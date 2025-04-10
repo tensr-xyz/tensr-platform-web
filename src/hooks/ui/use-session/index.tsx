@@ -175,8 +175,7 @@ class WebSocketService {
       }, 3000);
     };
 
-    this.ws.onerror = error => {
-    };
+    this.ws.onerror = error => {};
   }
 
   updatePresence(cursor: UserPresence['cursor']) {
@@ -227,7 +226,6 @@ class WebSocketService {
       };
       this.ws.send(JSON.stringify(message));
     } else {
-
     }
   }
 

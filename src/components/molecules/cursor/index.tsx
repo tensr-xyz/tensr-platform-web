@@ -28,7 +28,7 @@ const UserCursors = ({ presence, clientId }: UserCursorsProps) => {
       return (
         <div
           key={userId}
-          className="fixed pointer-events-none z-[9999]"
+          className="fixed pointer-events-none z-9999"
           style={{
             left: user.cursor.x,
             top: user.cursor.y,
@@ -64,7 +64,7 @@ const UserCursors = ({ presence, clientId }: UserCursorsProps) => {
   }
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-[9999]">
+    <div className="fixed inset-0 pointer-events-none z-9999">
       {otherUsers.map(([userId, user]: [string, User]) => renderCursor(user, userId))}
     </div>
   );

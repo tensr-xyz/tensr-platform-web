@@ -220,7 +220,7 @@ export const OneSampleTTest = ({ children }: TTestProps) => {
                 type="number"
                 value={hypothesizedMean}
                 onChange={e => setHypothesizedMean(e.target.value)}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded-sm"
                 placeholder="Enter value..."
               />
             </div>
@@ -230,7 +230,7 @@ export const OneSampleTTest = ({ children }: TTestProps) => {
               <select
                 value={confidenceLevel}
                 onChange={e => setConfidenceLevel(e.target.value)}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded-sm"
               >
                 <option value="0.90">90%</option>
                 <option value="0.95">95%</option>
@@ -321,7 +321,7 @@ export const OneSampleTTest = ({ children }: TTestProps) => {
           <button
             onClick={calculateTTest}
             disabled={!selectedVariable || !hypothesizedMean}
-            className="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-blue-500 text-white rounded-sm hover:bg-blue-600 disabled:opacity-50"
           >
             Calculate T-Test
           </button>

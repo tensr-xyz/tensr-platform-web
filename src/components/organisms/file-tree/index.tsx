@@ -1,4 +1,4 @@
-"use client"
+'use client';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -429,9 +429,7 @@ export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefres
                 isDirty: false,
               })
             );
-          } catch (err) {
-
-          }
+          } catch (err) {}
         }
       }
     } finally {

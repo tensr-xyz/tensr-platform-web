@@ -125,7 +125,7 @@ export const Mean = ({ children }: MeanProps) => {
               {selectedVariables.map(variable => (
                 <div
                   key={variable}
-                  className="flex items-center justify-between bg-gray-100 dark:bg-gray-800 p-2 rounded"
+                  className="flex items-center justify-between bg-gray-100 dark:bg-gray-800 p-2 rounded-sm"
                 >
                   <span>{variable}</span>
                   <button
@@ -170,7 +170,7 @@ export const Mean = ({ children }: MeanProps) => {
           <button
             onClick={calculateMeans}
             disabled={selectedVariables.length === 0}
-            className="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-blue-500 text-white rounded-sm hover:bg-blue-600 disabled:opacity-50"
           >
             Calculate
           </button>

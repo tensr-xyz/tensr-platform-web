@@ -7,7 +7,8 @@ import { clearAuthData, getIdToken, storeTokens, getStoredTokens } from '@/utils
 import { Actions } from '@/contexts/auth-context/types';
 
 // Make sure API_BASE_URL is properly defined
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
 
 export const useAuth = () => {
   const { state, dispatch } = useAuthState();
@@ -38,7 +39,7 @@ export const useAuth = () => {
         console.log('Restoring tokens from storage');
         dispatch({
           type: Actions.SET_TOKENS,
-          payload: storedTokens
+          payload: storedTokens,
         });
 
         // Use tokens to fetch user data
@@ -92,10 +93,10 @@ export const useAuth = () => {
       const savedSession = localStorage.getItem('auth_session');
       if (savedSession) {
         try {
-          console.log("Restoring session from storage");
+          console.log('Restoring session from storage');
           setSession(savedSession);
         } catch (e) {
-          console.error("Failed to restore session:", e);
+          console.error('Failed to restore session:', e);
           localStorage.removeItem('auth_session');
         }
       }
@@ -105,154 +106,160 @@ export const useAuth = () => {
   // Persist session to localStorage when it changes
   useEffect(() => {
     if (isBrowser.current && session) {
-      console.log("Storing session in localStorage");
+      console.log('Storing session in localStorage');
       localStorage.setItem('auth_session', session);
     } else if (isBrowser.current && !session) {
-      console.log("Clearing session from localStorage");
+      console.log('Clearing session from localStorage');
       localStorage.removeItem('auth_session');
     }
   }, [session]);
 
   // Initiate authentication
-  const initiateAuth = useCallback(async (email) => {
-    dispatch({ type: Actions.SET_LOADING, payload: true });
-    dispatch({ type: Actions.SET_ERROR, payload: null });
-    try {
-      console.log('Initiating auth for email:', email);
-      const response = await fetch(`${API_BASE_URL}/auth/initiate-auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
+  const initiateAuth = useCallback(
+    async email => {
+      dispatch({ type: Actions.SET_LOADING, payload: true });
+      dispatch({ type: Actions.SET_ERROR, payload: null });
+      try {
+        console.log('Initiating auth for email:', email);
+        const response = await fetch(`${API_BASE_URL}/auth/initiate-auth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Authentication failed');
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Authentication failed');
 
-      // Log the complete response for debugging
-      console.log('Auth response received:', JSON.stringify(data));
-      console.log('Session from response:', data.session);
+        // Log the complete response for debugging
+        console.log('Auth response received:', JSON.stringify(data));
+        console.log('Session from response:', data.session);
 
-      // Make sure session is being properly set
-      if (data.session) {
-        console.log('Setting session state with:', data.session);
-        setSession(data.session);
+        // Make sure session is being properly set
+        if (data.session) {
+          console.log('Setting session state with:', data.session);
+          setSession(data.session);
 
-        // Store session in localStorage
-        if (isBrowser.current) {
-          console.log('Storing session in localStorage');
-          localStorage.setItem('auth_session', data.session);
+          // Store session in localStorage
+          if (isBrowser.current) {
+            console.log('Storing session in localStorage');
+            localStorage.setItem('auth_session', data.session);
+          }
+        } else {
+          console.error('No session received from API');
         }
-      } else {
-        console.error('No session received from API');
-      }
 
-      dispatch({ type: Actions.SET_LOADING, payload: false });
-      return data;
-    } catch (error) {
-      console.error('Auth initiation failed:', error);
-      dispatch({
-        type: Actions.SET_ERROR,
-        payload: error instanceof Error ? error.message : 'Authentication failed'
-      });
-      dispatch({ type: Actions.SET_LOADING, payload: false });
-      throw error;
-    }
-  }, [dispatch]);
+        dispatch({ type: Actions.SET_LOADING, payload: false });
+        return data;
+      } catch (error) {
+        console.error('Auth initiation failed:', error);
+        dispatch({
+          type: Actions.SET_ERROR,
+          payload: error instanceof Error ? error.message : 'Authentication failed',
+        });
+        dispatch({ type: Actions.SET_LOADING, payload: false });
+        throw error;
+      }
+    },
+    [dispatch]
+  );
 
   // Verify authentication with OTP
-  const verifyAuth = useCallback(async (email, otp, authSession) => {
-    dispatch({ type: Actions.SET_LOADING, payload: true });
-    dispatch({ type: Actions.SET_ERROR, payload: null });
+  const verifyAuth = useCallback(
+    async (email, otp, authSession) => {
+      dispatch({ type: Actions.SET_LOADING, payload: true });
+      dispatch({ type: Actions.SET_ERROR, payload: null });
 
-    try {
-      // Use provided session or fall back to state
-      const sessionToUse = authSession || session;
+      try {
+        // Use provided session or fall back to state
+        const sessionToUse = authSession || session;
 
-      console.log('Verifying auth with session:', sessionToUse);
+        console.log('Verifying auth with session:', sessionToUse);
 
-      if (!sessionToUse) {
-        console.error("No session available for verification");
-        dispatch({
-          type: Actions.SET_ERROR,
-          payload: 'Your session has expired. Please try again.'
-        });
-        dispatch({ type: Actions.SET_LOADING, payload: false });
-        return {
-          success: false,
-          code: 'SESSION_EXPIRED',
-          message: 'Your session has expired. Please try again.',
-        };
-      }
-
-      const response = await fetch(`${API_BASE_URL}/auth/verify-auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          otp,
-          session: sessionToUse
-        }),
-      });
-
-      const responseData = await response.json();
-
-      // Parse the body from the response if it's a stringified JSON
-      let data;
-      if (responseData.body && typeof responseData.body === 'string') {
-        data = JSON.parse(responseData.body);
-      } else {
-        data = responseData;
-      }
-
-      if (!response.ok) {
-        dispatch({
-          type: Actions.SET_ERROR,
-          payload: data.message || 'Verification failed'
-        });
-        dispatch({ type: Actions.SET_LOADING, payload: false });
-        return {
-          success: false,
-          code: data.code || 'ERROR',
-          message: data.message || 'Verification failed',
-        };
-      }
-
-      // Handle success case
-      if (data.tokens) {
-        console.log('Auth verified successfully, storing tokens');
-        const { accessToken, idToken, refreshToken } = data.tokens;
-        storeTokens(accessToken, idToken, refreshToken);
-        dispatch({
-          type: Actions.SET_TOKENS,
-          payload: { accessToken, idToken, refreshToken }
-        });
-
-        if (data.user) {
-          console.log('Setting user data');
-          dispatch({ type: Actions.SET_USER, payload: data.user });
+        if (!sessionToUse) {
+          console.error('No session available for verification');
+          dispatch({
+            type: Actions.SET_ERROR,
+            payload: 'Your session has expired. Please try again.',
+          });
+          dispatch({ type: Actions.SET_LOADING, payload: false });
+          return {
+            success: false,
+            code: 'SESSION_EXPIRED',
+            message: 'Your session has expired. Please try again.',
+          };
         }
+
+        const response = await fetch(`${API_BASE_URL}/auth/verify-auth`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            otp,
+            session: sessionToUse,
+          }),
+        });
+
+        const responseData = await response.json();
+
+        // Parse the body from the response if it's a stringified JSON
+        let data;
+        if (responseData.body && typeof responseData.body === 'string') {
+          data = JSON.parse(responseData.body);
+        } else {
+          data = responseData;
+        }
+
+        if (!response.ok) {
+          dispatch({
+            type: Actions.SET_ERROR,
+            payload: data.message || 'Verification failed',
+          });
+          dispatch({ type: Actions.SET_LOADING, payload: false });
+          return {
+            success: false,
+            code: data.code || 'ERROR',
+            message: data.message || 'Verification failed',
+          };
+        }
+
+        // Handle success case
+        if (data.tokens) {
+          console.log('Auth verified successfully, storing tokens');
+          const { accessToken, idToken, refreshToken } = data.tokens;
+          storeTokens(accessToken, idToken, refreshToken);
+          dispatch({
+            type: Actions.SET_TOKENS,
+            payload: { accessToken, idToken, refreshToken },
+          });
+
+          if (data.user) {
+            console.log('Setting user data');
+            dispatch({ type: Actions.SET_USER, payload: data.user });
+          }
+        }
+
+        // Clear session after successful verification
+        setSession(null);
+        localStorage.removeItem('auth_session');
+
+        dispatch({ type: Actions.SET_LOADING, payload: false });
+        return { success: true, data };
+      } catch (error) {
+        console.error('Auth verification failed:', error);
+        dispatch({
+          type: Actions.SET_ERROR,
+          payload: error instanceof Error ? error.message : 'Verification failed',
+        });
+        dispatch({ type: Actions.SET_LOADING, payload: false });
+        return {
+          success: false,
+          code: 'INTERNAL_ERROR',
+          message: 'An unexpected error occurred',
+        };
       }
-
-      // Clear session after successful verification
-      setSession(null);
-      localStorage.removeItem('auth_session');
-
-      dispatch({ type: Actions.SET_LOADING, payload: false });
-      return { success: true, data };
-    } catch (error) {
-      console.error('Auth verification failed:', error);
-      dispatch({
-        type: Actions.SET_ERROR,
-        payload: error instanceof Error ? error.message : 'Verification failed'
-      });
-      dispatch({ type: Actions.SET_LOADING, payload: false });
-      return {
-        success: false,
-        code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred',
-      };
-    }
-  }, [dispatch, session]);
+    },
+    [dispatch, session]
+  );
 
   // Handle logout
   const logout = useCallback(() => {
@@ -264,55 +271,58 @@ export const useAuth = () => {
   }, [dispatch, router]);
 
   // Resend verification code
-  const resendVerificationCode = useCallback(async (email: string, authSession?: string) => {
-    dispatch({ type: Actions.SET_LOADING, payload: true });
-    dispatch({ type: Actions.SET_ERROR, payload: null });
-
-    try {
-      // Use provided session or fall back to state
-      const sessionToUse = authSession || session;
-
-      console.log('Resending code for email:', email, 'with session:', sessionToUse);
-
-      if (!sessionToUse) {
-        throw new Error('No active session available');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/auth/resend-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          session: sessionToUse
-        }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Failed to resend code');
-
-      // Parse the data if needed
-      const parsedData = data.body ? JSON.parse(data.body) : data;
-
-      // Update the session state
-      if (parsedData.session) {
-        console.log('New session received:', parsedData.session);
-        setSession(parsedData.session);
-      }
-
+  const resendVerificationCode = useCallback(
+    async (email: string, authSession?: string) => {
+      dispatch({ type: Actions.SET_LOADING, payload: true });
       dispatch({ type: Actions.SET_ERROR, payload: null });
-      dispatch({ type: Actions.SET_LOADING, payload: false });
 
-      return parsedData;
-    } catch (error) {
-      console.error('Resend code failed:', error);
-      dispatch({
-        type: Actions.SET_ERROR,
-        payload: error instanceof Error ? error.message : 'Failed to resend code'
-      });
-      dispatch({ type: Actions.SET_LOADING, payload: false });
-      throw error;
-    }
-  }, [dispatch, session]);
+      try {
+        // Use provided session or fall back to state
+        const sessionToUse = authSession || session;
+
+        console.log('Resending code for email:', email, 'with session:', sessionToUse);
+
+        if (!sessionToUse) {
+          throw new Error('No active session available');
+        }
+
+        const response = await fetch(`${API_BASE_URL}/auth/resend-code`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email,
+            session: sessionToUse,
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.message || 'Failed to resend code');
+
+        // Parse the data if needed
+        const parsedData = data.body ? JSON.parse(data.body) : data;
+
+        // Update the session state
+        if (parsedData.session) {
+          console.log('New session received:', parsedData.session);
+          setSession(parsedData.session);
+        }
+
+        dispatch({ type: Actions.SET_ERROR, payload: null });
+        dispatch({ type: Actions.SET_LOADING, payload: false });
+
+        return parsedData;
+      } catch (error) {
+        console.error('Resend code failed:', error);
+        dispatch({
+          type: Actions.SET_ERROR,
+          payload: error instanceof Error ? error.message : 'Failed to resend code',
+        });
+        dispatch({ type: Actions.SET_LOADING, payload: false });
+        throw error;
+      }
+    },
+    [dispatch, session]
+  );
 
   // Refresh user data
   const refreshUser = useCallback(async () => {

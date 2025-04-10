@@ -99,8 +99,7 @@ export default function Projects() {
 
       // await invoke('add_recent_project', { request });
       await fetchRecentProjects();
-    } catch (err) {
-    }
+    } catch (err) {}
   };
 
   const handleOpenFile = async () => {
@@ -179,7 +178,6 @@ export default function Projects() {
         params: { projectId: project.id },
       });
     } catch (err) {
-
     } finally {
       setIsLoading(false);
     }
@@ -354,9 +352,9 @@ export default function Projects() {
   }
 
   return (
-    <main className="flex-grow p-6">
+    <main className="grow p-6">
       <div className="flex items-center gap-4 pb-4 mb-4 border-b">
-        <div className="relative flex-grow max-w-md">
+        <div className="relative grow max-w-md">
           <LuSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
           <Input
             type="text"

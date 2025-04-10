@@ -1,4 +1,4 @@
-"use client"
+'use client';
 
 import { Search } from 'lucide-react';
 import { useState } from 'react';
@@ -122,7 +122,7 @@ const PluginsLayout = () => {
         {filteredPlugins.map(plugin => (
           <div key={plugin.pluginId} className="group overflow-hidden cursor-pointer bg-white">
             {/* Image Section */}
-            <div className="relative w-full aspect-[5/3] bg-gray-100 overflow-hidden">
+            <div className="relative w-full aspect-5/3 bg-gray-100 overflow-hidden">
               <img
                 src={plugin.thumbnailUrl || '/api/placeholder/480/320'}
                 alt={plugin.name}
@@ -156,7 +156,7 @@ const PluginsLayout = () => {
                         installPlugin(plugin);
                       }
                     }}
-                    className="px-2 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+                    className="px-2 py-1 bg-blue-500 text-white rounded-sm hover:bg-blue-600 transition-colors"
                   >
                     {isPluginInstalled(plugin.pluginId) ? 'Uninstall' : 'Install'}
                   </button>

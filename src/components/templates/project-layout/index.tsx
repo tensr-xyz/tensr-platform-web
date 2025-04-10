@@ -1,4 +1,4 @@
-"use client"
+'use client';
 import React, { useEffect, useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/atoms/resizable';
 import ProjectSidebar from '@/components/templates/project-sidebar';
@@ -44,11 +44,10 @@ const ProjectLayout = ({
       if (type === 'directory') {
         try {
           // Load file tree for directories
-          const files = {}
+          const files = {};
           // const files = await invoke<FileEntry[]>('read_directory', { path });
           projectDispatch({ type: ProjectActions.SET_FILE_SYSTEM, payload: files });
-        } catch (err) {
-        }
+        } catch (err) {}
       } else if (type === 'file' && initialFile?.metadata) {
         // Create a new tab for files
         const { metadata } = initialFile;
@@ -196,7 +195,7 @@ const ProjectLayout = ({
     <div
       className={cn(
         'fixed inset-0 bg-background text-foreground z-50 flex flex-col',
-        isMaximized && 'z-[100]'
+        isMaximized && 'z-100'
       )}
     >
       {/*<Titlebar activeTab={activeTab} onToggleSidebar={onToggleSidebar} />*/}

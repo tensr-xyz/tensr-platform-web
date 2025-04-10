@@ -86,7 +86,7 @@ const MarkdownViewer = ({ filePath }: MarkdownViewerProps) => {
 
       if (inline) {
         return (
-          <code className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded text-sm">
+          <code className="bg-gray-100 dark:bg-gray-800 px-1 py-0.5 rounded-sm text-sm">
             {children}
           </code>
         );
@@ -97,7 +97,9 @@ const MarkdownViewer = ({ filePath }: MarkdownViewerProps) => {
         </pre>
       );
     },
-    img: ({ src, alt }) => <img alt={alt} src={src} className="max-w-full h-auto rounded my-4" />,
+    img: ({ src, alt }) => (
+      <img alt={alt} src={src} className="max-w-full h-auto rounded-sm my-4" />
+    ),
     blockquote: ({ children }) => (
       <blockquote className="border-l-4 border-gray-300 pl-4 italic my-4">{children}</blockquote>
     ),

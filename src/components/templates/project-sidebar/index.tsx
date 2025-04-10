@@ -2,7 +2,14 @@
 
 import * as React from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import {LuBlocks, LuGitCompare, LuFolder, LuSheet, LuSquareCode, LuArrowRight} from 'react-icons/lu';
+import {
+  LuBlocks,
+  LuGitCompare,
+  LuFolder,
+  LuSheet,
+  LuSquareCode,
+  LuArrowRight,
+} from 'react-icons/lu';
 import {
   Sidebar,
   SidebarContent,
@@ -16,7 +23,7 @@ import {
   SidebarTrigger,
   SidebarProvider,
   SidebarRail,
-  useSidebar
+  useSidebar,
 } from '@/components/organisms/sidebar';
 import { useProject } from '@/contexts/project-context';
 import { ProjectActions, ViewType } from '@/contexts/project-context/types';
@@ -25,12 +32,12 @@ import { ImportData } from '@/types/file';
 import { FolderComponent } from '@/components/organisms/file-tree';
 import { FileEntry, FileResponse } from '@/types/project';
 import { IconType } from 'react-icons';
-import {Avatar, AvatarFallback, AvatarImage} from '@/components/atoms/avatar';
-import {useCallback, useEffect, useRef, useState} from 'react';
-import {useAuth} from "@/hooks/api/use-auth";
-import {Dialog, DialogContent, DialogTrigger} from "@/components/molecules/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/atoms/avatar';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useAuth } from '@/hooks/api/use-auth';
+import { Dialog, DialogContent, DialogTrigger } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
-import {EmailForm, OTPForm} from "@/components/organisms/forms/auth-form";
+import { EmailForm, OTPForm } from '@/components/organisms/forms/auth-form';
 
 interface NavItem {
   title: string;
@@ -89,7 +96,6 @@ export default function ProjectSidebar({ onPanelContent }: ProjectSidebarProps) 
 
     // Only process file operations for files
     if (file?.entry_type === 'file') {
-
       if (file.name.endsWith('.csv')) {
         try {
           // Replace Tauri invoke with fetch to your Next.js API
@@ -127,9 +133,7 @@ export default function ProjectSidebar({ onPanelContent }: ProjectSidebarProps) 
             });
           } else {
           }
-        } catch (err) {
-
-        }
+        } catch (err) {}
       }
     }
   };
@@ -214,57 +218,57 @@ export default function ProjectSidebar({ onPanelContent }: ProjectSidebarProps) 
   };
 
   return (
-      <SidebarProvider>
-        <Sidebar collapsible="icon">
-          <SidebarHeader>
-            <SidebarTrigger />
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarGroup className="px-1">
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {data.navMain.map(item => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton
-                            tooltip={{
-                              children: item.title,
-                              hidden: false,
-                            }}
-                            onClick={() => handleItemClick(item)}
-                            isActive={isItemActive(item)}
-                            className="flex h-8 w-8 items-center justify-center p-0"
-                        >
-                          <item.icon />
-                          <span className="sr-only">{item.title}</span>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-          <SidebarFooter className="px-1">
-            <SidebarMenu>
-              {data.navFooter.map(item => (
+    <SidebarProvider>
+      <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <SidebarTrigger />
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup className="px-1">
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {data.navMain.map(item => (
                   <SidebarMenuItem key={item.title}>
                     <SidebarMenuButton
-                        tooltip={{
-                          children: item.title,
-                          hidden: false,
-                        }}
-                        onClick={() => handleItemClick(item)}
-                        isActive={isItemActive(item)}
-                        className="flex h-8 w-8 items-center justify-center p-0"
+                      tooltip={{
+                        children: item.title,
+                        hidden: false,
+                      }}
+                      onClick={() => handleItemClick(item)}
+                      isActive={isItemActive(item)}
+                      className="flex h-8 w-8 items-center justify-center p-0"
                     >
                       <item.icon />
                       <span className="sr-only">{item.title}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarFooter>
-          <SidebarRail />
-        </Sidebar>
-      </SidebarProvider>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="px-1">
+          <SidebarMenu>
+            {data.navFooter.map(item => (
+              <SidebarMenuItem key={item.title}>
+                <SidebarMenuButton
+                  tooltip={{
+                    children: item.title,
+                    hidden: false,
+                  }}
+                  onClick={() => handleItemClick(item)}
+                  isActive={isItemActive(item)}
+                  className="flex h-8 w-8 items-center justify-center p-0"
+                >
+                  <item.icon />
+                  <span className="sr-only">{item.title}</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+    </SidebarProvider>
   );
 }

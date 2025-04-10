@@ -131,31 +131,31 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
   };
 
   const createDebouncedHandler = useCallback(
-      (tab: SpreadsheetTab) => {
-        return debounce(async (newData: Record<string, any>[]) => {
-          try {
-            dispatch(
-                updateTab(tab.id, {
-                  data: {
-                    ...tab.data,
-                    initialData: newData,
-                  },
-                  isDirty: true,
-                })
-            );
-          } catch (e) {}
-        }, 500);
-      },
-      [dispatch]
+    (tab: SpreadsheetTab) => {
+      return debounce(async (newData: Record<string, any>[]) => {
+        try {
+          dispatch(
+            updateTab(tab.id, {
+              data: {
+                ...tab.data,
+                initialData: newData,
+              },
+              isDirty: true,
+            })
+          );
+        } catch (e) {}
+      }, 500);
+    },
+    [dispatch]
   );
 
   const debouncedHandlers = useMemo(() => {
     return tabs.filter(isSpreadsheetTab).reduce(
-        (acc, tab) => {
-          acc[tab.id] = createDebouncedHandler(tab);
-          return acc;
-        },
-        {} as Record<string, ReturnType<typeof createDebouncedHandler>>
+      (acc, tab) => {
+        acc[tab.id] = createDebouncedHandler(tab);
+        return acc;
+      },
+      {} as Record<string, ReturnType<typeof createDebouncedHandler>>
     );
   }, [tabs, createDebouncedHandler]);
 
@@ -193,8 +193,8 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
       // Find insertion index
       let insertIndex = currentData.length;
       const selectedIndices = Object.keys(activeRowSelection)
-          .filter(key => activeRowSelection[key])
-          .map(key => parseInt(key, 10));
+        .filter(key => activeRowSelection[key])
+        .map(key => parseInt(key, 10));
 
       if (selectedIndices.length > 0) {
         insertIndex = selectedIndices[0] + 1;
@@ -205,18 +205,17 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
 
       // Update tab data
       dispatch(
-          updateTab(activeTab.id, {
-            data: {
-              ...activeTab.data,
-              initialData: currentData,
-            },
-            isDirty: true,
-          })
+        updateTab(activeTab.id, {
+          data: {
+            ...activeTab.data,
+            initialData: currentData,
+          },
+          isDirty: true,
+        })
       );
 
       // Force re-render of the spreadsheet
       setSpreadsheetVersion(prev => prev + 1);
-
     } catch (e) {}
   }, [activeTab, dispatch, activeRowSelection]);
 
@@ -225,13 +224,13 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
 
     try {
       // Get the current data
-      let currentData = [...activeTab.data.initialData];
+      const currentData = [...activeTab.data.initialData];
 
       // Get selected row indices from the activeRowSelection object
       const indicesToDelete = Object.keys(activeRowSelection)
-          .filter(key => activeRowSelection[key])
-          .map(key => parseInt(key, 10))
-          .sort((a, b) => b - a); // Sort in descending order
+        .filter(key => activeRowSelection[key])
+        .map(key => parseInt(key, 10))
+        .sort((a, b) => b - a); // Sort in descending order
 
       if (indicesToDelete.length === 0) {
         return; // Nothing to delete
@@ -244,13 +243,13 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
 
       // Update the tab data
       dispatch(
-          updateTab(activeTab.id, {
-            data: {
-              ...activeTab.data,
-              initialData: currentData,
-            },
-            isDirty: true,
-          })
+        updateTab(activeTab.id, {
+          data: {
+            ...activeTab.data,
+            initialData: currentData,
+          },
+          isDirty: true,
+        })
       );
 
       // Force re-render of the spreadsheet
@@ -266,23 +265,23 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
   }, [debouncedHandlers]);
 
   const renderSpreadsheetContent = (tab: SpreadsheetTab) => (
-      <div className="h-full">
-        <Spreadsheet
-            key={`${tab.id}-${spreadsheetVersion}`}
-            initialData={tab.data.initialData}
-            initialColumns={tab.data.initialColumns}
-            columnStats={tab.data.columnStats}
-            showMenu={showMenu}
-            showStats={showStats}
-            showFilters={showFilters}
-            onCloseFilters={() => setShowFilters(false)}
-            onChange={debouncedHandlers[tab.id]}
-            filePath={tab.data.filePath}
-            totalRowCount={tab.data.totalRows}
-            tabId={tab.id}
-            onSelectionChange={setActiveRowSelection}
-        />
-      </div>
+    <div className="h-full">
+      <Spreadsheet
+        key={`${tab.id}-${spreadsheetVersion}`}
+        initialData={tab.data.initialData}
+        initialColumns={tab.data.initialColumns}
+        columnStats={tab.data.columnStats}
+        showMenu={showMenu}
+        showStats={showStats}
+        showFilters={showFilters}
+        onCloseFilters={() => setShowFilters(false)}
+        onChange={debouncedHandlers[tab.id]}
+        filePath={tab.data.filePath}
+        totalRowCount={tab.data.totalRows}
+        tabId={tab.id}
+        onSelectionChange={setActiveRowSelection}
+      />
+    </div>
   );
 
   const renderTabContent = (tab: Tab) => {
@@ -290,17 +289,17 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
 
     if (tab.type === ViewType.MARKDOWN) {
       return (
-          <div className="h-full overflow-auto bg-background">
-            <MarkdownViewer filePath={tab.path || ''} />
-          </div>
+        <div className="h-full overflow-auto bg-background">
+          <MarkdownViewer filePath={tab.path || ''} />
+        </div>
       );
     }
 
     if (!isSpreadsheetTab(tab)) {
       return (
-          <div className="h-full flex items-center justify-center text-muted-foreground">
-            No content available
-          </div>
+        <div className="h-full flex items-center justify-center text-muted-foreground">
+          No content available
+        </div>
       );
     }
 
@@ -310,37 +309,37 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
       case ViewType.SPREADSHEET:
       case ViewType.CHARTS:
         return (
-            <AnalyticsLayout filePath={tab.data.filePath} columns={tab.data.initialColumns}>
-              {spreadsheetContent}
-            </AnalyticsLayout>
+          <AnalyticsLayout filePath={tab.data.filePath} columns={tab.data.initialColumns}>
+            {spreadsheetContent}
+          </AnalyticsLayout>
         );
 
-        // case ViewType.MODEL_BUILDER:
-        //   return (
-        //     <div className="h-full">
-        //       <ModelBuilder />
-        //     </div>
-        //   );
+      // case ViewType.MODEL_BUILDER:
+      //   return (
+      //     <div className="h-full">
+      //       <ModelBuilder />
+      //     </div>
+      //   );
 
       case ViewType.NOTEBOOK:
         return (
-            <div className="h-full">
-              <Notebook />
-            </div>
+          <div className="h-full">
+            <Notebook />
+          </div>
         );
 
-        // case ViewType.PLUGINS:
-        //   return (
-        //     <div className="h-full">
-        //       <PluginsLayout />
-        //     </div>
-        //   );
+      // case ViewType.PLUGINS:
+      //   return (
+      //     <div className="h-full">
+      //       <PluginsLayout />
+      //     </div>
+      //   );
 
       default:
         return (
-            <div className="h-full flex items-center justify-center text-muted-foreground">
-              No content available
-            </div>
+          <div className="h-full flex items-center justify-center text-muted-foreground">
+            No content available
+          </div>
         );
     }
   };
@@ -351,125 +350,125 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
   }, [dispatch, debouncedHandlers]);
 
   return (
-      <Tabs
-          value={activeTab?.id}
-          onValueChange={handleTabChange}
-          className="flex h-full flex-col relative bg-background"
-      >
-        <div className="flex h-10 items-center border-b border-foreground bg-background z-10">
-          <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 mx-2"
-              onClick={handleToggleFolder}
-              data-state={state.leftPanelOpen ? 'active' : 'inactive'}
-          >
-            <LuFolder />
-          </Button>
+    <Tabs
+      value={activeTab?.id}
+      onValueChange={handleTabChange}
+      className="flex h-full flex-col relative bg-background"
+    >
+      <div className="flex h-10 items-center border-b border-foreground bg-background z-10">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 mx-2"
+          onClick={handleToggleFolder}
+          data-state={state.leftPanelOpen ? 'active' : 'inactive'}
+        >
+          <LuFolder />
+        </Button>
 
-          <ScrollArea className="flex-1 h-10">
-            <TabsList className="h-10 inline-flex border-none">
-              {tabs.map(tab => (
-                  <TabsTrigger
-                      key={tab.id}
-                      value={tab.id}
-                      onClose={() => onTabClose(tab.id)}
-                      className="shrink-0"
-                  >
-                    {tab.name}
-                  </TabsTrigger>
-              ))}
-            </TabsList>
-            <ScrollBar orientation="horizontal" />
-          </ScrollArea>
-
-          <div className="flex-none flex items-center px-2">
-            <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setShowMenu(prev => !prev)}
-                data-state={showMenu ? 'active' : 'inactive'}
-            >
-              <LuMenu />
-              <span className="sr-only">Toggle Menu</span>
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <LuEllipsisVertical />
-                  <span className="sr-only">Toggle Menu</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleCloseAllTabs}>Close All Tabs</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-
-        {tabs.map(tab => (
-            <TabsContent
+        <ScrollArea className="flex-1 h-10">
+          <TabsList className="h-10 inline-flex border-none">
+            {tabs.map(tab => (
+              <TabsTrigger
                 key={tab.id}
                 value={tab.id}
-                className="absolute inset-0 top-10 bg-background flex flex-col"
-            >
-              {showMenu && (
-                  <div className="flex flex-row items-center justify-between bg-foreground px-1 min-h-8">
-                    <div className="flex flex-row items-center">
-                      <Button size="icon" variant="ghost" onClick={handleAddRow}>
-                        <LuPlus />
-                      </Button>
-                      <Button size="icon" variant="ghost" onClick={handleDeleteRows}>
-                        <LuMinus />
-                      </Button>
-                      <Separator orientation="vertical" className="h-4 mx-2" />
-                      <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                              projectDispatch({ type: ProjectActions.SET_VIEW, payload: ViewType.CHARTS })
-                          }
-                          data-state={state.activeView === ViewType.CHARTS ? 'active' : 'inactive'}
-                      >
-                        <LuSquareActivity />
-                        <span className="sr-only">Toggle Analytics</span>
-                      </Button>
-                      <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setShowStats(prev => !prev)}
-                          data-state={showStats ? 'active' : 'inactive'}
-                      >
-                        <LuSquareChartGantt />
-                        <span className="sr-only">Toggle Stats</span>
-                      </Button>
-                    </div>
-                    <div className="flex flex-row items-center">
-                      <Button size="icon" variant="ghost" onClick={() => setShowFilters(!showFilters)}>
-                        <LuListFilter />
-                      </Button>
-                    </div>
-                  </div>
-              )}
-              <div
-                  className="flex-1 relative"
-                  style={{
-                    height: showMenu ? 'calc(100% - 32px)' : '100%',
-                  }}
+                onClose={() => onTabClose(tab.id)}
+                className="shrink-0"
               >
-                {renderTabContent(tab)}
+                {tab.name}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
+
+        <div className="flex-none flex items-center px-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => setShowMenu(prev => !prev)}
+            data-state={showMenu ? 'active' : 'inactive'}
+          >
+            <LuMenu />
+            <span className="sr-only">Toggle Menu</span>
+          </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger>
+              <Button variant="ghost" size="icon" className="h-7 w-7">
+                <LuEllipsisVertical />
+                <span className="sr-only">Toggle Menu</span>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleCloseAllTabs}>Close All Tabs</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      {tabs.map(tab => (
+        <TabsContent
+          key={tab.id}
+          value={tab.id}
+          className="absolute inset-0 top-10 bg-background flex flex-col"
+        >
+          {showMenu && (
+            <div className="flex flex-row items-center justify-between bg-foreground px-1 min-h-8">
+              <div className="flex flex-row items-center">
+                <Button size="icon" variant="ghost" onClick={handleAddRow}>
+                  <LuPlus />
+                </Button>
+                <Button size="icon" variant="ghost" onClick={handleDeleteRows}>
+                  <LuMinus />
+                </Button>
+                <Separator orientation="vertical" className="h-4 mx-2" />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() =>
+                    projectDispatch({ type: ProjectActions.SET_VIEW, payload: ViewType.CHARTS })
+                  }
+                  data-state={state.activeView === ViewType.CHARTS ? 'active' : 'inactive'}
+                >
+                  <LuSquareActivity />
+                  <span className="sr-only">Toggle Analytics</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowStats(prev => !prev)}
+                  data-state={showStats ? 'active' : 'inactive'}
+                >
+                  <LuSquareChartGantt />
+                  <span className="sr-only">Toggle Stats</span>
+                </Button>
               </div>
-            </TabsContent>
-        ))}
-        {tabs.length === 0 && (
-            <div className="absolute inset-0 top-10 flex flex-col items-center justify-center bg-background text-muted-foreground">
-              <LuFolder className="h-12 w-12 mb-4" />
-              <h2 className="text-lg font-medium mb-2">No File Open</h2>
-              <p className="text-sm">Select a file from the project explorer to begin editing</p>
+              <div className="flex flex-row items-center">
+                <Button size="icon" variant="ghost" onClick={() => setShowFilters(!showFilters)}>
+                  <LuListFilter />
+                </Button>
+              </div>
             </div>
-        )}
-      </Tabs>
+          )}
+          <div
+            className="flex-1 relative"
+            style={{
+              height: showMenu ? 'calc(100% - 32px)' : '100%',
+            }}
+          >
+            {renderTabContent(tab)}
+          </div>
+        </TabsContent>
+      ))}
+      {tabs.length === 0 && (
+        <div className="absolute inset-0 top-10 flex flex-col items-center justify-center bg-background text-muted-foreground">
+          <LuFolder className="h-12 w-12 mb-4" />
+          <h2 className="text-lg font-medium mb-2">No File Open</h2>
+          <p className="text-sm">Select a file from the project explorer to begin editing</p>
+        </div>
+      )}
+    </Tabs>
   );
 };
 

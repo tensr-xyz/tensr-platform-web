@@ -38,7 +38,9 @@ const ProjectAvatar = ({ name }: ProjectAvatarProps) => {
   const initials = getInitials(name);
 
   return (
-    <div className={`${bgColor} w-6 h-6 rounded flex items-center justify-center shrink-0 mt-0.5`}>
+    <div
+      className={`${bgColor} w-6 h-6 rounded-sm flex items-center justify-center shrink-0 mt-0.5`}
+    >
       <span className="text-xs font-medium text-white">{initials}</span>
     </div>
   );

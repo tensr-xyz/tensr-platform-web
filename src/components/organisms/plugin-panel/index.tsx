@@ -137,7 +137,7 @@ const PluginItem: React.FC<{
   return (
     <div className="px-4 py-2 hover:bg-accent rounded-md">
       <div className="flex items-center justify-between">
-        <div className="flex-grow">
+        <div className="grow">
           <h3 className="font-medium">{plugin.name}</h3>
           <p className="text-sm text-muted-foreground">{plugin.description}</p>
           <div className="text-xs text-muted-foreground mt-1">
@@ -157,10 +157,10 @@ const PluginItem: React.FC<{
         </div>
       </div>
 
-      {error && <div className="text-red-500 text-sm mt-2 p-2 bg-red-50 rounded">{error}</div>}
+      {error && <div className="text-red-500 text-sm mt-2 p-2 bg-red-50 rounded-sm">{error}</div>}
 
       {result && (
-        <div className="mt-2 p-2 bg-muted rounded">
+        <div className="mt-2 p-2 bg-muted rounded-sm">
           <div className="font-medium text-sm">Result:</div>
           <pre className="text-xs overflow-auto max-h-40">{JSON.stringify(result, null, 2)}</pre>
         </div>
@@ -205,7 +205,7 @@ const PluginPanel: React.FC<PluginPanelProps> = ({ activeFileType, activeData })
                     <PluginItem key={plugin.pluginId} plugin={plugin} data={activeData} />
                   ))
                 ) : (
-                  <div className="px-4 py-2 text-muted-foreground text-center bg-muted rounded">
+                  <div className="px-4 py-2 text-muted-foreground text-center bg-muted rounded-sm">
                     No plugins installed for {activeFileType || 'this file type'}
                   </div>
                 )}

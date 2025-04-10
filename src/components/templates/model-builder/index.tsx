@@ -404,28 +404,28 @@ export function ModelBuilder() {
     <div className="fixed bottom-12 left-1/2 -translate-x-1/2 bg-white rounded-lg shadow-lg p-2 flex gap-2 z-50">
       <div className="flex gap-2 border-r pr-2">
         <button
-          className={`p-2 rounded ${selectedTool === 'move' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
+          className={`p-2 rounded-sm ${selectedTool === 'move' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('move')}
           title="Move Tool (V)"
         >
           <LuMove className="w-5 h-5" />
         </button>
         <button
-          className={`p-2 rounded ${selectedTool === 'observed' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
+          className={`p-2 rounded-sm ${selectedTool === 'observed' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('observed')}
           title="Observed Variable (O)"
         >
           <LuSquare className="w-5 h-5" />
         </button>
         <button
-          className={`p-2 rounded ${selectedTool === 'latent' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
+          className={`p-2 rounded-sm ${selectedTool === 'latent' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('latent')}
           title="Latent Variable (L)"
         >
           <LuCircle className="w-5 h-5" />
         </button>
         <button
-          className={`p-2 rounded ${selectedTool === 'path' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
+          className={`p-2 rounded-sm ${selectedTool === 'path' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('path')}
           title="Add Path (P)"
         >
@@ -435,7 +435,7 @@ export function ModelBuilder() {
 
       <div className="flex items-center gap-2 border-r pr-2">
         <button
-          className="p-2 rounded hover:bg-gray-100"
+          className="p-2 rounded-sm hover:bg-gray-100"
           onClick={undo}
           disabled={historyIndex <= 0}
           title="Undo (Ctrl+Z)"
@@ -443,7 +443,7 @@ export function ModelBuilder() {
           <LuRotateCcw className="w-5 h-5" />
         </button>
         <button
-          className="p-2 rounded hover:bg-gray-100"
+          className="p-2 rounded-sm hover:bg-gray-100"
           onClick={redo}
           disabled={historyIndex >= history.length - 1}
           title="Redo (Ctrl+Shift+Z)"
@@ -454,7 +454,7 @@ export function ModelBuilder() {
 
       <div className="flex items-center gap-2">
         <button
-          className="p-2 rounded hover:bg-gray-100"
+          className="p-2 rounded-sm hover:bg-gray-100"
           onClick={() => setZoom(z => Math.max(z - 0.1, MIN_ZOOM))}
           title="Zoom Out"
         >
@@ -462,7 +462,7 @@ export function ModelBuilder() {
         </button>
         <span className="text-sm">{Math.round(zoom * 100)}%</span>
         <button
-          className="p-2 rounded hover:bg-gray-100"
+          className="p-2 rounded-sm hover:bg-gray-100"
           onClick={() => setZoom(z => Math.min(z + 0.1, MAX_ZOOM))}
           title="Zoom In"
         >
@@ -560,7 +560,7 @@ export function ModelBuilder() {
           {editingLabel === node.id ? (
             <input
               autoFocus
-              className="absolute w-20 -ml-5 mt-1 text-sm text-center bg-white border rounded"
+              className="absolute w-20 -ml-5 mt-1 text-sm text-center bg-white border rounded-sm"
               value={node.label}
               onChange={e => {
                 const updatedNodes = nodes.map(n =>

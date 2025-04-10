@@ -175,11 +175,11 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                  <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-sm">
                     <span className="font-medium">Total Duplicates:</span>{' '}
                     {results.total_duplicates}
                   </div>
-                  <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded">
+                  <div className="p-2 bg-gray-50 dark:bg-gray-800 rounded-sm">
                     <span className="font-medium">Duplicate Groups:</span>{' '}
                     {results.duplicate_groups}
                   </div>
@@ -230,7 +230,7 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
           <button
             onClick={findDuplicates}
             disabled={!isFileLoaded || selectedColumns.length === 0 || isLoading}
-            className="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-blue-500 text-white rounded-sm hover:bg-blue-600 disabled:opacity-50"
           >
             {isLoading ? 'Finding Duplicates...' : 'Find Duplicates'}
           </button>

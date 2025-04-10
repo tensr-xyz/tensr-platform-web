@@ -153,7 +153,7 @@ export const FixDataTypesDialog = ({ children }: FixDataTypesProps) => {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Select Columns and Target Types</Label>
-            <div className="grid gap-2 max-h-64 overflow-y-auto p-2 border rounded">
+            <div className="grid gap-2 max-h-64 overflow-y-auto p-2 border rounded-sm">
               {columnConfigs.map(column => (
                 <div key={column.name} className="flex items-center gap-2">
                   <Checkbox

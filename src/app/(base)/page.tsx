@@ -1,7 +1,5 @@
-import HomeTemplate from "@/components/templates/home";
+import HomeTemplate from '@/components/templates/home';
 
 export default function BasePage() {
-    return (
-        <HomeTemplate />
-    )
+  return <HomeTemplate />;
 }

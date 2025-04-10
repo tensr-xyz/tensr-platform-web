@@ -1,7 +1,5 @@
-import PluginsLayout from "@/components/templates/plugins-layout";
+import PluginsLayout from '@/components/templates/plugins-layout';
 
 export default function PluginsPage() {
-    return (
-        <PluginsLayout />
-    )
+  return <PluginsLayout />;
 }

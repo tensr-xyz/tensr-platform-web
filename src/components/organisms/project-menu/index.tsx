@@ -36,8 +36,7 @@ export const ProjectMenu = () => {
       const recent = {};
       // const recent = await invoke<RecentProject[]>('get_recent_projects');
       setRecentProjects(recent);
-    } catch (err) {
-    }
+    } catch (err) {}
   };
 
   useEffect(() => {
@@ -104,8 +103,7 @@ export const ProjectMenu = () => {
       //   },
       // });
       await fetchRecentProjects();
-    } catch (err) {
-    }
+    } catch (err) {}
   };
 
   const handleRemoveProject = async (e: React.MouseEvent, project: RecentProject) => {

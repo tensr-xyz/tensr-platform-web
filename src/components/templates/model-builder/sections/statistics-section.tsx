@@ -98,7 +98,7 @@ export const StatisticsSection = ({
       try {
         const selectedVariables = availableVariables.map(v => v.name);
 
-        const stats = {}
+        const stats = {};
         // const stats = await invoke<Statistics>('calculate_statistics', {
         //   csvPath: activeTab.data.filePath,
         //   selectedVariables,

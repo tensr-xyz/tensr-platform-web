@@ -1,4 +1,4 @@
-"use client"
+'use client';
 
 import { createContext, useContext, useEffect, useReducer } from 'react';
 import { TabsContextProps, ProviderProps } from './types';

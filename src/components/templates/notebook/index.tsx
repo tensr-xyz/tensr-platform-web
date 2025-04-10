@@ -104,7 +104,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
 
       <div className="absolute right-0 top-0 h-full w-8 flex items-center justify-center invisible group-hover:visible">
         <button
-          className="p-1 hover:bg-gray-200 rounded"
+          className="p-1 hover:bg-gray-200 rounded-sm"
           onClick={e => {
             e.stopPropagation();
             onExecute(cell.id);
@@ -189,7 +189,7 @@ except ImportError as e:
       const setupCode = generateSetupCode();
       const fullCode = setupCode + '\n' + cell.content;
 
-      const result = {}
+      const result = {};
       // const result = await invoke<ExecutionResult>('execute_python', { code: fullCode });
 
       setCells(
@@ -230,7 +230,7 @@ except ImportError as e:
       setIsExecuting(true);
       try {
         const fullCode = setupCode + '\n' + cell.content;
-        const result = {}
+        const result = {};
         // const result = await invoke<ExecutionResult>('execute_python', { code: fullCode });
 
         setCells(prevCells =>
@@ -283,17 +283,17 @@ except ImportError as e:
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
-      <div className="flex items-center px-1 h-8 border-b bg-gray-50 flex-shrink-0">
+      <div className="flex items-center px-1 h-8 border-b bg-gray-50 shrink-0">
         <div className="flex items-center gap-1">
           <button
-            className="p-1 hover:bg-gray-200 rounded text-xs"
+            className="p-1 hover:bg-gray-200 rounded-sm text-xs"
             onClick={executeAllCells}
             disabled={isExecuting || !activeTab?.data?.initialData}
           >
             Run All
           </button>
           <button
-            className="p-1 hover:bg-gray-200 rounded"
+            className="p-1 hover:bg-gray-200 rounded-sm"
             onClick={() => selectedCell && executeCell(selectedCell)}
             disabled={isExecuting || !activeTab?.data?.initialData}
           >
@@ -312,7 +312,7 @@ except ImportError as e:
               </SelectItem>
             </SelectContent>
           </Select>
-          <button className="p-1 hover:bg-gray-200 rounded" onClick={addCell}>
+          <button className="p-1 hover:bg-gray-200 rounded-sm" onClick={addCell}>
             <LuPlus className="w-3 h-3" />
           </button>
         </div>

@@ -367,8 +367,7 @@ export const ImportWizard = ({
         });
 
         setProcessedData(rows);
-      } catch (e) {
-      }
+      } catch (e) {}
     }
 
     processPreviewData();
@@ -411,8 +410,7 @@ export const ImportWizard = ({
 
       onImport(importSettings, transformedData);
       onClose();
-    } catch (e) {
-    }
+    } catch (e) {}
   };
 
   return (

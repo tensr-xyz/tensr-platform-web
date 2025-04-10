@@ -78,7 +78,7 @@ export function Spreadsheet({
       setIsLoadingStats(true);
       statsLoadAttempted.current = true;
 
-      const stats = {}
+      const stats = {};
       // const stats = await invoke('analyse_csv', {
       //   request: {
       //     path: decodedFilePath,
@@ -274,7 +274,7 @@ export function Spreadsheet({
             };
           });
 
-          const response = {}
+          const response = {};
           // const response = await invoke<PageResponse>('fetch_csv_page', {
           //   request: {
           //     path: decodedFilePath,
@@ -650,7 +650,7 @@ export function Spreadsheet({
             {table.getHeaderGroups().map(headerGroup => (
               <TableRow
                 key={headerGroup.id}
-                className="!border-none" // Remove default border
+                className="border-none!" // Remove default border
                 style={{ display: 'flex', width: '100%' }}
               >
                 {headerGroup.headers.map(header => (

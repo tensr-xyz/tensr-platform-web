@@ -168,7 +168,7 @@ export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
         constant: constant ? parseFloat(constant) : undefined,
       };
 
-      const response = {}
+      const response = {};
       // const response = await invoke<ComputeVariableResponse>('compute_variable', {
       //   request,
       // });
@@ -264,7 +264,7 @@ export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
 
           <div className="space-y-2">
             <Label>Source Columns</Label>
-            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded">
+            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded-sm">
               {columnNames.map(column => (
                 <div key={column} className="flex items-center space-x-2">
                   <input
@@ -272,7 +272,7 @@ export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
                     id={`col-${column}`}
                     checked={selectedColumns.includes(column)}
                     onChange={() => handleColumnSelect(column)}
-                    className="rounded border-gray-300"
+                    className="rounded-sm border-gray-300"
                   />
                   <Label htmlFor={`col-${column}`} className="cursor-pointer">
                     {column}

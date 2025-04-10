@@ -132,15 +132,15 @@ const FrequencyItem = memo(
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {isSelected ? (
-            <LuEye className="w-4 h-4 flex-shrink-0" />
+            <LuEye className="w-4 h-4 shrink-0" />
           ) : (
-            <LuEyeOff className="w-4 h-4 flex-shrink-0" />
+            <LuEyeOff className="w-4 h-4 shrink-0" />
           )}
           <span className="truncate" style={{ color: backgroundColor }}>
             {value}
           </span>
         </div>
-        <span className="ml-2 flex-shrink-0" style={{ color: backgroundColor }}>
+        <span className="ml-2 shrink-0" style={{ color: backgroundColor }}>
           {count.toLocaleString()} ({percentage.toFixed(1)}%)
         </span>
       </div>
@@ -566,7 +566,7 @@ const AccordionHeader = memo(
           <span>{columnName}</span>
           {isLoading && <LuLoader className="w-4 h-4 animate-spin" />}
         </div>
-        <button onClick={handleVisibilityClick} className="p-1 hover:bg-accent/50 rounded-sm">
+        <button onClick={handleVisibilityClick} className="p-1 hover:bg-accent/50 rounded-xs">
           {isVisible ? (
             <LuEye className="w-4 h-4" />
           ) : (

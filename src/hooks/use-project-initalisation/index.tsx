@@ -3,11 +3,11 @@ import { ReadonlyURLSearchParams } from 'next/navigation';
 import { ImportData } from '@/types/file';
 
 export const useProjectInitialization = (
-    projectState: any,
-    searchParams: ReadonlyURLSearchParams,
-    setImportData: (data: ImportData | null) => void,
-    setShowImportWizard: (show: boolean) => void,
-    setRightPanelOpen?: (open: boolean) => void
+  projectState: any,
+  searchParams: ReadonlyURLSearchParams,
+  setImportData: (data: ImportData | null) => void,
+  setShowImportWizard: (show: boolean) => void,
+  setRightPanelOpen?: (open: boolean) => void
 ) => {
   // Add debugging logs
   useEffect(() => {
@@ -15,7 +15,7 @@ export const useProjectInitialization = (
       hasProject: !!projectState.currentProject,
       projectType: projectState.currentProject?.type,
       hasImportData: !!projectState.importData,
-      fileName: projectState.currentProject?.name
+      fileName: projectState.currentProject?.name,
     });
   }, [projectState.currentProject, projectState.importData]);
 
@@ -63,5 +63,12 @@ export const useProjectInitialization = (
       console.log('Directory project detected, opening right panel');
       setRightPanelOpen(true);
     }
-  }, [searchParams, projectState.currentProject, projectState.importData, setImportData, setShowImportWizard, setRightPanelOpen]);
+  }, [
+    searchParams,
+    projectState.currentProject,
+    projectState.importData,
+    setImportData,
+    setShowImportWizard,
+    setRightPanelOpen,
+  ]);
 };

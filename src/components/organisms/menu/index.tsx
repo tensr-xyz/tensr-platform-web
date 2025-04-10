@@ -108,8 +108,7 @@ export function CollaborationMenu({ activeTab }: CollaborationMenuProps) {
                   try {
                     await createSession(activeTab.data.filePath, activeTab.name);
                     setDialogOpen(false);
-                  } catch (error) {
-                  }
+                  } catch (error) {}
                 }
               }}
               disabled={!activeTab?.data.filePath}

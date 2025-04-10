@@ -136,7 +136,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
         values_to_count: valuesToCount,
       };
 
-      const response = {}
+      const response = {};
       // const response = await invoke<CountValuesResponse>('count_values', {
       //   request,
       // });
@@ -190,7 +190,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
           {/* Source Variables */}
           <div className="space-y-2">
             <Label>Variables to Search Through</Label>
-            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded">
+            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded-sm">
               {columnNames.map(variable => (
                 <div key={variable} className="flex items-center space-x-2">
                   <input
@@ -198,7 +198,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
                     id={`var-${variable}`}
                     checked={sourceVariables.includes(variable)}
                     onChange={() => handleVariableSelect(variable)}
-                    className="rounded border-gray-300"
+                    className="rounded-sm border-gray-300"
                   />
                   <Label htmlFor={`var-${variable}`} className="cursor-pointer">
                     {variable}

@@ -70,19 +70,16 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
   // Load installed plugins from local storage
   const loadInstalledPlugins = useCallback(async () => {
     try {
-      const installed = {}
+      const installed = {};
       // const installed = await invoke<PluginRecord[]>('get_installed_plugins');
 
       if (installed.length === 0) {
       } else {
-        installed.forEach((plugin, index) => {
-
-        });
+        installed.forEach((plugin, index) => {});
       }
 
       setInstalledPlugins(installed);
-    } catch (err) {
-    }
+    } catch (err) {}
   }, []);
 
   // Initialize plugin data

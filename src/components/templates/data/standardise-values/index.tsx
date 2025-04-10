@@ -114,7 +114,7 @@ export const StandardizeValuesDialog = ({ children }: StandardizeValuesProps) =>
       setIsLoading(true);
       setError(null);
 
-      const response = {}
+      const response = {};
       // const response = await invoke<any>('standardize_values', {
       //   request: {
       //     path: activeTab.data.filePath,
@@ -159,7 +159,7 @@ export const StandardizeValuesDialog = ({ children }: StandardizeValuesProps) =>
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Numeric Columns to Standardize</Label>
-            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded">
+            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded-sm">
               {columnNames.length > 0 ? (
                 columnNames.map(column => (
                   <div key={column} className="flex items-center space-x-2">

@@ -98,8 +98,7 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
         groups: groupedData,
       });
       setResults(response);
-    } catch (error) {
-    }
+    } catch (error) {}
   };
 
   return (
@@ -196,7 +195,7 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
           <button
             onClick={calculateAnova}
             disabled={!groupingVariable || !dependentVariable}
-            className="px-4 py-2 text-sm bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
+            className="px-4 py-2 text-sm bg-blue-500 text-white rounded-sm hover:bg-blue-600 disabled:opacity-50"
           >
             Calculate ANOVA
           </button>

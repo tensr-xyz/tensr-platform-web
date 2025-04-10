@@ -216,7 +216,7 @@ export const DataQualityDialog = ({ children }: DataQualityProps) => {
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Columns to Analyze</Label>
-            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded">
+            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded-sm">
               {columnNames.length > 0 ? (
                 columnNames.map(column => (
                   <div key={column} className="flex items-center space-x-2">

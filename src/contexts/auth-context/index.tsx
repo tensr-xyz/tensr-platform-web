@@ -7,7 +7,8 @@ import reducer from './reducer';
 import { Actions, AuthContextProps, ProviderProps } from './types';
 
 // Make sure API_BASE_URL is properly defined
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
 
@@ -54,7 +55,7 @@ export function AuthProvider({ children }: ProviderProps) {
                 payload: {
                   accessToken,
                   idToken,
-                  refreshToken: newRefreshToken || refreshToken  // Use old refreshToken if no new one
+                  refreshToken: newRefreshToken || refreshToken, // Use old refreshToken if no new one
                 },
               });
 
@@ -98,9 +99,9 @@ export function AuthProvider({ children }: ProviderProps) {
         }
       } catch (err) {
         const errorMessage =
-            err instanceof Error
-                ? `Auth initialization failed: ${err.message}`
-                : 'Auth initialization failed';
+          err instanceof Error
+            ? `Auth initialization failed: ${err.message}`
+            : 'Auth initialization failed';
         dispatch({ type: Actions.SET_ERROR, payload: errorMessage });
       } finally {
         dispatch({ type: Actions.SET_LOADING, payload: false });

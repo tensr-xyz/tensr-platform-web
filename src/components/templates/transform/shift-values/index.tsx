@@ -120,7 +120,7 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
       setError(null);
       setSuccess(null);
 
-      const response = {}
+      const response = {};
       // const response = await invoke<ShiftValuesResponse>('shift_values', {
       //   request,
       // });
@@ -165,7 +165,7 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
           {/* Variables Selection */}
           <div className="space-y-2">
             <Label>Variables to Shift</Label>
-            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded">
+            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded-sm">
               {columnNames.map(variable => (
                 <div key={variable} className="flex items-center space-x-2">
                   <input
@@ -173,7 +173,7 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
                     id={`var-${variable}`}
                     checked={selectedVariables.includes(variable)}
                     onChange={() => handleVariableSelect(variable)}
-                    className="rounded border-gray-300"
+                    className="rounded-sm border-gray-300"
                   />
                   <Label htmlFor={`var-${variable}`} className="cursor-pointer">
                     {variable}
