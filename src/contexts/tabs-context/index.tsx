@@ -64,10 +64,11 @@ export function TabsProvider({ children }: ProviderProps) {
     //     }
     //   }
     // });
-    const unsubscribe = {};
+    const unsubscribe = null; // or just don't set a value
 
     return () => {
-      unsubscribe.then(fn => fn());
+      // Do nothing or add a comment explaining why
+      // No cleanup needed for now since we're not actually subscribing to anything
     };
   }, [state.tabs]);
 

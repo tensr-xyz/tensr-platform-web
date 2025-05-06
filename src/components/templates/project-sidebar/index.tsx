@@ -1,15 +1,5 @@
-'use client';
-
 import * as React from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import {
-  LuBlocks,
-  LuGitCompare,
-  LuFolder,
-  LuSheet,
-  LuSquareCode,
-  LuArrowRight,
-} from 'react-icons/lu';
+import { LuSheet, LuSquareCode, LuSearch, LuSettings } from 'react-icons/lu';
 import {
   Sidebar,
   SidebarContent,
@@ -20,24 +10,26 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
-  SidebarProvider,
-  SidebarRail,
-  useSidebar,
 } from '@/components/organisms/sidebar';
 import { useProject } from '@/contexts/project-context';
-import { ProjectActions, ViewType } from '@/contexts/project-context/types';
-import { refreshFileSystem, setView } from '@/contexts/project-context/actions';
-import { ImportData } from '@/types/file';
-import { FolderComponent } from '@/components/organisms/file-tree';
-import { FileEntry, FileResponse } from '@/types/project';
+import { ProjectActions, ViewType, ActionProps } from '@/contexts/project-context/types';
+import {
+  refreshFileSystem,
+  setLeftPanelContent,
+  setView,
+} from '@/contexts/project-context/actions';
 import { IconType } from 'react-icons';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/atoms/avatar';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useAuth } from '@/hooks/api/use-auth';
-import { Dialog, DialogContent, DialogTrigger } from '@/components/molecules/dialog';
-import { Button } from '@/components/atoms/button';
-import { EmailForm, OTPForm } from '@/components/organisms/forms/auth-form';
+import { cn } from '@/utils';
+import {
+  CommandDialog,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '../../molecules/command';
+import { Home } from 'lucide-react';
+import Link from 'next/link';
 
 interface NavItem {
   title: string;
@@ -47,18 +39,15 @@ interface NavItem {
   component?: () => React.ReactNode;
   isNavigationItem?: boolean;
   isPanelItem?: boolean;
-  action?: () => { type: string; payload: any };
+  action?: () => ActionProps;
+  onClick?: () => void;
 }
 
-interface ProjectSidebarProps {
-  onPanelContent: (content: React.ReactNode) => void;
-}
+interface ProjectSidebarProps {}
 
-export default function ProjectSidebar({ onPanelContent }: ProjectSidebarProps) {
-  const router = useRouter();
-  const pathname = usePathname();
+export default function ProjectSidebar({}: ProjectSidebarProps) {
   const { state, dispatch } = useProject();
-  const [selectedPath, setSelectedPath] = React.useState('');
+  const [isCommandOpen, setIsCommandOpen] = React.useState(false);
 
   const handleRefreshFileSystem = React.useCallback(async () => {
     if (state.currentProject?.path) {
@@ -76,103 +65,54 @@ export default function ProjectSidebar({ onPanelContent }: ProjectSidebarProps) 
     }
   }, [state.currentProject, handleRefreshFileSystem]);
 
-  const handleSelect = async (path: string) => {
-    const findFile = (entries: FileEntry[], targetPath: string): FileEntry | null => {
-      for (const entry of entries) {
-        if (entry.path === targetPath) return entry;
-        if (entry.children) {
-          const found = findFile(entry.children, targetPath);
-          if (found) return found;
-        }
+  const handleOpenSettings = () => {
+    // Add your settings dialog opening logic here
+    console.log('Open settings dialog');
+  };
+
+  const handleOpenSearch = () => {
+    setIsCommandOpen(true);
+  };
+
+  React.useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setIsCommandOpen(open => !open);
       }
-      return null;
     };
 
-    const file = findFile(state.fileSystem, path);
-
-    // Update UI selection for both files and folders
-    setSelectedPath(path);
-    dispatch({ type: ProjectActions.SET_SELECTED_PATH, payload: path });
-
-    // Only process file operations for files
-    if (file?.entry_type === 'file') {
-      if (file.name.endsWith('.csv')) {
-        try {
-          // Replace Tauri invoke with fetch to your Next.js API
-          const response = await fetch('/api/csv/read', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              path: file.path,
-              projectPath: state.currentProject?.path,
-            }),
-          });
-
-          const data: FileResponse = await response.json();
-
-          if (data?.metadata) {
-            const importData: ImportData = {
-              fileName: file.name,
-              filePath: file.path,
-              preview: data.metadata.preview,
-              columnNames: data.metadata.column_names,
-              totalRows: data.metadata.rows,
-              totalColumns: data.metadata.columns,
-            };
-
-            dispatch({
-              type: ProjectActions.SET_IMPORT_DATA,
-              payload: importData,
-            });
-
-            dispatch({
-              type: ProjectActions.SET_SHOW_IMPORT_WIZARD,
-              payload: true,
-            });
-          } else {
-          }
-        } catch (err) {}
-      }
-    }
-  };
+    document.addEventListener('keydown', down);
+    return () => document.removeEventListener('keydown', down);
+  }, []);
 
   const data = {
     navMain: [
       {
-        title: 'Folder',
-        url: '/project/folder',
-        icon: LuFolder,
-        isActive: true,
-        isPanelItem: true,
-        component: () => <FolderComponent />,
-      },
-      {
         title: 'Spreadsheet',
-        url: '/project/spreadsheet',
+        url: '#',
         icon: LuSheet,
         action: () => setView(ViewType.SPREADSHEET),
       },
       {
-        title: 'Builder',
-        url: '/project/builder',
-        icon: LuGitCompare,
-        action: () => setView(ViewType.MODEL_BUILDER),
-      },
-      {
-        title: 'Plugins',
-        url: '/project/plugins',
-        icon: LuBlocks,
-        action: () => setView(ViewType.PLUGINS),
+        title: 'Notebook',
+        url: '#',
+        icon: LuSquareCode,
+        action: () => setView(ViewType.NOTEBOOK),
       },
     ] as NavItem[],
     navFooter: [
       {
-        title: 'Notebook',
-        url: '/project/notebook',
-        icon: LuSquareCode,
-        action: () => setView(ViewType.NOTEBOOK),
+        title: 'Search',
+        url: '#',
+        icon: LuSearch,
+        onClick: handleOpenSearch,
+      },
+      {
+        title: 'Settings',
+        url: '#',
+        icon: LuSettings,
+        onClick: handleOpenSettings,
       },
     ] as NavItem[],
   };
@@ -181,7 +121,11 @@ export default function ProjectSidebar({ onPanelContent }: ProjectSidebarProps) 
 
   const handleItemClick = (item: NavItem) => {
     if (item.isNavigationItem) {
-      router.push(item.url);
+      return;
+    }
+
+    if (item.onClick) {
+      item.onClick();
       return;
     }
 
@@ -195,11 +139,11 @@ export default function ProjectSidebar({ onPanelContent }: ProjectSidebarProps) 
       if (activeItem.title === item.title) {
         dispatch({ type: ProjectActions.TOGGLE_LEFT_PANEL, payload: !state.leftPanelOpen });
         if (!state.leftPanelOpen) {
-          onPanelContent(item.component());
+          dispatch(setLeftPanelContent(item.component()));
         }
       } else {
         setActiveItem(item);
-        onPanelContent(item.component());
+        dispatch(setLeftPanelContent(item.component()));
         if (!state.leftPanelOpen) {
           dispatch({ type: ProjectActions.TOGGLE_LEFT_PANEL, payload: true });
         }
@@ -209,45 +153,75 @@ export default function ProjectSidebar({ onPanelContent }: ProjectSidebarProps) 
 
   const isItemActive = (item: NavItem) => {
     if (item.action) {
-      return state.activeView === ViewType[item.action().payload];
+      const actionPayload = item.action().payload;
+      return Object.values(ViewType).includes(actionPayload) && state.activeView === actionPayload;
     }
     if (item.isNavigationItem) {
-      return pathname.startsWith(item.url);
+      return window.location.pathname.startsWith(item.url);
     }
     return item.isPanelItem && activeItem.title === item.title && state.leftPanelOpen;
   };
 
+  // Custom style classes for icon color
+  const iconStyle = 'text-[rgba(241,243,242,1)]';
+  const activeIconStyle = '!active:text-[rgb(225,227,227)]';
+  const activeBackgroundStyle = '!active:bg-[rgba(199,209,207,0.1)]';
+
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="icon">
-        <SidebarHeader>
-          <SidebarTrigger />
-        </SidebarHeader>
+    <>
+      <Sidebar
+        collapsible="none"
+        style={{
+          background: 'var(--foreground)',
+          backgroundColor: 'var(--foreground)',
+        }}
+      >
         <SidebarContent>
-          <SidebarGroup className="px-1">
+          <SidebarHeader>
+            <Link href="/">
+              <SidebarMenuButton
+                tooltip={{
+                  children: 'home',
+                  hidden: false,
+                }}
+                className={cn(iconStyle)}
+              >
+                <Home />
+                <span className="sr-only">home</span>
+              </SidebarMenuButton>
+            </Link>
+          </SidebarHeader>
+          <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                {data.navMain.map(item => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton
-                      tooltip={{
-                        children: item.title,
-                        hidden: false,
-                      }}
-                      onClick={() => handleItemClick(item)}
-                      isActive={isItemActive(item)}
-                      className="flex h-8 w-8 items-center justify-center p-0"
-                    >
-                      <item.icon />
-                      <span className="sr-only">{item.title}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {data.navMain.map(item => {
+                  const active = isItemActive(item);
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        tooltip={{
+                          children: item.title,
+                          hidden: false,
+                        }}
+                        onClick={() => handleItemClick(item)}
+                        isActive={active}
+                        className={cn(
+                          'flex h-8 w-8 items-center justify-center p-0 rounded-md',
+                          iconStyle,
+                          active ? cn(activeIconStyle, activeBackgroundStyle) : ''
+                        )}
+                      >
+                        <item.icon />
+                        <span className="sr-only">{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>
-        <SidebarFooter className="px-1">
+        <SidebarFooter>
           <SidebarMenu>
             {data.navFooter.map(item => (
               <SidebarMenuItem key={item.title}>
@@ -257,8 +231,10 @@ export default function ProjectSidebar({ onPanelContent }: ProjectSidebarProps) 
                     hidden: false,
                   }}
                   onClick={() => handleItemClick(item)}
-                  isActive={isItemActive(item)}
-                  className="flex h-8 w-8 items-center justify-center p-0"
+                  className={cn(
+                    'flex h-8 w-8 items-center justify-center p-0 rounded-md',
+                    iconStyle
+                  )}
                 >
                   <item.icon />
                   <span className="sr-only">{item.title}</span>
@@ -267,8 +243,20 @@ export default function ProjectSidebar({ onPanelContent }: ProjectSidebarProps) 
             ))}
           </SidebarMenu>
         </SidebarFooter>
-        <SidebarRail />
       </Sidebar>
-    </SidebarProvider>
+
+      <CommandDialog open={isCommandOpen} onOpenChange={setIsCommandOpen}>
+        <CommandInput placeholder="Type a command or search..." />
+        <CommandList>
+          <CommandEmpty>No results found.</CommandEmpty>
+          <CommandGroup heading="Quick Actions">
+            <CommandItem>
+              <LuSettings />
+              <span>Open Settings</span>
+            </CommandItem>
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
+    </>
   );
 }

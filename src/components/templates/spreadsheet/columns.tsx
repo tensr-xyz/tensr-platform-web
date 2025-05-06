@@ -9,7 +9,7 @@ interface InitialColumn {
   size?: number;
 }
 
-interface CreateColumnsProps {
+export interface CreateColumnsProps {
   initialColumns: InitialColumn[];
   extraColumnsCount: number;
   setData: React.Dispatch<React.SetStateAction<Record<string, any>[]>>;
@@ -31,22 +31,6 @@ CellRenderer.displayName = 'CellRenderer';
 // Separate the select column definition for cleaner code
 const selectColumn: ColumnDef<any> = {
   id: 'select',
-  header: ({ table }) => {
-    const hasAllSelected = table.getIsAllRowsSelected();
-
-    return (
-      <div className="flex w-full items-center gap-2 px-2">
-        <Checkbox
-          checked={hasAllSelected}
-          onCheckedChange={() => {
-            table.toggleAllRowsSelected(!hasAllSelected);
-          }}
-          aria-label="Select all"
-        />
-        <span className="text-xs">#</span>
-      </div>
-    );
-  },
   cell: ({ row }) => (
     <div className="flex w-full items-center gap-2 pl-2">
       <Checkbox
@@ -103,7 +87,7 @@ export const createColumns = ({
       .fill(null)
       .map((_, i) => ({
         id: `col-${initialColumns.length + i}`,
-        header: 'undefined',
+        header: 'New Column',
         accessorKey: `col-${initialColumns.length + i}`,
         size: DEFAULT_COLUMN_WIDTH,
         cell: ({

@@ -9,6 +9,7 @@ import {
   SortingState,
   useReactTable,
   VisibilityState,
+  OnChangeFn,
 } from '@tanstack/react-table';
 import {
   EditableCell,
@@ -18,22 +19,27 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/molecules/table';
-import { createColumns } from '@/components/templates/spreadsheet/columns.tsx';
-import { HeaderComponent } from '@/components/templates/spreadsheet/header.tsx';
+import { createColumns, CreateColumnsProps } from '@/components/templates/spreadsheet/columns';
+import { HeaderComponent } from '@/components/templates/spreadsheet/header';
 import { useSession, wsService } from '@/hooks/ui/use-session';
 import { cn } from '@/utils';
 import { useTabs } from '@/contexts/tabs-context';
 import { ColumnSummary } from '@/types/file';
-import Filters from '@/components/templates/spreadsheet/filters.tsx';
+import Filters from '@/components/templates/spreadsheet/filters';
 import { PageResponse } from '@/types/project';
 import { CellPosition, SortConfig, SpreadsheetProps } from '@/types/spreadsheet';
 import { handleKeyboardNavigation } from '@/utils/spreadsheet';
+import { updateTab } from '@/contexts/tabs-context/actions';
+import _ from 'lodash';
+import useAuth from '@/hooks/api/use-auth';
 
 const INITIAL_EMPTY_ROWS = 200;
 const ROWS_PER_BATCH = 100;
 const EXTRA_COLUMNS = 10;
 const DEFAULT_COLUMN_WIDTH = 150;
 const SCROLL_PERCENTAGE_THRESHOLD = 0.5;
+
+type RowType = Record<string, any> & { id: string };
 
 export function Spreadsheet({
   initialData,
@@ -44,12 +50,16 @@ export function Spreadsheet({
   tabId,
   showFilters = false,
   onCloseFilters,
+  onSelectionChange,
 }: SpreadsheetProps) {
-  const tableContainerRef = useRef(null);
+  const { tokens } = useAuth();
+  const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const loadingRef = useRef(false);
   const lastLoadedRowRef = useRef(initialData.length);
-  const [columnStats, setColumnStats] = useState<Record<string, ColumnSummary> | null>(null);
+  const [columnStats, setColumnStats] = useState<Record<string, ColumnSummary> | undefined>(
+    undefined
+  );
   const [focusedCell, setFocusedCell] = useState<CellPosition | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const statsLoadAttempted = useRef(false);
@@ -63,7 +73,7 @@ export function Spreadsheet({
   // Reset stats when file path changes
   useEffect(() => {
     if (filePath) {
-      setColumnStats(null);
+      setColumnStats(undefined);
       statsLoadAttempted.current = false;
     }
   }, [filePath]);
@@ -78,12 +88,22 @@ export function Spreadsheet({
       setIsLoadingStats(true);
       statsLoadAttempted.current = true;
 
-      const stats = {};
-      // const stats = await invoke('analyse_csv', {
-      //   request: {
-      //     path: decodedFilePath,
-      //   },
-      // });
+      const response = await fetch('http://localhost:8080/api/analysis/analyze-file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokens?.idToken}`,
+        },
+        body: JSON.stringify({
+          path: decodedFilePath,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error analyzing file: ${response.statusText}`);
+      }
+
+      const stats = await response.json();
 
       if (!stats || typeof stats !== 'object') {
         throw new Error('Invalid statistics data received');
@@ -106,7 +126,7 @@ export function Spreadsheet({
   const isFileMode = !!filePath;
 
   // Initialize data based on mode
-  const [data, setData] = useState(() => {
+  const [data, setData] = useState<RowType[]>(() => {
     if (isFileMode && initialData.length > 0) {
       // File mode with data: Initialize with provided data
       return initialData.map((row, index) => ({
@@ -128,7 +148,7 @@ export function Spreadsheet({
     }
   });
 
-  const { state } = useTabs();
+  const { state, dispatch } = useTabs();
   const activeTab = state.tabs.find(tab => tab.id === state.activeTabId);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -148,11 +168,11 @@ export function Spreadsheet({
   const columns = useMemo(
     () =>
       createColumns({
-        initialColumns,
+        initialColumns: initialColumns,
         extraColumnsCount,
-        setData,
+        setData: setData as React.Dispatch<React.SetStateAction<Record<string, any>[]>>,
         DEFAULT_COLUMN_WIDTH,
-      }),
+      } as CreateColumnsProps),
     [initialColumns, extraColumnsCount]
   );
 
@@ -166,7 +186,7 @@ export function Spreadsheet({
       setIsLoading(true);
 
       const startRow = lastLoadedRowRef.current;
-      const endRow = Math.min(startRow + ROWS_PER_BATCH, totalRowCount);
+      const endRow = Math.min(startRow + ROWS_PER_BATCH, totalRowCount || 0);
 
       // Convert TanStack Table sorting state to backend format
       const sortConfig: SortConfig[] | undefined =
@@ -178,10 +198,10 @@ export function Spreadsheet({
           : undefined;
 
       const filterConfig = columnFilters.map(filter => {
-        const { operator, value } = filter.value || {};
-
+        const filterValue = (filter.value as { operator?: string; value?: any }) || {};
+        const operator = filterValue.operator || '';
         // Always convert value to string
-        const stringValue = String(value);
+        const stringValue = String(filterValue.value || '');
 
         return {
           column: filter.id,
@@ -190,17 +210,28 @@ export function Spreadsheet({
         };
       });
 
-      const response = await invoke<PageResponse>('fetch_csv_page', {
-        request: {
-          path: decodedFilePath,
-          start_row: startRow,
-          end_row: endRow,
-          sort: sortConfig,
-          filters: filterConfig,
+      const response = await fetch('http://localhost:8080/api/files/fetch-page', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokens?.idToken}`,
         },
+        body: JSON.stringify({
+          path: dataToImport.filePath,
+          start_row: 0,
+          end_row: 100,
+        }),
       });
 
-      if (startRow >= totalRowCount) {
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Error response:', errorText);
+        throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+
+      if (startRow >= (totalRowCount || 0)) {
         setData(prevData => [
           ...prevData,
           ...Array(ROWS_PER_BATCH)
@@ -210,10 +241,12 @@ export function Spreadsheet({
             })),
         ]);
       } else {
-        const newRows = response.data[0].map((_, rowIndex) => {
-          const row = { id: `row-${startRow + rowIndex}` };
+        const newRows = data.data[0].map((_, rowIndex) => {
+          const row: RowType = { id: `row-${startRow + rowIndex}` };
           initialColumns.forEach((col, colIndex) => {
-            row[col.id] = response.data[colIndex][rowIndex];
+            if (col.id) {
+              row[col.id] = data.data[colIndex][rowIndex];
+            }
           });
           return row;
         });
@@ -230,19 +263,21 @@ export function Spreadsheet({
     }
   }, [decodedFilePath, initialColumns, totalRowCount, sorting, columnFilters]);
 
-  const handleSortingChange = useCallback(
-    async (newSorting: SortingState) => {
+  const handleSortingChange: OnChangeFn<SortingState> = useCallback(
+    async updaterOrValue => {
       // Reset the data and pagination state when sort changes
       setData([]);
       lastLoadedRowRef.current = 0;
 
       // Update the sorting state
+      const newSorting =
+        typeof updaterOrValue === 'function' ? updaterOrValue(sorting) : updaterOrValue;
       setSorting(newSorting);
 
       // Refetch data with new sorting
       await fetchMoreRows();
     },
-    [fetchMoreRows]
+    [fetchMoreRows, sorting]
   );
 
   const fetchFilteredData = useCallback(
@@ -266,30 +301,43 @@ export function Spreadsheet({
           const endRow = ROWS_PER_BATCH;
 
           const filterConfig = currentFilters.map(filter => {
-            const { operator, value } = filter.value || {};
+            const filterValue = (filter.value as { operator?: string; value?: any }) || {};
             return {
               column: filter.id,
-              operator,
-              value: String(value),
+              operator: filterValue.operator || '',
+              value: String(filterValue.value || ''),
             };
           });
 
-          const response = {};
-          // const response = await invoke<PageResponse>('fetch_csv_page', {
-          //   request: {
-          //     path: decodedFilePath,
-          //     start_row: startRow,
-          //     end_row: endRow,
-          //     filters: filterConfig,
-          //   },
-          // });
+          const response = await fetch('http://localhost:8080/api/files/fetch-page', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${tokens?.idToken}`,
+            },
+            body: JSON.stringify({
+              path: dataToImport.filePath,
+              start_row: 0,
+              end_row: 100,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
+          }
+
+          const data = await response.json();
 
           // Process the response
-          if (response.data && response.data[0]) {
-            const newRows = response.data[0].map((_, rowIndex) => {
-              const row = { id: `row-${rowIndex}` };
+          if (data.data && data.data[0]) {
+            const newRows = data.data[0].map((_, rowIndex) => {
+              const row: RowType = { id: `row-${rowIndex}` };
               initialColumns.forEach((col, colIndex) => {
-                row[col.id] = response.data[colIndex][rowIndex];
+                if (col.id) {
+                  row[col.id] = data.data[colIndex][rowIndex];
+                }
               });
               return row;
             });
@@ -356,7 +404,7 @@ export function Spreadsheet({
     const container = tableContainerRef.current;
     const cellElement = container.querySelector(
       `[data-row-index="${focusedCell.rowIndex}"][data-column-id="${focusedCell.columnId}"]`
-    );
+    ) as HTMLElement | null;
 
     if (!cellElement) return;
 
@@ -423,7 +471,7 @@ export function Spreadsheet({
       const verticalScrollPercentage = (scrollTop + clientHeight) / scrollHeight;
       if (verticalScrollPercentage > SCROLL_PERCENTAGE_THRESHOLD && !isLoading) {
         if (isFileMode) {
-          if (lastLoadedRowRef.current < totalRowCount) {
+          if (lastLoadedRowRef.current < (totalRowCount || 0)) {
             fetchMoreRows();
           } else {
             addEmptyRows();
@@ -442,17 +490,95 @@ export function Spreadsheet({
     [isLoading, isFileMode, fetchMoreRows, addEmptyRows, totalRowCount]
   );
 
+  useEffect(() => {
+    if (onSelectionChange) {
+      onSelectionChange(rowSelection);
+    }
+  }, [rowSelection, onSelectionChange]);
+
+  const saveSpreadsheetState = useCallback(
+    _.debounce(() => {
+      if (!tabId || !activeTab) return;
+
+      // Update initialColumns directly to ensure they have proper header values
+      if (activeTab.data && activeTab.data.initialColumns) {
+        const updatedColumns = activeTab.data.initialColumns.map((col: { id: string }) => {
+          // Find the matching column in the current table
+          const tableColumn = table.getColumn(col.id);
+          if (tableColumn && tableColumn.columnDef.header) {
+            // Ensure header is a string
+            const headerValue =
+              typeof tableColumn.columnDef.header === 'string'
+                ? tableColumn.columnDef.header
+                : `Column ${col.id.replace(/\D/g, '')}`;
+
+            return {
+              ...col,
+              header: headerValue,
+            };
+          }
+          return col;
+        });
+
+        // Update tab with correct columns
+        dispatch(
+          updateTab(tabId, {
+            data: {
+              ...activeTab.data,
+              initialColumns: updatedColumns,
+            },
+          })
+        );
+      }
+    }, 500),
+    [tabId, activeTab, table]
+  );
+
   const handleHeaderEdit = useCallback(
     (columnId: string, value: string) => {
+      // Update column header to be a string
       table.getAllColumns().forEach(column => {
-        if (column.id === columnId && column.columnDef.header) {
-          // @ts-ignore - We know this is safe since we're checking for header existence
+        if (column.id === columnId) {
+          // Ensure header is set as a string
           column.columnDef.header = value;
         }
       });
+
+      // Immediately update the actual initialColumns in the tab data
+      if (tabId && activeTab?.data?.initialColumns) {
+        const updatedColumns = activeTab.data.initialColumns.map((col: { id: string }) => {
+          if (col.id === columnId) {
+            return {
+              ...col,
+              header: value,
+            };
+          }
+          return col;
+        });
+
+        // Update the tab data with new columns
+        dispatch(
+          updateTab(tabId, {
+            data: {
+              ...activeTab.data,
+              initialColumns: updatedColumns,
+            },
+            isDirty: true,
+          })
+        );
+      }
+
+      // Also save spreadsheet state for consistency
+      saveSpreadsheetState();
     },
-    [table]
+    [table, tabId, activeTab, dispatch, saveSpreadsheetState]
   );
+
+  useEffect(() => {
+    if (onSelectionChange) {
+      onSelectionChange(rowSelection);
+    }
+  }, [rowSelection, onSelectionChange]);
 
   // Reset extra columns when initial columns change
   useEffect(() => {
@@ -474,6 +600,11 @@ export function Spreadsheet({
       );
     }
   }, [wsReady, currentSession, ws, tabId, decodedFilePath]);
+
+  useEffect(() => {
+    // Force virtualization recalculation
+    rowVirtualizer.measure();
+  }, [data.length, rowVirtualizer]);
 
   // Update the message handler to be more forgiving with tabIds
   useEffect(() => {
@@ -554,7 +685,12 @@ export function Spreadsheet({
   // Update the handleCellEdit function
   const handleCellEdit = useCallback(
     (rowIndex: number, columnId: string, value: any) => {
-      // Update local state immediately
+      // If the columnId has [object Object] in it, use the numeric part instead
+      const useColumnId = /object Object/.test(columnId)
+        ? columnId.replace(/\[object Object\](_duplicated_)?/, '')
+        : columnId;
+
+      // Update local state immediately with the cleaned column ID
       setData(prevData => {
         const newData = [...prevData];
         if (!newData[rowIndex]) {
@@ -562,17 +698,38 @@ export function Spreadsheet({
         }
         newData[rowIndex] = {
           ...newData[rowIndex],
-          [columnId]: value,
+          [useColumnId]: value,
         };
         return newData;
       });
 
+      // Mark tab as dirty and update tab data properly
+      if (tabId && activeTab?.data) {
+        const updatedData = {
+          ...activeTab.data,
+          initialData: data.map((row, idx) => {
+            if (idx === rowIndex) {
+              return { ...row, [useColumnId]: value };
+            }
+            return row;
+          }),
+        };
+
+        // Update the tab
+        dispatch(
+          updateTab(tabId, {
+            data: updatedData,
+            isDirty: true,
+          })
+        );
+      }
+
       // Send update via WebSocket service if connected
       if (wsReady && currentSession) {
-        wsService.sendCellUpdate(tabId, rowIndex, columnId, value);
+        wsService.sendCellUpdate(tabId, rowIndex, useColumnId, value);
       }
     },
-    [wsReady, currentSession, tabId]
+    [data, tabId, activeTab, dispatch, wsReady, currentSession]
   );
 
   const HeaderComponentWrapper = useMemo(
@@ -587,29 +744,39 @@ export function Spreadsheet({
           isLoadingStats={isLoadingStats}
         />
       ),
-    [table, showStats, columnStats, handleHeaderEdit]
+    [table, showStats, columnStats, handleHeaderEdit, isLoadingStats]
   );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      handleKeyboardNavigation({
-        e,
-        focusedCell,
-        table,
-        rows,
-        onPositionChange: newPosition => {
-          setFocusedCell(newPosition);
-          requestAnimationFrame(() => {
-            const cellRef = cellRefs.current.get(`${newPosition.rowIndex}-${newPosition.columnId}`);
-            if (cellRef) cellRef.focus();
-          });
-        },
-      });
+      if (focusedCell) {
+        handleKeyboardNavigation({
+          e,
+          focusedCell,
+          table,
+          rows,
+          onPositionChange: newPosition => {
+            setFocusedCell(newPosition);
+            requestAnimationFrame(() => {
+              const cellRef = cellRefs.current.get(
+                `${newPosition.rowIndex}-${newPosition.columnId}`
+              );
+              if (cellRef) cellRef.focus();
+            });
+          },
+        });
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
   }, [focusedCell, table, rows.length]);
+
+  useEffect(() => {
+    return () => {
+      saveSpreadsheetState.cancel();
+    };
+  }, [saveSpreadsheetState]);
 
   return (
     <div className="flex h-full flex-col">
@@ -624,7 +791,7 @@ export function Spreadsheet({
               fetchMoreRows();
             }}
             onCloseFilters={() => onCloseFilters?.()}
-            onFetchFilteredData={fetchFilteredData} // New prop
+            onFetchFilteredData={fetchFilteredData}
           />
         </div>
       )}
@@ -650,7 +817,7 @@ export function Spreadsheet({
             {table.getHeaderGroups().map(headerGroup => (
               <TableRow
                 key={headerGroup.id}
-                className="border-none!" // Remove default border
+                className="!border-none" // Remove default border
                 style={{ display: 'flex', width: '100%' }}
               >
                 {headerGroup.headers.map(header => (
@@ -710,7 +877,7 @@ export function Spreadsheet({
                         }
                       }}
                       className={cn(
-                        'border-r border-border last:border-r-0 border-b tabular-nums',
+                        'border-r border-border last:border-r-0 tabular-nums',
                         focusedCell?.rowIndex === virtualRow.index &&
                           focusedCell?.columnId === cell.column.id &&
                           'relative z-10'
@@ -727,8 +894,10 @@ export function Spreadsheet({
                         flexRender(cell.column.columnDef.cell, cell.getContext())
                       ) : (
                         <EditableCell
-                          value={cell.getValue() ?? ''}
-                          onEdit={value => handleCellEdit(virtualRow.index, cell.column.id, value)}
+                          value={(cell.getValue() as string | number | null) || ''}
+                          onEdit={(value: any) =>
+                            handleCellEdit(virtualRow.index, cell.column.id, value)
+                          }
                           className="h-7 w-full px-2"
                           isFocused={
                             focusedCell?.rowIndex === virtualRow.index &&

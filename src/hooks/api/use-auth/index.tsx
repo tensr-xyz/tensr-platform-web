@@ -5,14 +5,40 @@ import { useCallback, useState, useEffect, useRef } from 'react';
 import { useAuthState } from '@/contexts/auth-context';
 import { clearAuthData, getIdToken, storeTokens, getStoredTokens } from '@/utils/auth';
 import { Actions } from '@/contexts/auth-context/types';
+import { User } from '@/types/user'; // Make sure this import exists
 
 // Make sure API_BASE_URL is properly defined
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
 
+// Define fetchUserData function that was missing
+const fetchUserData = async (idToken: string, userId: string): Promise<User | null> => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Failed to fetch user data:', response.status);
+      return null;
+    }
+
+    const userData = await response.json();
+    return userData;
+  } catch (error) {
+    console.error('Error fetching user data:', error);
+    return null;
+  }
+};
+
 export const useAuth = () => {
   const { state, dispatch } = useAuthState();
-  const [session, setSession] = useState(null);
+  // Fix the session state type to string | null instead of just null
+  const [session, setSession] = useState<string | null>(null);
   const router = useRouter();
 
   // Use a ref to track if we're in a browser environment
@@ -116,7 +142,7 @@ export const useAuth = () => {
 
   // Initiate authentication
   const initiateAuth = useCallback(
-    async email => {
+    async (email: string) => {
       dispatch({ type: Actions.SET_LOADING, payload: true });
       dispatch({ type: Actions.SET_ERROR, payload: null });
       try {
@@ -165,7 +191,7 @@ export const useAuth = () => {
 
   // Verify authentication with OTP
   const verifyAuth = useCallback(
-    async (email, otp, authSession) => {
+    async (email: string, otp: string, authSession?: string) => {
       dispatch({ type: Actions.SET_LOADING, payload: true });
       dispatch({ type: Actions.SET_ERROR, payload: null });
 
@@ -327,7 +353,8 @@ export const useAuth = () => {
   // Refresh user data
   const refreshUser = useCallback(async () => {
     try {
-      const userId = state.user?.id;
+      // Fix accessing userId - use safe property access pattern
+      const userId = state.user?.userId; // Assuming User type has userId, not id
       const idToken = getIdToken();
 
       if (!userId || !idToken) {
@@ -360,7 +387,7 @@ export const useAuth = () => {
       console.error('Error refreshing user data:', error);
       return null;
     }
-  }, [dispatch, state.user?.id]);
+  }, [dispatch, state.user]);
 
   // Set up token refresh based on expiration
   useEffect(() => {
@@ -448,7 +475,7 @@ export const useAuth = () => {
       console.error('Error parsing JWT:', err);
       logout();
     }
-  }, [state.tokens, logout]);
+  }, [state.tokens, logout, state.user, dispatch]);
 
   return {
     user: state.user,
@@ -460,8 +487,8 @@ export const useAuth = () => {
     initiateAuth,
     verifyAuth,
     logout,
-    refreshUser: refreshUser || (() => {}),
-    resendVerificationCode: resendVerificationCode || (() => {}),
+    refreshUser,
+    resendVerificationCode,
   };
 };
 

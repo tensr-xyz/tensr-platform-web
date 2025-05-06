@@ -15,6 +15,10 @@ export interface BasePluginMetadata {
   compatibleVersions?: string[];
   license?: string;
 
+  thumbnailUrl: string;
+  isPaid: boolean;
+  tags: string[];
+
   // Plugin configuration
   config?: {
     timeout?: number;

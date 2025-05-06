@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
-import { FileUpload, FileData } from '@/types/file';
 import { ProjectActions } from '@/contexts/project-context/types';
 import { useProject } from '@/contexts/project-context';
+import { getIdToken } from '@/utils/auth';
 
 // API base URL - should be configured via environment variable
 const API_BASE_URL =
@@ -24,20 +24,6 @@ export interface FileMetadata {
   uploadedAt: string;
 }
 
-// S3 file service interface
-interface FileService {
-  getUploadUrl: (
-    userId: string,
-    fileInfo: {
-      fileName: string;
-      fileType: string;
-      fileSize: number;
-    }
-  ) => Promise<FileUpload>;
-  completeUpload: (userId: string, fileId: string) => Promise<any>;
-  getUserFiles: (userId: string) => Promise<FileMetadata[]>;
-}
-
 export const useFileHandler = ({
   allowedExtensions = ['.csv', '.xlsx', '.xls'],
   onUploadComplete,
@@ -47,109 +33,80 @@ export const useFileHandler = ({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [files, setFiles] = useState<FileMetadata[]>([]);
   const auth = useAuth();
-  const { user } = auth;
   const { state: projectState, dispatch } = useProject();
 
-  // Add debugging effect to monitor context updates
-  useEffect(() => {
-    console.log('Project state changed:', {
-      showImportWizard: projectState.showImportWizard,
-      hasImportData: !!projectState.importData,
-      currentProject: projectState.currentProject?.id,
-    });
-  }, [projectState.showImportWizard, projectState.importData, projectState.currentProject]);
+  // Use a ref to track if initial fetch has happened
+  const initialFetchDoneRef = useRef(false);
 
-  // Helper function to get access token from auth context
-  const getTokenFromAuth = (): string => {
+  // Helper function to get access token
+  const getToken = useCallback((): string => {
+    // First try to get from auth context
     if (auth.tokens?.accessToken) {
       return auth.tokens.accessToken;
     }
+
+    // Fallback to localStorage directly
+    const token = localStorage.getItem('access_token');
+    return token || '';
+  }, [auth.tokens]);
+
+  // Helper function to get user ID from multiple sources
+  const getUserId = useCallback((): string => {
+    // First try user object from auth context
+    if (auth.user?.userId) {
+      return auth.user.userId;
+    }
+
+    if (auth.user?.userId) {
+      return auth.user.userId;
+    }
+
+    // If no user in context, try to extract from token
+    const idToken = getIdToken();
+    if (idToken) {
+      try {
+        const payload = JSON.parse(atob(idToken.split('.')[1]));
+        return payload.sub || payload.user_id || '';
+      } catch (e) {
+        console.error('Error extracting user ID from token:', e);
+      }
+    }
+
     return '';
-  };
-
-  // S3 file service implementation
-  const fileService: FileService = {
-    getUploadUrl: async (userId, fileInfo) => {
-      try {
-        console.log('Getting upload URL for file:', fileInfo.fileName);
-        const token = getTokenFromAuth();
-        const response = await fetch(`${API_BASE_URL}/files/upload-url`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(fileInfo),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to get upload URL: ${response.statusText}`);
-        }
-
-        return response.json();
-      } catch (error) {
-        console.error('Error getting upload URL:', error);
-        throw error;
-      }
-    },
-
-    completeUpload: async (userId, fileId) => {
-      try {
-        console.log('Completing upload for fileId:', fileId);
-        const token = getTokenFromAuth();
-        const response = await fetch(`${API_BASE_URL}/files/${fileId}/complete`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to complete upload: ${response.statusText}`);
-        }
-
-        return response.json();
-      } catch (error) {
-        console.error('Error completing upload:', error);
-        throw error;
-      }
-    },
-
-    getUserFiles: async userId => {
-      try {
-        console.log('Fetching files for user:', userId);
-        const token = getTokenFromAuth();
-        const response = await fetch(`${API_BASE_URL}/files`, {
-          method: 'GET',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Failed to get files: ${response.statusText}`);
-        }
-
-        const data = await response.json();
-        return data.files;
-      } catch (error) {
-        console.error('Error getting user files:', error);
-        throw error;
-      }
-    },
-  };
+  }, [auth.user]);
 
   // Function to fetch user's files
-  const fetchUserFiles = async (): Promise<FileMetadata[]> => {
+  const fetchUserFiles = useCallback(async (): Promise<FileMetadata[]> => {
     try {
       setIsLoading(true);
       setError(null);
 
-      if (!user?.userId) {
-        throw new Error('User not authenticated');
+      const token = getToken();
+      if (!token) {
+        setError('No authentication token available. Please log in again.');
+        return [];
       }
 
-      const userFiles = await fileService.getUserFiles(user.userId);
+      const userId = getUserId();
+      if (!userId) {
+        console.warn('Unable to determine user ID - will use token authorization only');
+      }
+
+      console.log('Fetching files with token');
+      const response = await fetch(`${API_BASE_URL}/files`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to get files: ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const userFiles = data.files || [];
       setFiles(userFiles);
       return userFiles;
     } catch (err: any) {
@@ -159,7 +116,7 @@ export const useFileHandler = ({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [getToken, getUserId]); // Include dependencies to prevent stale closures
 
   // Main file handler function
   const handleFile = async (file: File): Promise<boolean> => {
@@ -181,6 +138,12 @@ export const useFileHandler = ({
         throw new Error('Unsupported file type. Please select a CSV or Excel file.');
       }
 
+      // Check token availability
+      const token = getToken();
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.');
+      }
+
       // Step 1: Get pre-signed URL for S3 upload
       console.log('Getting pre-signed URL for S3 upload');
       setUploadProgress(5);
@@ -190,7 +153,21 @@ export const useFileHandler = ({
         fileSize: file.size,
       };
 
-      const uploadData = await fileService.getUploadUrl(user.userId, fileInfo);
+      // Get upload URL
+      const response = await fetch(`${API_BASE_URL}/files/upload-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(fileInfo),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get upload URL: ${response.statusText}`);
+      }
+
+      const uploadData = await response.json();
       console.log('Got presigned URL for fileId:', uploadData.fileId);
 
       // Step 2: Upload directly to S3 using presigned URL
@@ -209,59 +186,22 @@ export const useFileHandler = ({
         console.log('Upload to S3 successful');
 
         // Step 3: Mark upload as complete
-        await fileService.completeUpload(user?.userId, uploadData.fileId);
-        setUploadProgress(70);
-        console.log('Marked upload as complete');
-      } catch (uploadError) {
-        console.error('S3 upload failed:', uploadError);
-        throw new Error(`Failed to upload file: ${uploadError.message}`);
-      }
+        const completeResponse = await fetch(
+          `${API_BASE_URL}/files/${uploadData.fileId}/complete`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
-      // Step 4: Process the file via backend service
-      console.log('Processing file through Rust backend');
-      const processUrl = `http://localhost:8080/api/files/${uploadData.fileId}/process`;
-      console.log('Processing URL:', processUrl);
-
-      try {
-        const apiResponse = await fetch(processUrl, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${getTokenFromAuth()}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            userId: user.userId,
-            fileName: fileName,
-            fileType: fileExtension,
-            token: getTokenFromAuth(), // Add this line
-          }),
-        });
-
-        if (!apiResponse.ok) {
-          const errorText = await apiResponse.text();
-          console.error('Process API error:', errorText);
-          throw new Error(`Failed to process file: ${errorText || apiResponse.statusText}`);
-        }
-
-        setUploadProgress(90);
-        console.log('File processed by backend');
-
-        // Parse the response
-        const data: FileData = await apiResponse.json();
-        console.log('Received processed data:', {
-          columns: data.metadata?.column_names?.length,
-          rows: data.metadata?.rows,
-        });
-
-        if (!data.metadata?.column_names?.length) {
-          throw new Error('No data found in file');
+        if (!completeResponse.ok) {
+          throw new Error('Failed to complete upload');
         }
 
         setUploadProgress(100);
-
-        // Update project context
-        console.log('Updating project context');
-        updateProjectContext(fileName, data, uploadData.fileId);
+        console.log('Marked upload as complete');
 
         // Refresh the files list
         await fetchUserFiles();
@@ -271,12 +211,12 @@ export const useFileHandler = ({
           console.log('Calling onUploadComplete with fileId:', uploadData.fileId);
           onUploadComplete(uploadData.fileId);
         }
-      } catch (processError) {
-        console.error('Error processing file:', processError);
-        throw new Error(`Failed to process file: ${processError.message}`);
-      }
 
-      return true;
+        return true;
+      } catch (uploadError: any) {
+        console.error('S3 upload failed:', uploadError);
+        throw new Error(`Failed to upload file: ${uploadError.message}`);
+      }
     } catch (err: any) {
       console.error('File upload/processing error:', err);
       setError(err.message || 'Failed to upload file');
@@ -357,52 +297,6 @@ export const useFileHandler = ({
     });
   };
 
-  // Helper function to update project context
-  const updateProjectContext = (fileName: string, data: FileData, fileId: string) => {
-    console.log('updateProjectContext called with:', { fileName, fileId });
-
-    // Create base project
-    const project = {
-      id: fileId,
-      name: fileName,
-      path: fileName, // Using filename instead of path for web
-      type: 'file' as const,
-    };
-
-    // Update project context
-    console.log('Dispatching SET_PROJECT');
-    dispatch({ type: ProjectActions.SET_PROJECT, payload: project });
-
-    // Set import data
-    const importData = {
-      fileName,
-      filePath: fileName,
-      fileId,
-      preview: data.metadata.preview,
-      columnNames: data.metadata.column_names,
-      totalRows: data.metadata.rows,
-      totalColumns: data.metadata.columns,
-      columnSummaries: data.column_summaries || null,
-      detectedDelimiter: data.metadata.detected_delimiter || null, // Added this field
-    };
-
-    console.log('Dispatching SET_IMPORT_DATA with:', {
-      columns: importData.columnNames.length,
-      rows: importData.totalRows,
-    });
-
-    dispatch({
-      type: ProjectActions.SET_IMPORT_DATA,
-      payload: importData,
-    });
-
-    console.log('Dispatching SET_SHOW_IMPORT_WIZARD');
-    dispatch({
-      type: ProjectActions.SET_SHOW_IMPORT_WIZARD,
-      payload: true,
-    });
-  };
-
   // Utility functions
   const getFileExtension = (filename: string): string => {
     return filename.slice(((filename.lastIndexOf('.') - 1) >>> 0) + 2);
@@ -425,6 +319,12 @@ export const useFileHandler = ({
     setError(null);
 
     try {
+      // Check token
+      const token = getToken();
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.');
+      }
+
       // First, ensure we have the file metadata
       const fileList = await fetchUserFiles();
       const fileInfo = fileList.find(file => file.fileId === fileId);
@@ -435,50 +335,11 @@ export const useFileHandler = ({
 
       console.log('Found file in user files:', fileInfo.fileName);
 
-      // Process the file through Rust backend directly (no more client-side download)
-      console.log('Processing file through backend directly from S3');
-      const processUrl = `http://localhost:8080/api/files/${fileId}/process`;
-
-      const apiResponse = await fetch(processUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${getTokenFromAuth()}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.userId,
-          fileName: fileInfo.fileName,
-          fileType: fileInfo.fileName.split('.').pop()?.toLowerCase(),
-          token: getTokenFromAuth(), // Add token for the Rust backend to use
-        }),
-      });
-
-      if (!apiResponse.ok) {
-        const errorText = await apiResponse.text();
-        throw new Error(`Backend processing failed: ${errorText || apiResponse.statusText}`);
-      }
-
-      const processResult = await apiResponse.json();
-      console.log('File processed by backend');
-
-      // Update project context with the result
-      const importData = {
-        fileName: fileInfo.fileName,
-        filePath: fileInfo.fileName,
-        fileId,
-        preview: processResult.metadata.preview,
-        columnNames: processResult.metadata.column_names,
-        totalRows: processResult.metadata.rows,
-        totalColumns: processResult.metadata.columns,
-        columnSummaries: processResult.column_summaries || null,
-        detectedDelimiter: processResult.metadata.detected_delimiter || ',',
-      };
-
-      // Create base project
+      // Create minimal project context with the file info
       const project = {
         id: fileId,
-        name: fileInfo.fileName, // Use fileInfo.fileName
-        path: fileInfo.fileName, // Use fileInfo.fileName
+        name: fileInfo.fileName,
+        path: fileInfo.fileName,
         type: 'file' as const,
       };
 
@@ -486,17 +347,24 @@ export const useFileHandler = ({
       console.log('Dispatching SET_PROJECT');
       dispatch({ type: ProjectActions.SET_PROJECT, payload: project });
 
-      console.log('Dispatching SET_IMPORT_DATA with:', {
-        columns: importData.columnNames.length,
-        rows: importData.totalRows,
-      });
+      // Create minimal import data
+      const importData = {
+        fileName: fileInfo.fileName,
+        filePath: fileInfo.fileName,
+        fileId,
+        preview: [], // No preview without backend processing
+        columnNames: [],
+        totalRows: 0,
+        totalColumns: 0,
+        columnSummaries: null,
+        detectedDelimiter: ',',
+      };
 
       dispatch({
         type: ProjectActions.SET_IMPORT_DATA,
         payload: importData,
       });
 
-      console.log('Dispatching SET_SHOW_IMPORT_WIZARD');
       dispatch({
         type: ProjectActions.SET_SHOW_IMPORT_WIZARD,
         payload: true,
@@ -512,14 +380,31 @@ export const useFileHandler = ({
     }
   };
 
-  // Load files when the component first mounts
+  // Load files when token is available - FIXED TO PREVENT INFINITE LOOP
   useEffect(() => {
-    if (user?.userId) {
+    // Only fetch files if we have a token and haven't already done the initial fetch
+    const token = getToken();
+
+    if (token && !initialFetchDoneRef.current) {
+      console.log('Initial fetch: Token available, fetching files');
+      initialFetchDoneRef.current = true; // Mark that we've done the initial fetch
+
       fetchUserFiles().catch(err => {
         console.error('Failed to load initial files:', err);
       });
     }
-  }, [user?.userId]);
+  }, [fetchUserFiles, getToken]); // Include fetchUserFiles in deps
+
+  // Additional effect to handle auth changes after initial load
+  useEffect(() => {
+    // If auth changes and we become authenticated, fetch files
+    if (auth.isAuthenticated && initialFetchDoneRef.current) {
+      console.log('Auth changed, refreshing files');
+      fetchUserFiles().catch(err => {
+        console.error('Failed to refresh files after auth change:', err);
+      });
+    }
+  }, [auth.isAuthenticated, fetchUserFiles]);
 
   return {
     handleFile,

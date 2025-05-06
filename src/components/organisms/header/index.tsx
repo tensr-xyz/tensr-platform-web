@@ -1,38 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-  Search,
-  Package,
-  Tag,
-  History,
-  Users,
-  User,
-  Building,
-  Briefcase,
-  Check,
-} from 'lucide-react';
+import { User, Building, Briefcase, X, Menu } from 'lucide-react';
 import Link from 'next/link';
-import { Dialog, DialogContent, DialogTrigger } from '@/components/molecules/dialog';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandItem,
-  CommandList,
-  CommandSeparator,
-} from '@/components/organisms/command';
 import { Button } from '@/components/atoms/button';
-import { ChevronsUpDown, Plus, ArrowRight } from 'lucide-react';
-import { EmailForm, OTPForm } from '@/components/organisms/forms/auth-form';
+import { ChevronsUpDown } from 'lucide-react';
 import useAuth from '@/hooks/api/use-auth';
-import {
-  NavigationMenu,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  navigationMenuTriggerStyle,
-} from '@/components/molecules/navigation-menu';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +15,119 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from '@/components/molecules/dropdown';
+import Image from 'next/image';
+import { Avatar, AvatarFallback } from '@/components/atoms/avatar';
+import { useIsMobile } from '@/hooks/ui/use-mobile';
+import { User as UserType } from '@/types/user';
+
+interface MobileMenuProps {
+  isOpen: boolean;
+  onClose: () => void;
+  user: UserType | null;
+  logout: () => void;
+}
+
+const getInitials = (email: string) => {
+  if (!email) return '??';
+  const localPart = email.split('@')[0];
+  const parts = localPart.split(/[._-]/).filter(part => part.length > 0);
+
+  if (parts.length > 1) {
+    return parts.map(part => part[0].toUpperCase()).join('');
+  }
+
+  return localPart.length > 1 ? localPart.slice(0, 2).toUpperCase() : localPart[0].toUpperCase();
+};
+
+export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) => {
+  const isAuthenticated = !!user;
+  const initials = user ? getInitials(user.email) : '';
+
+  return (
+    <div
+      className={`fixed inset-0 bg-white transform transition-transform duration-300 ${
+        isOpen ? 'translate-x-0' : 'translate-x-full'
+      } z-50`}
+    >
+      {/* Mobile Menu Header */}
+      <div className="flex items-center justify-between p-4 h-[72px] border-b">
+        <Link href="/" className="flex" onClick={onClose}>
+          <Button variant="link" size="sm">
+            <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={24} width={96} />
+          </Button>
+        </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={onClose}
+          className="rounded-full border active:border-black"
+        >
+          <X className="h-6 w-6" />
+        </Button>
+      </div>
+
+      {/* Mobile Menu Content */}
+      <div className="flex flex-col h-[calc(100vh-72px)] overflow-y-auto">
+        {/* User Section */}
+        {isAuthenticated && (
+          <div className="p-4 border-b">
+            <div className="flex items-center space-x-3">
+              <Avatar className="h-12 w-12">
+                <AvatarFallback>{initials}</AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium">{user.email}</p>
+                <p className="text-sm text-gray-600">{user.subscriptionTier}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Navigation Links */}
+        <div className="px-4">
+          <Link href="/documentation" onClick={onClose}>
+            <div className="text-lg font-medium p-2">Documentation</div>
+          </Link>
+          <Link href="/plugins" onClick={onClose}>
+            <div className="text-lg font-medium p-2">Plugins</div>
+          </Link>
+        </div>
+
+        <div className="p-4 border-t mt-auto">
+          {isAuthenticated && (
+            <div>
+              <Link href="/settings/account" onClick={onClose}>
+                <div className="text-lg font-medium p-2">Settings</div>
+              </Link>
+              <Button
+                variant="ghost"
+                className="px-0"
+                onClick={() => {
+                  logout();
+                  onClose();
+                }}
+              >
+                <div className="text-lg font-medium p-2">Logout</div>
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Download Button */}
+        <div className="p-4 border-t mt-auto">
+          <Link href="/download" onClick={onClose}>
+            <Button
+              variant="default"
+              className="w-full border border-black text-black bg-white rounded-full hover:bg-[#c4d4f6]"
+            >
+              Download
+            </Button>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 export function AccountSwitcher({
   teams,
@@ -88,42 +174,39 @@ export function AccountSwitcher({
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-
-        <DropdownMenuItem>
-          Profile
-          <DropdownMenuShortcut>⇧⌘P</DropdownMenuShortcut>
-        </DropdownMenuItem>
-        <DropdownMenuItem>
-          Settings
-          <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuLabel className="text-xs text-muted-foreground">Teams</DropdownMenuLabel>
-        {teams.map((team, index) => (
-          <DropdownMenuItem
-            key={team.name}
-            onClick={() => setActiveTeam(team)}
-            className="gap-2 p-2"
-          >
-            <div className="flex size-6 items-center justify-center rounded-sm border">
-              {team.logo && <team.logo className="size-4 shrink-0" />}
-            </div>
-            {team.name}
-            {activeTeam.name === team.name && (
-              <DropdownMenuShortcut>
-                <Check className="h-4 w-4" />
-              </DropdownMenuShortcut>
-            )}
+        <Link href="/settings/account">
+          <DropdownMenuItem>
+            Settings
+            <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
           </DropdownMenuItem>
-        ))}
-        <DropdownMenuItem className="gap-2 p-2">
-          <div className="flex size-6 items-center justify-center rounded-md border bg-background">
-            <Plus className="size-4" />
-          </div>
-          <div className="font-medium text-muted-foreground">Add team</div>
-        </DropdownMenuItem>
+        </Link>
+
+        {/*<DropdownMenuSeparator />*/}
+
+        {/*<DropdownMenuLabel className="text-xs text-muted-foreground">Teams</DropdownMenuLabel>*/}
+        {/*{teams.map((team, index) => (*/}
+        {/*  <DropdownMenuItem*/}
+        {/*    key={team.name}*/}
+        {/*    onClick={() => setActiveTeam(team)}*/}
+        {/*    className="gap-2 p-2"*/}
+        {/*  >*/}
+        {/*    <div className="flex size-6 items-center justify-center rounded-sm border">*/}
+        {/*      {team.logo && <team.logo className="size-4 shrink-0" />}*/}
+        {/*    </div>*/}
+        {/*    {team.name}*/}
+        {/*    {activeTeam.name === team.name && (*/}
+        {/*      <DropdownMenuShortcut>*/}
+        {/*        <Check className="h-4 w-4" />*/}
+        {/*      </DropdownMenuShortcut>*/}
+        {/*    )}*/}
+        {/*  </DropdownMenuItem>*/}
+        {/*))}*/}
+        {/*<DropdownMenuItem className="gap-2 p-2">*/}
+        {/*  <div className="flex size-6 items-center justify-center rounded-md border bg-background">*/}
+        {/*    <Plus className="size-4" />*/}
+        {/*  </div>*/}
+        {/*  <div className="font-medium text-muted-foreground">Add team</div>*/}
+        {/*</DropdownMenuItem>*/}
 
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={onLogout} className="text-red-600">
@@ -135,173 +218,10 @@ export function AccountSwitcher({
   );
 }
 
-export const CommandSearch = () => {
-  const [open, setOpen] = React.useState(false);
-  const commandRef = React.useRef<HTMLDivElement>(null);
-
-  // Set up event listeners to handle clicking outside to close
-  React.useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (commandRef.current && !commandRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-
-    // Handle Cmd+K shortcut
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        setOpen(true);
-        // Focus the input when opened with keyboard shortcut
-        const input = commandRef.current?.querySelector('input');
-        if (input) input.focus();
-      }
-
-      // Close on escape
-      if (e.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
-
-  // Handle input focus
-  const handleFocus = () => setOpen(true);
-  const handleBlur = () => {
-    // Don't close immediately on blur to allow for clicking on menu items
-    // This will be handled by the click outside handler
-  };
-
-  return (
-    <div className="relative w-full" ref={commandRef}>
-      <div className="flex items-center border-0 px-3" cmdk-input-wrapper="">
-        <Search className="mr-2 h-5 w-5 shrink-0 text-gray-400" />
-        <input
-          type="text"
-          placeholder="Search by name or cert #"
-          className="h-11 w-full bg-transparent py-3 text-sm outline-hidden placeholder:text-gray-400"
-          onFocus={handleFocus}
-          onBlur={handleBlur}
-        />
-        <span className="ml-auto pointer-events-none inline-flex h-5 select-none items-center gap-1 rounded-sm border bg-muted px-1.5 font-mono text-xs font-medium opacity-50">
-          <span className="text-xs">⌘</span>K
-        </span>
-      </div>
-
-      {open && (
-        <div className="absolute top-full left-0 right-0 z-50 mt-1">
-          <Command className="rounded-md border shadow-md bg-white">
-            <CommandList className="max-h-[300px] overflow-y-auto">
-              <CommandEmpty>No results found.</CommandEmpty>
-              <CommandGroup heading="Suggestions">
-                <CommandItem>
-                  <span>Popular Cards</span>
-                </CommandItem>
-                <CommandItem>
-                  <History className="mr-2 h-4 w-4" />
-                  <span>Trending This Week</span>
-                </CommandItem>
-                <CommandItem>
-                  <span className="mr-2 h-2 w-2 rounded-full bg-red-500" />
-                  <span>Live Auctions</span>
-                </CommandItem>
-              </CommandGroup>
-              <CommandSeparator />
-              <CommandGroup heading="Categories">
-                <CommandItem>
-                  <Package className="mr-2 h-4 w-4" />
-                  <span>Sports Cards</span>
-                </CommandItem>
-                <CommandItem>
-                  <Package className="mr-2 h-4 w-4" />
-                  <span>TCG (Trading Card Games)</span>
-                </CommandItem>
-                <CommandItem>
-                  <Package className="mr-2 h-4 w-4" />
-                  <span>Memorabilia</span>
-                </CommandItem>
-              </CommandGroup>
-              <CommandSeparator />
-              <CommandGroup heading="Tools">
-                <CommandItem>
-                  <Tag className="mr-2 h-4 w-4" />
-                  <span>Price Guide</span>
-                </CommandItem>
-                <CommandItem>
-                  <Users className="mr-2 h-4 w-4" />
-                  <span>Grading Companies</span>
-                </CommandItem>
-                <CommandItem>
-                  <Search className="mr-2 h-4 w-4" />
-                  <span>Certificate Lookup</span>
-                </CommandItem>
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </div>
-      )}
-    </div>
-  );
-};
-
-const DefaultTrigger = () => (
-  <Button variant="ghost" className="group cursor-pointer">
-    Log in
-    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-  </Button>
-);
-
-const LoginDialog = ({ trigger, className }: { trigger?: React.ReactNode; className?: string }) => {
-  // State for the dialog
-  const [isOpen, setIsOpen] = useState(false);
-  const [email, setEmail] = useState('');
-  const [showOTP, setShowOTP] = useState(false);
-  const [activeSession, setActiveSession] = useState<string | null>(null);
-
-  // Handle email form success - Now gets the session directly
-  const handleEmailSuccess = (emailAddress: string, session: string) => {
-    console.log('Email auth success, received session');
-    setEmail(emailAddress);
-    setActiveSession(session);
-    setShowOTP(true);
-  };
-
-  // Handle dialog close - reset state
-  const handleOpenChange = (open: boolean) => {
-    setIsOpen(open);
-    if (!open) {
-      // Only reset form state when dialog closes
-      setShowOTP(false);
-      setEmail('');
-      setActiveSession(null);
-    }
-  };
-
-  return (
-    <Dialog open={isOpen} onOpenChange={handleOpenChange}>
-      <DialogTrigger asChild>
-        <div className="cursor-pointer">{trigger || <DefaultTrigger />}</div>
-      </DialogTrigger>
-      <DialogContent className={`sm:max-w-[425px] ${className || ''}`}>
-        {showOTP && email && activeSession ? (
-          <OTPForm email={email} session={activeSession} />
-        ) : (
-          <EmailForm onSuccess={handleEmailSuccess} />
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-};
-
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
+  const isMobile = useIsMobile();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Sample team data - replace with your actual team data source
   const teams = [
@@ -329,51 +249,68 @@ export default function Header() {
     }
   };
 
+  if (isMobile) {
+    return (
+      <>
+        <header className="w-full bg-background z-40">
+          <div className="flex items-center justify-between p-4 h-[72px]">
+            <Link href="/" className="flex">
+              <Button className="h-12 w-24" variant="ghost" size="icon">
+                <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={128} width={128} />
+              </Button>
+            </Link>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="rounded-full"
+            >
+              <Menu className="!h-6 !w-6" />
+            </Button>
+          </div>
+        </header>
+        <MobileMenu
+          isOpen={isMobileMenuOpen}
+          onClose={() => setIsMobileMenuOpen(false)}
+          user={user}
+          logout={logout}
+        />
+      </>
+    );
+  }
+
   return (
     <header>
-      <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-border">
-        <div className="flex items-center space-x-8">
-          <h1 className="text-xl font-bold text-gray-800">Projects</h1>
-          <NavigationMenu>
-            <NavigationMenuList>
-              <NavigationMenuItem>
-                <Link href="/docs" legacyBehavior passHref>
-                  <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                    Documentation
-                  </NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <Link href="/docs" legacyBehavior passHref>
-                  <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                    Documentation
-                  </NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem>
+      <div className="flex items-center justify-between px-6 py-3 bg-background border-b border-border">
+        <div className="flex items-center space-x-4">
+          <Link href="/" className="flex">
+            <Button variant="link" size="sm">
+              <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={24} width={96} />
+            </Button>
+          </Link>
+          {/*<NavigationMenu>*/}
+          {/*  <NavigationMenuList>*/}
+          {/*    <NavigationMenuItem>*/}
+          {/*      <Link href="/plugins" legacyBehavior passHref>*/}
+          {/*        <NavigationMenuLink className={navigationMenuTriggerStyle()}>*/}
+          {/*          Plugins*/}
+          {/*        </NavigationMenuLink>*/}
+          {/*      </Link>*/}
+          {/*    </NavigationMenuItem>*/}
 
-              <NavigationMenuItem>
-                <Link href="/docs" legacyBehavior passHref>
-                  <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                    Documentation
-                  </NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem>
-
-              <NavigationMenuItem>
-                <Link href="/docs" legacyBehavior passHref>
-                  <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-                    Documentation
-                  </NavigationMenuLink>
-                </Link>
-              </NavigationMenuItem>
-            </NavigationMenuList>
-          </NavigationMenu>
+          {/*    <NavigationMenuItem>*/}
+          {/*      <Link href="/docs" legacyBehavior passHref>*/}
+          {/*        <NavigationMenuLink className={navigationMenuTriggerStyle()}>*/}
+          {/*          Documentation*/}
+          {/*        </NavigationMenuLink>*/}
+          {/*      </Link>*/}
+          {/*    </NavigationMenuItem>*/}
+          {/*  </NavigationMenuList>*/}
+          {/*</NavigationMenu>*/}
         </div>
         <div className="flex items-center space-x-4">
-          {isAuthenticated && user ? (
+          {isAuthenticated && user && (
             <AccountSwitcher teams={teams} user={user} onLogout={handleLogout} />
-          ) : (
-            <LoginDialog />
           )}
         </div>
       </div>

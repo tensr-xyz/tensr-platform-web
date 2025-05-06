@@ -50,7 +50,7 @@ interface ImportWizardProps {
   detectedDelimiter?: string;
   totalRows: number;
   totalColumns: number;
-  columnSummaries: Record<string, ColumnSummary>;
+  columnSummaries?: Record<string, ColumnSummary>; // Made optional
   onImport: (settings: ImportSettings, initialData: any[]) => void;
 }
 
@@ -84,7 +84,7 @@ const PreviewTable = ({
   columnTypes: Record<string, string>;
 }) => {
   return (
-    <div className="overflow-auto border">
+    <div className="overflow-auto border border-border rounded">
       <Table className="w-full border-collapse">
         <TableHeader>
           <TableRow>
@@ -197,8 +197,8 @@ const ImportSettingsForm = ({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="double">Double Quote (")</SelectItem>
-                    <SelectItem value="single">Single Quote (')</SelectItem>
+                    <SelectItem value="double">Double Quote (&quot;)</SelectItem>
+                    <SelectItem value="single">Single Quote (&apos;)</SelectItem>
                     <SelectItem value="none">None</SelectItem>
                   </SelectContent>
                 </Select>
@@ -429,8 +429,8 @@ export const ImportWizard = ({
         </DialogHeader>
 
         <Tabs defaultValue="preview" className="flex-1 flex flex-col min-h-0">
-          <div className="bg-foreground">
-            <TabsList>
+          <div className="bg-background border-b border-border">
+            <TabsList className="rounded-none">
               <TabsTrigger value="preview" className="flex items-center gap-2">
                 <LuTable className="h-4 w-4" />
                 Data Preview

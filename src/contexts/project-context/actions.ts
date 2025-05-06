@@ -1,6 +1,13 @@
 import { ProjectActions, ActionProps } from './types';
 import { ViewType } from './types';
-import { FileEntry, Project, FileResponse } from '@/types/project';
+import {
+  FileEntry,
+  Project,
+  FileResponse,
+  ProjectStatus,
+  ProjectFile,
+  FileMetadata,
+} from '@/types/project';
 
 export const setView = (view: ViewType): ActionProps => ({
   type: ProjectActions.SET_VIEW,
@@ -42,72 +49,47 @@ export const setMaximized = (isMaximized: boolean): ActionProps => ({
   payload: isMaximized,
 });
 
-export const openFile = async (path: string): Promise<ActionProps> => {
-  const fileName = path.split('\\').pop()?.split('/').pop();
-  if (!fileName) throw new Error('Invalid file path');
-
-  // const response = await invoke<FileResponse>(
-  //   fileName.endsWith('.csv') ? 'read_csv' : 'read_excel',
-  //   { request: { path } }
-  // );
-
-  const response = {};
-
-  const project: Project = {
-    id: crypto.randomUUID(),
-    name: fileName,
-    path,
-    type: 'file',
-    lastOpened: new Date(),
-    initialFile: {
-      path,
-      metadata: response.metadata,
-    },
-  };
-
-  return {
-    type: ProjectActions.SET_PROJECT,
-    payload: project,
-  };
-};
-
-export const openDirectory = async (path: string, dispatch: (action: ActionProps) => void) => {
-  const dirName = path.split('\\').pop()?.split('/').pop();
-  if (!dirName) throw new Error('Invalid directory path');
-
-  const project: Project = {
-    id: crypto.randomUUID(),
-    name: dirName,
-    path,
-    type: 'directory',
-    lastOpened: new Date(),
-  };
-
-  // const files = await invoke<FileEntry[]>('read_directory', { path });
-  const files = {};
-
-  dispatch({
-    type: ProjectActions.SET_PROJECT,
-    payload: {
-      project,
-      files,
-    },
-  });
-
-  return project;
-};
-
 export const closeImportWizard = (): ActionProps => ({
   type: ProjectActions.CLEAR_IMPORT_DATA,
 });
 
-export const refreshFileSystem = async (path: string, dispatch: (action: ActionProps) => void) => {
+export const refreshFileSystem = async (
+  projectId: string,
+  dispatch: (action: ActionProps) => void
+) => {
   try {
     dispatch({ type: ProjectActions.SET_LOADING, payload: true });
-    // const files = await invoke<FileEntry[]>('read_directory', { path });
-    const files = {};
-    dispatch({ type: ProjectActions.SET_FILE_SYSTEM, payload: files });
+
+    console.log(`Refreshing file system for project ${projectId}`);
+
+    // Fetch the project with its file structure
+    const response = await fetch(`/api/projects/${projectId}`);
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch project structure');
+    }
+
+    const project = await response.json();
+    console.log('Project data:', project);
+
+    // Update the project in state if needed
+    dispatch({
+      type: ProjectActions.SET_PROJECT,
+      payload: project,
+    });
+
+    // Update the file system if fileStructure exists
+    if (project.fileStructure) {
+      console.log('Setting file system:', project.fileStructure);
+      dispatch({
+        type: ProjectActions.SET_FILE_SYSTEM,
+        payload: project.fileStructure,
+      });
+    } else {
+      console.warn('No file structure found in project data');
+    }
   } catch (error) {
+    console.error('Error refreshing file system:', error);
     dispatch({
       type: ProjectActions.SET_ERROR,
       payload: error instanceof Error ? error.message : 'Failed to refresh file system',

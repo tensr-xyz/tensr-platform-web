@@ -1,6 +1,19 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
 import { ScrollArea } from '@/components/atoms/scroll-area';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/atoms/card';
 import {
   Select,
   SelectContent,
@@ -8,428 +21,565 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
-import { Alert, AlertDescription } from '@/components/atoms/alert';
-import { ChartContainer, ChartTooltip } from '@/components/molecules/chart';
-import { Scatter, ScatterChart, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { LuTriangleAlert } from 'react-icons/lu';
-import DistributionChart from '@/components/templates/analytics-dashboard/distribution-chart.tsx';
-import { useChartState } from '@/contexts/chart-context';
-import _ from 'lodash';
 
-interface RelationshipChartProps {
-  col1: string;
-  col2: string;
-  data: Array<Record<string, any>>;
+// Type definitions from FilterPanel
+interface ValueFrequency {
+  value: string;
+  count: number;
+  percentage: number;
 }
 
-interface ScatterDataPoint {
-  name: string;
-  x: number;
-  y: number;
+interface ColumnFrequencyResponse {
+  frequencies: ValueFrequency[];
+  column_type: string;
 }
-
-const RelationshipChart = React.memo<RelationshipChartProps>(({ col1, col2, data }) => {
-  const chartConfig = {
-    scatter: {
-      label: `${col1} vs ${col2}`,
-      color: 'hsl(var(--chart-1))',
-    },
-  };
-
-  const scatterData = data
-    .map(
-      (row: Record<string, any>): ScatterDataPoint => ({
-        name: row.Player || '',
-        x: parseFloat(row[col1]),
-        y: parseFloat(row[col2]),
-      })
-    )
-    .filter((point: ScatterDataPoint) => !isNaN(point.x) && !isNaN(point.y));
-
-  if (!col1 || !col2 || scatterData.length === 0) return null;
-
-  return (
-    <div className="w-full h-[400px]">
-      <ChartContainer config={chartConfig} className="w-full h-full">
-        <ScatterChart
-          margin={{
-            top: 20,
-            right: 20,
-            bottom: 60,
-            left: 60,
-          }}
-        >
-          <CartesianGrid strokeDasharray="3 3" />
-          <XAxis
-            type="number"
-            dataKey="x"
-            name={col1}
-            label={{
-              value: col1,
-              position: 'bottom',
-              offset: 40,
-            }}
-          />
-          <YAxis
-            type="number"
-            dataKey="y"
-            name={col2}
-            label={{
-              value: col2,
-              angle: -90,
-              position: 'left',
-              offset: 40,
-            }}
-          />
-          <ChartTooltip
-            cursor={{ strokeDasharray: '3 3' }}
-            content={({ active, payload }) => {
-              if (active && payload && payload.length) {
-                return (
-                  <div className="bg-background border p-2 shadow-md">
-                    <p className="font-medium">{payload[0].payload.name}</p>
-                    <p>{`${col1}: ${payload[0].value}`}</p>
-                    <p>{`${col2}: ${payload[0].payload.y}`}</p>
-                  </div>
-                );
-              }
-              return null;
-            }}
-          />
-          <Scatter name="Players" data={scatterData} fill="hsl(var(--chart-1))" />
-        </ScatterChart>
-      </ChartContainer>
-    </div>
-  );
-});
-
-export const createHistogramData = (data: any[], columnId: string, binCount = 20) => {
-  try {
-    // Extract and validate values
-    const values = data
-      .map(row => parseFloat(row[columnId]))
-      .filter(val => !isNaN(val) && val !== null && val !== undefined);
-
-    if (values.length === 0) return [];
-
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-
-    // If min equals max, create a single bin centered on that value
-    if (min === max) {
-      return [
-        {
-          range: min.toFixed(1),
-          frequency: values.length,
-          mean: min,
-          median: min,
-          standardDev: 0,
-        },
-      ];
-    }
-
-    // Create slightly wider bounds to ensure all points are included
-    const padding = (max - min) * 0.01;
-    const effectiveMin = min - padding;
-    const effectiveMax = max + padding;
-    const binSize = (effectiveMax - effectiveMin) / binCount;
-
-    // Initialize bins
-    const bins = Array.from({ length: binCount }, (_, i) => ({
-      binStart: effectiveMin + i * binSize,
-      binEnd: effectiveMin + (i + 1) * binSize,
-      count: 0,
-      values: [] as number[],
-    }));
-
-    // Distribute values into bins
-    values.forEach(value => {
-      // Safely calculate bin index
-      const index = Math.floor((value - effectiveMin) / binSize);
-      const binIndex = Math.min(Math.max(0, index), binCount - 1);
-
-      if (bins[binIndex]) {
-        bins[binIndex].count++;
-        bins[binIndex].values.push(value);
-      }
-    });
-
-    // Format bin data
-    return bins.map(bin => ({
-      range: bin.binStart.toFixed(1),
-      rangeEnd: bin.binEnd.toFixed(1),
-      frequency: bin.count,
-      mean: bin.values.length > 0 ? _.mean(bin.values) : 0,
-      median:
-        bin.values.length > 0
-          ? bin.values.sort((a, b) => a - b)[Math.floor(bin.values.length / 2)]
-          : 0,
-      standardDev:
-        bin.values.length > 1
-          ? Math.sqrt(_.mean(bin.values.map(v => Math.pow(v - _.mean(bin.values), 2))))
-          : 0,
-    }));
-  } catch (error) {
-    console.error('Error creating histogram data:', error);
-    return [];
-  }
-};
-
-export const calculateVariance = (values: number[]): number => {
-  if (values.length === 0) return 0;
-  const mean = _.mean(values);
-  return _.mean(values.map(x => Math.pow(x - mean, 2)));
-};
-
-export const calculateStats = (values: number[]) => {
-  if (!values || values.length === 0) return null;
-
-  try {
-    const filteredValues = values.filter(v => !isNaN(v) && v !== null && v !== undefined);
-    if (filteredValues.length === 0) return null;
-
-    const mean = _.mean(filteredValues);
-    const variance = calculateVariance(filteredValues);
-    const standardDev = Math.sqrt(variance);
-    const sortedValues = _.sortBy(filteredValues);
-
-    return {
-      count: filteredValues.length,
-      mean,
-      median: sortedValues[Math.floor(filteredValues.length / 2)],
-      standardDev,
-      min: _.min(filteredValues),
-      max: _.max(filteredValues),
-      quartiles: {
-        q1: sortedValues[Math.floor(filteredValues.length * 0.25)],
-        q3: sortedValues[Math.floor(filteredValues.length * 0.75)],
-      },
-      skewness: calculateSkewness(filteredValues, mean, standardDev),
-      kurtosis: calculateKurtosis(filteredValues, mean, standardDev),
-    };
-  } catch (error) {
-    console.error('Error calculating stats:', error);
-    return null;
-  }
-};
-
-const calculateSkewness = (values: number[], mean: number, standardDev: number): number => {
-  if (values.length < 3 || standardDev === 0) return 0;
-  const n = values.length;
-  const cubedDeviations = values.map(x => Math.pow((x - mean) / standardDev, 3));
-  return (n / ((n - 1) * (n - 2))) * _.sum(cubedDeviations);
-};
-
-const calculateKurtosis = (values: number[], mean: number, standardDev: number): number => {
-  if (values.length < 4 || standardDev === 0) return 0;
-  const n = values.length;
-  const fourthPowerDeviations = values.map(x => Math.pow((x - mean) / standardDev, 4));
-  return (
-    ((n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))) * _.sum(fourthPowerDeviations) -
-    (3 * Math.pow(n - 1, 2)) / ((n - 2) * (n - 3))
-  );
-};
 
 interface AnalyticsDashboardProps {
-  data: Record<string, any>[];
-  columns: Array<{ id: string; type: string }>;
-  activeView: string;
+  filePath: string;
+  columns: { id: string; name?: string }[];
+  viewMode?: string;
 }
 
-const AnalyticsDashboard = ({ data, columns, activeView }: AnalyticsDashboardProps) => {
-  const { state } = useChartState();
-  const [selectedColumn, setSelectedColumn] = useState<string | null>(null);
-  const [comparisonColumn, setComparisonColumn] = useState<string | null>(null);
+const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
+  filePath,
+  columns,
+  viewMode = 'bottom',
+}) => {
+  // State for chart configuration
+  const [xAxis, setXAxis] = useState('');
+  const [yAxis, setYAxis] = useState('');
+  const [chartType, setChartType] = useState('bar');
 
-  const numericColumns = useMemo(() => {
-    return columns.filter(col => {
-      const firstValue = data.find(row => row[col.id] !== null)?.[col.id];
-      return !isNaN(parseFloat(firstValue));
-    });
-  }, [columns, data]);
+  // State for frequency data from API
+  const [columnFrequencies, setColumnFrequencies] = useState<
+    Record<string, ColumnFrequencyResponse>
+  >({});
+  const [loadingColumn, setLoadingColumn] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const getColumnStats = useCallback(
-    (columnId: string) => {
-      const values = data.map(row => parseFloat(row[columnId])).filter(val => !isNaN(val));
-      return calculateStats(values);
+  // Refs to track initialization and prevent infinite loops
+  const initializedRef = useRef(false);
+  const requestedColumnsRef = useRef(new Set<string>());
+
+  // Colors for charts
+  const COLORS = [
+    '#4361ee',
+    '#3a0ca3',
+    '#7209b7',
+    '#f72585',
+    '#4cc9f0',
+    '#4895ef',
+    '#560bad',
+    '#f15bb5',
+    '#fee440',
+    '#00bbf9',
+    '#00f5d4',
+    '#01497c',
+    '#c77dff',
+    '#ff9e00',
+    '#9e2a2b',
+  ];
+
+  // Load frequency data for a column - FIXED to prevent infinite loops
+  const loadColumnFrequencies = useCallback(
+    async (columnName: string) => {
+      // Don't make API calls for non-existent files or already requested columns
+      if (!filePath || !columnName || requestedColumnsRef.current.has(columnName)) {
+        return;
+      }
+
+      // Check if we already have this column's data in state
+      if (columnFrequencies[columnName]) {
+        return;
+      }
+
+      // Mark column as requested to prevent duplicate requests
+      requestedColumnsRef.current.add(columnName);
+      setLoadingColumn(columnName);
+      setError(null);
+
+      try {
+        const params = {
+          request: {
+            path: filePath,
+          },
+          columnName,
+        };
+
+        const response = await invoke<ColumnFrequencyResponse>('get_column_frequencies', params);
+
+        setColumnFrequencies(prev => ({
+          ...prev,
+          [columnName]: response,
+        }));
+
+        // We successfully loaded this column, keep it in the requested set
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load frequencies');
+
+        // Remove from requested set on error to allow retry
+        requestedColumnsRef.current.delete(columnName);
+      } finally {
+        setLoadingColumn(null);
+      }
     },
-    [data]
-  );
+    [filePath]
+  ); // Only depend on filePath to prevent re-creation
 
-  const histogramDataCallback = useCallback(
-    (colId: string) => createHistogramData(data, colId),
-    [data]
-  );
+  // Initial setup of columns - FIXED to prevent infinite loops
+  useEffect(() => {
+    // Only run once for initial setup
+    if (initializedRef.current || columns.length === 0) return;
 
-  const renderOverview = () => (
-    <>
-      <Card>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-4 p-4">
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Total Rows</h3>
-              <p className="text-2xl font-bold">{data.length}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Numeric Columns</h3>
-              <p className="text-2xl font-bold">{numericColumns.length}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground">Missing Values</h3>
-              <p className="text-2xl font-bold">
-                {data.reduce(
-                  (acc, row) => acc + Object.values(row).filter(v => v === null || v === '').length,
-                  0
-                )}
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    // Helper to find appropriate columns
+    const findCategoricalColumn = () => {
+      return columns.find(col => {
+        const lowerId = (col.id || '').toLowerCase();
+        return (
+          lowerId.includes('category') ||
+          lowerId.includes('type') ||
+          lowerId.includes('name') ||
+          lowerId.includes('state') ||
+          lowerId.includes('country')
+        );
+      });
+    };
 
-      <Card className="mt-4">
-        <CardHeader>
-          <CardTitle>Data Quality Insights</CardTitle>
-          <CardDescription>Potential issues detected in your data</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {numericColumns.map(col => {
-              const stats = getColumnStats(col.id);
-              if (stats?.count !== data.length) {
-                const missingCount = data.length - (stats?.count || 0);
-                return (
-                  <Alert key={col.id} variant="destructive">
-                    <LuTriangleAlert className="h-4 w-4" />
-                    <AlertDescription>
-                      {col.id} has {missingCount} missing values
-                    </AlertDescription>
-                  </Alert>
-                );
-              }
-              return null;
-            })}
-          </div>
-        </CardContent>
-      </Card>
-    </>
-  );
+    const findNumericColumn = () => {
+      return columns.find(col => {
+        const lowerId = (col.id || '').toLowerCase();
+        return (
+          lowerId.includes('value') ||
+          lowerId.includes('count') ||
+          lowerId.includes('amount') ||
+          lowerId.includes('total') ||
+          lowerId.includes('case')
+        );
+      });
+    };
 
-  const renderDistribution = () => {
-    const stats = selectedColumn ? getColumnStats(selectedColumn) : null;
+    // Set X axis
+    const categoricalColumn = findCategoricalColumn();
+    const xAxisValue = categoricalColumn?.id || columns[0].id;
 
-    return (
-      <>
-        <div className="flex items-center space-x-4 mb-4">
-          <Select value={selectedColumn || ''} onValueChange={setSelectedColumn}>
-            <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Select variable" />
-            </SelectTrigger>
-            <SelectContent>
-              {numericColumns.map(col => (
-                <SelectItem key={col.id} value={col.id}>
-                  {col.id}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+    // Set Y axis
+    let yAxisValue = xAxisValue; // Default to the same as X-axis
 
-          {stats && (
-            <div className="flex space-x-4 text-sm">
-              <div className="px-3 py-1 bg-muted rounded-md">Mean: {stats.mean.toFixed(1)}</div>
-              <div className="px-3 py-1 bg-muted rounded-md">Median: {stats.median.toFixed(1)}</div>
-              <div className="px-3 py-1 bg-muted rounded-md">
-                SD: {stats.standardDev.toFixed(1)}
-              </div>
-            </div>
-          )}
+    if (columns.length > 1) {
+      const numericColumn = findNumericColumn();
+      if (numericColumn && numericColumn.id !== xAxisValue) {
+        yAxisValue = numericColumn.id;
+      } else if (columns[1].id !== xAxisValue) {
+        yAxisValue = columns[1].id;
+      }
+    }
+
+    // Mark as initialized before setting state to prevent re-runs
+    initializedRef.current = true;
+
+    // Set the axis values
+    setXAxis(xAxisValue);
+    setYAxis(yAxisValue);
+  }, [columns]); // Only depends on columns, not on xAxis/yAxis
+
+  // Load frequencies when selected columns change
+  useEffect(() => {
+    if (!initializedRef.current) return;
+
+    if (xAxis) {
+      loadColumnFrequencies(xAxis);
+    }
+
+    if (yAxis && yAxis !== xAxis) {
+      loadColumnFrequencies(yAxis);
+    }
+  }, [xAxis, yAxis, loadColumnFrequencies]);
+
+  // Process data for chart
+  const chartData = useMemo(() => {
+    // Need at least X axis data
+    if (!columnFrequencies[xAxis]) {
+      return [];
+    }
+
+    // If X and Y are the same column (single dimension visualization)
+    if (xAxis === yAxis) {
+      return columnFrequencies[xAxis].frequencies
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 20) // Limit to top 20 for readability
+        .map(freq => ({
+          name: freq.value,
+          value: freq.count,
+        }));
+    }
+
+    // For different dimensions, we need to create a more meaningful visualization
+
+    // If we're missing Y dimension data
+    if (!columnFrequencies[yAxis]) {
+      return [];
+    }
+
+    // Get the top values from each dimension
+    const topXValues = [...columnFrequencies[xAxis].frequencies]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const topYValues = [...columnFrequencies[yAxis].frequencies]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // Create a combined dataset that shows both dimensions' frequencies
+    return topXValues.map((xFreq, index) => {
+      // Find a Y value at the same rank
+      const yFreq = topYValues[index] || { value: 'N/A', count: 0 };
+
+      return {
+        name: xFreq.value,
+        [xAxis]: xFreq.count,
+        [yAxis]: yFreq.count,
+        yName: yFreq.value, // Include Y dimension name for tooltips
+      };
+    });
+  }, [xAxis, yAxis, columnFrequencies]);
+
+  // Render chart based on type
+  const renderChart = () => {
+    if (!chartData.length) {
+      return (
+        <div className="h-[400px] flex items-center justify-center text-muted-foreground">
+          {loadingColumn
+            ? 'Loading data...'
+            : error
+              ? `Error: ${error}`
+              : 'No data available for the selected dimensions'}
         </div>
+      );
+    }
 
-        {selectedColumn && stats && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Distribution of {selectedColumn}</CardTitle>
-              <CardDescription>
-                Skewness: {stats.skewness.toFixed(2)} | Kurtosis: {stats.kurtosis.toFixed(2)}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <DistributionChart
-                key={`${selectedColumn}-${state.type}`} // Add key to force re-render
-                columnId={selectedColumn}
-                chartType={state.type}
-                createHistogramData={histogramDataCallback}
+    if (xAxis === yAxis) {
+      // Single dimension visualization
+      if (chartType === 'pie') {
+        return (
+          <div className="h-[400px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  outerRadius={150}
+                  fill="#8884d8"
+                  dataKey="value"
+                  nameKey="name"
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+                >
+                  {chartData.map((_entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={value => [`${value} items`, 'Count']} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      }
+
+      if (chartType === 'line') {
+        return (
+          <div className="h-[400px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 70 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11 }}
+                  height={50}
+                  angle={-45}
+                  textAnchor="end"
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  label={{
+                    value: 'Count',
+                    angle: -90,
+                    position: 'insideLeft',
+                    style: { textAnchor: 'middle' },
+                  }}
+                />
+                <Tooltip formatter={value => [`${value} items`, 'Count']} />
+                <Line type="monotone" dataKey="value" stroke={COLORS[0]} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      }
+
+      // Default to bar chart for single dimension
+      return (
+        <div className="h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 70 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 11 }}
+                height={50}
+                angle={-45}
+                textAnchor="end"
               />
-            </CardContent>
-          </Card>
-        )}
-      </>
-    );
+              <YAxis
+                tick={{ fontSize: 11 }}
+                label={{
+                  value: 'Count',
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle' },
+                }}
+              />
+              <Tooltip formatter={value => [`${value} items`, 'Count']} />
+              <Bar dataKey="value" fill={COLORS[0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    } else {
+      // Multi-dimension visualization (comparing two dimensions)
+      if (chartType === 'pie') {
+        // Pie doesn't work well for two dimensions, fall back to bar
+        return (
+          <div className="h-[400px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 70 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11 }}
+                  height={50}
+                  angle={-45}
+                  textAnchor="end"
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  label={{
+                    value: 'Count',
+                    angle: -90,
+                    position: 'insideLeft',
+                    style: { textAnchor: 'middle' },
+                  }}
+                />
+                <Tooltip
+                  formatter={(value, name, props) => {
+                    // For Y dimension values, show the actual value name
+                    if (name === yAxis && props.payload) {
+                      return [`${value} items (${props.payload.yName})`, name];
+                    }
+                    return [`${value} items`, name];
+                  }}
+                />
+                <Bar dataKey={xAxis} fill={COLORS[0]} />
+                <Bar dataKey={yAxis} fill={COLORS[1]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      }
+
+      if (chartType === 'line') {
+        return (
+          <div className="h-[400px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 70 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11 }}
+                  height={50}
+                  angle={-45}
+                  textAnchor="end"
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  label={{
+                    value: 'Count',
+                    angle: -90,
+                    position: 'insideLeft',
+                    style: { textAnchor: 'middle' },
+                  }}
+                />
+                <Tooltip
+                  formatter={(value, name, props) => {
+                    // For Y dimension values, show the actual value name
+                    if (name === yAxis && props.payload) {
+                      return [`${value} items (${props.payload.yName})`, name];
+                    }
+                    return [`${value} items`, name];
+                  }}
+                />
+                <Line type="monotone" dataKey={xAxis} stroke={COLORS[0]} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey={yAxis} stroke={COLORS[1]} activeDot={{ r: 6 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        );
+      }
+
+      // Default to bar chart for two dimensions
+      return (
+        <div className="h-[400px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 70 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis
+                dataKey="name"
+                tick={{ fontSize: 11 }}
+                height={50}
+                angle={-45}
+                textAnchor="end"
+              />
+              <YAxis
+                tick={{ fontSize: 11 }}
+                label={{
+                  value: 'Count',
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle' },
+                }}
+              />
+              <Tooltip
+                formatter={(value, name, props) => {
+                  // For Y dimension values, show the actual value name
+                  if (name === yAxis && props.payload) {
+                    return [`${value} items (${props.payload.yName})`, name];
+                  }
+                  return [`${value} items`, name];
+                }}
+              />
+              <Bar dataKey={xAxis} fill={COLORS[0]} />
+              <Bar dataKey={yAxis} fill={COLORS[1]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      );
+    }
   };
 
-  const renderRelationships = () => (
-    <>
-      <div className="flex gap-4 mb-4">
-        <Select value={selectedColumn || ''} onValueChange={setSelectedColumn}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Select first variable" />
-          </SelectTrigger>
-          <SelectContent>
-            {numericColumns.map(col => (
-              <SelectItem key={col.id} value={col.id}>
-                {col.id}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-
-        <Select value={comparisonColumn || ''} onValueChange={setComparisonColumn}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="Select second variable" />
-          </SelectTrigger>
-          <SelectContent>
-            {numericColumns.map(col => (
-              <SelectItem key={col.id} value={col.id}>
-                {col.id}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
-      {selectedColumn && comparisonColumn && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Variable Analysis</CardTitle>
-            <CardDescription>
-              Relationship between {selectedColumn} and {comparisonColumn}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RelationshipChart col1={selectedColumn} col2={comparisonColumn} data={data} />
-          </CardContent>
-        </Card>
-      )}
-    </>
-  );
-
-  return (
-    <div className="h-full">
-      <ScrollArea className="h-full">
-        <div className="p-4 space-y-4">
-          {activeView === 'overview' && renderOverview()}
-          {activeView === 'distribution' && renderDistribution()}
-          {activeView === 'relationships' && renderRelationships()}
+  // Simplified view for bottom mode
+  if (viewMode === 'bottom') {
+    return (
+      <div className="h-full flex flex-col">
+        <div className="flex items-center gap-4 p-2 border-b">
+          <div className="flex-1">
+            <Select value={xAxis} onValueChange={setXAxis}>
+              <SelectTrigger className="h-7">
+                <SelectValue placeholder="Select X dimension" />
+              </SelectTrigger>
+              <SelectContent>
+                {columns.map(col => (
+                  <SelectItem key={col.id} value={col.id}>
+                    {col.name || col.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex-1">
+            <Select value={yAxis} onValueChange={setYAxis}>
+              <SelectTrigger className="h-7">
+                <SelectValue placeholder="Select Y dimension" />
+              </SelectTrigger>
+              <SelectContent>
+                {columns.map(col => (
+                  <SelectItem key={col.id} value={col.id}>
+                    {col.name || col.id}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Select value={chartType} onValueChange={setChartType}>
+              <SelectTrigger className="h-7 w-24">
+                <SelectValue placeholder="Chart type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="bar">Bar</SelectItem>
+                <SelectItem value="line">Line</SelectItem>
+                <SelectItem value="pie">Pie</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
-      </ScrollArea>
+        <div className="flex-1">{renderChart()}</div>
+      </div>
+    );
+  }
+
+  // Full view with more controls and stats
+  return (
+    <div className="h-full flex flex-col">
+      <div className="flex-1">
+        <ScrollArea className="h-full">
+          <div className="p-4 space-y-4">
+            <div>
+              <div>
+                <div className="flex flex-wrap items-center gap-4 mb-4">
+                  <div>
+                    <label className="text-sm font-medium block mb-1">X Dimension</label>
+                    <Select value={xAxis} onValueChange={setXAxis}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Select X dimension" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {columns.map(col => (
+                          <SelectItem key={col.id} value={col.id}>
+                            {col.name || col.id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium block mb-1">Y Dimension</label>
+                    <Select value={yAxis} onValueChange={setYAxis}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Select Y dimension" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {columns.map(col => (
+                          <SelectItem key={col.id} value={col.id}>
+                            {col.name || col.id}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium block mb-1">Chart Type</label>
+                    <Select value={chartType} onValueChange={setChartType}>
+                      <SelectTrigger className="w-[180px]">
+                        <SelectValue placeholder="Select chart type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bar">Bar Chart</SelectItem>
+                        <SelectItem value="line">Line Chart</SelectItem>
+                        <SelectItem value="pie">Pie Chart</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {renderChart()}
+              </div>
+            </div>
+          </div>
+        </ScrollArea>
+      </div>
     </div>
   );
 };
 
-export default React.memo(AnalyticsDashboard, (prevProps, nextProps) => {
-  return (
-    prevProps.data === nextProps.data &&
-    prevProps.columns === nextProps.columns &&
-    prevProps.activeView === nextProps.activeView
-  );
-});
+export default AnalyticsDashboard;

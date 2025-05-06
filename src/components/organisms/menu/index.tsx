@@ -55,18 +55,20 @@ export function CollaborationMenu({ activeTab }: CollaborationMenuProps) {
               <div className="p-2">
                 <div className="text-sm font-medium">Current Session</div>
                 <div className="text-xs text-muted-foreground">
-                  {currentSession.ownerName}'s session
+                  {currentSession.ownerName}&apos;s session
                 </div>
               </div>
               <DropdownMenuSeparator />
-              {currentSession.participants.map(participant => (
-                <DropdownMenuItem key={participant.userId} className="flex items-center gap-2">
-                  <Avatar className="h-6 w-6">
-                    <AvatarFallback>{participant.userName[0]}</AvatarFallback>
-                  </Avatar>
-                  <span>{participant.userName}</span>
-                </DropdownMenuItem>
-              ))}
+              {currentSession.participants.map(
+                (participant: { userId: string; userName: string }) => (
+                  <DropdownMenuItem key={participant.userId} className="flex items-center gap-2">
+                    <Avatar className="h-6 w-6">
+                      <AvatarFallback>{participant.userName[0]}</AvatarFallback>
+                    </Avatar>
+                    <span>{participant.userName}</span>
+                  </DropdownMenuItem>
+                )
+              )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => leaveSession()}>Leave Session</DropdownMenuItem>
             </>
@@ -104,21 +106,23 @@ export function CollaborationMenu({ activeTab }: CollaborationMenuProps) {
             <h4 className="text-sm font-medium mb-2">Create New Session</h4>
             <Button
               onClick={async () => {
-                if (activeTab?.data.filePath) {
+                if (activeTab?.data?.filePath) {
                   try {
                     await createSession(activeTab.data.filePath, activeTab.name);
                     setDialogOpen(false);
-                  } catch (error) {}
+                  } catch (error) {
+                    console.error('Failed to create session:', error);
+                  }
                 }
               }}
-              disabled={!activeTab?.data.filePath}
+              disabled={!activeTab?.data?.filePath}
               className="w-full"
             >
               Start Session
             </Button>
           </div>
 
-          {sessions.length > 0 && (
+          {sessions && sessions.length > 0 && (
             <>
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
@@ -132,28 +136,35 @@ export function CollaborationMenu({ activeTab }: CollaborationMenuProps) {
               </div>
 
               <div className="space-y-2">
-                {sessions.map(session => (
-                  <div
-                    key={session.id}
-                    className="flex items-center justify-between p-2 border rounded-lg"
-                  >
-                    <div>
-                      <div className="text-sm font-medium">{session.fileName}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {session.ownerName}'s session ({session.participantCount} participants)
-                      </div>
-                    </div>
-                    <Button
-                      size="sm"
-                      onClick={async () => {
-                        await joinSession(session.id);
-                        setDialogOpen(false);
-                      }}
+                {sessions.map(
+                  (session: {
+                    id: string;
+                    fileName: string;
+                    ownerName: string;
+                    participantCount: number;
+                  }) => (
+                    <div
+                      key={session.id}
+                      className="flex items-center justify-between p-2 border rounded-lg"
                     >
-                      Join
-                    </Button>
-                  </div>
-                ))}
+                      <div>
+                        <div className="text-sm font-medium">{session.fileName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {session.ownerName}&apos;s session ({session.participantCount} participants)
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={async () => {
+                          await joinSession(session.id);
+                          setDialogOpen(false);
+                        }}
+                      >
+                        Join
+                      </Button>
+                    </div>
+                  )
+                )}
               </div>
             </>
           )}

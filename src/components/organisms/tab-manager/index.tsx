@@ -1,30 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTabs } from '@/contexts/tabs-context';
-import { closeAllTabs, setActiveTab, updateTab } from '@/contexts/tabs-context/actions';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
+import { updateTab } from '@/contexts/tabs-context/actions';
 import { Button } from '@/components/atoms/button';
 import {
-  LuEllipsisVertical,
   LuFolder,
   LuListFilter,
   LuMenu,
   LuMinus,
+  LuPanelRight,
   LuPlus,
   LuSquareActivity,
   LuSquareChartGantt,
 } from 'react-icons/lu';
 import Spreadsheet from '@/components/templates/spreadsheet';
-import { ScrollArea, ScrollBar } from '@/components/atoms/scroll-area';
 import { useProject } from '@/contexts/project-context';
 import { ProjectActions, ViewType } from '@/contexts/project-context/types';
 // import { ModelBuilder } from '@/components/templates/model-builder';
 import { Notebook } from '@/components/templates/notebook';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/molecules/dropdown';
 import MarkdownViewer from '@/components/organisms/markdown-viewer';
 import AnalyticsLayout from '@/components/templates/analytics-layout';
 import { Separator } from '@/components/atoms/separator';
@@ -110,26 +102,30 @@ interface TabManagerProps {
   activeTab?: Tab;
   tabs: Tab[];
   onTabClose: (id: string) => void;
+  onToggleSidebar: () => void;
 }
 
 // Component
-const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) => {
+const TabManager: React.FC<TabManagerProps> = ({
+  activeTab,
+  tabs,
+  onTabClose,
+  onToggleSidebar,
+}) => {
   // State
   const [showStats, setShowStats] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
 
+  console.log(activeTab);
+
   // Hooks
-  const { dispatch } = useTabs();
+  const { state: tabState, dispatch } = useTabs();
   const { state, dispatch: projectDispatch } = useProject();
 
   const [activeRowSelection, setActiveRowSelection] = useState<RowSelection>({});
 
   // Handlers
-  const handleTabChange = (value: string) => {
-    dispatch(setActiveTab(value));
-  };
-
   const createDebouncedHandler = useCallback(
     (tab: SpreadsheetTab) => {
       return debounce(async (newData: Record<string, any>[]) => {
@@ -344,44 +340,21 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
     }
   };
 
-  const handleCloseAllTabs = useCallback(() => {
-    Object.values(debouncedHandlers).forEach(handler => handler.cancel());
-    dispatch(closeAllTabs());
-  }, [dispatch, debouncedHandlers]);
-
   return (
-    <Tabs
-      value={activeTab?.id}
-      onValueChange={handleTabChange}
-      className="flex h-full flex-col relative bg-background"
-    >
-      <div className="flex h-10 items-center border-b border-foreground bg-background z-10">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 mx-2"
-          onClick={handleToggleFolder}
-          data-state={state.leftPanelOpen ? 'active' : 'inactive'}
-        >
-          <LuFolder />
-        </Button>
-
-        <ScrollArea className="flex-1 h-10">
-          <TabsList className="h-10 inline-flex border-none">
-            {tabs.map(tab => (
-              <TabsTrigger
-                key={tab.id}
-                value={tab.id}
-                onClose={() => onTabClose(tab.id)}
-                className="shrink-0"
-              >
-                {tab.name}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
-
+    <div className="flex h-full flex-col relative bg-background">
+      <div className="flex h-10 items-center justify-between border-b border-border bg-background z-10">
+        <div className="flex flex-row items-center gap-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 mx-2"
+            onClick={handleToggleFolder}
+            data-state={state.leftPanelOpen ? 'active' : 'inactive'}
+          >
+            <LuFolder />
+          </Button>
+          <h1 className="text-sm font-semibold">{activeTab?.name}</h1>
+        </div>
         <div className="flex-none flex items-center px-2">
           <Button
             variant="ghost"
@@ -393,82 +366,84 @@ const TabManager: React.FC<TabManagerProps> = ({ activeTab, tabs, onTabClose }) 
             <LuMenu />
             <span className="sr-only">Toggle Menu</span>
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger>
-              <Button variant="ghost" size="icon" className="h-7 w-7">
-                <LuEllipsisVertical />
-                <span className="sr-only">Toggle Menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleCloseAllTabs}>Close All Tabs</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <Button
+            data-sidebar="trigger"
+            variant="ghost"
+            size="icon"
+            onClick={onToggleSidebar}
+            className="h-7 w-7"
+          >
+            <LuPanelRight />
+            <span className="sr-only">Toggle Sidebar</span>
+          </Button>
         </div>
       </div>
 
-      {tabs.map(tab => (
-        <TabsContent
-          key={tab.id}
-          value={tab.id}
-          className="absolute inset-0 top-10 bg-background flex flex-col"
-        >
-          {showMenu && (
-            <div className="flex flex-row items-center justify-between bg-foreground px-1 min-h-8">
-              <div className="flex flex-row items-center">
-                <Button size="icon" variant="ghost" onClick={handleAddRow}>
-                  <LuPlus />
-                </Button>
-                <Button size="icon" variant="ghost" onClick={handleDeleteRows}>
-                  <LuMinus />
-                </Button>
-                <Separator orientation="vertical" className="h-4 mx-2" />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() =>
-                    projectDispatch({ type: ProjectActions.SET_VIEW, payload: ViewType.CHARTS })
-                  }
-                  data-state={state.activeView === ViewType.CHARTS ? 'active' : 'inactive'}
-                >
-                  <LuSquareActivity />
-                  <span className="sr-only">Toggle Analytics</span>
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowStats(prev => !prev)}
-                  data-state={showStats ? 'active' : 'inactive'}
-                >
-                  <LuSquareChartGantt />
-                  <span className="sr-only">Toggle Stats</span>
-                </Button>
-              </div>
-              <div className="flex flex-row items-center">
-                <Button size="icon" variant="ghost" onClick={() => setShowFilters(!showFilters)}>
-                  <LuListFilter />
-                </Button>
-              </div>
-            </div>
-          )}
+      {/* Tab Content Area - Tabs are now only responsible for rendering content */}
+      <div className="absolute inset-0 top-10 bg-background">
+        {tabs.map(tab => (
           <div
-            className="flex-1 relative"
-            style={{
-              height: showMenu ? 'calc(100% - 32px)' : '100%',
-            }}
+            key={tab.id}
+            className="absolute inset-0 bg-background flex flex-col"
+            style={{ display: activeTab?.id === tab.id ? 'flex' : 'none' }}
           >
-            {renderTabContent(tab)}
+            {showMenu && (
+              <div className="flex flex-row items-center justify-between bg-background border-b border-border px-1 min-h-8">
+                <div className="flex flex-row items-center">
+                  <Button size="icon" variant="ghost" onClick={handleAddRow}>
+                    <LuPlus />
+                  </Button>
+                  <Button size="icon" variant="ghost" onClick={handleDeleteRows}>
+                    <LuMinus />
+                  </Button>
+                  <Separator orientation="vertical" className="h-4 mx-2" />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() =>
+                      projectDispatch({ type: ProjectActions.SET_VIEW, payload: ViewType.CHARTS })
+                    }
+                    data-state={state.activeView === ViewType.CHARTS ? 'active' : 'inactive'}
+                  >
+                    <LuSquareActivity />
+                    <span className="sr-only">Toggle Analytics</span>
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowStats(prev => !prev)}
+                    data-state={showStats ? 'active' : 'inactive'}
+                  >
+                    <LuSquareChartGantt />
+                    <span className="sr-only">Toggle Stats</span>
+                  </Button>
+                </div>
+                <div className="flex flex-row items-center">
+                  <Button size="icon" variant="ghost" onClick={() => setShowFilters(!showFilters)}>
+                    <LuListFilter />
+                  </Button>
+                </div>
+              </div>
+            )}
+            <div
+              className="flex-1 relative"
+              style={{
+                height: showMenu ? 'calc(100% - 32px)' : '100%',
+              }}
+            >
+              {renderTabContent(tab)}
+            </div>
           </div>
-        </TabsContent>
-      ))}
-      {tabs.length === 0 && (
-        <div className="absolute inset-0 top-10 flex flex-col items-center justify-center bg-background text-muted-foreground">
-          <LuFolder className="h-12 w-12 mb-4" />
-          <h2 className="text-lg font-medium mb-2">No File Open</h2>
-          <p className="text-sm">Select a file from the project explorer to begin editing</p>
-        </div>
-      )}
-    </Tabs>
+        ))}
+        {tabs.length === 0 && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background text-muted-foreground">
+            <LuFolder className="h-12 w-12 mb-4" />
+            <h2 className="text-lg font-medium mb-2">No File Open</h2>
+            <p className="text-sm">Select a file from the project explorer to begin editing</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 };
 

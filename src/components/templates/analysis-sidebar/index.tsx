@@ -16,6 +16,7 @@ import { useTabs } from '@/contexts/tabs-context';
 import { ANALYSIS_COMPONENTS, MENU_ITEMS, type MenuItems } from '@/configs/analysis-config';
 import PluginPanel from '@/components/organisms/plugin-panel';
 import { ColumnType } from '@tensr/sdk';
+import { AgentPanel } from '@/components/organisms/agent-panel';
 
 interface AnalysisItemProps {
   item: string;
@@ -50,27 +51,29 @@ const AnalysisItem = ({ item }: AnalysisItemProps) => {
 const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
   const { state } = useTabs();
   const activeTab = state.tabs.find(tab => tab.id === state.activeTabId);
-  // const [activeFilters, setActiveFilters] = useState<Record<string, Set<string>>>({});
-  //
-  // const handleFilterChange = (columnName: string, values: Set<string>) => {
-  //   setActiveFilters(prev => ({
-  //     ...prev,
-  //     [columnName]: values,
-  //   }));
-  // };
+
   const handleFilterChange = (columnName: string, values: Set<string>) => {
     // You can implement the filter logic here when needed
     console.log('Filter changed:', columnName, values);
   };
 
   const getVisibleMenuItems = (): MenuItems => {
-    return Object.entries(MENU_ITEMS).reduce((acc, [key, value]) => {
+    // Remove 'data' from the menu items since we've moved it to folder component
+    const filteredItems = { ...MENU_ITEMS };
+    delete filteredItems.data;
+
+    return Object.entries(filteredItems).reduce((acc, [key, value]) => {
       if (
-        (key === 'actions' || key === 'graph_options' || key === 'plugins') &&
+        (key === 'agent' || key === 'actions' || key === 'graph_options' || key === 'plugins') &&
         activeTab !== undefined
       ) {
         acc[key] = value;
-      } else if (key !== 'actions' && key !== 'graph_options' && key !== 'plugins') {
+      } else if (
+        key !== 'agent' &&
+        key !== 'actions' &&
+        key !== 'graph_options' &&
+        key !== 'plugins'
+      ) {
         acc[key] = value;
       }
       return acc;
@@ -86,6 +89,14 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
 
     // Now check if we have data
     if (!activeTab.data) return null;
+
+    if (key === 'agent') {
+      return (
+        <div className="h-full flex flex-col">
+          <AgentPanel />
+        </div>
+      );
+    }
 
     if (key === 'actions') {
       return (
@@ -103,11 +114,13 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
         return <PluginPanel activeFileType={'csv'} />;
       }
 
+      const { initialData, initialColumns } = activeTab.data;
+
       // Transform the data into a format plugins can understand
       // The data is already in object form, we just need to handle number conversion
-      const processedData = activeTab.data.initialData.map((row: any) => {
+      const processedData = initialData.map((row: any) => {
         const processedRow: Record<string, any> = {};
-        activeTab.data.initialColumns.forEach((col: any) => {
+        initialColumns.forEach((col: any) => {
           const value = row[col.id];
           // Convert numeric strings to numbers if appropriate
           if (typeof value === 'string' && !isNaN(Number(value)) && value !== '') {
@@ -171,18 +184,18 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
   const defaultTab = Object.keys(visibleMenuItems)[0] || 'data';
 
   return (
-    <Tabs defaultValue={defaultTab}>
-      <div className="flex items-center bg-background">
+    <Tabs defaultValue={defaultTab} className="flex flex-col h-full">
+      <div className="flex items-center bg-background border-b border-border">
         <Button onClick={onToggleSidebar} size="icon" variant="ghost" className="mx-1">
           <LuMinus className="h-4 w-4" />
         </Button>
         <ScrollArea className="flex-1">
-          <TabsList className="bg-transparent">
+          <TabsList className="p-0 rounded-none bg-transparent">
             {Object.entries(visibleMenuItems).map(([key, { icon }]) => (
               <TabsTrigger
                 key={key}
                 value={key}
-                className="flex flex-1 flex-row gap-2 px-3 items-center justify-center data-[state=active]:border-b data-[state=inactive]:bg-background"
+                className="flex flex-1 flex-row gap-2 items-center justify-center data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:rounded-none data-[state=active]:h-full"
                 isClosable={false}
               >
                 {icon}
@@ -194,11 +207,18 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
         </ScrollArea>
       </div>
 
-      {Object.entries(MENU_ITEMS).map(([key]) => (
-        <TabsContent key={key} value={key} className="p-0 border-0 h-full overflow-auto">
-          {renderMenuSections(key)}
-        </TabsContent>
-      ))}
+      <div className="flex-1 overflow-hidden">
+        {Object.entries(MENU_ITEMS).map(([key]) => (
+          <TabsContent
+            key={key}
+            value={key}
+            className="p-0 border-0 h-full overflow-auto flex flex-col"
+            style={{ height: 'calc(100vh - 64px)' }}
+          >
+            {renderMenuSections(key)}
+          </TabsContent>
+        ))}
+      </div>
     </Tabs>
   );
 };
