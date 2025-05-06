@@ -4,7 +4,7 @@ const TOKEN_KEYS = {
   REFRESH_TOKEN: 'refresh_token',
 } as const;
 
-export const isTokenValid = (token, bufferMinutes = 5) => {
+export const isTokenValid = (token: string, bufferMinutes = 5) => {
   if (!token) return false;
 
   try {

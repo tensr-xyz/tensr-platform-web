@@ -104,28 +104,67 @@ interface EditableCellProps {
   value: string | number | null;
   onEdit: (value: string) => void;
   className?: string;
+  inputClassName?: string;
   isFocused?: boolean;
   onFocus?: () => void;
+  onBlur?: () => void;
   onNavigate?: (direction: 'up' | 'down' | 'left' | 'right') => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement | HTMLInputElement>) => void;
 }
 
 const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
-  ({ value: initialValue, onEdit, className, isFocused, onFocus }, ref) => {
+  (
+    {
+      value: initialValue,
+      onEdit,
+      className,
+      inputClassName,
+      isFocused,
+      onFocus,
+      onBlur,
+      onNavigate,
+      onKeyDown,
+    },
+    ref
+  ) => {
     const [value, setValue] = React.useState<string>(initialValue?.toString() ?? '');
     const [isEditing, setIsEditing] = React.useState(false);
     const divRef = React.useRef<HTMLDivElement>(null);
+    const inputRef = React.useRef<HTMLInputElement>(null);
+
+    // Update local value when prop changes
+    React.useEffect(() => {
+      setValue(initialValue?.toString() ?? '');
+    }, [initialValue]);
 
     React.useImperativeHandle(ref, () => ({
       focus: () => {
-        divRef.current?.focus();
+        // When focusing programmatically, enter edit mode
         setIsEditing(true);
+
+        // Use requestAnimationFrame to ensure the DOM is updated
+        requestAnimationFrame(() => {
+          if (inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.select();
+          } else if (divRef.current) {
+            divRef.current.focus();
+          }
+        });
       },
     }));
 
-    // Handle Tab key in the cell itself to prevent default browser behavior
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement | HTMLInputElement>) => {
+      if (onKeyDown) {
+        onKeyDown(e);
+
+        if (e.defaultPrevented) {
+          return;
+        }
+      }
+
       if (e.key === 'Tab') {
-        e.preventDefault(); // This is crucial
+        e.preventDefault(); // Prevent default tab behavior
         return;
       }
 
@@ -135,99 +174,122 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
           if (value !== initialValue?.toString()) {
             onEdit(value);
           }
+          onBlur?.();
           e.preventDefault();
         } else if (e.key === 'Escape') {
           setValue(initialValue?.toString() ?? '');
           setIsEditing(false);
+          onBlur?.();
           e.preventDefault();
         }
       } else if (e.key === 'Enter' || e.key === 'F2') {
         setIsEditing(true);
         e.preventDefault();
       }
-    };
 
-    // Focus handling
-    React.useEffect(() => {
-      if (isFocused && divRef.current) {
-        divRef.current.focus();
+      // Handle navigation if provided
+      if (onNavigate && !isEditing) {
+        if (e.key === 'ArrowUp') {
+          onNavigate('up');
+          e.preventDefault();
+        } else if (e.key === 'ArrowDown') {
+          onNavigate('down');
+          e.preventDefault();
+        } else if (e.key === 'ArrowLeft') {
+          onNavigate('left');
+          e.preventDefault();
+        } else if (e.key === 'ArrowRight') {
+          onNavigate('right');
+          e.preventDefault();
+        }
       }
-    }, [isFocused]);
-
-    if (isEditing) {
-      return (
-        <div
-          className={cn(isFocused && ['outline outline-2 outline-primary', 'relative z-10'])}
-          style={{
-            outlineOffset: isFocused ? '-2px' : undefined,
-          }}
-        >
-          <Input
-            value={value}
-            onChange={e => setValue(e.target.value)}
-            onBlur={() => {
-              setIsEditing(false);
-              if (value !== initialValue?.toString()) {
-                onEdit(value);
-              }
-            }}
-            onKeyDown={handleKeyDown}
-            variant="ghost"
-            className={cn(
-              'h-7 w-full text-xs',
-              'align-middle [&:has([role=checkbox])]:pr-0',
-              className
-            )}
-            autoFocus
-          />
-        </div>
-      );
-    }
-
-    const mergeRefs = <T extends any>(
-      refs: Array<React.MutableRefObject<T> | React.LegacyRef<T> | null | undefined>
-    ): React.RefCallback<T> => {
-      return value => {
-        refs.forEach(ref => {
-          if (typeof ref === 'function') {
-            ref(value);
-          } else if (ref !== null && ref !== undefined) {
-            (ref as React.MutableRefObject<T | null>).current = value;
-          }
-        });
-      };
     };
 
-    const setRefs = React.useCallback(mergeRefs([ref, divRef]), [ref]);
+    // When isFocused changes to true, focus the appropriate element
+    React.useEffect(() => {
+      if (isFocused) {
+        if (isEditing && inputRef.current) {
+          inputRef.current.focus();
+          inputRef.current.select();
+        } else if (divRef.current) {
+          divRef.current.focus();
+        }
+      }
+    }, [isFocused, isEditing]);
 
     return (
-      <div
-        ref={setRefs}
-        role="textbox"
-        tabIndex={0}
-        onKeyDown={handleKeyDown}
-        onClick={e => {
-          e.preventDefault();
-          onFocus?.();
-        }}
-        onFocus={e => {
-          e.preventDefault();
-          onFocus?.();
-        }}
-        onDoubleClick={() => setIsEditing(true)}
-        className={cn(
-          'py-1 w-full h-full',
-          'flex items-center',
-          'truncate outline-hidden',
-          isFocused && ['outline outline-primary', 'relative z-10'],
-          className
+      <>
+        {isEditing ? (
+          <div
+            className={cn(
+              'relative z-10',
+              isFocused && !inputClassName && 'outline outline-2 outline-primary',
+              inputClassName // Apply custom input className if provided
+            )}
+            style={{
+              outlineOffset: isFocused && !inputClassName ? '-2px' : undefined,
+            }}
+          >
+            <Input
+              ref={inputRef}
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              onBlur={() => {
+                setIsEditing(false);
+                if (value !== initialValue?.toString()) {
+                  onEdit(value);
+                }
+                onBlur?.();
+              }}
+              onKeyDown={handleKeyDown}
+              variant="ghost"
+              className={cn(
+                'h-7 w-full text-xs',
+                'align-middle [&:has([role=checkbox])]:pr-0',
+                className
+              )}
+              autoFocus
+            />
+          </div>
+        ) : (
+          <div
+            ref={divRef}
+            role="textbox"
+            tabIndex={0}
+            onKeyDown={handleKeyDown}
+            onClick={e => {
+              e.preventDefault();
+              onFocus?.();
+            }}
+            onFocus={e => {
+              e.preventDefault();
+              onFocus?.();
+            }}
+            onDoubleClick={() => {
+              setIsEditing(true);
+              // Focus and select input on next render
+              requestAnimationFrame(() => {
+                if (inputRef.current) {
+                  inputRef.current.focus();
+                  inputRef.current.select();
+                }
+              });
+            }}
+            className={cn(
+              'py-1 px-2 w-full h-full',
+              'flex items-center',
+              'truncate outline-none',
+              isFocused && ['outline outline-2 outline-primary', 'relative z-10'],
+              className
+            )}
+            style={{
+              outlineOffset: isFocused ? '-2px' : undefined,
+            }}
+          >
+            <span className="truncate">{value}</span>
+          </div>
         )}
-        style={{
-          outlineOffset: isFocused ? '-2px' : undefined,
-        }}
-      >
-        <span className="truncate">{value}</span>
-      </div>
+      </>
     );
   }
 );

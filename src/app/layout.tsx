@@ -6,6 +6,7 @@ import { ProjectProvider } from '@/contexts/project-context';
 import { SidebarProvider } from '@/components/organisms/sidebar';
 import { AuthProvider } from '@/contexts/auth-context';
 import { AppProvider } from '@/contexts/app-context';
+import { ChartProvider } from '@/contexts/chart-context';
 
 const inter = Inter({
   variable: '--font-inter',
@@ -29,7 +30,9 @@ export default function RootLayout({
           <ProjectProvider>
             <AuthProvider>
               <TabsProvider>
-                <SidebarProvider>{children}</SidebarProvider>
+                <ChartProvider>
+                  <SidebarProvider>{children}</SidebarProvider>
+                </ChartProvider>
               </TabsProvider>
             </AuthProvider>
           </ProjectProvider>

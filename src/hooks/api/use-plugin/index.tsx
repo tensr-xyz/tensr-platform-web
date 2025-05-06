@@ -70,7 +70,7 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
   // Load installed plugins from local storage
   const loadInstalledPlugins = useCallback(async () => {
     try {
-      const installed = {};
+      const installed: PluginRecord[] = [];
       // const installed = await invoke<PluginRecord[]>('get_installed_plugins');
 
       if (installed.length === 0) {

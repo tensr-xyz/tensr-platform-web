@@ -9,7 +9,7 @@ import {
   LuBlocks,
 } from 'react-icons/lu';
 import { FilePickerWrapper } from '@/components/molecules/file-picker';
-import { Mean, OneWayAnova, OneSampleTTest } from '@/components/templates/analysis/index.ts';
+import { Mean, OneWayAnova, OneSampleTTest } from '@/components/templates/analysis';
 import { ExportDialog, MergeDatasetDialog } from '@/components/templates/data';
 import FindDuplicatesDialog from '@/components/templates/data/find-duplicates';
 import { HandleMissingDataDialog } from '@/components/templates/data/handle-missing-data';
@@ -19,6 +19,7 @@ import DataQualityDialog from '@/components/templates/data/data-quality';
 import ComputeVariablesDialog from '@/components/templates/transform/compute-variable';
 import CountValuesDialog from '@/components/templates/transform/count-values';
 import ShiftValuesDialog from '@/components/templates/transform/shift-values';
+import { MessageCircle } from 'lucide-react';
 
 export type MenuSection = Record<string, string[]>;
 
@@ -49,18 +50,22 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
 } as const;
 
 export const MENU_ITEMS: MenuItems = {
+  // agent: {
+  //   icon: <MessageCircle className="h-4 w-4" />,
+  //   sections: {},
+  // },
   actions: {
     icon: <LuFilter className="h-4 w-4" />,
     sections: {},
   },
-  graph_options: {
-    icon: <LuChartLine className="h-4 w-4" />,
-    sections: {},
-  },
-  plugins: {
-    icon: <LuBlocks className="h-4 w-4" />,
-    sections: {},
-  },
+  // graph_options: {
+  //   icon: <LuChartLine className="h-4 w-4" />,
+  //   sections: {},
+  // },
+  // plugins: {
+  //   icon: <LuBlocks className="h-4 w-4" />,
+  //   sections: {},
+  // },
   data: {
     icon: <LuDatabase className="h-4 w-4" />,
     sections: {

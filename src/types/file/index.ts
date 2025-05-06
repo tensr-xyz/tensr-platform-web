@@ -41,6 +41,7 @@ export interface ColumnSummary {
 export interface ImportData {
   fileName: string;
   filePath: string;
+  fileId: string;
   preview: string[][];
   columnNames: string[];
   totalRows: number;

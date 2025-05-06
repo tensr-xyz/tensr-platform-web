@@ -20,7 +20,7 @@ const MarkdownViewer = ({ filePath }: MarkdownViewerProps) => {
   useEffect(() => {
     const loadContent = async () => {
       try {
-        const fileContent = {};
+        const fileContent = '';
         // const fileContent = await invoke<string>('read_file', { path: filePath });
         setContent(fileContent);
         setError(null);

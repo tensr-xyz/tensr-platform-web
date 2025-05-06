@@ -1,4 +1,3 @@
-'use client';
 import React, { useEffect, useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/atoms/resizable';
 import ProjectSidebar from '@/components/templates/project-sidebar';
@@ -6,12 +5,12 @@ import AnalysisSidebar from '@/components/templates/analysis-sidebar';
 import Titlebar from '@/components/organisms/titlebar';
 import Footer from '@/components/organisms/footer';
 import { cn } from '@/utils';
-import { Tab } from '@/contexts/tabs-context/types';
+import { ColumnDefinition, Tab, TabData } from '@/contexts/tabs-context/types';
 import { useProject } from '@/contexts/project-context';
 import { useTabs } from '@/contexts/tabs-context';
-import { addTab } from '@/contexts/tabs-context/actions';
-import { ProjectActions } from '@/contexts/project-context/types';
-import { LuFolder } from 'react-icons/lu';
+import { addTab, closeTab } from '@/contexts/tabs-context/actions';
+import { ProjectActions, ViewType } from '@/contexts/project-context/types';
+import { FileEntry, Project } from '@/types/project';
 
 interface ProjectLayoutProps {
   children: React.ReactNode;
@@ -22,15 +21,14 @@ interface ProjectLayoutProps {
 }
 
 const ProjectLayout = ({
-  children,
-  rightPanelOpen,
-  onToggleSidebar,
-  isMaximized = false,
-  activeTab,
-}: ProjectLayoutProps) => {
+                         children,
+                         rightPanelOpen,
+                         onToggleSidebar,
+                         isMaximized = false,
+                         activeTab,
+                       }: ProjectLayoutProps) => {
   const { state: projectState, dispatch: projectDispatch } = useProject();
-  const { dispatch: tabDispatch, state: tabState } = useTabs();
-  const [leftPanelContent, setLeftPanelContent] = useState<React.ReactNode>(null);
+  const { state: tabState, dispatch: tabDispatch } = useTabs();
   const [isLoading, setIsLoading] = useState(false);
 
   // Handle project initialization
@@ -39,20 +37,21 @@ const ProjectLayout = ({
 
     const initializeProject = async () => {
       setIsLoading(true);
-      const { type, path, initialFile } = projectState.currentProject;
+      const { type, path, initialFile } = projectState.currentProject as Project;
 
       if (type === 'directory') {
         try {
           // Load file tree for directories
-          const files = {};
           // const files = await invoke<FileEntry[]>('read_directory', { path });
+          const files = {}
           projectDispatch({ type: ProjectActions.SET_FILE_SYSTEM, payload: files });
-        } catch (err) {}
+        } catch (err) {
+        }
       } else if (type === 'file' && initialFile?.metadata) {
         // Create a new tab for files
         const { metadata } = initialFile;
 
-        const columns = metadata.column_names.map(name => ({
+        const columns: ColumnDefinition[] = metadata.column_names.map(name => ({
           id: name,
           accessor: name,
           header: name,
@@ -62,16 +61,20 @@ const ProjectLayout = ({
 
         // Create initial rows from preview data
         const initialRows = metadata.preview.map((row, rowIndex) => {
-          const dataRow = { id: `row-${rowIndex}` };
+          const dataRow: Record<string, any> = { id: `row-${rowIndex}` };
           columns.forEach((col, colIndex) => {
-            dataRow[col.accessor] = row[colIndex];
+            if (col.accessor) {
+              // Check that accessor exists
+              dataRow[col.accessor] = row[colIndex];
+            }
           });
           return dataRow;
         });
 
-        const newTab = {
-          name: projectState.currentProject.name,
-          type: 'spreadsheet' as const,
+        const newTab: Tab = {
+          id: `tab-${Date.now()}`, // Adding an ID since it might be required by Tab type
+          name: projectState.currentProject ? projectState.currentProject.name : 'Untitled',
+          type: ViewType.SPREADSHEET,
           content: '',
           isDirty: false,
           data: {
@@ -91,7 +94,7 @@ const ProjectLayout = ({
               columnNames: metadata.column_names,
             },
             isInitialized: true,
-          },
+          } as TabData,
         };
 
         tabDispatch(addTab(newTab));
@@ -102,7 +105,7 @@ const ProjectLayout = ({
     initializeProject().catch(err => {
       setIsLoading(false);
     });
-  }, [projectState.currentProject]);
+  }, [projectState.currentProject, projectDispatch, tabDispatch]);
 
   // Handle import data changes
   useEffect(() => {
@@ -112,23 +115,23 @@ const ProjectLayout = ({
         payload: true,
       });
     }
-  }, [projectState.importData]);
+  }, [projectState.importData, projectDispatch, projectState.showImportWizard]);
 
-  const renderContent = () => {
-    if (tabState.tabs.length > 0) {
-      return children;
+  const handleTabClose = (tabId: string) => {
+    if (tabId) {
+      tabDispatch(closeTab(tabId));
     }
-
-    return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-        <LuFolder className="h-12 w-12 mb-4" />
-        <h2 className="text-lg font-medium mb-2">No File Open</h2>
-        <p className="text-sm">Select a file from the project explorer to begin editing</p>
-      </div>
-    );
   };
 
-  const rowCount = activeTab?.type === 'spreadsheet' ? activeTab.data?.totalRows || 0 : 0;
+  const renderContent = () => {
+    // Always return children (which includes TabManager)
+    return children;
+  };
+
+  const rowCount =
+    activeTab?.type === 'spreadsheet' && activeTab.data
+      ? (activeTab.data as TabData)?.totalRows || 0
+      : 0;
 
   const mainContent = (
     <ResizablePanelGroup
@@ -139,7 +142,9 @@ const ProjectLayout = ({
       {projectState.leftPanelOpen && (
         <>
           <ResizablePanel id="left" order={1} defaultSize={20} minSize={15} maxSize={30}>
-            <div className="h-full bg-background overflow-auto">{leftPanelContent}</div>
+            <div className="h-full bg-background overflow-auto">
+              {projectState.leftPanelContent}
+            </div>
           </ResizablePanel>
           <ResizableHandle />
         </>
@@ -163,7 +168,7 @@ const ProjectLayout = ({
                     <h2 className="text-sm font-medium">Terminal</h2>
                   </div>
                   <div className="p-4 font-mono text-sm">
-                    <div className="text-muted-foreground">$ echo "Terminal ready"</div>
+                    <div className="text-muted-foreground">$ echo Terminal ready</div>
                   </div>
                 </div>
               </ResizablePanel>
@@ -195,18 +200,25 @@ const ProjectLayout = ({
     <div
       className={cn(
         'fixed inset-0 bg-background text-foreground z-50 flex flex-col',
-        isMaximized && 'z-100'
+        isMaximized && 'z-[100]'
       )}
     >
-      {/*<Titlebar activeTab={activeTab} onToggleSidebar={onToggleSidebar} />*/}
-
       <div className="flex flex-1 overflow-hidden">
         {projectState.leftSidebarOpen && (
           <div className="bg-background">
-            <ProjectSidebar onPanelContent={setLeftPanelContent} />
+            <ProjectSidebar />
           </div>
         )}
-        {mainContent}
+        <div className="flex flex-col flex-1">
+          {/* Make sure we safely pass tabs to Titlebar */}
+          <Titlebar
+            onToggleSidebar={onToggleSidebar}
+            tabs={tabState.tabs || []}
+            activeTab={activeTab}
+            onTabClose={handleTabClose}
+          />
+          {mainContent}
+        </div>
       </div>
 
       {/*{projectState.footerOpen && (*/}

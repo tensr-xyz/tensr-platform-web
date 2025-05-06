@@ -116,7 +116,7 @@ export function AuthProvider({ children }: ProviderProps) {
 }
 
 // Helper function to extract sub from ID token
-function extractSubFromToken(idToken) {
+function extractSubFromToken(idToken: string) {
   try {
     const payload = JSON.parse(atob(idToken.split('.')[1]));
     return payload.sub;

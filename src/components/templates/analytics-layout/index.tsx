@@ -1,73 +1,50 @@
 import { ReactNode, useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/atoms/resizable';
 import { Button } from '@/components/atoms/button';
-import {
-  LuPanelBottom,
-  LuLayoutPanelLeft,
-  LuLayoutDashboard,
-  LuChartBar,
-  LuGitCompare,
-  LuX,
-  LuExpand,
-  LuShrink,
-} from 'react-icons/lu';
+import { LuX, LuExpand, LuPanelBottom, LuLayoutPanelLeft, LuShrink } from 'react-icons/lu';
 import { ViewType, ProjectActions } from '@/contexts/project-context/types';
 import { useProject } from '@/contexts/project-context';
 import AnalyticsDashboard from '@/components/templates/analytics-dashboard';
-import { Separator } from '@/components/atoms/separator';
 
 interface NavigationBarProps {
-  activeView: string;
   viewMode: string;
-  onViewChange: (view: string) => void;
   onViewModeChange: (mode: string) => void;
   onClose: () => void;
 }
 
 interface AnalyticsLayoutProps {
   children: ReactNode;
-  data?: Record<string, any>[];
-  columns?: any[];
+  columns?: { id: string; name?: string }[];
+  filePath?: string; // Add filePath prop
 }
 
-const NavigationBar = ({
-  activeView,
-  viewMode,
-  onViewChange,
-  onViewModeChange,
-  onClose,
-}: NavigationBarProps) => {
+const NavigationBar = ({ viewMode, onViewModeChange, onClose }: NavigationBarProps) => {
+  // If in bottom mode, only show expander and close buttons
+  if (viewMode === 'bottom') {
+    return (
+      <div className="flex flex-row items-center justify-between bg-background border-b px-1 h-8">
+        <div className="flex flex-1 items-center justify-between gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onViewModeChange('split')}
+            className="h-7 w-7"
+            title="Expand"
+          >
+            <LuExpand className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7" title="Close">
+            <LuX className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Full navigation for split and full modes
   return (
     <div className="flex flex-row items-center justify-between bg-background border-b px-1 h-8">
       <div className="flex flex-row items-center gap-1">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onViewChange('overview')}
-          data-state={activeView === 'overview' ? 'active' : 'inactive'}
-          className="h-7 w-7"
-        >
-          <LuLayoutDashboard className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onViewChange('distribution')}
-          data-state={activeView === 'distribution' ? 'active' : 'inactive'}
-          className="h-7 w-7"
-        >
-          <LuChartBar className="h-4 w-4" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => onViewChange('relationships')}
-          data-state={activeView === 'relationships' ? 'active' : 'inactive'}
-          className="h-7 w-7"
-        >
-          <LuGitCompare className="h-4 w-4" />
-        </Button>
-        <Separator orientation="vertical" className="h-4 mx-2" />
         <Button
           variant="ghost"
           size="icon"
@@ -119,10 +96,9 @@ const NavigationBar = ({
   );
 };
 
-const AnalyticsLayout = ({ children, data, columns }: AnalyticsLayoutProps) => {
+const AnalyticsLayout = ({ children, columns, filePath }: AnalyticsLayoutProps) => {
   const { state, dispatch } = useProject();
   const [viewMode, setViewMode] = useState('bottom');
-  const [activeView, setActiveView] = useState('overview');
 
   const toggleAnalytics = () => {
     dispatch({
@@ -131,22 +107,14 @@ const AnalyticsLayout = ({ children, data, columns }: AnalyticsLayoutProps) => {
     });
   };
 
+  const safeColumns = columns || [];
+
   const chartContent = (
     <div className="h-full flex flex-col">
-      <NavigationBar
-        activeView={activeView}
-        viewMode={viewMode}
-        onViewChange={setActiveView}
-        onViewModeChange={setViewMode}
-        onClose={toggleAnalytics}
-      />
-      <div className="flex-1 flex">
-        <div className="flex-none transition-all duration-200"></div>
-        <div className="flex-1">
-          <div className="p-4">
-            <AnalyticsDashboard data={data} columns={columns} activeView={activeView} />
-          </div>
-        </div>
+      <NavigationBar viewMode={viewMode} onViewModeChange={setViewMode} onClose={toggleAnalytics} />
+      <div className="flex-1">
+        {/* Pass the viewMode and filePath to the dashboard component */}
+        <AnalyticsDashboard columns={safeColumns} viewMode={viewMode} filePath={filePath || ''} />
       </div>
     </div>
   );

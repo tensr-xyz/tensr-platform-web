@@ -33,7 +33,7 @@ export const ProjectMenu = () => {
 
   const fetchRecentProjects = async () => {
     try {
-      const recent = {};
+      const recent: RecentProject[] = [];
       // const recent = await invoke<RecentProject[]>('get_recent_projects');
       setRecentProjects(recent);
     } catch (err) {}
@@ -50,7 +50,7 @@ export const ProjectMenu = () => {
   const handleOpenFile = async () => {
     try {
       setIsLoading(true);
-      const filePath = {};
+      const filePath: string = '';
       // const filePath = await invoke<string | null>('open_file_dialog');
       if (!filePath) return;
 
@@ -73,7 +73,7 @@ export const ProjectMenu = () => {
   const handleOpenDirectory = async () => {
     try {
       setIsLoading(true);
-      const dirPath = {};
+      const dirPath: string = '';
       // const dirPath = await invoke<string | null>('open_directory_dialog');
       if (!dirPath) return;
 

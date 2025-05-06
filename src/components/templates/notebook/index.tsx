@@ -9,13 +9,14 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { useTabs } from '@/contexts/tabs-context';
+import { useTheme } from '@/contexts/theme-context';
 
 interface Cell {
   id: number;
   type: 'code';
   content: string;
   stdout: string | null;
-  output: string | null;
+  output: OutputContent | null;
   error: string | null;
   executionCount: number | null;
 }
@@ -31,28 +32,109 @@ interface NotebookCellProps {
 
 interface ExecutionResult {
   stdout: string | null;
-  output: string | null;
+  output: OutputContent | null; // Changed from string to OutputContent
   error: string | null;
+}
+
+interface OutputContent {
+  type_: string; // Note the underscore to match Rust struct
+  data: any;
+}
+
+// Component to render different types of output
+const OutputRenderer: React.FC<{ output: OutputContent }> = ({ output }) => {
+  switch (output.type_) {
+    case 'plot':
+      return (
+        <div className="w-full">
+          <img
+            src={`data:image/png;base64,${output.data?.data ?? output.data}`}
+            alt="Plot"
+            className="max-w-full"
+          />
+        </div>
+      );
+    case 'table':
+      return <TableRenderer data={output.data} />;
+    case 'text':
+      return <div className="font-mono whitespace-pre-wrap">{output.data}</div>;
+    default:
+      return (
+        <div className="font-mono whitespace-pre-wrap">Unknown output type: {output.type_}</div>
+      );
+  }
+};
+
+// Component to render tables
+const TableRenderer: React.FC<{ data: any[] }> = ({ data }) => {
+  if (!data || data.length === 0) return null;
+
+  const headers = Object.keys(data[0]);
+
+  return (
+    <div className="overflow-x-auto my-4">
+      <table className="min-w-full divide-y divide-gray-200">
+        <thead className="bg-gray-50">
+          <tr>
+            {headers.map(header => (
+              <th
+                key={header}
+                className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+              >
+                {header}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {data.map((row, i) => (
+            <tr key={i}>
+              {headers.map(header => (
+                <td key={header} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {row[header]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+interface NotebookCellProps {
+  cell: Cell;
+  language: 'python' | 'r';
+  onContentChange: (cellId: number, content: string) => void;
+  onExecute: (cellId: number) => void;
+  isExecuting: boolean;
+  isSelected: boolean;
+  onSelect: (cellId: number) => void;
 }
 
 const NotebookCell: React.FC<NotebookCellProps> = ({
   cell,
+  language,
   onContentChange,
   onExecute,
   isExecuting,
   isSelected,
   onSelect,
 }) => {
+  const { theme } = useTheme();
+
+  const isDarkMode = theme === 'dark';
+
   return (
     <div
-      className={`relative group ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}
+      className={`relative group ${isSelected ? 'bg-background' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
       onClick={() => onSelect(cell.id)}
     >
-      <div className="absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center text-gray-500 select-none text-xs">
+      <div className="absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center text-gray-500 dark:text-gray-400 select-none text-xs">
         {`[${cell.executionCount !== null ? cell.executionCount : ' '}]:`}
       </div>
 
-      <div className="ml-12 border-l group-hover:border-l-2 group-hover:border-blue-200 pl-2 pr-10">
+      <div className="ml-12 border-l group-hover:border-l-2 group-hover:border-accent pl-2 pr-10">
         <div
           className="w-full"
           style={{
@@ -62,10 +144,10 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
           }}
         >
           <Editor
-            defaultLanguage="python"
+            defaultLanguage={language}
             value={cell.content}
             onChange={value => onContentChange(cell.id, value || '')}
-            theme="light"
+            theme={isDarkMode ? 'vs-dark' : 'vs-light'}
             options={{
               minimap: { enabled: false },
               fontSize: 13,
@@ -88,15 +170,14 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
           />
         </div>
 
-        {(cell.stdout || cell.output) && (
-          <div className="py-1 pl-2 font-mono text-xs text-gray-700 whitespace-pre-wrap border-l-2 border-green-200 bg-gray-50 my-1">
-            {cell.stdout && <div>{cell.stdout}</div>}
-            {cell.output && <div>{cell.output}</div>}
+        {cell.output && (
+          <div className="py-1 pl-2 my-1 dark:text-gray-200">
+            <OutputRenderer output={cell.output} />
           </div>
         )}
 
         {cell.error && (
-          <div className="py-1 pl-2 font-mono text-xs text-red-600 whitespace-pre-wrap border-l-2 border-red-200 bg-red-50 my-1">
+          <div className="py-1 pl-2 font-mono text-xs text-red-600 dark:text-red-400 whitespace-pre-wrap border-l-2 border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900 my-1">
             {cell.error}
           </div>
         )}
@@ -104,7 +185,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
 
       <div className="absolute right-0 top-0 h-full w-8 flex items-center justify-center invisible group-hover:visible">
         <button
-          className="p-1 hover:bg-gray-200 rounded-sm"
+          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
           onClick={e => {
             e.stopPropagation();
             onExecute(cell.id);
@@ -140,27 +221,69 @@ export const Notebook: React.FC = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [language, setLanguage] = useState<'python' | 'r'>('python');
 
-  const generateSetupCode = (): string => {
+  const generateSetupCode = (lang: 'python' | 'r'): string => {
     if (!activeTab?.data?.initialData) return '';
 
     const dataStr = JSON.stringify(activeTab.data.initialData);
 
-    return `
-try:
-    import pandas as pd
-    import json
-    import io
-    
-    # Initialize the dataframe from the tab's data
-    df = pd.read_json(io.StringIO('''${dataStr}'''))
-except ImportError as e:
-    if "pandas" in str(e):
-        print("ERROR: pandas is not installed. Please install it using:")
-        print("pip install pandas")
-        raise ImportError("pandas is required but not installed")
+    if (lang === 'python') {
+      return `
+import pandas as pd
+import json
+import io
+import matplotlib.pyplot as plt
+import base64
+from io import BytesIO
+
+# Initialize the dataframe from the tab's data
+df = pd.read_json(io.StringIO('''${dataStr}'''))
+
+# Function to convert matplotlib plots to JSON
+def fig_to_json():
+    buf = BytesIO()
+    plt.savefig(buf, format='png', bbox_inches='tight')
+    buf.seek(0)
+    img_str = base64.b64encode(buf.getvalue()).decode('utf-8')
+    plt.close()
+    return {
+        "type": "plot",
+        "data": {
+            "type": "image",
+            "format": "png",
+            "data": img_str
+        }
+    }
+
+# Function to convert pandas DataFrame to JSON
+def df_to_json(df):
+    return {
+        "type": "table",
+        "data": json.loads(df.to_json(orient='records'))
+    }
+
+# Function to capture output
+def display(obj):
+    if isinstance(obj, pd.DataFrame):
+        _ = df_to_json(obj)
+    elif str(type(obj).__module__).startswith('matplotlib'):
+        _ = fig_to_json()
     else:
-        raise e
+        print(obj)
+
+# Override display function
+globals()['display'] = display
 `;
+    } else {
+      return `
+# Load required libraries
+library(jsonlite)
+library(ggplot2)
+library(base64enc)
+
+# Parse the input data
+df <- fromJSON('''${dataStr}''')
+`;
+    }
   };
 
   const addCell = () => {
@@ -186,28 +309,46 @@ except ImportError as e:
       const cell = cells.find(c => c.id === cellId);
       if (!cell) return;
 
-      const setupCode = generateSetupCode();
+      const setupCode = generateSetupCode(language);
       const fullCode = setupCode + '\n' + cell.content;
 
-      const result = {};
-      // const result = await invoke<ExecutionResult>('execute_python', { code: fullCode });
+      const result = await invoke<ExecutionResult>(
+        language === 'python' ? 'execute_python' : 'execute_r',
+        { code: fullCode }
+      );
 
-      setCells(
-        cells.map(c =>
+      // Process stdout to find JSON objects
+      let output = result.output;
+      if (!output && result.stdout) {
+        try {
+          // Find the last JSON object in the output
+          const jsonMatch = result.stdout.match(/\{.*\}/g);
+          if (jsonMatch) {
+            const lastJson = jsonMatch[jsonMatch.length - 1];
+            const parsedOutput = JSON.parse(lastJson);
+            if (parsedOutput.type_ && parsedOutput.data) {
+              output = parsedOutput;
+            }
+          }
+        } catch (e) {}
+      }
+
+      setCells(prevCells =>
+        prevCells.map(c =>
           c.id === cellId
             ? {
                 ...c,
-                stdout: result.stdout,
-                output: result.output,
-                error: result.error,
+                stdout: result.stdout || null,
+                output: output,
+                error: result.error || null,
                 executionCount: (c.executionCount || 0) + 1,
               }
             : c
         )
       );
     } catch (err) {
-      setCells(
-        cells.map(c =>
+      setCells(prevCells =>
+        prevCells.map(c =>
           c.id === cellId
             ? {
                 ...c,
@@ -224,25 +365,26 @@ except ImportError as e:
   };
 
   const executeAllCells = async () => {
-    const setupCode = generateSetupCode();
-
     for (const cell of cells) {
       setIsExecuting(true);
       try {
+        const setupCode = generateSetupCode(language);
         const fullCode = setupCode + '\n' + cell.content;
-        const result = {};
-        // const result = await invoke<ExecutionResult>('execute_python', { code: fullCode });
+        const result = await invoke<ExecutionResult>(
+          language === 'python' ? 'execute_python' : 'execute_r',
+          { code: fullCode }
+        );
 
         setCells(prevCells =>
           prevCells.map(c =>
             c.id === cell.id
-              ? {
+              ? ({
                   ...c,
                   stdout: result.stdout,
                   output: result.output,
                   error: result.error,
                   executionCount: (c.executionCount || 0) + 1,
-                }
+                } as Cell)
               : c
           )
         );
@@ -250,12 +392,12 @@ except ImportError as e:
         setCells(prevCells =>
           prevCells.map(c =>
             c.id === cell.id
-              ? {
+              ? ({
                   ...c,
                   error: err instanceof Error ? err.message : String(err),
                   stdout: null,
                   output: null,
-                }
+                } as Cell)
               : c
           )
         );
@@ -272,28 +414,31 @@ except ImportError as e:
           return [
             {
               ...prevCells[0],
-              content: '# Access the active tab data using "df" variable\nprint(df.head())',
+              content:
+                language === 'python'
+                  ? '# Access the active tab data using "df" variable\nprint(df.head())'
+                  : '# Access the active tab data using "df" variable\nhead(df)',
             },
           ];
         }
         return prevCells;
       });
     }
-  }, [activeTab?.id]);
+  }, [activeTab?.id, language]);
 
   return (
-    <div className="flex flex-col h-full overflow-hidden bg-white">
-      <div className="flex items-center px-1 h-8 border-b bg-gray-50 shrink-0">
+    <div className="flex flex-col h-full overflow-hidden bg-background">
+      <div className="flex items-center px-1 h-8 border-b bg-background flex-shrink-0">
         <div className="flex items-center gap-1">
           <button
-            className="p-1 hover:bg-gray-200 rounded-sm text-xs"
+            className="p-1 hover:bg-gray-200 rounded text-xs"
             onClick={executeAllCells}
             disabled={isExecuting || !activeTab?.data?.initialData}
           >
             Run All
           </button>
           <button
-            className="p-1 hover:bg-gray-200 rounded-sm"
+            className="p-1 hover:bg-gray-200 rounded"
             onClick={() => selectedCell && executeCell(selectedCell)}
             disabled={isExecuting || !activeTab?.data?.initialData}
           >
@@ -312,7 +457,7 @@ except ImportError as e:
               </SelectItem>
             </SelectContent>
           </Select>
-          <button className="p-1 hover:bg-gray-200 rounded-sm" onClick={addCell}>
+          <button className="p-1 hover:bg-gray-200 rounded" onClick={addCell}>
             <LuPlus className="w-3 h-3" />
           </button>
         </div>
@@ -324,6 +469,7 @@ except ImportError as e:
             <NotebookCell
               key={cell.id}
               cell={cell}
+              language={language}
               onContentChange={updateCellContent}
               onExecute={executeCell}
               isExecuting={isExecuting}

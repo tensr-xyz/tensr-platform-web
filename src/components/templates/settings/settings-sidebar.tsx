@@ -1,210 +1,77 @@
-import * as React from 'react';
-import { ChevronRight } from 'lucide-react';
+'use client';
 
-import { SearchForm } from './search-form';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/atoms/collapsible';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupContent,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarRail,
-} from '@/components/organisms/sidebar';
+import * as React from 'react';
+import Link from 'next/link';
+import { Input } from '@/components/atoms/input';
+import { Search } from 'lucide-react';
+import { Button } from '@/components/atoms/button';
 
 // This is sample data.
 const data = {
   versions: ['1.0.1', '1.1.0-alpha', '2.0.0-beta1'],
   navMain: [
     {
-      title: 'Getting Started',
-      url: '#',
-      items: [
-        {
-          title: 'Installation',
-          url: '#',
-        },
-        {
-          title: 'Project Structure',
-          url: '#',
-        },
-      ],
+      title: 'Account',
+      url: '/settings/account',
     },
     {
-      title: 'Building Your Application',
-      url: '#',
-      items: [
-        {
-          title: 'Routing',
-          url: '#',
-        },
-        {
-          title: 'Data Fetching',
-          url: '#',
-          isActive: true,
-        },
-        {
-          title: 'Rendering',
-          url: '#',
-        },
-        {
-          title: 'Caching',
-          url: '#',
-        },
-        {
-          title: 'Styling',
-          url: '#',
-        },
-        {
-          title: 'Optimizing',
-          url: '#',
-        },
-        {
-          title: 'Configuring',
-          url: '#',
-        },
-        {
-          title: 'Testing',
-          url: '#',
-        },
-        {
-          title: 'Authentication',
-          url: '#',
-        },
-        {
-          title: 'Deploying',
-          url: '#',
-        },
-        {
-          title: 'Upgrading',
-          url: '#',
-        },
-        {
-          title: 'Examples',
-          url: '#',
-        },
-      ],
+      title: 'Billing',
+      url: '/settings/billing',
     },
-    {
-      title: 'API Reference',
-      url: '#',
-      items: [
-        {
-          title: 'Components',
-          url: '#',
-        },
-        {
-          title: 'File Conventions',
-          url: '#',
-        },
-        {
-          title: 'Functions',
-          url: '#',
-        },
-        {
-          title: 'next.config.js Options',
-          url: '#',
-        },
-        {
-          title: 'CLI',
-          url: '#',
-        },
-        {
-          title: 'Edge Runtime',
-          url: '#',
-        },
-      ],
-    },
-    {
-      title: 'Architecture',
-      url: '#',
-      items: [
-        {
-          title: 'Accessibility',
-          url: '#',
-        },
-        {
-          title: 'Fast Refresh',
-          url: '#',
-        },
-        {
-          title: 'Next.js Compiler',
-          url: '#',
-        },
-        {
-          title: 'Supported Browsers',
-          url: '#',
-        },
-        {
-          title: 'Turbopack',
-          url: '#',
-        },
-      ],
-    },
-    {
-      title: 'Community',
-      url: '#',
-      items: [
-        {
-          title: 'Contribution Guide',
-          url: '#',
-        },
-      ],
-    },
+    // {
+    //   title: 'Organisation',
+    //   url: '/settings/organisation',
+    // },
+    // {
+    //   title: 'Members',
+    //   url: '/settings/members',
+    // },
+    // {
+    //   title: 'Teams',
+    //   url: '/settings/teams',
+    // },
   ],
 };
 
-export function SettingsSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function SettingsSidebar() {
+  const [activeItem, setActiveItem] = React.useState(data.navMain[0].title);
+
   return (
-    <Sidebar {...props}>
-      <SidebarHeader>
-        <SearchForm />
-      </SidebarHeader>
-      <SidebarContent className="gap-0">
-        {/* We create a collapsible SidebarGroup for each parent. */}
-        {data.navMain.map(item => (
-          <Collapsible
-            key={item.title}
-            title={item.title}
-            defaultOpen
-            className="group/collapsible"
-          >
-            <SidebarGroup>
-              <SidebarGroupLabel
-                asChild
-                className="group/label text-sm text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
-              >
-                <CollapsibleTrigger>
-                  {item.title}{' '}
-                  <ChevronRight className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-90" />
-                </CollapsibleTrigger>
-              </SidebarGroupLabel>
-              <CollapsibleContent>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {item.items.map(item => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild isActive={item.isActive}>
-                          <a href={item.url}>{item.title}</a>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </CollapsibleContent>
-            </SidebarGroup>
-          </Collapsible>
-        ))}
-      </SidebarContent>
-      <SidebarRail />
-    </Sidebar>
+    <div className="w-xs border-gray-200">
+      <div className="flex flex-col gap-12 mb-8">
+        <div className="relative flex items-center">
+          <Input
+            className="bg-background pl-10" // Add left padding to make room for the icon
+          />
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+            <Search size={18} />
+          </div>
+        </div>
+        <nav className="space-y-1">
+          {data.navMain.map(item => (
+            <Link
+              key={item.title}
+              href={item.url}
+              onClick={() => {
+                setActiveItem(item.title);
+              }}
+              className={`block px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                activeItem === item.title
+                  ? 'bg-blue-50 text-blue-700'
+                  : 'text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {item.title}
+            </Link>
+          ))}
+        </nav>
+      </div>
+
+      <div className="border-t border-gray-200 pt-4 mt-6">
+        <Button variant="outline" className="bg-background w-full">
+          Log out
+        </Button>
+      </div>
+    </div>
   );
 }

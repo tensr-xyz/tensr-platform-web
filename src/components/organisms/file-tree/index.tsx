@@ -1,4 +1,3 @@
-'use client';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -8,7 +7,6 @@ import {
 } from '@/components/molecules/context-menu';
 import {
   SidebarContent,
-  SidebarGroup,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarMenu,
@@ -23,6 +21,7 @@ import {
   LuFolder,
   LuFolderPlus,
   LuMinus,
+  LuDatabase,
 } from 'react-icons/lu';
 import {
   Collapsible,
@@ -42,11 +41,20 @@ import { Input } from '@/components/atoms/input';
 import { ProjectActions, ViewType } from '@/contexts/project-context/types';
 import { addTab } from '@/contexts/tabs-context/actions';
 import { useTabs } from '@/contexts/tabs-context';
-import { useProject } from '@/contexts/project-context';
+import { useProject as useProjectState } from '@/contexts/project-context';
 import { refreshFileSystem } from '@/contexts/project-context/actions';
 import { useFileOperations } from '@/hooks/use-file-operations';
 import { ImportData } from '@/types/file';
 import { FileResponse } from '@/types/project';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/molecules/accordion';
+import { ScrollArea } from '@/components/atoms/scroll-area';
+import { MENU_ITEMS, ANALYSIS_COMPONENTS } from '@/configs/analysis-config';
+import { useProject } from '@/hooks/api/use-project';
 
 interface FileEntry {
   name: string;
@@ -63,7 +71,7 @@ interface FileTreeProps {
 
 interface FileOperationsProps {
   currentPath: string;
-  onRefresh: () => void;
+  onRefresh: () => Promise<void>;
 }
 
 const sortItems = (items: FileEntry[]) => {
@@ -178,7 +186,7 @@ interface FileTreeItemProps {
 }
 
 export const FileTreeItem = ({ item, onDoubleClick, onCreateFile }: FileTreeItemProps) => {
-  const { state, dispatch } = useProject();
+  const { state, dispatch } = useProjectState();
 
   const handleClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -230,7 +238,7 @@ export const FolderTreeItem = ({
   children,
   onRefresh,
 }: FolderTreeItemProps) => {
-  const { state, dispatch } = useProject();
+  const { state, dispatch } = useProjectState();
 
   const handleClick = (e: React.MouseEvent) => {
     // Only handle folder clicks, not bubbled events
@@ -296,12 +304,8 @@ export const FolderTreeItem = ({
   );
 };
 
-interface FileOperationsProps {
-  onRefresh: () => void;
-}
-
 export const FileOperations: React.FC<FileOperationsProps> = ({ onRefresh }) => {
-  const { state } = useProject();
+  const { state } = useProjectState();
   const [dialog, setDialog] = useState<{ type: FileOperation; isOpen: boolean } | null>(null);
 
   // Get the current directory path based on selection
@@ -356,7 +360,7 @@ export const FileOperations: React.FC<FileOperationsProps> = ({ onRefresh }) => 
 };
 
 export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefresh }) => {
-  const { state, dispatch } = useProject();
+  const { state, dispatch } = useProjectState();
   const { dispatch: tabsDispatch } = useTabs();
   const [dialog, setDialog] = useState<{ type: FileOperation; isOpen: boolean } | null>(null);
   const { createFile, createFolder } = useFileOperations(item.path, onRefresh);
@@ -371,7 +375,7 @@ export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefres
       if (file.entry_type === 'file') {
         if (file.name.endsWith('.csv')) {
           try {
-            const response = {};
+            const response = {} as FileResponse;
             // const response = await invoke<FileResponse>('read_csv', {
             //   request: {
             //     path: file.path,
@@ -381,12 +385,13 @@ export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefres
 
             if (response?.metadata) {
               const importData: ImportData = {
+                fileId: '', // Adding the required fileId field
                 fileName: file.name,
                 filePath: file.path,
-                preview: response.metadata.preview,
-                columnNames: response.metadata.column_names,
-                totalRows: response.metadata.rows,
-                totalColumns: response.metadata.columns,
+                preview: response.metadata.preview || [],
+                columnNames: response.metadata.column_names || [],
+                totalRows: response.metadata.rows || 0,
+                totalColumns: response.metadata.columns || 0,
               };
 
               dispatch({
@@ -414,11 +419,12 @@ export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefres
                 })
               );
             } else {
+              // Handle error
             }
           }
         } else if (file.name.endsWith('.md')) {
           try {
-            const content = {};
+            const content = {} as string;
             // const content = await invoke<string>('read_file', { path: file.path });
             tabsDispatch(
               addTab({
@@ -429,7 +435,9 @@ export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefres
                 isDirty: false,
               })
             );
-          } catch (err) {}
+          } catch (err) {
+            // Handle error
+          }
         }
       }
     } finally {
@@ -480,15 +488,45 @@ export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefres
   );
 };
 
-export const FolderComponent: React.FC = () => {
-  const { state, dispatch } = useProject();
-  const [selectedPath] = useState('');
+// Fix DataOperationItem component to eliminate ESLint warning
+const DataOperationItem = ({ item }: { item: string }) => {
+  const AnalysisComponent = ANALYSIS_COMPONENTS[item];
 
-  const handleRefresh = useCallback(async () => {
-    if (state.currentProject?.path) {
-      await refreshFileSystem(state.currentProject.path, dispatch);
+  if (!AnalysisComponent) {
+    return (
+      <div className="py-2 px-2">
+        <div className="px-2 py-1 opacity-50 cursor-not-allowed">{item} (Coming Soon)</div>
+      </div>
+    );
+  }
+
+  return (
+    <AnalysisComponent>
+      {/* Use children properly by not using children prop */}
+      <div className="py-2 px-2">
+        <div className="px-2 py-1 cursor-pointer">{item}</div>
+      </div>
+    </AnalysisComponent>
+  );
+};
+
+export const FolderComponent: React.FC = () => {
+  const { state, dispatch } = useProjectState();
+  const [selectedPath] = useState('');
+  // Get project without destructuring state and dispatch
+  const projectHook = useProject({ projectId: state.currentProject?.id });
+
+  // Convert void function to Promise<void> function
+  const handleRefresh = useCallback(async (): Promise<void> => {
+    if (state.currentProject?.id) {
+      console.log('Refreshing file system...');
+      await refreshFileSystem(state.currentProject.id, dispatch);
+      return Promise.resolve();
+    } else {
+      console.warn('No current project ID found');
+      return Promise.resolve();
     }
-  }, [state.currentProject?.path, dispatch]);
+  }, [state.currentProject?.id, dispatch]);
 
   useEffect(() => {
     handleRefresh();
@@ -496,35 +534,73 @@ export const FolderComponent: React.FC = () => {
 
   return (
     <SidebarContent>
-      <SidebarGroup>
-        <SidebarGroupContent className="flex justify-between items-center">
-          <SidebarGroupLabel>Files</SidebarGroupLabel>
-          <div className="flex items-center">
-            {state.currentProject?.type === 'directory' && (
-              <FileOperations currentPath={selectedPath || ''} onRefresh={handleRefresh} />
-            )}
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => dispatch({ type: ProjectActions.TOGGLE_LEFT_PANEL, payload: false })}
-            >
-              <LuMinus />
-            </Button>
-          </div>
-        </SidebarGroupContent>
-        <SidebarGroupContent>
-          <SidebarMenu>
-            {state.fileSystem.map(item => (
-              <FileTree
-                key={item.path}
-                item={item}
-                selectedPath={selectedPath}
-                onRefresh={handleRefresh}
-              />
+      <SidebarGroupContent className="flex justify-between items-center">
+        <div>
+          {state.currentProject?.projectName && (
+            <span className="text-sm font-medium">{state.currentProject.projectName}</span>
+          )}
+        </div>
+        <div className="flex items-center">
+          {/*{state.currentProject?.id && (*/}
+          {/*  <FileOperations currentPath={selectedPath || ''} onRefresh={handleRefresh} />*/}
+          {/*)}*/}
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => dispatch({ type: ProjectActions.TOGGLE_LEFT_PANEL, payload: false })}
+          >
+            <LuMinus />
+          </Button>
+        </div>
+      </SidebarGroupContent>
+      <SidebarGroupContent>
+        <ScrollArea className="h-[calc(100vh-8rem)]">
+          <Accordion
+            type="multiple"
+            defaultValue={['project-files', 'data-section-0']}
+            className="w-full"
+          >
+            {/* Project Files Accordion */}
+            {/*<AccordionItem value="project-files">*/}
+            {/*  <AccordionTrigger className="px-2">*/}
+            {/*    <div className="flex items-center gap-2">*/}
+            {/*      <span>Project Files</span>*/}
+            {/*    </div>*/}
+            {/*  </AccordionTrigger>*/}
+            {/*  <AccordionContent>*/}
+            {/*    <SidebarMenu>*/}
+            {/*      {state.fileSystem && state.fileSystem.length > 0 ? (*/}
+            {/*        state.fileSystem.map(item => (*/}
+            {/*          <FileTree*/}
+            {/*            key={item.path}*/}
+            {/*            item={item}*/}
+            {/*            selectedPath={selectedPath}*/}
+            {/*            onRefresh={handleRefresh}*/}
+            {/*          />*/}
+            {/*        ))*/}
+            {/*      ) : (*/}
+            {/*        <div className="p-2 text-sm text-muted-foreground">*/}
+            {/*          {state.loading ? 'Loading...' : 'No files yet. Create a new file or folder to get started.'}*/}
+            {/*        </div>*/}
+            {/*      )}*/}
+            {/*    </SidebarMenu>*/}
+            {/*  </AccordionContent>*/}
+            {/*</AccordionItem>*/}
+
+            {/* Data sections directly as accordions */}
+            {Object.entries(MENU_ITEMS.data.sections).map(([sectionName, items], index) => (
+              <AccordionItem key={`data-${index}`} value={`data-section-${index}`}>
+                <AccordionTrigger className="px-2">{sectionName}</AccordionTrigger>
+                <AccordionContent>
+                  {items.map((item, itemIndex) => (
+                    <DataOperationItem key={`${sectionName}-${itemIndex}`} item={item} />
+                  ))}
+                </AccordionContent>
+              </AccordionItem>
             ))}
-          </SidebarMenu>
-        </SidebarGroupContent>
-      </SidebarGroup>
+          </Accordion>
+        </ScrollArea>
+      </SidebarGroupContent>
     </SidebarContent>
   );
 };

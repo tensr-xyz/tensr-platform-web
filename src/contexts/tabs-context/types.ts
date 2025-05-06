@@ -1,20 +1,63 @@
-import { ViewType } from '@/contexts/project-context/types.ts';
+// tabs-context/types.ts
+import { ViewType } from '@/contexts/project-context/types';
 
 export interface ColumnVisibility {
   [columnId: string]: boolean;
 }
 
+// Base Tab interface with required fields and optional data fields
 export interface Tab {
   id: string;
-  path?: string;
   name: string;
-  content: string;
+  content: string; // Required by the context
   isDirty: boolean;
   type: ViewType;
+  path?: string;
   columnVisibility?: ColumnVisibility;
   data?: any;
 }
 
+// Column interface for spreadsheet tabs
+export interface Column {
+  id: string;
+  accessor: string;
+  header: string;
+  width: number;
+  type: string;
+}
+
+// TabData interface with specific spreadsheet data
+export interface TabData {
+  filePath?: string;
+  initialData?: Record<string, any>[];
+  initialColumns?: Column[];
+  columnStats?: Record<string, any>;
+  totalRows?: number;
+  processDataChunk?: (data: any[], startRow: number) => Record<string, any>[];
+  isInitialized?: boolean;
+  cleanValue?: (value: any) => any;
+  importSettings?: any;
+}
+
+// SpreadsheetTab extends the base Tab interface
+export interface SpreadsheetTab extends Tab {
+  type: ViewType.SPREADSHEET;
+  data: Required<TabData>;
+  content: string; // Ensure content is available
+}
+
+// Markdown-specific tab type
+export interface MarkdownTab extends Tab {
+  type: ViewType.MARKDOWN;
+  path: string;
+}
+
+// Type predicate to check if a tab is a spreadsheet tab
+export function isSpreadsheetTab(tab: Tab): tab is SpreadsheetTab {
+  return tab.type === ViewType.SPREADSHEET && tab.data !== undefined;
+}
+
+// Enum for tab action types
 export enum TabActions {
   ADD_TAB = 'ADD_TAB',
   CLOSE_TAB = 'CLOSE_TAB',

@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useRef, useCallback, useState } from 'react';
 import {
   LuArrowDownWideNarrow,
   LuArrowUpWideNarrow,
   LuBox,
+  LuChevronDown,
   LuEye,
   LuGroup,
   LuLoader,
@@ -10,7 +11,6 @@ import {
   LuWrench,
 } from 'react-icons/lu';
 import { Resizable } from 'react-resizable';
-import { Checkbox } from '@/components/atoms/checkbox';
 import { EditableCell, EditableCellRef } from '@/components/molecules/table';
 import {
   DropdownMenu,
@@ -23,6 +23,7 @@ import {
 } from '@/components/molecules/dropdown';
 import { Column, Header, Table } from '@tanstack/react-table';
 import { ColumnSummary } from '@/types/project';
+import { cn } from '@/utils';
 
 interface HeaderCellProps {
   column: Column<any>;
@@ -51,9 +52,11 @@ const StatsContainer = ({ children }: { children: React.ReactNode }) => (
 const HeaderCell = React.memo<HeaderCellProps>(
   ({ column, showStats, stats, isLoadingStats, onHeaderEdit }) => {
     const hasStats = stats?.numeric_stats || stats?.categorical_stats;
-    const editableCellRef = React.useRef<EditableCellRef>(null);
+    const editableCellRef = useRef<EditableCellRef>(null);
+    const [isEditing, setIsEditing] = useState(false);
+    const [dropdownOpen, setDropdownOpen] = useState(false);
 
-    const renderNumericValue = React.useCallback((value: number | undefined | null) => {
+    const renderNumericValue = useCallback((value: number | undefined | null) => {
       if (value === undefined || value === null) return '-';
       return value.toLocaleString(undefined, {
         maximumFractionDigits: 2,
@@ -61,25 +64,95 @@ const HeaderCell = React.memo<HeaderCellProps>(
       });
     }, []);
 
-    const renderPercentage = React.useCallback((value: number) => {
+    const renderPercentage = useCallback((value: number) => {
       return `${(value * 100).toFixed(1)}%`;
     }, []);
+
+    const handleRenameClick = useCallback(() => {
+      // Close dropdown first to avoid focus issues
+      setDropdownOpen(false);
+
+      // Focus the edit cell directly without delay
+      // We'll use requestAnimationFrame instead of setTimeout
+      // to ensure the dropdown is closed before focusing
+      requestAnimationFrame(() => {
+        setIsEditing(true);
+        if (editableCellRef.current) {
+          editableCellRef.current.focus();
+        }
+      });
+    }, []);
+
+    // Prevent dropdown from opening when editing
+    const handleDropdownTriggerClick = useCallback(
+      (e: React.MouseEvent) => {
+        if (isEditing) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+      },
+      [isEditing]
+    );
 
     return (
       <div className="w-full bg-background h-full flex flex-col">
         {/* Header Section - Fixed height */}
-        <div className="h-7 flex-none">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <div className="flex items-center justify-between px-2 h-7 w-full hover:bg-muted/50 cursor-pointer">
-                <div className="flex-1 min-w-0">
+        <div
+          className={cn(
+            'h-7 flex-none z-20',
+            (isEditing || dropdownOpen) && 'outline outline-2 outline-primary'
+          )}
+          style={{
+            outlineOffset: '-2px',
+          }}
+        >
+          <DropdownMenu
+            open={dropdownOpen && !isEditing}
+            onOpenChange={open => {
+              // Only allow opening dropdown if not editing
+              if (isEditing && open) return;
+              setDropdownOpen(open);
+            }}
+          >
+            <DropdownMenuTrigger asChild onClick={handleDropdownTriggerClick}>
+              <div
+                className={cn(
+                  'flex items-center justify-between h-7 w-full cursor-pointer',
+                  dropdownOpen ? 'bg-muted' : 'hover:bg-muted/50'
+                )}
+              >
+                <div className="flex-1 min-w-0 ">
                   <EditableCell
                     ref={editableCellRef}
                     value={column.columnDef.header as string}
-                    onEdit={onHeaderEdit || (() => {})}
-                    className="h-7 w-full"
+                    onEdit={value => {
+                      setIsEditing(false);
+                      if (onHeaderEdit) {
+                        onHeaderEdit(value);
+                      }
+                    }}
+                    className="h-7 w-full "
+                    inputClassName="z-20 relative outline outline-2 -outline-offset-2 outline-primary"
+                    isFocused={isEditing}
+                    onFocus={() => setIsEditing(true)}
+                    onBlur={() => {
+                      // Add slight delay to allow click events to process first
+                      setTimeout(() => setIsEditing(false), 50);
+                    }}
+                    // Handle special key presses
+                    onKeyDown={e => {
+                      // Stop propagation to prevent dropdown trigger
+                      e.stopPropagation();
+
+                      // If Escape is pressed, cancel edit
+                      if (e.key === 'Escape') {
+                        setIsEditing(false);
+                      }
+                    }}
                   />
                 </div>
+                <LuChevronDown className="mx-2 h-4 w-4" />
               </div>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="w-72">
@@ -130,7 +203,7 @@ const HeaderCell = React.memo<HeaderCellProps>(
                 <LuEye className="mr-2 h-4 w-4" />
                 <span>Hide column</span>
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => editableCellRef.current?.focus()}>
+              <DropdownMenuItem onClick={handleRenameClick}>
                 <LuPencil className="mr-2 h-4 w-4" />
                 <span>Rename</span>
               </DropdownMenuItem>
@@ -270,9 +343,9 @@ export const HeaderComponent = React.memo<HeaderComponentProps>(function HeaderC
 }) {
   const column = header.column;
   const stats = columnStats?.[column.id];
-  const [width, setWidth] = React.useState(column.getSize());
+  const [width, setWidth] = useState(column.getSize());
 
-  const handleResize = React.useCallback(
+  const handleResize = useCallback(
     (_e: React.SyntheticEvent, { size }: { size: { width: number } }) => {
       setWidth(size.width);
       table.setColumnSizing(prev => ({
@@ -286,17 +359,7 @@ export const HeaderComponent = React.memo<HeaderComponentProps>(function HeaderC
   if (column.id === 'select') {
     return (
       <div className="h-full w-full">
-        <div className="h-7 flex items-center gap-2 px-2">
-          <Checkbox
-            checked={table.getIsAllRowsSelected()}
-            onCheckedChange={() => {
-              // Instead of using the checkbox value directly,
-              // we should toggle based on current state
-              const hasAllSelected = table.getIsAllRowsSelected();
-              table.toggleAllRowsSelected(!hasAllSelected);
-            }}
-            aria-label="Select all"
-          />
+        <div className="h-7 flex items-center px-2">
           <span className="text-xs">#</span>
         </div>
         {showStats && <div className="h-[220px]" />}

@@ -2,6 +2,18 @@ import { useEffect, useState } from 'react';
 import { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
 
+export interface UserPresence {
+  userId: string;
+  userName: string;
+  cursor?: {
+    x: number;
+    y: number;
+    tabId?: string;
+    element?: string;
+  } | null;
+  lastActive: number;
+}
+
 interface CollaborationState {
   users: Map<string, UserPresence>;
   doc: Y.Doc;
