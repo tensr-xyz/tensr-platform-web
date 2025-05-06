@@ -150,7 +150,8 @@ export function CollaborationMenu({ activeTab }: CollaborationMenuProps) {
                       <div>
                         <div className="text-sm font-medium">{session.fileName}</div>
                         <div className="text-xs text-muted-foreground">
-                          {session.ownerName}&apos;s session ({session.participantCount} participants)
+                          {session.ownerName}&apos;s session ({session.participantCount}{' '}
+                          participants)
                         </div>
                       </div>
                       <Button

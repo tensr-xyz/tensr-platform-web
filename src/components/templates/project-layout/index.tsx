@@ -21,12 +21,12 @@ interface ProjectLayoutProps {
 }
 
 const ProjectLayout = ({
-                         children,
-                         rightPanelOpen,
-                         onToggleSidebar,
-                         isMaximized = false,
-                         activeTab,
-                       }: ProjectLayoutProps) => {
+  children,
+  rightPanelOpen,
+  onToggleSidebar,
+  isMaximized = false,
+  activeTab,
+}: ProjectLayoutProps) => {
   const { state: projectState, dispatch: projectDispatch } = useProject();
   const { state: tabState, dispatch: tabDispatch } = useTabs();
   const [isLoading, setIsLoading] = useState(false);
@@ -43,10 +43,9 @@ const ProjectLayout = ({
         try {
           // Load file tree for directories
           // const files = await invoke<FileEntry[]>('read_directory', { path });
-          const files = {}
+          const files = {};
           projectDispatch({ type: ProjectActions.SET_FILE_SYSTEM, payload: files });
-        } catch (err) {
-        }
+        } catch (err) {}
       } else if (type === 'file' && initialFile?.metadata) {
         // Create a new tab for files
         const { metadata } = initialFile;

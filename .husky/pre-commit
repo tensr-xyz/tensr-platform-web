@@ -1,0 +1,8 @@
+# Run Prettier formatting
+npm run format
+
+# Run Next.js build but ignore exit code
+npm run build || true
+
+# Stage any files that might have been modified by formatting
+git add .
