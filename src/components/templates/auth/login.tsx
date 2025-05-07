@@ -120,7 +120,7 @@ const LoginTemplate = () => {
       <div className="flex flex-col max-w-xl w-full">
         {!isVerifying ? (
           <div className="flex flex-col gap-10">
-            <div className="text-2xl border-l-4 !border-primary px-10">
+            <div className="text-3xl font-medium border-l-4 !border-primary px-10">
               Sign up or log in to Tensr
             </div>
             <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4 px-10">
@@ -130,11 +130,16 @@ const LoginTemplate = () => {
                 onChange={e => setEmail(e.target.value)}
                 disabled={isLoading}
               />
-              <Button className="px-4 py-3 w-fit" size="lg" type="submit" disabled={isLoading}>
+              <Button
+                className="px-4 py-3 h-12 lg:h-10 w-full lg:w-fit"
+                size="lg"
+                type="submit"
+                disabled={isLoading}
+              >
                 {isLoading ? 'Sending...' : 'Continue'}
               </Button>
             </form>
-            <div className="text-base px-10">You can also sign in with Google or Linkedin</div>
+            <div className="text-sm px-10">You can also sign in with Google or Linkedin</div>
           </div>
         ) : (
           <div className="flex flex-col gap-10">
@@ -145,7 +150,9 @@ const LoginTemplate = () => {
             >
               <ArrowLeft size={20} />
             </button>
-            <div className="text-2xl px-10 border-l-4 !border-primary">Check your email</div>
+            <div className="text-3xl font-medium px-10 border-l-4 !border-primary">
+              Check your email
+            </div>
             <p className="px-10">
               We sent an email to {email} with a magic link and code for easy login or signup.
             </p>
@@ -157,7 +164,12 @@ const LoginTemplate = () => {
                 disabled={isLoading}
               />
               <div className="flex flex-row gap-4">
-                <Button className="px-4 py-3 w-fit" size="lg" type="submit" disabled={isLoading}>
+                <Button
+                  className="px-4 py-3 h-12 lg:h-10 w-full lg:w-fit"
+                  size="lg"
+                  type="submit"
+                  disabled={isLoading}
+                >
                   {isLoading ? 'Verifying...' : 'Continue'}
                 </Button>
                 <Button
