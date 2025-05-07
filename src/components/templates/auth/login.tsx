@@ -120,10 +120,10 @@ const LoginTemplate = () => {
       <div className="flex flex-col max-w-xl w-full">
         {!isVerifying ? (
           <div className="flex flex-col gap-10">
-            <div className="text-3xl font-medium border-l-4 !border-primary px-10">
+            <div className="text-3xl font-medium border-l-4 !border-primary px-6 lg:px-10">
               Sign up or log in to Tensr
             </div>
-            <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4 px-10">
+            <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4 px-6 lg:px-10">
               <FloatingLabelInput
                 label="Email address"
                 value={email}
@@ -139,24 +139,26 @@ const LoginTemplate = () => {
                 {isLoading ? 'Sending...' : 'Continue'}
               </Button>
             </form>
-            <div className="text-sm px-10">You can also sign in with Google or Linkedin</div>
+            <div className="text-sm px-6 lg:px-10">
+              You can also sign in with Google or Linkedin
+            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-10">
             <button
               onClick={handleBackToLogin}
-              className="self-start flex items-center px-10"
+              className="self-start flex items-center px-6 lg:px-10"
               disabled={isLoading}
             >
               <ArrowLeft size={20} />
             </button>
-            <div className="text-3xl font-medium px-10 border-l-4 !border-primary">
+            <div className="text-3xl font-medium px-6 lg:px-10 border-l-4 !border-primary">
               Check your email
             </div>
-            <p className="px-10">
+            <p className="px-6 lg:px-10">
               We sent an email to {email} with a magic link and code for easy login or signup.
             </p>
-            <form onSubmit={handleVerificationSubmit} className="flex flex-col gap-4 px-10">
+            <form onSubmit={handleVerificationSubmit} className="flex flex-col gap-4 px-6 lg:px-10">
               <FloatingLabelInput
                 label="Login or verification code"
                 value={verificationCode}
@@ -208,14 +210,14 @@ const LoginTemplate = () => {
 
         {/* Show session expiry error when applicable */}
         {!session && !error && verificationAttempted && isVerifying && (
-          <div className="text-red-500 mt-4 px-10">
+          <div className="text-red-500 mt-4 px-6 lg:px-10">
             Session expired or not available. Please try again.
           </div>
         )}
 
         {/* Show regular errors */}
         {(error || authError) && (
-          <div className="text-red-500 mt-4 px-10">{error || authError}</div>
+          <div className="text-red-500 mt-4 px-6 lg:px-10">{error || authError}</div>
         )}
       </div>
       <div className="flex-1 flex items-end w-full max-w-xl">
