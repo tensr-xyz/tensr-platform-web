@@ -235,9 +235,8 @@ export const FolderTreeItem = ({
   selectedPath,
   onCreateFile,
   onCreateFolder,
-  children,
   onRefresh,
-}: FolderTreeItemProps) => {
+}: Omit<FolderTreeItemProps, 'children'>) => {
   const { state, dispatch } = useProjectState();
 
   const handleClick = (e: React.MouseEvent) => {
@@ -273,10 +272,10 @@ export const FolderTreeItem = ({
                 <span className="truncate">{item.name}</span>
               </SidebarMenuButton>
             </CollapsibleTrigger>
-            {children && children.length > 0 && (
+            {item.children && item.children.length > 0 && (
               <CollapsibleContent>
                 <SidebarMenuSub>
-                  {sortItems(children).map(child => (
+                  {sortItems(item.children).map(child => (
                     <FileTree
                       key={child.path}
                       item={child}
@@ -471,7 +470,6 @@ export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefres
         selectedPath={selectedPath}
         onCreateFile={() => setDialog({ type: 'file', isOpen: true })}
         onCreateFolder={() => setDialog({ type: 'folder', isOpen: true })}
-        children={item.children}
         onRefresh={onRefresh}
       />
 

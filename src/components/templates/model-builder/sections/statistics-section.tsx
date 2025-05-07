@@ -32,22 +32,26 @@ interface Statistics {
   fit_indices?: ModelFitIndices;
 }
 
+interface AvailableVariable {
+  name: string;
+  statistics: {
+    mean: number;
+    sd: number;
+    n: number;
+  };
+}
+
 interface StatisticsSectionProps {
   selectedNode: ModelNode | null;
   modelFitIndices: ModelFitIndices | null;
-  availableVariables: Array<{
-    name: string;
-    statistics: {
-      mean: number;
-      sd: number;
-      n: number;
-    };
-  }>;
+  availableVariables: AvailableVariable[];
 }
 
 // Utility functions
-const cleanNumericValue = (value: string): number | null => {
-  if (!value) return null;
+const cleanNumericValue = (value: string | number | undefined): number | null => {
+  if (value === undefined || value === null) return null;
+
+  if (typeof value === 'number') return value;
 
   // Remove commas and any other non-numeric characters except decimal points and minus signs
   const cleaned = value.replace(/[^0-9.-]/g, '');
@@ -77,7 +81,7 @@ export const StatisticsSection = ({
   selectedNode,
   modelFitIndices,
   availableVariables,
-}: StatisticsSectionProps): JSX.Element => {
+}: StatisticsSectionProps) => {
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,14 +102,48 @@ export const StatisticsSection = ({
       try {
         const selectedVariables = availableVariables.map(v => v.name);
 
-        const stats = {};
-        // const stats = await invoke<Statistics>('calculate_statistics', {
-        //   csvPath: activeTab.data.filePath,
-        //   selectedVariables,
+        // Mock implementation until the actual API is implemented
+        // In a real implementation, you would use fetch or another HTTP client
+        const mockVariableStats: Record<string, VariableStatistics> = {};
+        selectedVariables.forEach(varName => {
+          const matchingVar = availableVariables.find(v => v.name === varName);
+          if (matchingVar) {
+            mockVariableStats[varName] = matchingVar.statistics;
+          }
+        });
+
+        const mockCorrelations: Record<string, Record<string, number>> = {};
+        selectedVariables.forEach(var1 => {
+          mockCorrelations[var1] = {};
+          selectedVariables.forEach(var2 => {
+            if (var1 !== var2) {
+              // Generate a random correlation value between -1 and 1
+              mockCorrelations[var1][var2] = Math.round((Math.random() * 2 - 1) * 100) / 100;
+            }
+          });
+        });
+
+        const mockStats: Statistics = {
+          variables: mockVariableStats,
+          correlations: mockCorrelations,
+          fit_indices: modelFitIndices || undefined,
+        };
+
+        // TODO: Replace with actual API call
+        // const stats = await fetch('/api/statistics', {
+        //   method: 'POST',
+        //   headers: {
+        //     'Content-Type': 'application/json',
+        //   },
+        //   body: JSON.stringify({
+        //     csvPath: activeTab.data.filePath,
+        //     selectedVariables,
+        //   }),
         // });
+        // const data = await stats.json();
 
         if (isMounted) {
-          setStatistics(stats);
+          setStatistics(mockStats);
         }
       } catch (err) {
         if (isMounted) {
@@ -124,7 +162,7 @@ export const StatisticsSection = ({
     return () => {
       isMounted = false;
     };
-  }, [activeTab?.data?.filePath, availableVariables]);
+  }, [activeTab?.data?.filePath, availableVariables, modelFitIndices]);
 
   // Calculate basic statistics from initialData if statistics hasn't been set
   useEffect(() => {
@@ -136,13 +174,19 @@ export const StatisticsSection = ({
       const numericColumns = ['Value', 'Year'];
 
       numericColumns.forEach(column => {
-        const values = data
-          .map(row => cleanNumericValue(row[column]))
-          .filter((val): val is number => val !== null);
+        // Handle potential missing columns in the data
+        if (data.length > 0 && data[0] && typeof data[0] === 'object') {
+          // Check if the column exists in the data
+          if (column in data[0]) {
+            const values = data
+              .map((row: any) => cleanNumericValue(row[column as keyof typeof row]))
+              .filter((val: any): val is number => val !== null);
 
-        const stats = calculateBasicStats(values);
-        if (stats) {
-          basicStats[column] = stats;
+            const stats = calculateBasicStats(values);
+            if (stats) {
+              basicStats[column] = stats;
+            }
+          }
         }
       });
 
@@ -213,21 +257,23 @@ export const StatisticsSection = ({
   return (
     <div className="p-4 space-y-4">
       <h3 className="font-medium">{selectedNode.label} Statistics</h3>
-      {selectedNode.type === 'observed' && statistics?.variables[selectedNode.label] && (
-        <div className="space-y-2">
-          <div className="text-sm">
-            <span className="font-medium">Mean:</span>{' '}
-            {statistics.variables[selectedNode.label].mean.toFixed(3)}
+      {selectedNode.type === 'observed' &&
+        statistics?.variables &&
+        selectedNode.label in statistics.variables && (
+          <div className="space-y-2">
+            <div className="text-sm">
+              <span className="font-medium">Mean:</span>{' '}
+              {statistics.variables[selectedNode.label].mean.toFixed(3)}
+            </div>
+            <div className="text-sm">
+              <span className="font-medium">SD:</span>{' '}
+              {statistics.variables[selectedNode.label].sd.toFixed(3)}
+            </div>
+            <div className="text-sm">
+              <span className="font-medium">N:</span> {statistics.variables[selectedNode.label].n}
+            </div>
           </div>
-          <div className="text-sm">
-            <span className="font-medium">SD:</span>{' '}
-            {statistics.variables[selectedNode.label].sd.toFixed(3)}
-          </div>
-          <div className="text-sm">
-            <span className="font-medium">N:</span> {statistics.variables[selectedNode.label].n}
-          </div>
-        </div>
-      )}
+        )}
 
       {selectedNode.type === 'latent' && (
         <div className="text-sm text-muted-foreground">

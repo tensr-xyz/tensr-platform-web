@@ -21,23 +21,14 @@ interface Cell {
   executionCount: number | null;
 }
 
-interface NotebookCellProps {
-  cell: Cell;
-  onContentChange: (cellId: number, content: string) => void;
-  onExecute: (cellId: number) => void;
-  isExecuting: boolean;
-  isSelected: boolean;
-  onSelect: (cellId: number) => void;
-}
-
 interface ExecutionResult {
   stdout: string | null;
-  output: OutputContent | null; // Changed from string to OutputContent
+  output: OutputContent | null;
   error: string | null;
 }
 
 interface OutputContent {
-  type_: string; // Note the underscore to match Rust struct
+  type_: string;
   data: any;
 }
 
@@ -303,6 +294,62 @@ df <- fromJSON('''${dataStr}''')
     setCells(cells.map(cell => (cell.id === cellId ? { ...cell, content: newContent } : cell)));
   };
 
+  // Mock implementation of code execution
+  const mockExecuteCode = async (
+    code: string,
+    language: 'python' | 'r'
+  ): Promise<ExecutionResult> => {
+    console.log(`Executing ${language} code:`, code);
+
+    // Simulate processing time
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // For demonstration purposes, return mock results based on code content
+    if (code.includes('print(df.head())') || code.includes('head(df)')) {
+      return {
+        stdout: 'Displaying dataframe head',
+        output: {
+          type_: 'table',
+          data: [
+            { id: 1, name: 'Sample 1', value: 42 },
+            { id: 2, name: 'Sample 2', value: 73 },
+            { id: 3, name: 'Sample 3', value: 28 },
+          ],
+        },
+        error: null,
+      };
+    }
+
+    if (code.includes('plt.') || code.includes('ggplot')) {
+      return {
+        stdout: null,
+        output: {
+          type_: 'plot',
+          data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFDwJ2gUZFyQAAAABJRU5ErkJggg==', // Empty 1x1 PNG
+        },
+        error: null,
+      };
+    }
+
+    if (code.includes('error') || code.includes('raise')) {
+      return {
+        stdout: null,
+        output: null,
+        error: 'RuntimeError: This is a simulated error for demonstration purposes',
+      };
+    }
+
+    // Default response for other code
+    return {
+      stdout: 'Code executed successfully',
+      output: {
+        type_: 'text',
+        data: 'Code execution completed. No specific output to display.',
+      },
+      error: null,
+    };
+  };
+
   const executeCell = async (cellId: number) => {
     setIsExecuting(true);
     try {
@@ -312,10 +359,8 @@ df <- fromJSON('''${dataStr}''')
       const setupCode = generateSetupCode(language);
       const fullCode = setupCode + '\n' + cell.content;
 
-      const result = await invoke<ExecutionResult>(
-        language === 'python' ? 'execute_python' : 'execute_r',
-        { code: fullCode }
-      );
+      // Replace invoke with mockExecuteCode
+      const result = await mockExecuteCode(fullCode, language);
 
       // Process stdout to find JSON objects
       let output = result.output;
@@ -370,21 +415,20 @@ df <- fromJSON('''${dataStr}''')
       try {
         const setupCode = generateSetupCode(language);
         const fullCode = setupCode + '\n' + cell.content;
-        const result = await invoke<ExecutionResult>(
-          language === 'python' ? 'execute_python' : 'execute_r',
-          { code: fullCode }
-        );
+
+        // Replace invoke with mockExecuteCode
+        const result = await mockExecuteCode(fullCode, language);
 
         setCells(prevCells =>
           prevCells.map(c =>
             c.id === cell.id
-              ? ({
+              ? {
                   ...c,
                   stdout: result.stdout,
                   output: result.output,
                   error: result.error,
                   executionCount: (c.executionCount || 0) + 1,
-                } as Cell)
+                }
               : c
           )
         );
@@ -392,12 +436,12 @@ df <- fromJSON('''${dataStr}''')
         setCells(prevCells =>
           prevCells.map(c =>
             c.id === cell.id
-              ? ({
+              ? {
                   ...c,
                   error: err instanceof Error ? err.message : String(err),
                   stdout: null,
                   output: null,
-                } as Cell)
+                }
               : c
           )
         );

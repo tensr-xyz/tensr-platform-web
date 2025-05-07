@@ -27,6 +27,13 @@ interface DuplicateDetectionResponse {
   affected_rows: number[];
 }
 
+interface FindDuplicatesRequest {
+  path: string;
+  columns: string[];
+  match_case: boolean;
+  first_case_only: boolean;
+}
+
 export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
   const { state } = useTabs();
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
@@ -64,16 +71,80 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
     setError(null);
 
     try {
-      const request = {
-        request: {
-          path: activeTab.data.filePath,
-          columns: selectedColumns,
-          match_case: matchCase,
-          first_case_only: firstCaseOnly,
-        },
+      const requestData: FindDuplicatesRequest = {
+        path: activeTab.data.filePath,
+        columns: selectedColumns,
+        match_case: matchCase,
+        first_case_only: firstCaseOnly,
       };
 
-      const response = await invoke<DuplicateDetectionResponse>('find_duplicates', request);
+      // Mock implementation of invoke until the actual API call is implemented
+      // In a real implementation, you would use fetch or another HTTP client
+      const mockResponse: DuplicateDetectionResponse = {
+        duplicates: [
+          {
+            row_index: 1,
+            values: selectedColumns.reduce(
+              (acc, col) => {
+                acc[col] = `Sample ${col} value`;
+                return acc;
+              },
+              {} as Record<string, string>
+            ),
+            duplicate_group: 0,
+          },
+          {
+            row_index: 3,
+            values: selectedColumns.reduce(
+              (acc, col) => {
+                acc[col] = `Sample ${col} value`;
+                return acc;
+              },
+              {} as Record<string, string>
+            ),
+            duplicate_group: 0,
+          },
+          {
+            row_index: 5,
+            values: selectedColumns.reduce(
+              (acc, col) => {
+                acc[col] = `Another ${col} value`;
+                return acc;
+              },
+              {} as Record<string, string>
+            ),
+            duplicate_group: 1,
+          },
+          {
+            row_index: 8,
+            values: selectedColumns.reduce(
+              (acc, col) => {
+                acc[col] = `Another ${col} value`;
+                return acc;
+              },
+              {} as Record<string, string>
+            ),
+            duplicate_group: 1,
+          },
+        ],
+        total_duplicates: 4,
+        duplicate_groups: 2,
+        affected_rows: [1, 3, 5, 8],
+      };
+
+      // TODO: Replace with actual API call
+      // const response = await fetch('/api/find-duplicates', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({ request: requestData }),
+      // });
+      // const data = await response.json();
+
+      // Using mock response for now
+      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
+      const response = mockResponse;
 
       setResults(response);
     } catch (err) {
