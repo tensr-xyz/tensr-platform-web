@@ -168,7 +168,22 @@ export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
         constant: constant ? parseFloat(constant) : undefined,
       };
 
-      const response = {};
+      // Mock the response with proper structure that matches ComputeVariableResponse
+      const response: ComputeVariableResponse = {
+        success: true,
+        new_column_name: newVariableName,
+        rows_affected: 0,
+        path: 'mocked/path/to/computed_file.csv',
+        metadata: {
+          rows: 0,
+          columns: 0,
+          column_names: [],
+          preview: [],
+        },
+        column_summaries: {},
+      };
+
+      // The actual API call would be something like:
       // const response = await invoke<ComputeVariableResponse>('compute_variable', {
       //   request,
       // });
@@ -304,7 +319,7 @@ export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
           {success && (
             <Alert>
               <AlertDescription>
-                Successfully created new variable '{success.new_column_name}' (
+                Successfully created new variable &apos;{success.new_column_name}&apos; (
                 {success.rows_affected} rows affected)
               </AlertDescription>
             </Alert>

@@ -1,8 +1,45 @@
 import { Card } from '@/components/atoms/card';
 import { Input } from '@/components/atoms/input';
 import { Button } from '@/components/atoms/button';
+import { FC } from 'react';
 
-export function ErrorTermsSection({ nodes, errorTerms, onUpdateErrorTerm }) {
+// Define the type for a model node
+interface ModelNode {
+  id: string;
+  label: string;
+  type: 'observed' | 'latent';
+  x: number;
+  y: number;
+  variableName?: string;
+  dataType?: string;
+  missingHandling?: string;
+  statistics?: Record<string, number>;
+}
+
+// Define the type for an error term
+interface ErrorTerm {
+  id: string;
+  nodeId: string;
+  variance: number;
+}
+
+// Define the props for the ErrorTermsSection component
+interface ErrorTermsSectionProps {
+  nodes?: ModelNode[];
+  errorTerms?: ErrorTerm[];
+  onUpdateErrorTerm?: (errorTerm: ErrorTerm) => void;
+  // These props may be passed but are not used by this component
+  selectedNode?: ModelNode | null;
+  modelFitIndices?: any | null;
+  availableVariables?: any[];
+  onNodeUpdate?: (node: ModelNode) => void;
+}
+
+export const ErrorTermsSection: FC<ErrorTermsSectionProps> = ({
+  nodes = [],
+  errorTerms = [],
+  onUpdateErrorTerm = () => {},
+}) => {
   // Auto-generate error terms for observed variables
   const handleAutoCreateErrors = () => {
     const observedNodes = nodes.filter(n => n.type === 'observed');
@@ -33,7 +70,7 @@ export function ErrorTermsSection({ nodes, errorTerms, onUpdateErrorTerm }) {
                   onChange={e => {
                     onUpdateErrorTerm({
                       ...term,
-                      variance: parseFloat(e.target.value),
+                      variance: parseFloat(e.target.value) || 0,
                     });
                   }}
                   className="text-sm"
@@ -49,4 +86,4 @@ export function ErrorTermsSection({ nodes, errorTerms, onUpdateErrorTerm }) {
       </Card>
     </div>
   );
-}
+};

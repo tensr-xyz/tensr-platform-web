@@ -41,14 +41,29 @@ import {
   TableRow,
 } from '@/components/molecules/table';
 
-export const ProjectsTable = ({ data, onRowClick }) => {
+interface Project {
+  id: string;
+  name: string;
+  created: string;
+  status: 'Active' | 'Completed' | 'Archived' | string;
+  dataPoints: number;
+  analysisTypes: string[];
+  lastModified: string;
+}
+
+interface ProjectsTableProps {
+  data: Project[];
+  onRowClick: (id: string) => void;
+}
+
+export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
 
   // Format date function
-  const formatDate = dateString => {
+  const formatDate = (dateString: string): string => {
     try {
       const date = new Date(dateString);
       const now = new Date();
@@ -77,7 +92,7 @@ export const ProjectsTable = ({ data, onRowClick }) => {
   };
 
   // Define columns
-  const columns: ColumnDef<any>[] = [
+  const columns: ColumnDef<Project>[] = [
     {
       id: 'select',
       header: ({ table }) => (
@@ -133,8 +148,8 @@ export const ProjectsTable = ({ data, onRowClick }) => {
       accessorKey: 'status',
       header: 'Status',
       cell: ({ row }) => {
-        const status = row.getValue('status');
-        const getStatusColor = status => {
+        const status = row.getValue('status') as string;
+        const getStatusColor = (status: string): string => {
           switch (status) {
             case 'Active':
               return 'bg-green-100 text-green-800';
@@ -147,7 +162,7 @@ export const ProjectsTable = ({ data, onRowClick }) => {
           }
         };
 
-        const getStatusIcon = status => {
+        const getStatusIcon = (status: string) => {
           switch (status) {
             case 'Active':
               return <CheckCircle className="mr-1 h-4 w-4" />;
@@ -184,7 +199,7 @@ export const ProjectsTable = ({ data, onRowClick }) => {
         );
       },
       cell: ({ row }) => {
-        const dataPoints = row.getValue('dataPoints');
+        const dataPoints = row.getValue('dataPoints') as number;
         return <div className="text-sm">{dataPoints.toLocaleString()}</div>;
       },
     },
@@ -223,7 +238,7 @@ export const ProjectsTable = ({ data, onRowClick }) => {
         );
       },
       cell: ({ row }) => {
-        const lastModified = row.getValue('lastModified');
+        const lastModified = row.getValue('lastModified') as string;
         return <div className="text-sm">{formatDate(lastModified)}</div>;
       },
     },

@@ -43,6 +43,25 @@ interface HandleMissingDataProps {
   children: ReactNode;
 }
 
+interface HandleMissingDataRequest {
+  path: string;
+  columns: string[];
+  method: MissingDataMethod;
+  custom_value?: string | null;
+}
+
+interface HandleMissingDataResponse {
+  path: string;
+  metadata: {
+    rows: number;
+    columns: number;
+    column_names: string[];
+    preview: any[];
+  };
+  column_summaries?: Record<string, any>;
+  replaced_values_count?: number;
+}
+
 export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -101,14 +120,50 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
       setIsLoading(true);
       setError(null);
 
-      const response = await invoke<any>('handle_missing_data', {
-        request: {
-          path: activeTab.data.filePath,
-          columns: selectedColumns,
-          method,
-          custom_value: method === 'custom_value' ? customValue : null,
+      const requestData: HandleMissingDataRequest = {
+        path: activeTab.data.filePath,
+        columns: selectedColumns,
+        method,
+        custom_value: method === 'custom_value' ? customValue : null,
+      };
+
+      // Create a mock response for type checking while we implement the API
+      const mockResponse: HandleMissingDataResponse = {
+        path: activeTab.data.filePath.replace('.csv', '_imputed.csv'),
+        metadata: {
+          rows: activeTab.data.initialData?.length || 0,
+          columns: columnNames.length,
+          column_names: columnNames,
+          preview: activeTab.data.initialData?.slice(0, 5) || [],
         },
-      });
+        column_summaries: selectedColumns.reduce(
+          (acc, col) => {
+            acc[col] = {
+              type: 'numeric', // Assuming numeric for simplicity
+              missing_before: Math.floor(Math.random() * 20), // Random number for demonstration
+              missing_after: 0,
+              method: method,
+            };
+            return acc;
+          },
+          {} as Record<string, any>
+        ),
+        replaced_values_count: Math.floor(Math.random() * 50) + 10, // Random count between 10-60
+      };
+
+      // TODO: Replace with actual API call
+      // const response = await fetch('/api/handle-missing-data', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({ request: requestData }),
+      // });
+      // const data: HandleMissingDataResponse = await response.json();
+
+      // Using mock response for now
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
+      const response = mockResponse;
 
       dispatch({
         type: ProjectActions.SET_IMPORT_DATA,

@@ -217,7 +217,7 @@ export function Spreadsheet({
           Authorization: `Bearer ${tokens?.idToken}`,
         },
         body: JSON.stringify({
-          path: dataToImport.filePath,
+          path: decodedFilePath,
           start_row: 0,
           end_row: 100,
         }),
@@ -241,7 +241,7 @@ export function Spreadsheet({
             })),
         ]);
       } else {
-        const newRows = data.data[0].map((_, rowIndex) => {
+        const newRows = data.data[0].map((_: any, rowIndex: number) => {
           const row: RowType = { id: `row-${startRow + rowIndex}` };
           initialColumns.forEach((col, colIndex) => {
             if (col.id) {
@@ -316,7 +316,7 @@ export function Spreadsheet({
               Authorization: `Bearer ${tokens?.idToken}`,
             },
             body: JSON.stringify({
-              path: dataToImport.filePath,
+              path: decodedFilePath,
               start_row: 0,
               end_row: 100,
             }),
@@ -332,7 +332,7 @@ export function Spreadsheet({
 
           // Process the response
           if (data.data && data.data[0]) {
-            const newRows = data.data[0].map((_, rowIndex) => {
+            const newRows = data.data[0].map((_: any, rowIndex: string | number) => {
               const row: RowType = { id: `row-${rowIndex}` };
               initialColumns.forEach((col, colIndex) => {
                 if (col.id) {
@@ -732,20 +732,21 @@ export function Spreadsheet({
     [data, tabId, activeTab, dispatch, wsReady, currentSession]
   );
 
-  const HeaderComponentWrapper = useMemo(
-    () =>
-      ({ header }: { header: Header<any, unknown> }) => (
-        <HeaderComponent
-          header={header}
-          table={table}
-          showStats={showStats}
-          columnStats={columnStats}
-          onHeaderEdit={handleHeaderEdit}
-          isLoadingStats={isLoadingStats}
-        />
-      ),
-    [table, showStats, columnStats, handleHeaderEdit, isLoadingStats]
-  );
+  const HeaderComponentWrapper = useMemo(() => {
+    const WrappedHeaderComponent = ({ header }: { header: Header<any, unknown> }) => (
+      <HeaderComponent
+        header={header}
+        table={table}
+        showStats={showStats}
+        columnStats={columnStats}
+        onHeaderEdit={handleHeaderEdit}
+        isLoadingStats={isLoadingStats}
+      />
+    );
+
+    WrappedHeaderComponent.displayName = 'HeaderComponentWrapper';
+    return WrappedHeaderComponent;
+  }, [table, showStats, columnStats, handleHeaderEdit, isLoadingStats]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

@@ -7,8 +7,52 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { Input } from '@/components/atoms/input';
+import { FC } from 'react';
 
-export function PropertiesSection({ selectedNode, onNodeUpdate, availableVariables }) {
+// Define the type for statistics
+interface VariableStatistics {
+  mean?: number;
+  sd?: number;
+  n?: number;
+  [key: string]: number | undefined;
+}
+
+// Define the type for available variables
+interface AvailableVariable {
+  name: string;
+  statistics: VariableStatistics;
+}
+
+// Define the type for a model node
+interface ModelNode {
+  id: string;
+  label: string;
+  type: 'observed' | 'latent';
+  x: number;
+  y: number;
+  variableName?: string;
+  dataType?: string;
+  missingHandling?: string;
+  statistics?: Record<string, number>;
+}
+
+// Define the props for the PropertiesSection component
+interface PropertiesSectionProps {
+  selectedNode?: ModelNode | null;
+  onNodeUpdate?: (node: ModelNode) => void;
+  availableVariables?: AvailableVariable[];
+  // These are the additional props that may be passed but are not used by this component
+  modelFitIndices?: any;
+  nodes?: any[];
+  errorTerms?: any[];
+  onUpdateErrorTerm?: (errorTerm: any) => void;
+}
+
+export const PropertiesSection: FC<PropertiesSectionProps> = ({
+  selectedNode,
+  onNodeUpdate = () => {},
+  availableVariables = [],
+}) => {
   if (!selectedNode) {
     return (
       <div className="p-4 text-sm text-muted-foreground">Select a node to view its properties</div>
@@ -51,7 +95,7 @@ export function PropertiesSection({ selectedNode, onNodeUpdate, availableVariabl
                     ...selectedNode,
                     variableName: value,
                     label: value,
-                    statistics: selectedVariable?.statistics,
+                    statistics: selectedVariable?.statistics as Record<string, number> | undefined,
                   });
                 }}
               >
@@ -123,4 +167,4 @@ export function PropertiesSection({ selectedNode, onNodeUpdate, availableVariabl
       )}
     </div>
   );
-}
+};

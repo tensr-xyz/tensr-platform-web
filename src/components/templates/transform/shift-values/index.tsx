@@ -120,14 +120,34 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
       setError(null);
       setSuccess(null);
 
-      const response = {};
-      // const response = await invoke<ShiftValuesResponse>('shift_values', {
-      //   request,
-      // });
+      // Create a mock response while API implementation is pending
+      const mockResponse: ShiftValuesResponse = {
+        success: true,
+        rows_affected: 100, // Mock value
+        path: activeTab.data.filePath,
+        metadata: {
+          rows: 1000, // Mock value
+          columns: columnNames.length,
+          column_names: columnNames,
+          preview: activeTab?.data?.initialData?.slice(0, 5) || [],
+        },
+      };
 
+      // TODO: Replace with actual API call once implemented
+      // const response = await fetch('/api/shift-values', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify(request),
+      // });
+      // const data = await response.json();
+
+      // Using mock response for now
+      const response = mockResponse;
       setSuccess(response);
 
-      // Update project state
+      // Update project state with the response data
       dispatch({
         type: ProjectActions.SET_IMPORT_DATA,
         payload: {

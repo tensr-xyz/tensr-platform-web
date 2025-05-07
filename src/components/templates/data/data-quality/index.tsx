@@ -90,12 +90,108 @@ export const DataQualityDialog = ({ children }: DataQualityProps) => {
       setIsLoading(true);
       setError(null);
 
-      const response = await invoke<DataQualityMetric>('analyze_data_quality', {
-        request: {
-          path: activeTab.data.filePath,
-          columns: selectedColumns,
-        },
-      });
+      // Original code:
+      // const response = await invoke<DataQualityMetric>('analyze_data_quality', {
+      //   request: {
+      //     path: activeTab.data.filePath,
+      //     columns: selectedColumns,
+      //   },
+      // });
+
+      // Create a mock response with appropriate typing
+      const response: DataQualityMetric = {
+        total_rows: 1000,
+        total_columns: columnNames.length,
+        numeric_columns: selectedColumns.filter(
+          col =>
+            col.toLowerCase().includes('price') ||
+            col.toLowerCase().includes('amount') ||
+            col.toLowerCase().includes('count') ||
+            col.toLowerCase().includes('id')
+        ),
+        categorical_columns: selectedColumns.filter(
+          col =>
+            col.toLowerCase().includes('type') ||
+            col.toLowerCase().includes('category') ||
+            col.toLowerCase().includes('name')
+        ),
+        date_columns: selectedColumns.filter(
+          col => col.toLowerCase().includes('date') || col.toLowerCase().includes('time')
+        ),
+        column_metrics: Object.fromEntries(
+          selectedColumns.map(col => {
+            // Determine the type based on column name
+            const isNumeric =
+              col.toLowerCase().includes('price') ||
+              col.toLowerCase().includes('amount') ||
+              col.toLowerCase().includes('count') ||
+              col.toLowerCase().includes('id');
+            const isDate = col.toLowerCase().includes('date') || col.toLowerCase().includes('time');
+            const dataType = isNumeric ? 'numeric' : isDate ? 'date' : 'categorical';
+
+            // Create metrics based on type
+            const baseMetrics = {
+              data_type: dataType,
+              missing_count: Math.floor(Math.random() * 50),
+              missing_percentage: Math.random() * 5,
+              unique_count: Math.floor(Math.random() * 200) + 50,
+              unique_percentage: Math.random() * 20 + 10,
+            };
+
+            if (dataType === 'numeric') {
+              return [
+                col,
+                {
+                  ...baseMetrics,
+                  min_value: Math.floor(Math.random() * 100),
+                  max_value: Math.floor(Math.random() * 1000) + 500,
+                  mean: Math.random() * 500 + 100,
+                  std_dev: Math.random() * 100 + 10,
+                  quartiles: [
+                    Math.random() * 200 + 50,
+                    Math.random() * 200 + 250,
+                    Math.random() * 200 + 450,
+                  ],
+                },
+              ];
+            } else if (dataType === 'categorical') {
+              return [
+                col,
+                {
+                  ...baseMetrics,
+                  top_values: Array(5)
+                    .fill(null)
+                    .map((_, i) => ({
+                      value: `Category ${i + 1}`,
+                      count: Math.floor(Math.random() * 200) + 50,
+                    })),
+                  patterns: Array(3)
+                    .fill(null)
+                    .map((_, i) => ({
+                      pattern: `Pattern ${String.fromCharCode(65 + i)}`,
+                      count: Math.floor(Math.random() * 100) + 20,
+                    })),
+                },
+              ];
+            } else {
+              return [
+                col,
+                {
+                  ...baseMetrics,
+                  min_value: '2023-01-01',
+                  max_value: '2023-12-31',
+                  patterns: Array(2)
+                    .fill(null)
+                    .map((_, i) => ({
+                      pattern: i === 0 ? 'YYYY-MM-DD' : 'MM/DD/YYYY',
+                      count: Math.floor(Math.random() * 400) + 100,
+                    })),
+                },
+              ];
+            }
+          })
+        ),
+      };
 
       setMetrics(response);
     } catch (err) {

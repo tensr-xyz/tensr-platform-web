@@ -1,8 +1,12 @@
-# Run Prettier formatting
 npm run format
 
-# Run Next.js build but ignore exit code
-npm run build || true
+# Run ESLint check to display errors and warnings (without failing)
+echo "Running ESLint checks (warnings will not block commit)"
+npm run lint
 
-# Stage any files that might have been modified by formatting
+# Run Next.js build but don't fail on errors
+echo "Running Next.js build (errors will not block commit)"
+npm run build
+
+# Add any files that might have been modified by formatting
 git add .

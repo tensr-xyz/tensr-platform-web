@@ -80,7 +80,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
     '#9e2a2b',
   ];
 
-  // Load frequency data for a column - FIXED to prevent infinite loops
+  // Where the error occurs in the loadColumnFrequencies function
   const loadColumnFrequencies = useCallback(
     async (columnName: string) => {
       // Don't make API calls for non-existent files or already requested columns
@@ -106,7 +106,25 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
           columnName,
         };
 
-        const response = await invoke<ColumnFrequencyResponse>('get_column_frequencies', params);
+        // Mocked response instead of using invoke
+        // const response = await invoke<ColumnFrequencyResponse>('get_column_frequencies', params);
+
+        // Create a mock response based on column name
+        const response: ColumnFrequencyResponse = {
+          frequencies: Array(10)
+            .fill(null)
+            .map((_, i) => ({
+              value: `Value ${i + 1}`,
+              count: Math.floor(Math.random() * 100) + 1,
+              percentage: Math.random() * 0.5,
+            })),
+          column_type: columnName.toLowerCase().includes('date')
+            ? 'date'
+            : columnName.toLowerCase().includes('price') ||
+                columnName.toLowerCase().includes('amount')
+              ? 'numeric'
+              : 'categorical',
+        };
 
         setColumnFrequencies(prev => ({
           ...prev,

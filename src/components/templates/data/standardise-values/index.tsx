@@ -114,7 +114,19 @@ export const StandardizeValuesDialog = ({ children }: StandardizeValuesProps) =>
       setIsLoading(true);
       setError(null);
 
-      const response = {};
+      // Define a mock response with the appropriate structure
+      const response = {
+        path: 'mocked/path/to/standardized_file.csv',
+        metadata: {
+          preview: [],
+          column_names: [],
+          rows: 0,
+          columns: 0,
+        },
+        column_summaries: {},
+      };
+
+      // The actual API call would be something like:
       // const response = await invoke<any>('standardize_values', {
       //   request: {
       //     path: activeTab.data.filePath,
@@ -208,7 +220,7 @@ export const StandardizeValuesDialog = ({ children }: StandardizeValuesProps) =>
               onCheckedChange={checked => setCreateNewColumns(checked as boolean)}
             />
             <Label htmlFor="createNewColumns">
-              Create new columns (append '_standardized' to column names)
+              Create new columns (append &apos;_standardized&apos; to column names)
             </Label>
           </div>
 

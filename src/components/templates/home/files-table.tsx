@@ -33,14 +33,33 @@ import {
   TableRow,
 } from '@/components/molecules/table';
 
-export const FilesTable = ({ data, onRowClick, isLoading, onRefresh, error }) => {
+interface FileItem {
+  fileId: string;
+  fileName: string;
+  fileType: string;
+  size: number;
+  uploadedAt?: string;
+  createdAt?: string;
+}
+
+interface FilesTableProps {
+  data: FileItem[];
+  onRowClick: (fileId: string) => void;
+  isLoading: boolean;
+  onRefresh: () => void;
+  error: string | null;
+}
+
+export const FilesTable = ({ data, onRowClick, isLoading, onRefresh, error }: FilesTableProps) => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
 
   // Function to format date
-  const formatDate = dateString => {
+  const formatDate = (dateString: string | undefined): string => {
+    if (!dateString) return 'Unknown date';
+
     try {
       const date = new Date(dateString);
       const now = new Date();
@@ -69,7 +88,7 @@ export const FilesTable = ({ data, onRowClick, isLoading, onRefresh, error }) =>
   };
 
   // Format file size
-  const formatFileSize = bytes => {
+  const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return '0 Bytes';
 
     const k = 1024;
@@ -81,7 +100,7 @@ export const FilesTable = ({ data, onRowClick, isLoading, onRefresh, error }) =>
   };
 
   // Function to get file icon
-  const getFileIcon = fileType => {
+  const getFileIcon = (fileType: string) => {
     const type = fileType.toLowerCase();
     if (type.includes('csv')) {
       return <FileText className="h-5 w-5 text-green-600" />;
@@ -95,7 +114,7 @@ export const FilesTable = ({ data, onRowClick, isLoading, onRefresh, error }) =>
   };
 
   // Define columns
-  const columns: ColumnDef<any>[] = [
+  const columns: ColumnDef<FileItem>[] = [
     {
       id: 'select',
       header: ({ table }) => (

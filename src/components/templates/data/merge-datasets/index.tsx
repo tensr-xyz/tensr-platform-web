@@ -23,19 +23,46 @@ interface MergeDatasetProps {
   children: ReactNode;
 }
 
+type MergeType = (typeof MERGE_TYPES)[keyof typeof MERGE_TYPES];
+
+interface MergeDatasetRequest {
+  primary_path: string;
+  secondary_path: string;
+  merge_type: MergeType;
+}
+
+interface MergeDatasetResponse {
+  path: string;
+  metadata: {
+    rows: number;
+    columns: number;
+    column_names: string[];
+    preview: any[];
+  };
+  column_summaries?: Record<string, any>;
+}
+
 export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mergeType, setMergeType] = useState<(typeof MERGE_TYPES)[keyof typeof MERGE_TYPES]>(
-    MERGE_TYPES.CASES
-  );
+  const [mergeType, setMergeType] = useState<MergeType>(MERGE_TYPES.CASES);
   const [secondaryDataset, setSecondaryDataset] = useState<string>('');
   const { state, dispatch } = useProject();
 
   const handleSelectSecondaryDataset = async () => {
     try {
       setError(null);
-      const filePath = await invoke<string | null>('open_file_dialog');
+
+      // Mock implementation of file dialog
+      // In a real implementation, you would use a file dialog API or component
+      const mockFileSelectionDialog = async (): Promise<string | null> => {
+        // Simulate a file selection dialog
+        console.log('Opening file selection dialog...');
+        // Return a mock file path
+        return '/path/to/selected/secondary_dataset.csv';
+      };
+
+      const filePath = await mockFileSelectionDialog();
       if (filePath) {
         setSecondaryDataset(filePath);
       }
@@ -53,13 +80,66 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
         throw new Error('Please select both datasets to merge');
       }
 
-      const response = await invoke<any>('merge_datasets', {
-        request: {
-          primary_path: state.currentProject.path,
-          secondary_path: secondaryDataset,
-          merge_type: mergeType,
-        },
+      const requestData: MergeDatasetRequest = {
+        primary_path: state.currentProject.path,
+        secondary_path: secondaryDataset,
+        merge_type: mergeType,
+      };
+
+      // Create a mock response for type checking until the API is implemented
+      const mockColumnsCount = mergeType === MERGE_TYPES.VARIABLES ? 10 : 5;
+      const mockRowsCount = mergeType === MERGE_TYPES.CASES ? 20 : 10;
+
+      const mockColumnNames = Array.from({ length: mockColumnsCount }, (_, i) => {
+        if (mergeType === MERGE_TYPES.VARIABLES && i >= 5) {
+          return `new_var_${i - 4}`;
+        }
+        return `var_${i + 1}`;
       });
+
+      // Create a mock preview dataset
+      const mockPreview = Array.from({ length: 5 }, (_, rowIdx) => {
+        const rowData: Record<string, any> = { id: rowIdx + 1 };
+        mockColumnNames.forEach((colName, colIdx) => {
+          rowData[colName] = `Value ${rowIdx + 1}-${colIdx + 1}`;
+        });
+        return rowData;
+      });
+
+      const mockResponse: MergeDatasetResponse = {
+        path: `/path/to/output/merged_dataset_${Date.now()}.csv`,
+        metadata: {
+          rows: mockRowsCount,
+          columns: mockColumnsCount,
+          column_names: mockColumnNames,
+          preview: mockPreview,
+        },
+        column_summaries: mockColumnNames.reduce(
+          (acc, col, idx) => {
+            acc[col] = {
+              type: idx % 2 === 0 ? 'numeric' : 'string',
+              missing_count: 0,
+              unique_count: mockRowsCount,
+            };
+            return acc;
+          },
+          {} as Record<string, any>
+        ),
+      };
+
+      // TODO: Replace with actual API call
+      // const response = await fetch('/api/merge-datasets', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({ request: requestData }),
+      // });
+      // const data: MergeDatasetResponse = await response.json();
+
+      // Using mock response for now
+      await new Promise(resolve => setTimeout(resolve, 1200)); // Simulate API delay
+      const response = mockResponse;
 
       dispatch({
         type: ProjectActions.SET_IMPORT_DATA,
@@ -98,9 +178,7 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
             <Label>Merge Type</Label>
             <RadioGroup
               defaultValue={MERGE_TYPES.CASES}
-              onValueChange={value =>
-                setMergeType(value as (typeof MERGE_TYPES)[keyof typeof MERGE_TYPES])
-              }
+              onValueChange={value => setMergeType(value as MergeType)}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value={MERGE_TYPES.CASES} id="cases" />

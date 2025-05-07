@@ -15,7 +15,7 @@ import { useTabs } from '@/contexts/tabs-context';
 import {
   ModelNode,
   PropertiesSidebar,
-} from '@/components/templates/model-builder/properties-sidebar.tsx';
+} from '@/components/templates/model-builder/properties-sidebar';
 
 // Types
 type NodeType = 'observed' | 'latent';

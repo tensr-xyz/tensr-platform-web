@@ -136,7 +136,21 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
         values_to_count: valuesToCount,
       };
 
-      const response = {};
+      // Mock the response with the expected structure
+      const response: CountValuesResponse = {
+        success: true,
+        target_variable: targetVariable,
+        rows_affected: 0,
+        path: 'mocked/path/to/counted_file.csv',
+        metadata: {
+          rows: 0,
+          columns: 0,
+          column_names: [],
+          preview: [],
+        },
+      };
+
+      // The actual API call would be something like:
       // const response = await invoke<CountValuesResponse>('count_values', {
       //   request,
       // });
@@ -273,7 +287,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
           {success && (
             <Alert variant="default">
               <AlertDescription>
-                Successfully created target variable '{success.target_variable}' (
+                Successfully created target variable &apos;{success.target_variable}&apos; (
                 {success.rows_affected} rows affected)
               </AlertDescription>
             </Alert>

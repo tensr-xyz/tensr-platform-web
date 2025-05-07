@@ -5,7 +5,7 @@ import AnalysisSidebar from '@/components/templates/analysis-sidebar';
 import Titlebar from '@/components/organisms/titlebar';
 import Footer from '@/components/organisms/footer';
 import { cn } from '@/utils';
-import { ColumnDefinition, Tab, TabData } from '@/contexts/tabs-context/types';
+import { Column, Tab, TabData } from '@/contexts/tabs-context/types';
 import { useProject } from '@/contexts/project-context';
 import { useTabs } from '@/contexts/tabs-context';
 import { addTab, closeTab } from '@/contexts/tabs-context/actions';
@@ -50,7 +50,7 @@ const ProjectLayout = ({
         // Create a new tab for files
         const { metadata } = initialFile;
 
-        const columns: ColumnDefinition[] = metadata.column_names.map(name => ({
+        const columns: Column[] = metadata.column_names.map(name => ({
           id: name,
           accessor: name,
           header: name,

@@ -43,9 +43,7 @@ interface NavItem {
   onClick?: () => void;
 }
 
-interface ProjectSidebarProps {}
-
-export default function ProjectSidebar({}: ProjectSidebarProps) {
+export default function ProjectSidebar() {
   const { state, dispatch } = useProject();
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
 

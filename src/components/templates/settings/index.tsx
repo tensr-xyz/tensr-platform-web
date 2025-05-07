@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogTrigger } from '@/components/molecules/dia
 import { Button } from '@/components/atoms/button';
 import { LuSettings } from 'react-icons/lu';
 import { useState } from 'react';
-import { SettingsSidebar } from '@/components/templates/settings/settings-sidebar.tsx';
+import { SettingsSidebar } from '@/components/templates/settings/settings-sidebar';
 
 interface SettingsProps {
   trigger?: React.ReactNode;

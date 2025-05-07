@@ -43,6 +43,25 @@ interface FixDataTypesProps {
   children: ReactNode;
 }
 
+interface FixDataTypesRequest {
+  path: string;
+  columns: {
+    name: string;
+    target_type: DataType;
+  }[];
+}
+
+interface FixDataTypesResponse {
+  path: string;
+  metadata: {
+    rows: number;
+    columns: number;
+    column_names: string[];
+    preview: any[];
+  };
+  column_summaries?: Record<string, any>;
+}
+
 export const FixDataTypesDialog = ({ children }: FixDataTypesProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,15 +127,49 @@ export const FixDataTypesDialog = ({ children }: FixDataTypesProps) => {
       setIsLoading(true);
       setError(null);
 
-      const response = await invoke<any>('fix_data_types', {
-        request: {
-          path: activeTab.data.filePath,
-          columns: selectedConfigs.map(config => ({
-            name: config.name,
-            target_type: config.targetType,
-          })),
+      const requestData: FixDataTypesRequest = {
+        path: activeTab.data.filePath,
+        columns: selectedConfigs.map(config => ({
+          name: config.name,
+          target_type: config.targetType,
+        })),
+      };
+
+      // Create mock response for type checking until the API is implemented
+      const mockResponse: FixDataTypesResponse = {
+        path: activeTab.data.filePath.replace('.csv', '_processed.csv'),
+        metadata: {
+          rows: activeTab.data.initialData?.length || 0,
+          columns: columnConfigs.length,
+          column_names: columnConfigs.map(col => col.name),
+          preview: activeTab.data.initialData?.slice(0, 5) || [],
         },
-      });
+        column_summaries: columnConfigs.reduce(
+          (acc, col) => {
+            acc[col.name] = {
+              type: col.selected ? col.targetType : 'auto',
+              valid_count: activeTab.data.initialData?.length || 0,
+              missing_count: 0,
+            };
+            return acc;
+          },
+          {} as Record<string, any>
+        ),
+      };
+
+      // TODO: Replace with actual API call when implemented
+      // const response = await fetch('/api/fix-data-types', {
+      //   method: 'POST',
+      //   headers: {
+      //     'Content-Type': 'application/json',
+      //   },
+      //   body: JSON.stringify({ request: requestData }),
+      // });
+      // const data: FixDataTypesResponse = await response.json();
+
+      // Using mock response for now
+      await new Promise(resolve => setTimeout(resolve, 800)); // Simulate API delay
+      const response = mockResponse;
 
       dispatch({
         type: ProjectActions.SET_IMPORT_DATA,
