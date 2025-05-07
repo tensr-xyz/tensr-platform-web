@@ -4,6 +4,20 @@ const TOKEN_KEYS = {
   REFRESH_TOKEN: 'refresh_token',
 } as const;
 
+// Cookie helper functions
+const setCookie = (name: string, value: string, days: number = 7) => {
+  if (typeof window === 'undefined') return;
+
+  const expires = new Date();
+  expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Strict`;
+};
+
+const removeCookie = (name: string) => {
+  if (typeof window === 'undefined') return;
+  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Strict`;
+};
+
 export const isTokenValid = (token: string, bufferMinutes = 5) => {
   if (!token) return false;
 
@@ -29,9 +43,17 @@ export const storeTokens = (accessToken: string, idToken: string, refreshToken: 
   if (typeof window === 'undefined') return;
 
   try {
+    // Store in localStorage (keep existing behavior)
     localStorage.setItem(TOKEN_KEYS.ACCESS_TOKEN, accessToken);
     localStorage.setItem(TOKEN_KEYS.ID_TOKEN, idToken);
     localStorage.setItem(TOKEN_KEYS.REFRESH_TOKEN, refreshToken);
+
+    // Also store in cookies for middleware
+    setCookie('accessToken', accessToken, 1); // 1 day
+    setCookie('idToken', idToken, 1); // 1 day
+    setCookie('refreshToken', refreshToken, 7); // 7 days
+
+    console.log('Tokens stored in localStorage and cookies');
   } catch (error) {
     console.error('Error storing tokens:', error);
   }
@@ -41,9 +63,15 @@ export const removeTokens = () => {
   if (typeof window === 'undefined') return;
 
   try {
+    // Remove from localStorage
     Object.values(TOKEN_KEYS).forEach(key => {
       localStorage.removeItem(key);
     });
+
+    // Remove from cookies
+    removeCookie('accessToken');
+    removeCookie('idToken');
+    removeCookie('refreshToken');
   } catch (error) {
     console.error('Error removing tokens:', error);
   }
@@ -101,7 +129,8 @@ export const getStoredTokens = () => {
 export const clearAuthData = () => {
   removeTokens();
   if (typeof window !== 'undefined') {
-    // Clear any other auth-related items from sessionStorage if needed
+    // Clear any other auth-related items from localStorage/sessionStorage
+    localStorage.removeItem('auth_session');
     sessionStorage.clear();
   }
 };
