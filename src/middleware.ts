@@ -31,14 +31,7 @@ export function middleware(request: NextRequest) {
 // Configure matcher to exclude static files and API routes
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public (public files)
-     * - api (API routes)
-     */
-    '/((?!_next/static|_next/image|favicon.ico|public|api).*)',
+    // Exclude all files in the public folder and all Next.js image requests
+    '/((?!_next/static|_next/image|favicon.ico|tensr_icon_dark.png|tensr_icon_light.png|tensr_logo_dark.png|tensr_logo_light.png).*)',
   ],
 };
