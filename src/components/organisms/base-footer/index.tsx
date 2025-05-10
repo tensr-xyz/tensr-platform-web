@@ -137,19 +137,19 @@ const Footer: React.FC = () => {
           </div>
 
           {/* Product Column */}
-          <div className="md:col-span-1">
-            <FooterColumn {...FOOTER_SECTIONS.product} />
-          </div>
+          {/*<div className="md:col-span-1">*/}
+          {/*  <FooterColumn {...FOOTER_SECTIONS.product} />*/}
+          {/*</div>*/}
 
           {/* Company Column */}
-          <div className="md:col-span-1">
-            <FooterColumn {...FOOTER_SECTIONS.company} />
-          </div>
+          {/*<div className="md:col-span-1">*/}
+          {/*  <FooterColumn {...FOOTER_SECTIONS.company} />*/}
+          {/*</div>*/}
 
           {/* Resources Column */}
-          <div className="md:col-span-1">
-            <FooterColumn {...FOOTER_SECTIONS.resources} />
-          </div>
+          {/*<div className="md:col-span-1">*/}
+          {/*  <FooterColumn {...FOOTER_SECTIONS.resources} />*/}
+          {/*</div>*/}
         </div>
       </div>
     </footer>
