@@ -2,8 +2,7 @@ import { useState } from 'react';
 import { useProject } from '@/contexts/project-context';
 import { useAuthState } from '@/contexts/auth-context';
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // Updated type definition to accept a function that returns Promise<void>
 export const useFileOperations = (currentPath: string, onRefresh: () => Promise<void>) => {

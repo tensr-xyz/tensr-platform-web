@@ -32,14 +32,10 @@ import {
 import { Button } from '@/components/atoms/button';
 import { Card } from '@/components/atoms/card';
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // Initialize Stripe with your publishable key
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY ||
-    'pk_test_51RJir9H0hCtrU4vjrozMaXHylofcF5n4LvJNL0XyqmfdjphtCPfPcYlpVcdFGG5SlKyJpRMRdp9C5XLbehivEngh00ntTQEOrt'
-);
+const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 // Create a wrapper component to provide Stripe context
 const PaymentPageWithStripe = () => {

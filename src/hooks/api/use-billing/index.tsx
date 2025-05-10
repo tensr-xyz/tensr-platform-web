@@ -3,8 +3,7 @@ import { useAuth } from '@/hooks/api/use-auth';
 import { getIdToken } from '@/utils/auth';
 
 // API base URL - should be configured via environment variable
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // Subscription interface
 export interface Subscription {

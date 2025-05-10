@@ -4,8 +4,7 @@ import useAuth from '@/hooks/api/use-auth';
 import { getAccessToken } from '@/utils/auth';
 
 // API Base URL from environment variable
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 interface UseProjectProps {
   projectId?: string;

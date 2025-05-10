@@ -7,8 +7,7 @@ import reducer from './reducer';
 import { Actions, AuthContextProps, ProviderProps } from './types';
 
 // Make sure API_BASE_URL is properly defined
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
 

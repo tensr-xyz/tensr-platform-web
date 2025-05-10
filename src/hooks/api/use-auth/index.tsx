@@ -8,8 +8,7 @@ import { Actions } from '@/contexts/auth-context/types';
 import { User } from '@/types/user'; // Make sure this import exists
 
 // Make sure API_BASE_URL is properly defined
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // Define fetchUserData function that was missing
 const fetchUserData = async (idToken: string, userId: string): Promise<User | null> => {
