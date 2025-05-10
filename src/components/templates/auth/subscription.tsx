@@ -31,6 +31,9 @@ import {
 } from '@/components/atoms/select';
 import { Button } from '@/components/atoms/button';
 import { Card } from '@/components/atoms/card';
+import Loading from '@/components/molecules/loading';
+import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -418,8 +421,9 @@ const PaymentPage = () => {
       {loadingPlans ? (
         <div className="flex justify-center py-8">
           <div className="text-center">
-            <div className="mb-2">Loading available plans...</div>
-            {/* You could add a spinner here */}
+            <div className="mb-2">
+              <Loading />
+            </div>
           </div>
         </div>
       ) : (
@@ -862,11 +866,13 @@ const PaymentPage = () => {
       {/* Left sidebar with progress */}
       <div className="flex flex-col w-2/5 px-16 py-32">
         <div className="mb-8">
-          <LuCreditCard strokeWidth={1.25} size={20} className="mb-4" />
+          <Link href="/">
+            <ArrowLeft className="mb-4" />
+          </Link>
           <div className="text-xl">Subscription Plan</div>
           <div className="text-base text-gray-600">
             {formData.tier !== 'education'
-              ? `${currentPrice} ${formData.billingType === 'monthly' ? '/month' : '/year'}`
+              ? `$${currentPrice} ${formData.billingType === 'monthly' ? '/month' : '/year'}`
               : 'Free'}
           </div>
         </div>

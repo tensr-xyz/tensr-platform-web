@@ -431,11 +431,11 @@ export const ImportWizard = ({
         <Tabs defaultValue="preview" className="flex-1 flex flex-col min-h-0">
           <div className="bg-background border-b border-border">
             <TabsList className="rounded-none">
-              <TabsTrigger value="preview" className="flex items-center gap-2">
+              <TabsTrigger value="preview" className="flex items-center gap-2 py-1.5 rounded">
                 <LuTable className="h-4 w-4" />
                 Data Preview
               </TabsTrigger>
-              <TabsTrigger value="settings" className="flex items-center gap-2">
+              <TabsTrigger value="settings" className="flex items-center gap-2 py-1.5 rounded">
                 <LuSettings className="h-4 w-4" />
                 Import Settings
               </TabsTrigger>

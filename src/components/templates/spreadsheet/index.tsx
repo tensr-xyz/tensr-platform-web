@@ -26,7 +26,6 @@ import { cn } from '@/utils';
 import { useTabs } from '@/contexts/tabs-context';
 import { ColumnSummary } from '@/types/file';
 import Filters from '@/components/templates/spreadsheet/filters';
-import { PageResponse } from '@/types/project';
 import { CellPosition, SortConfig, SpreadsheetProps } from '@/types/spreadsheet';
 import { handleKeyboardNavigation } from '@/utils/spreadsheet';
 import { updateTab } from '@/contexts/tabs-context/actions';
@@ -782,7 +781,7 @@ export function Spreadsheet({
   return (
     <div className="flex h-full flex-col">
       {showFilters && (
-        <div className="border-b bg-background">
+        <div className="border-b border-border bg-background">
           <Filters
             table={table}
             onClearFilters={() => {

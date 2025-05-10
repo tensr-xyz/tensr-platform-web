@@ -14,6 +14,7 @@ import {
   Grid,
   List,
   Download,
+  FilePlus,
 } from 'lucide-react';
 import { useFileHandler } from '@/hooks/api/use-file';
 import { useRouter } from 'next/navigation';
@@ -703,15 +704,25 @@ const HomeTemplate: React.FC = () => {
                 </Button>
               </FilePickerWrapper>
 
-              {/* We'll keep the "New Project" button but make it disabled for MVP */}
-              <Button
-                className="h-10 text-xs sm:text-sm flex-1 sm:flex-none"
-                variant="outline"
-                disabled
-              >
-                <Plus className="h-4 w-4 mr-1 sm:mr-2" />
-                <span className="sm:inline">New Project</span>
-              </Button>
+              {activeTab === 'files' ? (
+                <Button
+                  className="h-10 text-xs sm:text-sm flex-1 sm:flex-none"
+                  variant="outline"
+                  onClick={() => router.push('/file/new')}
+                >
+                  <FilePlus className="h-4 w-4 mr-1 sm:mr-2" />
+                  <span className="sm:inline">New File</span>
+                </Button>
+              ) : (
+                <Button
+                  className="h-10 text-xs sm:text-sm flex-1 sm:flex-none"
+                  variant="outline"
+                  disabled
+                >
+                  <Plus className="h-4 w-4 mr-1 sm:mr-2" />
+                  <span className="sm:inline">New Project</span>
+                </Button>
+              )}
             </div>
           </div>
         </div>

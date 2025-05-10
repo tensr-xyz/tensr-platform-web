@@ -12,6 +12,9 @@ import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { useFileHandler } from '@/hooks/api/use-file';
 import { Progress } from '@/components/atoms/progress';
 
+// Define max file size constant (100MB)
+const MAX_FILE_SIZE = 100 * 1024 * 1024;
+
 interface FilePickerWrapperProps {
   children: ReactNode;
   onUploadComplete?: (fileId: string) => void;
@@ -103,7 +106,18 @@ export const FilePicker: React.FC<FilePickerProps> = ({
     console.log('File input changed, files:', event.target.files?.length);
     const file = event.target.files?.[0];
     if (file) {
-      console.log('Calling onFileSelect with file:', file.name);
+      console.log('File selected in FilePicker:', file.name, 'Size:', file.size);
+
+      // Check file size before proceeding
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`File is too large. Maximum size is 100MB.`);
+        // Reset the input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        return;
+      }
+
       try {
         const result = await onFileSelect(file);
         console.log('onFileSelect result:', result);
@@ -173,7 +187,15 @@ export const FilePicker: React.FC<FilePickerProps> = ({
             console.log('File dropped');
             const files = e.dataTransfer.files;
             if (files?.length) {
-              onFileSelect(files[0]);
+              const file = files[0];
+
+              // Check file size for drag and drop
+              if (file.size > MAX_FILE_SIZE) {
+                setError(`File is too large. Maximum size is 100MB.`);
+                return;
+              }
+
+              onFileSelect(file);
             }
           }}
         >
@@ -189,7 +211,9 @@ export const FilePicker: React.FC<FilePickerProps> = ({
             <LuFileSpreadsheet className="h-4 w-4" />
             <span>Select File</span>
           </button>
-          <p className="text-xs text-muted-foreground mt-4">Supports CSV, Excel (.xlsx, .xls)</p>
+          <p className="text-xs text-muted-foreground mt-4">
+            Supports CSV, Excel (.xlsx, .xls) • Max size: 100MB
+          </p>
         </div>
       )}
 

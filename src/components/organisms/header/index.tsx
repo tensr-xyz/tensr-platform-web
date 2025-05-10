@@ -50,7 +50,7 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
       } z-50`}
     >
       {/* Mobile Menu Header */}
-      <div className="flex items-center justify-between p-4 h-[72px] border-b">
+      <div className="flex items-center justify-between p-4 h-[72px] border-b border-border">
         <Link href="/" className="flex" onClick={onClose}>
           <Button variant="link" size="sm">
             <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={24} width={96} />
@@ -60,7 +60,7 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
           variant="ghost"
           size="icon"
           onClick={onClose}
-          className="rounded-full border active:border-black"
+          className="rounded-full border border-border active:border-black"
         >
           <X className="h-6 w-6" />
         </Button>
@@ -70,7 +70,7 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
       <div className="flex flex-col h-[calc(100vh-72px)] overflow-y-auto">
         {/* User Section */}
         {isAuthenticated && (
-          <div className="p-4 border-b">
+          <div className="p-4 border-b border-border">
             <div className="flex items-center space-x-3">
               <Avatar className="h-12 w-12">
                 <AvatarFallback>{initials}</AvatarFallback>
@@ -83,17 +83,7 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
           </div>
         )}
 
-        {/* Navigation Links */}
-        <div className="px-4">
-          <Link href="/documentation" onClick={onClose}>
-            <div className="text-lg font-medium p-2">Documentation</div>
-          </Link>
-          <Link href="/plugins" onClick={onClose}>
-            <div className="text-lg font-medium p-2">Plugins</div>
-          </Link>
-        </div>
-
-        <div className="p-4 border-t mt-auto">
+        <div className="p-4 border-t border-border mt-auto">
           {isAuthenticated && (
             <div>
               <Link href="/settings/account" onClick={onClose}>
@@ -111,18 +101,6 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
               </Button>
             </div>
           )}
-        </div>
-
-        {/* Download Button */}
-        <div className="p-4 border-t mt-auto">
-          <Link href="/download" onClick={onClose}>
-            <Button
-              variant="default"
-              className="w-full border border-black text-black bg-white rounded-full hover:bg-[#c4d4f6]"
-            >
-              Download
-            </Button>
-          </Link>
         </div>
       </div>
     </div>

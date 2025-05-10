@@ -79,7 +79,7 @@ const Filters = ({
   }, [onClearFilters]);
 
   return (
-    <div className="flex flex-row items-center gap-4 border-b p-1 min-h-12">
+    <div className="flex flex-row items-center gap-4 p-1 min-h-12">
       <Button className="h-8 min-w-8" size="icon" variant="ghost" onClick={onCloseFilters}>
         <LuX />
       </Button>
