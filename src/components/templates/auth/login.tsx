@@ -108,7 +108,7 @@ const LoginTemplate = () => {
   };
 
   return (
-    <div className="flex flex-col justify-between w-full max-w-xl items-center py-10 mx-auto min-h-screen border-x border-border">
+    <div className="flex flex-col justify-between w-full max-w-xl items-center py-10 mx-auto min-h-screen lg:border-x border-border">
       <Image
         className="absolute top-6 left-6"
         src="/tensr_logo_light.png"
@@ -120,9 +120,9 @@ const LoginTemplate = () => {
       <div className="flex flex-col max-w-xl w-full">
         {!isVerifying ? (
           <div className="flex flex-col gap-10">
-            <div className="text-3xl font-medium border-l-4 !border-primary px-6 lg:px-10">
+            <h1 className="text-3xl font-medium border-l-4 !border-primary px-6 lg:px-10">
               Sign up or log in to Tensr
-            </div>
+            </h1>
             <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4 px-6 lg:px-10">
               <FloatingLabelInput
                 label="Email address"
