@@ -2,73 +2,120 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { Input } from '@/components/atoms/input';
 import { Search } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
 
-// This is sample data.
-const data = {
-  versions: ['1.0.1', '1.1.0-alpha', '2.0.0-beta1'],
-  navMain: [
-    {
-      title: 'Account',
-      url: '/settings/account',
-    },
-    {
-      title: 'Billing',
-      url: '/settings/billing',
-    },
-    // {
-    //   title: 'Organisation',
-    //   url: '/settings/organisation',
-    // },
-    // {
-    //   title: 'Members',
-    //   url: '/settings/members',
-    // },
-    // {
-    //   title: 'Teams',
-    //   url: '/settings/teams',
-    // },
-  ],
-};
+// This is sample data
+const navigationItems = [
+  {
+    title: 'Team',
+    items: [
+      {
+        title: 'General',
+        url: '/settings/general',
+      },
+      {
+        title: 'Billing',
+        url: '/settings/billing',
+      },
+      // {
+      //   title: 'Invoices',
+      //   url: '/settings/invoices',
+      // },
+      // {
+      //   title: 'Members',
+      //   url: '/settings/members',
+      // },
+      // {
+      //   title: 'Access Groups',
+      //   url: '/settings/access-groups',
+      // },
+      // {
+      //   title: 'Log Drains',
+      //   url: '/settings/log-drains',
+      // },
+      // {
+      //   title: 'Webhooks',
+      //   url: '/settings/webhooks',
+      // },
+      // {
+      //   title: 'Security & Privacy',
+      //   url: '/settings/security-privacy',
+      // },
+      // {
+      //   title: 'Deployment Protection',
+      //   url: '/settings/deployment-protection',
+      // },
+      // {
+      //   title: 'Secure Compute',
+      //   url: '/settings/secure-compute',
+      // },
+      // {
+      //   title: 'Environment Variables',
+      //   url: '/settings/environment-variables',
+      // },
+    ],
+  },
+  {
+    title: 'Account',
+    items: [
+      {
+        title: 'Account',
+        url: '/settings/account',
+      },
+    ],
+  },
+];
 
 export function SettingsSidebar() {
-  const [activeItem, setActiveItem] = React.useState(data.navMain[0].title);
+  const pathname = usePathname();
 
   return (
-    <div className="w-xs border-gray-200">
-      <div className="flex flex-col gap-12 mb-8">
+    <div className="w-full md:w-60 flex-shrink-0">
+      <div className="flex flex-col gap-8 mb-8">
         <div className="relative flex items-center">
           <Input
-            className="bg-background pl-10" // Add left padding to make room for the icon
+            placeholder="Search..."
+            className="bg-white pl-10 h-10 border border-gray-200" // Add left padding for the icon
           />
-          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
             <Search size={18} />
           </div>
         </div>
-        <nav className="space-y-1">
-          {data.navMain.map(item => (
-            <Link
-              key={item.title}
-              href={item.url}
-              onClick={() => {
-                setActiveItem(item.title);
-              }}
-              className={`block px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                activeItem === item.title
-                  ? 'bg-blue-50 text-blue-700'
-                  : 'text-gray-700 hover:bg-gray-100'
-              }`}
-            >
-              {item.title}
-            </Link>
+
+        <div className="space-y-8">
+          {navigationItems.map(section => (
+            <div key={section.title} className="space-y-2">
+              <div className="text-xs text-gray-500 font-medium pl-3">{section.title}</div>
+
+              <nav className="space-y-1">
+                {section.items.map(item => {
+                  const isActive = pathname === item.url;
+                  return (
+                    <Link
+                      key={item.title}
+                      href={item.url}
+                      className={`block px-3 py-1.5 text-sm rounded-md transition-colors ${
+                        isActive ? 'font-medium text-black' : 'text-gray-600 hover:bg-gray-100'
+                      }`}
+                    >
+                      {item.title}
+                    </Link>
+                  );
+                })}
+              </nav>
+            </div>
           ))}
-        </nav>
+        </div>
       </div>
 
       <div className="border-t border-gray-200 pt-4 mt-6">
-        <Button variant="outline" className="bg-background w-full">
+        <Button
+          variant="outline"
+          className="w-full bg-white text-gray-700 border-gray-200 hover:bg-gray-100 hover:text-gray-900"
+        >
           Log out
         </Button>
       </div>

@@ -47,11 +47,11 @@ export default function Account() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-bold">Account Settings</h1>
-        <p className="text-gray-500">Manage your personal information</p>
+        <h1 className="text-xl font-medium">Account Settings</h1>
+        <p className="text-gray-500 text-sm mt-1">Manage your personal information</p>
       </div>
 
-      <div>
+      <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
         <form onSubmit={handleProfileUpdate}>
           <div className="p-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -64,6 +64,7 @@ export default function Account() {
                   id="firstName"
                   value={user.firstName || ''}
                   onChange={e => setUser({ ...user, firstName: e.target.value })}
+                  className="border-gray-200 bg-white"
                 />
               </div>
               <div>
@@ -75,6 +76,7 @@ export default function Account() {
                   id="lastName"
                   value={user.lastName || ''}
                   onChange={e => setUser({ ...user, lastName: e.target.value })}
+                  className="border-gray-200 bg-white"
                 />
               </div>
             </div>
@@ -83,7 +85,13 @@ export default function Account() {
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
                 Email Address
               </label>
-              <Input type="email" id="email" value={user.email} readOnly />
+              <Input
+                type="email"
+                id="email"
+                value={user.email}
+                readOnly
+                className="bg-gray-50 border-gray-200"
+              />
               <p className="mt-1 text-xs text-gray-500">
                 To change your email, please contact support.
               </p>
@@ -98,12 +106,17 @@ export default function Account() {
                 id="username"
                 value={user.username || ''}
                 onChange={e => setUser({ ...user, username: e.target.value })}
+                className="border-gray-200 bg-white"
               />
             </div>
           </div>
 
-          <div className="border-t border-border px-6 py-4 bg-secondary rounded-b-lg flex justify-end">
-            <Button type="submit" disabled={saveStatus === 'saving'}>
+          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex justify-end">
+            <Button
+              type="submit"
+              disabled={saveStatus === 'saving'}
+              className="bg-black hover:bg-gray-800 text-white"
+            >
               {saveStatus === 'saving' ? 'Saving...' : 'Save Changes'}
             </Button>
 

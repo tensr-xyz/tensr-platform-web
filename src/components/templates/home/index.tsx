@@ -297,7 +297,6 @@ const ProjectCard: React.FC<{ project: ProjectData; onSelect: (id: string) => vo
 // Main component
 const HomeTemplate: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
-  // In MVP, we'll only show 'files' tab but keep projects code commented for future
   const [activeTab, setActiveTab] = useState<string>('files');
   const [selectedView, setSelectedView] = useState<string>('list');
   const [commandOpen, setCommandOpen] = useState<boolean>(false);
@@ -307,15 +306,12 @@ const HomeTemplate: React.FC = () => {
   // Add event listener to close command dialog when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent): void => {
-      // Close command dialog if user clicks outside and it's open
       if (commandOpen) {
         setCommandOpen(false);
       }
     };
 
-    // Add event listener for mobile view
     document.addEventListener('mousedown', handleClickOutside);
-
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
@@ -329,16 +325,7 @@ const HomeTemplate: React.FC = () => {
   // Load files when component mounts
   useEffect(() => {
     fetchUserFiles();
-  }, []);
-
-  // Toggle function to handle command menu
-  const toggleCommandDialog = (): void => {
-    setCommandOpen(prev => !prev);
-    // Reset search term when closing to avoid persisting errors
-    if (commandOpen) {
-      setSearchTerm('');
-    }
-  };
+  }, [fetchUserFiles]);
 
   // Function to handle tab change
   const handleTabChange = (value: string): void => {
@@ -537,12 +524,14 @@ const HomeTemplate: React.FC = () => {
 
       {/* Main Content */}
       <div className="flex-1 w-full mx-auto px-3 sm:px-6 lg:px-12 py-4 sm:py-8">
+        {/* Removed title section */}
+
+        {/* Tabs and Search Bar Container */}
         <div className="space-y-4 mb-4 sm:mb-6">
-          {/* Mobile view controls - For MVP, we'll only show Files tab */}
+          {/* Mobile view controls */}
           <div className="flex sm:hidden justify-between items-center mb-4">
-            <Tabs defaultValue="files" onValueChange={handleTabChange} className="flex-1">
+            <Tabs defaultValue={activeTab} onValueChange={handleTabChange} className="flex-1">
               <TabsList className="bg-background h-10 border border-border rounded-md w-full">
-                {/* Keeping projects tab but making it disabled for MVP */}
                 <TabsTrigger
                   isClosable={false}
                   className="data-[state=active]:bg-secondary py-1.5 px-3 flex-1 opacity-50"
@@ -564,6 +553,7 @@ const HomeTemplate: React.FC = () => {
             </Tabs>
           </div>
 
+          {/* Combined Search and Controls Row */}
           <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 sm:gap-4">
             {/* Mobile buttons for search and filter */}
             <div className="flex sm:hidden items-center gap-2 w-full">
@@ -585,69 +575,21 @@ const HomeTemplate: React.FC = () => {
               </Button>
             </div>
 
-            {/* Desktop Search + Filters */}
-            <div className="hidden sm:flex relative flex-1 gap-3">
-              <div className="relative rounded-lg border border-border md:max-w-lg w-full">
+            {/* Desktop Search + Tabs (combined into one row) */}
+            <div className="hidden sm:flex items-center flex-1 gap-3">
+              {/* Search bar */}
+              <div className="relative border border-border rounded md:max-w-md w-full">
                 <input
                   type="text"
-                  className="w-full h-10 px-3 rounded-lg focus:outline-none bg-background"
+                  className="w-full h-10 px-3 pl-10 focus:outline-none bg-white rounded"
                   placeholder="Search files..."
-                  onClick={() => setCommandOpen(true)}
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                 />
-                <Search className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
-
-                {/* Command menu dropdown */}
-                {commandOpen && (
-                  <div className="absolute top-full left-0 w-full mt-1 bg-white rounded-lg border border-border shadow-lg z-50">
-                    {searchTerm && filteredFiles.length === 0 ? (
-                      <div className="p-2 text-sm text-gray-500">No files found.</div>
-                    ) : (
-                      <div className="max-h-[300px] overflow-y-auto">
-                        <div className="p-2 text-xs font-medium text-gray-500">Recent Files</div>
-                        {filteredFiles.slice(0, 5).map(file => (
-                          <div
-                            key={file.fileId}
-                            className="p-2 flex items-center gap-2 hover:bg-gray-100 cursor-pointer"
-                            onClick={() => {
-                              handleFileSelect(file.fileId);
-                              setCommandOpen(false);
-                            }}
-                          >
-                            <FileText className="h-4 w-4" />
-                            <div className="flex flex-col">
-                              <span className="text-sm">{file.fileName}</span>
-                              <span className="text-xs text-gray-500">
-                                {file.fileType.split('/')[1] || file.fileType} •{' '}
-                                {(file.size / 1024).toFixed(1)} KB
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
+                <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               </div>
 
-              {/* File type filter */}
-              <Select>
-                <SelectTrigger className="w-[140px] h-10">
-                  <SelectValue placeholder="File Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    <SelectLabel>File Type</SelectLabel>
-                    <SelectItem value="all">All</SelectItem>
-                    <SelectItem value="pdf">PDF</SelectItem>
-                    <SelectItem value="csv">CSV</SelectItem>
-                    <SelectItem value="excel">Excel</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-
-              {/* Desktop tabs - disabled Projects tab for MVP */}
+              {/* Desktop tabs */}
               <Tabs defaultValue="files" onValueChange={handleTabChange} className="hidden sm:flex">
                 <TabsList className="bg-background h-10 border border-border rounded-md">
                   <TabsTrigger
@@ -670,7 +612,6 @@ const HomeTemplate: React.FC = () => {
                 </TabsList>
               </Tabs>
 
-              {/* View options (list/grid) - Now fully functional */}
               <Tabs
                 defaultValue={selectedView}
                 onValueChange={setSelectedView}
@@ -695,41 +636,38 @@ const HomeTemplate: React.FC = () => {
               </Tabs>
             </div>
 
-            {/* Action buttons - Mobile optimized */}
+            {/* Action dropdown button */}
             <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start sm:space-x-3">
-              <FilePickerWrapper onUploadComplete={handleFileUploadComplete}>
-                <Button className="h-10 text-xs sm:text-sm flex-1 sm:flex-none">
-                  <Upload className="h-4 w-4 mr-1 sm:mr-2" />
-                  <span className="sm:inline">Upload</span>
-                </Button>
-              </FilePickerWrapper>
-
-              {activeTab === 'files' ? (
-                <Button
-                  className="h-10 text-xs sm:text-sm flex-1 sm:flex-none"
-                  variant="outline"
-                  onClick={() => router.push('/file/new')}
-                >
-                  <FilePlus className="h-4 w-4 mr-1 sm:mr-2" />
-                  <span className="sm:inline">New File</span>
-                </Button>
-              ) : (
-                <Button
-                  className="h-10 text-xs sm:text-sm flex-1 sm:flex-none"
-                  variant="outline"
-                  disabled
-                >
-                  <Plus className="h-4 w-4 mr-1 sm:mr-2" />
-                  <span className="sm:inline">New Project</span>
-                </Button>
-              )}
+              <Select>
+                <SelectTrigger className="w-[140px] h-10 bg-primary !text-white">
+                  <Plus className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Create..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <FilePickerWrapper onUploadComplete={handleFileUploadComplete}>
+                      <SelectItem value="upload" className="cursor-pointer">
+                        <div className="flex items-center">
+                          <Upload className="h-4 w-4 mr-2" />
+                          <span>Upload File</span>
+                        </div>
+                      </SelectItem>
+                    </FilePickerWrapper>
+                    <SelectItem value="new-file" onClick={() => router.push('/file/new')}>
+                      <div className="flex items-center">
+                        <FilePlus className="h-4 w-4 mr-2" />
+                        <span>New File</span>
+                      </div>
+                    </SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
 
-        {/* Files Tab Content - The only content in our MVP */}
+        {/* Files/Projects Content */}
         <div className="space-y-4">
-          {/* Files View - Now supports both list and grid view */}
           <div className="overflow-x-auto">
             {filesLoading ? (
               <Loading />
@@ -749,6 +687,7 @@ const HomeTemplate: React.FC = () => {
                 isLoading={filesLoading}
                 onRefresh={fetchUserFiles}
                 error={filesError}
+                hideControls={true} // Hide the table's internal controls
               />
             ) : (
               renderFilesGrid()

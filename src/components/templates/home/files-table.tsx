@@ -23,7 +23,6 @@ import {
 } from '@tanstack/react-table';
 import { ArrowUpDown, ChevronDown, FileText, MoreHorizontal, Upload } from 'lucide-react';
 import { useState } from 'react';
-import { Input } from '@/components/atoms/input';
 import {
   Table,
   TableBody,
@@ -48,9 +47,17 @@ interface FilesTableProps {
   isLoading: boolean;
   onRefresh: () => void;
   error: string | null;
+  hideControls?: boolean; // New prop to optionally hide the table controls
 }
 
-export const FilesTable = ({ data, onRowClick, isLoading, onRefresh, error }: FilesTableProps) => {
+export const FilesTable = ({
+  data,
+  onRowClick,
+  isLoading,
+  onRefresh,
+  error,
+  hideControls = false,
+}: FilesTableProps) => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -312,45 +319,48 @@ export const FilesTable = ({ data, onRowClick, isLoading, onRefresh, error }: Fi
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between py-4">
-        <Input
-          placeholder="Filter files..."
-          value={(table.getColumn('fileName')?.getFilterValue() as string) ?? ''}
-          onChange={event => table.getColumn('fileName')?.setFilterValue(event.target.value)}
-          className="max-w-sm bg-background"
-        />
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={onRefresh} className="flex items-center">
-            <span className="mr-1">Refresh</span>
-            {isLoading && <span className="animate-spin h-4 w-4">↻</span>}
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline">
-                Columns <ChevronDown className="ml-2 h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              {table
-                .getAllColumns()
-                .filter(column => column.getCanHide())
-                .map(column => {
-                  return (
-                    <DropdownMenuCheckboxItem
-                      key={column.id}
-                      className="capitalize"
-                      checked={column.getIsVisible()}
-                      onCheckedChange={value => column.toggleVisibility(!!value)}
-                    >
-                      {column.id}
-                    </DropdownMenuCheckboxItem>
-                  );
-                })}
-            </DropdownMenuContent>
-          </DropdownMenu>
+      {/* Conditionally render the controls based on the hideControls prop */}
+      {!hideControls && (
+        <div className="flex items-center justify-between py-4">
+          <input
+            placeholder="Filter files..."
+            value={(table.getColumn('fileName')?.getFilterValue() as string) ?? ''}
+            onChange={event => table.getColumn('fileName')?.setFilterValue(event.target.value)}
+            className="max-w-sm border border-border p-2 h-10 pl-4 bg-white"
+          />
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onRefresh} className="flex items-center">
+              <span className="mr-1">Refresh</span>
+              {isLoading && <span className="animate-spin h-4 w-4">↻</span>}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline">
+                  Columns <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {table
+                  .getAllColumns()
+                  .filter(column => column.getCanHide())
+                  .map(column => {
+                    return (
+                      <DropdownMenuCheckboxItem
+                        key={column.id}
+                        className="capitalize"
+                        checked={column.getIsVisible()}
+                        onCheckedChange={value => column.toggleVisibility(!!value)}
+                      >
+                        {column.id}
+                      </DropdownMenuCheckboxItem>
+                    );
+                  })}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
-      </div>
-      <div className="rounded-md border border-border bg-background">
+      )}
+      <div className="rounded-md border border-border bg-white">
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map(headerGroup => (
