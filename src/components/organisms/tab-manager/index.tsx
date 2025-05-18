@@ -22,6 +22,9 @@ import AnalyticsLayout from '@/components/templates/analytics-layout';
 import { Separator } from '@/components/atoms/separator';
 import { setLeftPanelContent, toggleLeftPanel } from '@/contexts/project-context/actions';
 import { FolderComponent } from '@/components/organisms/file-tree';
+import { Users } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
+import CollaborationPanel from '@/components/organisms/collaboration-panel';
 
 interface Column {
   id: string;
@@ -356,6 +359,23 @@ const TabManager: React.FC<TabManagerProps> = ({
           <h1 className="text-sm font-semibold">{activeTab?.name}</h1>
         </div>
         <div className="flex-none flex items-center px-2">
+          <Popover>
+            <PopoverTrigger>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setShowMenu(prev => !prev)}
+                data-state={showMenu ? 'active' : 'inactive'}
+              >
+                <Users />
+                <span className="sr-only">Toggle User Collaboration</span>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent align="end">
+              <CollaborationPanel projectId={''} />
+            </PopoverContent>
+          </Popover>
           <Button
             variant="ghost"
             size="icon"

@@ -1,4 +1,3 @@
-// tabs-context/types.ts
 import { ViewType } from '@/contexts/project-context/types';
 
 export interface ColumnVisibility {

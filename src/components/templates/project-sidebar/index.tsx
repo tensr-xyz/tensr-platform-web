@@ -160,20 +160,9 @@ export default function ProjectSidebar() {
     return item.isPanelItem && activeItem.title === item.title && state.leftPanelOpen;
   };
 
-  // Custom style classes for icon color
-  const iconStyle = 'text-[rgba(241,243,242,1)]';
-  const activeIconStyle = '!active:text-[rgb(225,227,227)]';
-  const activeBackgroundStyle = '!active:bg-[rgba(199,209,207,0.1)]';
-
   return (
     <>
-      <Sidebar
-        collapsible="none"
-        style={{
-          background: 'var(--foreground)',
-          backgroundColor: 'var(--foreground)',
-        }}
-      >
+      <Sidebar collapsible="none" className="border-r border-border">
         <SidebarContent>
           <SidebarHeader>
             <Link href="/">
@@ -182,7 +171,6 @@ export default function ProjectSidebar() {
                   children: 'home',
                   hidden: false,
                 }}
-                className={cn(iconStyle)}
               >
                 <Home />
                 <span className="sr-only">home</span>
@@ -203,11 +191,7 @@ export default function ProjectSidebar() {
                         }}
                         onClick={() => handleItemClick(item)}
                         isActive={active}
-                        className={cn(
-                          'flex h-8 w-8 items-center justify-center p-0 rounded-md',
-                          iconStyle,
-                          active ? cn(activeIconStyle, activeBackgroundStyle) : ''
-                        )}
+                        className={cn('flex h-8 w-8 items-center justify-center p-0 rounded-md')}
                       >
                         <item.icon />
                         <span className="sr-only">{item.title}</span>
@@ -229,10 +213,7 @@ export default function ProjectSidebar() {
                     hidden: false,
                   }}
                   onClick={() => handleItemClick(item)}
-                  className={cn(
-                    'flex h-8 w-8 items-center justify-center p-0 rounded-md',
-                    iconStyle
-                  )}
+                  className={cn('flex h-8 w-8 items-center justify-center p-0 rounded-md')}
                 >
                   <item.icon />
                   <span className="sr-only">{item.title}</span>

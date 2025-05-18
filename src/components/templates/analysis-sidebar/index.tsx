@@ -185,12 +185,12 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
 
   return (
     <Tabs defaultValue={defaultTab} className="flex flex-col h-full">
-      <div className="flex items-center bg-background border-b border-border">
+      <div className="flex items-center bg-background border-b border-border !min-h-10">
         <Button onClick={onToggleSidebar} size="icon" variant="ghost" className="mx-1">
           <LuMinus className="h-4 w-4" />
         </Button>
         <ScrollArea className="flex-1">
-          <TabsList className="p-0 rounded-none bg-transparent">
+          <TabsList className="p-0 rounded-none bg-transparent h-10">
             {Object.entries(visibleMenuItems).map(([key, { icon }]) => (
               <TabsTrigger
                 key={key}

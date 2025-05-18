@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { useTabs } from '@/contexts/tabs-context';
-import { useTheme } from '@/contexts/theme-context';
+import { useTheme } from 'next-themes';
 
 interface Cell {
   id: number;
@@ -125,7 +125,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
         {`[${cell.executionCount !== null ? cell.executionCount : ' '}]:`}
       </div>
 
-      <div className="ml-12 border-l group-hover:border-l-2 group-hover:border-accent pl-2 pr-10">
+      <div className="ml-12 border-l border-border group-hover:border-l-2 group-hover:border-accent pl-2 pr-10">
         <div
           className="w-full"
           style={{
@@ -472,7 +472,7 @@ df <- fromJSON('''${dataStr}''')
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-      <div className="flex items-center px-1 h-8 border-b bg-background flex-shrink-0">
+      <div className="flex items-center px-1 h-8 border-b border-border bg-background flex-shrink-0">
         <div className="flex items-center gap-1">
           <button
             className="p-1 hover:bg-gray-200 rounded text-xs"
