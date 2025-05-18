@@ -1,13 +1,5 @@
 import { ProjectActions, ActionProps } from './types';
 import { ViewType } from './types';
-import {
-  FileEntry,
-  Project,
-  FileResponse,
-  ProjectStatus,
-  ProjectFile,
-  FileMetadata,
-} from '@/types/project';
 
 export const setView = (view: ViewType): ActionProps => ({
   type: ProjectActions.SET_VIEW,

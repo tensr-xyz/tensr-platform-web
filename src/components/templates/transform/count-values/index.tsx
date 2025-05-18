@@ -11,9 +11,13 @@ import { Button } from '@/components/atoms/button';
 import { Label } from '@/components/atoms/label';
 import { Input } from '@/components/atoms/input';
 import { useTabs } from '@/contexts/tabs-context';
-import { useProject } from '@/contexts/project-context';
-import { ProjectActions } from '@/contexts/project-context/types';
 import { LuLoader } from 'react-icons/lu';
+import useAuth from '@/hooks/api/use-auth';
+import { updateTab } from '@/contexts/tabs-context/actions';
+import { ColumnSummary } from '@/types/file';
+
+// API base URL
+const API_BASE_URL = 'http://localhost:8080';
 
 interface ValueToCount {
   type_: 'single' | 'range' | 'sysmis'; // Changed from 'type' to 'type_' to match Rust
@@ -26,19 +30,16 @@ interface CountValuesRequest {
   target_variable: string;
   source_variables: string[];
   values_to_count: ValueToCount[];
+  token?: string;
 }
 
 interface CountValuesResponse {
   success: boolean;
-  target_variable: string;
+  new_column_name: string;
+  new_column_values: string[];
+  column_info: ColumnSummary;
   rows_affected: number;
-  path: string;
-  metadata: {
-    rows: number;
-    columns: number;
-    column_names: string[];
-    preview: any[];
-  };
+  column_type: string;
 }
 
 interface CountValuesDialogProps {
@@ -53,8 +54,10 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
   const [sourceVariables, setSourceVariables] = useState<string[]>([]);
   const [valuesToCount, setValuesToCount] = useState<ValueToCount[]>([]);
 
-  const { state: tabState } = useTabs();
-  const { dispatch } = useProject();
+  const { state: tabState, dispatch: tabDispatch } = useTabs();
+  const { tokens } = useAuth();
+
+  const token = tokens?.accessToken;
 
   const activeTab = useMemo(
     () => tabState.tabs.find(tab => tab.id === tabState.activeTabId),
@@ -124,6 +127,11 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
       return;
     }
 
+    if (!activeTab.id) {
+      setError('No active tab found');
+      return;
+    }
+
     try {
       setIsLoading(true);
       setError(null);
@@ -136,39 +144,84 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
         values_to_count: valuesToCount,
       };
 
-      // Mock the response with the expected structure
-      const response: CountValuesResponse = {
-        success: true,
-        target_variable: targetVariable,
-        rows_affected: 0,
-        path: 'mocked/path/to/counted_file.csv',
-        metadata: {
-          rows: 0,
-          columns: 0,
-          column_names: [],
-          preview: [],
+      // Call the API endpoint
+      const response = await fetch(`${API_BASE_URL}/api/transform/count-values`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(errorData || 'Failed to count values');
+      }
+
+      // Get the response data - now a CountValuesResponse instead of ProcessedDataResponse
+      const data: CountValuesResponse = await response.json();
+      setSuccess(data); // You might want to update your success state type
+
+      if (!activeTab.data.initialData) {
+        throw new Error('No data available in the current tab');
+      }
+
+      // Update the current tab's data with the new column
+      const updatedData = [...activeTab.data.initialData];
+
+      // Add the new column values to each row of data
+      for (let i = 0; i < updatedData.length; i++) {
+        if (i < data.new_column_values.length) {
+          const value = data.new_column_values[i];
+          // Convert value based on column type
+          let parsedValue: any = value;
+          if (data.column_type === 'Float64' && value !== 'null') {
+            parsedValue = parseFloat(value);
+          } else if (data.column_type === 'Int64' && value !== 'null') {
+            parsedValue = parseInt(value, 10);
+          } else if (value === 'null') {
+            parsedValue = null;
+          }
+
+          updatedData[i][data.new_column_name] = parsedValue;
+        }
+      }
+
+      // Create a new column definition
+      const newColumn = {
+        id: data.new_column_name,
+        accessor: data.new_column_name,
+        header: data.new_column_name,
+        width: 150,
+        type: data.column_type.toLowerCase().includes('float')
+          ? 'number'
+          : data.column_type.toLowerCase().includes('int')
+            ? 'number'
+            : 'string',
       };
 
-      // The actual API call would be something like:
-      // const response = await invoke<CountValuesResponse>('count_values', {
-      //   request,
-      // });
+      // Update the tab with new data and columns
+      const updatedColumns = [...(activeTab.data.initialColumns || []), newColumn];
 
-      setSuccess(response);
+      // Update stats with the new column info
+      const updatedStats = {
+        ...(activeTab.data.columnStats || {}),
+        [data.new_column_name]: data.column_info,
+      };
 
-      // Update project state
-      dispatch({
-        type: ProjectActions.SET_IMPORT_DATA,
-        payload: {
-          fileName: 'counted_dataset.csv',
-          filePath: response.path,
-          preview: response.metadata.preview,
-          columnNames: response.metadata.column_names,
-          totalRows: response.metadata.rows,
-          totalColumns: response.metadata.columns,
-        },
-      });
+      // Update the tab with the new data
+      tabDispatch(
+        updateTab(activeTab.id, {
+          data: {
+            ...activeTab.data,
+            initialData: updatedData,
+            initialColumns: updatedColumns,
+            columnStats: updatedStats,
+            totalColumns: (activeTab.data.totalColumns || 0) + 1,
+          },
+        })
+      );
 
       // Reset form
       setTargetVariable('');
@@ -242,7 +295,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
             <div className="space-y-2">
               {valuesToCount.map((value, index) => (
                 <div key={index} className="flex gap-2 items-center">
-                  {value.type_ === 'single' && ( // Changed from type to type_
+                  {value.type_ === 'single' && (
                     <Input
                       value={value.value1 || ''}
                       onChange={e => updateValueToCount(index, 'value1', e.target.value)}
@@ -250,7 +303,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
                       className="w-[200px]"
                     />
                   )}
-                  {value.type_ === 'range' && ( // Changed from type to type_
+                  {value.type_ === 'range' && (
                     <>
                       <Input
                         value={value.value1 || ''}
@@ -267,7 +320,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
                       />
                     </>
                   )}
-                  {value.type_ === 'sysmis' && ( // Changed from type to type_
+                  {value.type_ === 'sysmis' && (
                     <span className="text-sm text-gray-600">System-missing value (SYSMIS)</span>
                   )}
                   <Button variant="destructive" size="sm" onClick={() => removeValueToCount(index)}>
@@ -287,8 +340,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
           {success && (
             <Alert variant="default">
               <AlertDescription>
-                Successfully created target variable &apos;{success.target_variable}&apos; (
-                {success.rows_affected} rows affected)
+                Successfully created target variable &apos;{targetVariable}&apos;
               </AlertDescription>
             </Alert>
           )}

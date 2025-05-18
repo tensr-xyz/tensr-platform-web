@@ -18,12 +18,15 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { useTabs } from '@/contexts/tabs-context';
-import { useProject } from '@/contexts/project-context';
-import { ProjectActions } from '@/contexts/project-context/types';
 import { LuLoader } from 'react-icons/lu';
+import { ColumnSummary } from '@/types/file';
+import { updateTab } from '@/contexts/tabs-context/actions';
+import useAuth from '@/hooks/api/use-auth';
 
 type ShiftDirection = 'previous' | 'next';
 type MissingValueHandling = 'sysmis' | 'value' | 'preserve';
+
+const API_BASE_URL = 'http://localhost:8080';
 
 interface ShiftValuesRequest {
   path: string;
@@ -36,14 +39,10 @@ interface ShiftValuesRequest {
 
 interface ShiftValuesResponse {
   success: boolean;
+  updated_columns: Record<string, string[]>; // Map of column name to shifted values
+  column_infos: Record<string, ColumnSummary>; // Map of column name to column summary
   rows_affected: number;
-  path: string;
-  metadata: {
-    rows: number;
-    columns: number;
-    column_names: string[];
-    preview: any[];
-  };
+  column_types: Record<string, string>; // Map of column name to type
 }
 
 interface ShiftValuesDialogProps {
@@ -62,8 +61,10 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
   const [missingValueHandling, setMissingValueHandling] = useState<MissingValueHandling>('sysmis');
   const [customMissingValue, setCustomMissingValue] = useState<string>('');
 
-  const { state: tabState } = useTabs();
-  const { dispatch } = useProject();
+  const { dispatch, state: tabState } = useTabs();
+  const { tokens } = useAuth();
+
+  const token = tokens?.accessToken;
 
   const activeTab = useMemo(
     () => tabState.tabs.find(tab => tab.id === tabState.activeTabId),
@@ -105,7 +106,16 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
       return;
     }
 
+    if (!activeTab.id) {
+      setError('No active tab found');
+      return;
+    }
+
     try {
+      setIsLoading(true);
+      setError(null);
+      setSuccess(null);
+
       const request: ShiftValuesRequest = {
         path: activeTab.data.filePath,
         variables: selectedVariables,
@@ -116,51 +126,78 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
           missingValueHandling === 'value' ? parseFloat(customMissingValue) : undefined,
       };
 
-      setIsLoading(true);
-      setError(null);
-      setSuccess(null);
-
-      // Create a mock response while API implementation is pending
-      const mockResponse: ShiftValuesResponse = {
-        success: true,
-        rows_affected: 100, // Mock value
-        path: activeTab.data.filePath,
-        metadata: {
-          rows: 1000, // Mock value
-          columns: columnNames.length,
-          column_names: columnNames,
-          preview: activeTab?.data?.initialData?.slice(0, 5) || [],
+      // Call the API endpoint
+      const response = await fetch(`${API_BASE_URL}/api/transform/shift-values`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-      };
-
-      // TODO: Replace with actual API call once implemented
-      // const response = await fetch('/api/shift-values', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify(request),
-      // });
-      // const data = await response.json();
-
-      // Using mock response for now
-      const response = mockResponse;
-      setSuccess(response);
-
-      // Update project state with the response data
-      dispatch({
-        type: ProjectActions.SET_IMPORT_DATA,
-        payload: {
-          fileName: 'shifted_dataset.csv',
-          filePath: response.path,
-          preview: response.metadata.preview,
-          columnNames: response.metadata.column_names,
-          totalRows: response.metadata.rows,
-          totalColumns: response.metadata.columns,
-        },
+        body: JSON.stringify(request),
       });
 
-      // Reset form
+      if (!response.ok) {
+        const errorData = await response.text();
+        throw new Error(errorData || 'Failed to shift values');
+      }
+
+      // Get the response data - now a ShiftValuesResponse
+      const data: ShiftValuesResponse = await response.json();
+      setSuccess(data);
+
+      if (!activeTab.data.initialData) {
+        throw new Error('No data available in the current tab');
+      }
+
+      // Update the current tab's data with the shifted columns
+      const updatedData = [...activeTab.data.initialData];
+
+      // For each shifted column, update the values
+      for (const columnName of Object.keys(data.updated_columns)) {
+        const columnValues = data.updated_columns[columnName];
+        const columnType = data.column_types[columnName];
+
+        // Add the shifted values to each row
+        for (let i = 0; i < updatedData.length; i++) {
+          if (i < columnValues.length) {
+            const value = columnValues[i];
+            // Convert value based on column type
+            let parsedValue: any = value;
+            if (columnType === 'Float64' && value !== 'null') {
+              parsedValue = parseFloat(value);
+            } else if (columnType === 'Int64' && value !== 'null') {
+              parsedValue = parseInt(value, 10);
+            } else if (value === 'null') {
+              parsedValue = null;
+            }
+
+            updatedData[i][columnName] = parsedValue;
+          }
+        }
+      }
+
+      // Update stats with the new column info
+      const updatedStats = {
+        ...(activeTab.data.columnStats || {}),
+      };
+
+      // Add stats for each updated column
+      for (const [columnName, columnInfo] of Object.entries(data.column_infos)) {
+        updatedStats[columnName] = columnInfo;
+      }
+
+      // Update the tab with the new data
+      dispatch(
+        updateTab(activeTab.id, {
+          data: {
+            ...activeTab.data,
+            initialData: updatedData,
+            columnStats: updatedStats,
+          },
+        })
+      );
+
+      // Reset form after successful operation
       setSelectedVariables([]);
       setDirection('previous');
       setUnits(1);

@@ -1,8 +1,3 @@
 npm run format
-
-# Run Next.js build but don't fail on errors
-echo "Running Next.js build (errors will not block commit)"
 npm run build
-
-# Add any files that might have been modified by formatting
 git add .

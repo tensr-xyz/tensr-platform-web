@@ -7,6 +7,7 @@ import { SidebarProvider } from '@/components/organisms/sidebar';
 import { AuthProvider } from '@/contexts/auth-context';
 import { AppProvider } from '@/contexts/app-context';
 import { ChartProvider } from '@/contexts/chart-context';
+import { ThemeProvider } from '@/contexts/theme-context';
 
 const inter = Inter({
   variable: '--font-inter',
@@ -110,15 +111,22 @@ export default function RootLayout({
       </head>
       <body className={`${inter.className} antialiased`}>
         <AppProvider>
-          <ProjectProvider>
-            <AuthProvider>
-              <TabsProvider>
-                <ChartProvider>
-                  <SidebarProvider>{children}</SidebarProvider>
-                </ChartProvider>
-              </TabsProvider>
-            </AuthProvider>
-          </ProjectProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange
+          >
+            <ProjectProvider>
+              <AuthProvider>
+                <TabsProvider>
+                  <ChartProvider>
+                    <SidebarProvider>{children}</SidebarProvider>
+                  </ChartProvider>
+                </TabsProvider>
+              </AuthProvider>
+            </ProjectProvider>
+          </ThemeProvider>
         </AppProvider>
       </body>
     </html>
