@@ -20,42 +20,14 @@ const navigationItems = [
         title: 'Billing',
         url: '/settings/billing',
       },
-      // {
-      //   title: 'Invoices',
-      //   url: '/settings/invoices',
-      // },
-      // {
-      //   title: 'Members',
-      //   url: '/settings/members',
-      // },
-      // {
-      //   title: 'Access Groups',
-      //   url: '/settings/access-groups',
-      // },
-      // {
-      //   title: 'Log Drains',
-      //   url: '/settings/log-drains',
-      // },
-      // {
-      //   title: 'Webhooks',
-      //   url: '/settings/webhooks',
-      // },
-      // {
-      //   title: 'Security & Privacy',
-      //   url: '/settings/security-privacy',
-      // },
-      // {
-      //   title: 'Deployment Protection',
-      //   url: '/settings/deployment-protection',
-      // },
-      // {
-      //   title: 'Secure Compute',
-      //   url: '/settings/secure-compute',
-      // },
-      // {
-      //   title: 'Environment Variables',
-      //   url: '/settings/environment-variables',
-      // },
+      {
+        title: 'Organisation',
+        url: '/settings/organisation',
+      },
+      {
+        title: 'Members',
+        url: '/settings/members',
+      },
     ],
   },
   {

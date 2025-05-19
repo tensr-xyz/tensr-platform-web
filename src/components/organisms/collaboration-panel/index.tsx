@@ -126,9 +126,9 @@ const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
   const [error, setError] = useState<string | null>(null);
   const { user, isAuthenticated } = useAuth();
 
-  // Effect to manage collaboration and awareness
+  // Effect to manage collaboration and awareness - FIXED VERSION
   useEffect(() => {
-    if (collaborationState) {
+    if (collaborationState && collaborationState.awareness) {
       const { awareness } = collaborationState;
 
       // Get current user ID from awareness if not already set
@@ -322,7 +322,7 @@ const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
   };
 
   const handleRoleChange = (userId: string, role: string) => {
-    if (collaborationState) {
+    if (collaborationState && collaborationState.doc) {
       // In a real implementation, you'd broadcast this change to all users
       // For now, we just update our local state
       const updatedCollaborators = collaborators.map(user =>
@@ -340,7 +340,7 @@ const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
   const handleAccessLevelChange = (value: string) => {
     setAccessLevel(value);
 
-    if (collaborationState) {
+    if (collaborationState && collaborationState.doc) {
       // Update the document with the new access level
       const { doc } = collaborationState;
       doc.getMap('settings').set('accessLevel', value);
@@ -362,12 +362,13 @@ const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
+              {/* Fixed TooltipTrigger to avoid nested button issue */}
               <TooltipProvider>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-7 w-7">
+                  <TooltipTrigger>
+                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
                       <LuShield className="h-4 w-4" />
-                    </Button>
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>Security Settings</TooltipContent>
                 </Tooltip>
@@ -375,10 +376,10 @@ const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
 
               <TooltipProvider>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-7 w-7">
+                  <TooltipTrigger>
+                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
                       <LuSettings className="h-4 w-4" />
-                    </Button>
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>Collaboration Settings</TooltipContent>
                 </Tooltip>
@@ -412,12 +413,13 @@ const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-1">
+              {/* Fixed TooltipTrigger to avoid nested button issue */}
               <TooltipProvider>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-7 w-7">
+                  <TooltipTrigger>
+                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
                       <LuShield className="h-4 w-4" />
-                    </Button>
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>Security Settings</TooltipContent>
                 </Tooltip>
@@ -425,10 +427,10 @@ const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
 
               <TooltipProvider>
                 <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button size="icon" variant="ghost" className="h-7 w-7">
+                  <TooltipTrigger>
+                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
                       <LuSettings className="h-4 w-4" />
-                    </Button>
+                    </div>
                   </TooltipTrigger>
                   <TooltipContent>Collaboration Settings</TooltipContent>
                 </Tooltip>

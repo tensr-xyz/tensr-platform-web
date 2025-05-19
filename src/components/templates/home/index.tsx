@@ -10,11 +10,12 @@ import {
   Clock,
   Plus,
   Search,
-  Filter,
   Grid,
   List,
   Download,
   FilePlus,
+  MoreHorizontal,
+  Image,
 } from 'lucide-react';
 import { useFileHandler } from '@/hooks/api/use-file';
 import { useRouter } from 'next/navigation';
@@ -24,7 +25,6 @@ import {
   SelectContent,
   SelectGroup,
   SelectItem,
-  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
@@ -32,6 +32,14 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { FilePickerWrapper } from '@/components/molecules/file-picker';
 import { FilesTable } from '@/components/templates/home/files-table';
 import Loading from '@/components/molecules/loading';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from '@/components/molecules/drawer';
 
 // Define types for the application
 interface FileMetadata {
@@ -300,8 +308,8 @@ const HomeTemplate: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('files');
   const [selectedView, setSelectedView] = useState<string>('list');
   const [commandOpen, setCommandOpen] = useState<boolean>(false);
-  const [mobileSearchOpen, setMobileSearchOpen] = useState<boolean>(false);
-  const [mobileFilterOpen, setMobileFilterOpen] = useState<boolean>(false);
+  const [filterDrawerOpen, setFilterDrawerOpen] = useState<boolean>(false);
+  const [createDrawerOpen, setCreateDrawerOpen] = useState<boolean>(false);
 
   // Add event listener to close command dialog when clicking outside
   useEffect(() => {
@@ -333,8 +341,8 @@ const HomeTemplate: React.FC = () => {
 
     // Close any open overlays when changing tabs
     setCommandOpen(false);
-    setMobileSearchOpen(false);
-    setMobileFilterOpen(false);
+    setFilterDrawerOpen(false);
+    setCreateDrawerOpen(false);
   };
 
   // Filter files based on search term
@@ -345,146 +353,12 @@ const HomeTemplate: React.FC = () => {
   const handleFileUploadComplete = (fileId: string): void => {
     console.log('File uploaded successfully:', fileId);
     fetchUserFiles();
+    setCreateDrawerOpen(false);
   };
 
   const handleFileSelect = (fileId: string): void => {
     router.push(`/workspace/file/${fileId}`);
   };
-
-  // Render mobile search overlay
-  const renderMobileSearch = () => (
-    <div
-      className={`fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center pt-20 ${mobileSearchOpen ? 'block' : 'hidden'}`}
-      onClick={() => setMobileSearchOpen(false)}
-    >
-      <div
-        className="bg-white w-[90%] max-w-md rounded-lg shadow-lg p-4"
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-      >
-        <div className="flex items-center gap-2 mb-4">
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              className="w-full border rounded-md p-2 pr-8"
-              placeholder="Search..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              autoFocus
-            />
-            {searchTerm && (
-              <button
-                className="absolute right-2 top-2.5 text-gray-400"
-                onClick={() => setSearchTerm('')}
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Results or suggestions */}
-        <div className="max-h-[400px] overflow-y-auto">
-          {searchTerm ? (
-            filteredFiles.length > 0 ? (
-              <div className="space-y-2">
-                {filteredFiles.slice(0, 5).map(file => (
-                  <div
-                    key={file.fileId}
-                    className="p-2 hover:bg-gray-100 rounded cursor-pointer"
-                    onClick={() => {
-                      handleFileSelect(file.fileId);
-                      setMobileSearchOpen(false);
-                    }}
-                  >
-                    <div className="font-medium">{file.fileName}</div>
-                    <div className="text-xs text-gray-500">
-                      {file.fileType} • {(file.size / 1024).toFixed(1)} KB • Last modified:{' '}
-                      {new Date(file.updatedAt).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-4 text-gray-500">No results found</div>
-            )
-          ) : (
-            <div>
-              <p className="text-sm font-medium text-gray-500 mb-2">Recent searches</p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="px-3 py-1 bg-gray-100 rounded-full text-sm"
-                  onClick={() => setSearchTerm('PDF')}
-                >
-                  PDF
-                </button>
-                <button
-                  className="px-3 py-1 bg-gray-100 rounded-full text-sm"
-                  onClick={() => setSearchTerm('CSV')}
-                >
-                  CSV
-                </button>
-                <button
-                  className="px-3 py-1 bg-gray-100 rounded-full text-sm"
-                  onClick={() => setSearchTerm('Excel')}
-                >
-                  Excel
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  // Render mobile filter overlay
-  const renderMobileFilter = () => (
-    <div
-      className={`fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start justify-center pt-20 ${mobileFilterOpen ? 'block' : 'hidden'}`}
-      onClick={() => setMobileFilterOpen(false)}
-    >
-      <div
-        className="bg-white w-[90%] max-w-md rounded-lg shadow-lg p-4"
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-medium">Filters</h2>
-          <Button variant="ghost" className="p-2" onClick={() => setMobileFilterOpen(false)}>
-            ✕
-          </Button>
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <h3 className="text-sm font-medium mb-2">File Type</h3>
-            <div className="space-y-2">
-              <div className="flex items-center">
-                <input type="checkbox" id="pdf" className="mr-2" />
-                <label htmlFor="pdf">PDF</label>
-              </div>
-              <div className="flex items-center">
-                <input type="checkbox" id="csv" className="mr-2" />
-                <label htmlFor="csv">CSV</label>
-              </div>
-              <div className="flex items-center">
-                <input type="checkbox" id="excel" className="mr-2" />
-                <label htmlFor="excel">Excel</label>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button className="flex-1" variant="outline" onClick={() => setMobileFilterOpen(false)}>
-              Cancel
-            </Button>
-            <Button className="flex-1" onClick={() => setMobileFilterOpen(false)}>
-              Apply Filters
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   // Function to render empty state
   const renderEmptyState = () => (
@@ -518,14 +392,8 @@ const HomeTemplate: React.FC = () => {
 
   return (
     <div className="flex flex-col min-h-screen">
-      {/* Mobile search and filter overlays */}
-      {renderMobileSearch()}
-      {renderMobileFilter()}
-
       {/* Main Content */}
       <div className="flex-1 w-full mx-auto px-3 sm:px-6 lg:px-12 py-4 sm:py-8">
-        {/* Removed title section */}
-
         {/* Tabs and Search Bar Container */}
         <div className="space-y-4 mb-4 sm:mb-6">
           {/* Mobile view controls */}
@@ -555,24 +423,142 @@ const HomeTemplate: React.FC = () => {
 
           {/* Combined Search and Controls Row */}
           <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 sm:gap-4">
-            {/* Mobile buttons for search and filter */}
+            {/* NEW MOBILE SEARCH UI */}
             <div className="flex sm:hidden items-center gap-2 w-full">
-              <Button
-                variant="outline"
-                className="flex-1 h-10 justify-center"
-                onClick={() => setMobileSearchOpen(true)}
-              >
-                <Search className="h-4 w-4 mr-2" />
-                Search
-              </Button>
-              <Button
-                variant="outline"
-                className="flex-1 h-10 justify-center"
-                onClick={() => setMobileFilterOpen(true)}
-              >
-                <Filter className="h-4 w-4 mr-2" />
-                Filter
-              </Button>
+              <div className="flex-1 relative border border-gray-200 rounded-lg bg-white">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+                <input
+                  type="text"
+                  placeholder="Search Repositories and Projects..."
+                  className="w-full h-10 pl-9 pr-3 focus:outline-none rounded-lg"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              <Drawer open={filterDrawerOpen} onOpenChange={setFilterDrawerOpen}>
+                <DrawerTrigger asChild>
+                  <button className="p-2 border border-gray-200 rounded-lg bg-white">
+                    <MoreHorizontal className="w-5 h-5 text-gray-600" />
+                  </button>
+                </DrawerTrigger>
+                <DrawerContent>
+                  <DrawerHeader>
+                    <DrawerTitle>Filters</DrawerTitle>
+                  </DrawerHeader>
+                  <div className="px-4 pb-2">
+                    <div className="space-y-4">
+                      <div>
+                        <h3 className="text-sm font-medium mb-2">File Type</h3>
+                        <div className="flex flex-wrap gap-2">
+                          <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
+                            <FileText className="w-3 h-3" />
+                            <span>Documents</span>
+                          </button>
+                          <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
+                            <Image className="w-3 h-3" />
+                            <span>Images</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-medium mb-2">Date Modified</h3>
+                        <div className="flex flex-wrap gap-2">
+                          <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span>Last 7 days</span>
+                          </button>
+                          <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span>Last 30 days</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="text-sm font-medium mb-2">Status</h3>
+                        <div className="space-y-2">
+                          <div className="flex items-center">
+                            <input type="checkbox" id="active" className="mr-2" />
+                            <label htmlFor="active">Active</label>
+                          </div>
+                          <div className="flex items-center">
+                            <input type="checkbox" id="completed" className="mr-2" />
+                            <label htmlFor="completed">Completed</label>
+                          </div>
+                          <div className="flex items-center">
+                            <input type="checkbox" id="archived" className="mr-2" />
+                            <label htmlFor="archived">Archived</label>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <DrawerFooter>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        className="flex-1"
+                        onClick={() => setFilterDrawerOpen(false)}
+                      >
+                        Reset
+                      </Button>
+                      <Button className="flex-1" onClick={() => setFilterDrawerOpen(false)}>
+                        Apply Filters
+                      </Button>
+                    </div>
+                  </DrawerFooter>
+                </DrawerContent>
+              </Drawer>
+
+              <Drawer open={createDrawerOpen} onOpenChange={setCreateDrawerOpen}>
+                <DrawerTrigger asChild>
+                  <button className="p-2 bg-black rounded-lg text-white">
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </DrawerTrigger>
+                <DrawerContent>
+                  <DrawerHeader>
+                    <DrawerTitle>Create</DrawerTitle>
+                  </DrawerHeader>
+                  <div className="px-4 pb-4">
+                    <div className="space-y-3">
+                      <FilePickerWrapper onUploadComplete={handleFileUploadComplete}>
+                        <button className="w-full py-3 px-4 bg-gray-50 rounded-lg flex items-center justify-between group hover:bg-gray-100">
+                          <div className="flex items-center">
+                            <div className="bg-blue-100 p-2 rounded-lg mr-3">
+                              <Upload className="w-5 h-5 text-blue-600" />
+                            </div>
+                            <div className="text-left">
+                              <p className="font-medium">Upload File</p>
+                              <p className="text-sm text-gray-500">Upload from your device</p>
+                            </div>
+                          </div>
+                        </button>
+                      </FilePickerWrapper>
+
+                      <button
+                        className="w-full py-3 px-4 bg-gray-50 rounded-lg flex items-center justify-between group hover:bg-gray-100"
+                        onClick={() => {
+                          router.push('/file/new');
+                          setCreateDrawerOpen(false);
+                        }}
+                      >
+                        <div className="flex items-center">
+                          <div className="bg-green-100 p-2 rounded-lg mr-3">
+                            <FilePlus className="w-5 h-5 text-green-600" />
+                          </div>
+                          <div className="text-left">
+                            <p className="font-medium">New File</p>
+                            <p className="text-sm text-gray-500">Create a new file</p>
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </DrawerContent>
+              </Drawer>
             </div>
 
             {/* Desktop Search + Tabs (combined into one row) */}
@@ -636,8 +622,8 @@ const HomeTemplate: React.FC = () => {
               </Tabs>
             </div>
 
-            {/* Action dropdown button */}
-            <div className="flex w-full sm:w-auto items-center justify-between sm:justify-start sm:space-x-3">
+            {/* Action dropdown button (Desktop only) */}
+            <div className="hidden sm:flex w-auto items-center justify-start space-x-3">
               <Select>
                 <SelectTrigger className="w-[140px] h-10 bg-primary !text-white">
                   <Plus className="h-4 w-4 mr-2" />

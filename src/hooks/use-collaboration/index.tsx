@@ -32,11 +32,23 @@ export const useCollaboration = (projectId: string) => {
 
   // Initialize the collaboration state without connecting
   useEffect(() => {
+    // Create an empty awareness object that will be properly initialized when connecting
+    const dummyProvider = {
+      awareness: {
+        getStates: () => new Map(),
+        setLocalState: () => {},
+        on: () => {},
+        off: () => {},
+        clientID: 0,
+      },
+    };
+
     setCollaborationState({
       users: new Map(),
       doc: ydoc,
       provider: null,
-      awareness: null,
+      // Initialize with a dummy awareness object that has the necessary methods
+      awareness: dummyProvider.awareness,
       connect: (sessionId, userId, userName) => {
         // Get the WebSocket URL from your environment
         const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || '';
@@ -77,6 +89,8 @@ export const useCollaboration = (projectId: string) => {
           setCollaborationState(prev => ({
             ...prev!,
             provider: null,
+            // Reset to dummy awareness to prevent null errors
+            awareness: dummyProvider.awareness,
           }));
         }
       },
