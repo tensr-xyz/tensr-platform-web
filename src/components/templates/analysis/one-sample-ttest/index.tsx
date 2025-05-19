@@ -1,5 +1,5 @@
 import { useTabs } from '@/contexts/tabs-context';
-import { ReactNode, useMemo, useRef, useState } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -7,13 +7,29 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/molecules/dialog';
-import { Alert, AlertDescription, AlertTitle } from '@/components/atoms/alert';
-import { FileText } from 'lucide-react';
-import { Line, LineChart, ReferenceLine, ResponsiveContainer, XAxis, YAxis } from 'recharts';
-import { useProject } from '@/contexts/project-context';
+import { Button } from '@/components/atoms/button';
+import { Label } from '@/components/atoms/label';
+import { Input } from '@/components/atoms/input';
+import { Alert, AlertDescription } from '@/components/atoms/alert';
+import { LuLoader } from 'react-icons/lu';
+import useAuth from '@/hooks/api/use-auth';
 
-interface TTestProps {
+// API base URL
+const API_BASE_URL = 'http://localhost:8080';
+
+interface OneSampleTTestProps {
   children: ReactNode;
+}
+
+interface Variable {
+  name: string;
+  type: string;
+}
+
+interface OneSampleTTestRequest {
+  sample: number[];
+  hypothesized_mean: number;
+  confidence_level: number;
 }
 
 interface TTestResult {
@@ -23,319 +39,280 @@ interface TTestResult {
   mean_difference: number;
   sample_mean: number;
   sample_size: number;
-  confidence_interval: [number, number] | null;
+  confidence_interval?: [number, number];
 }
 
-interface ReportMetadata {
-  analysis_type: string;
-  timestamp: string;
-  output_path: string;
-}
-
-export const OneSampleTTest = ({ children }: TTestProps) => {
+export const OneSampleTTest = ({ children }: OneSampleTTestProps) => {
   const { state } = useTabs();
-  const { state: projectState } = useProject();
-  const [selectedVariable, setSelectedVariable] = useState<string>('');
-  const [hypothesizedMean, setHypothesizedMean] = useState<string>('');
+  const [selectedVariable, setSelectedVariable] = useState<string | null>(null);
+  const [hypothesizedMean, setHypothesizedMean] = useState<string>('0');
   const [confidenceLevel, setConfidenceLevel] = useState<string>('0.95');
   const [results, setResults] = useState<TTestResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [reportMetadata, setReportMetadata] = useState<ReportMetadata | null>(null);
-  const chartRef = useRef<HTMLDivElement>(null);
+  const { tokens } = useAuth();
+
+  const token = tokens?.accessToken;
 
   const activeTab = useMemo(
     () => state.tabs.find(tab => tab.id === state.activeTabId),
     [state.tabs, state.activeTabId]
   );
 
-  const variables = useMemo(() => {
-    if (!activeTab?.data?.initialData?.[0]) return [];
+  // Extract variables from the columns
+  const variables = useMemo((): Variable[] => {
+    if (!activeTab?.data?.initialColumns) return [];
+    return activeTab.data.initialColumns.map((column: { header: any; type: any }) => ({
+      name: column.header,
+      type: column.type || 'string',
+    }));
+  }, [activeTab?.data?.initialColumns]);
 
-    const columnNames = Object.keys(activeTab.data.initialData[0]).filter(key => key !== 'id');
-
-    return columnNames.map(colName => {
-      const sampleValues = activeTab.data.initialData
-        .slice(0, 5)
-        .map((row: { [x: string]: any }) => row[colName])
-        .filter((val: string | null) => val != null && val !== '');
-
-      const numericValues = sampleValues.map((val: { toString: () => string }) =>
-        parseFloat(val.toString())
-      );
-      const isNumeric = numericValues.every((val: number) => !isNaN(val));
-
-      return {
-        name: colName,
-        type: isNumeric ? 'number' : 'string',
-      };
-    });
-  }, [activeTab?.data?.initialData]);
-
-  const numericVariables = useMemo(() => {
-    return variables.filter(v => v.type === 'number');
-  }, [variables]);
-
-  const prepareData = () => {
+  // Extract data for the selected variable
+  const sampleData = useMemo(() => {
     if (!activeTab?.data?.initialData || !selectedVariable) return [];
 
     return activeTab.data.initialData
-      .map((row: any) => {
-        const value =
-          typeof row[selectedVariable] === 'number'
-            ? row[selectedVariable]
-            : parseFloat(row[selectedVariable]);
-        return !isNaN(value) ? value : null;
+      .map((row: { [x: string]: any }) => {
+        const val = row[selectedVariable];
+        return typeof val === 'number' ? val : parseFloat(val);
       })
-      .filter((value: number | null): value is number => value !== null);
+      .filter((val: number) => !isNaN(val));
+  }, [activeTab?.data?.initialData, selectedVariable]);
+
+  const handleVariableSelect = (variable: string) => {
+    setSelectedVariable(prevSelected => (prevSelected === variable ? null : variable));
+    // Reset results when changing variable
+    setResults(null);
   };
 
-  const generateHistogramData = (data: number[]) => {
-    // Create histogram data for visualization
-    const bins = 20;
-    const min = Math.min(...data);
-    const max = Math.max(...data);
-    const binWidth = (max - min) / bins;
+  const validateInput = () => {
+    if (!selectedVariable) return 'Please select a variable';
+    if (sampleData.length < 2)
+      return 'The selected variable must have at least 2 valid numeric values';
 
-    const histogram = Array(bins).fill(0);
-    data.forEach(value => {
-      const binIndex = Math.min(Math.floor((value - min) / binWidth), bins - 1);
-      histogram[binIndex]++;
-    });
+    const parsedMean = parseFloat(hypothesizedMean);
+    if (isNaN(parsedMean)) return 'Hypothesized mean must be a valid number';
 
-    return histogram.map((count, i) => ({
-      value: min + (i + 0.5) * binWidth,
-      frequency: count,
-    }));
+    const parsedConfidence = parseFloat(confidenceLevel);
+    if (isNaN(parsedConfidence) || parsedConfidence <= 0 || parsedConfidence >= 1)
+      return 'Confidence level must be between 0 and 1 (e.g., 0.95 for 95%)';
+
+    return null;
   };
 
-  const calculateTTest = async () => {
+  const runTTest = async () => {
+    const validationError = validateInput();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
     try {
-      const sample = prepareData();
-      if (sample.length < 2) {
-        throw new Error('Sample size must be at least 2');
-      }
+      setIsLoading(true);
+      setError(null);
 
-      // Check if all values are the same
-      const allSame = sample.every((val: any) => val === sample[0]);
-      if (allSame) {
-        throw new Error('Cannot perform t-test: All values are identical');
-      }
-
-      // Step 1: Calculate t-test
-      // Replace empty object with properly structured mock data
-      const response: TTestResult = {
-        t_statistic: 1.234,
-        p_value: 0.056,
-        degrees_of_freedom: sample.length - 1,
-        mean_difference: 0.5,
-        sample_mean: sample.reduce((sum: any, val: any) => sum + val, 0) / sample.length,
-        sample_size: sample.length,
-        confidence_interval: [0.1, 0.9],
+      const request: OneSampleTTestRequest = {
+        sample: sampleData,
+        hypothesized_mean: parseFloat(hypothesizedMean),
+        confidence_level: parseFloat(confidenceLevel),
       };
 
-      // Original API call (commented out)
-      // const response = await invoke<TTestResult>('calculate_one_sample_ttest', {
-      //   sample,
-      //   hypothesizedMean: parseFloat(hypothesizedMean),
-      //   confidenceLevel: parseFloat(confidenceLevel),
-      // });
+      const response = await fetch(`${API_BASE_URL}/api/statistics/calculate-one-sample-ttest`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(request),
+      });
 
-      if (!response) {
-        throw new Error('Failed to calculate t-test: No response received');
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to calculate t-test');
       }
 
-      setResults(response);
-
-      // Step 2: Wait for state update and chart render
-      await new Promise(resolve => setTimeout(resolve, 250));
-
-      // Step 3: Capture chart SVG
-      const chartSvg = captureChartSvg();
-      if (!chartSvg) {
-        throw new Error('Failed to capture chart visualization');
-      }
-
-      // Step 4: Generate report
-      // Mock the invoke function with a properly structured response
-      // const metadata = await invoke<ReportMetadata>('generate_ttest_report', {...});
-
-      // Replace with mock data
-      const metadata: ReportMetadata = {
-        analysis_type: 'One-Sample T-Test',
-        timestamp: new Date().toISOString(),
-        output_path: `/reports/${selectedVariable}_ttest_report.md`,
-      };
-
-      setReportMetadata(metadata);
+      const result: TTestResult = await response.json();
+      setResults(result);
     } catch (error) {
-      // Add an error state to show to the user
-      setError(error instanceof Error ? error.message : 'An unknown error occurred');
+      console.error('Failed to calculate t-test:', error);
+      setError(error instanceof Error ? error.message : 'Failed to calculate t-test');
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Updated captureChartSvg function
-  const captureChartSvg = (): string => {
-    if (!chartRef.current) return '';
-    const svg = chartRef.current.querySelector('svg');
-    if (!svg) return '';
+  const numericVariables = variables.filter(
+    v =>
+      v.type === 'number' ||
+      (activeTab?.data?.initialData?.[0]?.[v.name] !== undefined &&
+        !isNaN(parseFloat(activeTab.data.initialData[0][v.name])))
+  );
 
-    // Clone the SVG to avoid modifying the original
-    const clonedSvg = svg.cloneNode(true) as SVGElement;
+  const significanceLevel = results
+    ? results.p_value < 0.001
+      ? '< 0.001'
+      : results.p_value.toFixed(3)
+    : '';
 
-    // Add any needed SVG attributes
-    clonedSvg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  const isSignificant = results ? results.p_value < 0.05 : false;
 
-    // Get computed styles and apply them inline for better rendering
-    const styles = window.getComputedStyle(svg);
-    clonedSvg.style.backgroundColor = styles.backgroundColor;
-
-    return clonedSvg.outerHTML;
-  };
+  const conclusionText = results
+    ? isSignificant
+      ? `The sample mean (${results.sample_mean.toFixed(2)}) is significantly different from the hypothesized mean (${hypothesizedMean})`
+      : `The sample mean (${results.sample_mean.toFixed(2)}) is not significantly different from the hypothesized mean (${hypothesizedMean})`
+    : '';
 
   return (
     <Dialog>
       {children}
-      <DialogContent className="max-w-4xl max-h-96 overflow-y-auto">
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>One-Sample T-Test Analysis</DialogTitle>
+          <DialogTitle>One-Sample T-Test</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="border rounded-lg p-4">
-            <h3 className="font-medium mb-2">Test Variable</h3>
-            <div className="max-h-60 overflow-y-auto">
-              {numericVariables.map(variable => (
-                <div
-                  key={variable.name}
-                  onClick={() => setSelectedVariable(variable.name)}
-                  className={`p-2 cursor-pointer rounded ${
-                    selectedVariable === variable.name
-                      ? 'bg-blue-100 dark:bg-blue-900'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  {variable.name}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="border rounded-lg p-4">
+              <h3 className="font-medium mb-2">Numeric Variables</h3>
+              <div className="max-h-60 overflow-y-auto">
+                {numericVariables.length === 0 ? (
+                  <p className="text-sm text-gray-500 italic">No numeric variables found</p>
+                ) : (
+                  numericVariables.map(variable => (
+                    <div
+                      key={variable.name}
+                      onClick={() => handleVariableSelect(variable.name)}
+                      className={`p-2 cursor-pointer rounded ${
+                        selectedVariable === variable.name
+                          ? 'bg-blue-100 dark:bg-blue-900'
+                          : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                      }`}
+                    >
+                      {variable.name}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="border rounded-lg p-4 space-y-4">
+              <div>
+                <Label htmlFor="mean">Hypothesized Mean</Label>
+                <Input
+                  id="mean"
+                  type="number"
+                  step="any"
+                  value={hypothesizedMean}
+                  onChange={e => setHypothesizedMean(e.target.value)}
+                  placeholder="Enter hypothesized mean"
+                  className="mt-1"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="confidence">Confidence Level</Label>
+                <Input
+                  id="confidence"
+                  type="number"
+                  min="0.01"
+                  max="0.99"
+                  step="0.01"
+                  value={confidenceLevel}
+                  onChange={e => setConfidenceLevel(e.target.value)}
+                  placeholder="0.95 (for 95% confidence)"
+                  className="mt-1"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Enter a value between 0 and 1 (e.g., 0.95 for 95% confidence)
+                </p>
+              </div>
+
+              {selectedVariable && sampleData.length > 0 && (
+                <div>
+                  <p className="text-sm">
+                    <strong>Selected variable:</strong> {selectedVariable}
+                  </p>
+                  <p className="text-sm">
+                    <strong>Sample size:</strong> {sampleData.length} valid values
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-2">Hypothesized Mean</h3>
-              <input
-                type="number"
-                value={hypothesizedMean}
-                onChange={e => setHypothesizedMean(e.target.value)}
-                className="w-full p-2 border rounded-sm"
-                placeholder="Enter value..."
-              />
-            </div>
-
-            <div className="border rounded-lg p-4">
-              <h3 className="font-medium mb-2">Confidence Level</h3>
-              <select
-                value={confidenceLevel}
-                onChange={e => setConfidenceLevel(e.target.value)}
-                className="w-full p-2 border rounded-sm"
-              >
-                <option value="0.90">90%</option>
-                <option value="0.95">95%</option>
-                <option value="0.99">99%</option>
-              </select>
-            </div>
-          </div>
-
-          {results && (
-            <div className="mt-4 space-y-4">
-              <div ref={chartRef} className="w-full h-64 border rounded-lg p-4">
-                <ResponsiveContainer>
-                  <LineChart data={generateHistogramData(prepareData())}>
-                    <XAxis dataKey="value" />
-                    <YAxis />
-                    <Line type="monotone" dataKey="frequency" stroke="#8884d8" />
-                    <ReferenceLine
-                      x={parseFloat(hypothesizedMean)}
-                      stroke="red"
-                      label="Hypothesized Mean"
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-
-              <div className="border rounded-lg p-4">
-                <h3 className="font-medium mb-2">T-Test Results</h3>
-                <table className="w-full">
-                  <tbody>
-                    <tr>
-                      <td className="p-2 font-medium">t-statistic</td>
-                      <td className="p-2">{results.t_statistic.toFixed(4)}</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2 font-medium">p-value</td>
-                      <td className="p-2">
-                        {results.p_value < 0.001 ? 'p < .001' : `p = ${results.p_value.toFixed(3)}`}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="p-2 font-medium">Degrees of Freedom</td>
-                      <td className="p-2">{results.degrees_of_freedom}</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2 font-medium">Sample Mean</td>
-                      <td className="p-2">{results.sample_mean.toFixed(4)}</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2 font-medium">Mean Difference</td>
-                      <td className="p-2">{results.mean_difference.toFixed(4)}</td>
-                    </tr>
-                    <tr>
-                      <td className="p-2 font-medium">Sample Size</td>
-                      <td className="p-2">{results.sample_size}</td>
-                    </tr>
-                    {results.confidence_interval && (
-                      <tr>
-                        <td className="p-2 font-medium">Confidence Interval</td>
-                        <td className="p-2">
-                          ({results.confidence_interval[0].toFixed(4)},{' '}
-                          {results.confidence_interval[1].toFixed(4)})
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
 
           {error && (
             <Alert variant="destructive">
-              <AlertTitle>Error</AlertTitle>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
 
-          {reportMetadata && (
-            <Alert>
-              <FileText className="h-4 w-4" />
-              <AlertTitle>Analysis Report Generated</AlertTitle>
-              <AlertDescription>Report saved to: {reportMetadata.output_path}</AlertDescription>
-            </Alert>
+          {results && (
+            <div className="mt-4 border rounded-lg p-4">
+              <h3 className="font-medium mb-2">T-Test Results</h3>
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                    <p className="text-sm font-medium">T-Statistic</p>
+                    <p className="text-lg">{results.t_statistic.toFixed(3)}</p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                    <p className="text-sm font-medium">P-Value</p>
+                    <p
+                      className={`text-lg ${isSignificant ? 'text-green-600 dark:text-green-400' : ''}`}
+                    >
+                      {significanceLevel}
+                    </p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                    <p className="text-sm font-medium">Sample Mean</p>
+                    <p className="text-lg">{results.sample_mean.toFixed(3)}</p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                    <p className="text-sm font-medium">Mean Difference</p>
+                    <p className="text-lg">{results.mean_difference.toFixed(3)}</p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                    <p className="text-sm font-medium">Degrees of Freedom</p>
+                    <p className="text-lg">{results.degrees_of_freedom}</p>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                    <p className="text-sm font-medium">Sample Size</p>
+                    <p className="text-lg">{results.sample_size}</p>
+                  </div>
+                </div>
+
+                {results.confidence_interval && (
+                  <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                    <p className="text-sm font-medium">
+                      {(parseFloat(confidenceLevel) * 100).toFixed(0)}% Confidence Interval
+                    </p>
+                    <p className="text-lg">
+                      {results.confidence_interval[0].toFixed(3)} to{' '}
+                      {results.confidence_interval[1].toFixed(3)}
+                    </p>
+                  </div>
+                )}
+
+                <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-md mt-3">
+                  <p className="font-medium">Conclusion:</p>
+                  <p>{conclusionText}</p>
+                </div>
+              </div>
+            </div>
           )}
         </div>
 
         <DialogFooter>
-          <button
-            onClick={calculateTTest}
-            disabled={!selectedVariable || !hypothesizedMean}
-            className="px-4 py-2 text-sm bg-blue-500 text-white rounded-sm hover:bg-blue-600 disabled:opacity-50"
+          <Button
+            onClick={runTTest}
+            disabled={isLoading || !selectedVariable || sampleData.length < 2}
           >
-            Calculate T-Test
-          </button>
+            {isLoading ? <LuLoader className="h-4 w-4 animate-spin mr-2" /> : null}
+            Run T-Test
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
 };
-
-export default OneSampleTTest;

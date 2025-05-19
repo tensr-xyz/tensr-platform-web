@@ -1,7 +1,18 @@
 'use client';
 
 import React, { useState } from 'react';
-import { User, Building, Briefcase, X, Menu } from 'lucide-react';
+import {
+  User,
+  Building,
+  Briefcase,
+  X,
+  Menu,
+  Check,
+  Plus,
+  Settings,
+  Users,
+  LogOut,
+} from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/atoms/button';
 import { ChevronsUpDown } from 'lucide-react';
@@ -19,6 +30,18 @@ import Image from 'next/image';
 import { Avatar, AvatarFallback } from '@/components/atoms/avatar';
 import { useIsMobile } from '@/hooks/ui/use-mobile';
 import { User as UserType } from '@/types/user';
+import { useRouter } from 'next/navigation';
+import { Organization, useOrganization } from '@/hooks/api/use-organisation';
+import { toast } from '@/hooks/ui/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/molecules/dialog';
+import { Input } from '@/components/atoms/input';
+import { Label } from '@/components/atoms/label';
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -107,92 +130,200 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
   );
 };
 
-export function AccountSwitcher({
-  teams,
-  user,
-  onLogout,
-}: {
-  teams: {
-    name: string;
-    logo: React.ElementType;
-    plan: string;
-  }[];
-  user: any;
-  onLogout?: () => void;
-}) {
-  const [activeTeam, setActiveTeam] = React.useState(teams[0]);
+export function AccountSwitcher({ user, onLogout }: { user: any; onLogout?: () => void }) {
+  const router = useRouter();
+  const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [newOrgName, setNewOrgName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
-  if (!activeTeam || !user) {
+  const {
+    organizations,
+    activeOrganization,
+    setActiveOrganization,
+    createOrganization,
+    isLoading,
+  } = useOrganization();
+
+  const handleCreateOrganization = async () => {
+    if (!newOrgName.trim()) return;
+
+    setIsCreating(true);
+    try {
+      const newOrg = await createOrganization({ name: newOrgName });
+      toast({
+        title: 'Organization created',
+        description: `${newOrgName} has been created successfully.`,
+      });
+      setShowCreateDialog(false);
+      setNewOrgName('');
+
+      // Navigate to the new organization's settings page
+      router.push('/settings/organisation');
+    } catch (err: any) {
+      toast({
+        title: 'Failed to create organization',
+        description: err.message || 'An error occurred while creating the organization',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleSwitchOrganization = (org: Organization) => {
+    setActiveOrganization(org);
+    // Optional: refresh relevant data or navigate to a specific page
+    router.push('/dashboard');
+  };
+
+  const handleOrganizationSettings = () => {
+    router.push('/settings/organisation');
+  };
+
+  const handleTeamMembers = () => {
+    router.push('/settings/members');
+  };
+
+  if (!user) {
     return null;
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="flex items-center gap-2 px-2 py-1.5 h-auto">
-          <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
-            {user.email.charAt(0).toUpperCase()}
-          </div>
-          <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-semibold">{activeTeam.name}</span>
-            <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-          </div>
-          <ChevronsUpDown className="ml-auto h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg border-border"
-        align="end"
-        sideOffset={4}
-      >
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.name || user.email}</p>
-            <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <Link href="/settings/account">
-          <DropdownMenuItem>
-            Settings
-            <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="flex items-center gap-2 px-2 py-1.5 h-auto">
+            {activeOrganization ? (
+              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
+                {activeOrganization.name.charAt(0).toUpperCase()}
+              </div>
+            ) : (
+              <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-medium">
+                {user.email.charAt(0).toUpperCase()}
+              </div>
+            )}
+
+            <div className="grid flex-1 text-left text-sm leading-tight">
+              <span className="truncate font-semibold">
+                {activeOrganization ? activeOrganization.name : user.name || user.email}
+              </span>
+              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+            </div>
+            <ChevronsUpDown className="ml-auto h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg border-border"
+          align="end"
+          sideOffset={4}
+        >
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium leading-none">{user.name || user.email}</p>
+              <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+
+          <Link href="/settings/account">
+            <DropdownMenuItem>
+              Settings
+              <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </Link>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuLabel className="text-xs text-muted-foreground">
+            Organizations
+          </DropdownMenuLabel>
+          {organizations.map(org => (
+            <DropdownMenuItem
+              key={org.id}
+              onClick={() => handleSwitchOrganization(org)}
+              className="gap-2 p-2"
+            >
+              <div className="flex size-6 items-center justify-center rounded-sm border border-blue-200 bg-blue-50">
+                {org.name.charAt(0).toUpperCase()}
+              </div>
+              {org.name}
+              {activeOrganization?.id === org.id && (
+                <DropdownMenuShortcut>
+                  <Check className="h-4 w-4" />
+                </DropdownMenuShortcut>
+              )}
+            </DropdownMenuItem>
+          ))}
+
+          <DropdownMenuItem className="gap-2 p-2" onClick={() => setShowCreateDialog(true)}>
+            <div className="flex size-6 items-center justify-center rounded-md border bg-background">
+              <Plus className="size-4" />
+            </div>
+            <div className="font-medium text-muted-foreground">Create organization</div>
           </DropdownMenuItem>
-        </Link>
 
-        {/*<DropdownMenuSeparator />*/}
+          {activeOrganization && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Organization Settings
+              </DropdownMenuLabel>
 
-        {/*<DropdownMenuLabel className="text-xs text-muted-foreground">Teams</DropdownMenuLabel>*/}
-        {/*{teams.map((team, index) => (*/}
-        {/*  <DropdownMenuItem*/}
-        {/*    key={team.name}*/}
-        {/*    onClick={() => setActiveTeam(team)}*/}
-        {/*    className="gap-2 p-2"*/}
-        {/*  >*/}
-        {/*    <div className="flex size-6 items-center justify-center rounded-sm border">*/}
-        {/*      {team.logo && <team.logo className="size-4 shrink-0" />}*/}
-        {/*    </div>*/}
-        {/*    {team.name}*/}
-        {/*    {activeTeam.name === team.name && (*/}
-        {/*      <DropdownMenuShortcut>*/}
-        {/*        <Check className="h-4 w-4" />*/}
-        {/*      </DropdownMenuShortcut>*/}
-        {/*    )}*/}
-        {/*  </DropdownMenuItem>*/}
-        {/*))}*/}
-        {/*<DropdownMenuItem className="gap-2 p-2">*/}
-        {/*  <div className="flex size-6 items-center justify-center rounded-md border bg-background">*/}
-        {/*    <Plus className="size-4" />*/}
-        {/*  </div>*/}
-        {/*  <div className="font-medium text-muted-foreground">Add team</div>*/}
-        {/*</DropdownMenuItem>*/}
+              <DropdownMenuItem onClick={handleOrganizationSettings}>
+                <Settings className="mr-2 h-4 w-4" />
+                Organization Settings
+              </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onLogout} className="text-red-600">
-          Log out
-          <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+              <DropdownMenuItem onClick={handleTeamMembers}>
+                <Users className="mr-2 h-4 w-4" />
+                Team Members
+              </DropdownMenuItem>
+            </>
+          )}
+
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onLogout} className="text-red-600">
+            <LogOut className="mr-2 h-4 w-4" />
+            Log out
+            <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Create Organization Dialog */}
+      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Organization</DialogTitle>
+          </DialogHeader>
+
+          <div className="py-4">
+            <Label htmlFor="orgName">Organization Name</Label>
+            <Input
+              id="orgName"
+              value={newOrgName}
+              onChange={e => setNewOrgName(e.target.value)}
+              placeholder="Enter organization name"
+              className="mt-1"
+              autoFocus
+            />
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCreateDialog(false)}
+              disabled={isCreating}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleCreateOrganization} disabled={!newOrgName.trim() || isCreating}>
+              {isCreating ? 'Creating...' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -287,9 +418,7 @@ export default function Header() {
           {/*</NavigationMenu>*/}
         </div>
         <div className="flex items-center space-x-4">
-          {isAuthenticated && user && (
-            <AccountSwitcher teams={teams} user={user} onLogout={handleLogout} />
-          )}
+          {isAuthenticated && user && <AccountSwitcher user={user} onLogout={handleLogout} />}
         </div>
       </div>
     </header>

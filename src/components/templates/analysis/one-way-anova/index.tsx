@@ -7,9 +7,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/molecules/dialog';
+import { Button } from '@/components/atoms/button';
+import { LuLoader } from 'react-icons/lu';
+import { Alert, AlertDescription } from '@/components/atoms/alert';
+import useAuth from '@/hooks/api/use-auth';
+
+const API_BASE_URL = 'http://localhost:8080';
 
 interface AnovaProps {
   children: ReactNode;
+}
+
+interface Variable {
+  name: string;
+  type: string;
+}
+
+interface AnovaRequest {
+  groups: Record<string, number[]>;
 }
 
 interface AnovaResult {
@@ -28,6 +43,11 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
   const [groupingVariable, setGroupingVariable] = useState<string>('');
   const [dependentVariable, setDependentVariable] = useState<string>('');
   const [results, setResults] = useState<AnovaResult | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const { tokens } = useAuth();
+
+  const token = tokens?.accessToken;
 
   const activeTab = useMemo(
     () => state.tabs.find(tab => tab.id === state.activeTabId),
@@ -71,7 +91,7 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
   const prepareData = () => {
     if (!activeTab?.data?.initialData || !groupingVariable || !dependentVariable) return {};
 
-    const groupedData: { [key: string]: number[] } = {};
+    const groupedData: Record<string, number[]> = {};
 
     activeTab.data.initialData.forEach((row: any) => {
       const group = row[groupingVariable]?.toString();
@@ -91,36 +111,66 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
     return groupedData;
   };
 
+  const validateData = (groupedData: Record<string, number[]>) => {
+    // Check if we have at least 2 groups
+    if (Object.keys(groupedData).length < 2) {
+      return 'ANOVA requires at least two groups.';
+    }
+
+    // Check if each group has at least 2 observations
+    for (const [group, values] of Object.entries(groupedData)) {
+      if (values.length < 2) {
+        return `Group '${group}' has less than 2 valid observations, which is insufficient for ANOVA.`;
+      }
+    }
+
+    return null;
+  };
+
   const calculateAnova = async () => {
     try {
+      setError(null);
+      setIsLoading(true);
+
       const groupedData = prepareData();
 
-      // Mock the invoke function with a properly structured response
-      // Original code:
-      // const response = await invoke<AnovaResult>('calculate_anova', {
-      //   groups: groupedData,
-      // });
+      // Validate data
+      const validationError = validateData(groupedData);
+      if (validationError) {
+        setError(validationError);
+        setIsLoading(false);
+        return;
+      }
 
-      // Mock response with appropriate typing
-      const response: AnovaResult = {
-        f_statistic: 3.456,
-        p_value: 0.032,
-        df_between: Object.keys(groupedData).length - 1,
-        df_within:
-          Object.values(groupedData).reduce((sum, group) => sum + group.length, 0) -
-          Object.keys(groupedData).length,
-        sum_squares_between: 42.5,
-        sum_squares_within: 126.8,
-        mean_square_between: 21.25,
-        mean_square_within: 6.15,
+      const request: AnovaRequest = {
+        groups: groupedData,
       };
 
-      setResults(response);
+      const response = await fetch(`${API_BASE_URL}/api/statistics/calculate-anova`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(request),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(errorText || 'Failed to calculate ANOVA');
+      }
+
+      const result: AnovaResult = await response.json();
+      setResults(result);
     } catch (error) {
-      // You might want to handle errors here
       console.error('Error calculating ANOVA:', error);
+      setError(error instanceof Error ? error.message : 'Failed to calculate ANOVA');
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  const isSignificant = results && results.p_value < 0.05;
 
   return (
     <Dialog>
@@ -134,92 +184,136 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
           <div className="border rounded-lg p-4">
             <h3 className="font-medium mb-2">Grouping Variable</h3>
             <div className="max-h-60 overflow-y-auto">
-              {categoricalVariables.map(variable => (
-                <div
-                  key={variable.name}
-                  onClick={() => setGroupingVariable(variable.name)}
-                  className={`p-2 cursor-pointer rounded ${
-                    groupingVariable === variable.name
-                      ? 'bg-blue-100 dark:bg-blue-900'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  {variable.name}
-                </div>
-              ))}
+              {categoricalVariables.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">No categorical variables found</p>
+              ) : (
+                categoricalVariables.map(variable => (
+                  <div
+                    key={variable.name}
+                    onClick={() => setGroupingVariable(variable.name)}
+                    className={`p-2 cursor-pointer rounded ${
+                      groupingVariable === variable.name
+                        ? 'bg-blue-100 dark:bg-blue-900'
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    {variable.name}
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
           <div className="border rounded-lg p-4">
             <h3 className="font-medium mb-2">Dependent Variable</h3>
             <div className="max-h-60 overflow-y-auto">
-              {numericVariables.map(variable => (
-                <div
-                  key={variable.name}
-                  onClick={() => setDependentVariable(variable.name)}
-                  className={`p-2 cursor-pointer rounded ${
-                    dependentVariable === variable.name
-                      ? 'bg-blue-100 dark:bg-blue-900'
-                      : 'hover:bg-gray-100 dark:hover:bg-gray-800'
-                  }`}
-                >
-                  {variable.name}
-                </div>
-              ))}
+              {numericVariables.length === 0 ? (
+                <p className="text-sm text-gray-500 italic">No numeric variables found</p>
+              ) : (
+                numericVariables.map(variable => (
+                  <div
+                    key={variable.name}
+                    onClick={() => setDependentVariable(variable.name)}
+                    className={`p-2 cursor-pointer rounded ${
+                      dependentVariable === variable.name
+                        ? 'bg-blue-100 dark:bg-blue-900'
+                        : 'hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    {variable.name}
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
 
+        {error && (
+          <Alert variant="destructive" className="mt-4">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
         {results && (
           <div className="mt-4 border rounded-lg p-4">
             <h3 className="font-medium mb-2">ANOVA Results</h3>
-            <table className="w-full">
-              <tbody>
-                <tr>
-                  <td className="p-2 font-medium">F-statistic</td>
-                  <td className="p-2">{results.f_statistic.toFixed(4)}</td>
-                </tr>
-                <tr>
-                  <td className="p-2 font-medium">p-value</td>
-                  <td className="p-2">{results.p_value.toFixed(4)}</td>
-                </tr>
-                <tr>
-                  <td className="p-2 font-medium">Degrees of Freedom (Between)</td>
-                  <td className="p-2">{results.df_between}</td>
-                </tr>
-                <tr>
-                  <td className="p-2 font-medium">Degrees of Freedom (Within)</td>
-                  <td className="p-2">{results.df_within}</td>
-                </tr>
-                <tr>
-                  <td className="p-2 font-medium">Sum of Squares (Between)</td>
-                  <td className="p-2">{results.sum_squares_between.toFixed(4)}</td>
-                </tr>
-                <tr>
-                  <td className="p-2 font-medium">Sum of Squares (Within)</td>
-                  <td className="p-2">{results.sum_squares_within.toFixed(4)}</td>
-                </tr>
-                <tr>
-                  <td className="p-2 font-medium">Mean Square (Between)</td>
-                  <td className="p-2">{results.mean_square_between.toFixed(4)}</td>
-                </tr>
-                <tr>
-                  <td className="p-2 font-medium">Mean Square (Within)</td>
-                  <td className="p-2">{results.mean_square_within.toFixed(4)}</td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                  <p className="text-sm font-medium">F-statistic</p>
+                  <p className="text-lg">{results.f_statistic.toFixed(3)}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                  <p className="text-sm font-medium">p-value</p>
+                  <p
+                    className={`text-lg ${isSignificant ? 'text-green-600 dark:text-green-400' : ''}`}
+                  >
+                    {results.p_value < 0.001 ? '< 0.001' : results.p_value.toFixed(3)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                  <p className="text-sm font-medium">Between-group df</p>
+                  <p className="text-lg">{results.df_between}</p>
+                </div>
+                <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                  <p className="text-sm font-medium">Within-group df</p>
+                  <p className="text-lg">{results.df_within}</p>
+                </div>
+              </div>
+
+              <details className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                <summary className="font-medium cursor-pointer">Additional Statistics</summary>
+                <div className="mt-2 space-y-2 text-sm">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="font-medium">Sum of Squares (Between)</p>
+                      <p>{results.sum_squares_between.toFixed(3)}</p>
+                    </div>
+                    <div>
+                      <p className="font-medium">Sum of Squares (Within)</p>
+                      <p>{results.sum_squares_within.toFixed(3)}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <p className="font-medium">Mean Square (Between)</p>
+                      <p>{results.mean_square_between.toFixed(3)}</p>
+                    </div>
+                    <div>
+                      <p className="font-medium">Mean Square (Within)</p>
+                      <p>{results.mean_square_within.toFixed(3)}</p>
+                    </div>
+                  </div>
+                </div>
+              </details>
+
+              <div className="bg-blue-50 dark:bg-blue-900/30 p-3 rounded-md">
+                <p className="font-medium">Conclusion:</p>
+                <p>
+                  {isSignificant
+                    ? `There is a statistically significant difference between groups (F = ${results.f_statistic.toFixed(
+                        2
+                      )}, p ${results.p_value < 0.001 ? '< 0.001' : '= ' + results.p_value.toFixed(3)}).`
+                    : `There is no statistically significant difference between groups (F = ${results.f_statistic.toFixed(
+                        2
+                      )}, p = ${results.p_value.toFixed(3)}).`}
+                </p>
+              </div>
+            </div>
           </div>
         )}
 
         <DialogFooter>
-          <button
+          <Button
             onClick={calculateAnova}
-            disabled={!groupingVariable || !dependentVariable}
-            className="px-4 py-2 text-sm bg-blue-500 text-white rounded-sm hover:bg-blue-600 disabled:opacity-50"
+            disabled={isLoading || !groupingVariable || !dependentVariable}
           >
+            {isLoading ? <LuLoader className="h-4 w-4 animate-spin mr-2" /> : null}
             Calculate ANOVA
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
