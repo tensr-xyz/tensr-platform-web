@@ -30,7 +30,7 @@ import Image from 'next/image';
 import { Avatar, AvatarFallback } from '@/components/atoms/avatar';
 import { useIsMobile } from '@/hooks/ui/use-mobile';
 import { User as UserType } from '@/types/user';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { Organization, useOrganization } from '@/hooks/api/use-organisation';
 import { toast } from '@/hooks/ui/use-toast';
 import {
@@ -130,6 +130,33 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
   );
 };
 
+const NavigationTabs = () => {
+  const pathname = usePathname();
+
+  // Only the Overview tab as requested
+  const tabs = [{ name: 'Overview', path: '/' }];
+
+  return (
+    <div>
+      <div className="flex h-10 items-center px-4">
+        {tabs.map(tab => (
+          <Link
+            key={tab.path}
+            href={tab.path}
+            className={`inline-flex h-10 items-center justify-center border-b-2 px-4 pt-1 text-sm font-medium transition-colors ${
+              pathname === tab.path
+                ? 'border-black text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
+            }`}
+          >
+            {tab.name}
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 export function AccountSwitcher({ user, onLogout }: { user: any; onLogout?: () => void }) {
   const router = useRouter();
   const [showCreateDialog, setShowCreateDialog] = useState(false);
@@ -173,7 +200,7 @@ export function AccountSwitcher({ user, onLogout }: { user: any; onLogout?: () =
   const handleSwitchOrganization = (org: Organization) => {
     setActiveOrganization(org);
     // Optional: refresh relevant data or navigate to a specific page
-    router.push('/dashboard');
+    router.push('/');
   };
 
   const handleOrganizationSettings = () => {
@@ -390,13 +417,16 @@ export default function Header() {
 
   return (
     <header>
-      <div className="flex items-center justify-between px-6 py-3 bg-background border-b border-border">
-        <div className="flex items-center space-x-4">
+      <div className="flex flex-col justify-between px-1 pt-2 bg-background border-b border-border">
+        <div className="flex justify-between items-center space-x-4">
           <Link href="/" className="flex">
             <Button variant="link" size="sm">
               <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={24} width={96} />
             </Button>
           </Link>
+          <div className="flex items-center space-x-4 px-4">
+            {isAuthenticated && user && <AccountSwitcher user={user} onLogout={handleLogout} />}
+          </div>
           {/*<NavigationMenu>*/}
           {/*  <NavigationMenuList>*/}
           {/*    <NavigationMenuItem>*/}
@@ -417,9 +447,7 @@ export default function Header() {
           {/*  </NavigationMenuList>*/}
           {/*</NavigationMenu>*/}
         </div>
-        <div className="flex items-center space-x-4">
-          {isAuthenticated && user && <AccountSwitcher user={user} onLogout={handleLogout} />}
-        </div>
+        <NavigationTabs />
       </div>
     </header>
   );

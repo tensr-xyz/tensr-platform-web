@@ -33,7 +33,7 @@ import { Button } from '@/components/atoms/button';
 import { Card } from '@/components/atoms/card';
 import Loading from '@/components/molecules/loading';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Mail, PhoneCall } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -169,7 +169,7 @@ const PaymentPage = () => {
   // Pricing information
   const [pricingData, setPricingData] = useState<PricingData>({
     education: { monthly: 0, annual: 0, description: 'For students and academics' },
-    pro: { monthly: 29, annual: 290, description: 'For individual professionals' },
+    pro: { monthly: 20, annual: 200, description: 'For individual professionals' },
     team: { monthly: 99, annual: 990, description: 'For teams up to 5 users' },
     enterprise: { monthly: 249, annual: 2490, description: 'For larger organizations' },
   });
@@ -219,13 +219,21 @@ const PaymentPage = () => {
   // Navigation handlers
   const handleNext = () => {
     if (validateStep(currentStep)) {
+      // Skip payment flow if enterprise is selected
+      if (formData.tier === 'enterprise') {
+        // Just redirect to the appropriate page or open contact options
+        window.location.href = 'mailto:help@tensr.xyz?subject=Enterprise Plan Inquiry';
+        return;
+      }
+
+      // Normal flow for other plans
       if (currentStep < steps.length - 2) {
         setCurrentStep(prev => prev + 1);
       } else if (currentStep === steps.length - 2) {
         handleSubmit();
       } else {
         // Handle navigation from success screen
-        router.push('/dashboard');
+        router.push('/');
       }
     }
   };
@@ -396,21 +404,21 @@ const PaymentPage = () => {
   // Render methods for each step
   const renderPlanSelection = () => (
     <div className="space-y-6">
-      <div className="text-2xl">Choose Your Plan</div>
+      <div className="text-xl md:text-2xl">Choose Your Plan</div>
 
       <div className="space-y-2 mb-6">
         <div className="text-base font-medium">Billing Cycle</div>
         <div className="grid grid-cols-2 gap-4">
           <Button
             variant={formData.billingType === 'monthly' ? 'default' : 'outline'}
-            className="h-12 justify-center"
+            className="h-10 md:h-12 justify-center"
             onClick={() => handleInputChange('billingType', 'monthly')}
           >
             Monthly
           </Button>
           <Button
             variant={formData.billingType === 'annual' ? 'default' : 'outline'}
-            className="h-12 justify-center"
+            className="h-10 md:h-12 justify-center"
             onClick={() => handleInputChange('billingType', 'annual')}
           >
             Annual {discount && <span className="ml-2 text-xs">{discount}</span>}
@@ -448,16 +456,20 @@ const PaymentPage = () => {
                 </div>
                 <div className="flex flex-col items-end">
                   <div className="text-lg font-medium">
-                    {pricingData[tier].monthly === 0
-                      ? 'Free'
-                      : `$${pricingData[tier][formData.billingType]}`}
+                    {tier === 'enterprise'
+                      ? 'Custom'
+                      : pricingData[tier].monthly === 0
+                        ? 'Free'
+                        : `$${pricingData[tier][formData.billingType]}`}
                   </div>
                   <div className="text-xs text-[rgba(29,42,41,0.65)]">
-                    {pricingData[tier].monthly > 0 && formData.billingType === 'monthly'
-                      ? 'per month'
-                      : pricingData[tier].monthly > 0
-                        ? 'per year'
-                        : ''}
+                    {tier === 'enterprise'
+                      ? 'Contact for pricing'
+                      : pricingData[tier].monthly > 0 && formData.billingType === 'monthly'
+                        ? 'per month'
+                        : pricingData[tier].monthly > 0
+                          ? 'per year'
+                          : ''}
                   </div>
                 </div>
               </div>
@@ -473,6 +485,24 @@ const PaymentPage = () => {
                     </div>
                   ))}
               </div>
+
+              {/* Add Contact Buttons for Enterprise tier */}
+              {tier === 'enterprise' && (
+                <div className="mt-4 space-y-2">
+                  <Button
+                    variant="outline"
+                    className="w-full flex items-center justify-center gap-2"
+                    onClick={e => {
+                      e.stopPropagation(); // Prevent card selection
+                      window.location.href =
+                        'mailto:help@tensr.xyz?subject=Enterprise Plan Inquiry';
+                    }}
+                  >
+                    <Mail size={16} />
+                    Contact Sales
+                  </Button>
+                </div>
+              )}
             </Card>
           ))}
         </div>
@@ -482,7 +512,7 @@ const PaymentPage = () => {
 
   const renderBillingInformation = () => (
     <div className="space-y-6">
-      <div className="text-2xl">Billing Information</div>
+      <div className="text-xl md:text-2xl">Billing Information</div>
 
       <div className="grid gap-4">
         <FloatingLabelInput
@@ -513,7 +543,7 @@ const PaymentPage = () => {
           labelClassName="text-[rgba(29,42,41,0.65)]"
         />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FloatingLabelInput
             label="City"
             value={formData.billingCity}
@@ -533,7 +563,7 @@ const PaymentPage = () => {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <FloatingLabelInput
             label="Postal Code"
             value={formData.billingZip}
@@ -599,12 +629,12 @@ const PaymentPage = () => {
 
   const renderPaymentMethod = () => (
     <div className="space-y-6">
-      <div className="text-2xl">Payment Method</div>
+      <div className="text-xl md:text-2xl">Payment Method</div>
 
       {/* Stripe Card Element */}
-      <div className="border rounded-md p-4">
+      <div className="border border-border rounded-md p-4">
         <label className="block text-sm font-medium mb-2">Card Details</label>
-        <div className="p-4 border rounded-md bg-white">
+        <div className="p-4 border border-border rounded-md bg-white">
           <CardElement
             options={{
               style: {
@@ -682,8 +712,8 @@ const PaymentPage = () => {
 
   const renderReview = () => (
     <div className="space-y-6">
-      <div className="text-2xl">Review & Confirm</div>
-      <p className="text-gray-600">
+      <div className="text-xl md:text-2xl">Review & Confirm</div>
+      <p className="text-sm md:text-base text-gray-600">
         Please review all information before confirming your subscription.
       </p>
 
@@ -714,15 +744,15 @@ const PaymentPage = () => {
           <div className="space-y-2">
             <div className="grid grid-cols-2">
               <div className="text-sm font-medium">Name:</div>
-              <div className="text-sm">{formData.name}</div>
+              <div className="text-sm break-words">{formData.name}</div>
             </div>
             <div className="grid grid-cols-2">
               <div className="text-sm font-medium">Email:</div>
-              <div className="text-sm">{formData.email}</div>
+              <div className="text-sm break-words">{formData.email}</div>
             </div>
             <div className="grid grid-cols-2">
               <div className="text-sm font-medium">Address:</div>
-              <div className="text-sm">{formData.billingAddress}</div>
+              <div className="text-sm break-words">{formData.billingAddress}</div>
             </div>
             <div className="grid grid-cols-2">
               <div className="text-sm font-medium">City:</div>
@@ -773,10 +803,10 @@ const PaymentPage = () => {
         <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
           <LuCheck className="h-6 w-6 text-green-600" />
         </div>
-        <div className="text-2xl">Payment Successful!</div>
+        <div className="text-xl md:text-2xl">Payment Successful!</div>
       </div>
 
-      <p className="text-gray-600">
+      <p className="text-sm md:text-base text-gray-600">
         Thank you for your subscription! Your account has been successfully upgraded and you now
         have access to all the features included in your plan.
       </p>
@@ -786,7 +816,9 @@ const PaymentPage = () => {
         <div className="space-y-3">
           <div className="grid grid-cols-2">
             <div className="text-sm font-medium">Plan:</div>
-            <div className="text-sm capitalize">{subscriptionDetails?.tier || formData.tier}</div>
+            <div className="text-sm capitalize break-words">
+              {subscriptionDetails?.tier || formData.tier}
+            </div>
           </div>
           <div className="grid grid-cols-2">
             <div className="text-sm font-medium">Billing Cycle:</div>
@@ -829,7 +861,7 @@ const PaymentPage = () => {
           }}
         >
           <LuDownload size={16} />
-          Download Invoice
+          <span className="text-sm md:text-base">Download Invoice</span>
         </Button>
 
         <Button
@@ -838,8 +870,26 @@ const PaymentPage = () => {
           onClick={() => router.push('/account/subscription')}
         >
           <LuSettings size={16} />
-          Manage Subscription
+          <span className="text-sm md:text-base">Manage Subscription</span>
         </Button>
+      </div>
+    </div>
+  );
+
+  // Mobile Step Indicator component
+  const renderMobileStepIndicator = () => (
+    <div className="sm:hidden mb-6">
+      <div className="flex justify-between items-center mb-2">
+        <div className="text-sm font-medium">
+          Step {currentStep + 1} of {steps.length - 1}: {steps[currentStep].title}
+        </div>
+        <div className="text-xs text-gray-500">{steps[currentStep].duration}</div>
+      </div>
+      <div className="h-1 w-full bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className="h-full bg-primary transition-all duration-300 ease-in-out"
+          style={{ width: `${((currentStep + 1) / (steps.length - 1)) * 100}%` }}
+        ></div>
       </div>
     </div>
   );
@@ -862,18 +912,20 @@ const PaymentPage = () => {
   };
 
   return (
-    <div className="flex flex-row divide-x divide-border h-screen w-full">
-      {/* Left sidebar with progress */}
-      <div className="flex flex-col w-2/5 px-16 py-32">
+    <div className="flex flex-col md:flex-row md:divide-x md:divide-border min-h-screen w-full">
+      {/* Left sidebar with progress - Only visible on desktop */}
+      <div className="hidden md:flex md:flex-col md:w-2/5 md:px-16 md:py-32">
         <div className="mb-8">
           <Link href="/">
             <ArrowLeft className="mb-4" />
           </Link>
           <div className="text-xl">Subscription Plan</div>
           <div className="text-base text-gray-600">
-            {formData.tier !== 'education'
-              ? `$${currentPrice} ${formData.billingType === 'monthly' ? '/month' : '/year'}`
-              : 'Free'}
+            {formData.tier === 'education'
+              ? 'Free'
+              : formData.tier === 'enterprise'
+                ? 'Custom pricing'
+                : `$${currentPrice} ${formData.billingType === 'monthly' ? '/month' : '/year'}`}
           </div>
         </div>
 
@@ -894,9 +946,27 @@ const PaymentPage = () => {
         </Progress>
       </div>
 
-      {/* Main content area */}
-      <div className="flex flex-col w-3/5 px-16 py-32">
-        <div className="flex flex-col max-w-xl">
+      {/* Main content area - Full width on mobile, reduced width on desktop */}
+      <div className="flex flex-col w-full md:w-3/5 px-4 py-6 md:px-16 md:py-32">
+        {/* Mobile header with back button */}
+        <div className="flex md:hidden items-center mb-4">
+          <Link href="/" className="mr-4">
+            <ArrowLeft size={20} />
+          </Link>
+          <div>
+            <div className="text-lg font-medium">Subscription Plan</div>
+            <div className="text-sm text-gray-600">
+              {formData.tier !== 'education'
+                ? `$${currentPrice} ${formData.billingType === 'monthly' ? '/month' : '/year'}`
+                : 'Free'}
+            </div>
+          </div>
+        </div>
+
+        {/* Mobile step indicator - Only show if not on success step */}
+        {currentStep < steps.length - 1 && renderMobileStepIndicator()}
+
+        <div className="w-full max-w-xl mx-auto md:mx-0">
           {renderStepContent()}
 
           <div className="flex gap-4 mt-8">
@@ -914,7 +984,7 @@ const PaymentPage = () => {
               onClick={handleNext}
               disabled={loading}
               variant="default"
-              className="flex items-center gap-2"
+              className="flex-1 flex items-center justify-center gap-2"
             >
               {loading
                 ? 'Processing...'

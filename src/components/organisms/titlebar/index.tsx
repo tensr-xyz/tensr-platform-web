@@ -136,7 +136,7 @@ const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: Titleba
           {tabs && tabs.length > 0 && (
             <Tabs value={activeTab?.id} onValueChange={handleTabChange} className="flex-1">
               <ScrollArea className="w-full h-10">
-                <TabsList className="h-10 inline-flex border-none p-0">
+                <TabsList className="h-10 inline-flex border-none p-0 rounded-none">
                   {tabs.map(tab => (
                     <TabsTrigger
                       key={tab.id}

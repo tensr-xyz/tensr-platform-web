@@ -34,7 +34,7 @@ const LoginTemplate = () => {
 
     try {
       console.log('Submitting email:', email);
-      const result = await initiateAuth(email);
+      const result = await initiateAuth(email.toLowerCase());
       console.log('Auth initiated successfully');
 
       // Only proceed if we have a session
@@ -175,7 +175,7 @@ const LoginTemplate = () => {
                   {isLoading ? 'Verifying...' : 'Continue'}
                 </Button>
                 <Button
-                  className="px-4 py-3 w-fit bg-[#f8f9f7]"
+                  className="px-4 py-3 h-12 lg:h-10 w-fit bg-[#f8f9f7]"
                   variant="secondary"
                   size="lg"
                   onClick={handleBackToLogin}

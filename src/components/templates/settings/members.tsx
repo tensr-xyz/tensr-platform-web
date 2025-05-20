@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { Mail, UserPlus, Trash, Settings } from 'lucide-react';
+import { SubscriptionDialog } from '@/components/organisms/subscription-dialog';
 
 export default function TeamMembers() {
   const { activeOrganization, members, fetchMembers, addMember, removeMember, updateMemberRole } =
@@ -46,12 +47,44 @@ export default function TeamMembers() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editRole, setEditRole] = useState<'ADMIN' | 'MEMBER' | 'VIEWER'>('MEMBER');
 
+  // New state variables for subscription
+  const [hasTeamSubscription, setHasTeamSubscription] = useState(false);
+  const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
+
   // Load members when active organization changes
   useEffect(() => {
     if (activeOrganization) {
       fetchMembers(activeOrganization.id);
+
+      // In a real app, you would check subscription status from a backend API
+      // For demo purposes, we're using local state
+      // Example: checkSubscriptionStatus(activeOrganization.id)
     }
   }, [activeOrganization, fetchMembers]);
+
+  const handleAddButtonClick = () => {
+    // Check if user has team subscription before allowing to add members
+    if (!hasTeamSubscription && members.length >= 1) {
+      // If already has at least one member and no team subscription, show subscription dialog
+      setShowSubscriptionDialog(true);
+    } else {
+      // Otherwise, show normal add dialog
+      setShowAddDialog(true);
+    }
+  };
+
+  const handleSubscriptionUpgrade = () => {
+    // In a real app, this would open payment processing, redirect to subscription page, etc.
+    setHasTeamSubscription(true);
+    toast({
+      title: 'Subscription upgraded',
+      description: 'Your account has been upgraded to the Team plan',
+    });
+
+    // Close subscription dialog and open add member dialog
+    setShowSubscriptionDialog(false);
+    setShowAddDialog(true);
+  };
 
   const handleAddMember = async () => {
     if (!activeOrganization || !newMemberEmail.trim()) return;
@@ -168,7 +201,7 @@ export default function TeamMembers() {
           <h1 className="text-2xl font-bold">Team Members</h1>
           <p className="text-gray-500">Manage members of {activeOrganization.name}</p>
         </div>
-        <Button onClick={() => setShowAddDialog(true)}>
+        <Button onClick={handleAddButtonClick}>
           <UserPlus className="h-4 w-4 mr-2" />
           Add Member
         </Button>
@@ -257,6 +290,13 @@ export default function TeamMembers() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Use the imported Subscription Dialog component */}
+      <SubscriptionDialog
+        open={showSubscriptionDialog}
+        onClose={() => setShowSubscriptionDialog(false)}
+        onUpgrade={handleSubscriptionUpgrade}
+      />
 
       {/* Add Member Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

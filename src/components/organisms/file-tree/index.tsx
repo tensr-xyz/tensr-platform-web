@@ -501,7 +501,7 @@ const DataOperationItem = ({ item }: { item: string }) => {
   return (
     <AnalysisComponent>
       {/* Use children properly by not using children prop */}
-      <div className="py-2 px-2">
+      <div className="py-2 px-2 hover:bg-accent">
         <div className="px-2 py-1 cursor-pointer">{item}</div>
       </div>
     </AnalysisComponent>
@@ -589,7 +589,7 @@ export const FolderComponent: React.FC = () => {
             {Object.entries(MENU_ITEMS.data.sections).map(([sectionName, items], index) => (
               <AccordionItem key={`data-${index}`} value={`data-section-${index}`}>
                 <AccordionTrigger className="px-2">{sectionName}</AccordionTrigger>
-                <AccordionContent>
+                <AccordionContent className="p-0">
                   {items.map((item, itemIndex) => (
                     <DataOperationItem key={`${sectionName}-${itemIndex}`} item={item} />
                   ))}

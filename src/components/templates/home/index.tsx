@@ -425,92 +425,94 @@ const HomeTemplate: React.FC = () => {
           <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 sm:gap-4">
             {/* NEW MOBILE SEARCH UI */}
             <div className="flex sm:hidden items-center gap-2 w-full">
-              <div className="flex-1 relative border border-gray-200 rounded-lg bg-white">
+              <div className="flex flex-1 relative border border-gray-200 rounded-lg bg-white">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+
                 <input
                   type="text"
                   placeholder="Search Repositories and Projects..."
-                  className="w-full h-10 pl-9 pr-3 focus:outline-none rounded-lg"
+                  className="w-full h-10 pl-10 focus:outline-none rounded-lg"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
                 />
+
+                {/* Drawer Trigger Button inside the input */}
+                <Drawer open={filterDrawerOpen} onOpenChange={setFilterDrawerOpen}>
+                  <DrawerTrigger asChild>
+                    <Button variant="ghost">
+                      <MoreHorizontal className="w-5 h-5 text-gray-600" />
+                    </Button>
+                  </DrawerTrigger>
+                  <DrawerContent>
+                    <DrawerHeader>
+                      <DrawerTitle>Filters</DrawerTitle>
+                    </DrawerHeader>
+                    <div className="px-4 pb-2">
+                      <div className="space-y-4">
+                        <div>
+                          <h3 className="text-sm font-medium mb-2">File Type</h3>
+                          <div className="flex flex-wrap gap-2">
+                            <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
+                              <FileText className="w-3 h-3" />
+                              <span>Documents</span>
+                            </button>
+                            <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
+                              <Image className="w-3 h-3" />
+                              <span>Images</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-medium mb-2">Date Modified</h3>
+                          <div className="flex flex-wrap gap-2">
+                            <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              <span>Last 7 days</span>
+                            </button>
+                            <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              <span>Last 30 days</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <h3 className="text-sm font-medium mb-2">Status</h3>
+                          <div className="space-y-2">
+                            <div className="flex items-center">
+                              <input type="checkbox" id="active" className="mr-2" />
+                              <label htmlFor="active">Active</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input type="checkbox" id="completed" className="mr-2" />
+                              <label htmlFor="completed">Completed</label>
+                            </div>
+                            <div className="flex items-center">
+                              <input type="checkbox" id="archived" className="mr-2" />
+                              <label htmlFor="archived">Archived</label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <DrawerFooter>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          onClick={() => setFilterDrawerOpen(false)}
+                        >
+                          Reset
+                        </Button>
+                        <Button className="flex-1" onClick={() => setFilterDrawerOpen(false)}>
+                          Apply Filters
+                        </Button>
+                      </div>
+                    </DrawerFooter>
+                  </DrawerContent>
+                </Drawer>
               </div>
-
-              <Drawer open={filterDrawerOpen} onOpenChange={setFilterDrawerOpen}>
-                <DrawerTrigger asChild>
-                  <button className="p-2 border border-gray-200 rounded-lg bg-white">
-                    <MoreHorizontal className="w-5 h-5 text-gray-600" />
-                  </button>
-                </DrawerTrigger>
-                <DrawerContent>
-                  <DrawerHeader>
-                    <DrawerTitle>Filters</DrawerTitle>
-                  </DrawerHeader>
-                  <div className="px-4 pb-2">
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-sm font-medium mb-2">File Type</h3>
-                        <div className="flex flex-wrap gap-2">
-                          <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
-                            <FileText className="w-3 h-3" />
-                            <span>Documents</span>
-                          </button>
-                          <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
-                            <Image className="w-3 h-3" />
-                            <span>Images</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h3 className="text-sm font-medium mb-2">Date Modified</h3>
-                        <div className="flex flex-wrap gap-2">
-                          <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            <span>Last 7 days</span>
-                          </button>
-                          <button className="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            <span>Last 30 days</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div>
-                        <h3 className="text-sm font-medium mb-2">Status</h3>
-                        <div className="space-y-2">
-                          <div className="flex items-center">
-                            <input type="checkbox" id="active" className="mr-2" />
-                            <label htmlFor="active">Active</label>
-                          </div>
-                          <div className="flex items-center">
-                            <input type="checkbox" id="completed" className="mr-2" />
-                            <label htmlFor="completed">Completed</label>
-                          </div>
-                          <div className="flex items-center">
-                            <input type="checkbox" id="archived" className="mr-2" />
-                            <label htmlFor="archived">Archived</label>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <DrawerFooter>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        className="flex-1"
-                        onClick={() => setFilterDrawerOpen(false)}
-                      >
-                        Reset
-                      </Button>
-                      <Button className="flex-1" onClick={() => setFilterDrawerOpen(false)}>
-                        Apply Filters
-                      </Button>
-                    </div>
-                  </DrawerFooter>
-                </DrawerContent>
-              </Drawer>
 
               <Drawer open={createDrawerOpen} onOpenChange={setCreateDrawerOpen}>
                 <DrawerTrigger asChild>
