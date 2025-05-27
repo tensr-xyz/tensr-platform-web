@@ -446,30 +446,6 @@ export const useOrganization = (): UseOrganizationReturn => {
     }
   };
 
-  // Load organizations when auth changes
-  useEffect(() => {
-    const loadOrganizations = async () => {
-      if (auth.isAuthenticated) {
-        try {
-          const orgs = await fetchOrganizations();
-
-          // Try to restore active organization from localStorage
-          const storedOrgId = localStorage.getItem('activeOrganizationId');
-          if (storedOrgId && orgs.length > 0) {
-            const storedOrg = orgs.find(org => org.id === storedOrgId);
-            if (storedOrg) {
-              setActiveOrganization(storedOrg);
-            }
-          }
-        } catch (error) {
-          console.error('Failed to load organizations:', error);
-        }
-      }
-    };
-
-    loadOrganizations();
-  }, [auth.isAuthenticated, fetchOrganizations]);
-
   return {
     organizations,
     activeOrganization,

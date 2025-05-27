@@ -23,19 +23,35 @@ export interface FileMetadata {
   uploadedAt: string;
 }
 
+// File version interface
+export interface FileVersion {
+  versionId: string;
+  lastModified: string;
+  size: number;
+  isLatest: boolean;
+}
+
 export const useFileHandler = ({
   allowedExtensions = ['.csv', '.xlsx', '.xls'],
   onUploadComplete,
 }: UseFileHandlerProps) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [files, setFiles] = useState<FileMetadata[]>([]);
+  const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
+  const [fileVersions, setFileVersions] = useState<FileVersion[]>([]);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
+
   const auth = useAuth();
   const { state: projectState, dispatch } = useProject();
 
   // Use a ref to track if initial fetch has happened
   const initialFetchDoneRef = useRef(false);
+
+  // Auto-save configuration
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Helper function to get access token
   const getToken = useCallback((): string => {
@@ -379,6 +395,246 @@ export const useFileHandler = ({
     }
   };
 
+  // ===== NEW FUNCTIONS FOR FILE SAVING AND VERSION MANAGEMENT =====
+
+  // Save file content - creates a new version in S3
+  const saveFile = async (fileId: string, content: any): Promise<boolean> => {
+    console.log('saveFile called with fileId:', fileId);
+    setIsSaving(true);
+    setError(null);
+
+    try {
+      const token = getToken();
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.');
+      }
+
+      // 1. Get a pre-signed URL for updating the file
+      console.log('Getting pre-signed URL for file update');
+      const fileSize = new Blob([JSON.stringify(content)]).size;
+
+      const updateResponse = await fetch(`${API_BASE_URL}/files/${fileId}/update-url`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ fileSize }),
+      });
+
+      if (!updateResponse.ok) {
+        const errorText = await updateResponse.text();
+        throw new Error(`Failed to get update URL: ${updateResponse.statusText} - ${errorText}`);
+      }
+
+      const updateData = await updateResponse.json();
+      console.log('Got presigned URL for updating fileId:', fileId);
+
+      // 2. Upload content to S3
+      console.log('Uploading file content to S3');
+      const uploadResponse = await fetch(updateData.uploadUrl, {
+        method: 'PUT',
+        body: JSON.stringify(content),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-amz-server-side-encryption': 'AES256', // Required for server-side encryption
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file content to storage');
+      }
+
+      // 3. Mark the upload as complete
+      console.log('Marking update as complete');
+      const completeResponse = await fetch(`${API_BASE_URL}/files/${fileId}/complete`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!completeResponse.ok) {
+        throw new Error('Failed to complete file update');
+      }
+
+      // Update last saved time
+      const now = new Date();
+      setLastSavedTime(now);
+
+      console.log('File saved successfully');
+      return true;
+    } catch (err: any) {
+      console.error('Error saving file:', err);
+      setError(err.message || 'Failed to save file');
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Get file version history
+  const getFileVersions = async (fileId: string): Promise<FileVersion[]> => {
+    console.log('getFileVersions called with fileId:', fileId);
+    setIsLoadingVersions(true);
+    setError(null);
+
+    try {
+      const token = getToken();
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/files/${fileId}/versions`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to get file versions: ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      const versions = data.versions || [];
+      setFileVersions(versions);
+      return versions;
+    } catch (err: any) {
+      console.error('Error fetching file versions:', err);
+      setError(err.message || 'Failed to fetch file versions');
+      return [];
+    } finally {
+      setIsLoadingVersions(false);
+    }
+  };
+
+  // Get a specific version of a file
+  const getFileVersion = async (
+    fileId: string,
+    versionId: string
+  ): Promise<{ downloadUrl: string; fileName: string; expiresAt: string }> => {
+    console.log('getFileVersion called with fileId:', fileId, 'versionId:', versionId);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const token = getToken();
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/files/${fileId}/versions/${versionId}`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to get file version: ${response.statusText} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      return data;
+    } catch (err: any) {
+      console.error('Error fetching file version:', err);
+      setError(err.message || 'Failed to fetch file version');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Revert to a specific version
+  const revertToVersion = async (fileId: string, versionId: string): Promise<boolean> => {
+    console.log('revertToVersion called with fileId:', fileId, 'versionId:', versionId);
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const token = getToken();
+      if (!token) {
+        throw new Error('Authentication required. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/files/${fileId}/revert/${versionId}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to revert to version: ${response.statusText} - ${errorText}`);
+      }
+
+      // Update last saved time
+      const now = new Date();
+      setLastSavedTime(now);
+
+      // Refresh versions
+      await getFileVersions(fileId);
+
+      return true;
+    } catch (err: any) {
+      console.error('Error reverting to version:', err);
+      setError(err.message || 'Failed to revert to version');
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Set up auto-save functionality
+  const setupAutoSave = (
+    fileId: string,
+    content: any,
+    interval: number = 60000, // Default: 1 minute
+    enabled: boolean = true
+  ): (() => void) => {
+    // Clear any existing auto-save timer
+    if (autoSaveTimerRef.current) {
+      clearInterval(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+
+    if (!enabled) {
+      console.log('Auto-save disabled');
+      return () => {};
+    }
+
+    console.log(`Setting up auto-save every ${interval / 1000} seconds`);
+
+    // Set up new auto-save timer
+    autoSaveTimerRef.current = setInterval(() => {
+      console.log('Auto-save triggered');
+      saveFile(fileId, content)
+        .then(success => {
+          if (success) {
+            console.log('Auto-save completed successfully');
+          } else {
+            console.error('Auto-save failed');
+          }
+        })
+        .catch(err => {
+          console.error('Auto-save error:', err);
+          // Silent failure for auto-save
+        });
+    }, interval);
+
+    // Return cleanup function
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearInterval(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+  };
+
   // Load files when token is available - FIXED TO PREVENT INFINITE LOOP
   useEffect(() => {
     // Only fetch files if we have a token and haven't already done the initial fetch
@@ -405,7 +661,18 @@ export const useFileHandler = ({
     }
   }, [auth.isAuthenticated, fetchUserFiles]);
 
+  // Cleanup auto-save on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearInterval(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
+    };
+  }, []);
+
   return {
+    // Original functions
     handleFile,
     fetchUserFiles,
     files,
@@ -414,5 +681,16 @@ export const useFileHandler = ({
     error,
     setError,
     uploadProgress,
+
+    // New save and version management functions
+    saveFile,
+    isSaving,
+    lastSavedTime,
+    getFileVersions,
+    getFileVersion,
+    revertToVersion,
+    fileVersions,
+    isLoadingVersions,
+    setupAutoSave,
   };
 };

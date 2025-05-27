@@ -47,10 +47,11 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
   // Hooks and context
   const { state: projectState, dispatch: projectDispatch } = useProject();
   const { state: tabState, dispatch: tabDispatch } = useTabs();
-  const { tokens } = useAuth();
+  const { tokens, user } = useAuth();
 
   // Make sure we have a valid resource.id before using it
   const resourceId = resource?.id || '';
+  const userId = user?.userId;
 
   useCollaboration(resourceId);
 
@@ -151,6 +152,14 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
           console.error('No access token available');
           return;
         }
+
+        // Construct the full S3 key using userId and dataToImport.filePath (which is the fileId)
+        const s3Key =
+          userId && dataToImport.filePath
+            ? `users/${userId}/${dataToImport.filePath}/${dataToImport.fileName || 'untitled'}`
+            : dataToImport.filePath;
+
+        console.log('handleImport: Constructed s3Key (filePath):', s3Key);
 
         // Add headers to the request
         const response = await fetch('http://localhost:8080/api/files/fetch-page', {
@@ -267,7 +276,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         setShowImportWizard(false);
       }
     },
-    [projectState.importData, importData, resourceId, tabDispatch, projectDispatch, tokens]
+    [projectState.importData, importData, resourceId, tabDispatch, projectDispatch, tokens, userId]
   );
 
   // Handle import wizard close

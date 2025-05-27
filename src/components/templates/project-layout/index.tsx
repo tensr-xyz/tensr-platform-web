@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/atoms/resizable';
 import ProjectSidebar from '@/components/templates/project-sidebar';
 import AnalysisSidebar from '@/components/templates/analysis-sidebar';
@@ -11,6 +11,9 @@ import { useTabs } from '@/contexts/tabs-context';
 import { addTab, closeTab } from '@/contexts/tabs-context/actions';
 import { ProjectActions, ViewType } from '@/contexts/project-context/types';
 import { FileEntry, Project } from '@/types/project';
+import { useCollaboration } from '@/hooks/use-collaboration';
+import Loading from '@/components/molecules/loading';
+import useAuth from '@/hooks/api/use-auth';
 
 interface ProjectLayoutProps {
   children: React.ReactNode;
@@ -29,7 +32,14 @@ const ProjectLayout = ({
 }: ProjectLayoutProps) => {
   const { state: projectState, dispatch: projectDispatch } = useProject();
   const { state: tabState, dispatch: tabDispatch } = useTabs();
+  const { tokens, user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
+
+  // Make sure we have a valid resource.id before using it
+  const resourceId = projectState.currentProject?.id || '';
+  const userId = user?.userId;
+
+  useCollaboration(resourceId);
 
   // Handle project initialization
   useEffect(() => {
@@ -70,6 +80,12 @@ const ProjectLayout = ({
           return dataRow;
         });
 
+        // Construct the full S3 key
+        const s3Key =
+          userId && initialFile.path
+            ? `users/${userId}/${initialFile.path}/${projectState.currentProject?.name || 'untitled'}`
+            : initialFile.path;
+
         const newTab: Tab = {
           id: `tab-${Date.now()}`, // Adding an ID since it might be required by Tab type
           name: projectState.currentProject ? projectState.currentProject.name : 'Untitled',
@@ -77,7 +93,7 @@ const ProjectLayout = ({
           content: '',
           isDirty: false,
           data: {
-            filePath: initialFile.path,
+            filePath: s3Key,
             initialData: initialRows,
             initialColumns: columns,
             totalRows: metadata.rows,
@@ -104,7 +120,7 @@ const ProjectLayout = ({
     initializeProject().catch(err => {
       setIsLoading(false);
     });
-  }, [projectState.currentProject, projectDispatch, tabDispatch]);
+  }, [projectState.currentProject, projectDispatch, tabDispatch, userId]);
 
   // Handle import data changes
   useEffect(() => {

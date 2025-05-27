@@ -157,202 +157,216 @@ const NavigationTabs = () => {
   );
 };
 
-export function AccountSwitcher({ user, onLogout }: { user: any; onLogout?: () => void }) {
-  const router = useRouter();
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newOrgName, setNewOrgName] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
+export const AccountSwitcher = React.memo(
+  ({ user, onLogout }: { user: any; onLogout?: () => void }) => {
+    const router = useRouter();
+    const [showCreateDialog, setShowCreateDialog] = useState(false);
+    const [newOrgName, setNewOrgName] = useState('');
+    const [isCreating, setIsCreating] = useState(false);
 
-  const {
-    organizations,
-    activeOrganization,
-    setActiveOrganization,
-    createOrganization,
-    isLoading,
-  } = useOrganization();
+    const {
+      organizations,
+      activeOrganization,
+      setActiveOrganization,
+      createOrganization,
+      fetchOrganizations,
+      isLoading,
+    } = useOrganization();
 
-  const handleCreateOrganization = async () => {
-    if (!newOrgName.trim()) return;
+    const handleDropdownOpenChange = (open: boolean) => {
+      if (open && organizations.length === 0) {
+        fetchOrganizations();
+      }
+    };
 
-    setIsCreating(true);
-    try {
-      const newOrg = await createOrganization({ name: newOrgName });
-      toast({
-        title: 'Organization created',
-        description: `${newOrgName} has been created successfully.`,
-      });
-      setShowCreateDialog(false);
-      setNewOrgName('');
+    const handleCreateOrganization = async () => {
+      if (!newOrgName.trim()) return;
 
-      // Navigate to the new organization's settings page
+      setIsCreating(true);
+      try {
+        const newOrg = await createOrganization({ name: newOrgName });
+        toast({
+          title: 'Organization created',
+          description: `${newOrgName} has been created successfully.`,
+        });
+        setShowCreateDialog(false);
+        setNewOrgName('');
+
+        // Navigate to the new organization's settings page
+        router.push('/settings/organisation');
+      } catch (err: any) {
+        toast({
+          title: 'Failed to create organization',
+          description: err.message || 'An error occurred while creating the organization',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsCreating(false);
+      }
+    };
+
+    const handleSwitchOrganization = (org: Organization) => {
+      setActiveOrganization(org);
+      // Optional: refresh relevant data or navigate to a specific page
+      router.push('/');
+    };
+
+    const handleOrganizationSettings = () => {
       router.push('/settings/organisation');
-    } catch (err: any) {
-      toast({
-        title: 'Failed to create organization',
-        description: err.message || 'An error occurred while creating the organization',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsCreating(false);
+    };
+
+    const handleTeamMembers = () => {
+      router.push('/settings/members');
+    };
+
+    if (!user) {
+      return null;
     }
-  };
 
-  const handleSwitchOrganization = (org: Organization) => {
-    setActiveOrganization(org);
-    // Optional: refresh relevant data or navigate to a specific page
-    router.push('/');
-  };
+    return (
+      <>
+        <DropdownMenu onOpenChange={handleDropdownOpenChange}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="flex items-center gap-2 px-2 py-1.5 h-auto">
+              {activeOrganization ? (
+                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
+                  {activeOrganization.name.charAt(0).toUpperCase()}
+                </div>
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-medium">
+                  {user.email.charAt(0).toUpperCase()}
+                </div>
+              )}
 
-  const handleOrganizationSettings = () => {
-    router.push('/settings/organisation');
-  };
-
-  const handleTeamMembers = () => {
-    router.push('/settings/members');
-  };
-
-  if (!user) {
-    return null;
-  }
-
-  return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="flex items-center gap-2 px-2 py-1.5 h-auto">
-            {activeOrganization ? (
-              <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
-                {activeOrganization.name.charAt(0).toUpperCase()}
+              <div className="grid flex-1 text-left text-sm leading-tight">
+                <span className="truncate font-semibold">
+                  {activeOrganization ? activeOrganization.name : user.name || user.email}
+                </span>
+                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
               </div>
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-medium">
-                {user.email.charAt(0).toUpperCase()}
+              <ChevronsUpDown className="ml-auto h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg border-border"
+            align="end"
+            sideOffset={4}
+          >
+            <DropdownMenuLabel className="font-normal">
+              <div className="flex flex-col space-y-1">
+                <p className="text-sm font-medium leading-none">{user.name || user.email}</p>
+                <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
               </div>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+
+            <Link href="/settings/account">
+              <DropdownMenuItem>
+                Settings
+                <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+              </DropdownMenuItem>
+            </Link>
+
+            <DropdownMenuSeparator />
+
+            <DropdownMenuLabel className="text-xs text-muted-foreground">
+              Organizations
+            </DropdownMenuLabel>
+            {organizations.map(org => (
+              <DropdownMenuItem
+                key={org.id}
+                onClick={() => handleSwitchOrganization(org)}
+                className="gap-2 p-2"
+              >
+                <div className="flex size-6 items-center justify-center rounded-sm border border-blue-200 bg-blue-50">
+                  {org.name.charAt(0).toUpperCase()}
+                </div>
+                {org.name}
+                {activeOrganization?.id === org.id && (
+                  <DropdownMenuShortcut>
+                    <Check className="h-4 w-4" />
+                  </DropdownMenuShortcut>
+                )}
+              </DropdownMenuItem>
+            ))}
+
+            <DropdownMenuItem className="gap-2 p-2" onClick={() => setShowCreateDialog(true)}>
+              <div className="flex size-6 items-center justify-center rounded-md border bg-background">
+                <Plus className="size-4" />
+              </div>
+              <div className="font-medium text-muted-foreground">Create organization</div>
+            </DropdownMenuItem>
+
+            {activeOrganization && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  Organization Settings
+                </DropdownMenuLabel>
+
+                <DropdownMenuItem onClick={handleOrganizationSettings}>
+                  <Settings className="mr-2 h-4 w-4" />
+                  Organization Settings
+                </DropdownMenuItem>
+
+                <DropdownMenuItem onClick={handleTeamMembers}>
+                  <Users className="mr-2 h-4 w-4" />
+                  Team Members
+                </DropdownMenuItem>
+              </>
             )}
 
-            <div className="grid flex-1 text-left text-sm leading-tight">
-              <span className="truncate font-semibold">
-                {activeOrganization ? activeOrganization.name : user.name || user.email}
-              </span>
-              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-            </div>
-            <ChevronsUpDown className="ml-auto h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent
-          className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg border-border"
-          align="end"
-          sideOffset={4}
-        >
-          <DropdownMenuLabel className="font-normal">
-            <div className="flex flex-col space-y-1">
-              <p className="text-sm font-medium leading-none">{user.name || user.email}</p>
-              <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
-            </div>
-          </DropdownMenuLabel>
-          <DropdownMenuSeparator />
-
-          <Link href="/settings/account">
-            <DropdownMenuItem>
-              Settings
-              <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onLogout} className="text-red-600">
+              <LogOut className="mr-2 h-4 w-4" />
+              Log out
+              <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
             </DropdownMenuItem>
-          </Link>
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-          <DropdownMenuSeparator />
+        {/* Create Organization Dialog */}
+        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create New Organization</DialogTitle>
+            </DialogHeader>
 
-          <DropdownMenuLabel className="text-xs text-muted-foreground">
-            Organizations
-          </DropdownMenuLabel>
-          {organizations.map(org => (
-            <DropdownMenuItem
-              key={org.id}
-              onClick={() => handleSwitchOrganization(org)}
-              className="gap-2 p-2"
-            >
-              <div className="flex size-6 items-center justify-center rounded-sm border border-blue-200 bg-blue-50">
-                {org.name.charAt(0).toUpperCase()}
-              </div>
-              {org.name}
-              {activeOrganization?.id === org.id && (
-                <DropdownMenuShortcut>
-                  <Check className="h-4 w-4" />
-                </DropdownMenuShortcut>
-              )}
-            </DropdownMenuItem>
-          ))}
-
-          <DropdownMenuItem className="gap-2 p-2" onClick={() => setShowCreateDialog(true)}>
-            <div className="flex size-6 items-center justify-center rounded-md border bg-background">
-              <Plus className="size-4" />
+            <div className="py-4">
+              <Label htmlFor="orgName">Organization Name</Label>
+              <Input
+                id="orgName"
+                value={newOrgName}
+                onChange={e => setNewOrgName(e.target.value)}
+                placeholder="Enter organization name"
+                className="mt-1"
+                autoFocus
+              />
             </div>
-            <div className="font-medium text-muted-foreground">Create organization</div>
-          </DropdownMenuItem>
 
-          {activeOrganization && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuLabel className="text-xs text-muted-foreground">
-                Organization Settings
-              </DropdownMenuLabel>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowCreateDialog(false)}
+                disabled={isCreating}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleCreateOrganization}
+                disabled={!newOrgName.trim() || isCreating}
+              >
+                {isCreating ? 'Creating...' : 'Create'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </>
+    );
+  }
+);
 
-              <DropdownMenuItem onClick={handleOrganizationSettings}>
-                <Settings className="mr-2 h-4 w-4" />
-                Organization Settings
-              </DropdownMenuItem>
-
-              <DropdownMenuItem onClick={handleTeamMembers}>
-                <Users className="mr-2 h-4 w-4" />
-                Team Members
-              </DropdownMenuItem>
-            </>
-          )}
-
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onLogout} className="text-red-600">
-            <LogOut className="mr-2 h-4 w-4" />
-            Log out
-            <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* Create Organization Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create New Organization</DialogTitle>
-          </DialogHeader>
-
-          <div className="py-4">
-            <Label htmlFor="orgName">Organization Name</Label>
-            <Input
-              id="orgName"
-              value={newOrgName}
-              onChange={e => setNewOrgName(e.target.value)}
-              placeholder="Enter organization name"
-              className="mt-1"
-              autoFocus
-            />
-          </div>
-
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowCreateDialog(false)}
-              disabled={isCreating}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleCreateOrganization} disabled={!newOrgName.trim() || isCreating}>
-              {isCreating ? 'Creating...' : 'Create'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
-}
+AccountSwitcher.displayName = 'AccountSwitcher';
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();

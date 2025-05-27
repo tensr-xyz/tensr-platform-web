@@ -3,18 +3,11 @@
 import { FloatingLabelInput } from '@/components/molecules/floating-label-input';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  LuCreditCard,
-  LuCheck,
-  LuInfo,
-  LuDownload,
-  LuSettings,
-  LuArrowRight,
-} from 'react-icons/lu';
+import { LuCheck, LuInfo, LuDownload, LuSettings, LuArrowRight } from 'react-icons/lu';
 import { TIER_FEATURES, TierType } from '@/configs/pricing';
 import { useAuth } from '@/hooks/api/use-auth';
-import { loadStripe } from '@stripe/stripe-js';
-import { CardElement, useStripe, useElements, Elements } from '@stripe/react-stripe-js';
+import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js';
+import { useStripe, useElements, Elements, PaymentElement } from '@stripe/react-stripe-js';
 import {
   Progress,
   ProgressStep,
@@ -33,17 +26,40 @@ import { Button } from '@/components/atoms/button';
 import { Card } from '@/components/atoms/card';
 import Loading from '@/components/molecules/loading';
 import Link from 'next/link';
-import { ArrowLeft, Mail, PhoneCall } from 'lucide-react';
+import { ArrowLeft, Mail } from 'lucide-react';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // Initialize Stripe with your publishable key
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
+const stripePromise = loadStripe(
+  'pk_test_51RJir9H0hCtrU4vjrozMaXHylofcF5n4LvJNL0XyqmfdjphtCPfPcYlpVcdFGG5SlKyJpRMRdp9C5XLbehivEngh00ntTQEOrt'
+);
 
 // Create a wrapper component to provide Stripe context
 const PaymentPageWithStripe = () => {
+  const appearance = {
+    theme: 'stripe' as const,
+    variables: {
+      colorPrimary: '#0050d8',
+      colorBackground: '#ffffff',
+      colorText: '#424770',
+      colorDanger: '#e25950',
+      fontFamily: 'system-ui, sans-serif',
+      spacingUnit: '4px',
+      borderRadius: '4px',
+    },
+  };
+
+  // Setup mode - no client secret needed initially
+  const options: StripeElementsOptions = {
+    mode: 'setup',
+    currency: 'usd',
+    appearance,
+    paymentMethodCreation: 'manual',
+  };
+
   return (
-    <Elements stripe={stripePromise}>
+    <Elements stripe={stripePromise} options={options}>
       <PaymentPage />
     </Elements>
   );
@@ -88,6 +104,11 @@ interface SubscriptionDetails {
   amount: number;
   nextBillingDate: Date;
   subscriptionId: string;
+}
+
+// Define PaymentPage props
+interface PaymentPageProps {
+  setClientSecret: (secret: string) => void;
 }
 
 const PaymentPage = () => {
@@ -142,9 +163,11 @@ const PaymentPage = () => {
   const [currentStep, setCurrentStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [cardError, setCardError] = useState('');
   const [subscriptionDetails, setSubscriptionDetails] = useState<SubscriptionDetails | null>(null);
   const [loadingPlans, setLoadingPlans] = useState(true);
+  const [paymentIntentData, setPaymentIntentData] = useState<any>(null);
+  const [paymentElementReady, setPaymentElementReady] = useState(false);
+  const [paymentValid, setPaymentValid] = useState(false);
 
   // Get user name and email from user object or use empty string if not available
   const userName = user?.email?.split('@')[0] || '';
@@ -207,9 +230,18 @@ const PaymentPage = () => {
       }
     });
 
-    // For the payment step, check if card element has errors
-    if (stepIndex === 2 && cardError) {
-      newErrors.card = cardError;
+    // For the payment step, check if payment element is ready
+    if (stepIndex === 2) {
+      // Check for payment element readiness (only if not free tier)
+      if (!paymentIntentData) {
+        newErrors.submission = 'Payment is being prepared, please wait';
+      } else if (paymentIntentData.intentType !== 'none' && !paymentElementReady) {
+        newErrors.submission = 'Please complete payment details';
+      } else {
+        // If we're validating the payment step and everything is good,
+        // mark payment as valid for direct submission
+        setPaymentValid(true);
+      }
     }
 
     setErrors(newErrors);
@@ -221,12 +253,17 @@ const PaymentPage = () => {
     if (validateStep(currentStep)) {
       // Skip payment flow if enterprise is selected
       if (formData.tier === 'enterprise') {
-        // Just redirect to the appropriate page or open contact options
         window.location.href = 'mailto:help@tensr.xyz?subject=Enterprise Plan Inquiry';
         return;
       }
 
-      // Normal flow for other plans
+      // If we're on the payment step (step 2), process payment directly
+      if (currentStep === 2) {
+        handleSubmit();
+        return;
+      }
+
+      // Normal flow for other steps
       if (currentStep < steps.length - 2) {
         setCurrentStep(prev => prev + 1);
       } else if (currentStep === steps.length - 2) {
@@ -254,6 +291,22 @@ const PaymentPage = () => {
     }).format(date);
   };
 
+  useEffect(() => {
+    if (currentStep === 2) {
+      checkPlanType();
+    }
+  }, [currentStep]);
+
+  const checkPlanType = async () => {
+    // Only check if it's a free plan, don't create any intents
+    if (formData.tier === 'education') {
+      setPaymentIntentData({ intentType: 'none' });
+    } else {
+      setPaymentIntentData({ intentType: 'subscription' });
+    }
+    setPaymentElementReady(true);
+  };
+
   // Payment submission
   const handleSubmit = async () => {
     setLoading(true);
@@ -263,86 +316,101 @@ const PaymentPage = () => {
         throw new Error('Stripe has not been initialized');
       }
 
-      // Create PaymentIntent on the backend
-      const response = await fetch(`${API_BASE_URL}/billing/create-payment-intent`, {
+      // Handle free tier
+      if (formData.tier === 'education') {
+        // Create free subscription directly
+        const response = await fetch(`${API_BASE_URL}/billing/create-subscription`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens?.idToken}`,
+          },
+          body: JSON.stringify({
+            tier: formData.tier,
+            billingType: formData.billingType,
+            paymentMethodId: null, // No payment method for free tier
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.message || 'Error creating subscription');
+        }
+
+        const data = await response.json();
+        setSubscriptionDetails({
+          tier: formData.tier,
+          billingType: formData.billingType,
+          amount: 0,
+          nextBillingDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          subscriptionId: data.subscriptionId,
+        });
+
+        setCurrentStep(steps.length - 1);
+        return;
+      }
+
+      // For paid plans - follow Stripe docs exactly
+
+      // Step 1: Submit the payment element
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        throw new Error(submitError.message);
+      }
+
+      // Step 2: Create payment method (from Stripe docs)
+      const { error: pmError, paymentMethod } = await stripe.createPaymentMethod({
+        elements,
+      });
+
+      if (pmError) {
+        throw new Error(pmError.message);
+      }
+
+      console.log('Payment method created:', paymentMethod);
+
+      // Step 3: Create subscription on backend (from Stripe docs)
+      const response = await fetch(`${API_BASE_URL}/billing/create-subscription`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${tokens?.idToken}`,
         },
         body: JSON.stringify({
+          paymentMethodId: paymentMethod.id,
           tier: formData.tier,
           billingType: formData.billingType,
-          amount: currentPrice,
-          email: formData.email,
-          name: formData.name,
+          customerId: paymentMethod.customer, // If you have a customer
         }),
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Error creating payment intent');
+        throw new Error(errorData.message || 'Error creating subscription');
       }
 
-      const paymentData = await response.json();
-      console.log('Payment intent response:', paymentData);
+      const subscriptionData = await response.json();
+      console.log('Subscription created:', subscriptionData);
 
-      // Check if this is a free tier (intentType: 'none')
-      if (paymentData.intentType === 'none') {
-        console.log('Free tier selected, no payment needed');
-
-        // Set subscription details for success screen
-        setSubscriptionDetails({
-          tier: formData.tier,
-          billingType: formData.billingType,
-          amount: currentPrice,
-          nextBillingDate: new Date(
-            Date.now() + (formData.billingType === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000
-          ),
-          subscriptionId: paymentData.subscriptionId,
+      // Step 4: Handle authentication if required (from Stripe docs)
+      if (
+        subscriptionData.status === 'incomplete' &&
+        subscriptionData.latest_invoice?.payment_intent
+      ) {
+        const { error: confirmError } = await stripe.confirmPayment({
+          clientSecret: subscriptionData.latest_invoice.payment_intent.client_secret,
+          confirmParams: {
+            return_url: window.location.origin + '/payment/success',
+          },
+          redirect: 'if_required',
         });
 
-        // Skip payment processing and go straight to success
-        setCurrentStep(steps.length - 1);
-        return;
-      }
-
-      // Process payment for paid tiers
-      if (!paymentData.clientSecret) {
-        throw new Error('No client secret received from the server');
-      }
-
-      const cardElement = elements.getElement(CardElement);
-      if (!cardElement) {
-        throw new Error('Card element not found');
-      }
-
-      // Confirm payment with Stripe
-      const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(
-        paymentData.clientSecret,
-        {
-          payment_method: {
-            card: cardElement,
-            billing_details: {
-              name: formData.name,
-              email: formData.email,
-              address: {
-                line1: formData.billingAddress,
-                city: formData.billingCity,
-                state: formData.billingState,
-                postal_code: formData.billingZip,
-                country: formData.billingCountry,
-              },
-            },
-          },
+        if (confirmError) {
+          throw new Error(confirmError.message);
         }
-      );
-
-      if (stripeError) {
-        throw new Error(stripeError.message);
       }
 
-      // Payment successful
+      // Success!
       setSubscriptionDetails({
         tier: formData.tier,
         billingType: formData.billingType,
@@ -350,15 +418,15 @@ const PaymentPage = () => {
         nextBillingDate: new Date(
           Date.now() + (formData.billingType === 'monthly' ? 30 : 365) * 24 * 60 * 60 * 1000
         ),
-        subscriptionId: paymentIntent.id,
+        subscriptionId: subscriptionData.id,
       });
 
-      // Move to success step
       setCurrentStep(steps.length - 1);
-    } catch (err: any) {
-      console.error('Payment error:', err);
+    } catch (error: unknown) {
+      console.error('Payment error:', error);
       setErrors({
-        submission: err.message || 'An error occurred during payment processing',
+        submission:
+          error instanceof Error ? error.message : 'An error occurred during payment processing',
       });
     } finally {
       setLoading(false);
@@ -631,67 +699,42 @@ const PaymentPage = () => {
     <div className="space-y-6">
       <div className="text-xl md:text-2xl">Payment Method</div>
 
-      {/* Stripe Card Element */}
       <div className="border border-border rounded-md p-4">
-        <label className="block text-sm font-medium mb-2">Card Details</label>
-        <div className="p-4 border border-border rounded-md bg-white">
-          <CardElement
+        <label className="block text-sm font-medium mb-2">Payment Details</label>
+        {elements && (
+          <PaymentElement
+            id="payment-element"
             options={{
-              style: {
-                base: {
-                  fontSize: '16px',
-                  color: '#424770',
-                  '::placeholder': {
-                    color: '#aab7c4',
-                  },
-                  padding: '10px 0',
-                },
-                invalid: {
-                  color: '#9e2146',
-                },
+              layout: {
+                type: 'tabs',
+                defaultCollapsed: false,
               },
-              hidePostalCode: true, // We collect postal code separately
             }}
-            onChange={event => {
-              if (event.error) {
-                setCardError(event.error.message);
-              } else {
-                setCardError('');
-              }
+            onReady={() => {
+              console.log('PaymentElement is ready');
+              setPaymentElementReady(true);
             }}
           />
-        </div>
-        {cardError && <div className="text-red-500 text-sm mt-2">{cardError}</div>}
-        {errors.card && <div className="text-red-500 text-sm mt-2">{errors.card}</div>}
+        )}
+        {errors.submission && <div className="text-red-500 text-sm mt-2">{errors.submission}</div>}
       </div>
 
       <div className="flex items-center gap-2 text-sm p-4 bg-gray-50 rounded-md mt-4">
         <LuInfo size={16} className="text-gray-500 flex-shrink-0" />
         <span>
-          Your card will be charged ${currentPrice}{' '}
-          {formData.billingType === 'monthly' ? 'per month' : 'per year'}. You can cancel or change
-          your plan at any time from your account settings.
+          By clicking &quot;Subscribe Now&quot;, you&apos;ll be subscribed to the ${currentPrice}{' '}
+          {formData.billingType === 'monthly' ? 'monthly' : 'annual'} plan. You can cancel anytime.
         </span>
       </div>
 
       <div className="p-4 bg-gray-50 rounded-md">
         <div className="flex items-center justify-between">
-          <div className="text-base font-medium">Billing & Plan Summary</div>
+          <div className="text-base font-medium">Plan Summary</div>
           <div className="text-sm text-primary cursor-pointer" onClick={() => setCurrentStep(1)}>
             Change
           </div>
         </div>
         <div className="mt-2 space-y-1">
-          <div className="flex justify-between text-sm">
-            <span>Name:</span>
-            <span className="font-medium">{formData.name}</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span>Billing Address:</span>
-            <span className="font-medium">
-              {formData.billingCity}, {formData.billingState}, {formData.billingZip}
-            </span>
-          </div>
           <div className="flex justify-between text-sm">
             <span>Plan:</span>
             <span className="font-medium capitalize">
@@ -867,7 +910,7 @@ const PaymentPage = () => {
         <Button
           variant="outline"
           className="flex items-center justify-center gap-2"
-          onClick={() => router.push('/account/subscription')}
+          onClick={() => router.push('/settings/billing')}
         >
           <LuSettings size={16} />
           <span className="text-sm md:text-base">Manage Subscription</span>
@@ -988,11 +1031,13 @@ const PaymentPage = () => {
             >
               {loading
                 ? 'Processing...'
-                : currentStep === steps.length - 2
-                  ? 'Confirm Payment'
-                  : currentStep === steps.length - 1
-                    ? 'Go to Dashboard'
-                    : 'Continue'}
+                : currentStep === 2
+                  ? 'Pay Now'
+                  : currentStep === steps.length - 2
+                    ? 'Confirm Payment'
+                    : currentStep === steps.length - 1
+                      ? 'Go to Dashboard'
+                      : 'Continue'}
               {currentStep === steps.length - 1 && <LuArrowRight size={16} />}
             </Button>
           </div>

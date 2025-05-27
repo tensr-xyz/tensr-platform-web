@@ -24,102 +24,62 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { Skeleton } from '@/components/atoms/skeleton';
-
-// Mock data and hooks
-const useBilling = () => {
-  // This would be your actual implementation
-  return {
-    subscription: {
-      tier: 'PRO',
-      status: 'ACTIVE',
-      billingType: 'monthly',
-      issuedAt: '2025-01-01T00:00:00Z',
-      expiresAt: '2025-05-01T00:00:00Z',
-      licenseKey: 'PRO-1234-5678-9012-3456',
-    },
-    invoices: [
-      {
-        invoiceId: 'inv_123456',
-        createdAt: '2025-04-01T00:00:00Z',
-        description: 'Pro Plan - Monthly Subscription',
-        amount: 199,
-        currency: 'USD',
-        tier: 'PRO',
-        billingType: 'monthly',
-      },
-      {
-        invoiceId: 'inv_123455',
-        createdAt: '2025-03-01T00:00:00Z',
-        description: 'Pro Plan - Monthly Subscription',
-        amount: 199,
-        currency: 'USD',
-        tier: 'PRO',
-        billingType: 'monthly',
-      },
-    ],
-    usageStats: {
-      currentUsage: 450,
-      limit: 1000,
-    },
-    isLoading: false,
-    error: null,
-    formatDate: (dateString: string | number | Date) => {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    },
-    formatCurrency: (amount: any, currency: any) => {
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: currency || 'USD',
-      }).format(amount);
-    },
-    cancelSubscription: async () => {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      return true;
-    },
-  };
-};
+import { useBilling } from '@/hooks/api/use-billing'; // Import your existing hook
+import { Subscription, Invoice } from '@/hooks/api/use-billing';
 
 export default function BillingSettings() {
   const router = useRouter();
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [cancelInProgress, setCancelInProgress] = useState(false);
 
+  // Use your actual billing hook
   const {
     subscription,
     invoices,
     usageStats,
     isLoading,
     error,
+    setError,
     formatDate,
     formatCurrency,
     cancelSubscription,
+    loadAllBillingData,
   } = useBilling();
+
+  // Debug: Log subscription data
+  console.log('Subscription data:', subscription);
 
   const handleCancelSubscription = async () => {
     setCancelInProgress(true);
+    setError(null);
 
     try {
       const success = await cancelSubscription();
       if (success) {
         setIsCancelDialogOpen(false);
+        // Data will be automatically refreshed by the hook
       }
+    } catch (err: unknown) {
+      console.error('Error cancelling subscription:', err);
+      setError(err instanceof Error ? err.message : 'Failed to cancel subscription');
     } finally {
       setCancelInProgress(false);
     }
   };
 
-  const getStatusBadgeClass = (status: string) => {
+  const handleRetry = () => {
+    setError(null);
+    loadAllBillingData();
+  };
+
+  const getStatusBadgeClass = (status: string | undefined) => {
     switch (status?.toUpperCase()) {
       case 'ACTIVE':
         return 'bg-green-50 text-green-700 border border-green-200';
       case 'PAST_DUE':
         return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
       case 'CANCELED':
+      case 'CANCELLED':
         return 'bg-gray-50 text-gray-700 border border-gray-200';
       case 'TRIAL':
         return 'bg-blue-50 text-blue-700 border border-blue-200';
@@ -128,7 +88,7 @@ export default function BillingSettings() {
     }
   };
 
-  const tierFeatures: Record<string, string[]> = {
+  const tierFeatures = {
     FREE: [
       'Basic access with limited operations',
       'Up to 2 devices',
@@ -165,14 +125,17 @@ export default function BillingSettings() {
       'SOC2 compliance',
       '60 days offline grace period',
     ],
-  };
+  } as const;
+
+  type TierType = keyof typeof tierFeatures;
 
   const getCurrentTierFeatures = () => {
-    const tier = subscription?.tier?.toUpperCase() || 'FREE';
+    const tier = (subscription?.tier?.toUpperCase() || 'FREE') as TierType;
     return tierFeatures[tier] || tierFeatures.FREE;
   };
 
-  if (isLoading) {
+  // Show loading state OR if we don't have subscription data yet
+  if (isLoading || !subscription) {
     return (
       <div>
         <div className="mb-6">
@@ -204,6 +167,7 @@ export default function BillingSettings() {
     );
   }
 
+  // Show error state
   if (error) {
     return (
       <div>
@@ -222,9 +186,9 @@ export default function BillingSettings() {
               <p className="text-red-700">{error}</p>
             </div>
           </div>
-          <Button onClick={() => window.location.reload()} className="mt-4" variant="outline">
+          <Button onClick={handleRetry} className="mt-4" variant="outline">
             <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh Page
+            Try Again
           </Button>
         </div>
       </div>
@@ -245,47 +209,48 @@ export default function BillingSettings() {
         <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
           <div className="p-6">
             <h2 className="text-base font-medium mb-4">Current Plan</h2>
-            <div className="bg-blue-50 border border-blue-100 rounded-md p-4 mb-6">
+            <div className="border border-border rounded-md p-4 mb-6">
               <div className="flex items-center">
-                <Shield className="h-5 w-5 text-blue-600 mr-2" />
-                <h3 className="text-md font-medium text-blue-900">
-                  {subscription?.tier || 'Free'} Plan
+                <Shield className="h-5 w-5 mr-2" />
+                <h3 className="text-md font-medium">
+                  {subscription?.tier?.toUpperCase() || 'Free'} Plan
                 </h3>
                 <div className="ml-auto">
                   <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(subscription?.status || 'FREE')}`}
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(subscription?.status)}`}
                   >
-                    {subscription?.status || 'FREE'}
+                    {subscription?.status?.toUpperCase() || 'FREE'}
                   </span>
                 </div>
               </div>
-              {subscription?.status === 'ACTIVE' && subscription?.expiresAt && (
-                <p className="mt-2 text-sm text-blue-700">
+              {subscription?.status === 'active' && subscription?.expiresAt && (
+                <p className="mt-2 text-sm">
                   Your subscription will renew on {formatDate(subscription.expiresAt)}
                 </p>
               )}
-              {subscription?.status === 'CANCELED' && subscription?.expiresAt && (
-                <p className="mt-2 text-sm text-blue-700">
-                  Your subscription will end on {formatDate(subscription.expiresAt)}
-                </p>
-              )}
-              {subscription?.status === 'TRIAL' && subscription?.expiresAt && (
-                <p className="mt-2 text-sm text-blue-700">
+              {(subscription?.status === 'canceled' || subscription?.status === 'cancelled') &&
+                subscription?.expiresAt && (
+                  <p className="mt-2 text-sm">
+                    Your subscription will end on {formatDate(subscription.expiresAt)}
+                  </p>
+                )}
+              {subscription?.status === 'trial' && subscription?.expiresAt && (
+                <p className="mt-2 text-sm">
                   Your trial will end on {formatDate(subscription.expiresAt)}
                 </p>
               )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {subscription?.licenseKey && (
+              {subscription?.subscriptionId && (
                 <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
-                  <p className="text-xs text-gray-500 font-medium">License Key</p>
+                  <p className="text-xs text-gray-500 font-medium">Subscription ID</p>
                   <div className="flex items-center mt-1">
-                    <p className="font-mono text-sm">{subscription.licenseKey}</p>
+                    <p className="font-mono text-sm text-xs">{subscription.subscriptionId}</p>
                     <button
-                      className="ml-2 text-blue-600 text-xs hover:text-blue-800"
+                      className="ml-2 text-xs"
                       onClick={() => {
-                        navigator.clipboard.writeText(subscription.licenseKey!);
+                        navigator.clipboard.writeText(subscription.subscriptionId);
                       }}
                     >
                       Copy
@@ -296,20 +261,27 @@ export default function BillingSettings() {
               <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
                 <p className="text-xs text-gray-500 font-medium">Subscription Type</p>
                 <p className="font-medium mt-1 text-sm">
-                  {subscription?.billingType === 'monthly' ? 'Monthly' : 'Annual'}
-                  {subscription?.status === 'TRIAL' ? ' Trial' : ''}
+                  {subscription?.billingType === 'monthly'
+                    ? 'Monthly'
+                    : subscription?.billingType === 'annual'
+                      ? 'Annual'
+                      : 'Unknown'}
+                  {subscription?.status === 'trial' ? ' Trial' : ''}
                 </p>
               </div>
-              {subscription?.issuedAt && (
+              {subscription?.startDate && (
                 <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
                   <p className="text-xs text-gray-500 font-medium">Start Date</p>
-                  <p className="font-medium mt-1 text-sm">{formatDate(subscription.issuedAt)}</p>
+                  <p className="font-medium mt-1 text-sm">{formatDate(subscription.startDate)}</p>
                 </div>
               )}
               {subscription?.expiresAt && (
                 <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
                   <p className="text-xs text-gray-500 font-medium">
-                    {subscription?.status === 'CANCELED' ? 'End' : 'Renewal'} Date
+                    {subscription?.status === 'canceled' || subscription?.status === 'cancelled'
+                      ? 'End'
+                      : 'Renewal'}{' '}
+                    Date
                   </p>
                   <p className="font-medium mt-1 text-sm">{formatDate(subscription.expiresAt)}</p>
                 </div>
@@ -333,7 +305,7 @@ export default function BillingSettings() {
                       width:
                         usageStats.limit === -1
                           ? '5%'
-                          : `${Math.min(100, (usageStats.currentUsage / usageStats.limit) * 100)}%`,
+                          : `${Math.min(100, usageStats.utilizationPercentage || 0)}%`,
                     }}
                   ></div>
                 </div>
@@ -346,7 +318,7 @@ export default function BillingSettings() {
               </div>
               <div className="p-4">
                 <ul className="space-y-2">
-                  {getCurrentTierFeatures().map((feature, index) => (
+                  {getCurrentTierFeatures().map((feature: string, index: number) => (
                     <li key={index} className="flex items-center text-sm">
                       <Check className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
                       {feature}
@@ -371,10 +343,10 @@ export default function BillingSettings() {
               className="inline-flex items-center px-4 py-2 border border-black bg-black text-sm text-white rounded-md hover:bg-gray-800"
             >
               <ArrowUpRight className="h-4 w-4 mr-2" />
-              {subscription?.status === 'ACTIVE' ? 'Change Plan' : 'Upgrade Plan'}
+              {subscription?.status === 'active' ? 'Change Plan' : 'Upgrade Plan'}
             </Link>
 
-            {subscription?.status === 'ACTIVE' && (
+            {subscription?.status === 'active' && (
               <Button
                 variant="outline"
                 className="border-red-600 text-red-600 hover:bg-red-50 text-sm"
@@ -393,7 +365,7 @@ export default function BillingSettings() {
           <div className="p-6">
             <h2 className="text-base font-medium mb-4">Billing History</h2>
 
-            {invoices.length === 0 ? (
+            {!invoices || invoices.length === 0 ? (
               <div className="text-center py-8 border border-gray-200 rounded-md">
                 <Calendar className="h-10 w-10 text-gray-400 mx-auto mb-2" />
                 <p className="text-gray-500 text-sm">No billing history available yet</p>
@@ -430,7 +402,7 @@ export default function BillingSettings() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {invoices.map(invoice => (
+                    {invoices.map((invoice: Invoice) => (
                       <tr key={invoice.invoiceId}>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {formatDate(invoice.createdAt)}
@@ -444,7 +416,9 @@ export default function BillingSettings() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <a
-                            href={`/billing/invoices/${invoice.invoiceId}/pdf`}
+                            href={
+                              invoice.pdfUrl || `/api/billing/invoices/${invoice.invoiceId}/pdf`
+                            }
                             className="text-blue-600 hover:text-blue-900 inline-flex items-center"
                             target="_blank"
                             rel="noopener noreferrer"
@@ -477,8 +451,17 @@ export default function BillingSettings() {
             <div className="flex gap-3">
               <Clock className="h-5 w-5 text-yellow-500 flex-shrink-0" />
               <p className="text-sm text-yellow-700">
-                Your subscription will remain active until {formatDate(subscription?.expiresAt)},
-                and you will not be charged again.
+                {subscription?.expiresAt ? (
+                  <>
+                    Your subscription will remain active until {formatDate(subscription.expiresAt)},
+                    and you will not be charged again.
+                  </>
+                ) : (
+                  <>
+                    Your subscription will remain active until the end of your current billing
+                    period, and you will not be charged again.
+                  </>
+                )}
               </p>
             </div>
           </div>

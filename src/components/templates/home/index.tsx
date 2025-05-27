@@ -362,13 +362,13 @@ const HomeTemplate: React.FC = () => {
 
   // Function to render empty state
   const renderEmptyState = () => (
-    <div className="bg-white rounded-lg border p-4 sm:p-8 text-center">
+    <div className="p-4 sm:p-8 text-center">
       <div className="max-w-sm mx-auto">
-        <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-          <FileText className="h-8 w-8 text-gray-400" />
+        <div className="bg-white border border-border w-16 h-16 rounded flex items-center justify-center mx-auto mb-4">
+          <FileText className="h-8 w-8" />
         </div>
-        <p className="text-gray-700 text-base sm:text-lg font-medium mb-2">No files found</p>
-        <p className="text-gray-500 text-sm sm:text-base mb-4 sm:mb-6">
+        <p className="text-sm font-medium mb-2">No files found</p>
+        <p className="text-muted-foreground text-sm mb-4 sm:mb-6">
           Upload your first file to get started with your analysis
         </p>
         <FilePickerWrapper onUploadComplete={handleFileUploadComplete}>
@@ -627,7 +627,7 @@ const HomeTemplate: React.FC = () => {
             {/* Action dropdown button (Desktop only) */}
             <div className="hidden sm:flex w-auto items-center justify-start space-x-3">
               <Select>
-                <SelectTrigger className="w-[140px] h-10 bg-primary !text-white">
+                <SelectTrigger className="w-[140px] h-10 bg-foreground !text-white">
                   <Plus className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Create..." />
                 </SelectTrigger>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useTabs } from '@/contexts/tabs-context';
 import { updateTab } from '@/contexts/tabs-context/actions';
 import { Button } from '@/components/atoms/button';
@@ -11,6 +11,11 @@ import {
   LuPlus,
   LuSquareActivity,
   LuSquareChartGantt,
+  LuSave,
+  LuHistory,
+  LuClock,
+  LuDownload,
+  LuRewind,
 } from 'react-icons/lu';
 import Spreadsheet from '@/components/templates/spreadsheet';
 import { useProject } from '@/contexts/project-context';
@@ -25,6 +30,16 @@ import { FolderComponent } from '@/components/organisms/file-tree';
 import { Users } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import CollaborationPanel from '@/components/organisms/collaboration-panel';
+import { useFileHandler } from '@/hooks/api/use-file';
+import { toast } from '@/hooks/ui/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/molecules/dialog';
+import Loading from '@/components/molecules/loading';
 
 interface Column {
   id: string;
@@ -66,9 +81,28 @@ interface RowSelection {
 
 export type Tab = SpreadsheetTab | MarkdownTab | BaseTab;
 
-// Type guard
-function isSpreadsheetTab(tab: Tab): tab is SpreadsheetTab {
-  return tab.type === ViewType.SPREADSHEET;
+// Type guard with null/undefined check
+function isSpreadsheetTab(tab: Tab | undefined | null): tab is SpreadsheetTab {
+  return tab !== undefined && tab !== null && tab.type === ViewType.SPREADSHEET;
+}
+
+// Extract fileId from file path
+// This handles both formats:
+// 1. Full path: users/userId/fileId/filename
+// 2. Direct fileId
+function extractFileId(filePath?: string): string | null {
+  if (!filePath) return null;
+
+  // If the path contains slashes, it's a full path
+  if (filePath.includes('/')) {
+    const parts = filePath.split('/');
+    if (parts.length >= 3) {
+      return parts[2];
+    }
+  }
+
+  // Otherwise, assume it's a direct fileId
+  return filePath;
 }
 
 // Utility Types
@@ -119,14 +153,45 @@ const TabManager: React.FC<TabManagerProps> = ({
   const [showStats, setShowStats] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-
-  console.log(activeTab);
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [savingStatus, setSavingStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  const [fileVersions, setFileVersions] = useState<any[]>([]);
+  const [isLoadingVersions, setIsLoadingVersions] = useState(false);
+  const [reverting, setReverting] = useState(false);
 
   // Hooks
   const { state: tabState, dispatch } = useTabs();
   const { state, dispatch: projectDispatch } = useProject();
+  const {
+    saveFile,
+    isSaving,
+    lastSavedTime,
+    getFileVersions,
+    getFileVersion,
+    revertToVersion,
+    setupAutoSave,
+  } = useFileHandler({});
 
   const [activeRowSelection, setActiveRowSelection] = useState<RowSelection>({});
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Get current file ID - with null checks
+  const currentFileId = useMemo(() => {
+    if (!activeTab) return null;
+
+    console.log('Active Tab:', activeTab);
+    console.log('Is Spreadsheet Tab:', isSpreadsheetTab(activeTab));
+    console.log('Active Tab isDirty:', activeTab.isDirty);
+
+    if (isSpreadsheetTab(activeTab)) {
+      return extractFileId(activeTab.data.filePath);
+    } else if (activeTab.path) {
+      return extractFileId(activeTab.path);
+    }
+
+    return null;
+  }, [activeTab]);
 
   // Handlers
   const createDebouncedHandler = useCallback(
@@ -142,13 +207,33 @@ const TabManager: React.FC<TabManagerProps> = ({
               isDirty: true,
             })
           );
-        } catch (e) {}
+
+          // If auto-save is enabled, schedule a save
+          if (autoSaveEnabled && currentFileId) {
+            // Clear any existing auto-save timer
+            if (autoSaveTimerRef.current) {
+              clearTimeout(autoSaveTimerRef.current);
+            }
+
+            // Set a new timer
+            autoSaveTimerRef.current = setTimeout(() => {
+              handleSaveFile();
+            }, 30000); // Auto-save after 30 seconds of inactivity
+          }
+        } catch (e) {
+          console.error('Error in debounced handler:', e);
+        }
       }, 500);
     },
-    [dispatch]
+    [dispatch, autoSaveEnabled, currentFileId]
   );
 
   const debouncedHandlers = useMemo(() => {
+    // Add safety check for tabs
+    if (!tabs || !Array.isArray(tabs)) {
+      return {};
+    }
+
     return tabs.filter(isSpreadsheetTab).reduce(
       (acc, tab) => {
         acc[tab.id] = createDebouncedHandler(tab);
@@ -157,6 +242,188 @@ const TabManager: React.FC<TabManagerProps> = ({
       {} as Record<string, ReturnType<typeof createDebouncedHandler>>
     );
   }, [tabs, createDebouncedHandler]);
+
+  // Handle save
+  const handleSaveFile = async () => {
+    console.log('handleSaveFile called');
+    if (!activeTab || !isSpreadsheetTab(activeTab)) {
+      console.log('handleSaveFile: No active spreadsheet tab');
+      toast({
+        title: 'Cannot save',
+        description: 'No active file',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!currentFileId) {
+      console.log('handleSaveFile: No currentFileId');
+      toast({
+        title: 'Save As required',
+        description: 'This file has not been saved before. Please use "Save As" to save it.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    // Don't save if the file isn't dirty
+    if (!activeTab.isDirty) {
+      console.log('handleSaveFile: Tab is not dirty');
+      toast({
+        title: 'No changes to save',
+        description: 'The file is already up to date',
+      });
+      return;
+    }
+
+    console.log('handleSaveFile: Setting savingStatus to saving');
+    setSavingStatus('saving');
+
+    try {
+      console.log('handleSaveFile: Calling saveFile with fileId', currentFileId);
+      // Save the file content
+      const success = await saveFile(currentFileId, activeTab.data.initialData);
+
+      if (success) {
+        console.log('handleSaveFile: saveFile succeeded');
+        // Update tab to mark as no longer dirty
+        dispatch(
+          updateTab(activeTab.id, {
+            isDirty: false,
+          })
+        );
+
+        console.log('handleSaveFile: Setting savingStatus to saved');
+        setSavingStatus('saved');
+        toast({
+          title: 'File saved',
+          description: 'Your changes have been saved successfully',
+        });
+      }
+    } catch (error) {
+      console.error('Error saving file:', error);
+      setSavingStatus('error');
+      toast({
+        title: 'Save failed',
+        description: 'There was an error saving your file. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      console.log('handleSaveFile: Finally block executed');
+      // Reset status after a delay
+      setTimeout(() => {
+        if (savingStatus === 'saved' || savingStatus === 'error') {
+          console.log('handleSaveFile: Resetting savingStatus to idle');
+          setSavingStatus('idle');
+        }
+      }, 3000);
+    }
+  };
+
+  // Handle version history
+  const handleOpenVersionHistory = async () => {
+    if (!activeTab || !isSpreadsheetTab(activeTab)) {
+      toast({
+        title: 'No file selected',
+        description: 'Please select a file to view its version history',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!currentFileId) {
+      toast({
+        title: 'Save As required',
+        description: 'This file has not been saved before. Please use "Save As" to save it.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    setShowVersionHistory(true);
+    setIsLoadingVersions(true);
+
+    try {
+      const versions = await getFileVersions(currentFileId);
+      setFileVersions(versions);
+    } catch (error) {
+      console.error('Error loading versions:', error);
+      toast({
+        title: 'Failed to load version history',
+        description: 'There was an error loading the version history. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoadingVersions(false);
+    }
+  };
+
+  // Handle downloading a version
+  const handleDownloadVersion = async (versionId: string) => {
+    if (!currentFileId) return;
+
+    try {
+      const downloadInfo = await getFileVersion(currentFileId, versionId);
+
+      // Create a temporary link and click it to start download
+      const link = document.createElement('a');
+      link.href = downloadInfo.downloadUrl;
+      link.setAttribute('download', downloadInfo.fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: 'Download started',
+        description: 'Your file will download shortly',
+      });
+    } catch (error) {
+      console.error('Error downloading version:', error);
+      toast({
+        title: 'Download failed',
+        description: 'There was an error downloading this version. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Handle reverting to a version
+  const handleRevertToVersion = async (versionId: string) => {
+    if (!currentFileId) return;
+
+    setReverting(true);
+
+    try {
+      await revertToVersion(currentFileId, versionId);
+
+      // Close the dialog
+      setShowVersionHistory(false);
+
+      // Reload the current tab data
+      setSpreadsheetVersion(prev => prev + 1);
+
+      // Update the tab to mark as not dirty
+      if (activeTab) {
+        dispatch(
+          updateTab(activeTab.id, {
+            isDirty: false,
+          })
+        );
+      }
+
+      toast({
+        title: 'Version restored',
+        description: 'The file has been reverted to the selected version',
+      });
+    } catch (error) {
+      console.error('Error reverting to version:', error);
+      toast({
+        title: 'Revert failed',
+        description: 'There was an error reverting to this version. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setReverting(false);
+    }
+  };
 
   const handleToggleFolder = useCallback(() => {
     if (!state.leftPanelOpen) {
@@ -171,7 +438,7 @@ const TabManager: React.FC<TabManagerProps> = ({
 
   const [spreadsheetVersion, setSpreadsheetVersion] = useState(0);
 
-  // 2. Update your handleAddRow and handleDeleteRows functions to increment the version:
+  // Handle adding a row
   const handleAddRow = useCallback(() => {
     if (!activeTab || !isSpreadsheetTab(activeTab)) {
       return;
@@ -215,9 +482,12 @@ const TabManager: React.FC<TabManagerProps> = ({
 
       // Force re-render of the spreadsheet
       setSpreadsheetVersion(prev => prev + 1);
-    } catch (e) {}
+    } catch (e) {
+      console.error('Error adding row:', e);
+    }
   }, [activeTab, dispatch, activeRowSelection]);
 
+  // Handle deleting rows
   const handleDeleteRows = useCallback(() => {
     if (!activeTab || !isSpreadsheetTab(activeTab)) return;
 
@@ -253,13 +523,26 @@ const TabManager: React.FC<TabManagerProps> = ({
 
       // Force re-render of the spreadsheet
       setSpreadsheetVersion(prev => prev + 1);
-    } catch (e) {}
+    } catch (e) {
+      console.error('Error deleting rows:', e);
+    }
   }, [activeTab, dispatch, activeRowSelection]);
 
   // Cleanup
   useEffect(() => {
     return () => {
-      Object.values(debouncedHandlers).forEach(handler => handler.cancel());
+      if (debouncedHandlers && typeof debouncedHandlers === 'object') {
+        Object.values(debouncedHandlers).forEach(handler => {
+          if (handler && typeof handler.cancel === 'function') {
+            handler.cancel();
+          }
+        });
+      }
+
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+        autoSaveTimerRef.current = null;
+      }
     };
   }, [debouncedHandlers]);
 
@@ -284,7 +567,8 @@ const TabManager: React.FC<TabManagerProps> = ({
   );
 
   const renderTabContent = (tab: Tab) => {
-    if (tab.id !== activeTab?.id) return null;
+    // First check if we have an active tab
+    if (!activeTab || tab.id !== activeTab.id) return null;
 
     if (tab.type === ViewType.MARKDOWN) {
       return (
@@ -313,26 +597,12 @@ const TabManager: React.FC<TabManagerProps> = ({
           </AnalyticsLayout>
         );
 
-      // case ViewType.MODEL_BUILDER:
-      //   return (
-      //     <div className="h-full">
-      //       <ModelBuilder />
-      //     </div>
-      //   );
-
       case ViewType.NOTEBOOK:
         return (
           <div className="h-full">
             <Notebook />
           </div>
         );
-
-      // case ViewType.PLUGINS:
-      //   return (
-      //     <div className="h-full">
-      //       <PluginsLayout />
-      //     </div>
-      //   );
 
       default:
         return (
@@ -356,9 +626,49 @@ const TabManager: React.FC<TabManagerProps> = ({
           >
             <LuFolder />
           </Button>
-          <h1 className="text-sm font-semibold">{activeTab?.name}</h1>
+          <h1 className="text-sm font-medium">
+            {activeTab?.name}
+            {activeTab?.isDirty && <span className="ml-1 text-muted-foreground">*</span>}
+          </h1>
+          {lastSavedTime && (
+            <span className="text-xs text-muted-foreground ml-2">
+              Last saved: {new Date(lastSavedTime).toLocaleTimeString()}
+            </span>
+          )}
         </div>
         <div className="flex-none flex items-center px-2">
+          {/* Save Button - show for any spreadsheet tab */}
+          {activeTab && isSpreadsheetTab(activeTab) && currentFileId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 relative"
+              onClick={handleSaveFile}
+              disabled={savingStatus === 'saving' || !activeTab.isDirty}
+              title="Save"
+            >
+              <LuSave className={savingStatus === 'saving' ? 'animate-pulse' : ''} />
+              {activeTab.isDirty && (
+                <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-primary"></span>
+              )}
+              <span className="sr-only">Save</span>
+            </Button>
+          )}
+
+          {/* Version History Button - show for any spreadsheet tab */}
+          {activeTab && isSpreadsheetTab(activeTab) && currentFileId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={handleOpenVersionHistory}
+              title="Version History"
+            >
+              <LuHistory />
+              <span className="sr-only">Version History</span>
+            </Button>
+          )}
+
           <Popover>
             <PopoverTrigger>
               <Button
@@ -401,61 +711,67 @@ const TabManager: React.FC<TabManagerProps> = ({
 
       {/* Tab Content Area - Tabs are now only responsible for rendering content */}
       <div className="absolute inset-0 top-10 bg-background">
-        {tabs.map(tab => (
-          <div
-            key={tab.id}
-            className="absolute inset-0 bg-background flex flex-col"
-            style={{ display: activeTab?.id === tab.id ? 'flex' : 'none' }}
-          >
-            {showMenu && (
-              <div className="flex flex-row items-center justify-between bg-background border-b border-border px-1 min-h-8">
-                <div className="flex flex-row items-center">
-                  <Button size="icon" variant="ghost" onClick={handleAddRow}>
-                    <LuPlus />
-                  </Button>
-                  <Button size="icon" variant="ghost" onClick={handleDeleteRows}>
-                    <LuMinus />
-                  </Button>
-                  <Separator orientation="vertical" className="h-4 mx-2" />
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() =>
-                      projectDispatch({ type: ProjectActions.SET_VIEW, payload: ViewType.CHARTS })
-                    }
-                    data-state={state.activeView === ViewType.CHARTS ? 'active' : 'inactive'}
-                  >
-                    <LuSquareActivity />
-                    <span className="sr-only">Toggle Analytics</span>
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => setShowStats(prev => !prev)}
-                    data-state={showStats ? 'active' : 'inactive'}
-                  >
-                    <LuSquareChartGantt />
-                    <span className="sr-only">Toggle Stats</span>
-                  </Button>
-                </div>
-                <div className="flex flex-row items-center">
-                  <Button size="icon" variant="ghost" onClick={() => setShowFilters(!showFilters)}>
-                    <LuListFilter />
-                  </Button>
-                </div>
-              </div>
-            )}
+        {/* Add check to ensure tabs is an array */}
+        {Array.isArray(tabs) &&
+          tabs.map(tab => (
             <div
-              className="flex-1 relative"
-              style={{
-                height: showMenu ? 'calc(100% - 32px)' : '100%',
-              }}
+              key={tab.id}
+              className="absolute inset-0 bg-background flex flex-col"
+              style={{ display: activeTab?.id === tab.id ? 'flex' : 'none' }}
             >
-              {renderTabContent(tab)}
+              {showMenu && (
+                <div className="flex flex-row items-center justify-between bg-background border-b border-border px-1 min-h-8">
+                  <div className="flex flex-row items-center">
+                    <Button size="icon" variant="ghost" onClick={handleAddRow}>
+                      <LuPlus />
+                    </Button>
+                    <Button size="icon" variant="ghost" onClick={handleDeleteRows}>
+                      <LuMinus />
+                    </Button>
+                    <Separator orientation="vertical" className="h-4 mx-2" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() =>
+                        projectDispatch({ type: ProjectActions.SET_VIEW, payload: ViewType.CHARTS })
+                      }
+                      data-state={state.activeView === ViewType.CHARTS ? 'active' : 'inactive'}
+                    >
+                      <LuSquareActivity />
+                      <span className="sr-only">Toggle Analytics</span>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setShowStats(prev => !prev)}
+                      data-state={showStats ? 'active' : 'inactive'}
+                    >
+                      <LuSquareChartGantt />
+                      <span className="sr-only">Toggle Stats</span>
+                    </Button>
+                  </div>
+                  <div className="flex flex-row items-center">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => setShowFilters(!showFilters)}
+                    >
+                      <LuListFilter />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <div
+                className="flex-1 relative"
+                style={{
+                  height: showMenu ? 'calc(100% - 32px)' : '100%',
+                }}
+              >
+                {renderTabContent(tab)}
+              </div>
             </div>
-          </div>
-        ))}
-        {tabs.length === 0 && (
+          ))}
+        {(!Array.isArray(tabs) || tabs.length === 0) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-background text-muted-foreground">
             <LuFolder className="h-12 w-12 mb-4" />
             <h2 className="text-lg font-medium mb-2">No File Open</h2>
@@ -463,6 +779,101 @@ const TabManager: React.FC<TabManagerProps> = ({
           </div>
         )}
       </div>
+
+      {/* Version History Dialog */}
+      <Dialog open={showVersionHistory} onOpenChange={setShowVersionHistory}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LuHistory className="h-5 w-5" />
+              Version History
+            </DialogTitle>
+            <DialogDescription>
+              View and restore previous versions of {activeTab?.name || 'this file'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-4 max-h-[400px] overflow-y-auto">
+            {isLoadingVersions ? (
+              <div className="flex justify-center py-8">
+                <Loading />
+              </div>
+            ) : fileVersions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                <p>No version history found for this file.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {fileVersions.map(version => (
+                  <div
+                    key={version.versionId}
+                    className="flex flex-col rounded-md border border-border p-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <LuClock className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">
+                          {new Date(version.lastModified).toLocaleString()}
+                        </span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {Math.round(version.size / 1024)} KB
+                      </span>
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      {version.isLatest && (
+                        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs text-primary">
+                          Current Version
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-2 flex justify-between">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-xs"
+                        onClick={() => handleDownloadVersion(version.versionId)}
+                      >
+                        <LuDownload className="mr-1 h-3 w-3" />
+                        Download
+                      </Button>
+                      {!version.isLatest && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => handleRevertToVersion(version.versionId)}
+                          disabled={reverting}
+                        >
+                          <LuRewind className="mr-1 h-3 w-3" />
+                          Revert to this version
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save status notification */}
+      {savingStatus === 'saving' && (
+        <div className="fixed bottom-4 right-4 bg-amber-500 text-white px-4 py-2 rounded shadow-lg">
+          Saving...
+        </div>
+      )}
+      {savingStatus === 'saved' && (
+        <div className="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded shadow-lg">
+          Saved successfully
+        </div>
+      )}
+      {savingStatus === 'error' && (
+        <div className="fixed bottom-4 right-4 bg-red-500 text-white px-4 py-2 rounded shadow-lg">
+          Save failed
+        </div>
+      )}
     </div>
   );
 };
