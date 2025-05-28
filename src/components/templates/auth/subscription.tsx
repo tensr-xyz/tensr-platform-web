@@ -27,6 +27,7 @@ import { Card } from '@/components/atoms/card';
 import Loading from '@/components/molecules/loading';
 import Link from 'next/link';
 import { ArrowLeft, Mail } from 'lucide-react';
+import Image from 'next/image';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -201,6 +202,13 @@ const PaymentPage = () => {
   const currentPrice = pricingData[formData.tier][formData.billingType];
   const discount = formData.billingType === 'annual' ? 'Save 20%' : '';
 
+  // Get price display for header
+  const getPriceDisplay = () => {
+    if (formData.tier === 'education') return 'Free';
+    if (formData.tier === 'enterprise') return 'Contact for pricing';
+    return `$${currentPrice} ${formData.billingType === 'monthly' ? '/month' : '/year'}`;
+  };
+
   // Input handlers
   const handleInputChange = <K extends keyof FormData>(field: K, value: FormData[K]) => {
     setFormData(prev => {
@@ -217,6 +225,22 @@ const PaymentPage = () => {
         return newErrors;
       });
     }
+  };
+
+  // Handle plan selection with direct navigation for enterprise
+  const handlePlanSelect = (tier: TierType) => {
+    handleInputChange('tier', tier);
+
+    // For enterprise, show contact modal/redirect immediately
+    if (tier === 'enterprise') {
+      window.location.href = 'mailto:help@tensr.xyz?subject=Enterprise Plan Inquiry';
+      return;
+    }
+
+    // For other plans, proceed to next step after selection
+    setTimeout(() => {
+      setCurrentStep(1);
+    }, 100);
   };
 
   // Validate current step
@@ -507,10 +531,11 @@ const PaymentPage = () => {
           {Object.keys(pricingData).map(tier => (
             <Card
               key={tier}
-              className={`p-4 hover:border-black cursor-pointer duration-100 ${formData.tier === tier ? 'border-primary' : ''}`}
-              onClick={() => handleInputChange('tier', tier as TierType)}
+              className={`p-4 border-2 hover:border-black cursor-pointer duration-100 ${
+                formData.tier === tier ? 'border-primary bg-primary/5' : 'border-gray-200'
+              }`}
             >
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-start mb-4">
                 <div className="flex flex-col">
                   <div className="flex items-center gap-2">
                     <div className="text-lg font-medium capitalize">{tier}</div>
@@ -518,7 +543,7 @@ const PaymentPage = () => {
                       <span className="text-xs bg-gray-100 px-2 py-1 rounded-full">Free</span>
                     )}
                   </div>
-                  <div className="text-sm text-[rgba(29,42,41,0.65)]">
+                  <div className="text-sm text-[rgba(29,42,41,0.65)] mt-1">
                     {pricingData[tier].description}
                   </div>
                 </div>
@@ -543,7 +568,7 @@ const PaymentPage = () => {
               </div>
 
               {/* Feature highlights */}
-              <div className="mt-4 space-y-2">
+              <div className="mb-4 space-y-2">
                 {(TIER_FEATURES[tier.toUpperCase() as keyof typeof TIER_FEATURES] || [])
                   .slice(0, 3)
                   .map((feature, index) => (
@@ -554,14 +579,14 @@ const PaymentPage = () => {
                   ))}
               </div>
 
-              {/* Add Contact Buttons for Enterprise tier */}
-              {tier === 'enterprise' && (
-                <div className="mt-4 space-y-2">
+              {/* Action Button */}
+              <div className="mt-4">
+                {tier === 'enterprise' ? (
                   <Button
                     variant="outline"
                     className="w-full flex items-center justify-center gap-2"
                     onClick={e => {
-                      e.stopPropagation(); // Prevent card selection
+                      e.stopPropagation();
                       window.location.href =
                         'mailto:help@tensr.xyz?subject=Enterprise Plan Inquiry';
                     }}
@@ -569,8 +594,17 @@ const PaymentPage = () => {
                     <Mail size={16} />
                     Contact Sales
                   </Button>
-                </div>
-              )}
+                ) : (
+                  <Button
+                    variant={formData.tier === tier ? 'default' : 'outline'}
+                    className="w-full"
+                    onClick={() => handlePlanSelect(tier as TierType)}
+                  >
+                    {formData.tier === tier ? 'Selected' : 'Select Plan'}
+                    {formData.tier === tier && <LuCheck className="ml-2" size={16} />}
+                  </Button>
+                )}
+              </div>
             </Card>
           ))}
         </div>
@@ -583,6 +617,7 @@ const PaymentPage = () => {
       <div className="text-xl md:text-2xl">Billing Information</div>
 
       <div className="grid gap-4">
+        {/* Contact Information - Full width */}
         <FloatingLabelInput
           label="Full Name"
           value={formData.name}
@@ -602,6 +637,7 @@ const PaymentPage = () => {
           type="email"
         />
 
+        {/* Address - Full width */}
         <FloatingLabelInput
           label="Billing Address"
           value={formData.billingAddress}
@@ -611,7 +647,8 @@ const PaymentPage = () => {
           labelClassName="text-[rgba(29,42,41,0.65)]"
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {/* City and State - 2 columns on mobile and desktop */}
+        <div className="grid grid-cols-2 gap-3 sm:gap-4">
           <FloatingLabelInput
             label="City"
             value={formData.billingCity}
@@ -631,39 +668,44 @@ const PaymentPage = () => {
           />
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <FloatingLabelInput
-            label="Postal Code"
-            value={formData.billingZip}
-            onChange={e => handleInputChange('billingZip', e.target.value)}
-            inputClassName="focus:ring-black"
-            focusedLabelClassName="text-black"
-            labelClassName="text-[rgba(29,42,41,0.65)]"
-          />
+        {/* Postal Code and Country - 2 columns with responsive sizing */}
+        <div className="grid grid-cols-5 gap-3 sm:gap-4">
+          <div className="col-span-2">
+            <FloatingLabelInput
+              label="Postal Code"
+              value={formData.billingZip}
+              onChange={e => handleInputChange('billingZip', e.target.value)}
+              inputClassName="focus:ring-black"
+              focusedLabelClassName="text-black"
+              labelClassName="text-[rgba(29,42,41,0.65)]"
+            />
+          </div>
 
-          <Select
-            value={formData.billingCountry}
-            onValueChange={value => handleInputChange('billingCountry', value)}
-          >
-            <SelectTrigger className="h-16">
-              <SelectValue placeholder="Select Country" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="US">United States</SelectItem>
-              <SelectItem value="CA">Canada</SelectItem>
-              <SelectItem value="GB">United Kingdom</SelectItem>
-              <SelectItem value="AU">Australia</SelectItem>
-              <SelectItem value="DE">Germany</SelectItem>
-              <SelectItem value="FR">France</SelectItem>
-              <SelectItem value="JP">Japan</SelectItem>
-              <SelectItem value="IN">India</SelectItem>
-              <SelectItem value="BR">Brazil</SelectItem>
-              <SelectItem value="OTHER">Other</SelectItem>
-            </SelectContent>
-          </Select>
-          {errors.billingCountry && (
-            <div className="text-red-500 text-sm">{errors.billingCountry}</div>
-          )}
+          <div className="col-span-3">
+            <Select
+              value={formData.billingCountry}
+              onValueChange={value => handleInputChange('billingCountry', value)}
+            >
+              <SelectTrigger className="h-16">
+                <SelectValue placeholder="Select Country" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="US">United States</SelectItem>
+                <SelectItem value="CA">Canada</SelectItem>
+                <SelectItem value="GB">United Kingdom</SelectItem>
+                <SelectItem value="AU">Australia</SelectItem>
+                <SelectItem value="DE">Germany</SelectItem>
+                <SelectItem value="FR">France</SelectItem>
+                <SelectItem value="JP">Japan</SelectItem>
+                <SelectItem value="IN">India</SelectItem>
+                <SelectItem value="BR">Brazil</SelectItem>
+                <SelectItem value="OTHER">Other</SelectItem>
+              </SelectContent>
+            </Select>
+            {errors.billingCountry && (
+              <div className="text-red-500 text-sm mt-1">{errors.billingCountry}</div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -963,13 +1005,7 @@ const PaymentPage = () => {
             <ArrowLeft className="mb-4" />
           </Link>
           <div className="text-xl">Subscription Plan</div>
-          <div className="text-base text-gray-600">
-            {formData.tier === 'education'
-              ? 'Free'
-              : formData.tier === 'enterprise'
-                ? 'Custom pricing'
-                : `$${currentPrice} ${formData.billingType === 'monthly' ? '/month' : '/year'}`}
-          </div>
+          <div className="text-base text-gray-600">{getPriceDisplay()}</div>
         </div>
 
         <Progress>
@@ -991,17 +1027,27 @@ const PaymentPage = () => {
 
       {/* Main content area - Full width on mobile, reduced width on desktop */}
       <div className="flex flex-col w-full md:w-3/5 px-4 py-6 md:px-16 md:py-32">
-        {/* Mobile header with back button */}
-        <div className="flex md:hidden items-center mb-4">
-          <Link href="/" className="mr-4">
-            <ArrowLeft size={20} />
+        {/* Mobile and Desktop header with logo and back button */}
+        <div className="flex items-center mb-6">
+          {/* Logo */}
+          <Link href="/">
+            <Image
+              className="absolute top-6 left-6"
+              src="/tensr_logo_light.png"
+              alt="Tensr Logo"
+              height={24}
+              width={96}
+            />
           </Link>
-          <div>
-            <div className="text-lg font-medium">Subscription Plan</div>
-            <div className="text-sm text-gray-600">
-              {formData.tier !== 'education'
-                ? `$${currentPrice} ${formData.billingType === 'monthly' ? '/month' : '/year'}`
-                : 'Free'}
+
+          {/* Back button and title - positioned to avoid logo overlap */}
+          <div className="flex items-center mt-12 md:mt-0 md:hidden">
+            <Link href="/" className="mr-4">
+              <ArrowLeft size={20} />
+            </Link>
+            <div>
+              <div className="text-lg font-medium md:text-xl">Subscription Plan</div>
+              <div className="text-sm text-gray-600 md:text-base">{getPriceDisplay()}</div>
             </div>
           </div>
         </div>
@@ -1012,35 +1058,52 @@ const PaymentPage = () => {
         <div className="w-full max-w-xl mx-auto md:mx-0">
           {renderStepContent()}
 
-          <div className="flex gap-4 mt-8">
-            {currentStep < steps.length - 1 && currentStep > 0 && (
+          {/* Navigation buttons - only show for steps that need manual navigation */}
+          {currentStep !== 0 && currentStep < steps.length - 1 && (
+            <div className="flex gap-4 mt-8">
+              {currentStep > 0 && (
+                <Button
+                  onClick={handlePrevious}
+                  disabled={loading}
+                  variant="secondary"
+                  className="bg-[#70806013] border border-[#85851A1A] hover:bg-[#70806026]"
+                >
+                  Previous
+                </Button>
+              )}
               <Button
-                onClick={handlePrevious}
+                onClick={handleNext}
                 disabled={loading}
-                variant="secondary"
-                className="bg-[#70806013] border border-[#85851A1A] hover:bg-[#70806026]"
+                variant="default"
+                className="flex-1 flex items-center justify-center gap-2"
               >
-                Previous
+                {loading
+                  ? 'Processing...'
+                  : currentStep === 2
+                    ? 'Pay Now'
+                    : currentStep === steps.length - 2
+                      ? 'Confirm Payment'
+                      : currentStep === steps.length - 1
+                        ? 'Go to Dashboard'
+                        : 'Continue'}
+                {currentStep === steps.length - 1 && <LuArrowRight size={16} />}
               </Button>
-            )}
-            <Button
-              onClick={handleNext}
-              disabled={loading}
-              variant="default"
-              className="flex-1 flex items-center justify-center gap-2"
-            >
-              {loading
-                ? 'Processing...'
-                : currentStep === 2
-                  ? 'Pay Now'
-                  : currentStep === steps.length - 2
-                    ? 'Confirm Payment'
-                    : currentStep === steps.length - 1
-                      ? 'Go to Dashboard'
-                      : 'Continue'}
-              {currentStep === steps.length - 1 && <LuArrowRight size={16} />}
-            </Button>
-          </div>
+            </div>
+          )}
+
+          {/* Success step navigation */}
+          {currentStep === steps.length - 1 && (
+            <div className="flex gap-4 mt-8">
+              <Button
+                onClick={() => router.push('/')}
+                variant="default"
+                className="flex-1 flex items-center justify-center gap-2"
+              >
+                Go to Dashboard
+                <LuArrowRight size={16} />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </div>

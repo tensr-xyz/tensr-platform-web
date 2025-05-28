@@ -425,12 +425,12 @@ const HomeTemplate: React.FC = () => {
           <div className="flex flex-wrap sm:flex-nowrap justify-between items-center gap-2 sm:gap-4">
             {/* NEW MOBILE SEARCH UI */}
             <div className="flex sm:hidden items-center gap-2 w-full">
-              <div className="flex flex-1 relative border border-gray-200 rounded-lg bg-white">
+              <div className="flex flex-1 items-center relative border border-gray-200 rounded-lg bg-white">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
 
                 <input
                   type="text"
-                  placeholder="Search Repositories and Projects..."
+                  placeholder="Search Files and Projects..."
                   className="w-full h-10 pl-10 focus:outline-none rounded-lg"
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
