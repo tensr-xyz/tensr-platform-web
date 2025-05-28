@@ -73,6 +73,7 @@ export interface SpreadsheetTab extends BaseTab {
 export interface MarkdownTab extends BaseTab {
   type: ViewType.MARKDOWN;
   path: string;
+  content?: string;
 }
 
 interface RowSelection {
@@ -571,9 +572,10 @@ const TabManager: React.FC<TabManagerProps> = ({
     if (!activeTab || tab.id !== activeTab.id) return null;
 
     if (tab.type === ViewType.MARKDOWN) {
+      const markdownTab = tab as MarkdownTab;
       return (
         <div className="h-full overflow-auto bg-background">
-          <MarkdownViewer filePath={tab.path || ''} />
+          <MarkdownViewer filePath={markdownTab.path || ''} content={markdownTab.content} />
         </div>
       );
     }

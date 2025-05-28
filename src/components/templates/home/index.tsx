@@ -626,22 +626,32 @@ const HomeTemplate: React.FC = () => {
 
             {/* Action dropdown button (Desktop only) */}
             <div className="hidden sm:flex w-auto items-center justify-start space-x-3">
-              <Select>
+              <Select
+                onValueChange={value => {
+                  if (value === 'new-file') {
+                    router.push('/file/new');
+                  } else if (value === 'upload') {
+                    // Trigger file input click
+                    const fileInput = document.getElementById('file-upload-input');
+                    if (fileInput) {
+                      fileInput.click();
+                    }
+                  }
+                }}
+              >
                 <SelectTrigger className="w-[140px] h-10 bg-foreground !text-white">
                   <Plus className="h-4 w-4 mr-2" />
                   <SelectValue placeholder="Create..." />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <FilePickerWrapper onUploadComplete={handleFileUploadComplete}>
-                      <SelectItem value="upload" className="cursor-pointer">
-                        <div className="flex items-center">
-                          <Upload className="h-4 w-4 mr-2" />
-                          <span>Upload File</span>
-                        </div>
-                      </SelectItem>
-                    </FilePickerWrapper>
-                    <SelectItem value="new-file" onClick={() => router.push('/file/new')}>
+                    <SelectItem value="upload">
+                      <div className="flex items-center">
+                        <Upload className="h-4 w-4 mr-2" />
+                        <span>Upload File</span>
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="new-file">
                       <div className="flex items-center">
                         <FilePlus className="h-4 w-4 mr-2" />
                         <span>New File</span>
@@ -650,6 +660,11 @@ const HomeTemplate: React.FC = () => {
                   </SelectGroup>
                 </SelectContent>
               </Select>
+
+              {/* Hidden file input */}
+              <FilePickerWrapper onUploadComplete={handleFileUploadComplete}>
+                <input id="file-upload-input" type="file" className="hidden" />
+              </FilePickerWrapper>
             </div>
           </div>
         </div>
