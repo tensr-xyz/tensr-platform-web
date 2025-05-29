@@ -8,6 +8,9 @@ import { AuthProvider } from '@/contexts/auth-context';
 import { AppProvider } from '@/contexts/app-context';
 import { ChartProvider } from '@/contexts/chart-context';
 import { ThemeProvider } from '@/contexts/theme-context';
+import { OrganizationProvider } from '@/contexts/organisation-context';
+import { Toaster } from '@/components/molecules/toast/toaster';
+import Providers from '@/utils/providers';
 
 const inter = Inter({
   variable: '--font-inter',
@@ -110,24 +113,31 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.className} antialiased`}>
-        <AppProvider>
-          <ThemeProvider
-            attribute="class"
-            defaultTheme="system"
-            enableSystem
-            disableTransitionOnChange
-          >
-            <ProjectProvider>
-              <AuthProvider>
-                <TabsProvider>
-                  <ChartProvider>
-                    <SidebarProvider>{children}</SidebarProvider>
-                  </ChartProvider>
-                </TabsProvider>
-              </AuthProvider>
-            </ProjectProvider>
-          </ThemeProvider>
-        </AppProvider>
+        <Providers>
+          <AppProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              <ProjectProvider>
+                <AuthProvider>
+                  <OrganizationProvider>
+                    <TabsProvider>
+                      <ChartProvider>
+                        <SidebarProvider>
+                          {children}
+                          <Toaster />
+                        </SidebarProvider>
+                      </ChartProvider>
+                    </TabsProvider>
+                  </OrganizationProvider>
+                </AuthProvider>
+              </ProjectProvider>
+            </ThemeProvider>
+          </AppProvider>
+        </Providers>
       </body>
     </html>
   );

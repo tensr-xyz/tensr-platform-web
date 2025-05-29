@@ -1,18 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-  User,
-  Building,
-  Briefcase,
-  X,
-  Menu,
-  Check,
-  Plus,
-  Settings,
-  Users,
-  LogOut,
-} from 'lucide-react';
+import { User, Building, X, Menu, Check, Plus, Settings, Users, LogOut } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/atoms/button';
 import { ChevronsUpDown } from 'lucide-react';
@@ -31,17 +20,9 @@ import { Avatar, AvatarFallback } from '@/components/atoms/avatar';
 import { useIsMobile } from '@/hooks/ui/use-mobile';
 import { User as UserType } from '@/types/user';
 import { usePathname, useRouter } from 'next/navigation';
-import { Organization, useOrganization } from '@/hooks/api/use-organisation';
 import { toast } from '@/hooks/ui/use-toast';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/molecules/dialog';
-import { Input } from '@/components/atoms/input';
-import { Label } from '@/components/atoms/label';
+import { useOrganizationContext } from '@/contexts/organisation-context';
+import { PermissionWrapper } from '@/wrappers/permission';
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -65,6 +46,26 @@ const getInitials = (email: string) => {
 export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) => {
   const isAuthenticated = !!user;
   const initials = user ? getInitials(user.email) : '';
+  const {
+    activeOrganization,
+    currentUserRole,
+    isPersonalAccount,
+    canManageOrganization,
+    canManageMembers,
+  } = useOrganizationContext();
+
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case 'ADMIN':
+        return 'bg-red-100 text-red-800';
+      case 'MEMBER':
+        return 'bg-blue-100 text-blue-800';
+      case 'VIEWER':
+        return 'bg-gray-100 text-gray-800';
+      default:
+        return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   return (
     <div
@@ -98,11 +99,58 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
               <Avatar className="h-12 w-12">
                 <AvatarFallback>{initials}</AvatarFallback>
               </Avatar>
-              <div>
+              <div className="flex-1">
                 <p className="font-medium">{user.email}</p>
                 <p className="text-sm text-gray-600">{user.subscriptionTier}</p>
+
+                {/* Organization Context */}
+                <div className="flex items-center gap-2 mt-1">
+                  {isPersonalAccount ? (
+                    <>
+                      <User className="w-3 h-3 text-gray-500" />
+                      <span className="text-xs text-gray-600">Personal Account</span>
+                    </>
+                  ) : activeOrganization ? (
+                    <>
+                      <Building className="w-3 h-3 text-gray-500" />
+                      <span className="text-xs text-gray-600">{activeOrganization.name}</span>
+                      {currentUserRole && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${getRoleBadgeColor(currentUserRole)}`}
+                        >
+                          {currentUserRole}
+                        </span>
+                      )}
+                    </>
+                  ) : null}
+                </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Organization Actions - Only show when in an organization */}
+        {isAuthenticated && !isPersonalAccount && activeOrganization && (
+          <div className="p-4 border-b border-border">
+            <div className="text-sm font-medium text-gray-500 mb-2">Organization Actions</div>
+
+            <PermissionWrapper requireOrgAdmin>
+              <Link href="/settings/organization" onClick={onClose}>
+                <div className="flex items-center gap-2 text-sm font-medium p-2 hover:bg-gray-50 rounded">
+                  <Settings className="w-4 h-4" />
+                  Organization Settings
+                </div>
+              </Link>
+            </PermissionWrapper>
+
+            <PermissionWrapper minimumRole="MEMBER">
+              <Link href="/settings/members" onClick={onClose}>
+                <div className="flex items-center gap-2 text-sm font-medium p-2 hover:bg-gray-50 rounded">
+                  <Users className="w-4 h-4" />
+                  Team Members
+                </div>
+              </Link>
+            </PermissionWrapper>
           </div>
         )}
 
@@ -132,9 +180,20 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
 
 const NavigationTabs = () => {
   const pathname = usePathname();
+  const { activeOrganization, isPersonalAccount, canManageOrganization } = useOrganizationContext();
 
-  // Only the Overview tab as requested
-  const tabs = [{ name: 'Overview', path: '/' }];
+  // Dynamic tabs based on organization context
+  const tabs = [
+    { name: 'Overview', path: '/' },
+    ...(!isPersonalAccount && activeOrganization
+      ? [
+          { name: 'Organization', path: '/organization' },
+          ...(canManageOrganization()
+            ? [{ name: 'Settings', path: '/settings/organization' }]
+            : []),
+        ]
+      : []),
+  ];
 
   return (
     <div>
@@ -157,240 +216,211 @@ const NavigationTabs = () => {
   );
 };
 
-export const AccountSwitcher = React.memo(
-  ({ user, onLogout }: { user: any; onLogout?: () => void }) => {
-    const router = useRouter();
-    const [showCreateDialog, setShowCreateDialog] = useState(false);
-    const [newOrgName, setNewOrgName] = useState('');
-    const [isCreating, setIsCreating] = useState(false);
+export const AccountSwitcher: React.FC = () => {
+  const router = useRouter();
+  const { user, logout } = useAuth();
+  const {
+    activeOrganization,
+    currentUserRole,
+    isPersonalAccount,
+    userOrganizations,
+    switchOrganization,
+    switchToPersonalAccount,
+    canManageOrganization,
+    canManageMembers,
+    isSwitching,
+  } = useOrganizationContext();
 
-    const {
-      organizations,
-      activeOrganization,
-      setActiveOrganization,
-      createOrganization,
-      fetchOrganizations,
-      isLoading,
-    } = useOrganization();
+  const [isOpen, setIsOpen] = useState(false);
 
-    const handleDropdownOpenChange = (open: boolean) => {
-      if (open && organizations.length === 0) {
-        fetchOrganizations();
-      }
-    };
+  const handleSwitchToPersonalAccount = () => {
+    switchToPersonalAccount();
+    setIsOpen(false);
+    toast({
+      title: 'Switched to Personal Account',
+      description: 'You are now in your personal workspace',
+    });
+  };
 
-    const handleCreateOrganization = async () => {
-      if (!newOrgName.trim()) return;
-
-      setIsCreating(true);
-      try {
-        const newOrg = await createOrganization({ name: newOrgName });
-        toast({
-          title: 'Organization created',
-          description: `${newOrgName} has been created successfully.`,
-        });
-        setShowCreateDialog(false);
-        setNewOrgName('');
-
-        // Navigate to the new organization's settings page
-        router.push('/settings/organisation');
-      } catch (err: any) {
-        toast({
-          title: 'Failed to create organization',
-          description: err.message || 'An error occurred while creating the organization',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsCreating(false);
-      }
-    };
-
-    const handleSwitchOrganization = (org: Organization) => {
-      setActiveOrganization(org);
-      // Optional: refresh relevant data or navigate to a specific page
-      router.push('/');
-    };
-
-    const handleOrganizationSettings = () => {
-      router.push('/settings/organisation');
-    };
-
-    const handleTeamMembers = () => {
-      router.push('/settings/members');
-    };
-
-    if (!user) {
-      return null;
+  const handleSwitchOrganization = async (orgId: string) => {
+    try {
+      await switchOrganization(orgId);
+      setIsOpen(false);
+      const orgName = userOrganizations.find(o => o.id === orgId)?.name;
+      toast({
+        title: 'Organization switched',
+        description: `Switched to ${orgName}`,
+      });
+    } catch (err: any) {
+      toast({
+        title: 'Failed to switch organization',
+        description: err.message,
+        variant: 'destructive',
+      });
     }
+  };
 
-    return (
-      <>
-        <DropdownMenu onOpenChange={handleDropdownOpenChange}>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="flex items-center gap-2 px-2 py-1.5 h-auto">
-              {activeOrganization ? (
-                <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
-                  {activeOrganization.name.charAt(0).toUpperCase()}
-                </div>
-              ) : (
-                <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-medium">
-                  {user.email.charAt(0).toUpperCase()}
-                </div>
-              )}
+  const handleLogout = () => {
+    logout();
+    setIsOpen(false);
+  };
 
-              <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-semibold">
-                  {activeOrganization ? activeOrganization.name : user.name || user.email}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-              </div>
-              <ChevronsUpDown className="ml-auto h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent
-            className="w-[--radix-dropdown-menu-trigger-width] min-w-56 rounded-lg border-border"
-            align="end"
-            sideOffset={4}
+  if (!user) return null;
+
+  return (
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          className="flex items-center gap-2 px-2 py-1.5 h-auto"
+          disabled={isSwitching}
+        >
+          {isPersonalAccount ? (
+            <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-medium">
+              <User className="w-4 h-4" />
+            </div>
+          ) : (
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
+              <Building className="w-4 h-4" />
+            </div>
+          )}
+
+          <div className="grid flex-1 text-left text-sm leading-tight">
+            <span className="truncate font-semibold">
+              {isPersonalAccount ? 'Personal Account' : activeOrganization?.name || 'Loading...'}
+            </span>
+            <div className="flex items-center gap-2">
+              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+            </div>
+          </div>
+          <ChevronsUpDown className="ml-auto h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+
+      <DropdownMenuContent
+        className="w-[--radix-dropdown-menu-trigger-width] min-w-64 rounded-lg"
+        align="end"
+        sideOffset={4}
+      >
+        <DropdownMenuLabel className="font-normal">
+          <div className="flex flex-col space-y-1">
+            <p className="text-sm font-medium leading-none">{user.email}</p>
+            <p className="text-xs leading-none text-muted-foreground">
+              {isPersonalAccount
+                ? 'Personal Account'
+                : `${activeOrganization?.name} • ${currentUserRole}`}
+            </p>
+          </div>
+        </DropdownMenuLabel>
+
+        <DropdownMenuSeparator />
+
+        {/* Personal Account */}
+        <DropdownMenuItem onClick={handleSwitchToPersonalAccount} className="gap-2 p-2">
+          <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-medium text-xs">
+            <User className="w-3 h-3" />
+          </div>
+          <div>
+            <div className="font-medium">Personal Account</div>
+            <div className="text-xs text-muted-foreground">Individual workspace</div>
+          </div>
+          {isPersonalAccount && (
+            <DropdownMenuShortcut>
+              <Check className="h-4 w-4" />
+            </DropdownMenuShortcut>
+          )}
+        </DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        {/* Organizations */}
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Organizations ({userOrganizations.length})
+        </DropdownMenuLabel>
+
+        {userOrganizations.map(org => (
+          <DropdownMenuItem
+            key={org.id}
+            onClick={() => handleSwitchOrganization(org.id)}
+            className="gap-2 p-2"
           >
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">{user.name || user.email}</p>
-                <p className="text-xs leading-none text-muted-foreground">{user.email}</p>
+            <div className="w-6 h-6 rounded-sm border border-blue-200 bg-blue-50 flex items-center justify-center">
+              <Building className="w-3 h-3 text-blue-600" />
+            </div>
+            <div className="flex-1">
+              <div className="font-medium">{org.name}</div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  {org.description || 'Organization workspace'}
+                </span>
               </div>
-            </DropdownMenuLabel>
+            </div>
+            {!isPersonalAccount && activeOrganization?.id === org.id && (
+              <DropdownMenuShortcut>
+                <Check className="h-4 w-4" />
+              </DropdownMenuShortcut>
+            )}
+          </DropdownMenuItem>
+        ))}
+
+        <DropdownMenuItem
+          className="gap-2 p-2"
+          onClick={() => router.push('/organizations/create')}
+        >
+          <div className="w-6 h-6 rounded-md border bg-background flex items-center justify-center">
+            <Plus className="w-4 h-4" />
+          </div>
+          <div className="font-medium text-muted-foreground">Create organization</div>
+        </DropdownMenuItem>
+
+        {/* Organization-specific actions - Only show when in an organization */}
+        {!isPersonalAccount && activeOrganization && (
+          <>
             <DropdownMenuSeparator />
-
-            <Link href="/settings/account">
-              <DropdownMenuItem>
-                Settings
-                <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
-              </DropdownMenuItem>
-            </Link>
-
-            <DropdownMenuSeparator />
-
             <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Organizations
+              {activeOrganization.name} Actions
             </DropdownMenuLabel>
-            {organizations.map(org => (
-              <DropdownMenuItem
-                key={org.id}
-                onClick={() => handleSwitchOrganization(org)}
-                className="gap-2 p-2"
-              >
-                <div className="flex size-6 items-center justify-center rounded-sm border border-blue-200 bg-blue-50">
-                  {org.name.charAt(0).toUpperCase()}
-                </div>
-                {org.name}
-                {activeOrganization?.id === org.id && (
-                  <DropdownMenuShortcut>
-                    <Check className="h-4 w-4" />
-                  </DropdownMenuShortcut>
-                )}
+
+            {canManageOrganization() && (
+              <DropdownMenuItem onClick={() => router.push('/settings/organization')}>
+                <Settings className="mr-2 h-4 w-4" />
+                Organization Settings
               </DropdownMenuItem>
-            ))}
-
-            <DropdownMenuItem className="gap-2 p-2" onClick={() => setShowCreateDialog(true)}>
-              <div className="flex size-6 items-center justify-center rounded-md border bg-background">
-                <Plus className="size-4" />
-              </div>
-              <div className="font-medium text-muted-foreground">Create organization</div>
-            </DropdownMenuItem>
-
-            {activeOrganization && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuLabel className="text-xs text-muted-foreground">
-                  Organization Settings
-                </DropdownMenuLabel>
-
-                <DropdownMenuItem onClick={handleOrganizationSettings}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Organization Settings
-                </DropdownMenuItem>
-
-                <DropdownMenuItem onClick={handleTeamMembers}>
-                  <Users className="mr-2 h-4 w-4" />
-                  Team Members
-                </DropdownMenuItem>
-              </>
             )}
 
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onLogout} className="text-red-600">
-              <LogOut className="mr-2 h-4 w-4" />
-              Log out
-              <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            {canManageMembers() && (
+              <DropdownMenuItem onClick={() => router.push('/settings/members')}>
+                <Users className="mr-2 h-4 w-4" />
+                Manage Members
+              </DropdownMenuItem>
+            )}
+          </>
+        )}
 
-        {/* Create Organization Dialog */}
-        <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Organization</DialogTitle>
-            </DialogHeader>
+        <DropdownMenuSeparator />
 
-            <div className="py-4">
-              <Label htmlFor="orgName">Organization Name</Label>
-              <Input
-                id="orgName"
-                value={newOrgName}
-                onChange={e => setNewOrgName(e.target.value)}
-                placeholder="Enter organization name"
-                className="mt-1"
-                autoFocus
-              />
-            </div>
+        {/* User settings */}
+        <Link href="/settings/account">
+          <DropdownMenuItem>
+            Settings
+            <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+          </DropdownMenuItem>
+        </Link>
 
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowCreateDialog(false)}
-                disabled={isCreating}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleCreateOrganization}
-                disabled={!newOrgName.trim() || isCreating}
-              >
-                {isCreating ? 'Creating...' : 'Create'}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </>
-    );
-  }
-);
-
-AccountSwitcher.displayName = 'AccountSwitcher';
+        <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+          <LogOut className="mr-2 h-4 w-4" />
+          Log out
+          <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
 
 export default function Header() {
   const { user, isAuthenticated, logout } = useAuth();
   const isMobile = useIsMobile();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  // Sample team data - replace with your actual team data source
-  const teams = [
-    {
-      name: 'Personal Account',
-      logo: User,
-      plan: 'Free',
-    },
-    {
-      name: 'Acme Inc',
-      logo: Building,
-      plan: 'Pro',
-    },
-    {
-      name: 'Monsters Inc',
-      logo: Briefcase,
-      plan: 'Team',
-    },
-  ];
 
   // Handle logout
   const handleLogout = () => {
@@ -439,27 +469,8 @@ export default function Header() {
             </Button>
           </Link>
           <div className="flex items-center space-x-4 px-4">
-            {isAuthenticated && user && <AccountSwitcher user={user} onLogout={handleLogout} />}
+            {isAuthenticated && user && <AccountSwitcher />}
           </div>
-          {/*<NavigationMenu>*/}
-          {/*  <NavigationMenuList>*/}
-          {/*    <NavigationMenuItem>*/}
-          {/*      <Link href="/plugins" legacyBehavior passHref>*/}
-          {/*        <NavigationMenuLink className={navigationMenuTriggerStyle()}>*/}
-          {/*          Plugins*/}
-          {/*        </NavigationMenuLink>*/}
-          {/*      </Link>*/}
-          {/*    </NavigationMenuItem>*/}
-
-          {/*    <NavigationMenuItem>*/}
-          {/*      <Link href="/docs" legacyBehavior passHref>*/}
-          {/*        <NavigationMenuLink className={navigationMenuTriggerStyle()}>*/}
-          {/*          Documentation*/}
-          {/*        </NavigationMenuLink>*/}
-          {/*      </Link>*/}
-          {/*    </NavigationMenuItem>*/}
-          {/*  </NavigationMenuList>*/}
-          {/*</NavigationMenu>*/}
         </div>
         <NavigationTabs />
       </div>

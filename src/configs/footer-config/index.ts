@@ -22,7 +22,7 @@ export const FOOTER_SECTIONS: FooterStructure = {
       { label: 'Docs', href: '/docs' },
       { label: 'Demo', href: '/demo' },
       { label: 'Features', href: '/features' },
-      { label: 'Security', href: '/security' },
+      // { label: 'Security', href: '/security' },
     ],
   },
   company: {
@@ -38,10 +38,9 @@ export const FOOTER_SECTIONS: FooterStructure = {
   resources: {
     title: 'Resources',
     links: [
-      { label: 'Status', href: '/status' },
       { label: 'Support', href: '/support' },
-      { label: 'Privacy policy', href: '/privacy' },
-      { label: 'Terms of service', href: '/terms' },
+      { label: 'Privacy policy', href: 'https://tensr-1.gitbook.io/tensr' },
+      { label: 'Terms of service', href: 'https://tensr-1.gitbook.io/tensr' },
     ],
   },
 };

@@ -23,7 +23,6 @@ interface FilePickerWrapperProps {
 export const FilePickerWrapper = ({ children, onUploadComplete }: FilePickerWrapperProps) => {
   const [open, setOpen] = React.useState(false);
   const { dispatch } = useProject();
-  console.log('FilePickerWrapper rendering, dispatch:', !!dispatch);
 
   const { handleFile, isLoading, error, setError, uploadProgress } = useFileHandler({
     allowedExtensions: ['.csv', '.xlsx', '.xls'],

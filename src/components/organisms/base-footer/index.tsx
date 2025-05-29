@@ -125,7 +125,10 @@ const Footer: React.FC = () => {
                   <Link href="#" className="text-gray-500 hover:text-gray-900">
                     <LuTwitter className="h-5 w-5" />
                   </Link>
-                  <Link href="#" className="text-gray-500 hover:text-gray-900">
+                  <Link
+                    href="https://github.com/tensr-xyz"
+                    className="text-gray-500 hover:text-gray-900"
+                  >
                     <LuGithub className="h-5 w-5" />
                   </Link>
                 </div>
@@ -137,9 +140,9 @@ const Footer: React.FC = () => {
           </div>
 
           {/* Product Column */}
-          {/*<div className="md:col-span-1">*/}
-          {/*  <FooterColumn {...FOOTER_SECTIONS.product} />*/}
-          {/*</div>*/}
+          <div className="md:col-span-1">
+            <FooterColumn {...FOOTER_SECTIONS.product} />
+          </div>
 
           {/* Company Column */}
           {/*<div className="md:col-span-1">*/}
@@ -147,9 +150,9 @@ const Footer: React.FC = () => {
           {/*</div>*/}
 
           {/* Resources Column */}
-          {/*<div className="md:col-span-1">*/}
-          {/*  <FooterColumn {...FOOTER_SECTIONS.resources} />*/}
-          {/*</div>*/}
+          <div className="md:col-span-1">
+            <FooterColumn {...FOOTER_SECTIONS.resources} />
+          </div>
         </div>
       </div>
     </footer>

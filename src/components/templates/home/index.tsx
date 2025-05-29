@@ -17,7 +17,6 @@ import {
   MoreHorizontal,
   Image,
 } from 'lucide-react';
-import { useFileHandler } from '@/hooks/api/use-file';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/atoms/button';
 import {
@@ -40,18 +39,10 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from '@/components/molecules/drawer';
+import { useFiles, FileMetadata } from './file-fetcher';
+import { useToast } from '@/hooks/ui/use-toast';
 
 // Define types for the application
-interface FileMetadata {
-  fileId: string;
-  fileName: string;
-  fileType: string;
-  size: number;
-  createdAt: string;
-  updatedAt: string;
-  uploadedAt: string;
-}
-
 interface ProjectData {
   id: string;
   projectId?: string;
@@ -310,6 +301,7 @@ const HomeTemplate: React.FC = () => {
   const [commandOpen, setCommandOpen] = useState<boolean>(false);
   const [filterDrawerOpen, setFilterDrawerOpen] = useState<boolean>(false);
   const [createDrawerOpen, setCreateDrawerOpen] = useState<boolean>(false);
+  const { toast } = useToast();
 
   // Add event listener to close command dialog when clicking outside
   useEffect(() => {
@@ -327,23 +319,8 @@ const HomeTemplate: React.FC = () => {
 
   const router = useRouter();
 
-  // Use the file handler hook with proper types
-  const { files, fetchUserFiles, isLoading: filesLoading, error: filesError } = useFileHandler({});
-
-  // Load files when component mounts
-  useEffect(() => {
-    fetchUserFiles();
-  }, [fetchUserFiles]);
-
-  // Function to handle tab change
-  const handleTabChange = (value: string): void => {
-    setActiveTab(value);
-
-    // Close any open overlays when changing tabs
-    setCommandOpen(false);
-    setFilterDrawerOpen(false);
-    setCreateDrawerOpen(false);
-  };
+  // Use the new file fetcher hook
+  const { files, isLoading: filesLoading, error: filesError, refetch: fetchUserFiles } = useFiles();
 
   // Filter files based on search term
   const filteredFiles = files.filter((file: FileMetadata) =>
@@ -354,6 +331,10 @@ const HomeTemplate: React.FC = () => {
     console.log('File uploaded successfully:', fileId);
     fetchUserFiles();
     setCreateDrawerOpen(false);
+    toast({
+      title: 'File uploaded successfully',
+      description: 'Your file has been uploaded and is ready to use.',
+    });
   };
 
   const handleFileSelect = (fileId: string): void => {
@@ -398,7 +379,7 @@ const HomeTemplate: React.FC = () => {
         <div className="space-y-4 mb-4 sm:mb-6">
           {/* Mobile view controls */}
           <div className="flex sm:hidden justify-between items-center mb-4">
-            <Tabs defaultValue={activeTab} onValueChange={handleTabChange} className="flex-1">
+            <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="flex-1">
               <TabsList className="bg-background h-10 border border-border rounded-md w-full">
                 <TabsTrigger
                   isClosable={false}
@@ -578,7 +559,7 @@ const HomeTemplate: React.FC = () => {
               </div>
 
               {/* Desktop tabs */}
-              <Tabs defaultValue="files" onValueChange={handleTabChange} className="hidden sm:flex">
+              <Tabs defaultValue="files" onValueChange={setActiveTab} className="hidden sm:flex">
                 <TabsList className="bg-background h-10 border border-border rounded-md">
                   <TabsTrigger
                     isClosable={false}
@@ -625,7 +606,7 @@ const HomeTemplate: React.FC = () => {
             </div>
 
             {/* Action dropdown button (Desktop only) */}
-            <div className="hidden sm:flex w-auto items-center justify-start space-x-3">
+            <div className="hidden sm:flex w-auto items-center justify-start">
               <Select
                 onValueChange={value => {
                   if (value === 'new-file') {
@@ -677,7 +658,16 @@ const HomeTemplate: React.FC = () => {
             ) : filesError ? (
               <div className="bg-white rounded-lg border p-4 sm:p-8 text-center">
                 <p className="text-red-500">Error loading files: {String(filesError)}</p>
-                <Button onClick={fetchUserFiles} className="mt-4">
+                <Button
+                  onClick={() => {
+                    fetchUserFiles();
+                    toast({
+                      title: 'Refreshing files',
+                      description: 'Attempting to reload your files...',
+                    });
+                  }}
+                  className="mt-4"
+                >
                   Retry
                 </Button>
               </div>
@@ -688,9 +678,15 @@ const HomeTemplate: React.FC = () => {
                 data={filteredFiles}
                 onRowClick={handleFileSelect}
                 isLoading={filesLoading}
-                onRefresh={fetchUserFiles}
+                onRefresh={() => {
+                  fetchUserFiles();
+                  toast({
+                    title: 'Refreshing files',
+                    description: 'Your files are being refreshed...',
+                  });
+                }}
                 error={filesError}
-                hideControls={true} // Hide the table's internal controls
+                hideControls={true}
               />
             ) : (
               renderFilesGrid()
@@ -702,4 +698,5 @@ const HomeTemplate: React.FC = () => {
   );
 };
 
+// Export the component directly without the QueryClientProvider wrapper
 export default HomeTemplate;
