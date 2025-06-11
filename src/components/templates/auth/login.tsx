@@ -139,9 +139,6 @@ const LoginTemplate = () => {
                 {isLoading ? 'Sending...' : 'Continue'}
               </Button>
             </form>
-            <div className="text-sm px-6 lg:px-10">
-              You can also sign in with Google or Linkedin
-            </div>
           </div>
         ) : (
           <div className="flex flex-col gap-10">
@@ -173,15 +170,6 @@ const LoginTemplate = () => {
                   disabled={isLoading}
                 >
                   {isLoading ? 'Verifying...' : 'Continue'}
-                </Button>
-                <Button
-                  className="px-4 py-3 h-12 lg:h-10 w-fit bg-[#f8f9f7]"
-                  variant="secondary"
-                  size="lg"
-                  onClick={handleBackToLogin}
-                  disabled={isLoading}
-                >
-                  Use password instead
                 </Button>
               </div>
             </form>

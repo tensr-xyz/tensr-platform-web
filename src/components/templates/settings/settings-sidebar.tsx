@@ -30,15 +30,6 @@ const navigationItems = [
       },
     ],
   },
-  {
-    title: 'Account',
-    items: [
-      {
-        title: 'Account',
-        url: '/settings/account',
-      },
-    ],
-  },
 ];
 
 export function SettingsSidebar() {

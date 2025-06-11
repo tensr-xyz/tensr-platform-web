@@ -46,9 +46,6 @@ export default function BillingSettings() {
     loadAllBillingData,
   } = useBilling();
 
-  // Debug: Log subscription data
-  console.log('Subscription data:', subscription);
-
   const handleCancelSubscription = async () => {
     setCancelInProgress(true);
     setError(null);
@@ -223,34 +220,34 @@ export default function BillingSettings() {
                   </span>
                 </div>
               </div>
-              {subscription?.status === 'active' && subscription?.expiresAt && (
+              {subscription?.status === 'active' && subscription?.renewalDate && (
                 <p className="mt-2 text-sm">
-                  Your subscription will renew on {formatDate(subscription.expiresAt)}
+                  Your subscription will renew on {formatDate(subscription.renewalDate)}
                 </p>
               )}
               {(subscription?.status === 'canceled' || subscription?.status === 'cancelled') &&
-                subscription?.expiresAt && (
+                subscription?.renewalDate && (
                   <p className="mt-2 text-sm">
-                    Your subscription will end on {formatDate(subscription.expiresAt)}
+                    Your subscription will end on {formatDate(subscription.renewalDate)}
                   </p>
                 )}
-              {subscription?.status === 'trial' && subscription?.expiresAt && (
+              {subscription?.status === 'trial' && subscription?.renewalDate && (
                 <p className="mt-2 text-sm">
-                  Your trial will end on {formatDate(subscription.expiresAt)}
+                  Your trial will end on {formatDate(subscription.renewalDate)}
                 </p>
               )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {subscription?.subscriptionId && (
+              {subscription?.stripeSubscriptionId && (
                 <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
                   <p className="text-xs text-gray-500 font-medium">Subscription ID</p>
                   <div className="flex items-center mt-1">
-                    <p className="font-mono text-sm text-xs">{subscription.subscriptionId}</p>
+                    <p className="font-mono text-sm text-xs">{subscription.stripeSubscriptionId}</p>
                     <button
                       className="ml-2 text-xs"
                       onClick={() => {
-                        navigator.clipboard.writeText(subscription.subscriptionId);
+                        navigator.clipboard.writeText(subscription.stripeSubscriptionId);
                       }}
                     >
                       Copy
@@ -275,7 +272,7 @@ export default function BillingSettings() {
                   <p className="font-medium mt-1 text-sm">{formatDate(subscription.startDate)}</p>
                 </div>
               )}
-              {subscription?.expiresAt && (
+              {subscription?.renewalDate && (
                 <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
                   <p className="text-xs text-gray-500 font-medium">
                     {subscription?.status === 'canceled' || subscription?.status === 'cancelled'
@@ -283,7 +280,7 @@ export default function BillingSettings() {
                       : 'Renewal'}{' '}
                     Date
                   </p>
-                  <p className="font-medium mt-1 text-sm">{formatDate(subscription.expiresAt)}</p>
+                  <p className="font-medium mt-1 text-sm">{formatDate(subscription.renewalDate)}</p>
                 </div>
               )}
             </div>
@@ -419,7 +416,7 @@ export default function BillingSettings() {
                             href={
                               invoice.pdfUrl || `/api/billing/invoices/${invoice.invoiceId}/pdf`
                             }
-                            className="text-blue-600 hover:text-blue-900 inline-flex items-center"
+                            className="text-primary inline-flex items-center"
                             target="_blank"
                             rel="noopener noreferrer"
                           >
@@ -451,10 +448,10 @@ export default function BillingSettings() {
             <div className="flex gap-3">
               <Clock className="h-5 w-5 text-yellow-500 flex-shrink-0" />
               <p className="text-sm text-yellow-700">
-                {subscription?.expiresAt ? (
+                {subscription?.renewalDate ? (
                   <>
-                    Your subscription will remain active until {formatDate(subscription.expiresAt)},
-                    and you will not be charged again.
+                    Your subscription will remain active until{' '}
+                    {formatDate(subscription.renewalDate)}, and you will not be charged again.
                   </>
                 ) : (
                   <>

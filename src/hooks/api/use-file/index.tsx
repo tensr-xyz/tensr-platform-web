@@ -96,7 +96,7 @@ export const useFileHandler = ({
       setIsLoading(true);
       setError(null);
 
-      const token = getToken();
+      const token = getIdToken();
       if (!token) {
         setError('No authentication token available. Please log in again.');
         return [];

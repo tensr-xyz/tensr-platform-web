@@ -41,6 +41,7 @@ import {
 } from '@/components/molecules/drawer';
 import { useFiles, FileMetadata } from './file-fetcher';
 import { useToast } from '@/hooks/ui/use-toast';
+import { useOrganizationContext } from '@/contexts/organisation-context';
 
 // Define types for the application
 interface ProjectData {
@@ -302,6 +303,7 @@ const HomeTemplate: React.FC = () => {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState<boolean>(false);
   const [createDrawerOpen, setCreateDrawerOpen] = useState<boolean>(false);
   const { toast } = useToast();
+  const { activeOrganization, isPersonalAccount } = useOrganizationContext();
 
   // Add event listener to close command dialog when clicking outside
   useEffect(() => {
@@ -320,7 +322,15 @@ const HomeTemplate: React.FC = () => {
   const router = useRouter();
 
   // Use the new file fetcher hook
-  const { files, isLoading: filesLoading, error: filesError, refetch: fetchUserFiles } = useFiles();
+  const {
+    files,
+    isLoading: filesLoading,
+    error: filesError,
+    refetch: fetchUserFiles,
+  } = useFiles({
+    context: isPersonalAccount ? 'personal' : 'organization',
+    organizationId: activeOrganization?.id,
+  });
 
   // Filter files based on search term
   const filteredFiles = files.filter((file: FileMetadata) =>

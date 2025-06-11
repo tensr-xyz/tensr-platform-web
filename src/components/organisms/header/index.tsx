@@ -1,7 +1,24 @@
 'use client';
 
 import React, { useState } from 'react';
-import { User, Building, X, Menu, Check, Plus, Settings, Users, LogOut } from 'lucide-react';
+import {
+  User,
+  Building,
+  X,
+  Menu,
+  Check,
+  Plus,
+  Settings,
+  Users,
+  LogOut,
+  Bell,
+  MessageSquare,
+  BookOpen,
+  ArrowRight,
+  Smile,
+  Meh,
+  Frown,
+} from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/atoms/button';
 import { ChevronsUpDown } from 'lucide-react';
@@ -23,6 +40,18 @@ import { usePathname, useRouter } from 'next/navigation';
 import { toast } from '@/hooks/ui/use-toast';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { PermissionWrapper } from '@/wrappers/permission';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/atoms/select';
+import { Textarea } from '@/components/atoms/text-area';
+import { CreateFeedbackInput, FeedbackTopic } from '@/types/feedback';
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -178,22 +207,224 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
   );
 };
 
+const FeedbackPopover: React.FC = () => {
+  const [topic, setTopic] = useState<FeedbackTopic | ''>('');
+  const [feedback, setFeedback] = useState('');
+  const [rating, setRating] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const { user, tokens } = useAuth();
+
+  const submitFeedback = async (feedbackData: CreateFeedbackInput) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${tokens?.idToken}`,
+        },
+        body: JSON.stringify(feedbackData),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error) {
+      console.error('Failed to submit feedback:', error);
+      throw error;
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!user) {
+      toast({
+        title: 'Authentication Required',
+        description: 'Please log in to submit feedback.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (!topic || !feedback.trim() || rating === null) {
+      toast({
+        title: 'Validation Error',
+        description: 'Please select a topic, provide feedback, and choose a rating.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const feedbackData: CreateFeedbackInput = {
+        userId: user.userId,
+        topic: topic as FeedbackTopic,
+        rating: rating,
+        text: feedback.trim(),
+      };
+
+      await submitFeedback(feedbackData);
+
+      // Reset form
+      setTopic('');
+      setFeedback('');
+      setRating(null);
+      setIsOpen(false);
+
+      toast({
+        title: 'Feedback Submitted',
+        description: 'Thank you for your feedback!',
+      });
+    } catch (error) {
+      toast({
+        title: 'Submission Failed',
+        description: 'Failed to submit feedback. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const topicOptions = [
+    { value: FeedbackTopic.BUG, label: 'Bug Report' },
+    { value: FeedbackTopic.FEATURE, label: 'Feature Request' },
+    { value: FeedbackTopic.GENERAL, label: 'General Feedback' },
+    { value: FeedbackTopic.UI, label: 'UI/Design' },
+    { value: FeedbackTopic.UX, label: 'User Experience' },
+    { value: FeedbackTopic.PERFORMANCE, label: 'Performance' },
+    { value: FeedbackTopic.OTHER, label: 'Other' },
+  ];
+
+  const ratingOptions = [
+    { value: 5, icon: Smile, label: 'Very Satisfied', color: 'text-green-600' },
+    { value: 4, icon: Smile, label: 'Satisfied', color: 'text-green-500' },
+    { value: 3, icon: Meh, label: 'Neutral', color: 'text-yellow-500' },
+    { value: 2, icon: Frown, label: 'Dissatisfied', color: 'text-orange-500' },
+    { value: 1, icon: Frown, label: 'Very Dissatisfied', color: 'text-red-500' },
+  ];
+
+  return (
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          className="rounded-md px-3 py-1.5 flex items-center space-x-1 border border-border"
+        >
+          Feedback
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80 p-4" align="end" sideOffset={10}>
+        <div className="grid gap-4">
+          <h4 className="font-medium leading-none">Send Feedback</h4>
+          <div className="space-y-4">
+            <Select onValueChange={value => setTopic(value as FeedbackTopic)} value={topic}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a topic..." />
+              </SelectTrigger>
+              <SelectContent>
+                {topicOptions.map(option => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Textarea
+              placeholder="Your feedback..."
+              value={feedback}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFeedback(e.target.value)}
+              rows={5}
+              disabled={isSubmitting}
+            />
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700">How satisfied are you?</label>
+              <div className="flex justify-between items-center bg-gray-50 p-3 -mx-4 rounded-md">
+                <div className="flex space-x-1">
+                  {ratingOptions.map(({ value, icon: Icon, label, color }) => (
+                    <Button
+                      key={value}
+                      variant="ghost"
+                      size="icon"
+                      className={`rounded-full transition-colors ${
+                        rating === value ? 'bg-blue-100 border-blue-300' : 'hover:bg-gray-100'
+                      }`}
+                      onClick={() => setRating(value)}
+                      disabled={isSubmitting}
+                      title={label}
+                    >
+                      <Icon className={`h-4 w-4 ${rating === value ? 'text-blue-600' : color}`} />
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  onClick={handleSubmit}
+                  className="w-auto px-4 py-2"
+                  disabled={isSubmitting || !topic || !feedback.trim() || rating === null}
+                >
+                  {isSubmitting ? 'Sending...' : 'Send'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
+const UserProfileMenu: React.FC = () => {
+  const { user, logout } = useAuth();
+  const router = useRouter();
+
+  if (!user) return null;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" className="relative h-9 w-9 rounded-full">
+          <Avatar className="h-9 w-9">
+            <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
+          </Avatar>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56" align="end" forceMount>
+        <DropdownMenuLabel className="font-normal">
+          <div className="flex flex-col space-y-1">
+            <p className="text-sm font-medium leading-none">{user.email}</p>
+            <p className="text-xs leading-none text-muted-foreground">{user.subscriptionTier}</p>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={() => router.push('/settings/account')}>
+          <Settings className="mr-2 h-4 w-4" />
+          <span>Settings</span>
+          <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onClick={logout} className="text-red-600">
+          <LogOut className="mr-2 h-4 w-4" />
+          <span>Log out</span>
+          <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+};
+
 const NavigationTabs = () => {
   const pathname = usePathname();
-  const { activeOrganization, isPersonalAccount, canManageOrganization } = useOrganizationContext();
 
   // Dynamic tabs based on organization context
-  const tabs = [
-    { name: 'Overview', path: '/' },
-    ...(!isPersonalAccount && activeOrganization
-      ? [
-          { name: 'Organization', path: '/organization' },
-          ...(canManageOrganization()
-            ? [{ name: 'Settings', path: '/settings/organization' }]
-            : []),
-        ]
-      : []),
-  ];
+  const tabs = [{ name: 'Overview', path: '/' }];
 
   return (
     <div>
@@ -286,12 +517,9 @@ export const AccountSwitcher: React.FC = () => {
           )}
 
           <div className="grid flex-1 text-left text-sm leading-tight">
-            <span className="truncate font-semibold">
+            <span className="truncate font-medium">
               {isPersonalAccount ? 'Personal Account' : activeOrganization?.name || 'Loading...'}
             </span>
-            <div className="flex items-center gap-2">
-              <span className="truncate text-xs text-muted-foreground">{user.email}</span>
-            </div>
           </div>
           <ChevronsUpDown className="ml-auto h-4 w-4" />
         </Button>
@@ -299,7 +527,7 @@ export const AccountSwitcher: React.FC = () => {
 
       <DropdownMenuContent
         className="w-[--radix-dropdown-menu-trigger-width] min-w-64 rounded-lg"
-        align="end"
+        align="start"
         sideOffset={4}
       >
         <DropdownMenuLabel className="font-normal">
@@ -396,22 +624,6 @@ export const AccountSwitcher: React.FC = () => {
             )}
           </>
         )}
-
-        <DropdownMenuSeparator />
-
-        {/* User settings */}
-        <Link href="/settings/account">
-          <DropdownMenuItem>
-            Settings
-            <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </Link>
-
-        <DropdownMenuItem onClick={handleLogout} className="text-red-600">
-          <LogOut className="mr-2 h-4 w-4" />
-          Log out
-          <DropdownMenuShortcut>⇧⌘Q</DropdownMenuShortcut>
-        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -460,20 +672,29 @@ export default function Header() {
   }
 
   return (
-    <header>
-      <div className="flex flex-col justify-between px-1 pt-2 bg-background border-b border-border">
-        <div className="flex justify-between items-center space-x-4">
+    <header className="w-full bg-background z-40 flex flex-col">
+      <div className="flex justify-between items-center h-16 px-4">
+        <div className="flex items-center space-x-4">
           <Link href="/" className="flex">
             <Button variant="link" size="sm">
               <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={24} width={96} />
             </Button>
           </Link>
-          <div className="flex items-center space-x-4 px-4">
-            {isAuthenticated && user && <AccountSwitcher />}
-          </div>
+          {isAuthenticated && user && <AccountSwitcher />}
         </div>
-        <NavigationTabs />
+
+        <div className="flex items-center space-x-2">
+          <FeedbackPopover />
+          <Button variant="outline" size="icon" className="rounded-full">
+            <Bell className="h-5 w-5" />
+          </Button>
+          <Button variant="outline" size="icon" className="rounded-full">
+            <BookOpen className="h-5 w-5" />
+          </Button>
+          {isAuthenticated && user && <UserProfileMenu />}
+        </div>
       </div>
+      <NavigationTabs />
     </header>
   );
 }

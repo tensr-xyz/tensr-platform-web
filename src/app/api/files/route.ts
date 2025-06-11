@@ -1,15 +1,27 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     // Get the token from cookies
     const cookieStore = await cookies();
-    const token = cookieStore.get('accessToken')?.value;
+    const token = cookieStore.get('idToken')?.value;
 
     if (!token) {
       console.error('No access token found in cookies');
       return NextResponse.json({ error: 'Unauthorized - No token found' }, { status: 401 });
+    }
+
+    // Extract query parameters from the request URL
+    const { searchParams } = new URL(request.url);
+    const context = searchParams.get('context') || 'personal';
+    const organizationId = searchParams.get('organizationId');
+
+    // Build query string
+    const queryParams = new URLSearchParams();
+    queryParams.append('context', context);
+    if (organizationId) {
+      queryParams.append('organizationId', organizationId);
     }
 
     // Use the same API URL as the client
@@ -19,8 +31,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
-    console.log('Fetching files from:', `${apiUrl}/files`);
-    const response = await fetch(`${apiUrl}/files`, {
+    const fetchUrl = `${apiUrl}/files?${queryParams.toString()}`;
+    console.log('Fetching files from:', fetchUrl);
+
+    const response = await fetch(fetchUrl, {
       headers: {
         Authorization: `Bearer ${token}`,
       },

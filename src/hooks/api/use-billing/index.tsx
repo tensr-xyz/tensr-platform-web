@@ -5,18 +5,25 @@ import { getIdToken } from '@/utils/auth';
 // API base URL - should be configured via environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-// Subscription interface
+// Updated Subscription interface to match your API response
 export interface Subscription {
   userId: string;
-  subscriptionId: string;
+  stripeCustomerId: string;
+  stripeSubscriptionId: string;
   tier: string;
   status: string;
   billingType: 'monthly' | 'annual';
   startDate: string;
-  expiresAt: string;
-  issuedAt?: string;
-  gracePeriodDays: number;
-  maxDevices: number;
+  renewalDate: string;
+  paymentMethodId?: string;
+  createdAt: string;
+  updatedAt: string;
+  // Legacy fields for backward compatibility (optional)
+  subscriptionId?: string; // Can map to stripeSubscriptionId
+  expiresAt?: string; // Can map to renewalDate
+  // Additional fields that might be needed
+  gracePeriodDays?: number;
+  maxDevices?: number;
   licenseKey?: string;
   devices?: {
     deviceId: string;
@@ -25,10 +32,7 @@ export interface Subscription {
     appVersion: string;
     os: string;
   }[];
-  paymentMethodId?: string;
   lastValidated?: string;
-  createdAt: string;
-  updatedAt: string;
 }
 
 // Invoice interface
@@ -136,6 +140,16 @@ export const useBilling = () => {
     return '';
   }, [auth.user, getToken]);
 
+  // Helper function to normalize subscription data
+  const normalizeSubscriptionData = (data: any): Subscription => {
+    return {
+      ...data,
+      // Add backward compatibility mappings
+      subscriptionId: data.stripeSubscriptionId,
+      expiresAt: data.renewalDate,
+    };
+  };
+
   // Function to fetch current subscription
   const fetchSubscription = useCallback(async (): Promise<Subscription | null> => {
     try {
@@ -161,8 +175,11 @@ export const useBilling = () => {
       }
 
       const data = await response.json();
-      setSubscription(data);
-      return data;
+      // Extract the subscription data from the response wrapper
+      const subscriptionData = data.subscription || data;
+      const normalizedData = normalizeSubscriptionData(subscriptionData);
+      setSubscription(normalizedData);
+      return normalizedData;
     } catch (err: any) {
       console.error('Error fetching subscription:', err);
       setError(err.message || 'Failed to fetch subscription details');
@@ -197,7 +214,7 @@ export const useBilling = () => {
       }
 
       const data = await response.json();
-      const userInvoices = data.invoices || [];
+      const userInvoices = data.items || [];
       setInvoices(userInvoices);
       return userInvoices;
     } catch (err: any) {

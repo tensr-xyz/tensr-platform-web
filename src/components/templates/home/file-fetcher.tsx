@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { getAccessToken } from '@/utils/auth';
+import { getAccessToken, getIdToken } from '@/utils/auth';
 
 export interface FileMetadata {
   fileId: string;
@@ -11,16 +11,43 @@ export interface FileMetadata {
   uploadedAt: string;
 }
 
-async function fetchFiles(): Promise<FileMetadata[]> {
-  const token = getAccessToken();
+interface FilesResponse {
+  files: FileMetadata[];
+  context: {
+    type: 'personal' | 'organization';
+    organizationId?: string;
+    organizationRole?: 'ADMIN' | 'MEMBER';
+  };
+  total: number;
+}
+
+interface UseFilesOptions {
+  context?: 'personal' | 'organization';
+  organizationId?: string;
+  enabled?: boolean; // Allow disabling the query
+}
+
+async function fetchFiles(options: UseFilesOptions = {}): Promise<FilesResponse> {
+  const token = getIdToken();
 
   if (!token) {
     console.error('No authentication token found');
     throw new Error('No authentication token found');
   }
 
-  console.log('Fetching files from /api/files');
-  const response = await fetch('/api/files', {
+  // Build query parameters
+  const params = new URLSearchParams();
+  const context = options.context || 'personal';
+  params.append('context', context);
+
+  if (context === 'organization' && options.organizationId) {
+    params.append('organizationId', options.organizationId);
+  }
+
+  const url = `/api/files?${params.toString()}`;
+  console.log('Fetching files from:', url);
+
+  const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -33,19 +60,33 @@ async function fetchFiles(): Promise<FileMetadata[]> {
   }
 
   const data = await response.json();
-  return data.files || [];
+  return data;
 }
 
-export const useFiles = () => {
+export const useFiles = (options: UseFilesOptions = {}) => {
+  const { context = 'personal', organizationId, enabled = true } = options;
+
+  // Create a unique query key that includes the context and organization
+  const queryKey = ['files', context, organizationId].filter(Boolean);
+
   const query = useQuery({
-    queryKey: ['files'],
-    queryFn: fetchFiles,
+    queryKey,
+    queryFn: () => fetchFiles(options),
+    enabled, // Allow disabling the query if needed
+    staleTime: 5 * 60 * 1000, // Consider data fresh for 5 minutes
+    gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (renamed from cacheTime)
   });
 
   return {
-    files: query.data || [],
+    files: query.data?.files || [],
+    contextInfo: query.data?.context || null,
+    total: query.data?.total || 0,
     isLoading: query.isLoading,
     error: query.error,
     refetch: query.refetch,
+    // Convenience properties
+    isPersonalContext: query.data?.context?.type === 'personal',
+    isOrganizationContext: query.data?.context?.type === 'organization',
+    organizationRole: query.data?.context?.organizationRole,
   };
 };
