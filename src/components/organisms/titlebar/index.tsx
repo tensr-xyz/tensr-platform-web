@@ -159,7 +159,7 @@ const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: Titleba
         <div className="flex items-center h-full gap-1">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-7 w-7">
+              <Button variant="ghost" size="icon">
                 <LuEllipsisVertical />
                 <span className="sr-only">Toggle Menu</span>
               </Button>

@@ -162,18 +162,21 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         console.log('handleImport: Constructed s3Key (filePath):', s3Key);
 
         // Add headers to the request
-        const response = await fetch('http://localhost:8080/api/files/fetch-page', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            path: dataToImport.filePath,
-            start_row: 0,
-            end_row: 100,
-          }),
-        });
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({
+              path: dataToImport.filePath,
+              start_row: 0,
+              end_row: 100,
+            }),
+          }
+        );
 
         if (!response.ok) {
           const errorText = await response.text();

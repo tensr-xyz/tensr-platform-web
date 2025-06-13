@@ -26,7 +26,7 @@ import useAuth from '@/hooks/api/use-auth';
 type ShiftDirection = 'previous' | 'next';
 type MissingValueHandling = 'sysmis' | 'value' | 'preserve';
 
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
 
 interface ShiftValuesRequest {
   path: string;

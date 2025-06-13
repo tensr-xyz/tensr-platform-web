@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from '@/components/atoms/alert';
 import useAuth from '@/hooks/api/use-auth';
 
 // API base URL
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
 
 interface MeanProps {
   children: ReactNode;

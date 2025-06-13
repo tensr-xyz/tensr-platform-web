@@ -17,7 +17,7 @@ import { updateTab } from '@/contexts/tabs-context/actions';
 import { ColumnSummary } from '@/types/file';
 
 // API base URL
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
 
 interface ValueToCount {
   type_: 'single' | 'range' | 'sysmis'; // Changed from 'type' to 'type_' to match Rust

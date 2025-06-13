@@ -315,7 +315,7 @@ const FeedbackPopover: React.FC = () => {
       <PopoverTrigger asChild>
         <Button
           variant="outline"
-          className="rounded-md px-3 py-1.5 flex items-center space-x-1 border border-border"
+          className="rounded-md px-3 py-1.5 flex items-center space-x-1 border border-border h-8"
         >
           Feedback
         </Button>
@@ -390,8 +390,8 @@ const UserProfileMenu: React.FC = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-          <Avatar className="h-9 w-9">
+        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+          <Avatar className="h-8 w-8">
             <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
           </Avatar>
         </Button>
@@ -427,13 +427,13 @@ const NavigationTabs = () => {
   const tabs = [{ name: 'Overview', path: '/' }];
 
   return (
-    <div>
-      <div className="flex h-10 items-center px-4">
+    <div className="sticky top-0 bg-background z-50 border-b border-border">
+      <div className="flex items-center px-4">
         {tabs.map(tab => (
           <Link
             key={tab.path}
             href={tab.path}
-            className={`inline-flex h-10 items-center justify-center border-b-2 px-4 pt-1 text-sm font-medium transition-colors ${
+            className={`inline-flex items-center justify-center border-b-2 p-3 text-sm font-medium transition-colors ${
               pathname === tab.path
                 ? 'border-black text-foreground'
                 : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
@@ -507,11 +507,11 @@ export const AccountSwitcher: React.FC = () => {
           disabled={isSwitching}
         >
           {isPersonalAccount ? (
-            <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-medium">
+            <div className="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center text-gray-600 font-medium">
               <User className="w-4 h-4" />
             </div>
           ) : (
-            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
+            <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white font-medium">
               <Building className="w-4 h-4" />
             </div>
           )}
@@ -634,13 +634,6 @@ export default function Header() {
   const isMobile = useIsMobile();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Handle logout
-  const handleLogout = () => {
-    if (logout) {
-      logout();
-    }
-  };
-
   if (isMobile) {
     return (
       <>
@@ -672,29 +665,69 @@ export default function Header() {
   }
 
   return (
-    <header className="w-full bg-background z-40 flex flex-col">
-      <div className="flex justify-between items-center h-16 px-4">
-        <div className="flex items-center space-x-4">
-          <Link href="/" className="flex">
-            <Button variant="link" size="sm">
-              <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={24} width={96} />
-            </Button>
-          </Link>
-          {isAuthenticated && user && <AccountSwitcher />}
-        </div>
+    <div className="w-full">
+      {/* Main header - not sticky, will scroll out of view */}
+      <header className="w-full bg-background z-40 relative">
+        <div className="flex justify-between items-center h-16 px-4">
+          <div className="flex items-center space-x-1">
+            <Link href="/" className="flex">
+              <Button variant="link" size="sm">
+                <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={24} width={96} />
+              </Button>
+            </Link>
+            {isAuthenticated && user && <AccountSwitcher />}
+          </div>
 
-        <div className="flex items-center space-x-2">
-          <FeedbackPopover />
-          <Button variant="outline" size="icon" className="rounded-full">
-            <Bell className="h-5 w-5" />
-          </Button>
-          <Button variant="outline" size="icon" className="rounded-full">
-            <BookOpen className="h-5 w-5" />
-          </Button>
-          {isAuthenticated && user && <UserProfileMenu />}
+          <div className="flex items-center space-x-2">
+            <FeedbackPopover />
+            <DropdownMenu>
+              <DropdownMenuTrigger>
+                <Button variant="outline" size="icon" className="rounded-full h-8 w-8">
+                  <Bell className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                {/* Mock Notifications */}
+                <DropdownMenuItem className="flex flex-col items-start gap-1">
+                  <p className="text-sm font-medium leading-none">Goal Due Soon</p>
+                  <p className="text-xs leading-snug text-muted-foreground">
+                    Your goal Finish header is due tomorrow.
+                  </p>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex flex-col items-start gap-1">
+                  <p className="text-sm font-medium leading-none">New Comment</p>
+                  <p className="text-xs leading-snug text-muted-foreground">
+                    New comment on ticket #101.
+                  </p>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex flex-col items-start gap-1">
+                  <p className="text-sm font-medium leading-none">Workspace Invitation</p>
+                  <p className="text-xs leading-snug text-muted-foreground">
+                    Oliver Darby invited you to a workspace.
+                  </p>
+                </DropdownMenuItem>
+                <DropdownMenuItem className="flex flex-col items-start gap-1">
+                  <p className="text-sm font-medium leading-none">Report Ready</p>
+                  <p className="text-xs leading-snug text-muted-foreground">
+                    Weekly progress report is ready.
+                  </p>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button variant="outline" size="icon" className="rounded-full h-8 w-8">
+              <BookOpen className="h-5 w-5" />
+            </Button>
+            {isAuthenticated && user && <UserProfileMenu />}
+          </div>
         </div>
+      </header>
+
+      {/* Navigation tabs - overlapped and sticky */}
+      <div className="relative -mt-4 z-50">
+        <NavigationTabs />
       </div>
-      <NavigationTabs />
-    </header>
+    </div>
   );
 }

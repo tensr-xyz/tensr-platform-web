@@ -16,7 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import useAuth from '@/hooks/api/use-auth';
 import { ViewType } from '@/contexts/project-context/types';
 
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
 
 interface AnovaProps {
   children: ReactNode;

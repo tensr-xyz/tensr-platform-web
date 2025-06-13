@@ -763,14 +763,17 @@ const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps
         setErrors(prev => ({ ...prev, [columnName]: null }));
 
         // Use fetch for the HTTP request
-        const response = await fetch('http://localhost:8080/api/analysis/column-frequencies', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${tokens?.idToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(params),
-        });
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/analysis/column-frequencies`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${tokens?.idToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(params),
+          }
+        );
 
         if (!response.ok) {
           const errorData = await response.json();

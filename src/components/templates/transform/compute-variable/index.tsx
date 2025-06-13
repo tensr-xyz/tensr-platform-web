@@ -89,7 +89,7 @@ interface ComputeVariablesProps {
 }
 
 // API base URL
-const API_BASE_URL = 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
 
 export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
   const [isLoading, setIsLoading] = useState(false);

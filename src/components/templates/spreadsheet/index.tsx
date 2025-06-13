@@ -87,16 +87,19 @@ export function Spreadsheet({
       setIsLoadingStats(true);
       statsLoadAttempted.current = true;
 
-      const response = await fetch('http://localhost:8080/api/analysis/analyze-file', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.idToken}`,
-        },
-        body: JSON.stringify({
-          path: decodedFilePath,
-        }),
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/analysis/analyze-file`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens?.idToken}`,
+          },
+          body: JSON.stringify({
+            path: decodedFilePath,
+          }),
+        }
+      );
 
       if (!response.ok) {
         throw new Error(`Error analyzing file: ${response.statusText}`);
@@ -209,18 +212,21 @@ export function Spreadsheet({
         };
       });
 
-      const response = await fetch('http://localhost:8080/api/files/fetch-page', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.idToken}`,
-        },
-        body: JSON.stringify({
-          path: decodedFilePath,
-          start_row: 0,
-          end_row: 100,
-        }),
-      });
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens?.idToken}`,
+          },
+          body: JSON.stringify({
+            path: decodedFilePath,
+            start_row: 0,
+            end_row: 100,
+          }),
+        }
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -308,18 +314,21 @@ export function Spreadsheet({
             };
           });
 
-          const response = await fetch('http://localhost:8080/api/files/fetch-page', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${tokens?.idToken}`,
-            },
-            body: JSON.stringify({
-              path: decodedFilePath,
-              start_row: 0,
-              end_row: 100,
-            }),
-          });
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${tokens?.idToken}`,
+              },
+              body: JSON.stringify({
+                path: decodedFilePath,
+                start_row: 0,
+                end_row: 100,
+              }),
+            }
+          );
 
           if (!response.ok) {
             const errorText = await response.text();

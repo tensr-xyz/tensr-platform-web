@@ -84,7 +84,7 @@ export default function FileWorkspacePage() {
         resource.path = fileInfo.fileName;
 
         // Process the file through backend
-        const processUrl = `http://localhost:8080/api/files/${fileInfo.fileId}/process`;
+        const processUrl = `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/${fileInfo.fileId}/process`;
         logDebug(`Making API request to: ${processUrl}`);
 
         const token = getToken();
