@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/molecules/chart';
 
 // Type definitions from FilterPanel
 interface ValueFrequency {
@@ -265,7 +266,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   const renderChart = () => {
     if (!chartData.length) {
       return (
-        <div className="h-[400px] flex items-center justify-center text-muted-foreground">
+        <div className="flex-1 w-full h-full flex items-center justify-center text-muted-foreground bg-white">
           {loadingColumn
             ? 'Loading data...'
             : error
@@ -275,210 +276,234 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
       );
     }
 
+    // Shared chart style
+    const chartContainerClass = 'flex-1 w-full h-full bg-white';
+    const axisStyle = { fontSize: 13, fontWeight: 500, fontFamily: 'Inter, sans-serif' };
+    const gridStyle = { stroke: '#eee', opacity: 0.7 };
+    const barRadius: [number, number, number, number] = [0, 0, 0, 0];
+    const chartConfig = {};
+
     if (xAxis === yAxis) {
       // Single dimension visualization
       if (chartType === 'pie') {
         return (
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={chartData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  outerRadius={150}
-                  fill="#8884d8"
-                  dataKey="value"
-                  nameKey="name"
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
-                >
-                  {chartData.map((_entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={value => [`${value} items`, 'Count']} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          <ChartContainer config={chartConfig} className={chartContainerClass}>
+            <PieChart>
+              <Pie
+                data={chartData}
+                cx="50%"
+                cy="50%"
+                labelLine={false}
+                outerRadius={150}
+                fill={COLORS[0]}
+                dataKey="value"
+                nameKey="name"
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(1)}%`}
+              >
+                {chartData.map((_entry, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Pie>
+              <ChartTooltip content={<ChartTooltipContent />} />
+            </PieChart>
+          </ChartContainer>
         );
       }
 
       if (chartType === 'line') {
         return (
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 70 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11 }}
-                  height={50}
-                  angle={-45}
-                  textAnchor="end"
-                />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  label={{
-                    value: 'Count',
-                    angle: -90,
-                    position: 'insideLeft',
-                    style: { textAnchor: 'middle' },
-                  }}
-                />
-                <Tooltip formatter={value => [`${value} items`, 'Count']} />
-                <Line type="monotone" dataKey="value" stroke={COLORS[0]} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <ChartContainer config={chartConfig} className={chartContainerClass}>
+            <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+              <CartesianGrid {...gridStyle} vertical={false} />
+              <XAxis
+                dataKey="name"
+                tick={axisStyle}
+                height={50}
+                angle={-45}
+                textAnchor="end"
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={axisStyle}
+                axisLine={false}
+                tickLine={false}
+                label={{
+                  value: 'Count',
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle', ...axisStyle },
+                }}
+              />
+              <ChartTooltip
+                content={<ChartTooltipContent />}
+                cursor={{ fill: 'rgba(67, 97, 238, 0.07)' }}
+              />
+              <Line
+                type="monotone"
+                dataKey="value"
+                stroke={COLORS[0]}
+                strokeWidth={3}
+                activeDot={{ r: 6 }}
+              />
+            </LineChart>
+          </ChartContainer>
         );
       }
 
       // Default to bar chart for single dimension
       return (
-        <div className="h-[400px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 70 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 11 }}
-                height={50}
-                angle={-45}
-                textAnchor="end"
-              />
-              <YAxis
-                tick={{ fontSize: 11 }}
-                label={{
-                  value: 'Count',
-                  angle: -90,
-                  position: 'insideLeft',
-                  style: { textAnchor: 'middle' },
-                }}
-              />
-              <Tooltip formatter={value => [`${value} items`, 'Count']} />
-              <Bar dataKey="value" fill={COLORS[0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartContainer config={chartConfig} className={chartContainerClass}>
+          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+            <CartesianGrid {...gridStyle} vertical={false} />
+            <XAxis
+              dataKey="name"
+              tick={axisStyle}
+              height={50}
+              angle={-45}
+              textAnchor="end"
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={axisStyle}
+              axisLine={false}
+              tickLine={false}
+              label={{
+                value: 'Count',
+                angle: -90,
+                position: 'insideLeft',
+                style: { textAnchor: 'middle', ...axisStyle },
+              }}
+            />
+            <ChartTooltip
+              content={<ChartTooltipContent />}
+              cursor={{ fill: 'rgba(67, 97, 238, 0.07)' }}
+            />
+            <Bar dataKey="value" fill={COLORS[0]} radius={barRadius} />
+          </BarChart>
+        </ChartContainer>
       );
     } else {
       // Multi-dimension visualization (comparing two dimensions)
       if (chartType === 'pie') {
         // Pie doesn't work well for two dimensions, fall back to bar
         return (
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 70 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11 }}
-                  height={50}
-                  angle={-45}
-                  textAnchor="end"
-                />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  label={{
-                    value: 'Count',
-                    angle: -90,
-                    position: 'insideLeft',
-                    style: { textAnchor: 'middle' },
-                  }}
-                />
-                <Tooltip
-                  formatter={(value, name, props) => {
-                    // For Y dimension values, show the actual value name
-                    if (name === yAxis && props.payload) {
-                      return [`${value} items (${props.payload.yName})`, name];
-                    }
-                    return [`${value} items`, name];
-                  }}
-                />
-                <Bar dataKey={xAxis} fill={COLORS[0]} />
-                <Bar dataKey={yAxis} fill={COLORS[1]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          <ChartContainer config={chartConfig} className={chartContainerClass}>
+            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+              <CartesianGrid {...gridStyle} vertical={false} />
+              <XAxis
+                dataKey="name"
+                tick={axisStyle}
+                height={50}
+                angle={-45}
+                textAnchor="end"
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={axisStyle}
+                axisLine={false}
+                tickLine={false}
+                label={{
+                  value: 'Count',
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle', ...axisStyle },
+                }}
+              />
+              <ChartTooltip
+                content={<ChartTooltipContent />}
+                cursor={{ fill: 'rgba(67, 97, 238, 0.07)' }}
+              />
+              <Bar dataKey={xAxis} fill={COLORS[0]} radius={barRadius} />
+              <Bar dataKey={yAxis} fill={COLORS[1]} radius={barRadius} />
+            </BarChart>
+          </ChartContainer>
         );
       }
 
       if (chartType === 'line') {
         return (
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 70 }}>
-                <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                <XAxis
-                  dataKey="name"
-                  tick={{ fontSize: 11 }}
-                  height={50}
-                  angle={-45}
-                  textAnchor="end"
-                />
-                <YAxis
-                  tick={{ fontSize: 11 }}
-                  label={{
-                    value: 'Count',
-                    angle: -90,
-                    position: 'insideLeft',
-                    style: { textAnchor: 'middle' },
-                  }}
-                />
-                <Tooltip
-                  formatter={(value, name, props) => {
-                    // For Y dimension values, show the actual value name
-                    if (name === yAxis && props.payload) {
-                      return [`${value} items (${props.payload.yName})`, name];
-                    }
-                    return [`${value} items`, name];
-                  }}
-                />
-                <Line type="monotone" dataKey={xAxis} stroke={COLORS[0]} activeDot={{ r: 6 }} />
-                <Line type="monotone" dataKey={yAxis} stroke={COLORS[1]} activeDot={{ r: 6 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+          <ChartContainer config={chartConfig} className={chartContainerClass}>
+            <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+              <CartesianGrid {...gridStyle} vertical={false} />
+              <XAxis
+                dataKey="name"
+                tick={axisStyle}
+                height={50}
+                angle={-45}
+                textAnchor="end"
+                axisLine={false}
+                tickLine={false}
+              />
+              <YAxis
+                tick={axisStyle}
+                axisLine={false}
+                tickLine={false}
+                label={{
+                  value: 'Count',
+                  angle: -90,
+                  position: 'insideLeft',
+                  style: { textAnchor: 'middle', ...axisStyle },
+                }}
+              />
+              <ChartTooltip
+                content={<ChartTooltipContent />}
+                cursor={{ fill: 'rgba(67, 97, 238, 0.07)' }}
+              />
+              <Line
+                type="monotone"
+                dataKey={xAxis}
+                stroke={COLORS[0]}
+                strokeWidth={3}
+                activeDot={{ r: 6 }}
+              />
+              <Line
+                type="monotone"
+                dataKey={yAxis}
+                stroke={COLORS[1]}
+                strokeWidth={3}
+                activeDot={{ r: 6 }}
+              />
+            </LineChart>
+          </ChartContainer>
         );
       }
 
       // Default to bar chart for two dimensions
       return (
-        <div className="h-[400px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 30, left: 20, bottom: 70 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-              <XAxis
-                dataKey="name"
-                tick={{ fontSize: 11 }}
-                height={50}
-                angle={-45}
-                textAnchor="end"
-              />
-              <YAxis
-                tick={{ fontSize: 11 }}
-                label={{
-                  value: 'Count',
-                  angle: -90,
-                  position: 'insideLeft',
-                  style: { textAnchor: 'middle' },
-                }}
-              />
-              <Tooltip
-                formatter={(value, name, props) => {
-                  // For Y dimension values, show the actual value name
-                  if (name === yAxis && props.payload) {
-                    return [`${value} items (${props.payload.yName})`, name];
-                  }
-                  return [`${value} items`, name];
-                }}
-              />
-              <Bar dataKey={xAxis} fill={COLORS[0]} />
-              <Bar dataKey={yAxis} fill={COLORS[1]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartContainer config={chartConfig} className={chartContainerClass}>
+          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 40 }}>
+            <CartesianGrid {...gridStyle} vertical={false} />
+            <XAxis
+              dataKey="name"
+              tick={axisStyle}
+              height={50}
+              angle={-45}
+              textAnchor="end"
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tick={axisStyle}
+              axisLine={false}
+              tickLine={false}
+              label={{
+                value: 'Count',
+                angle: -90,
+                position: 'insideLeft',
+                style: { textAnchor: 'middle', ...axisStyle },
+              }}
+            />
+            <ChartTooltip
+              content={<ChartTooltipContent />}
+              cursor={{ fill: 'rgba(67, 97, 238, 0.07)' }}
+            />
+            <Bar dataKey={xAxis} fill={COLORS[0]} radius={barRadius} />
+            <Bar dataKey={yAxis} fill={COLORS[1]} radius={barRadius} />
+          </BarChart>
+        </ChartContainer>
       );
     }
   };
@@ -487,7 +512,7 @@ const AnalyticsDashboard: React.FC<AnalyticsDashboardProps> = ({
   if (viewMode === 'bottom') {
     return (
       <div className="h-full flex flex-col">
-        <div className="flex items-center gap-4 p-2 border-b">
+        <div className="flex items-center gap-4 p-2 border-b border-border">
           <div className="flex-1">
             <Select value={xAxis} onValueChange={setXAxis}>
               <SelectTrigger className="h-7">

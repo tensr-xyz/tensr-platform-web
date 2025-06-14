@@ -22,7 +22,7 @@ const NavigationBar = ({ viewMode, onViewModeChange, onClose }: NavigationBarPro
   // If in bottom mode, only show expander and close buttons
   if (viewMode === 'bottom') {
     return (
-      <div className="flex flex-row items-center justify-between bg-background border-b px-1 h-8">
+      <div className="flex flex-row items-center justify-between bg-background border-b border-border px-1 h-8">
         <div className="flex flex-1 items-center justify-between gap-1">
           <Button
             variant="ghost"
@@ -43,7 +43,7 @@ const NavigationBar = ({ viewMode, onViewModeChange, onClose }: NavigationBarPro
 
   // Full navigation for split and full modes
   return (
-    <div className="flex flex-row items-center justify-between bg-background border-b px-1 h-8">
+    <div className="flex flex-row items-center justify-between bg-background border-b border-border px-1 h-8">
       <div className="flex flex-row items-center gap-1">
         <Button
           variant="ghost"
