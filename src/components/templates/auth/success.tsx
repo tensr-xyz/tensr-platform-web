@@ -3,8 +3,9 @@ import { Button } from '@/components/atoms/button';
 import { useRouter } from 'next/navigation';
 import { LuCheck, LuDownload } from 'react-icons/lu';
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
+import Link from 'next/link';
 
 const PaymentSuccessPage = () => {
   const router = useRouter();
@@ -133,8 +134,12 @@ const PaymentSuccessPage = () => {
 
       <div className="flex-1 flex items-end w-full max-w-xl px-10">
         <div className="flex flex-row gap-4 text-sm w-full">
-          <div>Terms of Service</div>
-          <div>Privacy Policy</div>
+          <Link href="https://tensr-1.gitbook.io/tensr/legal-policies/terms-of-service">
+            Terms of Service
+          </Link>
+          <Link href="https://tensr-1.gitbook.io/tensr/legal-policies/privacy-policy">
+            Privacy Policy
+          </Link>
         </div>
       </div>
     </div>

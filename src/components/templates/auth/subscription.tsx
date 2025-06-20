@@ -28,6 +28,7 @@ import Loading from '@/components/molecules/loading';
 import Link from 'next/link';
 import { ArrowLeft, Mail } from 'lucide-react';
 import Image from 'next/image';
+import { getEligiblePlans, decodeIdToken } from '@/utils/auth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -35,6 +36,14 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const stripePromise = loadStripe(
   'pk_test_51RJir9H0hCtrU4vjrozMaXHylofcF5n4LvJNL0XyqmfdjphtCPfPcYlpVcdFGG5SlKyJpRMRdp9C5XLbehivEngh00ntTQEOrt'
 );
+
+// Mapping from backend plan names to frontend keys
+const PLAN_KEY_MAP: Record<string, string> = {
+  professional: 'pro',
+  team: 'team',
+  enterprise: 'enterprise',
+  education: 'education',
+};
 
 // Create a wrapper component to provide Stripe context
 const PaymentPageWithStripe = () => {
@@ -169,6 +178,10 @@ const PaymentPage = () => {
   const [paymentIntentData, setPaymentIntentData] = useState<any>(null);
   const [paymentElementReady, setPaymentElementReady] = useState(false);
   const [paymentValid, setPaymentValid] = useState(false);
+  const [eligiblePlans, setEligiblePlans] = useState<string[]>([]);
+  const [eligibleFrontendPlans, setEligibleFrontendPlans] = useState<string[]>([]);
+  const [currentPlan, setCurrentPlan] = useState<string | null>(null);
+  const [currentPlanStatus, setCurrentPlanStatus] = useState<string | null>(null);
 
   // Get user name and email from user object or use empty string if not available
   const userName = user?.email?.split('@')[0] || '';
@@ -493,6 +506,24 @@ const PaymentPage = () => {
     fetchPlans();
   }, []);
 
+  useEffect(() => {
+    if (tokens?.idToken) {
+      const plans = getEligiblePlans(tokens.idToken);
+      setEligiblePlans(plans);
+      setEligibleFrontendPlans(plans.map(plan => PLAN_KEY_MAP[plan] || plan));
+      // Get current plan and status from token
+      const decoded = decodeIdToken(tokens.idToken);
+      if (decoded) {
+        setCurrentPlan(
+          PLAN_KEY_MAP[decoded['custom:subscriptionTier']] ||
+            decoded['custom:subscriptionTier'] ||
+            null
+        );
+        setCurrentPlanStatus(decoded['custom:subscriptionStatus'] || null);
+      }
+    }
+  }, [tokens?.idToken]);
+
   // Render methods for each step
   const renderPlanSelection = () => (
     <div className="space-y-6">
@@ -528,85 +559,108 @@ const PaymentPage = () => {
         </div>
       ) : (
         <div className="space-y-4">
-          {Object.keys(pricingData).map(tier => (
-            <Card
-              key={tier}
-              className={`p-4 border-2 hover:border-black cursor-pointer duration-100 ${
-                formData.tier === tier ? 'border-primary bg-primary/5' : 'border-gray-200'
-              }`}
-            >
-              <div className="flex justify-between items-start mb-4">
-                <div className="flex flex-col">
-                  <div className="flex items-center gap-2">
-                    <div className="text-lg font-medium capitalize">{tier}</div>
-                    {pricingData[tier].monthly === 0 && (
-                      <span className="text-xs bg-gray-100 px-2 py-1 rounded-full">Free</span>
-                    )}
-                  </div>
-                  <div className="text-sm text-[rgba(29,42,41,0.65)] mt-1">
-                    {pricingData[tier].description}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end">
-                  <div className="text-lg font-medium">
-                    {tier === 'enterprise'
-                      ? 'Custom'
-                      : pricingData[tier].monthly === 0
-                        ? 'Free'
-                        : `$${pricingData[tier][formData.billingType]}`}
-                  </div>
-                  <div className="text-xs text-[rgba(29,42,41,0.65)]">
-                    {tier === 'enterprise'
-                      ? 'Contact for pricing'
-                      : pricingData[tier].monthly > 0 && formData.billingType === 'monthly'
-                        ? 'per month'
-                        : pricingData[tier].monthly > 0
-                          ? 'per year'
-                          : ''}
-                  </div>
-                </div>
-              </div>
-
-              {/* Feature highlights */}
-              <div className="mb-4 space-y-2">
-                {(TIER_FEATURES[tier.toUpperCase() as keyof typeof TIER_FEATURES] || [])
-                  .slice(0, 3)
-                  .map((feature, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <LuCheck className="text-primary" size={16} />
-                      <span className="text-sm">{feature.text}</span>
+          {Object.keys(pricingData).map(tier => {
+            const isEligible = eligibleFrontendPlans.includes(tier);
+            const isDisabled = !isEligible && tier !== 'enterprise';
+            const isCurrent = currentPlan === tier;
+            return (
+              <Card
+                key={tier}
+                className={`p-4 border-2 hover:border-black cursor-pointer duration-100 ${
+                  formData.tier === tier ? 'border-primary bg-primary/5' : 'border-gray-200'
+                } ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-2">
+                      <div className="text-lg font-medium capitalize">{tier}</div>
+                      {pricingData[tier].monthly === 0 && (
+                        <span className="text-xs bg-gray-100 px-2 py-1 rounded-full">Free</span>
+                      )}
+                      {!isEligible && tier !== 'enterprise' && (
+                        <span className="text-xs bg-yellow-100 px-2 py-1 rounded-full">
+                          Not Eligible
+                        </span>
+                      )}
+                      {isCurrent && (
+                        <span className="text-xs bg-blue-100 px-2 py-1 rounded-full">
+                          Current Plan
+                          {currentPlanStatus
+                            ? ` (${currentPlanStatus.charAt(0).toUpperCase() + currentPlanStatus.slice(1)})`
+                            : ''}
+                        </span>
+                      )}
                     </div>
-                  ))}
-              </div>
+                    <div className="text-sm text-[rgba(29,42,41,0.65)] mt-1">
+                      {pricingData[tier].description}
+                    </div>
+                  </div>
+                  <div className="flex flex-col items-end">
+                    <div className="text-lg font-medium">
+                      {tier === 'enterprise'
+                        ? 'Custom'
+                        : pricingData[tier].monthly === 0
+                          ? 'Free'
+                          : `$${pricingData[tier][formData.billingType]}`}
+                    </div>
+                    <div className="text-xs text-[rgba(29,42,41,0.65)]">
+                      {tier === 'enterprise'
+                        ? 'Contact for pricing'
+                        : pricingData[tier].monthly > 0 && formData.billingType === 'monthly'
+                          ? 'per month'
+                          : pricingData[tier].monthly > 0
+                            ? 'per year'
+                            : ''}
+                    </div>
+                  </div>
+                </div>
 
-              {/* Action Button */}
-              <div className="mt-4">
-                {tier === 'enterprise' ? (
-                  <Button
-                    variant="outline"
-                    className="w-full flex items-center justify-center gap-2"
-                    onClick={e => {
-                      e.stopPropagation();
-                      window.location.href =
-                        'mailto:help@tensr.xyz?subject=Enterprise Plan Inquiry';
-                    }}
-                  >
-                    <Mail size={16} />
-                    Contact Sales
-                  </Button>
-                ) : (
-                  <Button
-                    variant={formData.tier === tier ? 'default' : 'outline'}
-                    className="w-full"
-                    onClick={() => handlePlanSelect(tier as TierType)}
-                  >
-                    {formData.tier === tier ? 'Selected' : 'Select Plan'}
-                    {formData.tier === tier && <LuCheck className="ml-2" size={16} />}
-                  </Button>
-                )}
-              </div>
-            </Card>
-          ))}
+                {/* Feature highlights */}
+                <div className="mb-4 space-y-2">
+                  {(TIER_FEATURES[tier.toUpperCase() as keyof typeof TIER_FEATURES] || [])
+                    .slice(0, 3)
+                    .map((feature, index) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <LuCheck className="text-primary" size={16} />
+                        <span className="text-sm">{feature.text}</span>
+                      </div>
+                    ))}
+                </div>
+
+                {/* Action Button */}
+                <div className="mt-4">
+                  {tier === 'enterprise' ? (
+                    <Button
+                      variant="outline"
+                      className="w-full flex items-center justify-center gap-2"
+                      onClick={e => {
+                        e.stopPropagation();
+                        window.location.href =
+                          'mailto:help@tensr.xyz?subject=Enterprise Plan Inquiry';
+                      }}
+                    >
+                      <Mail size={16} />
+                      Contact Sales
+                    </Button>
+                  ) : (
+                    <Button
+                      variant={formData.tier === tier ? 'default' : 'outline'}
+                      className="w-full"
+                      onClick={() => !isDisabled && handlePlanSelect(tier as TierType)}
+                      disabled={isDisabled}
+                    >
+                      {formData.tier === tier
+                        ? 'Selected'
+                        : isDisabled
+                          ? 'Not Available'
+                          : 'Select Plan'}
+                      {formData.tier === tier && <LuCheck className="ml-2" size={16} />}
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
         </div>
       )}
     </div>

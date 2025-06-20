@@ -134,3 +134,31 @@ export const clearAuthData = () => {
     sessionStorage.clear();
   }
 };
+
+export const decodeIdToken = (idToken: string) => {
+  try {
+    const base64Url = idToken.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (error) {
+    console.error('Error decoding ID token:', error);
+    return null;
+  }
+};
+
+export const getEligiblePlans = (idToken: string): string[] => {
+  try {
+    const decoded = decodeIdToken(idToken);
+    if (!decoded || !decoded['custom:eligiblePlans']) return [];
+    return JSON.parse(decoded['custom:eligiblePlans']);
+  } catch (error) {
+    console.error('Error getting eligible plans:', error);
+    return [];
+  }
+};

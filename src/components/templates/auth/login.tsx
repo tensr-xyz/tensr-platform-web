@@ -6,6 +6,7 @@ import React, { FormEvent, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/api/use-auth';
+import Link from 'next/link';
 
 const LoginTemplate = () => {
   const router = useRouter();
@@ -210,8 +211,12 @@ const LoginTemplate = () => {
       </div>
       <div className="flex-1 flex items-end w-full max-w-xl">
         <div className="flex flex-row gap-4 text-sm w-full px-10">
-          <div>Terms of Service</div>
-          <div>Privacy Policy</div>
+          <Link href="https://tensr-1.gitbook.io/tensr/legal-policies/terms-of-service">
+            Terms of Service
+          </Link>
+          <Link href="https://tensr-1.gitbook.io/tensr/legal-policies/privacy-policy">
+            Privacy Policy
+          </Link>
         </div>
       </div>
     </div>

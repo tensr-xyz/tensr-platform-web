@@ -1,3 +1,6 @@
+import Link from 'next/link';
+import React from 'react';
+
 interface FooterSection {
   title: string;
   links: FooterLink[];
@@ -39,8 +42,14 @@ export const FOOTER_SECTIONS: FooterStructure = {
     title: 'Resources',
     links: [
       { label: 'Support', href: '/support' },
-      { label: 'Privacy policy', href: 'https://tensr-1.gitbook.io/tensr' },
-      { label: 'Terms of service', href: 'https://tensr-1.gitbook.io/tensr' },
+      {
+        label: 'Privacy policy',
+        href: 'https://tensr-1.gitbook.io/tensr/legal-policies/privacy-policy',
+      },
+      {
+        label: 'Terms of service',
+        href: 'https://tensr-1.gitbook.io/tensr/legal-policies/terms-of-service',
+      },
     ],
   },
 };
