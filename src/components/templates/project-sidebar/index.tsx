@@ -30,6 +30,7 @@ import {
 } from '../../molecules/command';
 import { Home } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 interface NavItem {
   title: string;
@@ -46,6 +47,7 @@ interface NavItem {
 export default function ProjectSidebar() {
   const { state, dispatch } = useProject();
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
+  const router = useRouter();
 
   const handleRefreshFileSystem = React.useCallback(async () => {
     if (state.currentProject?.path) {
@@ -64,8 +66,7 @@ export default function ProjectSidebar() {
   }, [state.currentProject, handleRefreshFileSystem]);
 
   const handleOpenSettings = () => {
-    // Add your settings dialog opening logic here
-    console.log('Open settings dialog');
+    router.push('/settings/general');
   };
 
   const handleOpenSearch = () => {
@@ -108,8 +109,9 @@ export default function ProjectSidebar() {
       },
       {
         title: 'Settings',
-        url: '#',
+        url: '/settings/general',
         icon: LuSettings,
+        isNavigationItem: true,
         onClick: handleOpenSettings,
       },
     ] as NavItem[],
@@ -119,6 +121,11 @@ export default function ProjectSidebar() {
 
   const handleItemClick = (item: NavItem) => {
     if (item.isNavigationItem) {
+      if (item.onClick) {
+        item.onClick();
+      } else {
+        router.push(item.url);
+      }
       return;
     }
 
@@ -205,21 +212,25 @@ export default function ProjectSidebar() {
         </SidebarContent>
         <SidebarFooter>
           <SidebarMenu>
-            {data.navFooter.map(item => (
-              <SidebarMenuItem key={item.title}>
-                <SidebarMenuButton
-                  tooltip={{
-                    children: item.title,
-                    hidden: false,
-                  }}
-                  onClick={() => handleItemClick(item)}
-                  className={cn('flex h-8 w-8 items-center justify-center p-0 rounded-md')}
-                >
-                  <item.icon />
-                  <span className="sr-only">{item.title}</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+            {data.navFooter.map(item => {
+              const active = isItemActive(item);
+              return (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    tooltip={{
+                      children: item.title,
+                      hidden: false,
+                    }}
+                    onClick={() => handleItemClick(item)}
+                    isActive={active}
+                    className={cn('flex h-8 w-8 items-center justify-center p-0 rounded-md')}
+                  >
+                    <item.icon />
+                    <span className="sr-only">{item.title}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
@@ -229,7 +240,7 @@ export default function ProjectSidebar() {
         <CommandList>
           <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup heading="Quick Actions">
-            <CommandItem>
+            <CommandItem onSelect={() => router.push('/settings/general')}>
               <LuSettings />
               <span>Open Settings</span>
             </CommandItem>

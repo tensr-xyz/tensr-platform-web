@@ -186,7 +186,7 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
         <div className="p-4 border-t border-border mt-auto">
           {isAuthenticated && (
             <div>
-              <Link href="/settings/account" onClick={onClose}>
+              <Link href="/settings/general" onClick={onClose}>
                 <div className="text-lg font-medium p-2">Settings</div>
               </Link>
               <Button
@@ -404,7 +404,7 @@ const UserProfileMenu: React.FC = () => {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={() => router.push('/settings/account')}>
+        <DropdownMenuItem onClick={() => router.push('/settings/general')}>
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
           <DropdownMenuShortcut>⌘S</DropdownMenuShortcut>
@@ -716,9 +716,11 @@ export default function Header() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="outline" size="icon" className="rounded-full h-8 w-8">
-              <BookOpen className="h-5 w-5" />
-            </Button>
+            <Link href="https://tensr-1.gitbook.io/tensr/">
+              <Button variant="outline" size="icon" className="rounded-full h-8 w-8">
+                <BookOpen className="h-5 w-5" />
+              </Button>
+            </Link>
             {isAuthenticated && user && <UserProfileMenu />}
           </div>
         </div>

@@ -28,13 +28,16 @@ interface ExecutionResult {
 }
 
 interface OutputContent {
-  type_: string;
+  type_?: string;
+  type?: string;
   data: any;
 }
 
 // Component to render different types of output
 const OutputRenderer: React.FC<{ output: OutputContent }> = ({ output }) => {
-  switch (output.type_) {
+  const outputType = output.type_ || output.type;
+
+  switch (outputType) {
     case 'plot':
       return (
         <div className="w-full">
@@ -50,9 +53,7 @@ const OutputRenderer: React.FC<{ output: OutputContent }> = ({ output }) => {
     case 'text':
       return <div className="font-mono whitespace-pre-wrap">{output.data}</div>;
     default:
-      return (
-        <div className="font-mono whitespace-pre-wrap">Unknown output type: {output.type_}</div>
-      );
+      return <div className="font-mono whitespace-pre-wrap">Unknown output type: {outputType}</div>;
   }
 };
 
@@ -167,6 +168,12 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
           </div>
         )}
 
+        {cell.stdout && !cell.output && (
+          <div className="py-1 pl-2 font-mono text-xs text-gray-700 dark:text-gray-300 whitespace-pre-wrap border-l-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 my-1">
+            {cell.stdout}
+          </div>
+        )}
+
         {cell.error && (
           <div className="py-1 pl-2 font-mono text-xs text-red-600 dark:text-red-400 whitespace-pre-wrap border-l-2 border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900 my-1">
             {cell.error}
@@ -212,68 +219,64 @@ export const Notebook: React.FC = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [language, setLanguage] = useState<'python' | 'r'>('python');
 
+  // API base URL
+  const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
+
   const generateSetupCode = (lang: 'python' | 'r'): string => {
     if (!activeTab?.data?.initialData) return '';
 
-    const dataStr = JSON.stringify(activeTab.data.initialData);
+    const data = activeTab.data.initialData;
 
     if (lang === 'python') {
-      return `
-import pandas as pd
+      return `import pandas as pd
 import json
 import io
 import matplotlib.pyplot as plt
 import base64
 from io import BytesIO
 
-# Initialize the dataframe from the tab's data
-df = pd.read_json(io.StringIO('''${dataStr}'''))
+# Create DataFrame from the tab's data
+data_dict = ${JSON.stringify(data)}
+df = pd.DataFrame(data_dict)
 
-# Function to convert matplotlib plots to JSON
-def fig_to_json():
-    buf = BytesIO()
-    plt.savefig(buf, format='png', bbox_inches='tight')
-    buf.seek(0)
-    img_str = base64.b64encode(buf.getvalue()).decode('utf-8')
-    plt.close()
-    return {
-        "type": "plot",
-        "data": {
-            "type": "image",
-            "format": "png",
-            "data": img_str
-        }
-    }
-
-# Function to convert pandas DataFrame to JSON
-def df_to_json(df):
-    return {
-        "type": "table",
-        "data": json.loads(df.to_json(orient='records'))
-    }
-
-# Function to capture output
-def display(obj):
-    if isinstance(obj, pd.DataFrame):
-        _ = df_to_json(obj)
-    elif str(type(obj).__module__).startswith('matplotlib'):
-        _ = fig_to_json()
-    else:
-        print(obj)
-
-# Override display function
-globals()['display'] = display
-`;
+# Note: The backend already sets up __output__ capture system`;
     } else {
-      return `
-# Load required libraries
+      // For R, write the data to a JSON string and parse it properly
+      if (!Array.isArray(data) || data.length === 0) {
+        return `# No data available
+df <- data.frame()`;
+      }
+
+      // Create a safe JSON string and let R parse it
+      const jsonData = JSON.stringify(data);
+
+      return `# Load required libraries
 library(jsonlite)
 library(ggplot2)
 library(base64enc)
 
-# Parse the input data
-df <- fromJSON('''${dataStr}''')
-`;
+# Parse JSON data safely
+json_string <- '${jsonData.replace(/'/g, "\\'")}'
+df <- fromJSON(json_string)
+
+# Convert columns with numeric-looking data to numeric
+# This handles the percentage columns and other numeric fields
+numeric_pattern_cols <- names(df)[sapply(df, function(x) {
+  # Check if column looks numeric (ignoring NA values)
+  non_na_vals <- x[!is.na(x) & x != "null" & x != ""]
+  if(length(non_na_vals) == 0) return(FALSE)
+  # Check if most values can be converted to numeric
+  converted <- suppressWarnings(as.numeric(non_na_vals))
+  sum(!is.na(converted)) >= length(non_na_vals) * 0.7
+})]
+
+# Convert the identified columns to numeric
+for(col in numeric_pattern_cols) {
+  df[[col]] <- suppressWarnings(as.numeric(df[[col]]))
+}
+
+# Clean up column names for R (replace problematic characters)
+names(df) <- make.names(names(df))`;
     }
   };
 
@@ -294,60 +297,36 @@ df <- fromJSON('''${dataStr}''')
     setCells(cells.map(cell => (cell.id === cellId ? { ...cell, content: newContent } : cell)));
   };
 
-  // Mock implementation of code execution
-  const mockExecuteCode = async (
-    code: string,
-    language: 'python' | 'r'
-  ): Promise<ExecutionResult> => {
-    console.log(`Executing ${language} code:`, code);
-
-    // Simulate processing time
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // For demonstration purposes, return mock results based on code content
-    if (code.includes('print(df.head())') || code.includes('head(df)')) {
-      return {
-        stdout: 'Displaying dataframe head',
-        output: {
-          type_: 'table',
-          data: [
-            { id: 1, name: 'Sample 1', value: 42 },
-            { id: 2, name: 'Sample 2', value: 73 },
-            { id: 3, name: 'Sample 3', value: 28 },
-          ],
+  // Remove mockExecuteCode and replace with real API call
+  const executeCode = async (code: string, language: 'python' | 'r'): Promise<ExecutionResult> => {
+    const endpoint =
+      language === 'python'
+        ? `${API_BASE_URL}/api/execute/python`
+        : `${API_BASE_URL}/api/execute/r`;
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
         },
-        error: null,
-      };
-    }
-
-    if (code.includes('plt.') || code.includes('ggplot')) {
-      return {
-        stdout: null,
-        output: {
-          type_: 'plot',
-          data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+P+/HgAFDwJ2gUZFyQAAAABJRU5ErkJggg==', // Empty 1x1 PNG
-        },
-        error: null,
-      };
-    }
-
-    if (code.includes('error') || code.includes('raise')) {
+        body: JSON.stringify({ code }),
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        return {
+          stdout: null,
+          output: null,
+          error: errorText || 'Failed to execute code',
+        };
+      }
+      return await response.json();
+    } catch (err) {
       return {
         stdout: null,
         output: null,
-        error: 'RuntimeError: This is a simulated error for demonstration purposes',
+        error: err instanceof Error ? err.message : 'Failed to execute code',
       };
     }
-
-    // Default response for other code
-    return {
-      stdout: 'Code executed successfully',
-      output: {
-        type_: 'text',
-        data: 'Code execution completed. No specific output to display.',
-      },
-      error: null,
-    };
   };
 
   const executeCell = async (cellId: number) => {
@@ -359,8 +338,8 @@ df <- fromJSON('''${dataStr}''')
       const setupCode = generateSetupCode(language);
       const fullCode = setupCode + '\n' + cell.content;
 
-      // Replace invoke with mockExecuteCode
-      const result = await mockExecuteCode(fullCode, language);
+      // Use real API call
+      const result = await executeCode(fullCode, language);
 
       // Process stdout to find JSON objects
       let output = result.output;
@@ -371,11 +350,22 @@ df <- fromJSON('''${dataStr}''')
           if (jsonMatch) {
             const lastJson = jsonMatch[jsonMatch.length - 1];
             const parsedOutput = JSON.parse(lastJson);
-            if (parsedOutput.type_ && parsedOutput.data) {
-              output = parsedOutput;
+            if (parsedOutput.type && parsedOutput.data) {
+              output = {
+                type_: parsedOutput.type,
+                data: parsedOutput.data,
+              };
             }
           }
         } catch (e) {}
+      }
+
+      // Handle backend output format (type vs type_)
+      if (output && output.type && !output.type_) {
+        output = {
+          type_: output.type,
+          data: output.data,
+        };
       }
 
       setCells(prevCells =>
@@ -416,8 +406,8 @@ df <- fromJSON('''${dataStr}''')
         const setupCode = generateSetupCode(language);
         const fullCode = setupCode + '\n' + cell.content;
 
-        // Replace invoke with mockExecuteCode
-        const result = await mockExecuteCode(fullCode, language);
+        // Use real API call
+        const result = await executeCode(fullCode, language);
 
         setCells(prevCells =>
           prevCells.map(c =>
