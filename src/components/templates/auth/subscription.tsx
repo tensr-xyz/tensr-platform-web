@@ -31,11 +31,11 @@ import Image from 'next/image';
 import { getEligiblePlans, decodeIdToken } from '@/utils/auth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 
 // Initialize Stripe with your publishable key
-const stripePromise = loadStripe(
-  'pk_test_51RJir9H0hCtrU4vjrozMaXHylofcF5n4LvJNL0XyqmfdjphtCPfPcYlpVcdFGG5SlKyJpRMRdp9C5XLbehivEngh00ntTQEOrt'
-);
+if (!PUBLISHABLE_KEY) throw new Error('Missing Stripe publishable key');
+const stripePromise = loadStripe(PUBLISHABLE_KEY);
 
 // Mapping from backend plan names to frontend keys
 const PLAN_KEY_MAP: Record<string, string> = {
