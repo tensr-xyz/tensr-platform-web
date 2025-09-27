@@ -20,7 +20,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/molecules/dialog';
-import { Tab } from '@/contexts/tabs-context/types';
+import { Tab } from '@/stores/tabs-store';
 
 interface CollaborationMenuProps {
   activeTab?: Tab;
@@ -108,7 +108,9 @@ export function CollaborationMenu({ activeTab }: CollaborationMenuProps) {
               onClick={async () => {
                 if (activeTab?.data?.filePath) {
                   try {
-                    await createSession(activeTab.data.filePath, activeTab.name);
+                    // Ensure file path starts with / for API compatibility
+                    const filePath = activeTab.data.filePath.startsWith('/') ? activeTab.data.filePath : `/${activeTab.data.filePath}`;
+                    await createSession(filePath, activeTab.name);
                     setDialogOpen(false);
                   } catch (error) {
                     console.error('Failed to create session:', error);

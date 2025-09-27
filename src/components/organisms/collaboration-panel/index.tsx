@@ -19,7 +19,9 @@ import {
 } from '@/components/atoms/select';
 import { useCollaboration, UserPresence } from '@/hooks/use-collaboration';
 import { useAuth } from '@/hooks/api/use-auth';
+import { useProjectStore } from '@/stores/project-store';
 import { getIdToken } from '@/utils/auth';
+import { apiClient } from '@/lib/api-client';
 
 // API Base URL
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -112,10 +114,11 @@ const CollaboratorItem = ({
 
 interface CollaborationPanelProps {
   projectId: string;
+  activeTab?: any; // Add activeTab prop for file context
 }
 
 // Main Collaboration Component
-const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
+const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) => {
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [accessLevel, setAccessLevel] = useState('read-only');
   const collaborationState = useCollaboration(projectId);
@@ -125,6 +128,7 @@ const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user, isAuthenticated } = useAuth();
+  const { selectedPath, fileSystem } = useProjectStore();
 
   // Effect to manage collaboration and awareness - FIXED VERSION
   useEffect(() => {
@@ -184,26 +188,33 @@ const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
         throw new Error('You must be logged in to start a session');
       }
 
-      // Create a new session by calling the API
-      const response = await fetch(`${API_BASE_URL}/sessions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          projectId,
-          accessLevel,
-          createdBy: user?.userId || currentUserId,
-        }),
-        credentials: 'include',
-      });
+      // Get current file information from either project context or active tab
+      let filePath: string;
+      let fileName: string;
 
-      if (!response.ok) {
-        throw new Error(`Failed to create session: ${response.status}`);
+      if (activeTab && activeTab.data && activeTab.data.filePath) {
+        // File workspace context - get info from active tab
+        // Ensure file path starts with / for API compatibility
+        filePath = activeTab.data.filePath.startsWith('/') ? activeTab.data.filePath : `/${activeTab.data.filePath}`;
+        fileName = activeTab.name;
+      } else {
+        // Project workspace context - get info from project context
+        const currentFile = fileSystem.find(file => file.path === selectedPath);
+        if (!currentFile) {
+          throw new Error('No file is currently selected. Please select a file to collaborate on.');
+        }
+        // Ensure file path starts with / for API compatibility
+        filePath = currentFile.path.startsWith('/') ? currentFile.path : `/${currentFile.path}`;
+        fileName = currentFile.name;
       }
 
-      const sessionData = await response.json();
+      // Create a new session by calling the API with the correct data
+      const sessionData = await apiClient.collaboration.createSession({
+        filePath,
+        fileName,
+        userName: user?.email || 'Anonymous',
+      });
+
       setSessionId(sessionData.id);
 
       if (collaborationState) {
@@ -398,14 +409,25 @@ const CollaborationPanel = ({ projectId }: CollaborationPanelProps) => {
                 <SelectItem value="full-access">Full Access</SelectItem>
               </SelectContent>
             </Select>
-            <Button size="sm" className="w-full" onClick={handleStartSession} disabled={isLoading}>
+            <Button
+              size="sm"
+              className="w-full"
+              onClick={handleStartSession}
+              disabled={
+                isLoading ||
+                (!activeTab?.data?.filePath &&
+                  (!selectedPath || !fileSystem.find(file => file.path === selectedPath)))
+              }
+            >
               {isLoading ? 'Starting...' : 'Start Session'}
             </Button>
           </div>
 
           <p className="text-xs text-muted-foreground">
-            Start a collaboration session, share link and work together on this project with your
-            teammates.
+            {!activeTab?.data?.filePath &&
+            (!selectedPath || !fileSystem.find(file => file.path === selectedPath))
+              ? 'Select a file to start a collaboration session'
+              : 'Start a collaboration session, share link and work together on this file with your teammates.'}
           </p>
         </div>
       ) : (
