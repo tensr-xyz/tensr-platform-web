@@ -202,7 +202,7 @@ test.describe('Collaboration Features', () => {
       await page.mouse.move(200, 200);
       
       // Verify cursor position is tracked
-      await expect(page.locator('[data-testid="cursor-position"]')).toBeVisible();
+      await expect(page.locator("[data-testid=\"cursor-position\"]")).toBeVisible();
     });
 
     test('should handle collaborative document editing', async ({ page }) => {
@@ -378,7 +378,7 @@ test.describe('Collaboration Features', () => {
             created: new Date().toISOString(),
             lastActive: new Date().toISOString(),
           })),
-          headers: { 'content-type': 'application/json' },
+          headers: { 'content-type': 'application/json' }
         })
       );
       
