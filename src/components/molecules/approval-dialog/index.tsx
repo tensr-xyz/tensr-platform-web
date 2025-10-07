@@ -1,4 +1,11 @@
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/atoms/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
 import { Badge } from '@/components/atoms/badge';
 import { Clock, Play, X, CheckCircle } from 'lucide-react';
@@ -20,13 +27,13 @@ interface ApprovalDialogProps {
   isExecuting?: boolean;
 }
 
-export function ApprovalDialog({ 
-  open, 
-  onOpenChange, 
-  command, 
-  onApprove, 
+export function ApprovalDialog({
+  open,
+  onOpenChange,
+  command,
+  onApprove,
   onReject,
-  isExecuting = false 
+  isExecuting = false,
 }: ApprovalDialogProps) {
   if (!command) return null;
 
@@ -53,9 +60,7 @@ export function ApprovalDialog({
             {getToolIcon(command.tool)}
             {getToolDisplayName(command.tool)}
           </DialogTitle>
-          <DialogDescription>
-            {command.description}
-          </DialogDescription>
+          <DialogDescription>{command.description}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -78,9 +83,7 @@ export function ApprovalDialog({
             <div>
               <h4 className="text-sm font-medium mb-2">Parameters:</h4>
               <div className="bg-muted p-3 rounded-md text-sm">
-                <pre className="whitespace-pre-wrap">
-                  {JSON.stringify(command.params, null, 2)}
-                </pre>
+                <pre className="whitespace-pre-wrap">{JSON.stringify(command.params, null, 2)}</pre>
               </div>
             </div>
           )}
@@ -104,11 +107,7 @@ export function ApprovalDialog({
             <X className="h-4 w-4" />
             Cancel
           </Button>
-          <Button
-            onClick={onApprove}
-            disabled={isExecuting}
-            className="flex items-center gap-2"
-          >
+          <Button onClick={onApprove} disabled={isExecuting} className="flex items-center gap-2">
             <Play className="h-4 w-4" />
             {isExecuting ? 'Executing...' : 'Execute'}
           </Button>
