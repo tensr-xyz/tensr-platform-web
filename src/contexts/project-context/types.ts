@@ -13,6 +13,7 @@ export enum ViewType {
   NOTEBOOK = 'notebook',
   PLUGINS = 'plugins',
   MARKDOWN = 'markdown',
+  SEM = 'sem',
 }
 
 export enum ProjectActions {

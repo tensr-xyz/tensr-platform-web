@@ -1091,6 +1091,7 @@ const PaymentPage = () => {
               alt="Tensr Logo"
               height={24}
               width={96}
+              unoptimized
             />
           </Link>
 

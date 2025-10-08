@@ -2,9 +2,7 @@ import React, { useCallback, useMemo } from 'react';
 import { ProjectMenu } from '@/components/organisms/project-menu';
 import { ScrollArea, ScrollBar } from '@/components/atoms/scroll-area';
 import { Tabs, TabsList, TabsTrigger } from '@/components/molecules/tabs';
-import { useTabs } from '@/contexts/tabs-context';
-import { closeAllTabs, setActiveTab, updateTab } from '@/contexts/tabs-context/actions';
-import { Tab } from '@/contexts/tabs-context/types';
+import { useTabsStore, Tab } from '@/stores/tabs-store';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/molecules/dropdown';
 import { Button } from '@/components/atoms/button';
-import { LuEllipsisVertical } from 'react-icons/lu';
+import { LuEllipsisVertical, LuPanelLeft } from 'react-icons/lu';
 import { ViewType } from '@/contexts/project-context/types';
 
 // Define the SpreadsheetTab interface here to match the Tab interface from your context
@@ -26,6 +24,7 @@ interface SpreadsheetTab extends Tab {
 
 interface TitlebarProps {
   onToggleSidebar: () => void;
+  onToggleLeftSidebar: () => void;
   tabs?: Tab[];
   activeTab?: Tab;
   onTabClose?: (id: string) => void;
@@ -70,26 +69,30 @@ function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): Debo
   return debounced;
 }
 
-const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: TitlebarProps) => {
-  const { dispatch } = useTabs();
+const Titlebar = ({
+  onToggleSidebar,
+  onToggleLeftSidebar,
+  tabs = [],
+  activeTab,
+  onTabClose,
+}: TitlebarProps) => {
+  const { updateTab, setActiveTab, closeAllTabs } = useTabsStore();
 
   const createDebouncedHandler = useCallback(
     (tab: SpreadsheetTab) => {
       return debounce(async (newData: Record<string, any>[]) => {
         try {
-          dispatch(
-            updateTab(tab.id, {
-              data: {
-                ...tab.data,
-                initialData: newData,
-              },
-              isDirty: true,
-            })
-          );
+          updateTab(tab.id, {
+            data: {
+              ...tab.data,
+              initialData: newData,
+            },
+            isDirty: true,
+          });
         } catch (e) {}
       }, 500);
     },
-    [dispatch]
+    [updateTab]
   );
 
   const debouncedHandlers = useMemo(() => {
@@ -105,7 +108,7 @@ const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: Titleba
   }, [tabs, createDebouncedHandler]);
 
   const handleTabChange = (value: string) => {
-    dispatch(setActiveTab(value));
+    setActiveTab(value);
   };
 
   // Safe tab closing function that checks if onTabClose exists
@@ -117,16 +120,20 @@ const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: Titleba
 
   const handleCloseAllTabs = useCallback(() => {
     Object.values(debouncedHandlers).forEach(handler => handler.cancel());
-    dispatch(closeAllTabs());
-  }, [dispatch, debouncedHandlers]);
+    closeAllTabs();
+  }, [closeAllTabs, debouncedHandlers]);
 
   return (
-    <div className="h-10 bg-secondary border-b border-border flex items-stretch relative">
+    <div className="h-10 bg-sidebar border-b border-border flex items-stretch relative">
       {/* Main titlebar content */}
       <div className="flex-1 flex justify-between items-center">
         {/* Left section */}
         <div className="flex items-center h-full">
           <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={onToggleLeftSidebar} className="h-7 w-7">
+              <LuPanelLeft />
+              <span className="sr-only">Toggle Project Sidebar</span>
+            </Button>
             <ProjectMenu />
           </div>
         </div>

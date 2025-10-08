@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 
 // Type definitions
 interface ModelNode {
@@ -85,8 +85,8 @@ export const StatisticsSection = ({
   const [statistics, setStatistics] = useState<Statistics | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const { state } = useTabs();
-  const activeTab = state.tabs.find(tab => tab.id === state.activeTabId);
+  const { tabs, activeTabId } = useTabsStore();
+  const activeTab = tabs.find(tab => tab.id === activeTabId);
 
   useEffect(() => {
     let isMounted = true;

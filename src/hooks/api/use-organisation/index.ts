@@ -31,6 +31,45 @@ export interface OrganizationMember {
   };
 }
 
+// Team types
+export interface Team {
+  id: string;
+  organizationId: string;
+  name: string;
+  description?: string;
+  accessLevel: 'READ_ONLY' | 'READ_WRITE' | 'ADMIN';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TeamMember {
+  teamId: string;
+  userId: string;
+  role: 'MEMBER' | 'LEADER';
+  joinedAt: string;
+  user?: {
+    id: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    profilePicture?: string;
+  };
+}
+
+// Invitation types
+export interface OrganizationInvitation {
+  id: string;
+  organizationId: string;
+  email: string;
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+  invitedBy: string;
+  status: 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'CANCELLED';
+  token: string;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface UseOrganizationReturn {
   organizations: Organization[];
   activeOrganization: Organization | null;
@@ -57,6 +96,53 @@ interface UseOrganizationReturn {
     userId: string,
     role: 'ADMIN' | 'MEMBER' | 'VIEWER'
   ) => Promise<OrganizationMember>;
+  // Team methods
+  teams: Team[];
+  createTeam: (
+    orgId: string,
+    data: {
+      name: string;
+      description?: string;
+      accessLevel?: 'READ_ONLY' | 'READ_WRITE' | 'ADMIN';
+    }
+  ) => Promise<Team>;
+  updateTeam: (
+    orgId: string,
+    teamId: string,
+    data: {
+      name?: string;
+      description?: string;
+      accessLevel?: 'READ_ONLY' | 'READ_WRITE' | 'ADMIN';
+    }
+  ) => Promise<Team>;
+  deleteTeam: (orgId: string, teamId: string) => Promise<boolean>;
+  listTeams: (orgId: string) => Promise<Team[]>;
+  // Team member methods
+  listTeamMembers: (teamId: string) => Promise<TeamMember[]>;
+  addMemberToTeam: (
+    teamId: string,
+    data: {
+      email: string;
+      role: 'MEMBER' | 'LEADER';
+    }
+  ) => Promise<TeamMember>;
+  removeMemberFromTeam: (teamId: string, userId: string) => Promise<boolean>;
+  updateTeamMemberRole: (
+    teamId: string,
+    userId: string,
+    role: 'MEMBER' | 'LEADER'
+  ) => Promise<TeamMember>;
+  // Invitation methods
+  invitations: OrganizationInvitation[];
+  createInvitation: (
+    orgId: string,
+    data: {
+      email: string;
+      role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+    }
+  ) => Promise<OrganizationInvitation>;
+  listInvitations: (orgId: string) => Promise<OrganizationInvitation[]>;
+  deleteInvitation: (token: string) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
   fetchOrganizations: () => Promise<Organization[]>;
@@ -67,6 +153,8 @@ export const useOrganization = (): UseOrganizationReturn => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const auth = useAuth();
@@ -446,6 +534,447 @@ export const useOrganization = (): UseOrganizationReturn => {
     }
   };
 
+  // Team methods
+  const createTeam = async (
+    orgId: string,
+    data: {
+      name: string;
+      description?: string;
+      accessLevel?: 'READ_ONLY' | 'READ_WRITE' | 'ADMIN';
+    }
+  ): Promise<Team> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        throw new Error('No authentication token available. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/teams`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Failed to create team: ${errorData.message || response.statusText}`);
+      }
+
+      const newTeam = await response.json();
+
+      // Update local state
+      setTeams(prev => [...prev, newTeam]);
+
+      return newTeam;
+    } catch (err: any) {
+      console.error('Error creating team:', err);
+      setError(err.message || 'Failed to create team');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateTeam = async (
+    orgId: string,
+    teamId: string,
+    data: {
+      name?: string;
+      description?: string;
+      accessLevel?: 'READ_ONLY' | 'READ_WRITE' | 'ADMIN';
+    }
+  ): Promise<Team> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        throw new Error('No authentication token available. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/teams/${teamId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Failed to update team: ${errorData.message || response.statusText}`);
+      }
+
+      const updatedTeam = await response.json();
+
+      // Update local state
+      setTeams(prev => prev.map(team => (team.id === teamId ? updatedTeam : team)));
+
+      return updatedTeam;
+    } catch (err: any) {
+      console.error('Error updating team:', err);
+      setError(err.message || 'Failed to update team');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteTeam = async (orgId: string, teamId: string): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        throw new Error('No authentication token available. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/teams/${teamId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Failed to delete team: ${errorData.message || response.statusText}`);
+      }
+
+      // Update local state
+      setTeams(prev => prev.filter(team => team.id !== teamId));
+
+      return true;
+    } catch (err: any) {
+      console.error('Error deleting team:', err);
+      setError(err.message || 'Failed to delete team');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const listTeams = async (orgId: string): Promise<Team[]> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        setError('No authentication token available. Please log in again.');
+        return [];
+      }
+
+      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/teams`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Failed to get teams: ${errorData.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      const orgTeams = data.teams || [];
+      setTeams(orgTeams);
+
+      return orgTeams;
+    } catch (err: any) {
+      console.error('Error fetching teams:', err);
+      setError(err.message || 'Failed to fetch teams');
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Team member methods
+  const listTeamMembers = async (teamId: string): Promise<TeamMember[]> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        setError('No authentication token available. Please log in again.');
+        return [];
+      }
+
+      const response = await fetch(`${API_BASE_URL}/teams/${teamId}/members`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Failed to get team members: ${errorData.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      const teamMembers = data.members || [];
+      // Update local state
+      // This state is not directly managed by this hook, so we just return
+      return teamMembers;
+    } catch (err: any) {
+      console.error('Error fetching team members:', err);
+      setError(err.message || 'Failed to fetch team members');
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const addMemberToTeam = async (
+    teamId: string,
+    data: {
+      email: string;
+      role: 'MEMBER' | 'LEADER';
+    }
+  ): Promise<TeamMember> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        throw new Error('No authentication token available. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/teams/${teamId}/members`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Failed to add team member: ${errorData.message || response.statusText}`);
+      }
+
+      const newMember = await response.json();
+      // Update local state
+      // This state is not directly managed by this hook, so we just return
+      return newMember;
+    } catch (err: any) {
+      console.error('Error adding team member:', err);
+      setError(err.message || 'Failed to add team member');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const removeMemberFromTeam = async (teamId: string, userId: string): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        throw new Error('No authentication token available. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/teams/${teamId}/members/${userId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(
+          `Failed to remove team member: ${errorData.message || response.statusText}`
+        );
+      }
+
+      // Update local state
+      // This state is not directly managed by this hook, so we just return
+      return true;
+    } catch (err: any) {
+      console.error('Error removing team member:', err);
+      setError(err.message || 'Failed to remove team member');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const updateTeamMemberRole = async (
+    teamId: string,
+    userId: string,
+    role: 'MEMBER' | 'LEADER'
+  ): Promise<TeamMember> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        throw new Error('No authentication token available. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/teams/${teamId}/members/${userId}/role`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ role }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(
+          `Failed to update team member role: ${errorData.message || response.statusText}`
+        );
+      }
+
+      const updatedMember = await response.json();
+      // Update local state
+      // This state is not directly managed by this hook, so we just return
+      return updatedMember;
+    } catch (err: any) {
+      console.error('Error updating team member role:', err);
+      setError(err.message || 'Failed to update team member role');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Invitation methods
+  const createInvitation = async (
+    orgId: string,
+    data: {
+      email: string;
+      role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+    }
+  ): Promise<OrganizationInvitation> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        throw new Error('No authentication token available. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/invitations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Failed to create invitation: ${errorData.message || response.statusText}`);
+      }
+
+      const newInvitation = await response.json();
+      // Update local state
+      setInvitations(prev => [...prev, newInvitation]);
+      return newInvitation;
+    } catch (err: any) {
+      console.error('Error creating invitation:', err);
+      setError(err.message || 'Failed to create invitation');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const listInvitations = async (orgId: string): Promise<OrganizationInvitation[]> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        setError('No authentication token available. Please log in again.');
+        return [];
+      }
+
+      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/invitations`, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Failed to get invitations: ${errorData.message || response.statusText}`);
+      }
+
+      const data = await response.json();
+      const orgInvitations = data.invitations || [];
+      // Update local state
+      setInvitations(orgInvitations);
+      return orgInvitations;
+    } catch (err: any) {
+      console.error('Error fetching invitations:', err);
+      setError(err.message || 'Failed to fetch invitations');
+      return [];
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const deleteInvitation = async (invitationToken: string): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const token = getToken();
+      if (!token) {
+        throw new Error('No authentication token available. Please log in again.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/invitations/${invitationToken}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        throw new Error(`Failed to delete invitation: ${errorData.message || response.statusText}`);
+      }
+
+      // Update local state
+      setInvitations(prev => prev.filter(inv => inv.token !== invitationToken));
+      return true;
+    } catch (err: any) {
+      console.error('Error deleting invitation:', err);
+      setError(err.message || 'Failed to delete invitation');
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return {
     organizations,
     activeOrganization,
@@ -460,6 +989,19 @@ export const useOrganization = (): UseOrganizationReturn => {
     addMember,
     removeMember,
     updateMemberRole,
+    teams,
+    createTeam,
+    updateTeam,
+    deleteTeam,
+    listTeams,
+    listTeamMembers,
+    addMemberToTeam,
+    removeMemberFromTeam,
+    updateTeamMemberRole,
+    invitations,
+    createInvitation,
+    listInvitations,
+    deleteInvitation,
     isLoading,
     error,
     fetchOrganizations,

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PluginRecord } from '@/types/plugin';
 
-const BASE_URL = 'https://t8ioaf6fl9.execute-api.us-east-1.amazonaws.com';
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -61,7 +61,26 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
       }
 
       const data: PaginatedResponse<PluginRecord> = await response.json();
-      return data;
+
+      // Ensure all plugins have required properties with defaults
+      const processedData = {
+        ...data,
+        items: data.items.map(plugin => ({
+          ...plugin,
+          status: plugin.status || 'PENDING',
+          isPaid: plugin.isPaid || false,
+          tags: plugin.tags || [],
+          thumbnailUrl: plugin.thumbnailUrl || '',
+          revenue: plugin.revenue || {
+            totalSales: 0,
+            totalDownloads: 0,
+            platformFee: 0,
+            creatorPayout: 0,
+          },
+        })),
+      };
+
+      return processedData;
     } catch (err) {
       throw err;
     }
@@ -133,7 +152,22 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
       );
     }
 
-    return response.json();
+    const plugin: PluginRecord = await response.json();
+
+    // Ensure plugin has required properties with defaults
+    return {
+      ...plugin,
+      status: plugin.status || 'PENDING',
+      isPaid: plugin.isPaid || false,
+      tags: plugin.tags || [],
+      thumbnailUrl: plugin.thumbnailUrl || '',
+      revenue: plugin.revenue || {
+        totalSales: 0,
+        totalDownloads: 0,
+        platformFee: 0,
+        creatorPayout: 0,
+      },
+    };
   };
 
   const getPluginVersions = async (pluginId: string): Promise<PluginRecord[]> => {

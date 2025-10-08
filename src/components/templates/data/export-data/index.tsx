@@ -1,5 +1,5 @@
 import { ReactNode, useState } from 'react';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import {
   Dialog,
   DialogContent,
@@ -51,12 +51,12 @@ const EXPORT_FORMATS: ExportFormat[] = [
 ];
 
 export const ExportDialog = ({ children }: ExportDialogProps) => {
-  const { state } = useTabs();
+  const { tabs, activeTabId } = useTabsStore();
   const [selectedFormat, setSelectedFormat] = useState('csv');
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string>('');
 
-  const activeTab = state.tabs.find(tab => tab.id === state.activeTabId);
+  const activeTab = tabs.find(tab => tab.id === activeTabId);
 
   const handleExport = async () => {
     if (!activeTab?.data?.filePath) {

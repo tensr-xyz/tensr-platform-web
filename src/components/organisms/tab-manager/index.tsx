@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { useTabs } from '@/contexts/tabs-context';
-import { updateTab } from '@/contexts/tabs-context/actions';
+import { useTabsStore, Tab } from '@/stores/tabs-store';
 import { Button } from '@/components/atoms/button';
 import {
   LuFolder,
@@ -18,14 +17,14 @@ import {
   LuRewind,
 } from 'react-icons/lu';
 import Spreadsheet from '@/components/templates/spreadsheet';
-import { useProject } from '@/contexts/project-context';
-import { ProjectActions, ViewType } from '@/contexts/project-context/types';
-// import { ModelBuilder } from '@/components/templates/model-builder';
+import { useProjectStore } from '@/stores/project-store';
+import { ViewType } from '@/stores/tabs-store';
 import { Notebook } from '@/components/templates/notebook';
 import MarkdownViewer from '@/components/organisms/markdown-viewer';
+import { ModelBuilder } from '@/components/templates/model-builder';
 import AnalyticsLayout from '@/components/templates/analytics-layout';
 import { Separator } from '@/components/atoms/separator';
-import { setLeftPanelContent, toggleLeftPanel } from '@/contexts/project-context/actions';
+// Removed context actions import - using store actions instead
 import { FolderComponent } from '@/components/organisms/file-tree';
 import { Users } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
@@ -91,8 +90,16 @@ function isSpreadsheetTab(tab: Tab | undefined | null): tab is SpreadsheetTab {
 // This handles both formats:
 // 1. Full path: users/userId/fileId/filename
 // 2. Direct fileId
+// 3. Project ID (UUID) - return null to avoid calling file API
 function extractFileId(filePath?: string): string | null {
   if (!filePath) return null;
+
+  // Check if it's a project ID (UUID) - if so, return null to avoid calling file API
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(filePath)) {
+    console.log('Detected project ID, returning null to avoid file API calls');
+    return null;
+  }
 
   // If the path contains slashes, it's a full path
   if (filePath.includes('/')) {
@@ -162,8 +169,15 @@ const TabManager: React.FC<TabManagerProps> = ({
   const [reverting, setReverting] = useState(false);
 
   // Hooks
-  const { state: tabState, dispatch } = useTabs();
-  const { state, dispatch: projectDispatch } = useProject();
+  const { updateTab, setTabDirty, addTab, closeTab, setActiveTab } = useTabsStore();
+  const {
+    currentProject,
+    leftPanelOpen,
+    toggleLeftPanel,
+    activeView,
+    setLeftPanelContent,
+    setView,
+  } = useProjectStore();
   const {
     saveFile,
     isSaving,
@@ -199,15 +213,13 @@ const TabManager: React.FC<TabManagerProps> = ({
     (tab: SpreadsheetTab) => {
       return debounce(async (newData: Record<string, any>[]) => {
         try {
-          dispatch(
-            updateTab(tab.id, {
-              data: {
-                ...tab.data,
-                initialData: newData,
-              },
-              isDirty: true,
-            })
-          );
+          updateTab(tab.id, {
+            data: {
+              ...tab.data,
+              initialData: newData,
+            },
+            isDirty: true,
+          });
 
           // If auto-save is enabled, schedule a save
           if (autoSaveEnabled && currentFileId) {
@@ -226,7 +238,7 @@ const TabManager: React.FC<TabManagerProps> = ({
         }
       }, 500);
     },
-    [dispatch, autoSaveEnabled, currentFileId]
+    [autoSaveEnabled, currentFileId]
   );
 
   const debouncedHandlers = useMemo(() => {
@@ -288,11 +300,9 @@ const TabManager: React.FC<TabManagerProps> = ({
       if (success) {
         console.log('handleSaveFile: saveFile succeeded');
         // Update tab to mark as no longer dirty
-        dispatch(
-          updateTab(activeTab.id, {
-            isDirty: false,
-          })
-        );
+        updateTab(activeTab.id, {
+          isDirty: false,
+        });
 
         console.log('handleSaveFile: Setting savingStatus to saved');
         setSavingStatus('saved');
@@ -403,11 +413,9 @@ const TabManager: React.FC<TabManagerProps> = ({
 
       // Update the tab to mark as not dirty
       if (activeTab) {
-        dispatch(
-          updateTab(activeTab.id, {
-            isDirty: false,
-          })
-        );
+        updateTab(activeTab.id, {
+          isDirty: false,
+        });
       }
 
       toast({
@@ -427,15 +435,16 @@ const TabManager: React.FC<TabManagerProps> = ({
   };
 
   const handleToggleFolder = useCallback(() => {
-    if (!state.leftPanelOpen) {
+    console.log('Toggle folder clicked, current state:', leftPanelOpen);
+    if (!leftPanelOpen) {
       // Set panel content first, then open the panel
-      projectDispatch(setLeftPanelContent(<FolderComponent />));
-      projectDispatch(toggleLeftPanel(true));
+      setLeftPanelContent(<FolderComponent />);
+      toggleLeftPanel(true);
     } else {
       // Just close the panel
-      projectDispatch(toggleLeftPanel(false));
+      toggleLeftPanel(false);
     }
-  }, [state.leftPanelOpen, projectDispatch]);
+  }, [leftPanelOpen, setLeftPanelContent, toggleLeftPanel]);
 
   const [spreadsheetVersion, setSpreadsheetVersion] = useState(0);
 
@@ -471,22 +480,20 @@ const TabManager: React.FC<TabManagerProps> = ({
       currentData.splice(insertIndex, 0, emptyRow);
 
       // Update tab data
-      dispatch(
-        updateTab(activeTab.id, {
-          data: {
-            ...activeTab.data,
-            initialData: currentData,
-          },
-          isDirty: true,
-        })
-      );
+      updateTab(activeTab.id, {
+        data: {
+          ...activeTab.data,
+          initialData: currentData,
+        },
+        isDirty: true,
+      });
 
       // Force re-render of the spreadsheet
       setSpreadsheetVersion(prev => prev + 1);
     } catch (e) {
       console.error('Error adding row:', e);
     }
-  }, [activeTab, dispatch, activeRowSelection]);
+  }, [activeTab, activeRowSelection]);
 
   // Handle deleting rows
   const handleDeleteRows = useCallback(() => {
@@ -512,22 +519,20 @@ const TabManager: React.FC<TabManagerProps> = ({
       });
 
       // Update the tab data
-      dispatch(
-        updateTab(activeTab.id, {
-          data: {
-            ...activeTab.data,
-            initialData: currentData,
-          },
-          isDirty: true,
-        })
-      );
+      updateTab(activeTab.id, {
+        data: {
+          ...activeTab.data,
+          initialData: currentData,
+        },
+        isDirty: true,
+      });
 
       // Force re-render of the spreadsheet
       setSpreadsheetVersion(prev => prev + 1);
     } catch (e) {
       console.error('Error deleting rows:', e);
     }
-  }, [activeTab, dispatch, activeRowSelection]);
+  }, [activeTab, activeRowSelection]);
 
   // Cleanup
   useEffect(() => {
@@ -563,6 +568,7 @@ const TabManager: React.FC<TabManagerProps> = ({
         totalRowCount={tab.data.totalRows}
         tabId={tab.id}
         onSelectionChange={setActiveRowSelection}
+        tabData={tab.data}
       />
     </div>
   );
@@ -580,51 +586,60 @@ const TabManager: React.FC<TabManagerProps> = ({
       );
     }
 
-    if (!isSpreadsheetTab(tab)) {
-      return (
-        <div className="h-full flex items-center justify-center text-muted-foreground">
-          No content available
-        </div>
-      );
+    // For spreadsheet tabs, render based on activeView
+    if (isSpreadsheetTab(tab)) {
+      const spreadsheetContent = renderSpreadsheetContent(tab);
+
+      switch (activeView) {
+        case ViewType.SPREADSHEET:
+        case ViewType.CHARTS:
+          return (
+            <AnalyticsLayout filePath={tab.data.filePath} columns={tab.data.initialColumns}>
+              {spreadsheetContent}
+            </AnalyticsLayout>
+          );
+
+        case ViewType.NOTEBOOK:
+          return (
+            <div className="h-full">
+              <Notebook />
+            </div>
+          );
+
+        case ViewType.SEM:
+          return (
+            <div className="h-full">
+              <ModelBuilder />
+            </div>
+          );
+
+        default:
+          return (
+            <div className="h-full flex items-center justify-center text-muted-foreground">
+              No content available
+            </div>
+          );
+      }
     }
 
-    const spreadsheetContent = renderSpreadsheetContent(tab);
-
-    switch (state.activeView) {
-      case ViewType.SPREADSHEET:
-      case ViewType.CHARTS:
-        return (
-          <AnalyticsLayout filePath={tab.data.filePath} columns={tab.data.initialColumns}>
-            {spreadsheetContent}
-          </AnalyticsLayout>
-        );
-
-      case ViewType.NOTEBOOK:
-        return (
-          <div className="h-full">
-            <Notebook />
-          </div>
-        );
-
-      default:
-        return (
-          <div className="h-full flex items-center justify-center text-muted-foreground">
-            No content available
-          </div>
-        );
-    }
+    // For non-spreadsheet tabs, return no content
+    return (
+      <div className="h-full flex items-center justify-center text-muted-foreground">
+        No content available
+      </div>
+    );
   };
 
   return (
     <div className="flex h-full flex-col relative bg-background">
-      <div className="flex h-10 items-center justify-between border-b border-border bg-background z-10">
+      <div className="flex h-10 items-center justify-between border-b border-border bg-sidebar z-10">
         <div className="flex flex-row items-center gap-2">
           <Button
             variant="ghost"
             size="icon"
             className="h-7 w-7 mx-2"
             onClick={handleToggleFolder}
-            data-state={state.leftPanelOpen ? 'active' : 'inactive'}
+            data-state={leftPanelOpen ? 'active' : 'inactive'}
           >
             <LuFolder />
           </Button>
@@ -672,7 +687,7 @@ const TabManager: React.FC<TabManagerProps> = ({
           )}
 
           <Popover>
-            <PopoverTrigger>
+            <PopoverTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
@@ -685,7 +700,10 @@ const TabManager: React.FC<TabManagerProps> = ({
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end">
-              <CollaborationPanel projectId={''} />
+              <CollaborationPanel
+                projectId={currentProject?.id || currentFileId || ''}
+                activeTab={activeTab}
+              />
             </PopoverContent>
           </Popover>
           <Button
@@ -734,10 +752,8 @@ const TabManager: React.FC<TabManagerProps> = ({
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() =>
-                        projectDispatch({ type: ProjectActions.SET_VIEW, payload: ViewType.CHARTS })
-                      }
-                      data-state={state.activeView === ViewType.CHARTS ? 'active' : 'inactive'}
+                      onClick={() => setView(ViewType.CHARTS)}
+                      data-state={activeView === ViewType.CHARTS ? 'active' : 'inactive'}
                     >
                       <LuSquareActivity />
                       <span className="sr-only">Toggle Analytics</span>

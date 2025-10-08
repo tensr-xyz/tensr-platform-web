@@ -28,11 +28,7 @@ export function ProgressIndicator({ progress, command }: ProgressIndicatorProps)
     return <Clock className="h-4 w-4 text-muted-foreground" />;
   };
 
-  const steps = [
-    'Processing dataset',
-    'Running analysis',
-    'Generating results',
-  ];
+  const steps = ['Processing dataset', 'Running analysis', 'Generating results'];
 
   return (
     <Card className="w-full">
@@ -59,7 +55,7 @@ export function ProgressIndicator({ progress, command }: ProgressIndicatorProps)
               const stepNumber = index + 1;
               const isActive = stepNumber === progress.step;
               const isCompleted = stepNumber < progress.step || progress.completed;
-              
+
               return (
                 <div
                   key={stepNumber}
@@ -68,11 +64,15 @@ export function ProgressIndicator({ progress, command }: ProgressIndicatorProps)
                   }`}
                 >
                   {getStepIcon(stepNumber, progress.step, progress.completed)}
-                  <span className={`text-sm ${
-                    isActive ? 'font-medium text-blue-700 dark:text-blue-300' : 
-                    isCompleted ? 'text-green-700 dark:text-green-300' : 
-                    'text-muted-foreground'
-                  }`}>
+                  <span
+                    className={`text-sm ${
+                      isActive
+                        ? 'font-medium text-blue-700 dark:text-blue-300'
+                        : isCompleted
+                          ? 'text-green-700 dark:text-green-300'
+                          : 'text-muted-foreground'
+                    }`}
+                  >
                     {step}
                   </span>
                   {isActive && (

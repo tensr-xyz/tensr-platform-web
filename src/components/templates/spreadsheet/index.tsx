@@ -23,20 +23,22 @@ import { createColumns, CreateColumnsProps } from '@/components/templates/spread
 import { HeaderComponent } from '@/components/templates/spreadsheet/header';
 import { useSession, wsService } from '@/hooks/ui/use-session';
 import { cn } from '@/utils';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import { ColumnSummary } from '@/types/file';
 import Filters from '@/components/templates/spreadsheet/filters';
 import { CellPosition, SortConfig, SpreadsheetProps } from '@/types/spreadsheet';
 import { handleKeyboardNavigation } from '@/utils/spreadsheet';
-import { updateTab } from '@/contexts/tabs-context/actions';
 import _ from 'lodash';
 import useAuth from '@/hooks/api/use-auth';
+import { Column } from '@/stores/tabs-store';
 
 const INITIAL_EMPTY_ROWS = 200;
 const ROWS_PER_BATCH = 100;
 const EXTRA_COLUMNS = 10;
 const DEFAULT_COLUMN_WIDTH = 150;
-const SCROLL_PERCENTAGE_THRESHOLD = 0.5;
+const SCROLL_PERCENTAGE_THRESHOLD = 0.7; // Load new data when user scrolls to 70%
+const PREFETCH_THRESHOLD = 0.3; // Start prefetching when user scrolls to 30%
+const INITIAL_PREFETCH_DELAY = 100; // Delay before initial prefetch (ms)
 
 type RowType = Record<string, any> & { id: string };
 
@@ -50,18 +52,27 @@ export function Spreadsheet({
   showFilters = false,
   onCloseFilters,
   onSelectionChange,
+  onChange,
+  columnStats,
+  showMenu = true,
+  tabData,
 }: SpreadsheetProps) {
   const { tokens } = useAuth();
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const loadingRef = useRef(false);
   const lastLoadedRowRef = useRef(initialData.length);
-  const [columnStats, setColumnStats] = useState<Record<string, ColumnSummary> | undefined>(
-    undefined
-  );
+  const [localColumnStats, setLocalColumnStats] = useState<
+    Record<string, ColumnSummary> | undefined
+  >(undefined);
   const [focusedCell, setFocusedCell] = useState<CellPosition | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const statsLoadAttempted = useRef(false);
+
+  // Prefetch state management
+  const [prefetchedData, setPrefetchedData] = useState<RowType[]>([]);
+  const isPrefetchingRef = useRef(false);
+  const prefetchedRowRangeRef = useRef<{ start: number; end: number } | null>(null);
 
   // Memoize the decoded file path
   const decodedFilePath = useMemo(
@@ -72,14 +83,26 @@ export function Spreadsheet({
   // Reset stats when file path changes
   useEffect(() => {
     if (filePath) {
-      setColumnStats(undefined);
+      setLocalColumnStats(undefined);
       statsLoadAttempted.current = false;
     }
   }, [filePath]);
 
+  // Check if this is a project file (selected from a multi-file project)
+  // Only skip fetchMoreRows for project files, not for projects themselves
+  const isProjectFile = useMemo(() => {
+    return tabData?.isProjectFile === true;
+  }, [tabData?.isProjectFile]);
+
   // Load statistics
   const loadColumnStats = useCallback(async () => {
     if (!showStats || !decodedFilePath || statsLoadAttempted.current) {
+      return;
+    }
+
+    // For projects, we already have column stats from the processed data
+    if (isProjectFile) {
+      console.log('Project file data already has column stats, skipping analysis');
       return;
     }
 
@@ -111,19 +134,19 @@ export function Spreadsheet({
         throw new Error('Invalid statistics data received');
       }
 
-      setColumnStats(stats);
+      setLocalColumnStats(stats);
     } catch (error) {
     } finally {
       setIsLoadingStats(false);
     }
-  }, [decodedFilePath, showStats, columnStats]);
+  }, [decodedFilePath, showStats, localColumnStats, isProjectFile]);
 
   // Trigger statistics loading when needed
   useEffect(() => {
-    if (showStats && decodedFilePath && !columnStats && !isLoadingStats) {
+    if (showStats && decodedFilePath && !localColumnStats && !isLoadingStats) {
       loadColumnStats();
     }
-  }, [showStats, decodedFilePath, columnStats, isLoadingStats, loadColumnStats]);
+  }, [showStats, decodedFilePath, localColumnStats, isLoadingStats, loadColumnStats]);
 
   const isFileMode = !!filePath;
 
@@ -150,22 +173,14 @@ export function Spreadsheet({
     }
   });
 
-  const { state, dispatch } = useTabs();
-  const activeTab = state.tabs.find(tab => tab.id === state.activeTabId);
+  const { tabs, activeTabId, updateTab } = useTabsStore();
+  const activeTab = tabs.find(tab => tab.id === activeTabId);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnSizing, setColumnSizing] = useState({});
   const [extraColumnsCount, setExtraColumnsCount] = useState(EXTRA_COLUMNS);
   const [rowSelection, setRowSelection] = useState({});
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(
-    activeTab?.data?.columnVisibility || {}
-  );
-
-  useEffect(() => {
-    if (activeTab?.data?.columnVisibility) {
-      setColumnVisibility(activeTab.data.columnVisibility);
-    }
-  }, [activeTab?.data?.columnVisibility]);
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
 
   const columns = useMemo(
     () =>
@@ -183,12 +198,38 @@ export function Spreadsheet({
       return;
     }
 
+    // For project files (selected from multi-file projects), we already have all the data
+    if (isProjectFile) {
+      console.log('Project file data already loaded, skipping fetchMoreRows');
+      return;
+    }
+
     try {
       loadingRef.current = true;
       setIsLoading(true);
 
       const startRow = lastLoadedRowRef.current;
       const endRow = Math.min(startRow + ROWS_PER_BATCH, totalRowCount || 0);
+
+      // Check if we have prefetched data for this range
+      if (
+        prefetchedData.length > 0 &&
+        prefetchedRowRangeRef.current &&
+        prefetchedRowRangeRef.current.start === startRow &&
+        prefetchedRowRangeRef.current.end === endRow
+      ) {
+        // Use prefetched data
+        setData(prevData => [...prevData, ...prefetchedData]);
+        setPrefetchedData([]);
+        prefetchedRowRangeRef.current = null;
+
+        const newLastLoadedRow = lastLoadedRowRef.current + ROWS_PER_BATCH;
+        lastLoadedRowRef.current = newLastLoadedRow;
+
+        // Start prefetching the next page
+        setTimeout(() => prefetchNextPage(), 0);
+        return;
+      }
 
       // Convert TanStack Table sorting state to backend format
       const sortConfig: SortConfig[] | undefined =
@@ -212,21 +253,97 @@ export function Spreadsheet({
         };
       });
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
-        {
+      // Check if this is a project (UUID) or a file path
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const isProject = uuidRegex.test(decodedFilePath);
+
+      let response;
+      if (isProject) {
+        // For projects, we need to get the actual file path from the project data
+        // First, get the project details to find the file path
+        const projectResponse = await fetch(
+          `https://api.dev.tensr.xyz/projects/${decodedFilePath}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${tokens?.idToken}`,
+            },
+          }
+        );
+
+        if (!projectResponse.ok) {
+          throw new Error(`Failed to get project details: ${projectResponse.status}`);
+        }
+
+        const projectData = await projectResponse.json();
+
+        // Get the first file from the project (assuming single file for now)
+        const firstFile = projectData.fileGroups?.data?.[0];
+        if (!firstFile) {
+          throw new Error('No files found in project');
+        }
+
+        // Use file API with project context - send the file_id directly
+        response = await fetch(`${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${tokens?.idToken}`,
           },
           body: JSON.stringify({
-            path: decodedFilePath,
-            start_row: 0,
-            end_row: 100,
+            path: firstFile.path, // Send the original filename
+            start_row: startRow,
+            end_row: endRow,
+            sort_config: sortConfig,
+            filter_config: filterConfig,
+            project_id: decodedFilePath,
+            file_id: firstFile.fileId, // This is the key field!
           }),
+        });
+      } else {
+        // Determine if this is a project file by checking if filePath contains project structure
+        const isProjectFile =
+          decodedFilePath.includes('/users/') && decodedFilePath.includes('/projects/');
+
+        let requestBody: any = {
+          path: decodedFilePath,
+          start_row: startRow,
+          end_row: endRow,
+          sort_config: sortConfig,
+          filter_config: filterConfig,
+        };
+
+        // If it's a project file, extract project context
+        if (isProjectFile) {
+          const pathParts = decodedFilePath.split('/');
+          const usersIndex = pathParts.indexOf('users');
+          const projectsIndex = pathParts.indexOf('projects');
+
+          if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
+            const userId = pathParts[usersIndex + 1];
+            const projectId = pathParts[projectsIndex + 1];
+            const fileId = pathParts[projectsIndex + 3]; // files/{fileId}/{fileName}
+
+            requestBody = {
+              ...requestBody,
+              project_id: projectId,
+              file_id: fileId,
+            };
+          }
         }
-      );
+
+        // Use file API for regular files
+        response = await fetch(`${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens?.idToken}`,
+          },
+          body: JSON.stringify(requestBody),
+        });
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -246,33 +363,274 @@ export function Spreadsheet({
             })),
         ]);
       } else {
-        const newRows = data.data[0].map((_: any, rowIndex: number) => {
-          const row: RowType = { id: `row-${startRow + rowIndex}` };
-          initialColumns.forEach((col, colIndex) => {
-            if (col.id) {
-              row[col.id] = data.data[colIndex][rowIndex];
-            }
-          });
-          return row;
-        });
+        // Both projects and files now use the file API, so data format is consistent
+        const processedData = data.data;
 
-        setData(prevData => [...prevData, ...newRows]);
+        if (processedData && processedData[0]) {
+          const newRows = processedData[0].map((_: any, rowIndex: number) => {
+            const row: RowType = { id: `row-${startRow + rowIndex}` };
+            initialColumns.forEach((col, colIndex) => {
+              if (col.id) {
+                row[col.id] = processedData[colIndex][rowIndex];
+              }
+            });
+            return row;
+          });
+
+          setData(prevData => [...prevData, ...newRows]);
+        }
       }
 
       const newLastLoadedRow = lastLoadedRowRef.current + ROWS_PER_BATCH;
       lastLoadedRowRef.current = newLastLoadedRow;
+
+      // Immediately start prefetching the next page after loading
+      if (newLastLoadedRow < (totalRowCount || 0)) {
+        setTimeout(() => {
+          if (!isPrefetchingRef.current) {
+            prefetchNextPage();
+          }
+        }, 0);
+
+        // Also trigger another fetch if we're still close to the end
+        // This ensures continuous loading without requiring more scrolling
+        setTimeout(() => {
+          if (!loadingRef.current && newLastLoadedRow < (totalRowCount || 0)) {
+            fetchMoreRows();
+          }
+        }, 100);
+      }
     } catch (error) {
     } finally {
       setIsLoading(false);
       loadingRef.current = false;
     }
-  }, [decodedFilePath, initialColumns, totalRowCount, sorting, columnFilters]);
+  }, [
+    decodedFilePath,
+    initialColumns,
+    totalRowCount,
+    sorting,
+    columnFilters,
+    isProjectFile,
+    tokens?.idToken,
+  ]);
+
+  // Prefetch function - loads data in background without showing loading state
+  const prefetchNextPage = useCallback(async () => {
+    if (!decodedFilePath || isPrefetchingRef.current || isProjectFile) {
+      return;
+    }
+
+    const nextStartRow = lastLoadedRowRef.current;
+    const nextEndRow = Math.min(nextStartRow + ROWS_PER_BATCH, totalRowCount || 0);
+
+    // Don't prefetch if we've already prefetched this range or if no more data
+    if (
+      nextStartRow >= (totalRowCount || 0) ||
+      (prefetchedRowRangeRef.current &&
+        prefetchedRowRangeRef.current.start === nextStartRow &&
+        prefetchedRowRangeRef.current.end === nextEndRow)
+    ) {
+      return;
+    }
+
+    try {
+      isPrefetchingRef.current = true;
+
+      // Convert TanStack Table sorting state to backend format
+      const sortConfig: SortConfig[] | undefined =
+        sorting.length > 0
+          ? sorting.map(sort => ({
+              column: sort.id,
+              desc: sort.desc,
+            }))
+          : undefined;
+
+      const filterConfig = columnFilters.map(filter => {
+        const filterValue = (filter.value as { operator?: string; value?: any }) || {};
+        const operator = filterValue.operator || '';
+        const stringValue = String(filterValue.value || '');
+
+        return {
+          column: filter.id,
+          operator,
+          value: stringValue,
+        };
+      });
+
+      // Check if this is a project (UUID) or a file path
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const isProject = uuidRegex.test(decodedFilePath);
+
+      let response;
+      if (isProject) {
+        // For projects, get the project details to find the file path
+        const projectResponse = await fetch(
+          `https://api.dev.tensr.xyz/projects/${decodedFilePath}`,
+          {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${tokens?.idToken}`,
+            },
+          }
+        );
+
+        if (!projectResponse.ok) {
+          throw new Error(`Failed to get project details: ${projectResponse.status}`);
+        }
+
+        const projectData = await projectResponse.json();
+        const firstFile = projectData.fileGroups?.data?.[0];
+        if (!firstFile) {
+          throw new Error('No files found in project');
+        }
+
+        response = await fetch(`${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens?.idToken}`,
+          },
+          body: JSON.stringify({
+            path: firstFile.path,
+            start_row: nextStartRow,
+            end_row: nextEndRow,
+            sort_config: sortConfig,
+            filter_config: filterConfig,
+            project_id: decodedFilePath,
+            file_id: firstFile.fileId,
+          }),
+        });
+      } else {
+        // Handle regular files and project files
+        const isProjectFile =
+          decodedFilePath.includes('/users/') && decodedFilePath.includes('/projects/');
+
+        let requestBody: any = {
+          path: decodedFilePath,
+          start_row: nextStartRow,
+          end_row: nextEndRow,
+          sort_config: sortConfig,
+          filter_config: filterConfig,
+        };
+
+        if (isProjectFile) {
+          const pathParts = decodedFilePath.split('/');
+          const usersIndex = pathParts.indexOf('users');
+          const projectsIndex = pathParts.indexOf('projects');
+
+          if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
+            const userId = pathParts[usersIndex + 1];
+            const projectId = pathParts[projectsIndex + 1];
+            const fileId = pathParts[projectsIndex + 3];
+
+            requestBody = {
+              ...requestBody,
+              project_id: projectId,
+              file_id: fileId,
+            };
+          }
+        }
+
+        response = await fetch(`${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${tokens?.idToken}`,
+          },
+          body: JSON.stringify(requestBody),
+        });
+      }
+
+      if (!response.ok) {
+        console.warn('Prefetch failed:', response.status);
+        return;
+      }
+
+      const data = await response.json();
+      const processedData = data.data;
+
+      if (processedData && processedData[0]) {
+        const newRows = processedData[0].map((_: any, rowIndex: number) => {
+          const row: RowType = { id: `row-${nextStartRow + rowIndex}` };
+          initialColumns.forEach((col, colIndex) => {
+            if (col.id) {
+              row[col.id] = processedData[colIndex][rowIndex];
+            }
+          });
+          return row;
+        });
+
+        setPrefetchedData(newRows);
+        prefetchedRowRangeRef.current = { start: nextStartRow, end: nextEndRow };
+      }
+    } catch (error) {
+      console.warn('Prefetch error:', error);
+    } finally {
+      isPrefetchingRef.current = false;
+    }
+  }, [
+    decodedFilePath,
+    initialColumns,
+    totalRowCount,
+    sorting,
+    columnFilters,
+    isProjectFile,
+    tokens?.idToken,
+  ]);
+
+  // Initial data loading and prefetch after component loads
+  useEffect(() => {
+    if (
+      !isProjectFile &&
+      decodedFilePath &&
+      initialData.length > 0 &&
+      lastLoadedRowRef.current < (totalRowCount || 0)
+    ) {
+      // Load more data immediately if we have a large dataset but only initial data
+      if (
+        totalRowCount &&
+        totalRowCount > initialData.length &&
+        lastLoadedRowRef.current < totalRowCount
+      ) {
+        const timer = setTimeout(() => {
+          fetchMoreRows();
+        }, INITIAL_PREFETCH_DELAY);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [decodedFilePath, isProjectFile, totalRowCount, initialData.length, fetchMoreRows]);
+
+  // Additional effect to ensure data loading on mount for large datasets
+  useEffect(() => {
+    if (
+      !isProjectFile &&
+      decodedFilePath &&
+      totalRowCount &&
+      totalRowCount > ROWS_PER_BATCH &&
+      lastLoadedRowRef.current < totalRowCount &&
+      !loadingRef.current
+    ) {
+      // If we have a large dataset but haven't loaded much data yet, load more
+      const timer = setTimeout(() => {
+        if (!loadingRef.current) {
+          fetchMoreRows();
+        }
+      }, 200); // Slightly longer delay to avoid conflicts
+      return () => clearTimeout(timer);
+    }
+  }, [decodedFilePath, isProjectFile, totalRowCount, fetchMoreRows]);
 
   const handleSortingChange: OnChangeFn<SortingState> = useCallback(
     async updaterOrValue => {
       // Reset the data and pagination state when sort changes
       setData([]);
       lastLoadedRowRef.current = 0;
+      // Clear prefetched data since sorting changed
+      setPrefetchedData([]);
+      prefetchedRowRangeRef.current = null;
 
       // Update the sorting state
       const newSorting =
@@ -295,6 +653,9 @@ export function Spreadsheet({
       // Reset data and pagination
       setData([]);
       lastLoadedRowRef.current = 0;
+      // Clear prefetched data since filters changed
+      setPrefetchedData([]);
+      prefetchedRowRangeRef.current = null;
 
       // Use a callback to ensure we're working with the latest state
       const fetchData = async () => {
@@ -314,6 +675,37 @@ export function Spreadsheet({
             };
           });
 
+          // Determine if this is a project file by checking if filePath contains project structure
+          const isProjectFile =
+            decodedFilePath &&
+            decodedFilePath.includes('/users/') &&
+            decodedFilePath.includes('/projects/');
+
+          let requestBody: any = {
+            path: decodedFilePath,
+            start_row: 0,
+            end_row: 100,
+          };
+
+          // If it's a project file, extract project context
+          if (isProjectFile && decodedFilePath) {
+            const pathParts = decodedFilePath.split('/');
+            const usersIndex = pathParts.indexOf('users');
+            const projectsIndex = pathParts.indexOf('projects');
+
+            if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
+              const userId = pathParts[usersIndex + 1];
+              const projectId = pathParts[projectsIndex + 1];
+              const fileId = pathParts[projectsIndex + 3]; // files/{fileId}/{fileName}
+
+              requestBody = {
+                ...requestBody,
+                project_id: projectId,
+                file_id: fileId,
+              };
+            }
+          }
+
           const response = await fetch(
             `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
             {
@@ -322,11 +714,7 @@ export function Spreadsheet({
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${tokens?.idToken}`,
               },
-              body: JSON.stringify({
-                path: decodedFilePath,
-                start_row: 0,
-                end_row: 100,
-              }),
+              body: JSON.stringify(requestBody),
             }
           );
 
@@ -396,7 +784,7 @@ export function Spreadsheet({
   const { rows } = table.getRowModel();
 
   const rowVirtualizer = useVirtualizer({
-    count: rows.length + ROWS_PER_BATCH, // Always show extra rows
+    count: totalRowCount || rows.length, // Use actual total row count when available
     getScrollElement: () => tableContainerRef.current,
     estimateSize: useCallback(() => 28, []),
     overscan: 20,
@@ -477,7 +865,33 @@ export function Spreadsheet({
 
       // Vertical scroll check
       const verticalScrollPercentage = (scrollTop + clientHeight) / scrollHeight;
-      if (verticalScrollPercentage > SCROLL_PERCENTAGE_THRESHOLD && !isLoading) {
+
+      // Prefetch trigger - start prefetching at 30% scroll
+      if (verticalScrollPercentage > PREFETCH_THRESHOLD && !isPrefetchingRef.current) {
+        if (isFileMode && lastLoadedRowRef.current < (totalRowCount || 0)) {
+          prefetchNextPage();
+        }
+      }
+
+      // Load trigger - use a more intelligent approach
+      // Instead of percentage, check if we're near the bottom of currently loaded data
+      const rowsPerPage = Math.floor(clientHeight / 28); // Approximate rows visible
+      const currentLoadedRows = lastLoadedRowRef.current;
+      const virtualScrollPosition = Math.floor(scrollTop / 28); // Approximate row position
+
+      // Load more data when we're within 2 pages of the end of loaded data
+      const shouldLoadMore = virtualScrollPosition + rowsPerPage * 2 >= currentLoadedRows;
+
+      if (shouldLoadMore && !isLoading && isFileMode) {
+        if (lastLoadedRowRef.current < (totalRowCount || 0)) {
+          fetchMoreRows();
+        } else {
+          addEmptyRows();
+        }
+      }
+
+      // Fallback to percentage-based loading for edge cases
+      if (verticalScrollPercentage > SCROLL_PERCENTAGE_THRESHOLD && !isLoading && !shouldLoadMore) {
         if (isFileMode) {
           if (lastLoadedRowRef.current < (totalRowCount || 0)) {
             fetchMoreRows();
@@ -495,7 +909,7 @@ export function Spreadsheet({
         addExtraColumns();
       }
     },
-    [isLoading, isFileMode, fetchMoreRows, addEmptyRows, totalRowCount]
+    [isLoading, isFileMode, fetchMoreRows, addEmptyRows, totalRowCount, prefetchNextPage]
   );
 
   useEffect(() => {
@@ -510,7 +924,7 @@ export function Spreadsheet({
 
       // Update initialColumns directly to ensure they have proper header values
       if (activeTab.data && activeTab.data.initialColumns) {
-        const updatedColumns = activeTab.data.initialColumns.map((col: { id: string }) => {
+        const updatedColumns = activeTab.data.initialColumns.map((col: Column) => {
           // Find the matching column in the current table
           const tableColumn = table.getColumn(col.id);
           if (tableColumn && tableColumn.columnDef.header) {
@@ -529,17 +943,15 @@ export function Spreadsheet({
         });
 
         // Update tab with correct columns
-        dispatch(
-          updateTab(tabId, {
-            data: {
-              ...activeTab.data,
-              initialColumns: updatedColumns,
-            },
-          })
-        );
+        updateTab(tabId, {
+          data: {
+            ...activeTab.data,
+            initialColumns: updatedColumns,
+          },
+        });
       }
     }, 500),
-    [tabId, activeTab, table]
+    [tabId, activeTab, table, updateTab]
   );
 
   const handleHeaderEdit = useCallback(
@@ -554,7 +966,7 @@ export function Spreadsheet({
 
       // Immediately update the actual initialColumns in the tab data
       if (tabId && activeTab?.data?.initialColumns) {
-        const updatedColumns = activeTab.data.initialColumns.map((col: { id: string }) => {
+        const updatedColumns = activeTab.data.initialColumns.map((col: Column) => {
           if (col.id === columnId) {
             return {
               ...col,
@@ -565,21 +977,19 @@ export function Spreadsheet({
         });
 
         // Update the tab data with new columns
-        dispatch(
-          updateTab(tabId, {
-            data: {
-              ...activeTab.data,
-              initialColumns: updatedColumns,
-            },
-            isDirty: true,
-          })
-        );
+        updateTab(tabId, {
+          data: {
+            ...activeTab.data,
+            initialColumns: updatedColumns,
+          },
+          isDirty: true,
+        });
       }
 
       // Also save spreadsheet state for consistency
       saveSpreadsheetState();
     },
-    [table, tabId, activeTab, dispatch, saveSpreadsheetState]
+    [table, tabId, activeTab, updateTab, saveSpreadsheetState]
   );
 
   useEffect(() => {
@@ -610,9 +1020,25 @@ export function Spreadsheet({
   }, [wsReady, currentSession, ws, tabId, decodedFilePath]);
 
   useEffect(() => {
-    // Force virtualization recalculation
+    // Force virtualization recalculation and check if we need more data
     rowVirtualizer.measure();
-  }, [data.length, rowVirtualizer]);
+
+    // After data loads, check if we should load more automatically
+    if (isFileMode && !isLoading && tableContainerRef.current) {
+      const container = tableContainerRef.current;
+      const { scrollHeight, scrollTop, clientHeight } = container;
+      const verticalScrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+
+      // If user is still near the bottom after new data loads, continue loading
+      if (verticalScrollPercentage > 0.6 && lastLoadedRowRef.current < (totalRowCount || 0)) {
+        setTimeout(() => {
+          if (!loadingRef.current) {
+            fetchMoreRows();
+          }
+        }, 200);
+      }
+    }
+  }, [data.length, rowVirtualizer, isFileMode, isLoading, totalRowCount, fetchMoreRows]);
 
   // Update the message handler to be more forgiving with tabIds
   useEffect(() => {
@@ -724,12 +1150,10 @@ export function Spreadsheet({
         };
 
         // Update the tab
-        dispatch(
-          updateTab(tabId, {
-            data: updatedData,
-            isDirty: true,
-          })
-        );
+        updateTab(tabId, {
+          data: updatedData,
+          isDirty: true,
+        });
       }
 
       // Send update via WebSocket service if connected
@@ -737,7 +1161,7 @@ export function Spreadsheet({
         wsService.sendCellUpdate(tabId, rowIndex, useColumnId, value);
       }
     },
-    [data, tabId, activeTab, dispatch, wsReady, currentSession]
+    [data, tabId, activeTab, updateTab, wsReady, currentSession]
   );
 
   const HeaderComponentWrapper = useMemo(() => {
@@ -797,6 +1221,9 @@ export function Spreadsheet({
               setColumnFilters([]);
               setData([]);
               lastLoadedRowRef.current = 0;
+              // Clear prefetched data since filters were cleared
+              setPrefetchedData([]);
+              prefetchedRowRangeRef.current = null;
               fetchMoreRows();
             }}
             onCloseFilters={() => onCloseFilters?.()}

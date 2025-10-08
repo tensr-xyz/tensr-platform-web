@@ -15,9 +15,17 @@ export interface BasePluginMetadata {
   compatibleVersions?: string[];
   license?: string;
 
-  thumbnailUrl: string;
+  // Monetization fields
   isPaid: boolean;
+  pricing?: {
+    model: 'free' | 'one-time' | 'subscription';
+    price?: number;
+    currency?: string;
+    subscriptionInterval?: 'monthly' | 'yearly';
+    trialDays?: number;
+  };
   tags: string[];
+  thumbnailUrl: string;
 
   // Plugin configuration
   config?: {
@@ -39,6 +47,14 @@ export interface PluginMetadata extends BasePluginMetadata {
   createdAt: string;
   updatedAt?: string;
   validationErrors?: string[];
+
+  // Revenue tracking
+  revenue?: {
+    totalSales: number;
+    totalDownloads: number;
+    platformFee: number; // Default 10%
+    creatorPayout: number;
+  };
 }
 
 // Complete record including S3 and scanning information
@@ -89,4 +105,44 @@ interface PaginationParams {
 
 export interface GetPluginsOptions extends PaginationParams {
   authorId?: string;
+}
+
+// Plugin purchase and licensing types
+export interface PluginPurchase {
+  purchaseId: string;
+  pluginId: string;
+  userId: string;
+  pricingModel: 'free' | 'one-time' | 'subscription';
+  amount: number;
+  currency: string;
+  stripePaymentIntentId?: string;
+  stripeSubscriptionId?: string;
+  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  purchasedAt: string;
+  expiresAt?: string; // For subscriptions
+  licenseKey?: string;
+}
+
+export interface PluginLicense {
+  licenseId: string;
+  pluginId: string;
+  userId: string;
+  purchaseId: string;
+  status: 'active' | 'expired' | 'revoked';
+  issuedAt: string;
+  expiresAt?: string;
+  restrictions?: {
+    maxUsers?: number;
+    maxUsage?: number;
+    allowedDomains?: string[];
+  };
+}
+
+export interface PluginPurchaseOptions {
+  pluginId: string;
+  pricingModel: 'free' | 'one-time' | 'subscription';
+  price?: number;
+  currency?: string;
+  subscriptionInterval?: 'monthly' | 'yearly';
+  trialDays?: number;
 }

@@ -11,6 +11,11 @@ import { Project } from '@/types/project';
 export default function ProjectWorkspacePage() {
   const params = useParams();
   const projectId = params.projectId as string;
+
+  // Debug logging
+  console.log('ProjectWorkspacePage - params:', params);
+  console.log('ProjectWorkspacePage - projectId:', projectId);
+
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [resource, setResource] = useState<WorkspaceResource>({
@@ -51,7 +56,7 @@ export default function ProjectWorkspacePage() {
       setResource({
         id: projectId,
         name: project.name || project.projectName || '', // Handle both field names
-        path: project.path || projectId, // Fallback to ID if path is not available
+        path: projectId, // Always use project ID as path for project detection
         type: 'project',
       });
     }
@@ -69,8 +74,8 @@ export default function ProjectWorkspacePage() {
     importData?: ImportData | null;
     showImportWizard?: boolean;
   }> => {
-    // If the project has associated import data, you can return it here
-    // For now, just return an empty object that matches the expected return type
+    // For projects, we don't need to process import data like files
+    // The project data is already loaded via the useProject hook
     return {
       importData: null,
       showImportWizard: false,
@@ -78,7 +83,7 @@ export default function ProjectWorkspacePage() {
   };
 
   if (isLoading || projectLoading) {
-    return <Loading />;
+    return <Loading fullScreen />;
   }
 
   // if (error) {

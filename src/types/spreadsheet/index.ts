@@ -19,6 +19,7 @@ export interface SpreadsheetProps {
   showFilters?: boolean;
   onCloseFilters?: () => void;
   onSelectionChange?: (selection: Record<string, boolean>) => void;
+  tabData?: { isProjectFile?: boolean };
 }
 
 export interface SortConfig {

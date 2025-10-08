@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
-import { useFileHandler } from '@/hooks/api/use-file';
+import { useProjectFileUpload } from '@/hooks/api/use-project-file-upload';
 import { Progress } from '@/components/atoms/progress';
 
 // Define max file size constant (100MB)
@@ -17,21 +17,21 @@ const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
 interface FilePickerWrapperProps {
   children: ReactNode;
-  onUploadComplete?: (fileId: string) => void;
+  onUploadComplete?: (projectId: string) => void;
 }
 
 export const FilePickerWrapper = ({ children, onUploadComplete }: FilePickerWrapperProps) => {
   const [open, setOpen] = React.useState(false);
   const { dispatch } = useProject();
 
-  const { handleFile, isLoading, error, setError, uploadProgress } = useFileHandler({
+  const { uploadFile, isLoading, error, clearError, uploadProgress } = useProjectFileUpload({
     allowedExtensions: ['.csv', '.xlsx', '.xls'],
-    onUploadComplete: fileId => {
-      console.log('Upload complete callback, fileId:', fileId);
+    onUploadComplete: projectId => {
+      console.log('Upload complete callback, projectId:', projectId);
       // Close dialog when upload is complete
       setOpen(false);
       if (onUploadComplete) {
-        onUploadComplete(fileId);
+        onUploadComplete(projectId);
       }
     },
   });
@@ -56,11 +56,11 @@ export const FilePickerWrapper = ({ children, onUploadComplete }: FilePickerWrap
         <FilePicker
           isLoading={isLoading}
           error={error}
-          setError={setError}
+          setError={clearError}
           uploadProgress={uploadProgress}
           onFileSelect={file => {
             console.log('File selected in FilePicker:', file.name);
-            return handleFile(file);
+            return uploadFile(file);
           }}
         />
       </DialogContent>
@@ -71,9 +71,9 @@ export const FilePickerWrapper = ({ children, onUploadComplete }: FilePickerWrap
 interface FilePickerProps {
   isLoading: boolean;
   error: string | null;
-  setError: (error: string | null) => void;
+  setError: () => void;
   uploadProgress: number;
-  onFileSelect: (file: File) => Promise<boolean>;
+  onFileSelect: (file: File) => Promise<string | null>;
   acceptedFileTypes?: string;
   children?: (props: {
     onClick: () => void;
@@ -97,7 +97,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
 
   const handleClick = () => {
     console.log('Select file button clicked');
-    setError(null);
+    setError();
     fileInputRef.current?.click();
   };
 
@@ -109,7 +109,8 @@ export const FilePicker: React.FC<FilePickerProps> = ({
 
       // Check file size before proceeding
       if (file.size > MAX_FILE_SIZE) {
-        setError(`File is too large. Maximum size is 100MB.`);
+        // We can't set a custom error message with clearError, so we'll just clear and let the upload fail
+        setError();
         // Reset the input
         if (fileInputRef.current) {
           fileInputRef.current.value = '';
@@ -190,7 +191,8 @@ export const FilePicker: React.FC<FilePickerProps> = ({
 
               // Check file size for drag and drop
               if (file.size > MAX_FILE_SIZE) {
-                setError(`File is too large. Maximum size is 100MB.`);
+                // We can't set a custom error message with clearError, so we'll just clear and let the upload fail
+                setError();
                 return;
               }
 

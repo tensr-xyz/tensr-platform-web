@@ -69,7 +69,7 @@ export function AgentPanel() {
 
     // Add user message to store
     addMessage(projectId, userMessage);
-    
+
     const currentMessage = inputMessage;
     setInputMessage('');
     setLoading(projectId, true);
@@ -103,7 +103,7 @@ export function AgentPanel() {
         // Show approval dialog
         setPendingCommand(response.pendingCommand);
         setApprovalDialogOpen(true);
-        
+
         const aiMessage = {
           role: 'assistant' as const,
           content: response.content,
@@ -159,8 +159,8 @@ export function AgentPanel() {
     setIsExecuting(true);
     setExecutionProgress({
       step: 1,
-      totalSteps: 3,
-      currentStep: 'Processing dataset',
+      totalSteps: 2,
+      currentStep: 'Executing analysis...',
       completed: false,
     });
 
@@ -181,36 +181,26 @@ export function AgentPanel() {
         throw new Error(response.content);
       }
 
-      // Update progress
+      // Update progress to completion
       setExecutionProgress({
         step: 2,
-        totalSteps: 3,
-        currentStep: 'Running analysis',
-        completed: false,
+        totalSteps: 2,
+        currentStep: 'Analysis complete',
+        completed: true,
       });
 
-      // Simulate progress updates
-      setTimeout(() => {
-        setExecutionProgress({
-          step: 3,
-          totalSteps: 3,
-          currentStep: 'Generating results',
-          completed: false,
-        });
-      }, 2000);
-
+      // Hide progress after a short delay and show results
       setTimeout(() => {
         setIsExecuting(false);
         setExecutionProgress(null);
-        
+
         const aiMessage = {
           role: 'assistant' as const,
           content: response.content,
           timestamp: new Date(),
         };
         addMessage(projectId, aiMessage);
-      }, 4000);
-
+      }, 1000);
     } catch (err: any) {
       setIsExecuting(false);
       setExecutionProgress(null);
@@ -222,10 +212,10 @@ export function AgentPanel() {
   const handleReject = () => {
     setApprovalDialogOpen(false);
     setPendingCommand(null);
-    
+
     const aiMessage = {
       role: 'assistant' as const,
-      content: 'Command cancelled. Let me know if you\'d like to try something else!',
+      content: "Command cancelled. Let me know if you'd like to try something else!",
       timestamp: new Date(),
     };
     addMessage(projectId, aiMessage);
@@ -349,10 +339,7 @@ export function AgentPanel() {
       {isExecuting && executionProgress && (
         <div className="absolute inset-0 bg-background/80 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="w-full max-w-md mx-4">
-            <ProgressIndicator
-              progress={executionProgress}
-              command={pendingCommand?.tool}
-            />
+            <ProgressIndicator progress={executionProgress} command={pendingCommand?.tool} />
           </div>
         </div>
       )}

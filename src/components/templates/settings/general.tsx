@@ -1,15 +1,16 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useTheme } from 'next-themes';
-import { Moon, Sun, Monitor } from 'lucide-react';
-import { Input } from '@/components/atoms/input';
-import { Button } from '@/components/atoms/button';
+import { useTheme } from '@/contexts/theme-context';
+import { useAuthStore } from '@/stores/auth-store';
 import { getAccessToken } from '@/utils/auth';
 import { User } from '@/types/user';
-import { useAuthState } from '@/contexts/auth-context';
-import { Actions } from '@/contexts/auth-context/types';
-import { toast } from '@/hooks/ui/use-toast';
+import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
+import { Label } from '@/components/atoms/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
+import { Separator } from '@/components/atoms/separator';
+import { LuSave, LuUser, LuMail, LuAtSign, LuSun, LuMonitor, LuMoon } from 'react-icons/lu';
 
 interface ApiError {
   message: string;
@@ -18,8 +19,7 @@ interface ApiError {
 }
 
 export default function GeneralSettings() {
-  const { state, dispatch } = useAuthState();
-  const { user: contextUser, isLoading: authLoading } = state;
+  const { user: contextUser, isLoading: authLoading } = useAuthStore();
   const { theme, setTheme } = useTheme();
 
   const [user, setUser] = useState<User | null>(null);
@@ -112,7 +112,6 @@ export default function GeneralSettings() {
       // Update both local state and context
       setUser(updatedUser);
       setOriginalUser(updatedUser);
-      dispatch({ type: Actions.SET_USER, payload: updatedUser });
       setSaveStatus('success');
 
       // Show success toast
@@ -330,7 +329,7 @@ export default function GeneralSettings() {
                 </div>
               </div>
               <div className="flex items-center">
-                <Sun className="h-4 w-4 text-yellow-500 mr-2" />
+                <LuSun className="h-4 w-4 text-yellow-500 mr-2" />
                 <span className="text-sm text-gray-900 dark:text-white">Light</span>
               </div>
             </div>
@@ -358,7 +357,7 @@ export default function GeneralSettings() {
                 </div>
               </div>
               <div className="flex items-center">
-                <Monitor className="h-4 w-4 text-gray-500 mr-2" />
+                <LuMonitor className="h-4 w-4 text-gray-500 mr-2" />
                 <span className="text-sm text-gray-900 dark:text-white">System</span>
               </div>
             </div>
@@ -384,7 +383,7 @@ export default function GeneralSettings() {
                 </div>
               </div>
               <div className="flex items-center">
-                <Moon className="h-4 w-4 text-blue-500 mr-2" />
+                <LuMoon className="h-4 w-4 text-blue-500 mr-2" />
                 <span className="text-sm text-gray-900 dark:text-white">Dark</span>
               </div>
             </div>

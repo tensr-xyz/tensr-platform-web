@@ -1,6 +1,7 @@
 import { CategoricalStats, DescriptiveStats } from '@/types/file';
 
-export interface Project {
+// Legacy interface for backward compatibility - will be removed
+export interface LegacyProject {
   id: string;
   name: string;
   path: string;

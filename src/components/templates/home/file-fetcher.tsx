@@ -44,7 +44,8 @@ async function fetchFiles(options: UseFilesOptions = {}): Promise<FilesResponse>
     params.append('organizationId', options.organizationId);
   }
 
-  const url = `/api/files?${params.toString()}`;
+  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.tensr.xyz';
+  const url = `${API_BASE_URL}/files?${params.toString()}`;
   console.log('Fetching files from:', url);
 
   const response = await fetch(url, {
@@ -77,7 +78,17 @@ export const useFiles = (options: UseFilesOptions = {}) => {
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (renamed from cacheTime)
   });
 
-  return {
+  // Debug logging
+  console.log('useFiles hook - query state:', {
+    data: query.data,
+    isLoading: query.isLoading,
+    error: query.error,
+    isSuccess: query.isSuccess,
+    isError: query.isError,
+    queryKey,
+  });
+
+  const result = {
     files: query.data?.files || [],
     contextInfo: query.data?.context || null,
     total: query.data?.total || 0,
@@ -89,4 +100,7 @@ export const useFiles = (options: UseFilesOptions = {}) => {
     isOrganizationContext: query.data?.context?.type === 'organization',
     organizationRole: query.data?.context?.organizationRole,
   };
+
+  console.log('useFiles hook - returning result:', result);
+  return result;
 };

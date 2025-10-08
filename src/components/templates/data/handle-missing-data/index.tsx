@@ -18,7 +18,7 @@ import {
 } from '@/components/atoms/select';
 import { Checkbox } from '@/components/atoms/checkbox';
 import { useProject } from '@/contexts/project-context';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import { ProjectActions } from '@/contexts/project-context/types';
 import { LuLoader } from 'react-icons/lu';
 
@@ -68,13 +68,10 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
   const [method, setMethod] = useState<MissingDataMethod>('series_mean');
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [customValue, setCustomValue] = useState<string>('');
-  const { state: tabState } = useTabs();
+  const { tabs, activeTabId } = useTabsStore();
   const { dispatch } = useProject();
 
-  const activeTab = useMemo(
-    () => tabState.tabs.find(tab => tab.id === tabState.activeTabId),
-    [tabState.tabs, tabState.activeTabId]
-  );
+  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   const criticalError = useMemo(() => {
     if (!activeTab) return 'Please open a dataset first';

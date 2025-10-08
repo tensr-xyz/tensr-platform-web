@@ -1,19 +1,18 @@
 'use client';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
-import { useProject } from '@/contexts/project-context';
-import { ProjectActions, ViewType } from '@/contexts/project-context/types';
+import { useProjectStore, ViewType } from '@/stores/project-store';
 import { ImportData } from '@/types/file';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import TabManager from '@/components/organisms/tab-manager';
 import { ImportWizard, ImportSettings } from '@/components/organisms/wizards/import-wizard';
-import { addTab, closeTab } from '@/contexts/tabs-context/actions';
+import { FileSelector, ProjectFile } from '@/components/molecules/file-selector';
 import { cleanValue } from '@/utils/project';
 import ProjectLayout from '@/components/templates/project-layout';
 import { useCollaboration } from '@/hooks/use-collaboration';
 import Loading from '@/components/molecules/loading';
 import useAuth from '@/hooks/api/use-auth';
-import { Tab } from '@/contexts/tabs-context/types';
+import { Tab } from '@/stores/tabs-store';
 import PluginsLayout from '@/components/templates/plugins-layout';
 
 export interface WorkspaceResource {
@@ -35,18 +34,35 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
   // State
   const [importData, setImportData] = useState<ImportData | null>(null);
   const [showImportWizard, setShowImportWizard] = useState(false);
+  const [showFileSelector, setShowFileSelector] = useState(false);
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
+  const [projectName, setProjectName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
+  const [currentResource, setCurrentResource] = useState<WorkspaceResource>(resource);
 
   // Refs
   const projectRef = useRef<HTMLDivElement>(null);
-  const initialLoadedRef = useRef(false);
-  const processingRef = useRef(false);
+  const mountedRef = useRef(false);
+  const hasLoadedRef = useRef(false);
 
   // Hooks and context
-  const { state: projectState, dispatch: projectDispatch } = useProject();
-  const { state: tabState, dispatch: tabDispatch } = useTabs();
+  const {
+    setProject,
+    importData: projectImportData,
+    setImportData: setProjectImportData,
+    clearImportData,
+    fetchProjectData,
+    getProjectDetails,
+    isProjectLoaded,
+    cacheProject,
+    isLoading: storeLoading,
+    error: storeError,
+    leftSidebarOpen,
+    toggleLeftSidebar,
+  } = useProjectStore();
+  const { tabs, activeTabId, addTab, closeTab } = useTabsStore();
   const { tokens, user } = useAuth();
 
   // Make sure we have a valid resource.id before using it
@@ -56,88 +72,120 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
   useCollaboration(resourceId);
 
   // Add a null check for activeTab
-  const activeTab = tabState.tabs.find(tab => tab?.id === tabState.activeTabId);
+  const activeTab = tabs.find(tab => tab?.id === activeTabId);
 
-  // Load data when resource changes - WITH PROTECTION AGAINST INFINITE LOOPS
+  // Handle navigation events to cache project data
   useEffect(() => {
-    // Skip if we're already processing or no resource ID
-    if (processingRef.current || !resourceId) return;
-
-    // Only run this once per resource.id
-    const resourceKey = `${resource.type}-${resourceId}`;
-    if (initialLoadedRef.current) {
-      console.log(`Resource ${resourceKey} already loaded, skipping`);
-      return;
-    }
-
-    const loadResourceData = async () => {
-      try {
-        console.log(`Loading resource data for ${resource.type} ${resourceId}`);
-        processingRef.current = true;
-        setIsLoading(true);
-        setError(null);
-
-        // Create base project
-        const project = {
-          id: resourceId,
-          name: resource.name || 'Untitled',
-          path: resource.path || '',
-          type: resource.type || 'file',
-        };
-
-        // Update project context
-        projectDispatch({
-          type: ProjectActions.SET_PROJECT,
-          payload: project,
-        });
-
-        // Process the resource data
-        console.log('Calling processData function');
-        const result = await processData(resource);
-        console.log('processData completed', result);
-
-        // Set import data if available
-        if (result.importData) {
-          console.log('Setting import data from processData result');
-          setImportData(result.importData);
-          setShowImportWizard(result.showImportWizard || false);
-        }
-
-        initialLoadedRef.current = true;
-      } catch (err: any) {
-        console.error(`Error loading ${resource.type}:`, err);
-        setError(err.message || `Failed to load ${resource.type}`);
-      } finally {
-        setIsLoading(false);
-        processingRef.current = false;
+    const handleBeforeUnload = () => {
+      if (resourceId) {
+        cacheProject(resourceId);
       }
     };
 
-    loadResourceData();
-  }, [resourceId, resource.type, resource.name, resource.path, processData, resource]);
+    // Cache project data when navigating away
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [resourceId, cacheProject]);
+
+  // Proper useEffect with mounted guard - only runs once when auth is ready
+  useEffect(() => {
+    // Mark as mounted
+    mountedRef.current = true;
+
+    // Only load data once when we have all required data
+    if (!hasLoadedRef.current && tokens?.accessToken && userId && resourceId) {
+      hasLoadedRef.current = true;
+
+      const loadData = async () => {
+        try {
+          // Check if project is already loaded before making API call
+          if (isProjectLoaded(resourceId)) {
+            console.log('Project already loaded, skipping API call');
+            setIsLoading(false);
+            return;
+          }
+
+          // For projects, first get the project details to check for multiple files
+          if (resource.type === 'project') {
+            const projectDetails = await getProjectDetails(resourceId, tokens.accessToken, userId);
+
+            if (projectDetails.totalFiles > 1) {
+              // Show file selector for multiple files
+              setProjectFiles(projectDetails.files);
+              setProjectName(projectDetails.projectName);
+              setShowFileSelector(true);
+              setIsLoading(false);
+              return;
+            }
+            // For single file projects, proceed with normal processing
+            await fetchProjectData(
+              resourceId,
+              tokens.accessToken,
+              userId,
+              0,
+              projectDetails.projectName
+            );
+          } else {
+            await fetchProjectData(resourceId, tokens.accessToken, userId);
+          }
+          if (mountedRef.current) {
+            setIsLoading(false);
+          }
+        } catch (err) {
+          if (mountedRef.current) {
+            setError(err instanceof Error ? err.message : 'Unknown error');
+            setIsLoading(false);
+          }
+        }
+      };
+
+      loadData();
+    }
+  }, [
+    tokens?.accessToken,
+    userId,
+    resourceId,
+    fetchProjectData,
+    getProjectDetails,
+    isProjectLoaded,
+    resource.type,
+  ]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
+      // Cache the current project data when unmounting
+      if (resourceId) {
+        cacheProject(resourceId);
+      }
+    };
+  }, [resourceId, cacheProject]);
 
   // Monitor project state's importData changes - WITH PROTECTION AGAINST DUPLICATE UPDATES
   useEffect(() => {
     // Skip if we're already showing the import wizard with the same data
-    if (showImportWizard && importData && projectState.importData?.fileId === importData.fileId) {
+    if (showImportWizard && importData && projectImportData?.fileId === importData.fileId) {
       return;
     }
 
-    if (projectState.importData) {
-      console.log('Setting import data from project state:', projectState.importData.fileName);
-      setImportData(projectState.importData);
+    // Process import data for both files and projects
+    if (projectImportData) {
+      setProjectImportData(projectImportData);
       setShowImportWizard(true);
     }
-  }, [projectState.importData, showImportWizard, importData]);
+  }, [projectImportData, showImportWizard, importData]);
 
   // Handle import completion
   const handleImport = useCallback(
     async (settings: ImportSettings) => {
-      const dataToImport = projectState.importData || importData;
+      const dataToImport = projectImportData || importData;
       if (!dataToImport) return;
 
       try {
-        console.log('Processing import for file:', dataToImport.fileName);
         const columns = settings.columnNames.map(name => ({
           id: name,
           accessor: name,
@@ -159,32 +207,107 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             ? `users/${userId}/${dataToImport.filePath}/${dataToImport.fileName || 'untitled'}`
             : dataToImport.filePath;
 
-        console.log('handleImport: Constructed s3Key (filePath):', s3Key);
+        // For projects, we already have the processed data from the Rust API
+        // For files, we need to fetch the data
+        let data;
 
-        // Add headers to the request
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
+        if (currentResource.type === 'project') {
+          // Use the data that was already processed by the Rust API
+          data = {
+            data: dataToImport.preview,
+            metadata: {
+              rows: dataToImport.totalRows,
+              columns: dataToImport.totalColumns,
             },
-            body: JSON.stringify({
-              path: dataToImport.filePath,
-              start_row: 0,
-              end_row: 100,
-            }),
+          };
+        } else {
+          // For files, we need to fetch the data using the file API
+          // Check if this is a project file (filePath is a project ID) or a regular file
+          const uuidRegex =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          const isProjectFile = uuidRegex.test(dataToImport.filePath);
+
+          let requestBody: any = {
+            path: dataToImport.filePath,
+            start_row: 0,
+            end_row: 100,
+          };
+
+          // If it's a project file (filePath is a project ID), we need to get the file_id
+          if (isProjectFile) {
+            // For project files, we need to fetch the project data to get the file_id
+            const projectResponse = await fetch(
+              `https://api.dev.tensr.xyz/projects/${dataToImport.filePath}`,
+              {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+            if (!projectResponse.ok) {
+              throw new Error(`Failed to get project details: ${projectResponse.status}`);
+            }
+
+            const projectData = await projectResponse.json();
+            const firstFile = projectData.fileGroups?.data?.[0];
+            if (!firstFile) {
+              throw new Error('No files found in project');
+            }
+
+            requestBody = {
+              ...requestBody,
+              project_id: dataToImport.filePath,
+              file_id: firstFile.fileId,
+            };
+          } else {
+            // For regular files, check if filePath contains project structure
+            const isProjectFilePath =
+              dataToImport.filePath.includes('/users/') &&
+              dataToImport.filePath.includes('/projects/');
+
+            if (isProjectFilePath) {
+              const pathParts = dataToImport.filePath.split('/');
+              const usersIndex = pathParts.indexOf('users');
+              const projectsIndex = pathParts.indexOf('projects');
+
+              if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
+                const userId = pathParts[usersIndex + 1];
+                const projectId = pathParts[projectsIndex + 1];
+                const fileId = pathParts[projectsIndex + 3]; // files/{fileId}/{fileName}
+
+                requestBody = {
+                  ...requestBody,
+                  project_id: projectId,
+                  file_id: fileId,
+                };
+              }
+            }
           }
-        );
 
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('Error response:', errorText);
-          throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
+          // Fetch data for files using the updated approach
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(requestBody),
+            }
+          );
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
+          }
+
+          data = await response.json();
         }
-
-        const data = await response.json();
 
         // Define types for data processing
         type ColumnDefinition = {
@@ -245,6 +368,9 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         // Add a fallback/default ID for the tab
         const tabId = dataToImport.fileId || resourceId || `tab-${Date.now()}`;
 
+        // Use the file path from import data (which is now correctly formatted with leading /)
+        const filePath = dataToImport.filePath;
+
         // Create a new tab with the correct type
         const newTab: Omit<Tab, 'id'> = {
           name: dataToImport.fileName || 'Untitled',
@@ -252,7 +378,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
           content: '',
           isDirty: false,
           data: {
-            filePath: dataToImport.filePath,
+            filePath,
             initialData: fullData,
             initialColumns: columns,
             totalRows: dataToImport.totalRows,
@@ -260,38 +386,92 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             columnStats: dataToImport.columnSummaries || {},
             importSettings: settings,
             isInitialized: true,
-            cleanValue,
+            isProjectFile: false, // Always allow fetchMoreRows to be called
+            cleanValue: (value: any) => cleanValue(value, 'string'), // Create wrapper function
             // Pass the custom processing function for future data chunks
             processDataChunk: (data: any[], startRow: number) =>
               processColumnOrientedData(data, columns),
           },
         };
 
-        console.log('Adding new tab:', newTab.name);
-        tabDispatch(addTab({ ...newTab }));
-        projectDispatch({ type: ProjectActions.CLEAR_IMPORT_DATA });
+        addTab({ ...newTab });
+        clearImportData();
         setImportData(null);
         setShowImportWizard(false);
       } catch (err) {
         console.error('Import failed:', err);
-        projectDispatch({ type: ProjectActions.CLEAR_IMPORT_DATA });
+        clearImportData();
         setImportData(null);
         setShowImportWizard(false);
       }
     },
-    [projectState.importData, importData, resourceId, tabDispatch, projectDispatch, tokens, userId]
+    [projectImportData, importData, resourceId, addTab, setProject, tokens, userId]
   );
+
+  // Handle file selection from file selector
+  const handleFileSelect = useCallback(
+    async (fileIndex: number) => {
+      try {
+        setShowFileSelector(false);
+        setIsLoading(true);
+
+        // Get the selected file info
+        const selectedFile = projectFiles[fileIndex];
+        if (!selectedFile) {
+          throw new Error('Selected file not found');
+        }
+
+        // Update the resource to treat it as a file, not a project
+        // Note: We use the project ID as the path since that's what the Rust API expects
+        // But we mark it as type 'file' so the Spreadsheet knows to fetch more data
+        const fileResource: WorkspaceResource = {
+          id: resourceId, // Use project ID as ID
+          name: selectedFile.name,
+          path: resourceId, // Use project ID as path (Rust API expects this)
+          type: 'file', // Change to file type so Spreadsheet fetches more data
+        };
+
+        // Update the current resource state
+        setCurrentResource(fileResource);
+
+        // Process the selected file using the project API (since it's still a project file)
+        await fetchProjectData(
+          resourceId,
+          tokens?.accessToken || '',
+          userId,
+          fileIndex,
+          projectName
+        );
+
+        if (mountedRef.current) {
+          setIsLoading(false);
+        }
+      } catch (err) {
+        if (mountedRef.current) {
+          setError(err instanceof Error ? err.message : 'Unknown error');
+          setIsLoading(false);
+        }
+      }
+    },
+    [projectFiles, resourceId, tokens?.accessToken, userId, fetchProjectData]
+  );
+
+  // Handle file selector close
+  const handleFileSelectorClose = useCallback(() => {
+    setShowFileSelector(false);
+    // Navigate back or show an error
+    setError('No file selected for import');
+  }, []);
 
   // Handle import wizard close
   const handleWizardClose = useCallback(() => {
-    console.log('Closing import wizard');
     setShowImportWizard(false);
     setImportData(null);
-    projectDispatch({ type: ProjectActions.CLEAR_IMPORT_DATA });
-  }, [projectDispatch]);
+    clearImportData();
+  }, [clearImportData]);
 
   if (isLoading) {
-    return <Loading />;
+    return <Loading fullScreen />;
   }
 
   if (error) {
@@ -311,27 +491,39 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         activeTab={activeTab}
         rightPanelOpen={rightPanelOpen}
         onToggleSidebar={() => setRightPanelOpen(!rightPanelOpen)}
+        onToggleLeftSidebar={() => toggleLeftSidebar(!leftSidebarOpen)}
       >
         <div ref={projectRef} className="relative h-full w-full">
           <TabManager
             activeTab={activeTab}
-            tabs={tabState.tabs}
-            onTabClose={tabId => tabId && tabDispatch(closeTab(tabId))}
+            tabs={tabs}
+            onTabClose={tabId => tabId && closeTab(tabId)}
             onToggleSidebar={() => setRightPanelOpen(!rightPanelOpen)}
           />
         </div>
       </ProjectLayout>
 
+      {/* File selector for multi-file projects */}
+      {showFileSelector && (
+        <FileSelector
+          isOpen={showFileSelector}
+          onClose={handleFileSelectorClose}
+          onFileSelect={handleFileSelect}
+          projectName={projectName}
+          files={projectFiles}
+        />
+      )}
+
       {/* Import wizard rendered OUTSIDE the layout component */}
-      {showImportWizard && importData && (
+      {projectImportData && (
         <ImportWizard
           isOpen={true}
           onClose={handleWizardClose}
-          previewData={importData.preview}
-          columnNames={importData.columnNames}
-          totalRows={importData.totalRows}
-          totalColumns={importData.totalColumns}
-          columnSummaries={importData.columnSummaries}
+          previewData={projectImportData.preview}
+          columnNames={projectImportData.columnNames}
+          totalRows={projectImportData.totalRows}
+          totalColumns={projectImportData.totalColumns}
+          columnSummaries={projectImportData.columnSummaries}
           onImport={handleImport}
         />
       )}

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api-client';
+import { getIdToken } from '@/utils/auth';
 
 type Listener<T> = (value: T) => void;
 
@@ -320,9 +322,8 @@ export function useSession() {
     // Fetch available sessions initially and then periodically
     const fetchSessions = async () => {
       try {
-        const response = await fetch('http://localhost:3000/api/sessions');
-        const data = await response.json();
-        setSessions(data || []);
+        const response = await apiClient.collaboration.sessions();
+        setSessions(response || []);
       } catch (error) {
         console.error('Failed to fetch sessions:', error);
         setSessions([]);
@@ -342,18 +343,17 @@ export function useSession() {
 
   const createSession = async (filePath: string, fileName: string) => {
     try {
-      const response = await fetch('http://localhost:3000/api/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filePath,
-          fileName,
-          userId: wsService.userId,
-          userName: wsService.userName,
-        }),
+      const idToken = getIdToken();
+      if (!idToken) {
+        throw new Error('Authentication required');
+      }
+
+      const session = await apiClient.collaboration.createSession({
+        filePath,
+        fileName,
+        userName: wsService.userName,
       });
 
-      const session = await response.json();
       wsService.setupWebSocket(session.id);
       return session;
     } catch (error) {
@@ -364,16 +364,12 @@ export function useSession() {
 
   const joinSession = async (sessionId: string) => {
     try {
-      const response = await fetch(`http://localhost:3000/api/sessions/${sessionId}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: wsService.userId,
-          userName: wsService.userName,
-        }),
-      });
+      const idToken = getIdToken();
+      if (!idToken) {
+        throw new Error('Authentication required');
+      }
 
-      const session = await response.json();
+      const session = await apiClient.collaboration.joinSession(sessionId);
       wsService.setupWebSocket(session.id);
       return session;
     } catch (error) {

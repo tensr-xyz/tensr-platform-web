@@ -195,7 +195,9 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
       if (activeTab && activeTab.data && activeTab.data.filePath) {
         // File workspace context - get info from active tab
         // Ensure file path starts with / for API compatibility
-        filePath = activeTab.data.filePath.startsWith('/') ? activeTab.data.filePath : `/${activeTab.data.filePath}`;
+        filePath = activeTab.data.filePath.startsWith('/')
+          ? activeTab.data.filePath
+          : `/${activeTab.data.filePath}`;
         fileName = activeTab.name;
       } else {
         // Project workspace context - get info from project context

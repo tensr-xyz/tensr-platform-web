@@ -2,8 +2,7 @@ import { ReactNode, useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/atoms/resizable';
 import { Button } from '@/components/atoms/button';
 import { LuX, LuExpand, LuPanelBottom, LuLayoutPanelLeft, LuShrink } from 'react-icons/lu';
-import { ViewType, ProjectActions } from '@/contexts/project-context/types';
-import { useProject } from '@/contexts/project-context';
+import { useProjectStore, ViewType } from '@/stores/project-store';
 import AnalyticsDashboard from '@/components/templates/analytics-dashboard';
 
 interface NavigationBarProps {
@@ -97,14 +96,11 @@ const NavigationBar = ({ viewMode, onViewModeChange, onClose }: NavigationBarPro
 };
 
 const AnalyticsLayout = ({ children, columns, filePath }: AnalyticsLayoutProps) => {
-  const { state, dispatch } = useProject();
+  const { activeView, setActiveView } = useProjectStore();
   const [viewMode, setViewMode] = useState('bottom');
 
   const toggleAnalytics = () => {
-    dispatch({
-      type: ProjectActions.SET_VIEW,
-      payload: state.activeView === ViewType.CHARTS ? ViewType.SPREADSHEET : ViewType.CHARTS,
-    });
+    setActiveView(activeView === ViewType.CHARTS ? ViewType.SPREADSHEET : ViewType.CHARTS);
   };
 
   const safeColumns = columns || [];
@@ -119,7 +115,7 @@ const AnalyticsLayout = ({ children, columns, filePath }: AnalyticsLayoutProps) 
     </div>
   );
 
-  if (state.activeView !== ViewType.CHARTS) {
+  if (activeView !== ViewType.CHARTS) {
     return children;
   }
 

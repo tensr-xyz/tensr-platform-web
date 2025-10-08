@@ -1,4 +1,4 @@
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
@@ -41,7 +41,7 @@ interface MeansRequest {
 type Results = Record<string, DescriptiveStats>;
 
 export const Mean = ({ children }: MeanProps) => {
-  const { state } = useTabs();
+  const { tabs, activeTabId } = useTabsStore();
   const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
   const [results, setResults] = useState<Results | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -50,10 +50,7 @@ export const Mean = ({ children }: MeanProps) => {
 
   const token = tokens?.accessToken;
 
-  const activeTab = useMemo(
-    () => state.tabs.find(tab => tab.id === state.activeTabId),
-    [state.tabs, state.activeTabId]
-  );
+  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   // Extract variables from the columns
   const variables = useMemo((): Variable[] => {

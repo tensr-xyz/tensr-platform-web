@@ -8,7 +8,7 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/atoms/alert';
 import { Copy } from 'lucide-react';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 
 interface DuplicateDialogProps {
   children: ReactNode;
@@ -35,7 +35,7 @@ interface FindDuplicatesRequest {
 }
 
 export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
-  const { state } = useTabs();
+  const { tabs, activeTabId } = useTabsStore();
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [matchCase, setMatchCase] = useState(true);
   const [firstCaseOnly, setFirstCaseOnly] = useState(false);
@@ -43,10 +43,7 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const activeTab = useMemo(
-    () => state.tabs.find(tab => tab.id === state.activeTabId),
-    [state.tabs, state.activeTabId]
-  );
+  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   const variables = useMemo(() => {
     if (!activeTab?.data?.initialData?.[0]) {

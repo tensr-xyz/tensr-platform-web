@@ -2,19 +2,21 @@ interface Organisation {
   // Primary key
   orgId: string;
   name: string;
-  slug: string; // URL-friendly identifier
+  slug?: string; // URL-friendly identifier (optional for now)
 
   // Billing and subscription
-  billingEmail: string;
-  subscriptionTier: 'FREE' | 'TEAM' | 'ENTERPRISE';
-  subscriptionStatus: 'ACTIVE' | 'TRIALING' | 'PAST_DUE' | 'CANCELLED';
+  billingEmail?: string; // Optional for now
+  subscriptionTier?: 'FREE' | 'TEAM' | 'ENTERPRISE'; // Optional for now
+  subscriptionStatus?: 'ACTIVE' | 'TRIALING' | 'PAST_DUE' | 'CANCELLED'; // Optional for now
 
   // Organization details
   logoUrl?: string;
   website?: string;
+  description?: string;
+  settings?: Record<string, any>;
 
   // Ownership
-  ownerId: string; // Reference to the user who created/owns organization
+  ownerId?: string; // Reference to the user who created/owns organization
 
   // Audit
   createdAt: string;
@@ -48,16 +50,16 @@ interface OrgMember {
   userId: string;
 
   // Role within organization
-  role: 'OWNER' | 'ADMIN' | 'MEMBER' | 'GUEST';
+  role: 'ADMIN' | 'MEMBER' | 'VIEWER'; // Updated to match backend
 
   // Teams this user belongs to in this org
-  teamIds: string[];
+  teamIds?: string[]; // Optional for now
 
   // Invite status
-  status: 'ACTIVE' | 'INVITED' | 'SUSPENDED';
-  inviteEmail?: string;
+  status?: 'ACTIVE' | 'INVITED' | 'SUSPENDED'; // Optional for now
+  inviteEmail?: string; // Optional for now
 
   // Audit
-  addedAt: string;
-  updatedAt: string;
+  addedAt?: string; // Optional for now
+  updatedAt?: string; // Optional for now
 }

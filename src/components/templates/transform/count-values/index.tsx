@@ -10,10 +10,9 @@ import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
 import { Label } from '@/components/atoms/label';
 import { Input } from '@/components/atoms/input';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import { LuLoader } from 'react-icons/lu';
 import useAuth from '@/hooks/api/use-auth';
-import { updateTab } from '@/contexts/tabs-context/actions';
 import { ColumnSummary } from '@/types/file';
 
 // API base URL
@@ -54,15 +53,12 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
   const [sourceVariables, setSourceVariables] = useState<string[]>([]);
   const [valuesToCount, setValuesToCount] = useState<ValueToCount[]>([]);
 
-  const { state: tabState, dispatch: tabDispatch } = useTabs();
+  const { tabs, activeTabId, updateTab } = useTabsStore();
   const { tokens } = useAuth();
 
   const token = tokens?.accessToken;
 
-  const activeTab = useMemo(
-    () => tabState.tabs.find(tab => tab.id === tabState.activeTabId),
-    [tabState.tabs, tabState.activeTabId]
-  );
+  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   const columnNames = useMemo(() => {
     if (!activeTab?.data?.initialData?.[0]) {

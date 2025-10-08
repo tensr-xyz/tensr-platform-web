@@ -1,5 +1,4 @@
-import { useTabs } from '@/contexts/tabs-context';
-import { addTab, setActiveTab } from '@/contexts/tabs-context/actions';
+import { useTabsStore } from '@/stores/tabs-store';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
@@ -65,7 +64,7 @@ interface AnovaResponse {
 }
 
 export const OneWayAnova = ({ children }: AnovaProps) => {
-  const { state, dispatch } = useTabs();
+  const { tabs, activeTabId, addTab } = useTabsStore();
   const [groupingVariable, setGroupingVariable] = useState<string>('');
   const [dependentVariable, setDependentVariable] = useState<string>('');
   const [results, setResults] = useState<AnovaResult | null>(null);
@@ -77,8 +76,8 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
   const token = tokens?.accessToken;
 
   const activeDataTab = useMemo(
-    () => state.tabs.find(tab => tab.id === state.activeTabId),
-    [state.tabs, state.activeTabId]
+    () => tabs.find(tab => tab.id === activeTabId),
+    [tabs, activeTabId]
   );
 
   const variables = useMemo(() => {
@@ -205,11 +204,11 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
       isDirty: false,
     };
 
-    // Add the tab - the reducer will generate an ID and set it as active automatically
-    dispatch(addTab(reportTab));
+    // Add the tab - the store will generate an ID and set it as active automatically
+    addTab(reportTab);
 
-    // Note: Your reducer automatically sets the new tab as active in ADD_TAB case,
-    // so we don't need to dispatch setActiveTab separately
+    // Note: The store automatically sets the new tab as active when adding,
+    // so we don't need to call setActiveTab separately
   };
 
   const downloadReport = () => {

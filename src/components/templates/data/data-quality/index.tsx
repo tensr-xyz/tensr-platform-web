@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
 import { Label } from '@/components/atoms/label';
 import { Checkbox } from '@/components/atoms/checkbox';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import { LuLoader } from 'react-icons/lu';
 
 interface DataQualityMetric {
@@ -47,12 +47,9 @@ export const DataQualityDialog = ({ children }: DataQualityProps) => {
   const [error, setError] = useState<string | null>(null);
   const [metrics, setMetrics] = useState<DataQualityMetric | null>(null);
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
-  const { state: tabState } = useTabs();
+  const { tabs, activeTabId } = useTabsStore();
 
-  const activeTab = useMemo(
-    () => tabState.tabs.find(tab => tab.id === tabState.activeTabId),
-    [tabState.tabs, tabState.activeTabId]
-  );
+  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   const criticalError = useMemo(() => {
     if (!activeTab) return 'Please open a dataset first';

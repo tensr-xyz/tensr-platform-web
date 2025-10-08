@@ -11,7 +11,7 @@ import { ScrollArea, ScrollBar } from '@/components/atoms/scroll-area';
 import { Button } from '@/components/atoms/button';
 import FilterPanel from '@/components/organisms/filter-panel';
 import ChartPanel from '@/components/organisms/chart-panel';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 
 import { ANALYSIS_COMPONENTS, MENU_ITEMS, type MenuItems } from '@/configs/analysis-config';
 import PluginPanel from '@/components/organisms/plugin-panel';
@@ -28,6 +28,13 @@ interface AnalysisSidebarProps {
 
 const AnalysisItem = ({ item }: AnalysisItemProps) => {
   const AnalysisComponent = ANALYSIS_COMPONENTS[item];
+
+  // Debug logging
+  console.log(`Looking for component for: "${item}"`, {
+    found: !!AnalysisComponent,
+    component: AnalysisComponent,
+    availableKeys: Object.keys(ANALYSIS_COMPONENTS),
+  });
 
   if (!AnalysisComponent) {
     return (
@@ -49,8 +56,8 @@ const AnalysisItem = ({ item }: AnalysisItemProps) => {
 };
 
 const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
-  const { state } = useTabs();
-  const activeTab = state.tabs.find(tab => tab.id === state.activeTabId);
+  const { tabs, activeTabId } = useTabsStore();
+  const activeTab = tabs.find(tab => tab.id === activeTabId);
 
   const handleFilterChange = (columnName: string, values: Set<string>) => {
     // You can implement the filter logic here when needed
@@ -62,22 +69,8 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
     const filteredItems = { ...MENU_ITEMS };
     delete filteredItems.data;
 
-    return Object.entries(filteredItems).reduce((acc, [key, value]) => {
-      if (
-        (key === 'agent' || key === 'actions' || key === 'graph_options' || key === 'plugins') &&
-        activeTab !== undefined
-      ) {
-        acc[key] = value;
-      } else if (
-        key !== 'agent' &&
-        key !== 'actions' &&
-        key !== 'graph_options' &&
-        key !== 'plugins'
-      ) {
-        acc[key] = value;
-      }
-      return acc;
-    }, {} as MenuItems);
+    // Show all menu items regardless of whether tabs are open
+    return filteredItems;
   };
 
   const renderSpreadsheetContent = (key: string) => {
@@ -92,7 +85,10 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
 
     if (key === 'agent') {
       return (
-        <div className="h-full flex flex-col">
+        <div
+          className="w-full h-full flex flex-col overflow-hidden"
+          style={{ maxWidth: '100%', width: '100%' }}
+        >
           <AgentPanel />
         </div>
       );
@@ -168,16 +164,46 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
     const spreadsheetContent = renderSpreadsheetContent(key);
     if (spreadsheetContent) return spreadsheetContent;
 
-    return Object.entries(MENU_ITEMS[key].sections).map(([sectionName, items], index) => (
-      <Accordion key={`${key}-${index}`} type="single" collapsible defaultValue="item-1">
-        <AccordionItem value="item-1">
-          <AccordionTrigger>{sectionName}</AccordionTrigger>
-          {items.map((item, itemIndex) => (
-            <AnalysisItem key={`${sectionName}-${itemIndex}`} item={item} />
+    // Handle special cases for new menu items
+    if (key === 'visualization' || key === 'time_series' || key === 'ml_ai' || key === 'syntax') {
+      return (
+        <div className="space-y-4">
+          {Object.entries(MENU_ITEMS[key].sections).map(([sectionName, items], index) => (
+            <Accordion key={`${key}-${index}`} type="single" collapsible defaultValue="item-1">
+              <AccordionItem value="item-1">
+                <AccordionTrigger className="text-sm font-medium">{sectionName}</AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-1">
+                    {items.map((item, itemIndex) => (
+                      <AnalysisItem key={`${sectionName}-${itemIndex}`} item={item} />
+                    ))}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            </Accordion>
           ))}
-        </AccordionItem>
-      </Accordion>
-    ));
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {Object.entries(MENU_ITEMS[key].sections).map(([sectionName, items], index) => (
+          <Accordion key={`${key}-${index}`} type="single" collapsible defaultValue="item-1">
+            <AccordionItem value="item-1">
+              <AccordionTrigger className="text-sm font-medium">{sectionName}</AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-1">
+                  {items.map((item, itemIndex) => (
+                    <AnalysisItem key={`${sectionName}-${itemIndex}`} item={item} />
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        ))}
+      </div>
+    );
   };
 
   const visibleMenuItems = getVisibleMenuItems();
@@ -208,14 +234,14 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
       </div>
 
       <div className="flex-1 overflow-hidden">
-        {Object.entries(MENU_ITEMS).map(([key]) => (
+        {Object.entries(visibleMenuItems).map(([key]) => (
           <TabsContent
             key={key}
             value={key}
-            className="p-0 border-0 h-full overflow-auto flex flex-col"
-            style={{ height: 'calc(100vh - 64px)' }}
+            className="p-0 border-0 h-full overflow-hidden flex flex-col"
+            style={{ maxWidth: '100%', width: '100%' }}
           >
-            {renderMenuSections(key)}
+            <div className="h-full w-full overflow-hidden">{renderMenuSections(key)}</div>
           </TabsContent>
         ))}
       </div>

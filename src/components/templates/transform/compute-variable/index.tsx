@@ -17,11 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import { useProject } from '@/contexts/project-context';
 import { LuLoader } from 'react-icons/lu';
 import useAuth from '@/hooks/api/use-auth';
-import { updateTab } from '@/contexts/tabs-context/actions';
 
 const COMPUTATION_TYPES = {
   arithmetic: 'arithmetic',
@@ -103,16 +102,13 @@ export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [constant, setConstant] = useState<string>('');
 
-  const { state: tabState, dispatch: tabDispatch } = useTabs();
+  const { tabs, activeTabId, updateTab } = useTabsStore();
   const { tokens } = useAuth();
   const { dispatch: projectDispatch } = useProject();
 
   const token = tokens?.accessToken;
 
-  const activeTab = useMemo(
-    () => tabState.tabs.find(tab => tab.id === tabState.activeTabId),
-    [tabState.tabs, tabState.activeTabId]
-  );
+  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   const columnNames = useMemo(() => {
     if (!activeTab?.data?.initialData?.[0]) {

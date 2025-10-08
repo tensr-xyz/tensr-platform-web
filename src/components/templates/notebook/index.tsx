@@ -8,8 +8,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
-import { useTabs } from '@/contexts/tabs-context';
-import { useTheme } from 'next-themes';
+import { useTabsStore } from '@/stores/tabs-store';
+import { useTheme } from '@/contexts/theme-context';
 
 interface Cell {
   id: number;
@@ -198,11 +198,8 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
 };
 
 export const Notebook: React.FC = () => {
-  const { state } = useTabs();
-  const activeTab = useMemo(
-    () => state.tabs.find(tab => tab.id === state.activeTabId),
-    [state.tabs, state.activeTabId]
-  );
+  const { tabs, activeTabId } = useTabsStore();
+  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   const [cells, setCells] = useState<Cell[]>([
     {

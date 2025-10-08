@@ -7,12 +7,12 @@ import {
 } from '@/components/molecules/accordion';
 import { Input } from '@/components/atoms/input';
 import { ScrollArea } from '@/components/atoms/scroll-area';
-import { LuEye, LuEyeOff, LuLoader } from 'react-icons/lu';
+import { LuEye, LuEyeOff } from 'react-icons/lu';
+import { LoaderCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, ResponsiveContainer, ReferenceArea, YAxis, Cell } from 'recharts';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef } from 'react';
-import { useTabs } from '@/contexts/tabs-context';
-import { updateTab } from '@/contexts/tabs-context/actions';
+import { useTabsStore } from '@/stores/tabs-store';
 import _ from 'lodash';
 import useDebounce from '@/hooks/ui/use-debounce';
 import useAuth from '@/hooks/api/use-auth';
@@ -205,7 +205,7 @@ ErrorDisplay.displayName = 'ErrorDisplay';
 // Add displayName to LoadingContent
 const LoadingContent = memo(() => (
   <div className="flex flex-col items-center justify-center h-64 space-y-4">
-    <LuLoader className="w-8 h-8 animate-spin text-primary" />
+    <LoaderCircle className="w-8 h-8 animate-spin text-primary" />
     <p className="text-sm text-muted-foreground">Loading data...</p>
   </div>
 ));
@@ -706,7 +706,7 @@ const AccordionHeader = memo(
       <div className="flex items-center justify-between w-full">
         <div className="flex items-center gap-2">
           <span>{columnName}</span>
-          {isLoading && <LuLoader className="w-4 h-4 animate-spin" />}
+          {isLoading && <LoaderCircle className="w-4 h-4 animate-spin" />}
         </div>
         <button onClick={handleVisibilityClick} className="p-1 hover:bg-accent/50 rounded-sm">
           {isVisible ? (
@@ -723,10 +723,10 @@ AccordionHeader.displayName = 'AccordionHeader';
 
 // Updated FilterPanel component to use fetch instead of invoke
 const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps) => {
-  const { state, dispatch } = useTabs();
+  const { tabs, activeTabId, updateTab } = useTabsStore();
   const { tokens } = useAuth();
-  const activeTab = state.tabs.find(tab => tab.id === state.activeTabId);
-  const columnVisibility = activeTab?.data?.columnVisibility || {};
+  const activeTab = tabs.find(tab => tab.id === activeTabId);
+  const columnVisibility = activeTab?.columnVisibility || {};
 
   const [columnData, setColumnData] = useState<Record<string, ColumnFrequencyResponse | null>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
@@ -820,16 +820,11 @@ const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps
         [columnId]: !columnVisibility[columnId],
       };
 
-      dispatch(
-        updateTab(activeTab.id, {
-          data: {
-            ...activeTab.data,
-            columnVisibility: newVisibility,
-          },
-        })
-      );
+      updateTab(activeTab.id, {
+        columnVisibility: newVisibility,
+      });
     },
-    [activeTab, columnVisibility, dispatch]
+    [activeTab, columnVisibility, updateTab]
   );
 
   // Retry loading on error

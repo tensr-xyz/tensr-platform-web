@@ -22,13 +22,14 @@ import {
   LuFolderPlus,
   LuMinus,
   LuDatabase,
+  LuRefreshCw,
 } from 'react-icons/lu';
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/atoms/collapsible';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -38,14 +39,11 @@ import {
 } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
-import { ProjectActions, ViewType } from '@/contexts/project-context/types';
-import { addTab } from '@/contexts/tabs-context/actions';
-import { useTabs } from '@/contexts/tabs-context';
-import { useProject as useProjectState } from '@/contexts/project-context';
-import { refreshFileSystem } from '@/contexts/project-context/actions';
-import { useFileOperations } from '@/hooks/use-file-operations';
+import { useProjectStore } from '@/stores/project-store';
+import { useAuth } from '@/hooks/api/use-auth';
 import { ImportData } from '@/types/file';
 import { FileResponse } from '@/types/project';
+
 import {
   Accordion,
   AccordionContent,
@@ -54,7 +52,6 @@ import {
 } from '@/components/molecules/accordion';
 import { ScrollArea } from '@/components/atoms/scroll-area';
 import { MENU_ITEMS, ANALYSIS_COMPONENTS } from '@/configs/analysis-config';
-import { useProject } from '@/hooks/api/use-project';
 
 interface FileEntry {
   name: string;
@@ -63,14 +60,27 @@ interface FileEntry {
   children?: FileEntry[];
 }
 
-interface FileTreeProps {
+interface FileTreeItemProps {
   item: FileEntry;
-  selectedPath: string;
+  onDoubleClick: (item: FileEntry) => void;
+  onCreateFile: (item: FileEntry) => void;
+}
+
+interface FolderTreeItemProps {
+  item: FileEntry;
+  onDoubleClick: (item: FileEntry) => void;
+  onCreateFile: (item: FileEntry) => void;
   onRefresh: () => Promise<void>;
 }
 
 interface FileOperationsProps {
   currentPath: string;
+  onRefresh: () => Promise<void>;
+}
+
+interface FileTreeProps {
+  item: FileEntry;
+  selectedPath: string;
   onRefresh: () => Promise<void>;
 }
 
@@ -179,310 +189,276 @@ export const CreateDialog: React.FC<CreateDialogProps> = ({
   );
 };
 
-interface FileTreeItemProps {
-  item: FileEntry;
-  onDoubleClick: (e: React.MouseEvent) => void;
-  onCreateFile: () => void;
-}
-
 export const FileTreeItem = ({ item, onDoubleClick, onCreateFile }: FileTreeItemProps) => {
-  const { state, dispatch } = useProjectState();
+  const { currentProject } = useProjectStore();
 
   const handleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
     e.stopPropagation();
-    dispatch({ type: ProjectActions.SET_SELECTED_PATH, payload: item.path });
-  };
-
-  return (
-    <ContextMenu>
-      <ContextMenuTrigger>
-        <SidebarMenuButton
-          className="relative"
-          isActive={state.selectedPath === item.path}
-          onClick={handleClick}
-          onDoubleClick={e => {
-            e.preventDefault();
-            e.stopPropagation();
-            onDoubleClick(e);
-          }}
-        >
-          <LuFile className="shrink-0" />
-          <span className="truncate">{item.name}</span>
-        </SidebarMenuButton>
-      </ContextMenuTrigger>
-      <ContextMenuContent>
-        <ContextMenuItem onClick={onCreateFile}>
-          New File
-          <ContextMenuShortcut>⌘N</ContextMenuShortcut>
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
-  );
-};
-
-interface FolderTreeItemProps {
-  item: FileEntry;
-  selectedPath: string;
-  onCreateFile: () => void;
-  onCreateFolder: () => void;
-  children?: FileEntry[];
-  onRefresh: () => Promise<void>;
-}
-
-export const FolderTreeItem = ({
-  item,
-  selectedPath,
-  onCreateFile,
-  onCreateFolder,
-  onRefresh,
-}: Omit<FolderTreeItemProps, 'children'>) => {
-  const { state, dispatch } = useProjectState();
-
-  const handleClick = (e: React.MouseEvent) => {
-    // Only handle folder clicks, not bubbled events
-    if (e.currentTarget === e.target || e.target === e.currentTarget.firstChild) {
-      e.stopPropagation();
+    if (onDoubleClick) {
+      onDoubleClick(item);
     }
   };
 
-  const handleDoubleClick = (e: React.MouseEvent) => {
-    e.preventDefault();
+  const handleCreateFile = (e: React.MouseEvent) => {
     e.stopPropagation();
-    dispatch({ type: ProjectActions.SET_SELECTED_PATH, payload: item.path });
+    if (onCreateFile) {
+      onCreateFile(item);
+    }
   };
 
   return (
-    <SidebarMenuItem>
-      <ContextMenu>
-        <ContextMenuTrigger>
-          <Collapsible
-            className="group/collapsible [&[data-state=open]>button>svg:first-child]:rotate-90"
-            defaultOpen={item.name === 'test_folder'}
+    <div
+      className="flex items-center justify-between p-1 hover:bg-accent rounded-sm cursor-pointer"
+      onClick={handleClick}
+    >
+      <div className="flex items-center gap-2">
+        {item.entry_type === 'directory' ? (
+          <LuFolder className="h-4 w-4 text-blue-500" />
+        ) : (
+          <LuFile className="h-4 w-4 text-gray-500" />
+        )}
+        <span className="text-sm">{item.name}</span>
+      </div>
+      {item.entry_type === 'directory' && (
+        <Button
+          size="icon"
+          variant="ghost"
+          className="h-6 w-6 opacity-0 group-hover:opacity-100"
+          onClick={handleCreateFile}
+        >
+          <LuFilePlus className="h-3 w-3" />
+        </Button>
+      )}
+    </div>
+  );
+};
+
+export const FolderTreeItem = ({
+  item,
+  onDoubleClick,
+  onCreateFile,
+  onRefresh,
+}: FolderTreeItemProps) => {
+  const { currentProject } = useProjectStore();
+
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onDoubleClick) {
+      onDoubleClick(item);
+    }
+  };
+
+  const handleCreateFile = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (onCreateFile) {
+      onCreateFile(item);
+    }
+  };
+
+  return (
+    <Collapsible>
+      <CollapsibleTrigger asChild>
+        <div
+          className="flex items-center justify-between p-1 hover:bg-accent rounded-sm cursor-pointer"
+          onClick={handleClick}
+        >
+          <div className="flex items-center gap-2">
+            <LuFolder className="h-4 w-4 text-blue-500" />
+            <span className="text-sm">{item.name}</span>
+          </div>
+          <Button
+            size="icon"
+            variant="ghost"
+            className="h-6 w-6 opacity-0 group-hover:opacity-100"
+            onClick={handleCreateFile}
           >
-            <CollapsibleTrigger asChild>
-              <SidebarMenuButton
-                className="group relative hover:bg-accent/50"
-                isActive={state.selectedPath === item.path}
-                onClick={handleClick}
-                onDoubleClick={handleDoubleClick}
-              >
-                <LuChevronRight className="transition-transform shrink-0" />
-                <LuFolder className="shrink-0" />
-                <span className="truncate">{item.name}</span>
-              </SidebarMenuButton>
-            </CollapsibleTrigger>
-            {item.children && item.children.length > 0 && (
-              <CollapsibleContent>
-                <SidebarMenuSub>
-                  {sortItems(item.children).map(child => (
-                    <FileTree
-                      key={child.path}
-                      item={child}
-                      selectedPath={selectedPath}
-                      onRefresh={onRefresh}
-                    />
-                  ))}
-                </SidebarMenuSub>
-              </CollapsibleContent>
-            )}
-          </Collapsible>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem onClick={onCreateFile}>
-            New File
-            <ContextMenuShortcut>⌘N</ContextMenuShortcut>
-          </ContextMenuItem>
-          <ContextMenuItem onClick={onCreateFolder}>
-            New Folder
-            <ContextMenuShortcut>⇧⌘N</ContextMenuShortcut>
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
-    </SidebarMenuItem>
+            <LuFilePlus className="h-3 w-3" />
+          </Button>
+        </div>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="pl-4">
+          {item.children?.map((child, index) => (
+            <FileTreeItem
+              key={`${child.path}-${index}`}
+              item={child}
+              onDoubleClick={onDoubleClick}
+              onCreateFile={onCreateFile}
+            />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 };
 
 export const FileOperations: React.FC<FileOperationsProps> = ({ onRefresh }) => {
-  const { state } = useProjectState();
+  const { currentProject } = useProjectStore();
   const [dialog, setDialog] = useState<{ type: FileOperation; isOpen: boolean } | null>(null);
 
-  // Get the current directory path based on selection
-  const getCurrentDirectory = () => {
-    if (!state.selectedPath) return state.currentProject?.path || '';
-
-    // If selected item is a file, use its parent directory
-    const selectedItem = state.fileSystem.find(item => {
-      const queue = [item];
-      while (queue.length > 0) {
-        const current = queue.shift()!;
-        if (current.path === state.selectedPath) return current;
-        if (current.children) queue.push(...current.children);
-      }
-      return false;
-    });
-
-    if (selectedItem?.entry_type === 'file') {
-      return state.selectedPath.substring(0, state.selectedPath.lastIndexOf('/'));
-    }
-
-    return state.selectedPath;
+  const handleCreateFile = () => {
+    setDialog({ type: 'file', isOpen: true });
   };
 
-  const currentPath = getCurrentDirectory();
-  const { createFile, createFolder } = useFileOperations(currentPath, onRefresh);
+  const handleCreateFolder = () => {
+    setDialog({ type: 'folder', isOpen: true });
+  };
 
   return (
-    <div className="flex">
-      <Button size="icon" variant="ghost" onClick={() => setDialog({ type: 'file', isOpen: true })}>
-        <LuFilePlus className="h-4 w-4" />
+    <div className="flex items-center gap-2">
+      <Button size="sm" variant="outline" onClick={handleCreateFile}>
+        <LuFilePlus className="h-4 w-4 mr-2" />
+        File
       </Button>
-      <Button
-        size="icon"
-        variant="ghost"
-        onClick={() => setDialog({ type: 'folder', isOpen: true })}
-      >
-        <LuFolderPlus className="h-4 w-4" />
+      <Button size="sm" variant="outline" onClick={handleCreateFolder}>
+        <LuFolderPlus className="h-4 w-4 mr-2" />
+        Folder
+      </Button>
+      <Button size="sm" variant="outline" onClick={onRefresh}>
+        <LuRefreshCw className="h-4 w-4 mr-2" />
+        Refresh
       </Button>
 
-      {dialog && (
-        <CreateDialog
-          type={dialog.type}
-          currentPath={currentPath}
-          onClose={() => setDialog(null)}
-          onCreateFile={createFile}
-          onCreateFolder={createFolder}
-        />
+      {dialog?.isOpen && (
+        <Dialog open={dialog.isOpen} onOpenChange={() => setDialog(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create {dialog.type === 'file' ? 'File' : 'Folder'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <Input placeholder={`${dialog.type === 'file' ? 'File' : 'Folder'} name`} />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialog(null)}>
+                Cancel
+              </Button>
+              <Button>Create</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
 };
 
 export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefresh }) => {
-  const { state, dispatch } = useProjectState();
-  const { dispatch: tabsDispatch } = useTabs();
+  const { currentProject } = useProjectStore();
+  const { tokens, user } = useAuth();
   const [dialog, setDialog] = useState<{ type: FileOperation; isOpen: boolean } | null>(null);
-  const { createFile, createFolder } = useFileOperations(item.path, onRefresh);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Full file processing handler - moved from original handleFileSelect
+  // File processing handler - calls the store's processFile function
   const handleFileOpen = async (file: FileEntry) => {
-    if (isProcessing) return;
+    if (isProcessing || !currentProject?.id) return;
     setIsProcessing(true);
 
     try {
       if (file.entry_type === 'file') {
-        if (file.name.endsWith('.csv')) {
-          try {
-            const response = {} as FileResponse;
-            // const response = await invoke<FileResponse>('read_csv', {
-            //   request: {
-            //     path: file.path,
-            //     projectPath: state.currentProject?.path,
-            //   },
-            // });
+        // Find the file index in the project's file list
+        const { fileSystem, processFile } = useProjectStore.getState();
+        const fileIndex = fileSystem.findIndex(f => f.path === file.path);
 
-            if (response?.metadata) {
-              const importData: ImportData = {
-                fileId: '', // Adding the required fileId field
-                fileName: file.name,
-                filePath: file.path,
-                preview: response.metadata.preview || [],
-                columnNames: response.metadata.column_names || [],
-                totalRows: response.metadata.rows || 0,
-                totalColumns: response.metadata.columns || 0,
-              };
-
-              dispatch({
-                type: ProjectActions.SET_IMPORT_DATA,
-                payload: importData,
-              });
-
-              dispatch({
-                type: ProjectActions.SET_SHOW_IMPORT_WIZARD,
-                payload: true,
-              });
-            }
-          } catch (err: any) {
-            // Check if it's a Polars empty CSV error
-            if (err?.Polars?.includes('empty CSV')) {
-              const emptyData = createEmptySpreadsheetData();
-              tabsDispatch(
-                addTab({
-                  name: file.name,
-                  path: file.path,
-                  type: ViewType.SPREADSHEET,
-                  content: '',
-                  data: emptyData,
-                  isDirty: false,
-                })
-              );
-            } else {
-              // Handle error
-            }
-          }
-        } else if (file.name.endsWith('.md')) {
-          try {
-            const content = {} as string;
-            // const content = await invoke<string>('read_file', { path: file.path });
-            tabsDispatch(
-              addTab({
-                name: file.name,
-                path: file.path,
-                type: ViewType.MARKDOWN,
-                content,
-                isDirty: false,
-              })
-            );
-          } catch (err) {
-            // Handle error
-          }
+        if (fileIndex === -1) {
+          console.error('File not found in project file list');
+          return;
         }
+
+        // Get auth token and user ID from auth context
+        const token = tokens?.accessToken;
+        const userId = user?.userId;
+
+        console.log('Auth debug:', { tokens, user, token, userId });
+
+        if (!token || !userId) {
+          console.error('Missing authentication credentials', { token, userId });
+          return;
+        }
+
+        // Process the file using the store's processFile function
+        await processFile(currentProject.id, fileIndex, token, userId);
       }
+    } catch (error) {
+      console.error('Error opening file:', error);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleDoubleClick = async (e: React.MouseEvent, file: FileEntry) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    if (file.entry_type === 'file') {
-      await handleFileOpen(file);
-    }
+  const handleCreateFile = () => {
+    setDialog({ type: 'file', isOpen: true });
   };
 
-  if (item.entry_type === 'file') {
-    return (
-      <FileTreeItem
-        item={item}
-        onDoubleClick={e => handleDoubleClick(e, item)}
-        onCreateFile={() => setDialog({ type: 'file', isOpen: true })}
-      />
-    );
-  }
+  const handleCreateFolder = () => {
+    setDialog({ type: 'folder', isOpen: true });
+  };
 
   return (
-    <>
-      <FolderTreeItem
-        item={item}
-        selectedPath={selectedPath}
-        onCreateFile={() => setDialog({ type: 'file', isOpen: true })}
-        onCreateFolder={() => setDialog({ type: 'folder', isOpen: true })}
-        onRefresh={onRefresh}
-      />
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {item.entry_type === 'directory' ? (
+            <LuFolder className="h-4 w-4 text-blue-500" />
+          ) : (
+            <LuFile className="h-4 w-4 text-gray-500" />
+          )}
+          <span className="text-sm font-medium">{item.name}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {item.entry_type === 'directory' && (
+            <>
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleCreateFile}>
+                <LuFilePlus className="h-3 w-3" />
+              </Button>
+              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={handleCreateFolder}>
+                <LuFolderPlus className="h-3 w-3" />
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
 
-      {dialog && state.selectedPath && (
-        <CreateDialog
-          type={dialog.type}
-          currentPath={state.selectedPath}
-          onClose={() => setDialog(null)}
-          onCreateFile={createFile}
-          onCreateFolder={createFolder}
-        />
+      {item.entry_type === 'file' && (
+        <div
+          className="pl-4 cursor-pointer hover:bg-accent rounded-sm p-1"
+          onDoubleClick={() => handleFileOpen(item)}
+        >
+          <LuFile className="h-4 w-4 text-gray-500 inline mr-2" />
+          <span className="text-sm">{item.name}</span>
+        </div>
       )}
-    </>
+
+      {item.entry_type === 'directory' && item.children && (
+        <div className="pl-4 space-y-1">
+          {sortItems(item.children).map((child, index) => (
+            <FileTree
+              key={`${child.path}-${index}`}
+              item={child}
+              selectedPath={selectedPath}
+              onRefresh={onRefresh}
+            />
+          ))}
+        </div>
+      )}
+
+      {dialog?.isOpen && (
+        <Dialog open={dialog.isOpen} onOpenChange={() => setDialog(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Create {dialog.type === 'file' ? 'File' : 'Folder'}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <Input placeholder={`${dialog.type === 'file' ? 'File' : 'Folder'} name`} />
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialog(null)}>
+                Cancel
+              </Button>
+              <Button>Create</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
   );
 };
 
@@ -509,95 +485,55 @@ const DataOperationItem = ({ item }: { item: string }) => {
 };
 
 export const FolderComponent: React.FC = () => {
-  const { state, dispatch } = useProjectState();
+  const { currentProject, fileSystem, leftPanelOpen, toggleLeftPanel, isLoading } =
+    useProjectStore();
   const [selectedPath] = useState('');
-  // Get project without destructuring state and dispatch
-  const projectHook = useProject({ projectId: state.currentProject?.id });
-
-  // Convert void function to Promise<void> function
-  const handleRefresh = useCallback(async (): Promise<void> => {
-    if (state.currentProject?.id) {
-      console.log('Refreshing file system...');
-      await refreshFileSystem(state.currentProject.id, dispatch);
-      return Promise.resolve();
-    } else {
-      console.warn('No current project ID found');
-      return Promise.resolve();
-    }
-  }, [state.currentProject?.id, dispatch]);
-
-  useEffect(() => {
-    handleRefresh();
-  }, [handleRefresh]);
 
   return (
     <SidebarContent>
-      <SidebarGroupContent className="flex justify-between items-center">
-        <div>
-          {state.currentProject?.projectName && (
-            <span className="text-sm font-medium">{state.currentProject.projectName}</span>
-          )}
-        </div>
-        <div className="flex items-center">
-          {/*{state.currentProject?.id && (*/}
-          {/*  <FileOperations currentPath={selectedPath || ''} onRefresh={handleRefresh} />*/}
-          {/*)}*/}
+      <SidebarGroupContent title="Files" className="px-3 py-1">
+        <div className="flex items-center justify-end gap-4 mb-2">
           <Button
             size="icon"
-            variant="ghost"
-            onClick={() => dispatch({ type: ProjectActions.TOGGLE_LEFT_PANEL, payload: false })}
+            variant="outline"
+            onClick={() => {
+              /* TODO: Add create file logic */
+            }}
           >
-            <LuMinus />
+            <LuFilePlus className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => {
+              /* TODO: Add create folder logic */
+            }}
+          >
+            <LuFolderPlus className="h-4 w-4" />
           </Button>
         </div>
-      </SidebarGroupContent>
-      <SidebarGroupContent>
-        <ScrollArea className="h-[calc(100vh-8rem)]">
-          <Accordion
-            type="multiple"
-            defaultValue={['project-files', 'data-section-0']}
-            className="w-full"
-          >
-            {/* Project Files Accordion */}
-            {/*<AccordionItem value="project-files">*/}
-            {/*  <AccordionTrigger className="px-2">*/}
-            {/*    <div className="flex items-center gap-2">*/}
-            {/*      <span>Project Files</span>*/}
-            {/*    </div>*/}
-            {/*  </AccordionTrigger>*/}
-            {/*  <AccordionContent>*/}
-            {/*    <SidebarMenu>*/}
-            {/*      {state.fileSystem && state.fileSystem.length > 0 ? (*/}
-            {/*        state.fileSystem.map(item => (*/}
-            {/*          <FileTree*/}
-            {/*            key={item.path}*/}
-            {/*            item={item}*/}
-            {/*            selectedPath={selectedPath}*/}
-            {/*            onRefresh={handleRefresh}*/}
-            {/*          />*/}
-            {/*        ))*/}
-            {/*      ) : (*/}
-            {/*        <div className="p-2 text-sm text-muted-foreground">*/}
-            {/*          {state.loading ? 'Loading...' : 'No files yet. Create a new file or folder to get started.'}*/}
-            {/*        </div>*/}
-            {/*      )}*/}
-            {/*    </SidebarMenu>*/}
-            {/*  </AccordionContent>*/}
-            {/*</AccordionItem>*/}
-
-            {/* Data sections directly as accordions */}
-            {Object.entries(MENU_ITEMS.data.sections).map(([sectionName, items], index) => (
-              <AccordionItem key={`data-${index}`} value={`data-section-${index}`}>
-                <AccordionTrigger className="px-2">{sectionName}</AccordionTrigger>
-                <AccordionContent className="p-0">
-                  {items.map((item, itemIndex) => (
-                    <DataOperationItem key={`${sectionName}-${itemIndex}`} item={item} />
-                  ))}
-                </AccordionContent>
-              </AccordionItem>
+        {isLoading ? (
+          <div className="p-4 text-center text-muted-foreground">
+            <p className="text-sm">Loading files...</p>
+          </div>
+        ) : fileSystem.length === 0 ? (
+          <div className="p-4 text-center text-muted-foreground">
+            <p className="text-sm">No files found</p>
+          </div>
+        ) : (
+          <div className="space-y-1">
+            {fileSystem.map((file, index) => (
+              <FileTree
+                key={`${file.path}-${index}`}
+                item={file}
+                selectedPath={selectedPath}
+                onRefresh={async () => {
+                  // Refresh logic can be added here if needed
+                }}
+              />
             ))}
-          </Accordion>
-        </ScrollArea>
+          </div>
+        )}
       </SidebarGroupContent>
     </SidebarContent>
   );

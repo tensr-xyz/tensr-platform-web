@@ -40,7 +40,12 @@ export const isTokenValid = (token: string, bufferMinutes = 5) => {
 };
 
 export const storeTokens = (accessToken: string, idToken: string, refreshToken: string) => {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined') {
+    console.log('storeTokens called on server side, skipping');
+    return;
+  }
+
+  console.log('storeTokens called on client side!'); // Simple check
 
   try {
     // Store in localStorage (keep existing behavior)
@@ -53,7 +58,8 @@ export const storeTokens = (accessToken: string, idToken: string, refreshToken: 
     setCookie('idToken', idToken, 1); // 1 day
     setCookie('refreshToken', refreshToken, 7); // 7 days
 
-    console.log('Tokens stored in localStorage and cookies');
+    console.log('Tokens stored successfully');
+    console.log('Cookies after setting:', document.cookie);
   } catch (error) {
     console.error('Error storing tokens:', error);
   }

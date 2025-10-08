@@ -109,7 +109,9 @@ export function CollaborationMenu({ activeTab }: CollaborationMenuProps) {
                 if (activeTab?.data?.filePath) {
                   try {
                     // Ensure file path starts with / for API compatibility
-                    const filePath = activeTab.data.filePath.startsWith('/') ? activeTab.data.filePath : `/${activeTab.data.filePath}`;
+                    const filePath = activeTab.data.filePath.startsWith('/')
+                      ? activeTab.data.filePath
+                      : `/${activeTab.data.filePath}`;
                     await createSession(filePath, activeTab.name);
                     setDialogOpen(false);
                   } catch (error) {

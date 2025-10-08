@@ -1,8 +1,6 @@
-import { useProject } from '@/contexts/project-context';
-import { useApp } from '@/contexts/app-context';
+import { useAppStore, DialogType } from '@/stores/app-store';
 import React, { useEffect, useState } from 'react';
-import { AppActions, DialogType } from '@/contexts/app-context/types';
-import { ProjectActions } from '@/contexts/project-context/types';
+import { useProjectStore } from '@/stores/project-store';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,8 +24,8 @@ interface RecentProject {
 }
 
 export const ProjectMenu = () => {
-  const { state: projectState, dispatch: projectDispatch } = useProject();
-  const { dispatch: appDispatch } = useApp();
+  const { setProject, currentProject } = useProjectStore();
+  const { showDialog } = useAppStore();
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -44,7 +42,7 @@ export const ProjectMenu = () => {
   }, []);
 
   const handleNewProject = () => {
-    appDispatch({ type: AppActions.SHOW_DIALOG, payload: DialogType.NEW_PROJECT });
+    showDialog(DialogType.NEW_PROJECT);
   };
 
   const handleOpenFile = async () => {
@@ -62,7 +60,7 @@ export const ProjectMenu = () => {
         type: 'file',
       };
 
-      projectDispatch({ type: ProjectActions.SET_PROJECT, payload: project });
+      setProject(project);
       await addToHistory(project);
     } catch (err) {
     } finally {
@@ -84,7 +82,7 @@ export const ProjectMenu = () => {
         type: 'directory',
       };
 
-      projectDispatch({ type: ProjectActions.SET_PROJECT, payload: project });
+      setProject(project);
       await addToHistory(project);
     } catch (err) {
     } finally {
@@ -122,7 +120,7 @@ export const ProjectMenu = () => {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-2">
-          {projectState.currentProject?.name || 'No Project'}
+          {currentProject?.name || 'No Project'}
           <LuChevronDown />
         </Button>
       </DropdownMenuTrigger>
@@ -143,20 +141,18 @@ export const ProjectMenu = () => {
 
         <DropdownMenuSeparator />
 
-        {projectState.currentProject && (
+        {currentProject && (
           <>
             <DropdownMenuLabel>Current Project</DropdownMenuLabel>
             <DropdownMenuItem disabled={isLoading} className="flex items-center gap-2">
-              {projectState.currentProject.type === 'directory' ? (
+              {currentProject.type === 'directory' ? (
                 <LuFolder className="h-4 w-4" />
               ) : (
                 <LuFile className="h-4 w-4" />
               )}
               <div className="flex flex-col">
-                <span className="font-medium">{projectState.currentProject.name}</span>
-                <span className="text-xs text-muted-foreground">
-                  {projectState.currentProject.path}
-                </span>
+                <span className="font-medium">{currentProject.name}</span>
+                <span className="text-xs text-muted-foreground">{currentProject.path}</span>
               </div>
             </DropdownMenuItem>
             <DropdownMenuSeparator />

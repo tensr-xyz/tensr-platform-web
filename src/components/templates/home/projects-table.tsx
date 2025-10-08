@@ -42,7 +42,8 @@ import {
 } from '@/components/molecules/table';
 
 interface Project {
-  id: string;
+  id?: string;
+  projectId?: string;
   name: string;
   created: string;
   status: 'Active' | 'Completed' | 'Archived' | string;
@@ -57,6 +58,10 @@ interface ProjectsTableProps {
 }
 
 export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
+  // Debug logging
+  console.log('ProjectsTable - data received:', data);
+  console.log('ProjectsTable - first project:', data[0]);
+
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -117,7 +122,7 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
       enableHiding: false,
     },
     {
-      accessorKey: 'name',
+      accessorKey: 'projectName',
       header: ({ column }) => {
         return (
           <Button
@@ -137,8 +142,8 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
               <FileText className="h-5 w-5 text-blue-600" />
             </div>
             <div className="ml-4">
-              <div className="text-sm font-medium text-gray-900">{project.name}</div>
-              <div className="text-xs text-gray-500">Created: {project.created}</div>
+              <div className="text-sm font-medium text-gray-900">{project.projectName}</div>
+              <div className="text-xs text-gray-500">Created: {formatDate(project.createdAt)}</div>
             </div>
           </div>
         );
@@ -186,46 +191,44 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
       },
     },
     {
-      accessorKey: 'dataPoints',
+      accessorKey: 'size',
       header: ({ column }) => {
         return (
           <Button
             variant="ghost"
             onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
           >
-            Data Points
+            Size
             <ArrowUpDown className="ml-2 h-4 w-4" />
           </Button>
         );
       },
       cell: ({ row }) => {
-        const dataPoints = row.getValue('dataPoints') as number;
-        return <div className="text-sm">{dataPoints.toLocaleString()}</div>;
+        const size = row.getValue('size') as number;
+        const formatSize = (bytes: number): string => {
+          if (bytes === 0) return '0 B';
+          const k = 1024;
+          const sizes = ['B', 'KB', 'MB', 'GB'];
+          const i = Math.floor(Math.log(bytes) / Math.log(k));
+          return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+        };
+        return <div className="text-sm">{formatSize(size || 0)}</div>;
       },
     },
     {
-      accessorKey: 'analysisTypes',
-      header: 'Analysis Types',
+      accessorKey: 'fileCount',
+      header: 'Files',
       cell: ({ row }) => {
-        const analysisTypes = row.getValue('analysisTypes') as string[];
+        const fileCount = (row.getValue('fileCount') as number) || 0;
         return (
-          <div className="flex flex-wrap gap-1">
-            {analysisTypes.slice(0, 2).map((type, index) => (
-              <span key={index} className="px-2 py-1 bg-gray-100 rounded-sm text-xs">
-                {type}
-              </span>
-            ))}
-            {analysisTypes.length > 2 && (
-              <span className="px-2 py-1 bg-gray-100 rounded-sm text-xs">
-                +{analysisTypes.length - 2}
-              </span>
-            )}
+          <div className="text-sm">
+            {fileCount} file{fileCount !== 1 ? 's' : ''}
           </div>
         );
       },
     },
     {
-      accessorKey: 'lastModified',
+      accessorKey: 'updatedAt',
       header: ({ column }) => {
         return (
           <Button
@@ -238,8 +241,8 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
         );
       },
       cell: ({ row }) => {
-        const lastModified = row.getValue('lastModified') as string;
-        return <div className="text-sm">{formatDate(lastModified)}</div>;
+        const updatedAt = row.getValue('updatedAt') as string;
+        return <div className="text-sm">{formatDate(updatedAt || '')}</div>;
       },
     },
     {
@@ -261,7 +264,11 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
               <DropdownMenuItem
                 onClick={e => {
                   e.stopPropagation();
-                  onRowClick(project.id);
+                  console.log(
+                    'ProjectsTable - Open project clicked with projectId:',
+                    project.projectId
+                  );
+                  onRowClick(project.projectId);
                 }}
               >
                 Open project
@@ -307,8 +314,8 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
       <div className="flex items-center py-4">
         <Input
           placeholder="Filter projects..."
-          value={(table.getColumn('name')?.getFilterValue() as string) ?? ''}
-          onChange={event => table.getColumn('name')?.setFilterValue(event.target.value)}
+          value={(table.getColumn('projectName')?.getFilterValue() as string) ?? ''}
+          onChange={event => table.getColumn('projectName')?.setFilterValue(event.target.value)}
           className="max-w-sm bg-background"
         />
         <DropdownMenu>
@@ -359,7 +366,10 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
-                  onClick={() => onRowClick(row.original.id)}
+                  onClick={() => {
+                    console.log('ProjectsTable - Row clicked, row.original:', row.original);
+                    onRowClick(row.original.projectId || row.original.id);
+                  }}
                   className="cursor-pointer"
                 >
                   {row.getVisibleCells().map(cell => (

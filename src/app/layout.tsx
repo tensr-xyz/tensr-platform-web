@@ -1,16 +1,15 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { TabsProvider } from '@/contexts/tabs-context';
-import { ProjectProvider } from '@/contexts/project-context';
-import { SidebarProvider } from '@/components/organisms/sidebar';
-import { AuthProvider } from '@/contexts/auth-context';
-import { AppProvider } from '@/contexts/app-context';
-import { ChartProvider } from '@/contexts/chart-context';
-import { ThemeProvider } from '@/contexts/theme-context';
-import { OrganizationProvider } from '@/contexts/organisation-context';
-import { Toaster } from '@/components/molecules/toast/toaster';
 import Providers from '@/utils/providers';
+import { AppProvider } from '@/contexts/app-context';
+import { ThemeProvider } from '@/contexts/theme-context';
+import { ProjectProvider } from '@/contexts/project-context';
+import { OrganizationProvider } from '@/contexts/organisation-context';
+
+import { ChartProvider } from '@/contexts/chart-context';
+import { SidebarProvider } from '@/components/organisms/sidebar';
+import { Toaster } from '@/components/molecules/toast/toaster';
 
 const inter = Inter({
   variable: '--font-inter',
@@ -115,25 +114,16 @@ export default function RootLayout({
       <body className={`${inter.className} antialiased`}>
         <Providers>
           <AppProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="system"
-              enableSystem
-              disableTransitionOnChange
-            >
+            <ThemeProvider>
               <ProjectProvider>
-                <AuthProvider>
-                  <OrganizationProvider>
-                    <TabsProvider>
-                      <ChartProvider>
-                        <SidebarProvider>
-                          {children}
-                          <Toaster />
-                        </SidebarProvider>
-                      </ChartProvider>
-                    </TabsProvider>
-                  </OrganizationProvider>
-                </AuthProvider>
+                <OrganizationProvider>
+                  <ChartProvider>
+                    <SidebarProvider>
+                      {children}
+                      <Toaster />
+                    </SidebarProvider>
+                  </ChartProvider>
+                </OrganizationProvider>
               </ProjectProvider>
             </ThemeProvider>
           </AppProvider>

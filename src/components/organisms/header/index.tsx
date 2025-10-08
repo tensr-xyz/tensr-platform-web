@@ -106,7 +106,14 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
       <div className="flex items-center justify-between p-4 h-[72px] border-b border-border">
         <Link href="/" className="flex" onClick={onClose}>
           <Button variant="link" size="sm">
-            <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={24} width={96} />
+            <Image
+              src="/tensr_logo_light.png"
+              alt="Tensr Logo"
+              height={24}
+              width={96}
+              priority
+              onError={e => console.error('Image failed to load:', e)}
+            />
           </Button>
         </Link>
         <Button
@@ -423,25 +430,29 @@ const UserProfileMenu: React.FC = () => {
 const NavigationTabs = () => {
   const pathname = usePathname();
 
-  // Dynamic tabs based on organization context
-  const tabs = [{ name: 'Overview', path: '/' }];
-
   return (
     <div className="sticky top-0 bg-background z-50 border-b border-border">
       <div className="flex items-center px-4">
-        {tabs.map(tab => (
-          <Link
-            key={tab.path}
-            href={tab.path}
-            className={`inline-flex items-center justify-center border-b-2 p-3 text-sm font-medium transition-colors ${
-              pathname === tab.path
-                ? 'border-black text-foreground'
-                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
-            }`}
-          >
-            {tab.name}
-          </Link>
-        ))}
+        <Link
+          href="/"
+          className={`inline-flex items-center justify-center border-b-2 p-3 text-sm font-medium transition-colors ${
+            pathname === '/'
+              ? 'border-black text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
+          }`}
+        >
+          Overview
+        </Link>
+        <Link
+          href="/plugins"
+          className={`inline-flex items-center justify-center border-b-2 p-3 text-sm font-medium transition-colors ${
+            pathname === '/plugins'
+              ? 'border-black text-foreground'
+              : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
+          }`}
+        >
+          Plugins
+        </Link>
       </div>
     </div>
   );
@@ -641,7 +652,13 @@ export default function Header() {
           <div className="flex items-center justify-between p-4 h-[72px]">
             <Link href="/" className="flex">
               <Button className="h-12 w-24" variant="ghost" size="icon">
-                <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={128} width={128} />
+                <Image
+                  src="/tensr_logo_light.png"
+                  alt="Tensr Logo"
+                  height={128}
+                  width={128}
+                  unoptimized
+                />
               </Button>
             </Link>
             <Button
@@ -672,7 +689,13 @@ export default function Header() {
           <div className="flex items-center space-x-1">
             <Link href="/" className="flex">
               <Button variant="link" size="sm">
-                <Image src="/tensr_logo_light.png" alt="Tensr Logo" height={24} width={96} />
+                <Image
+                  src="/tensr_logo_light.png"
+                  alt="Tensr Logo"
+                  height={24}
+                  width={96}
+                  unoptimized
+                />
               </Button>
             </Link>
             {isAuthenticated && user && <AccountSwitcher />}
@@ -681,7 +704,7 @@ export default function Header() {
           <div className="flex items-center space-x-2">
             <FeedbackPopover />
             <DropdownMenu>
-              <DropdownMenuTrigger>
+              <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="rounded-full h-8 w-8">
                   <Bell className="h-5 w-5" />
                 </Button>

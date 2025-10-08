@@ -4,9 +4,9 @@ import { Button } from '@/components/atoms/button';
 import { useRouter } from 'next/navigation';
 import React, { FormEvent, useState } from 'react';
 import { ArrowLeft } from 'lucide-react';
-import Image from 'next/image';
 import { useAuth } from '@/hooks/api/use-auth';
 import Link from 'next/link';
+import Image from 'next/image';
 
 const LoginTemplate = () => {
   const router = useRouter();
@@ -16,6 +16,7 @@ const LoginTemplate = () => {
     resendVerificationCode,
     isLoading,
     error: authError,
+    tokens,
   } = useAuth();
 
   const [email, setEmail] = useState('');
@@ -34,7 +35,9 @@ const LoginTemplate = () => {
     }
 
     try {
+      setError(''); // Clear any previous errors
       console.log('Submitting email:', email);
+
       const result = await initiateAuth(email.toLowerCase());
       console.log('Auth initiated successfully');
 
@@ -48,7 +51,9 @@ const LoginTemplate = () => {
       }
     } catch (err) {
       console.error('Failed to initiate auth:', err);
-      setError('Failed to send verification email. Please try again.');
+      const errorMessage =
+        err instanceof Error ? err.message : 'Failed to send verification email. Please try again.';
+      setError(errorMessage);
     }
   };
 
@@ -68,8 +73,29 @@ const LoginTemplate = () => {
       console.log('Verification result:', result);
 
       if (result.success) {
-        console.log('Verification successful, redirecting');
-        router.push('/');
+        console.log('login: Verification successful, redirecting');
+        console.log('login: Router object:', router);
+        console.log('login: Current tokens from useAuth:', tokens);
+
+        // Redirect immediately - cookies should be set by now
+        console.log('login: Redirecting to home page...');
+        console.log('login: Cookies before redirect:', document.cookie);
+        console.log(
+          'login: Tokens in Zustand store:',
+          JSON.stringify({
+            accessToken: tokens?.accessToken?.substring(0, 20) + '...',
+            idToken: tokens?.idToken?.substring(0, 20) + '...',
+          })
+        );
+
+        try {
+          window.location.href = '/';
+          console.log('login: Redirect initiated');
+        } catch (error) {
+          console.error('login: Redirect failed:', error);
+          // Fallback: try router.push
+          router.push('/');
+        }
       } else {
         setError('Verification failed. Please check your code and try again.');
       }
@@ -116,6 +142,7 @@ const LoginTemplate = () => {
         alt="Tensr Logo"
         height={24}
         width={96}
+        unoptimized
       />
       <div className="flex-1"></div>
       <div className="flex flex-col max-w-xl w-full">

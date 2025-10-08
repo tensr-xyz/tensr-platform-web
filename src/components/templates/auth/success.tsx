@@ -59,6 +59,7 @@ const PaymentSuccessPage = () => {
         alt="Tensr Logo"
         height={24}
         width={96}
+        unoptimized
       />
       <div className="flex-1"></div>
 

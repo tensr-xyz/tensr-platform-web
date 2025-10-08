@@ -1,11 +1,11 @@
+import PluginDetails from '@/components/templates/plugin-details';
 import { Suspense } from 'react';
 import Loading from '@/components/molecules/loading';
-import Plugin from '@/components/templates/plugin';
 
-export default function PluginPage() {
+export default function PluginDetailsPage() {
   return (
     <Suspense fallback={<Loading />}>
-      <Plugin />
+      <PluginDetails />
     </Suspense>
   );
 }

@@ -45,48 +45,5 @@ export const closeImportWizard = (): ActionProps => ({
   type: ProjectActions.CLEAR_IMPORT_DATA,
 });
 
-export const refreshFileSystem = async (
-  projectId: string,
-  dispatch: (action: ActionProps) => void
-) => {
-  try {
-    dispatch({ type: ProjectActions.SET_LOADING, payload: true });
-
-    console.log(`Refreshing file system for project ${projectId}`);
-
-    // Fetch the project with its file structure
-    const response = await fetch(`/api/projects/${projectId}`);
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch project structure');
-    }
-
-    const project = await response.json();
-    console.log('Project data:', project);
-
-    // Update the project in state if needed
-    dispatch({
-      type: ProjectActions.SET_PROJECT,
-      payload: project,
-    });
-
-    // Update the file system if fileStructure exists
-    if (project.fileStructure) {
-      console.log('Setting file system:', project.fileStructure);
-      dispatch({
-        type: ProjectActions.SET_FILE_SYSTEM,
-        payload: project.fileStructure,
-      });
-    } else {
-      console.warn('No file structure found in project data');
-    }
-  } catch (error) {
-    console.error('Error refreshing file system:', error);
-    dispatch({
-      type: ProjectActions.SET_ERROR,
-      payload: error instanceof Error ? error.message : 'Failed to refresh file system',
-    });
-  } finally {
-    dispatch({ type: ProjectActions.SET_LOADING, payload: false });
-  }
-};
+// REMOVED: refreshFileSystem function that was calling wrong internal API endpoint
+// This functionality is now handled by the Zustand store with proper external API calls

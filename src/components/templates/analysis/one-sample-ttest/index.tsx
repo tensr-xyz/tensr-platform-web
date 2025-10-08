@@ -1,4 +1,4 @@
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
@@ -43,7 +43,7 @@ interface TTestResult {
 }
 
 export const OneSampleTTest = ({ children }: OneSampleTTestProps) => {
-  const { state } = useTabs();
+  const { tabs, activeTabId } = useTabsStore();
   const [selectedVariable, setSelectedVariable] = useState<string | null>(null);
   const [hypothesizedMean, setHypothesizedMean] = useState<string>('0');
   const [confidenceLevel, setConfidenceLevel] = useState<string>('0.95');
@@ -54,10 +54,7 @@ export const OneSampleTTest = ({ children }: OneSampleTTestProps) => {
 
   const token = tokens?.accessToken;
 
-  const activeTab = useMemo(
-    () => state.tabs.find(tab => tab.id === state.activeTabId),
-    [state.tabs, state.activeTabId]
-  );
+  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   // Extract variables from the columns
   const variables = useMemo((): Variable[] => {

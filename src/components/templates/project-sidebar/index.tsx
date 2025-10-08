@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { LuSheet, LuSquareCode, LuSearch, LuSettings } from 'react-icons/lu';
+import { LuSheet, LuSquareCode, LuSearch, LuSettings, LuBrain } from 'react-icons/lu';
 import {
   Sidebar,
   SidebarContent,
@@ -10,14 +10,10 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarProvider,
 } from '@/components/organisms/sidebar';
-import { useProject } from '@/contexts/project-context';
-import { ProjectActions, ViewType, ActionProps } from '@/contexts/project-context/types';
-import {
-  refreshFileSystem,
-  setLeftPanelContent,
-  setView,
-} from '@/contexts/project-context/actions';
+import { useProjectStore, ViewType } from '@/stores/project-store';
+import { ProjectActions } from '@/contexts/project-context/types';
 import { IconType } from 'react-icons';
 import { cn } from '@/utils';
 import {
@@ -40,30 +36,21 @@ interface NavItem {
   component?: () => React.ReactNode;
   isNavigationItem?: boolean;
   isPanelItem?: boolean;
-  action?: () => ActionProps;
+  action?: () => void;
   onClick?: () => void;
 }
 
 export default function ProjectSidebar() {
-  const { state, dispatch } = useProject();
+  const {
+    currentProject,
+    leftPanelOpen,
+    toggleLeftPanel,
+    setLeftPanelContent,
+    activeView,
+    setView,
+  } = useProjectStore();
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
   const router = useRouter();
-
-  const handleRefreshFileSystem = React.useCallback(async () => {
-    if (state.currentProject?.path) {
-      await refreshFileSystem(state.currentProject.path, dispatch);
-    }
-  }, [state.currentProject?.path, dispatch]);
-
-  React.useEffect(() => {
-    handleRefreshFileSystem();
-  }, [handleRefreshFileSystem]);
-
-  React.useEffect(() => {
-    if (state.currentProject?.type === 'directory') {
-      handleRefreshFileSystem();
-    }
-  }, [state.currentProject, handleRefreshFileSystem]);
 
   const handleOpenSettings = () => {
     router.push('/settings/general');
@@ -98,6 +85,12 @@ export default function ProjectSidebar() {
         url: '#',
         icon: LuSquareCode,
         action: () => setView(ViewType.NOTEBOOK),
+      },
+      {
+        title: 'SEM',
+        url: '#',
+        icon: LuBrain,
+        action: () => setView(ViewType.SEM),
       },
     ] as NavItem[],
     navFooter: [
@@ -135,41 +128,47 @@ export default function ProjectSidebar() {
     }
 
     if (item.action) {
-      const action = item.action();
-      dispatch(action);
+      item.action();
       return;
     }
 
     if (item.isPanelItem && item.component) {
       if (activeItem.title === item.title) {
-        dispatch({ type: ProjectActions.TOGGLE_LEFT_PANEL, payload: !state.leftPanelOpen });
-        if (!state.leftPanelOpen) {
-          dispatch(setLeftPanelContent(item.component()));
+        toggleLeftPanel(!leftPanelOpen);
+        if (!leftPanelOpen) {
+          setLeftPanelContent(item.component());
         }
       } else {
         setActiveItem(item);
-        dispatch(setLeftPanelContent(item.component()));
-        if (!state.leftPanelOpen) {
-          dispatch({ type: ProjectActions.TOGGLE_LEFT_PANEL, payload: true });
+        setLeftPanelContent(item.component());
+        if (!leftPanelOpen) {
+          toggleLeftPanel(true);
         }
       }
     }
   };
 
   const isItemActive = (item: NavItem) => {
-    if (item.action) {
-      const actionPayload = item.action().payload;
-      return Object.values(ViewType).includes(actionPayload) && state.activeView === actionPayload;
+    // For view items, check against activeView directly
+    if (item.title === 'Spreadsheet') {
+      return activeView === ViewType.SPREADSHEET;
     }
+    if (item.title === 'Notebook') {
+      return activeView === ViewType.NOTEBOOK;
+    }
+    if (item.title === 'SEM') {
+      return activeView === ViewType.SEM;
+    }
+
     if (item.isNavigationItem) {
       return window.location.pathname.startsWith(item.url);
     }
-    return item.isPanelItem && activeItem.title === item.title && state.leftPanelOpen;
+    return item.isPanelItem && activeItem.title === item.title && leftPanelOpen;
   };
 
   return (
-    <>
-      <Sidebar collapsible="none" className="border-r border-border">
+    <SidebarProvider defaultOpen={false}>
+      <Sidebar collapsible="icon" className="border-r border-border">
         <SidebarContent>
           <SidebarHeader>
             <Link href="/">
@@ -247,6 +246,6 @@ export default function ProjectSidebar() {
           </CommandGroup>
         </CommandList>
       </CommandDialog>
-    </>
+    </SidebarProvider>
   );
 }

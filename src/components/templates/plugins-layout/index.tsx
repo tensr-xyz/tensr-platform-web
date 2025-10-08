@@ -1,246 +1,366 @@
 'use client';
 
-import { Search } from 'lucide-react';
-import { useState } from 'react';
-import { Input } from '@/components/atoms/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/atoms/select';
-import usePlugins from '@/hooks/api/use-plugin';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/atoms/card';
-import { Button } from '@/components/atoms/button';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { Plus, Search, Star, Download, ChevronDown, Zap, User, ArrowRight } from 'lucide-react';
+import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { PluginRecord } from '@/types/plugin';
+import usePlugins from '@/hooks/api/use-plugin';
+import { Loading } from '@/components/molecules/loading';
 
-interface PluginCardProps {
-  plugin: PluginRecord;
-  onSelect?: (pluginId: string) => void;
-  isPluginInstalled: (pluginId: string) => boolean;
-  installPlugin: (plugin: PluginRecord) => void;
-  uninstallPlugin: (pluginId: string) => void;
+interface FilterOptions {
+  search: string;
+  category: string;
 }
 
-const PluginCard = ({
-  plugin,
-  onSelect,
-  isPluginInstalled,
-  installPlugin,
-  uninstallPlugin,
-}: PluginCardProps) => {
+export default function PluginsLayout() {
+  const router = useRouter();
+  const { plugins, isPluginInstalled, installPlugin } = usePlugins();
+
+  const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState<FilterOptions>({
+    search: '',
+    category: '',
+  });
+
+  useEffect(() => {
+    if (plugins.length > 0 || !loading) {
+      setLoading(false);
+    }
+  }, [plugins, loading]);
+
+  const filteredPlugins = useMemo(() => {
+    return plugins.filter(plugin => {
+      if (
+        filters.search &&
+        !plugin.name.toLowerCase().includes(filters.search.toLowerCase()) &&
+        !plugin.description.toLowerCase().includes(filters.search.toLowerCase())
+      ) {
+        return false;
+      }
+
+      if (filters.category && plugin.language !== filters.category) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [plugins, filters]);
+
+  const categories = useMemo(() => {
+    const cats = [...new Set(plugins.map(p => p.language))];
+    return cats.sort();
+  }, [plugins]);
+
+  const handleInstall = async (plugin: PluginRecord) => {
+    try {
+      if (plugin.isPaid) {
+        router.push(`/plugins/${plugin.pluginId}/purchase`);
+      } else {
+        await installPlugin(plugin);
+      }
+    } catch (error) {
+      console.error('Error installing plugin:', error);
+    }
+  };
+
+  const handleViewDetails = (plugin: PluginRecord) => {
+    router.push(`/plugins/${plugin.pluginId}`);
+  };
+
+  if (loading) {
+    return <Loading fullScreen />;
+  }
+
   return (
-    <Card
-      className="cursor-pointer overflow-hidden hover:border-foreground transition-colors group bg-white"
-      onClick={() => onSelect && onSelect(plugin.pluginId)}
-    >
-      {/* Image Section with padding */}
-      <div className="p-3 pb-0">
-        <div className="relative w-full aspect-[2/1] bg-gray-100 overflow-hidden rounded-md">
-          <img
-            src={plugin.thumbnailUrl || '/api/placeholder/480/320'}
-            alt={plugin.name}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute bottom-2 right-2">
-            <span
-              className={`text-xs px-2 py-1 rounded-md ${
-                plugin.isPaid ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-700'
-              }`}
-            >
-              {plugin.isPaid ? 'Paid' : 'Free'}
+    <div className="max-w-7xl mx-auto px-6 py-8">
+      {/* Top Navigation - Notion Style */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-6">
+          <h1 className="text-xl font-semibold text-gray-900">Discover</h1>
+          <div className="flex items-center gap-4 text-gray-600">
+            <span className="flex items-center gap-1 cursor-pointer hover:text-gray-900">
+              Work <ChevronDown className="h-4 w-4" />
             </span>
+            <span className="flex items-center gap-1 cursor-pointer hover:text-gray-900">
+              Life <ChevronDown className="h-4 w-4" />
+            </span>
+            <span className="flex items-center gap-1 cursor-pointer hover:text-gray-900">
+              School <ChevronDown className="h-4 w-4" />
+            </span>
+          </div>
+        </div>
+
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <Input
+            placeholder="Try 'data analysis'"
+            value={filters.search}
+            onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
+            className="pl-10 w-64 border-gray-200 focus:border-gray-400 focus:ring-0"
+          />
+        </div>
+      </div>
+
+      {/* Category Pills - Exact Notion Style */}
+      <div className="flex flex-wrap gap-2 mb-8">
+        <button
+          onClick={() => setFilters(prev => ({ ...prev, category: '' }))}
+          className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+            filters.category === ''
+              ? 'bg-gray-100 text-gray-900 border-gray-200'
+              : 'text-gray-600 hover:bg-gray-50 border-gray-200'
+          }`}
+        >
+          All
+        </button>
+        {categories.map(category => (
+          <button
+            key={category}
+            onClick={() => setFilters(prev => ({ ...prev, category }))}
+            className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
+              filters.category === category
+                ? 'bg-gray-100 text-gray-900 border-gray-200'
+                : 'text-gray-600 hover:bg-gray-50 border-gray-200'
+            }`}
+          >
+            {category}
+          </button>
+        ))}
+      </div>
+
+      {/* Main Content Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        {/* AI Section Card */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
+              <Zap className="h-4 w-4 text-blue-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-900">AI</span>
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Your agent, your rules</h2>
+          <p className="text-gray-600 mb-4">
+            Connect any page to your agent to customize how your agent talks, thinks, and works
+          </p>
+          <div className="flex items-center gap-2 text-blue-600 font-medium">
+            <span>Explore</span>
+            <ArrowRight className="h-4 w-4" />
+          </div>
+          {/* Illustration placeholder */}
+          <div className="mt-4 flex justify-center">
+            <div className="w-32 h-32 bg-gray-100 rounded-full flex items-center justify-center">
+              <div className="text-gray-400 text-sm">AI Agent</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Top Creator Card */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
+              <User className="h-4 w-4 text-gray-600" />
+            </div>
+            <span className="text-sm font-medium text-gray-900">Top creator</span>
+          </div>
+          <div className="flex items-start gap-4">
+            <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+              <User className="h-6 w-6 text-gray-600" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-gray-900 mb-1">Plugin Creator</h3>
+              <p className="text-gray-600 text-sm">
+                Beginner-friendly analysis plugins for everyday data processing and insights
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      <CardHeader className="p-3 pb-1">
-        <div className="flex justify-between items-start w-full">
-          <div className="flex-1">
-            <CardTitle className="text-sm font-medium text-gray-900">{plugin.name}</CardTitle>
-            <p className="text-xs text-gray-600 mt-0.5 line-clamp-2">{plugin.description}</p>
-          </div>
+      {/* Featured Plugins Section */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Star className="h-5 w-5 text-gray-600" />
+          <h2 className="text-lg font-semibold text-gray-900">Featured plugins</h2>
         </div>
-      </CardHeader>
 
-      <CardContent className="p-3 pt-1">
-        <div className="flex flex-wrap gap-2 mb-2">
-          {plugin.tags &&
-            plugin.tags.slice(0, 2).map((tag, index) => (
-              <span key={index} className="px-2 py-1 bg-gray-100 rounded-sm text-xs text-gray-600">
-                {tag}
-              </span>
-            ))}
-          {plugin.tags && plugin.tags.length > 2 && (
-            <span className="px-2 py-1 bg-gray-100 rounded-sm text-xs text-gray-600">
-              +{plugin.tags.length - 2}
-            </span>
-          )}
-        </div>
-      </CardContent>
-
-      <CardFooter className="flex justify-between text-xs text-gray-500 p-3 pt-0">
-        <span>by {plugin.authorId}</span>
-        <div className="flex items-center gap-3">
-          <Button
-            size="sm"
-            onClick={e => {
-              e.stopPropagation();
-              if (isPluginInstalled(plugin.pluginId)) {
-                uninstallPlugin(plugin.pluginId);
-              } else {
-                installPlugin(plugin);
-              }
-            }}
-          >
-            {isPluginInstalled(plugin.pluginId) ? 'Uninstall' : 'Install'}
-          </Button>
-        </div>
-      </CardFooter>
-    </Card>
-  );
-};
-
-const PluginsLayout = () => {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedFilters, setSelectedFilters] = useState({
-    products: 'all products',
-    resources: 'all resources',
-    pricing: 'all',
-  });
-  const router = useRouter();
-
-  const {
-    plugins,
-    loading,
-    error,
-    hasMore,
-    loadMore,
-    isPluginInstalled,
-    installPlugin,
-    uninstallPlugin,
-  } = usePlugins();
-
-  const filterOptions = [
-    {
-      id: 'products',
-      label: 'All products',
-      options: ['All products', 'Design', 'Development', 'Marketing'],
-    },
-    {
-      id: 'resources',
-      label: 'All resources',
-      options: ['All resources', 'Plugins', 'Templates', 'UI Kits'],
-    },
-    {
-      id: 'pricing',
-      label: 'Paid + free',
-      options: ['All', 'Free', 'Paid'],
-    },
-  ];
-
-  const handleFilterChange = (filterId: string, value: string) => {
-    setSelectedFilters(prev => ({
-      ...prev,
-      [filterId]: value,
-    }));
-  };
-
-  const filteredPlugins = plugins.filter(plugin => {
-    // Search filter
-    if (
-      searchQuery &&
-      !plugin.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-      !plugin.description.toLowerCase().includes(searchQuery.toLowerCase())
-    ) {
-      return false;
-    }
-
-    // Pricing filter
-    if (selectedFilters.pricing !== 'all') {
-      const isPaid = selectedFilters.pricing === 'paid';
-      if (plugin.isPaid !== isPaid) return false;
-    }
-
-    // Add more filters as needed
-    return true;
-  });
-
-  const handlePluginSelect = (pluginId: string) => {
-    router.push(`/plugins/${pluginId}`);
-  };
-
-  if (error) {
-    return (
-      <div className="w-full px-8 py-8 text-red-500">Error loading plugins: {error.message}</div>
-    );
-  }
-
-  return (
-    <div className="w-full min-h-screen bg-secondary p-4 md:p-8">
-      {/* Search and Filters Row */}
-      <div className="flex flex-col sm:flex-row justify-between items-center gap-4 mb-8">
-        <div className="relative w-full sm:w-[400px]">
-          <Input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder='Search for resources like "portfolio"'
-            className="w-full h-10 pl-10 bg-background"
-          />
-          <Search
-            className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-            size={16}
-          />
-        </div>
-        <div className="flex flex-wrap gap-2 items-center">
-          {filterOptions.map(filter => (
-            <Select key={filter.id} onValueChange={value => handleFilterChange(filter.id, value)}>
-              <SelectTrigger className="w-[140px] bg-white h-10">
-                <SelectValue placeholder={filter.label} />
-              </SelectTrigger>
-              <SelectContent>
-                {filter.options.map(option => (
-                  <SelectItem key={option} value={option.toLowerCase()}>
-                    {option}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {filteredPlugins.slice(0, 3).map(plugin => (
+            <FeaturedPluginCard
+              key={plugin.pluginId}
+              plugin={plugin}
+              onInstall={handleInstall}
+              onViewDetails={handleViewDetails}
+              isInstalled={isPluginInstalled(plugin.pluginId)}
+            />
           ))}
         </div>
       </div>
 
-      {/* Plugins Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredPlugins.map(plugin => (
-          <PluginCard
-            key={plugin.pluginId}
-            plugin={plugin}
-            onSelect={handlePluginSelect}
-            isPluginInstalled={isPluginInstalled}
-            installPlugin={installPlugin}
-            uninstallPlugin={uninstallPlugin}
-          />
-        ))}
-      </div>
+      {/* All Plugins Grid */}
+      {filteredPlugins.length > 3 && (
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">All plugins</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredPlugins.slice(3).map(plugin => (
+              <PluginCard
+                key={plugin.pluginId}
+                plugin={plugin}
+                onInstall={handleInstall}
+                onViewDetails={handleViewDetails}
+                isInstalled={isPluginInstalled(plugin.pluginId)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Load More Button */}
-      {hasMore && (
-        <div className="mt-8 text-center">
-          <button
-            onClick={loadMore}
-            disabled={loading}
-            className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50"
+      {filteredPlugins.length === 0 && (
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Search className="h-8 w-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No plugins found</h3>
+          <p className="text-gray-600 mb-4">Try adjusting your search terms or filters.</p>
+          <Button
+            variant="outline"
+            onClick={() => setFilters({ search: '', category: '' })}
+            className="border-gray-200 text-gray-600 hover:bg-gray-50"
           >
-            {loading ? 'Loading...' : 'Load More'}
-          </button>
+            Clear filters
+          </Button>
         </div>
       )}
     </div>
   );
-};
+}
 
-export default PluginsLayout;
+// Featured Plugin Card - Exact Notion Template Style
+function FeaturedPluginCard({
+  plugin,
+  onInstall,
+  onViewDetails,
+  isInstalled,
+}: {
+  plugin: PluginRecord;
+  onInstall: (plugin: PluginRecord) => void;
+  onViewDetails: (plugin: PluginRecord) => void;
+  isInstalled: boolean;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
+      {/* Template Preview */}
+      <div className="aspect-video bg-gray-100 flex items-center justify-center">
+        {plugin.thumbnailUrl ? (
+          <img src={plugin.thumbnailUrl} alt={plugin.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="text-gray-400 text-sm">Template Preview</div>
+        )}
+      </div>
+
+      {/* Template Info */}
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-medium text-gray-900">{plugin.name}</h3>
+          <div className="flex items-center gap-1 text-xs text-gray-500">
+            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
+            <span>4.6</span>
+          </div>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-gray-600">Free</span>
+          <Button
+            onClick={() => onViewDetails(plugin)}
+            size="sm"
+            className="text-xs bg-gray-900 hover:bg-gray-800 text-white"
+          >
+            View
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Plugin Card Component - Notion Style
+function PluginCard({
+  plugin,
+  onInstall,
+  onViewDetails,
+  isInstalled,
+}: {
+  plugin: PluginRecord;
+  onInstall: (plugin: PluginRecord) => void;
+  onViewDetails: (plugin: PluginRecord) => void;
+  isInstalled: boolean;
+}) {
+  return (
+    <div className="group border border-gray-200 rounded-lg p-6 hover:border-gray-300 transition-colors bg-white">
+      {/* Plugin Preview/Thumbnail */}
+      <div className="aspect-video bg-gray-100 rounded-md mb-4 flex items-center justify-center">
+        {plugin.thumbnailUrl ? (
+          <img
+            src={plugin.thumbnailUrl}
+            alt={plugin.name}
+            className="w-full h-full object-cover rounded-md"
+          />
+        ) : (
+          <div className="text-gray-400 text-sm">Preview</div>
+        )}
+      </div>
+
+      {/* Plugin Info */}
+      <div className="space-y-3">
+        <div>
+          <h3 className="font-medium text-gray-900 mb-1">{plugin.name}</h3>
+          <p className="text-sm text-gray-600 line-clamp-2">{plugin.description}</p>
+        </div>
+
+        {/* Stats */}
+        <div className="flex items-center gap-4 text-xs text-gray-500">
+          <div className="flex items-center gap-1">
+            <Download className="h-3 w-3" />
+            <span>{plugin.revenue?.totalDownloads || 0}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Star className="h-3 w-3" />
+            <span>4.6</span>
+          </div>
+          <span className="text-gray-400">•</span>
+          <span className="capitalize">{plugin.language}</span>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-2 pt-2">
+          <Button
+            onClick={() => onViewDetails(plugin)}
+            variant="outline"
+            size="sm"
+            className="flex-1 border-gray-200 text-gray-600 hover:bg-gray-50"
+          >
+            View Details
+          </Button>
+
+          {!isInstalled && plugin.status === 'APPROVED' ? (
+            <Button
+              onClick={() => onInstall(plugin)}
+              size="sm"
+              className="flex-1 bg-gray-900 hover:bg-gray-800 text-white"
+            >
+              {plugin.isPaid ? 'Purchase' : 'Install'}
+            </Button>
+          ) : (
+            <Button
+              disabled
+              size="sm"
+              className="flex-1 bg-gray-100 text-gray-400 cursor-not-allowed"
+            >
+              {isInstalled ? 'Installed' : 'Unavailable'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

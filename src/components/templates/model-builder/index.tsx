@@ -11,7 +11,7 @@ import {
   LuPlus,
 } from 'react-icons/lu';
 import { SidebarTrigger, SidebarProvider, SidebarInset } from '@/components/organisms/sidebar';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import {
   ModelNode,
   PropertiesSidebar,
@@ -82,11 +82,8 @@ const generateId = (): string => `id-${Date.now()}-${Math.random().toString(36).
 const snapToGrid = (value: number): number => Math.round(value / GRID_SIZE) * GRID_SIZE;
 
 export function ModelBuilder() {
-  const { state } = useTabs();
-  const activeTab = useMemo(
-    () => state.tabs.find(tab => tab.id === state.activeTabId),
-    [state.tabs, state.activeTabId]
-  );
+  const { tabs, activeTabId } = useTabsStore();
+  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   // State
   const [nodes, setNodes] = useState<Node[]>([]);

@@ -17,10 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
-import { useTabs } from '@/contexts/tabs-context';
+import { useTabsStore } from '@/stores/tabs-store';
 import { LuLoader } from 'react-icons/lu';
 import { ColumnSummary } from '@/types/file';
-import { updateTab } from '@/contexts/tabs-context/actions';
 import useAuth from '@/hooks/api/use-auth';
 
 type ShiftDirection = 'previous' | 'next';
@@ -61,15 +60,12 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
   const [missingValueHandling, setMissingValueHandling] = useState<MissingValueHandling>('sysmis');
   const [customMissingValue, setCustomMissingValue] = useState<string>('');
 
-  const { dispatch, state: tabState } = useTabs();
+  const { tabs, activeTabId, updateTab } = useTabsStore();
   const { tokens } = useAuth();
 
   const token = tokens?.accessToken;
 
-  const activeTab = useMemo(
-    () => tabState.tabs.find(tab => tab.id === tabState.activeTabId),
-    [tabState.tabs, tabState.activeTabId]
-  );
+  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   const columnNames = useMemo(() => {
     if (!activeTab?.data?.initialData?.[0]) {

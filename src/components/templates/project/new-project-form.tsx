@@ -4,7 +4,8 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
-import { Save, ArrowLeft } from 'lucide-react';
+import { Save, ArrowLeft, Upload } from 'lucide-react';
+import { useState } from 'react';
 
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
@@ -25,6 +26,7 @@ import {
   FormMessage,
 } from '@/components/atoms/form';
 import { useProject } from '@/hooks/api/use-project';
+import { useProjectFileUpload } from '@/hooks/api/use-project-file-upload';
 import { ProjectStatus } from '@/types/project';
 
 // Simple form schema
@@ -36,6 +38,7 @@ const projectFormSchema = z.object({
   sourceType: z.enum(['folder', 'zip', 'git'], {
     message: 'Please select a valid source type.',
   }),
+  createWithFile: z.boolean().optional(),
 });
 
 type ProjectFormValues = z.infer<typeof projectFormSchema>;
@@ -43,6 +46,20 @@ type ProjectFormValues = z.infer<typeof projectFormSchema>;
 export default function NewProjectForm() {
   const router = useRouter();
   const { createProject, isLoading } = useProject();
+  const [createWithFile, setCreateWithFile] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  // File upload hook
+  const {
+    uploadFile,
+    isLoading: isUploading,
+    error: uploadError,
+  } = useProjectFileUpload({
+    allowedExtensions: ['.csv', '.xlsx', '.xls', '.json'],
+    onUploadComplete: projectId => {
+      router.push(`/workspace/project/${projectId}`);
+    },
+  });
 
   // Initialize form
   const form = useForm<ProjectFormValues>({
@@ -51,27 +68,44 @@ export default function NewProjectForm() {
       projectName: '',
       description: '',
       sourceType: 'folder',
+      createWithFile: false,
     },
   });
 
   // Handle form submission
   async function onSubmit(values: ProjectFormValues) {
     try {
-      // Create simple project
-      const projectData = {
-        projectName: values.projectName,
-        description: values.description || '',
-        originalName: values.projectName,
-        sourceType: values.sourceType,
-        status: 'pending_upload' as ProjectStatus,
-      };
+      if (createWithFile && selectedFile) {
+        // Upload file and create project automatically
+        await uploadFile(selectedFile);
+      } else {
+        // Create blank project
+        const projectData = {
+          projectName: values.projectName,
+          description: values.description || '',
+          originalName: values.projectName,
+          sourceType: values.sourceType,
+          status: 'pending_upload' as ProjectStatus,
+        };
 
-      const response = await createProject(projectData);
-      router.push(`/projects/${response.projectId}`);
+        const response = await createProject(projectData);
+        router.push(`/workspace/project/${response.projectId}`);
+      }
     } catch (error) {
       console.error('Error creating project:', error);
     }
   }
+
+  // Handle file selection
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      // Auto-fill project name from file name (without extension)
+      const projectName = file.name.replace(/\.[^/.]+$/, '');
+      form.setValue('projectName', projectName);
+    }
+  };
 
   return (
     <div>
@@ -81,6 +115,39 @@ export default function NewProjectForm() {
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          {/* File Upload Toggle */}
+          <div className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              id="createWithFile"
+              checked={createWithFile}
+              onChange={e => setCreateWithFile(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            <label htmlFor="createWithFile" className="text-sm font-medium">
+              Upload a file to start with
+            </label>
+          </div>
+
+          {/* File Upload Section */}
+          {createWithFile && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Select File</label>
+              <input
+                type="file"
+                accept=".csv,.xlsx,.xls,.json"
+                onChange={handleFileSelect}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+              />
+              {selectedFile && (
+                <p className="text-sm text-gray-600">
+                  Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
+                </p>
+              )}
+              {uploadError && <p className="text-sm text-red-600">{uploadError}</p>}
+            </div>
+          )}
+
           <FormField
             control={form.control}
             name="projectName"
@@ -141,9 +208,18 @@ export default function NewProjectForm() {
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <Button type="submit" disabled={isLoading}>
-              <Save className="h-4 w-4 mr-2" />
-              {isLoading ? 'Creating...' : 'Create Project'}
+            <Button type="submit" disabled={isLoading || isUploading}>
+              {createWithFile ? (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  {isUploading ? 'Uploading...' : 'Create Project with File'}
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  {isLoading ? 'Creating...' : 'Create Project'}
+                </>
+              )}
             </Button>
           </div>
         </form>
