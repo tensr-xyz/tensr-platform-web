@@ -220,13 +220,49 @@ export const useProjectFileUpload = ({
             throw new Error('Failed to complete project upload');
           }
 
-          setUploadProgress(100);
+          setUploadProgress(85);
           console.log('Project creation and file upload completed successfully');
 
           // Update the project store with the new project
           const finalProjectData = await completeResponse.json();
           setProject(finalProjectData);
 
+          // Step 6: Process the file to get schema and metadata
+          setUploadProgress(90);
+          console.log('Processing file to extract schema...');
+          
+          const RUST_API_URL = process.env.NEXT_PUBLIC_RUST_API_URL || 'https://api.dev.tensr.xyz';
+          try {
+            const processResponse = await fetch(
+              `${RUST_API_URL}/projects/${projectId}/process`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+                body: JSON.stringify({
+                  file_index: 0, // Process first file
+                }),
+              }
+            );
+
+            if (processResponse.ok) {
+              const processData = await processResponse.json();
+              console.log('File processed successfully, schema extracted:', processData);
+              
+              // TODO: Update project file with schema from processData.column_summaries
+              // This could be done via a new endpoint or by updating the project
+            } else {
+              console.warn('File processing failed, continuing without schema:', processResponse.statusText);
+            }
+          } catch (processError) {
+            console.warn('Failed to process file for schema extraction:', processError);
+            // Continue anyway - file is uploaded even if processing fails
+          }
+
+          setUploadProgress(100);
+          
           // Call the completion callback
           onUploadComplete?.(projectId);
 
