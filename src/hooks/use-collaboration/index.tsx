@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { WebsocketProvider } from 'y-websocket';
 import * as Y from 'yjs';
+import { getIdToken } from '@/utils/auth';
 
 export interface UserPresence {
   userId: string;
@@ -21,7 +22,7 @@ interface CollaborationState {
   doc: Y.Doc;
   provider: WebsocketProvider | null;
   awareness: any;
-  connect: (sessionId: string, userId: string, userName: string) => void;
+  connect: (sessionId: string, userId: string, userName: string) => any;
   disconnect: () => void;
 }
 
@@ -36,6 +37,7 @@ export const useCollaboration = (projectId: string) => {
     const dummyProvider = {
       awareness: {
         getStates: () => new Map(),
+        getLocalState: () => null,
         setLocalState: () => {},
         on: () => {},
         off: () => {},
@@ -54,12 +56,14 @@ export const useCollaboration = (projectId: string) => {
         const wsUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL || '';
         if (!wsUrl) {
           console.error('WebSocket URL is not configured');
-          return;
+          return null;
         }
 
         // Create connection with session ID and auth token
-        const authToken = localStorage.getItem('token') || '';
+        const authToken = getIdToken() || '';
+        console.log('[Collaboration] ID Token:', authToken ? `${authToken.substring(0, 20)}...` : 'null');
         const wsUrlWithParams = `${wsUrl}?sessionId=${sessionId}&userId=${userId}&token=${authToken}`;
+        console.log('[Collaboration] WebSocket URL:', wsUrlWithParams.replace(authToken, '***TOKEN***'));
 
         // Create the WebSocket provider
         const newProvider = new WebsocketProvider(wsUrlWithParams, projectId, ydoc);
@@ -80,6 +84,9 @@ export const useCollaboration = (projectId: string) => {
           provider: newProvider,
           awareness: awareness,
         }));
+
+        // Return the awareness object so it can be used immediately
+        return awareness;
       },
       disconnect: () => {
         if (provider) {

@@ -220,15 +220,14 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
       setSessionId(sessionData.id);
 
       if (collaborationState) {
-        // Connect to WebSocket with the new session ID
-        collaborationState.connect(
+        // Connect to WebSocket with the new session ID and get the awareness object
+        const awareness = collaborationState.connect(
           sessionData.id,
           user?.userId || currentUserId || '',
           user?.email || 'Anonymous'
         );
 
         // Update local state to "Host" for the creator
-        const { awareness } = collaborationState;
         if (awareness) {
           const localState = awareness.getLocalState();
           if (localState) {
