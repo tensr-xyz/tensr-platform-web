@@ -251,8 +251,37 @@ export const useProjectFileUpload = ({
               const processData = await processResponse.json();
               console.log('File processed successfully, schema extracted:', processData);
               
-              // TODO: Update project file with schema from processData.column_summaries
-              // This could be done via a new endpoint or by updating the project
+              // Save schema back to project file metadata
+              if (processData.column_summaries && uploadData.fileId) {
+                try {
+                  const schemaUpdateResponse = await fetch(
+                    `${API_BASE_URL}/projects/${projectId}/files/${uploadData.fileId}`,
+                    {
+                      method: 'PUT',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `Bearer ${token}`,
+                      },
+                      body: JSON.stringify({
+                        schema: processData.column_summaries.map((col: any) => ({
+                          name: col.name,
+                          type: col.data_type,
+                          header: col.name,
+                        })),
+                        rowCount: processData.metadata?.rows || 0,
+                      }),
+                    }
+                  );
+
+                  if (schemaUpdateResponse.ok) {
+                    console.log('Schema saved to project file metadata successfully');
+                  } else {
+                    console.warn('Failed to save schema to project file metadata:', schemaUpdateResponse.statusText);
+                  }
+                } catch (schemaError) {
+                  console.warn('Failed to save schema to project file metadata:', schemaError);
+                }
+              }
             } else {
               console.warn('File processing failed, continuing without schema:', processResponse.statusText);
             }

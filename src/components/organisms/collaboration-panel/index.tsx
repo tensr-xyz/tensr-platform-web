@@ -268,7 +268,7 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
         },
         body: JSON.stringify({
           userId: user?.userId || currentUserId,
-          // Add any other necessary data for joining
+          userName: user?.email || 'Anonymous',
         }),
         credentials: 'include',
       });

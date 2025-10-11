@@ -82,14 +82,6 @@ export function AgentPanel() {
         throw new Error('Authentication required. Please log in again.');
       }
 
-      // Get current tab/file data to include schema in context
-      const activeTab = tabs.find((t) => t.id === activeTabId);
-      const fileSchema = activeTab?.data?.initialColumns?.map((col: any) => ({
-        name: col.id || col.accessor,
-        type: col.type || 'string',
-        header: col.header || col.id,
-      })) || [];
-
       // Call the backend agent API
       const response = await apiClient.agent.chat({
         projectId,
@@ -98,7 +90,6 @@ export function AgentPanel() {
           snapshotId: 'current-snapshot',
           variables: [],
           filters: {},
-          schema: fileSchema, // Pass the file schema
         },
         authToken: token, // Use ID token for API Gateway authorization
       });
