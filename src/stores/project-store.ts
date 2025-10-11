@@ -309,6 +309,40 @@ export const useProjectStore = create<ProjectStore>()(
               showImportWizard: false, // Don't show import wizard automatically
             });
 
+            // Process the first file to get schema if files exist
+            if (projectData.fileGroups?.data && projectData.fileGroups.data.length > 0) {
+              try {
+                console.log('Processing file to extract schema...');
+                const RUST_API_URL = process.env.NEXT_PUBLIC_RUST_API_URL || 'https://api.dev.tensr.xyz';
+                const processResponse = await fetch(
+                  `${RUST_API_URL}/projects/${projectId}/process`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({
+                      file_index: fileIndex,
+                    }),
+                  }
+                );
+
+                if (processResponse.ok) {
+                  const processData = await processResponse.json();
+                  console.log('File processed successfully, schema extracted:', processData);
+                  
+                  // TODO: Save schema back to project or use it directly
+                  // For now, the agent will use this schema when making requests
+                } else {
+                  console.warn('File processing failed:', processResponse.statusText);
+                }
+              } catch (processError) {
+                console.warn('Failed to process file for schema extraction:', processError);
+                // Continue anyway - project is loaded even if processing fails
+              }
+            }
+
             return {
               importData: null, // No import data until user selects a file
               showImportWizard: false,
