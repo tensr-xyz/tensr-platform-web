@@ -1,15 +1,16 @@
-import React, { useRef, useCallback, useState } from 'react';
+import React, { useRef, useCallback, useState, useMemo } from 'react';
 import {
-  LuArrowDownWideNarrow,
-  LuArrowUpWideNarrow,
-  LuBox,
-  LuChevronDown,
-  LuEye,
-  LuGroup,
-  LuLoader,
-  LuPencil,
-  LuWrench,
-} from 'react-icons/lu';
+  ArrowDownWideNarrow,
+  ArrowUpWideNarrow,
+  Box,
+  ChevronDown,
+  Eye,
+  Users as Group,
+  Loader2 as Loader,
+  Pencil,
+  Wrench,
+  Info,
+} from 'lucide-react';
 import { Resizable } from 'react-resizable';
 import { EditableCell, EditableCellRef } from '@/components/molecules/table';
 import {
@@ -24,6 +25,13 @@ import {
 import { Column, Header, Table } from '@tanstack/react-table';
 import { ColumnSummary } from '@/types/project';
 import { cn } from '@/utils';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/atoms/tooltip';
+import { Sparkline } from '@/components/molecules/sparkline';
 
 interface HeaderCellProps {
   column: Column<any>;
@@ -31,6 +39,8 @@ interface HeaderCellProps {
   stats?: ColumnSummary;
   isLoadingStats: boolean;
   onHeaderEdit?: (value: string) => void;
+  onColumnAction?: (action: string, columnId: string) => void;
+  datasetId?: string;
 }
 
 interface HeaderComponentProps {
@@ -40,6 +50,8 @@ interface HeaderComponentProps {
   columnStats?: Record<string, ColumnSummary>;
   onHeaderEdit?: (columnId: string, value: string) => void;
   isLoadingStats: boolean;
+  onColumnAction?: (action: string, columnId: string) => void;
+  datasetId?: string;
 }
 
 // Stats container component to ensure consistent heights
@@ -50,7 +62,7 @@ const StatsContainer = ({ children }: { children: React.ReactNode }) => (
 );
 
 const HeaderCell = React.memo<HeaderCellProps>(
-  ({ column, showStats, stats, isLoadingStats, onHeaderEdit }) => {
+  ({ column, showStats, stats, isLoadingStats, onHeaderEdit, onColumnAction, datasetId }) => {
     const hasStats = stats?.numeric_stats || stats?.categorical_stats;
     const editableCellRef = useRef<EditableCellRef>(null);
     const [isEditing, setIsEditing] = useState(false);
@@ -67,6 +79,40 @@ const HeaderCell = React.memo<HeaderCellProps>(
     const renderPercentage = useCallback((value: number) => {
       return `${(value * 100).toFixed(1)}%`;
     }, []);
+
+    const quickSummary = useMemo(() => {
+      if (!stats) return '';
+
+      const parts: string[] = [];
+      if (stats.data_type) {
+        parts.push(`Type: ${stats.data_type}`);
+      }
+
+      const missing = stats.numeric_stats?.missing_count ?? stats.categorical_stats?.missing_count;
+      if (missing !== undefined) {
+        parts.push(`Missing: ${missing}`);
+      }
+
+      if (stats.numeric_stats) {
+        const mean = stats.numeric_stats.mean;
+        const sd = stats.numeric_stats.std_dev;
+        if (mean !== undefined && mean !== null) {
+          parts.push(`Mean: ${renderNumericValue(mean)}`);
+        }
+        if (sd !== undefined && sd !== null) {
+          parts.push(`SD: ${renderNumericValue(sd)}`);
+        }
+      }
+
+      if (stats.categorical_stats) {
+        const distinct = stats.categorical_stats.distinct_count;
+        if (distinct !== undefined && distinct !== null) {
+          parts.push(`Distinct: ${distinct}`);
+        }
+      }
+
+      return parts.join(' • ');
+    }, [stats, renderNumericValue]);
 
     const handleRenameClick = useCallback(() => {
       // Close dropdown first to avoid focus issues
@@ -107,108 +153,201 @@ const HeaderCell = React.memo<HeaderCellProps>(
             outlineOffset: '-2px',
           }}
         >
-          <DropdownMenu
-            open={dropdownOpen && !isEditing}
-            onOpenChange={open => {
-              // Only allow opening dropdown if not editing
-              if (isEditing && open) return;
-              setDropdownOpen(open);
-            }}
-          >
-            <DropdownMenuTrigger asChild onClick={handleDropdownTriggerClick}>
-              <div
-                className={cn(
-                  'flex items-center justify-between h-7 w-full cursor-pointer',
-                  dropdownOpen ? 'bg-muted' : 'hover:bg-muted/50'
-                )}
+          <TooltipProvider>
+            <Tooltip delayDuration={200}>
+              <DropdownMenu
+                open={dropdownOpen && !isEditing}
+                onOpenChange={open => {
+                  // Only allow opening dropdown if not editing
+                  if (isEditing && open) return;
+                  setDropdownOpen(open);
+                }}
               >
-                <div className="flex-1 min-w-0 ">
-                  <EditableCell
-                    ref={editableCellRef}
-                    value={column.columnDef.header as string}
-                    onEdit={value => {
-                      setIsEditing(false);
-                      if (onHeaderEdit) {
-                        onHeaderEdit(value);
-                      }
-                    }}
-                    className="h-7 w-full "
-                    inputClassName="z-20 relative outline outline-2 -outline-offset-2 outline-primary"
-                    isFocused={isEditing}
-                    onFocus={() => setIsEditing(true)}
-                    onBlur={() => {
-                      // Add slight delay to allow click events to process first
-                      setTimeout(() => setIsEditing(false), 50);
-                    }}
-                    // Handle special key presses
-                    onKeyDown={e => {
-                      // Stop propagation to prevent dropdown trigger
-                      e.stopPropagation();
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild onClick={handleDropdownTriggerClick}>
+                    <div
+                      className={cn(
+                        'flex items-center justify-between h-7 w-full cursor-pointer',
+                        dropdownOpen ? 'bg-muted' : 'hover:bg-muted/50'
+                      )}
+                    >
+                      <div className="flex-1 min-w-0 flex items-center gap-1">
+                        <EditableCell
+                          ref={editableCellRef}
+                          value={column.columnDef.header as string}
+                          onEdit={value => {
+                            setIsEditing(false);
+                            if (onHeaderEdit) {
+                              onHeaderEdit(value);
+                            }
+                          }}
+                          className="h-7 flex-1"
+                          inputClassName="z-20 relative outline outline-2 -outline-offset-2 outline-primary"
+                          isFocused={isEditing}
+                          onFocus={() => setIsEditing(true)}
+                          onBlur={() => {
+                            // Add slight delay to allow click events to process first
+                            setTimeout(() => setIsEditing(false), 50);
+                          }}
+                          // Handle special key presses
+                          onKeyDown={e => {
+                            // Stop propagation to prevent dropdown trigger
+                            e.stopPropagation();
 
-                      // If Escape is pressed, cancel edit
-                      if (e.key === 'Escape') {
-                        setIsEditing(false);
-                      }
-                    }}
-                  />
-                </div>
-                <LuChevronDown className="mx-2 h-4 w-4" />
-              </div>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-72">
-              <DropdownMenuGroup>
-                <DropdownMenuItem
-                  onClick={() => column.toggleSorting(false)}
-                  className="flex items-center justify-between"
-                >
-                  <div className="flex items-center">
-                    <LuArrowUpWideNarrow className="mr-2 h-4 w-4" />
-                    <span>Sort ascending</span>
-                  </div>
-                  {column.getIsSorted() === 'asc' && (
-                    <span className="text-muted-foreground text-xs">⌘↑</span>
-                  )}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => column.toggleSorting(true)}
-                  className="flex items-center justify-between"
-                >
-                  <div className="flex items-center">
-                    <LuArrowDownWideNarrow className="mr-2 h-4 w-4" />
-                    <span>Sort descending</span>
-                  </div>
-                  {column.getIsSorted() === 'desc' && (
-                    <span className="text-muted-foreground text-xs">⌘↓</span>
-                  )}
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuGroup>
-                <DropdownMenuItem>
-                  <LuGroup className="mr-2 h-4 w-4" />
-                  <span>Group by</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem>
-                  <LuBox className="mr-2 h-4 w-4" />
-                  <span>Aggregate by</span>
-                  <DropdownMenuShortcut>⌘+T</DropdownMenuShortcut>
-                </DropdownMenuItem>
-              </DropdownMenuGroup>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem>
-                <LuWrench className="mr-2 h-4 w-4" />
-                <span>Change column type</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem>
-                <LuEye className="mr-2 h-4 w-4" />
-                <span>Hide column</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={handleRenameClick}>
-                <LuPencil className="mr-2 h-4 w-4" />
-                <span>Rename</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                            // If Escape is pressed, cancel edit
+                            if (e.key === 'Escape') {
+                              setIsEditing(false);
+                            }
+                          }}
+                        />
+                        {/* AI Insight Icon */}
+                        <Tooltip delayDuration={300}>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              className="h-4 w-4 text-muted-foreground hover:text-foreground flex-shrink-0"
+                              onClick={e => {
+                                e.stopPropagation();
+                                onColumnAction?.('show-insight', column.id);
+                              }}
+                            >
+                              <Info className="h-3 w-3" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom" className="max-w-xs">
+                            <div className="text-xs">
+                              {quickSummary || 'Click for column insights'}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                        {/* Badges for data quality issues */}
+                        {stats && (
+                          <>
+                            {(stats.numeric_stats?.missing_count ??
+                              stats.categorical_stats?.missing_count ??
+                              0) >
+                              (stats.numeric_stats?.count ?? stats.categorical_stats?.count ?? 1) *
+                                0.1 && (
+                              <span
+                                className="h-3 w-3 rounded-full bg-yellow-500 flex-shrink-0"
+                                title="High missingness"
+                              />
+                            )}
+                            {stats.numeric_stats &&
+                              stats.numeric_stats.std_dev !== undefined &&
+                              stats.numeric_stats.std_dev < 0.01 && (
+                                <span
+                                  className="h-3 w-3 rounded-full bg-blue-500 flex-shrink-0"
+                                  title="Low variance"
+                                />
+                              )}
+                          </>
+                        )}
+                        {/* Sparkline for numeric columns */}
+                        {stats?.numeric_stats && showStats && (
+                          <div className="flex-shrink-0">
+                            <Sparkline
+                              data={[
+                                stats.numeric_stats.percentile_5 || 0,
+                                stats.numeric_stats.percentile_25 || 0,
+                                stats.numeric_stats.percentile_50 || 0,
+                                stats.numeric_stats.percentile_75 || 0,
+                                stats.numeric_stats.percentile_95 || 0,
+                              ]}
+                              width={40}
+                              height={12}
+                            />
+                          </div>
+                        )}
+                      </div>
+                      <ChevronDown className="mx-2 h-4 w-4 flex-shrink-0" />
+                    </div>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <DropdownMenuContent align="start" className="w-72">
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      onClick={() => column.toggleSorting(false)}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center">
+                        <ArrowUpWideNarrow className="mr-2 h-4 w-4" />
+                        <span>Sort ascending</span>
+                      </div>
+                      {column.getIsSorted() === 'asc' && (
+                        <span className="text-muted-foreground text-xs">⌘↑</span>
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => column.toggleSorting(true)}
+                      className="flex items-center justify-between"
+                    >
+                      <div className="flex items-center">
+                        <ArrowDownWideNarrow className="mr-2 h-4 w-4" />
+                        <span>Sort descending</span>
+                      </div>
+                      {column.getIsSorted() === 'desc' && (
+                        <span className="text-muted-foreground text-xs">⌘↓</span>
+                      )}
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem>
+                      <Group className="mr-2 h-4 w-4" />
+                      <span>Group by</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem>
+                      <Box className="mr-2 h-4 w-4" />
+                      <span>Aggregate by</span>
+                      <DropdownMenuShortcut>⌘+T</DropdownMenuShortcut>
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem onClick={() => onColumnAction?.('suggest-transformations', column.id)}>
+                      <Wrench className="mr-2 h-4 w-4" />
+                      <span>Suggest transformations</span>
+                    </DropdownMenuItem>
+                    {stats?.categorical_stats && (
+                      <DropdownMenuItem onClick={() => onColumnAction?.('clean-categories', column.id)}>
+                        <Wrench className="mr-2 h-4 w-4" />
+                        <span>Clean categories</span>
+                      </DropdownMenuItem>
+                    )}
+                    {stats?.numeric_stats && (
+                      <DropdownMenuItem onClick={() => onColumnAction?.('detect-outliers', column.id)}>
+                        <Info className="mr-2 h-4 w-4" />
+                        <span>Detect outliers</span>
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuItem onClick={() => onColumnAction?.('check-relationships', column.id)}>
+                      <Info className="mr-2 h-4 w-4" />
+                      <span>Check relationships</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem>
+                    <Wrench className="mr-2 h-4 w-4" />
+                    <span>Change column type</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem>
+                    <Eye className="mr-2 h-4 w-4" />
+                    <span>Hide column</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleRenameClick}>
+                    <Pencil className="mr-2 h-4 w-4" />
+                    <span>Rename</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              {quickSummary && (
+                <TooltipContent side="bottom">
+                  <div className="max-w-xs text-xs">{quickSummary}</div>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {/* Stats Section - Fixed height container */}
@@ -216,7 +355,7 @@ const HeaderCell = React.memo<HeaderCellProps>(
           <StatsContainer>
             {isLoadingStats ? (
               <div className="h-full flex items-center justify-center">
-                <LuLoader className="h-4 w-4 animate-spin text-muted-foreground" />
+                <Loader className="h-4 w-4 animate-spin text-muted-foreground" />
               </div>
             ) : hasStats ? (
               <div className="space-y-3">
@@ -340,6 +479,8 @@ export const HeaderComponent = React.memo<HeaderComponentProps>(function HeaderC
   columnStats,
   onHeaderEdit,
   isLoadingStats,
+  onColumnAction = () => {},
+  datasetId,
 }) {
   const column = header.column;
   const stats = columnStats?.[column.id];
@@ -388,6 +529,8 @@ export const HeaderComponent = React.memo<HeaderComponentProps>(function HeaderC
           stats={stats}
           onHeaderEdit={value => onHeaderEdit?.(column.id, value)}
           isLoadingStats={isLoadingStats}
+          onColumnAction={onColumnAction}
+          datasetId={datasetId}
         />
       </div>
     </Resizable>

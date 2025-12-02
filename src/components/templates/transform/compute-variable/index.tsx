@@ -19,7 +19,7 @@ import {
 } from '@/components/atoms/select';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useProject } from '@/contexts/project-context';
-import { LuLoader } from 'react-icons/lu';
+import { Loader2 as Loader } from 'lucide-react';
 import useAuth from '@/hooks/api/use-auth';
 
 const COMPUTATION_TYPES = {
@@ -378,7 +378,7 @@ export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
 
         <DialogFooter>
           <Button onClick={handleCompute} disabled={isLoading || !!criticalError}>
-            {isLoading ? <LuLoader className="h-4 w-4 animate-spin" /> : 'Compute Variable'}
+            {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : 'Compute Variable'}
           </Button>
         </DialogFooter>
       </DialogContent>

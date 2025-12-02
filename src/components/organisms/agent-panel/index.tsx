@@ -5,6 +5,7 @@ import { Send, Brain, Loader2, AlertCircle, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
+import { ColumnFiltersState } from '@tanstack/react-table';
 import { useAuth } from '@/hooks/api/use-auth';
 import { Message } from '@/types/agent';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,7 +16,7 @@ import { ApprovalDialog } from '@/components/molecules/approval-dialog';
 import { ProgressIndicator } from '@/components/molecules/progress-indicator';
 
 export function AgentPanel() {
-  const { tabs, activeTabId } = useTabsStore();
+  const { tabs, activeTabId, updateTab } = useTabsStore();
   const { currentProject } = useProjectStore();
   const { tokens } = useAuth();
 
@@ -80,6 +81,162 @@ export function AgentPanel() {
       const token = getIdToken();
       if (!token) {
         throw new Error('Authentication required. Please log in again.');
+      }
+
+      // Check if this is a filter query - if so, handle it directly
+      const isFilterQuery =
+        /(show|filter|find|where|participants|rows with|where.*>|where.*<|display|list)/i.test(
+          currentMessage
+        );
+
+      // Check if this is a data quality scan request
+      const isDataQualityQuery = /(data quality|quality scan|check data|data issues|scan data|data problems)/i.test(
+        currentMessage
+      );
+
+      if (isFilterQuery && activeTab?.data?.initialColumns) {
+        try {
+          // Get dataset schema from active tab
+          const datasetSchema = {
+            columns: activeTab.data.initialColumns.map((col: any) => ({
+              id: col.id,
+              name: col.header || col.id,
+              type: col.type || 'numeric',
+            })),
+          };
+
+          // Call AI filters API
+          const filterResponse = await apiClient.ai.filters({
+            datasetSchema,
+            instruction: currentMessage,
+          });
+
+          if (filterResponse?.filters && Array.isArray(filterResponse.filters)) {
+            // Convert to ColumnFiltersState format
+            const newFilters: ColumnFiltersState = filterResponse.filters.map(
+              (filter: { columnId: string; operator: string; value: any }) => ({
+                id: filter.columnId,
+                value: {
+                  operator: filter.operator,
+                  value: filter.value,
+                },
+              })
+            );
+
+            // Update tab store with filters
+            if (activeTab) {
+              updateTab(activeTab.id, {
+                data: {
+                  ...activeTab.data,
+                  columnFilters: newFilters as any, // Type assertion needed due to ColumnFiltersState type mismatch
+                },
+              });
+            }
+
+            // Show success message
+            const filterList = filterResponse.filters
+              .map((f: any) => {
+                const columnName =
+                  activeTab.data?.initialColumns?.find((col: any) => col.id === f.columnId)
+                    ?.header || f.columnId;
+                return `• ${columnName} ${f.operator} ${f.value}`;
+              })
+              .join('\n');
+
+            const filterMessage = {
+              role: 'assistant' as const,
+              content: `✅ **Filters applied!**\n\n${filterResponse.description || 'Applied the following filters:'}\n\n${filterList}\n\nThe table has been filtered accordingly.`,
+              timestamp: new Date(),
+            };
+            addMessage(projectId, filterMessage);
+            setLoading(projectId, false);
+            return;
+          }
+        } catch (filterError) {
+          // If filter generation fails, fall through to regular agent chat
+          console.warn('Filter generation failed, using regular chat:', filterError);
+        }
+      }
+
+      // Check if this is an analysis question - if so, use analysis planner first
+      const isAnalysisQuestion =
+        /(predict|analyze|relationship|correlation|regression|anova|compare|difference|effect|impact)/i.test(
+          currentMessage
+        );
+
+      if (isAnalysisQuestion && activeTab?.data?.initialColumns) {
+        try {
+          // Get dataset schema from active tab
+          const datasetSchema = {
+            columns: activeTab.data.initialColumns.map((col: any) => ({
+              id: col.id,
+              name: col.header || col.id,
+              type: col.type || 'numeric',
+            })),
+          };
+
+          // Call analysis planner
+          const plan = await apiClient.ai.analysisPlanner({
+            datasetSchema,
+            question: currentMessage,
+          });
+
+          // Show the plan to user and offer to run
+          const planMessage = {
+            role: 'assistant' as const,
+            content: `I suggest running a **${plan.analysisType}** analysis.\n\n**Rationale:** ${plan.rationale}\n\nWould you like me to run this analysis?`,
+            timestamp: new Date(),
+          };
+          addMessage(projectId, planMessage);
+
+          // Store the plan for execution
+          setPendingCommand({
+            tool: 'run_analysis',
+            params: plan.spec,
+            description: `Run ${plan.analysisType} analysis`,
+            analysisPlan: plan,
+          });
+          setApprovalDialogOpen(true);
+          setLoading(projectId, false);
+          return;
+        } catch (planError) {
+          // If planning fails, fall through to regular agent chat
+          console.warn('Analysis planning failed, using regular chat:', planError);
+        }
+      }
+
+      // Handle data quality scan
+      if (isDataQualityQuery && activeTab?.data) {
+        try {
+          const datasetId = activeTab.data.filePath || activeTab.id;
+          const datasetSchema = {
+            columns: activeTab.data.initialColumns?.map((col: any) => ({
+              id: col.id,
+              name: col.header || col.id,
+              type: col.type || 'numeric',
+            })) || [],
+          };
+
+          const qualityReport = await apiClient.ai.dataQualityScan({
+            datasetId,
+            datasetSchema,
+            columnStats: activeTab.data.columnStats,
+          });
+
+          const reportMessage = {
+            role: 'assistant' as const,
+            content: `## Data Quality Report\n\n**Overall Score: ${qualityReport.overallScore}/100**\n\n${qualityReport.summary || ''}\n\n### Issues by Column:\n${(qualityReport.columns || []).map((col: any) => `\n**${col.id}** (Score: ${col.score}/100)\n${col.issues?.map((issue: string) => `- ${issue}`).join('\n') || 'No issues'}\n${col.suggestions?.map((sugg: string) => `💡 ${sugg}`).join('\n') || ''}`).join('\n')}`,
+            timestamp: new Date(),
+          };
+          addMessage(projectId, reportMessage);
+          setLoading(projectId, false);
+          return;
+        } catch (error: any) {
+          console.error('Failed to run data quality scan', error);
+          setError(projectId, error.message || 'Failed to run data quality scan');
+          setLoading(projectId, false);
+          return;
+        }
       }
 
       // Call the backend agent API
@@ -159,8 +316,8 @@ export function AgentPanel() {
     setIsExecuting(true);
     setExecutionProgress({
       step: 1,
-      totalSteps: 2,
-      currentStep: 'Executing analysis...',
+      totalSteps: 3,
+      currentStep: 'Running analysis...',
       completed: false,
     });
 
@@ -170,6 +327,77 @@ export function AgentPanel() {
         throw new Error('Authentication required. Please log in again.');
       }
 
+      // If this is an analysis plan, run it directly
+      if (pendingCommand.tool === 'run_analysis' && pendingCommand.analysisPlan) {
+        const { analysisPlan } = pendingCommand;
+        const spec = analysisPlan.spec;
+
+        // Map analysis type to API call
+        let analysisResult;
+        if (analysisPlan.analysisType === 'regression') {
+          analysisResult = await apiClient.analysis.regression({
+            datasetId: activeTab?.data?.filePath || projectId,
+            dependent: spec.dependent,
+            predictors: spec.predictors,
+            controls: spec.controls,
+          });
+        } else if (analysisPlan.analysisType === 'anova') {
+          analysisResult = await apiClient.analysis.anova({
+            datasetId: activeTab?.data?.filePath || projectId,
+            dependent: spec.dependent,
+            independent: spec.independent || spec.groups?.[0],
+            groups: spec.groups,
+          });
+        } else if (analysisPlan.analysisType === 'correlations') {
+          analysisResult = await apiClient.analysis.correlations({
+            datasetId: activeTab?.data?.filePath || projectId,
+            variables: spec.variables || spec.predictors,
+          });
+        }
+
+        setExecutionProgress({
+          step: 2,
+          totalSteps: 3,
+          currentStep: 'Generating APA writeup...',
+          completed: false,
+        });
+
+        // Generate APA writeup
+        const writeup = await apiClient.ai.apaWriteup({
+          analysisType: analysisPlan.analysisType,
+          results: analysisResult,
+          context: {
+            dvLabel: spec.dependent,
+            predictorLabels: (spec.predictors || []).reduce((acc: any, p: string) => {
+              acc[p] = p;
+              return acc;
+            }, {}),
+          },
+        });
+
+        setExecutionProgress({
+          step: 3,
+          totalSteps: 3,
+          currentStep: 'Complete',
+          completed: true,
+        });
+
+        // Show results
+        const resultMessage = {
+          role: 'assistant' as const,
+          content: `**Analysis Results**\n\n${writeup.apaText}\n\n**Summary:** ${writeup.summary}`,
+          timestamp: new Date(),
+        };
+        addMessage(projectId, resultMessage);
+
+        setTimeout(() => {
+          setIsExecuting(false);
+          setExecutionProgress(null);
+        }, 1000);
+        return;
+      }
+
+      // Otherwise, use the regular approval flow
       const response = await apiClient.agent.approve({
         projectId,
         command: pendingCommand,
@@ -272,9 +500,26 @@ export function AgentPanel() {
                     : 'bg-muted text-foreground'
                 }`}
               >
-                <div
-                  dangerouslySetInnerHTML={{ __html: message.content.replace(/\n/g, '<br/>') }}
-                />
+                {typeof message.content === 'string' ? (
+                  <div
+                    dangerouslySetInnerHTML={{ __html: message.content.replace(/\n/g, '<br/>') }}
+                  />
+                ) : (
+                  <div className="space-y-2">
+                    {message.content &&
+                    typeof message.content === 'object' &&
+                    'results' in message.content ? (
+                      // Render structured results (e.g., descriptive statistics)
+                      <pre className="text-xs overflow-x-auto">
+                        {JSON.stringify(message.content, null, 2)}
+                      </pre>
+                    ) : (
+                      <pre className="text-xs overflow-x-auto">
+                        {JSON.stringify(message.content, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))

@@ -25,9 +25,17 @@ import {
   TrendingUp,
   PieChart,
   ScatterChart,
-  Histogram,
+  BarChart3 as Histogram,
+  Sparkles,
+  RefreshCw,
+  BookOpen,
+  Loader2,
 } from 'lucide-react';
 import { AnalysisResult, AnalysisOutput } from '@/types/agent';
+import { apiClient } from '@/lib/api-client';
+import { useTabsStore } from '@/stores/tabs-store';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/molecules/dialog';
+import { Textarea } from '@/components/atoms/text-area';
 
 interface AnalysisResultsProps {
   result: AnalysisResult;
@@ -44,6 +52,16 @@ interface ChartData {
 export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, className }) => {
   const [activeTab, setActiveTab] = useState('summary');
   const [selectedOutput, setSelectedOutput] = useState<AnalysisOutput | null>(null);
+  const [explanationDialogOpen, setExplanationDialogOpen] = useState(false);
+  const [explanation, setExplanation] = useState<any>(null);
+  const [explanationLoading, setExplanationLoading] = useState(false);
+  const [rerunDialogOpen, setRerunDialogOpen] = useState(false);
+  const [modificationNote, setModificationNote] = useState('');
+  const [apaDialogOpen, setApaDialogOpen] = useState(false);
+  const [apaWriteup, setApaWriteup] = useState<string | null>(null);
+  const [apaLoading, setApaLoading] = useState(false);
+  const { tabs, activeTabId } = useTabsStore();
+  const activeTabData = tabs.find(t => t.id === activeTabId);
 
   // Process and categorize outputs
   const processedOutputs = useMemo(() => {
@@ -79,7 +97,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
       // In production, you'd parse the actual chart data from the output
       return {
         type: 'bar' as const, // Default type
-        data: output.data || {},
+        data: output.content || {},
         options: {
           title: output.title || 'Chart',
           xAxis: { title: 'X Axis' },
@@ -134,11 +152,11 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
 
   // Render table output
   const renderTable = (output: AnalysisOutput) => {
-    if (!output.data || !Array.isArray(output.data)) {
+    if (!output.content || !Array.isArray(output.content)) {
       return <div className="text-gray-500">No table data available</div>;
     }
 
-    const columns = Object.keys(output.data[0] || {});
+    const columns = Object.keys(output.content[0] || {});
 
     return (
       <div className="space-y-3">
@@ -148,7 +166,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
             <Button
               variant="outline"
               size="sm"
-              onClick={() => exportToCSV(output.data, output.title || 'table')}
+              onClick={() => exportToCSV(output.content, output.title || 'table')}
             >
               <Download className="w-3 h-3 mr-1" />
               CSV
@@ -156,7 +174,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
             <Button
               variant="outline"
               size="sm"
-              onClick={() => copyToClipboard(JSON.stringify(output.data, null, 2))}
+              onClick={() => copyToClipboard(JSON.stringify(output.content, null, 2))}
             >
               <Copy className="w-3 h-3 mr-1" />
               Copy
@@ -176,7 +194,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
               </TableRow>
             </TableHeader>
             <TableBody>
-              {output.data.slice(0, 100).map((row, index) => (
+              {output.content.slice(0, 100).map((row, index) => (
                 <TableRow key={index}>
                   {columns.map(column => (
                     <TableCell key={column} className="text-xs">
@@ -189,9 +207,9 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
           </Table>
         </ScrollArea>
 
-        {output.data.length > 100 && (
+        {output.content.length > 100 && (
           <div className="text-xs text-gray-500 text-center">
-            Showing first 100 rows of {output.data.length} total rows
+            Showing first 100 rows of {output.content.length} total rows
           </div>
         )}
       </div>
@@ -246,7 +264,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
 
   // Render statistics output
   const renderStatistics = (output: AnalysisOutput) => {
-    if (!output.data) {
+    if (!output.content) {
       return <div className="text-gray-500">No statistics data available</div>;
     }
 
@@ -258,7 +276,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
             <Button
               variant="outline"
               size="sm"
-              onClick={() => exportToJSON(output.data, output.title || 'statistics')}
+              onClick={() => exportToJSON(output.content, output.title || 'statistics')}
             >
               <Download className="w-3 h-3 mr-1" />
               JSON
@@ -266,7 +284,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
             <Button
               variant="outline"
               size="sm"
-              onClick={() => copyToClipboard(JSON.stringify(output.data, null, 2))}
+              onClick={() => copyToClipboard(JSON.stringify(output.content, null, 2))}
             >
               <Copy className="w-3 h-3 mr-1" />
               Copy
@@ -275,7 +293,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {Object.entries(output.data).map(([key, value]) => (
+          {Object.entries(output.content).map(([key, value]) => (
             <div key={key} className="bg-gray-50 p-3 rounded border">
               <div className="text-xs font-medium text-gray-600">{key}</div>
               <div className="text-sm font-semibold">
@@ -339,7 +357,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
             <Button
               variant="outline"
               size="sm"
-              onClick={() => exportToJSON(output.data, output.title || 'raw')}
+              onClick={() => exportToJSON(output.content, output.title || 'raw')}
             >
               <Download className="w-3 h-3 mr-1" />
               JSON
@@ -347,7 +365,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
             <Button
               variant="outline"
               size="sm"
-              onClick={() => copyToClipboard(JSON.stringify(output.data, null, 2))}
+              onClick={() => copyToClipboard(JSON.stringify(output.content, null, 2))}
             >
               <Copy className="w-3 h-3 mr-1" />
               Copy
@@ -357,7 +375,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
 
         <div className="bg-gray-50 p-3 rounded border">
           <pre className="text-xs overflow-x-auto">
-            <code>{JSON.stringify(output.data, null, 2)}</code>
+            <code>{JSON.stringify(output.content, null, 2)}</code>
           </pre>
         </div>
       </div>
@@ -373,13 +391,73 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
               <CheckCircle className="w-5 h-5 text-green-600" />
               <span className="font-medium">Analysis Complete</span>
             </div>
-            <Badge variant="secondary">{result.analysisType}</Badge>
+            <Badge variant="secondary">{result.taskId || 'Analysis'}</Badge>
           </div>
 
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <span>Execution time: {result.executionTime}ms</span>
-            <span>•</span>
-            <span>{result.outputs.length} outputs</span>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                setExplanationDialogOpen(true);
+                setExplanationLoading(true);
+                try {
+                  const analysisType = result.metadata?.analysisType || 'analysis';
+                  const expl = await apiClient.ai.explainResult({
+                    analysisType,
+                    results: result.outputs.map(o => o.content),
+                    context: result.metadata,
+                    teachingMode: activeTabData?.data?.teachingMode || false,
+                  });
+                  setExplanation(expl);
+                } catch (error) {
+                  console.error('Failed to explain result', error);
+                } finally {
+                  setExplanationLoading(false);
+                }
+              }}
+            >
+              <Sparkles className="w-3 h-3 mr-1" />
+              Explain
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setRerunDialogOpen(true)}
+            >
+              <RefreshCw className="w-3 h-3 mr-1" />
+              Re-run
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                setApaDialogOpen(true);
+                setApaLoading(true);
+                try {
+                  const analysisType = result.metadata?.analysisType || 'analysis';
+                  const writeup = await apiClient.ai.apaWriteup({
+                    analysisType,
+                    results: result.outputs.map(o => o.content),
+                    context: result.metadata,
+                  });
+                  setApaWriteup(writeup.apaText || writeup.summary || 'APA writeup generated');
+                } catch (error) {
+                  console.error('Failed to generate APA writeup', error);
+                  setApaWriteup('Failed to generate APA writeup');
+                } finally {
+                  setApaLoading(false);
+                }
+              }}
+            >
+              <BookOpen className="w-3 h-3 mr-1" />
+              APA
+            </Button>
+            <div className="flex items-center gap-2 text-sm text-gray-600 ml-2">
+              <span>Execution time: {result.executionTime}ms</span>
+              <span>•</span>
+              <span>{result.outputs.length} outputs</span>
+            </div>
           </div>
         </div>
       </div>
@@ -547,6 +625,143 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Explanation Dialog */}
+      <Dialog open={explanationDialogOpen} onOpenChange={setExplanationDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>Analysis Explanation</DialogTitle>
+            <DialogDescription>AI-powered explanation of these results</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] pr-4">
+            {explanationLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+            ) : explanation ? (
+              <div className="space-y-4">
+                <div>
+                  <h4 className="font-medium mb-2">Explanation</h4>
+                  <p className="text-sm text-muted-foreground">{explanation.explanation}</p>
+                </div>
+                {explanation.keyFindings && explanation.keyFindings.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-2">Key Findings</h4>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                      {explanation.keyFindings.map((finding: string, idx: number) => (
+                        <li key={idx}>{finding}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {explanation.implications && (
+                  <div>
+                    <h4 className="font-medium mb-2">Implications</h4>
+                    <p className="text-sm text-muted-foreground">{explanation.implications}</p>
+                  </div>
+                )}
+                {explanation.recommendations && explanation.recommendations.length > 0 && (
+                  <div>
+                    <h4 className="font-medium mb-2">Recommendations</h4>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                      {explanation.recommendations.map((rec: string, idx: number) => (
+                        <li key={idx}>{rec}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">No explanation available</div>
+            )}
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
+
+      {/* Re-run Dialog */}
+      <Dialog open={rerunDialogOpen} onOpenChange={setRerunDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Re-run Analysis with Modifications</DialogTitle>
+            <DialogDescription>Describe how you'd like to modify this analysis</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Textarea
+              placeholder="e.g., Add more predictors, change the model type, filter to specific groups..."
+              value={modificationNote}
+              onChange={e => setModificationNote(e.target.value)}
+              rows={4}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setRerunDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  // This would trigger a re-run through the agent panel
+                  // For now, just log and close
+                  console.log('Re-run requested with modification:', modificationNote);
+                  setRerunDialogOpen(false);
+                  setModificationNote('');
+                }}
+              >
+                Re-run
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* APA Writeup Dialog */}
+      <Dialog open={apaDialogOpen} onOpenChange={setApaDialogOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh]">
+          <DialogHeader>
+            <DialogTitle>APA-Style Writeup</DialogTitle>
+            <DialogDescription>Academic format writeup of this analysis</DialogDescription>
+          </DialogHeader>
+          <ScrollArea className="max-h-[60vh] pr-4">
+            {apaLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+            ) : apaWriteup ? (
+              <div className="prose prose-sm max-w-none">
+                <pre className="whitespace-pre-wrap text-sm">{apaWriteup}</pre>
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">No writeup available</div>
+            )}
+          </ScrollArea>
+          {apaWriteup && !apaLoading && (
+            <div className="flex justify-end gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const blob = new Blob([apaWriteup], { type: 'text/plain' });
+                  const url = window.URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'apa-writeup.txt';
+                  a.click();
+                  window.URL.revokeObjectURL(url);
+                }}
+              >
+                <Download className="w-3 h-3 mr-1" />
+                Download
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => copyToClipboard(apaWriteup)}
+              >
+                <Copy className="w-3 h-3 mr-1" />
+                Copy
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };

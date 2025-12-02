@@ -1,24 +1,23 @@
-import { JSX, ReactNode } from 'react';
+import { JSX, ReactNode, Suspense, lazy } from 'react';
 import {
-  LuCalculator,
-  LuDatabase,
-  LuFilter,
-  LuChartLine,
-  LuTableProperties,
-  LuWrench,
-  LuBlocks,
-  LuFileText,
-  LuBrain,
-  LuTrendingUp,
-  LuChartBar,
-  LuChartArea,
-  LuChartScatter,
-  LuActivity,
-  LuZap,
-  LuCode,
-  LuSettings,
-} from 'react-icons/lu';
-import { FilePickerWrapper } from '@/components/molecules/file-picker';
+  Calculator,
+  Database,
+  Filter,
+  TrendingUp as ChartLine,
+  TableProperties,
+  Wrench,
+  Blocks,
+  FileText,
+  Brain,
+  TrendingUp,
+  BarChart3 as ChartBar,
+  AreaChart as ChartArea,
+  ScatterChart as ChartScatter,
+  Activity,
+  Zap,
+  Code,
+  Settings,
+} from 'lucide-react';
 import {
   Mean,
   OneWayAnova,
@@ -54,6 +53,22 @@ export interface MenuItem {
 export type MenuItems = Record<string, MenuItem>;
 
 export type AnalysisComponent = ({ children }: { children: ReactNode }) => JSX.Element | null;
+
+// Lazy wrapper for FilePickerWrapper to avoid circular dependency
+// Uses React.lazy to dynamically import only when component is rendered
+const LazyFilePickerWrapperInternal = lazy(() =>
+  import('@/components/molecules/file-picker').then(module => ({
+    default: module.FilePickerWrapper,
+  }))
+);
+
+const LazyFilePickerWrapper: AnalysisComponent = ({ children }) => {
+  return (
+    <Suspense fallback={null}>
+      <LazyFilePickerWrapperInternal>{children}</LazyFilePickerWrapperInternal>
+    </Suspense>
+  );
+};
 
 export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   // Descriptive Statistics
@@ -151,7 +166,7 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'P-P Plots': DataVisualization,
 
   // Data Operations
-  'Import Data': FilePickerWrapper,
+  'Import Data': LazyFilePickerWrapper,
   'Export Data': ExportDialog,
   'Merge Datasets': MergeDatasetDialog,
   'Find Duplicates': FindDuplicatesDialog,
@@ -201,19 +216,13 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'Add Variables': MergeDatasetDialog,
   'Match Files': MergeDatasetDialog,
 
-  // Syntax & Programming
+  // Syntax
   'Syntax Editor': DataVisualization,
   'Command Language': DataVisualization,
   Macros: DataVisualization,
   Scripts: DataVisualization,
   'Batch Processing': DataVisualization,
   'Syntax Validation': DataVisualization,
-  'Python Integration': DataVisualization,
-  'R Integration': DataVisualization,
-  'Custom Functions': DataVisualization,
-  'API Access': DataVisualization,
-  Automation: DataVisualization,
-  'Custom Dialogs': DataVisualization,
   'Reproducible Analysis': DataVisualization,
   'Version Control': DataVisualization,
   'Template Creation': DataVisualization,
@@ -241,11 +250,6 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'Scoring Rules': DataVisualization,
   'Workflow Automation': DataVisualization,
   'Task Scheduling': DataVisualization,
-  'Data Comments': DataVisualization,
-  'Variable Definitions': DataVisualization,
-  'Output Templates': DataVisualization,
-  'Analysis Logs': DataVisualization,
-  'Audit Trails': DataVisualization,
   'Multi-user Access': DataVisualization,
   'Role-based Permissions': DataVisualization,
   'Sharing Results': DataVisualization,
@@ -258,19 +262,19 @@ export const MENU_ITEMS: MenuItems = {
     sections: {},
   },
   actions: {
-    icon: <LuFilter className="h-4 w-4" />,
+    icon: <Filter className="h-4 w-4" />,
     sections: {},
   },
   graph_options: {
-    icon: <LuChartLine className="h-4 w-4" />,
+    icon: <ChartLine className="h-4 w-4" />,
     sections: {},
   },
   plugins: {
-    icon: <LuBlocks className="h-4 w-4" />,
+    icon: <Blocks className="h-4 w-4" />,
     sections: {},
   },
   data: {
-    icon: <LuDatabase className="h-4 w-4" />,
+    icon: <Database className="h-4 w-4" />,
     sections: {
       'Import & Export': [
         'Import Data',
@@ -311,7 +315,7 @@ export const MENU_ITEMS: MenuItems = {
     },
   },
   transform: {
-    icon: <LuTableProperties className="h-4 w-4" />,
+    icon: <TableProperties className="h-4 w-4" />,
     sections: {
       'Create & Transform': [
         'Compute Variable',
@@ -365,7 +369,7 @@ export const MENU_ITEMS: MenuItems = {
     },
   },
   analyze: {
-    icon: <LuCalculator className="h-4 w-4" />,
+    icon: <Calculator className="h-4 w-4" />,
     sections: {
       'Descriptive Statistics': [
         'Compare Means',
@@ -443,7 +447,7 @@ export const MENU_ITEMS: MenuItems = {
     },
   },
   visualization: {
-    icon: <LuChartBar className="h-4 w-4" />,
+    icon: <ChartBar className="h-4 w-4" />,
     sections: {
       'Basic Charts': ['Bar Charts', 'Pie Charts', 'Line Charts', 'Area Charts', 'Dot Plots'],
       'Statistical Plots': [
@@ -475,7 +479,7 @@ export const MENU_ITEMS: MenuItems = {
     },
   },
   time_series: {
-    icon: <LuTrendingUp className="h-4 w-4" />,
+    icon: <TrendingUp className="h-4 w-4" />,
     sections: {
       'Time Series Analysis': [
         'ARIMA Models',
@@ -498,7 +502,7 @@ export const MENU_ITEMS: MenuItems = {
     },
   },
   ml_ai: {
-    icon: <LuBrain className="h-4 w-4" />,
+    icon: <Brain className="h-4 w-4" />,
     sections: {
       'Supervised Learning': [
         'Classification',
@@ -530,7 +534,7 @@ export const MENU_ITEMS: MenuItems = {
     },
   },
   syntax: {
-    icon: <LuCode className="h-4 w-4" />,
+    icon: <Code className="h-4 w-4" />,
     sections: {
       'SPSS Syntax': [
         'Syntax Editor',
@@ -539,14 +543,6 @@ export const MENU_ITEMS: MenuItems = {
         'Scripts',
         'Batch Processing',
         'Syntax Validation',
-      ],
-      Programming: [
-        'Python Integration',
-        'R Integration',
-        'Custom Functions',
-        'API Access',
-        'Automation',
-        'Custom Dialogs',
       ],
       Workflow: [
         'Reproducible Analysis',
@@ -558,7 +554,7 @@ export const MENU_ITEMS: MenuItems = {
     },
   },
   utilities: {
-    icon: <LuWrench className="h-4 w-4" />,
+    icon: <Wrench className="h-4 w-4" />,
     sections: {
       'Variable Management': [
         'Variable Sets',
@@ -589,13 +585,6 @@ export const MENU_ITEMS: MenuItems = {
         'Scoring Rules',
         'Workflow Automation',
         'Task Scheduling',
-      ],
-      Documentation: [
-        'Data Comments',
-        'Variable Definitions',
-        'Output Templates',
-        'Analysis Logs',
-        'Audit Trails',
       ],
       Collaboration: [
         'Multi-user Access',

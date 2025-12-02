@@ -8,7 +8,7 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
-import { LuLoader } from 'react-icons/lu';
+import { Loader2 as Loader } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import useAuth from '@/hooks/api/use-auth';
 
@@ -238,7 +238,7 @@ export const Mean = ({ children }: MeanProps) => {
 
         <DialogFooter>
           <Button onClick={calculateMeans} disabled={isLoading || selectedVariables.length === 0}>
-            {isLoading ? <LuLoader className="h-4 w-4 animate-spin mr-2" /> : null}
+            {isLoading ? <Loader className="h-4 w-4 animate-spin mr-2" /> : null}
             Calculate Means
           </Button>
         </DialogFooter>

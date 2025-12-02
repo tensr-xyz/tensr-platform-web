@@ -7,73 +7,25 @@ import {
 } from '@/components/molecules/accordion';
 import { ScrollArea } from '@/components/atoms/scroll-area';
 import { Button } from '@/components/atoms/button';
-import { Loader2 } from 'lucide-react';
+import { Loader } from '@/components/molecules/loading';
 import usePlugins from '@/hooks/api/use-plugin';
-import { FileType } from '@tensr/sdk';
 import { PluginRecord } from '@/types/plugin';
-
-const getAcceptedInputTypes = (fileType: FileType): string[] => {
-  switch (fileType.toString().toLowerCase()) {
-    case 'csv':
-      return ['csv', 'text', 'string'];
-    case 'xlsx':
-      return ['xlsx', 'excel', 'spreadsheet'];
-    default:
-      return [fileType.toString().toLowerCase()];
-  }
-};
-
-// Create a class to manage plugins
-class PluginRegistry {
-  private static instance: PluginRegistry;
-  private installedPlugins: PluginRecord[] = [];
-
-  private constructor() {}
-
-  static getInstance(): PluginRegistry {
-    if (!PluginRegistry.instance) {
-      PluginRegistry.instance = new PluginRegistry();
-    }
-    return PluginRegistry.instance;
-  }
-
-  setInstalledPlugins(plugins: PluginRecord[]) {
-    this.installedPlugins = plugins;
-  }
-
-  getAllPlugins(): PluginRecord[] {
-    return this.installedPlugins;
-  }
-
-  getPluginsForFileType(fileType: FileType): PluginRecord[] {
-    const acceptedTypes = getAcceptedInputTypes(fileType);
-
-    return this.installedPlugins.filter(plugin => {
-      const inputTypes = plugin.capabilities?.inputTypes || [];
-      const isCompatible = inputTypes.some(type => acceptedTypes.includes(type.toLowerCase()));
-
-      return isCompatible;
-    });
-  }
-}
-
-// Export the singleton instance
-export const pluginRegistry = PluginRegistry.getInstance();
+import { apiClient } from '@/lib/api-client';
+import PluginUIRenderer from '@/components/molecules/plugin-ui-renderer';
 
 interface PluginPanelProps {
-  activeFileType?: FileType;
-  activeData?: any; // Add activeData prop
+  activeData?: any;
 }
 
 // Individual plugin item component
 const PluginItem: React.FC<{
   plugin: PluginRecord;
   data?: any;
-}> = ({ plugin, data }) => {
+  onExecutionComplete?: (result: any) => void;
+}> = ({ plugin, data, onExecutionComplete }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
-  const { uninstallPlugin } = usePlugins();
 
   const handleRun = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -85,50 +37,38 @@ const PluginItem: React.FC<{
 
     setIsLoading(true);
     setError(null);
+    setResult(null);
 
     try {
-      // Transform the data to match plugin's expected format
+      // Transform the data to match plugin's expected format (DataSet)
+      // All data is parquet format, so no fileType needed
       const transformedData = {
-        rows: data.data, // Your data is already in the correct format
-        columns: data.metadata.columns.map((col: any) => ({
-          id: col.id,
-          name: col.name,
+        rows: data.data || data.rows || [],
+        columns: (data.metadata?.columns || data.columns || []).map((col: any) => ({
+          id: col.id || col.name,
+          name: col.name || col.id,
+          type: col.type || 'string',
         })),
-        totalRows: data.metadata.totalRows,
+        totalRows:
+          data.metadata?.totalRows || data.totalRows || (data.data || data.rows || []).length,
+        totalColumns: (data.metadata?.columns || data.columns || []).length,
       };
 
-      // Get the plugin's entry point file path
-      const pluginPath = {};
-      // const pluginPath = await invoke<string>('get_plugin_path', {
-      //   pluginId: plugin.pluginId,
-      //   entryPoint: plugin.entryPoint,
-      // });
+      // Execute the plugin via API
+      const executionResult = await apiClient.plugins.execute(plugin.pluginId, transformedData);
 
-      // Execute the plugin with transformed data
-      const result = {};
-      // const result = await invoke('execute_plugin', {
-      //   pluginPath,
-      //   data: transformedData,
-      //   capabilities: plugin.capabilities,
-      // });
-
-      setResult(result);
+      if (executionResult.success) {
+        setResult(executionResult.result);
+        if (onExecutionComplete) {
+          onExecutionComplete(executionResult.result);
+        }
+      } else {
+        setError(executionResult.error || 'Plugin execution failed');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to execute plugin');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleUninstall = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-
-    try {
-      setIsLoading(true);
-      await uninstallPlugin(plugin.pluginId);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to uninstall plugin');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to execute plugin';
+      setError(errorMessage);
+      console.error('Plugin execution error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -142,24 +82,18 @@ const PluginItem: React.FC<{
           <p className="text-sm text-muted-foreground">{plugin.description}</p>
           <div className="text-xs text-muted-foreground mt-1">
             <div>Version: {plugin.version}</div>
-            {plugin.capabilities && (
-              <div>Supports: {plugin.capabilities.inputTypes.join(', ')}</div>
-            )}
           </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleRun} disabled={isLoading || !data}>
-            {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Run'}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleUninstall} disabled={isLoading}>
-            Uninstall
+            {isLoading ? <Loader size="sm" /> : data ? 'Run' : 'Open a file to run'}
           </Button>
         </div>
       </div>
 
       {error && <div className="text-red-500 text-sm mt-2 p-2 bg-red-50 rounded-sm">{error}</div>}
 
-      {result && (
+      {result && !onExecutionComplete && (
         <div className="mt-2 p-2 bg-muted rounded-sm">
           <div className="font-medium text-sm">Result:</div>
           <pre className="text-xs overflow-auto max-h-40">{JSON.stringify(result, null, 2)}</pre>
@@ -170,43 +104,51 @@ const PluginItem: React.FC<{
 };
 
 // Main plugin panel component
-const PluginPanel: React.FC<PluginPanelProps> = ({ activeFileType, activeData }) => {
-  const { installedPlugins } = usePlugins();
-  const [filteredPlugins, setFilteredPlugins] = useState<PluginRecord[]>([]);
+const PluginPanel: React.FC<PluginPanelProps> = ({ activeData }) => {
+  const { plugins } = usePlugins();
+  const [executionResult, setExecutionResult] = useState<{
+    plugin: PluginRecord;
+    result: any;
+  } | null>(null);
 
-  useEffect(() => {
-    pluginRegistry.setInstalledPlugins(installedPlugins);
+  const handleExecutionComplete = (plugin: PluginRecord, result: any) => {
+    setExecutionResult({ plugin, result });
+  };
 
-    // const filtered = activeFileType
-    //   ? pluginRegistry.getPluginsForFileType(activeFileType)
-    //   : installedPlugins;
+  // Show UI renderer if execution completed
+  if (executionResult) {
+    return (
+      <PluginUIRenderer
+        plugin={executionResult.plugin}
+        result={executionResult.result}
+        onClose={() => setExecutionResult(null)}
+      />
+    );
+  }
 
-    // logInfo('Filtered plugins result:', {
-    //   filteredCount: filtered.length,
-    //   filtered: filtered.map(p => ({
-    //     name: p.name,
-    //     inputTypes: p.capabilities?.input_types
-    //   }))
-    // });
-
-    setFilteredPlugins(installedPlugins);
-  }, [installedPlugins, activeFileType]);
+  // Show all approved plugins - no need to install, just use them on files
+  const approvedPlugins = plugins.filter(p => p.status === 'APPROVED');
 
   return (
     <ScrollArea className="h-full">
       <div className="p-4">
         <Accordion type="single" collapsible className="mb-4">
           <AccordionItem value="plugins">
-            <AccordionTrigger>Installed Plugins ({filteredPlugins.length})</AccordionTrigger>
+            <AccordionTrigger>Plugins ({approvedPlugins.length})</AccordionTrigger>
             <AccordionContent>
               <div className="space-y-2">
-                {filteredPlugins.length > 0 ? (
-                  filteredPlugins.map(plugin => (
-                    <PluginItem key={plugin.pluginId} plugin={plugin} data={activeData} />
+                {approvedPlugins.length > 0 ? (
+                  approvedPlugins.map(plugin => (
+                    <PluginItem
+                      key={plugin.pluginId}
+                      plugin={plugin}
+                      data={activeData}
+                      onExecutionComplete={result => handleExecutionComplete(plugin, result)}
+                    />
                   ))
                 ) : (
                   <div className="px-4 py-2 text-muted-foreground text-center bg-muted rounded-sm">
-                    No plugins installed for {activeFileType || 'this file type'}
+                    No plugins available
                   </div>
                 )}
               </div>

@@ -11,7 +11,7 @@ import { Button } from '@/components/atoms/button';
 import { Label } from '@/components/atoms/label';
 import { Input } from '@/components/atoms/input';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
-import { LuLoader } from 'react-icons/lu';
+import { Loader2 as Loader } from 'lucide-react';
 import useAuth from '@/hooks/api/use-auth';
 
 // API base URL
@@ -40,6 +40,10 @@ interface TTestResult {
   sample_mean: number;
   sample_size: number;
   confidence_interval?: [number, number];
+}
+
+interface TTestResponse {
+  results: TTestResult;
 }
 
 export const OneSampleTTest = ({ children }: OneSampleTTestProps) => {
@@ -129,8 +133,8 @@ export const OneSampleTTest = ({ children }: OneSampleTTestProps) => {
         throw new Error(errorText || 'Failed to calculate t-test');
       }
 
-      const result: TTestResult = await response.json();
-      setResults(result);
+      const result: TTestResponse = await response.json();
+      setResults(result.results);
     } catch (error) {
       console.error('Failed to calculate t-test:', error);
       setError(error instanceof Error ? error.message : 'Failed to calculate t-test');
@@ -305,7 +309,7 @@ export const OneSampleTTest = ({ children }: OneSampleTTestProps) => {
             onClick={runTTest}
             disabled={isLoading || !selectedVariable || sampleData.length < 2}
           >
-            {isLoading ? <LuLoader className="h-4 w-4 animate-spin mr-2" /> : null}
+            {isLoading ? <Loader className="h-4 w-4 animate-spin mr-2" /> : null}
             Run T-Test
           </Button>
         </DialogFooter>

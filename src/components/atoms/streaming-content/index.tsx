@@ -1,5 +1,5 @@
 import { Suspense } from 'react';
-import { Loading } from '@/components/molecules/loading';
+import Loading from '@/components/molecules/loading';
 
 interface StreamingContentProps {
   children: React.ReactNode;

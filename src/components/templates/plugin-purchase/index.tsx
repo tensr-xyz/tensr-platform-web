@@ -9,6 +9,7 @@ import { Separator } from '@/components/atoms/separator';
 import { ArrowLeft, CreditCard, Shield, Download, CheckCircle } from 'lucide-react';
 import { PluginRecord } from '@/types/plugin';
 import usePlugins from '@/hooks/api/use-plugin';
+import { Loader } from '@/components/molecules/loading';
 
 export default function PluginPurchase() {
   const params = useParams();
@@ -82,25 +83,19 @@ export default function PluginPurchase() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-4 text-lg">Loading purchase...</p>
-        </div>
-      </div>
-    );
+    return <Loader fullScreen />;
   }
 
   if (error || !plugin) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-red-600 mb-4">Purchase Error</h1>
-          <p className="text-muted-foreground mb-6">
-            {error || 'The requested plugin could not be found.'}
-          </p>
-          <Button onClick={() => router.push('/plugins')}>Back to Marketplace</Button>
+          <div className="text-center">
+            <h1 className="text-2xl font-bold text-red-600 mb-4">Purchase Error</h1>
+            <p className="text-muted-foreground mb-6">
+              {error || 'The requested plugin could not be found.'}
+            </p>
+            <Button onClick={() => router.push('/plugins')}>Back to Marketplace</Button>
+          </div>
         </div>
       </div>
     );

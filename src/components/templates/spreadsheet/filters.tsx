@@ -10,7 +10,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { Input } from '@/components/atoms/input';
-import { LuPlus, LuX } from 'react-icons/lu';
+import { Plus, X } from 'lucide-react';
 import { Separator } from '@/components/atoms/separator';
 
 const FILTER_OPERATORS = {
@@ -81,7 +81,7 @@ const Filters = ({
   return (
     <div className="flex flex-row items-center gap-4 p-1 min-h-12">
       <Button className="h-8 min-w-8" size="icon" variant="ghost" onClick={onCloseFilters}>
-        <LuX />
+        <X />
       </Button>
 
       {/* Column Select */}
@@ -133,7 +133,7 @@ const Filters = ({
         variant="outline"
         onClick={applyFilter}
       >
-        <LuPlus />
+        <Plus />
         <div>Apply filter</div>
       </Button>
 

@@ -2,20 +2,24 @@ import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useTabsStore, Tab } from '@/stores/tabs-store';
 import { Button } from '@/components/atoms/button';
 import {
-  LuFolder,
-  LuListFilter,
-  LuMenu,
-  LuMinus,
-  LuPanelRight,
-  LuPlus,
-  LuSquareActivity,
-  LuSquareChartGantt,
-  LuSave,
-  LuHistory,
-  LuClock,
-  LuDownload,
-  LuRewind,
-} from 'react-icons/lu';
+  PanelLeftOpen,
+  PanelLeftClose,
+  PanelRightOpen,
+  PanelRightClose,
+  Folder,
+  Filter,
+  Menu,
+  Minus,
+  Plus,
+  Activity,
+  BarChart3,
+  Save,
+  History,
+  Clock,
+  Download,
+  RotateCcw,
+  GraduationCap,
+} from 'lucide-react';
 import Spreadsheet from '@/components/templates/spreadsheet';
 import { useProjectStore } from '@/stores/project-store';
 import { ViewType } from '@/stores/tabs-store';
@@ -25,10 +29,7 @@ import { ModelBuilder } from '@/components/templates/model-builder';
 import AnalyticsLayout from '@/components/templates/analytics-layout';
 import { Separator } from '@/components/atoms/separator';
 // Removed context actions import - using store actions instead
-import { FolderComponent } from '@/components/organisms/file-tree';
-import { Users } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
-import CollaborationPanel from '@/components/organisms/collaboration-panel';
+import { LeftPanel } from '@/components/organisms/left-panel';
 import { useFileHandler } from '@/hooks/api/use-file';
 import { toast } from '@/hooks/ui/use-toast';
 import {
@@ -148,6 +149,7 @@ interface TabManagerProps {
   tabs: Tab[];
   onTabClose: (id: string) => void;
   onToggleSidebar: () => void;
+  rightPanelOpen?: boolean;
 }
 
 // Component
@@ -156,6 +158,7 @@ const TabManager: React.FC<TabManagerProps> = ({
   tabs,
   onTabClose,
   onToggleSidebar,
+  rightPanelOpen = false,
 }) => {
   // State
   const [showStats, setShowStats] = useState(false);
@@ -438,7 +441,7 @@ const TabManager: React.FC<TabManagerProps> = ({
     console.log('Toggle folder clicked, current state:', leftPanelOpen);
     if (!leftPanelOpen) {
       // Set panel content first, then open the panel
-      setLeftPanelContent(<FolderComponent />);
+      setLeftPanelContent(<LeftPanel />);
       toggleLeftPanel(true);
     } else {
       // Just close the panel
@@ -631,7 +634,7 @@ const TabManager: React.FC<TabManagerProps> = ({
   };
 
   return (
-    <div className="flex h-full flex-col relative bg-background">
+    <div className="flex h-full flex-col bg-background">
       <div className="flex h-10 items-center justify-between border-b border-border bg-sidebar z-10">
         <div className="flex flex-row items-center gap-2">
           <Button
@@ -640,8 +643,9 @@ const TabManager: React.FC<TabManagerProps> = ({
             className="h-7 w-7 mx-2"
             onClick={handleToggleFolder}
             data-state={leftPanelOpen ? 'active' : 'inactive'}
+            title={leftPanelOpen ? 'Close Left Panel' : 'Open Left Panel'}
           >
-            <LuFolder />
+            {leftPanelOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
           </Button>
           <h1 className="text-sm font-medium">
             {activeTab?.name}
@@ -664,7 +668,7 @@ const TabManager: React.FC<TabManagerProps> = ({
               disabled={savingStatus === 'saving' || !activeTab.isDirty}
               title="Save"
             >
-              <LuSave className={savingStatus === 'saving' ? 'animate-pulse' : ''} />
+              <Save className={savingStatus === 'saving' ? 'animate-pulse' : ''} />
               {activeTab.isDirty && (
                 <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-primary"></span>
               )}
@@ -681,31 +685,32 @@ const TabManager: React.FC<TabManagerProps> = ({
               onClick={handleOpenVersionHistory}
               title="Version History"
             >
-              <LuHistory />
+              <History />
               <span className="sr-only">Version History</span>
             </Button>
           )}
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => setShowMenu(prev => !prev)}
-                data-state={showMenu ? 'active' : 'inactive'}
-              >
-                <Users />
-                <span className="sr-only">Toggle User Collaboration</span>
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end">
-              <CollaborationPanel
-                projectId={currentProject?.id || currentFileId || ''}
-                activeTab={activeTab}
-              />
-            </PopoverContent>
-          </Popover>
+          {activeTab && isSpreadsheetTab(activeTab) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={() => {
+                // Toggle teaching mode - store in tab data or global state
+                const currentTeachingMode = activeTab.data?.teachingMode || false;
+                updateTab(activeTab.id, {
+                  data: {
+                    ...activeTab.data,
+                    teachingMode: !currentTeachingMode,
+                  },
+                });
+              }}
+              title="Toggle teaching mode"
+            >
+              <GraduationCap className="h-3 w-3 mr-1" />
+              Teaching: {activeTab.data?.teachingMode ? 'ON' : 'OFF'}
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
@@ -713,40 +718,61 @@ const TabManager: React.FC<TabManagerProps> = ({
             onClick={() => setShowMenu(prev => !prev)}
             data-state={showMenu ? 'active' : 'inactive'}
           >
-            <LuMenu />
+            <Menu />
             <span className="sr-only">Toggle Menu</span>
           </Button>
           <Button
-            data-sidebar="trigger"
             variant="ghost"
             size="icon"
             onClick={onToggleSidebar}
             className="h-7 w-7"
+            title={rightPanelOpen ? 'Close Right Panel' : 'Open Right Panel'}
           >
-            <LuPanelRight />
-            <span className="sr-only">Toggle Sidebar</span>
+            {rightPanelOpen ? <PanelRightClose /> : <PanelRightOpen />}
+            <span className="sr-only">Toggle Right Panel</span>
           </Button>
         </div>
       </div>
 
+      {/* Secondary View Switcher: shown only for spreadsheet tabs */}
+      {activeTab && isSpreadsheetTab(activeTab) && (
+        <div className="flex items-center gap-1 border-b border-border bg-muted/30 h-8">
+          {[
+            { key: ViewType.SPREADSHEET, label: 'Sheet' },
+            { key: ViewType.CHARTS, label: 'Charts' },
+            { key: ViewType.NOTEBOOK, label: 'Notebook' },
+            { key: ViewType.SEM, label: 'SEM' },
+          ].map(v => (
+            <Button
+              key={v.key}
+              variant={activeView === v.key ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setView(v.key)}
+            >
+              {v.label}
+            </Button>
+          ))}
+        </div>
+      )}
+
       {/* Tab Content Area - Tabs are now only responsible for rendering content */}
-      <div className="absolute inset-0 top-10 bg-background">
+      <div className="flex-1 bg-background">
         {/* Add check to ensure tabs is an array */}
         {Array.isArray(tabs) &&
           tabs.map(tab => (
             <div
               key={tab.id}
-              className="absolute inset-0 bg-background flex flex-col"
+              className="h-full flex flex-col bg-background"
               style={{ display: activeTab?.id === tab.id ? 'flex' : 'none' }}
             >
               {showMenu && (
                 <div className="flex flex-row items-center justify-between bg-background border-b border-border px-1 min-h-8">
                   <div className="flex flex-row items-center">
                     <Button size="icon" variant="ghost" onClick={handleAddRow}>
-                      <LuPlus />
+                      <Plus />
                     </Button>
                     <Button size="icon" variant="ghost" onClick={handleDeleteRows}>
-                      <LuMinus />
+                      <Minus />
                     </Button>
                     <Separator orientation="vertical" className="h-4 mx-2" />
                     <Button
@@ -755,7 +781,7 @@ const TabManager: React.FC<TabManagerProps> = ({
                       onClick={() => setView(ViewType.CHARTS)}
                       data-state={activeView === ViewType.CHARTS ? 'active' : 'inactive'}
                     >
-                      <LuSquareActivity />
+                      <Activity />
                       <span className="sr-only">Toggle Analytics</span>
                     </Button>
                     <Button
@@ -764,7 +790,7 @@ const TabManager: React.FC<TabManagerProps> = ({
                       onClick={() => setShowStats(prev => !prev)}
                       data-state={showStats ? 'active' : 'inactive'}
                     >
-                      <LuSquareChartGantt />
+                      <BarChart3 />
                       <span className="sr-only">Toggle Stats</span>
                     </Button>
                   </div>
@@ -774,24 +800,17 @@ const TabManager: React.FC<TabManagerProps> = ({
                       variant="ghost"
                       onClick={() => setShowFilters(!showFilters)}
                     >
-                      <LuListFilter />
+                      <Filter />
                     </Button>
                   </div>
                 </div>
               )}
-              <div
-                className="flex-1 relative"
-                style={{
-                  height: showMenu ? 'calc(100% - 32px)' : '100%',
-                }}
-              >
-                {renderTabContent(tab)}
-              </div>
+              <div className="flex-1 relative">{renderTabContent(tab)}</div>
             </div>
           ))}
         {(!Array.isArray(tabs) || tabs.length === 0) && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center bg-background text-muted-foreground">
-            <LuFolder className="h-12 w-12 mb-4" />
+          <div className="flex h-full flex-col items-center justify-center bg-background text-muted-foreground">
+            <Folder className="h-12 w-12 mb-4" />
             <h2 className="text-lg font-medium mb-2">No File Open</h2>
             <p className="text-sm">Select a file from the project explorer to begin editing</p>
           </div>
@@ -803,7 +822,7 @@ const TabManager: React.FC<TabManagerProps> = ({
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <LuHistory className="h-5 w-5" />
+              <History className="h-5 w-5" />
               Version History
             </DialogTitle>
             <DialogDescription>
@@ -829,7 +848,7 @@ const TabManager: React.FC<TabManagerProps> = ({
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <LuClock className="h-4 w-4 text-muted-foreground" />
+                        <Clock className="h-4 w-4 text-muted-foreground" />
                         <span className="font-medium">
                           {new Date(version.lastModified).toLocaleString()}
                         </span>
@@ -852,7 +871,7 @@ const TabManager: React.FC<TabManagerProps> = ({
                         className="text-xs"
                         onClick={() => handleDownloadVersion(version.versionId)}
                       >
-                        <LuDownload className="mr-1 h-3 w-3" />
+                        <Download className="mr-1 h-3 w-3" />
                         Download
                       </Button>
                       {!version.isLatest && (
@@ -863,7 +882,7 @@ const TabManager: React.FC<TabManagerProps> = ({
                           onClick={() => handleRevertToVersion(version.versionId)}
                           disabled={reverting}
                         >
-                          <LuRewind className="mr-1 h-3 w-3" />
+                          <RotateCcw className="mr-1 h-3 w-3" />
                           Revert to this version
                         </Button>
                       )}

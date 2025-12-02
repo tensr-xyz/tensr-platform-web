@@ -1,4 +1,4 @@
-import { getIdToken } from '@/utils/auth';
+import { getSessionToken, getSessionJwt } from '@/utils/auth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const FARGATE_API_URL =
@@ -13,7 +13,7 @@ class ApiClient {
     options: RequestInit = {},
     useFargate: boolean = false
   ): Promise<T> {
-    const token = getIdToken();
+    const token = getSessionJwt() || getSessionToken();
 
     if (!token) {
       throw new Error('No authentication token found');
@@ -272,6 +272,12 @@ class ApiClient {
     uninstall: (id: string) => this.request<any>(`/plugins/${id}/uninstall`, { method: 'POST' }),
 
     downloadUrl: (id: string) => this.request<any>(`/plugins/${id}/download-url`),
+
+    execute: (id: string, data: any, config?: any) =>
+      this.request<any>(`/plugins/${id}/execute`, {
+        method: 'POST',
+        body: JSON.stringify({ data, config }),
+      }),
 
     purchase: (id: string, data: any) =>
       this.request<any>(`/plugins/${id}/purchase`, {
@@ -694,6 +700,41 @@ class ApiClient {
         },
         true
       ),
+
+    // Regression
+    regression: (data: any) =>
+      this.request<any>(
+        '/analysis/regression',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    anova: (data: any) =>
+      this.request<any>(
+        '/analysis/anova',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    correlations: (data: any) =>
+      this.request<any>(
+        '/analysis/correlations',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    list: (datasetId: string) => this.request<any[]>(`/datasets/${datasetId}/analyses`),
+
+    get: (analysisId: string) => this.request<any>(`/analysis/${analysisId}`),
   };
 
   // Transform API
@@ -775,6 +816,429 @@ class ApiClient {
           authToken: data.authToken,
         }),
       }),
+  };
+
+  // Datasets API
+  datasets = {
+    create: (data: any) =>
+      this.request<any>('/datasets', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    get: (id: string) => this.request<any>(`/datasets/${id}`),
+
+    getColumns: (datasetId: string) => this.request<any>(`/datasets/${datasetId}/columns`),
+
+    getColumnInspector: (datasetId: string, columnId: string) =>
+      this.request<any>(`/datasets/${datasetId}/columns/${columnId}/inspector`),
+
+    getRows: (datasetId: string, params?: { offset?: number; limit?: number; filters?: any[] }) => {
+      const searchParams = new URLSearchParams();
+      if (params?.offset !== undefined) searchParams.append('offset', String(params.offset));
+      if (params?.limit !== undefined) searchParams.append('limit', String(params.limit));
+      if (params?.filters) searchParams.append('filters', JSON.stringify(params.filters));
+      return this.request<any>(`/datasets/${datasetId}/rows?${searchParams.toString()}`);
+    },
+
+    createColumn: (datasetId: string, data: { name: string; expression: string }) =>
+      this.request<any>(`/datasets/${datasetId}/columns`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  };
+
+  // AI API
+  ai = {
+    columnInsight: (data: { datasetId: string; columnId: string; stats?: any }) =>
+      this.request<any>('/ai/column-insight', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    rowInsight: (data: { datasetId: string; rowId: string; rowData: Record<string, any> }) =>
+      this.request<any>('/ai/row-insight', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    fixRow: (data: { datasetId: string; rowId: string; rowData: Record<string, any>; columnStats?: any }) =>
+      this.request<any>('/ai/fix-row', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    suggestTransformations: (data: { datasetId: string; columnId: string; columnType?: string; stats?: any }) =>
+      this.request<any>('/ai/suggest-transformations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    cleanCategories: (data: { datasetId: string; columnId: string; uniqueValues?: string[] }) =>
+      this.request<any>('/ai/clean-categories', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    detectOutliers: (data: { datasetId: string; columnId: string; stats?: any }) =>
+      this.request<any>('/ai/detect-outliers', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    dataQualityScan: (data: { datasetId: string; datasetSchema?: any; columnStats?: any }) =>
+      this.request<any>('/ai/data-quality-scan', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    explainResult: (data: { analysisType: string; results: any; context?: any; teachingMode?: boolean }) =>
+      this.request<any>('/ai/explain-result', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    relationships: (data: { datasetId: string; targetColumnId: string }) =>
+      this.request<any>('/ai/relationships', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    newColumn: (data: { datasetSchema: any; instruction: string }) =>
+      this.request<any>('/ai/new-column', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    filters: (data: { datasetSchema: any; instruction: string }) =>
+      this.request<any>('/ai/filters', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    analysisPlanner: (data: { datasetSchema: any; question: string }) =>
+      this.request<any>('/ai/analysis-planner', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    apaWriteup: (data: { analysisType: string; results: any; context: any }) =>
+      this.request<any>('/ai/apa-writeup', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+  };
+
+  // Analysis API (extend existing)
+  analysis = {
+    // ... existing analysis methods ...
+    regression: (data: any) =>
+      this.request<any>('/analysis/regression', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    anova: (data: any) =>
+      this.request<any>('/analysis/anova', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    correlations: (data: any) =>
+      this.request<any>('/analysis/correlations', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
+
+    list: (datasetId: string) => this.request<any[]>(`/datasets/${datasetId}/analyses`),
+
+    get: (analysisId: string) => this.request<any>(`/analysis/${analysisId}`),
+
+    // Clustering
+    clustering: {
+      kmeans: (data: {
+        datasetId: string;
+        variables: string[];
+        k: number;
+        maxIterations?: number;
+        tolerance?: number;
+        projectId?: string;
+      }) =>
+        this.request<any>('/analysis/clustering/kmeans', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+
+      hierarchical: (data: {
+        datasetId: string;
+        variables: string[];
+        linkage?: string;
+        distanceMetric?: string;
+        nClusters?: number;
+        projectId?: string;
+      }) =>
+        this.request<any>('/analysis/clustering/hierarchical', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+
+      dbscan: (data: {
+        datasetId: string;
+        variables: string[];
+        eps: number;
+        minSamples: number;
+        projectId?: string;
+      }) =>
+        this.request<any>('/analysis/clustering/dbscan', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+    },
+
+    // Simulations
+    simulation: {
+      power: (data: {
+        analysisType: string;
+        effectSize?: number;
+        sampleSizes?: number[];
+        alpha?: number;
+        power?: number;
+        alternative?: string;
+        testType?: string;
+      }) =>
+        this.request<any>('/analysis/simulation/power', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+
+      whatIf: (data: {
+        analysisId: string;
+        scenario: string;
+        variableChanges?: Record<string, any>;
+        datasetId?: string;
+      }) =>
+        this.request<any>('/analysis/simulation/what-if', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+    },
+
+    // Factor analysis
+    pca: (data: any) =>
+      this.request<any>(
+        '/api/analysis/perform-pca',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    efa: (data: any) =>
+      this.request<any>(
+        '/api/analysis/perform-efa',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    factorAnalysis: (data: any) =>
+      this.request<any>(
+        '/api/analysis/factor-analysis',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    // Clustering
+    kmeans: (data: any) =>
+      this.request<any>(
+        '/api/analysis/clustering/kmeans',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    hierarchicalClustering: (data: any) =>
+      this.request<any>(
+        '/api/analysis/clustering/hierarchical',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    dbscan: (data: any) =>
+      this.request<any>(
+        '/api/analysis/clustering/dbscan',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    // Time series
+    arima: (data: any) =>
+      this.request<any>(
+        '/api/analysis/time-series/arima',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    exponentialSmoothing: (data: any) =>
+      this.request<any>(
+        '/api/analysis/time-series/exponential-smoothing',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    seasonalDecomposition: (data: any) =>
+      this.request<any>(
+        '/api/analysis/time-series/seasonal-decomposition',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    // Machine learning
+    decisionTree: (data: any) =>
+      this.request<any>(
+        '/api/analysis/ml/decision-tree',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    randomForest: (data: any) =>
+      this.request<any>(
+        '/api/analysis/ml/random-forest',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    neuralNetwork: (data: any) =>
+      this.request<any>(
+        '/api/analysis/ml/neural-network',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    svm: (data: any) =>
+      this.request<any>(
+        '/api/analysis/ml/svm',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    // Model selection
+    automatedModelSelection: (data: any) =>
+      this.request<any>(
+        '/api/analysis/model-selection/automated',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    hyperparameterTuning: (data: any) =>
+      this.request<any>(
+        '/api/analysis/model-selection/hyperparameter-tuning',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    // GLM models
+    logisticRegression: (data: any) =>
+      this.request<any>(
+        '/api/analysis/glm/logistic',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    poissonRegression: (data: any) =>
+      this.request<any>(
+        '/api/analysis/glm/poisson',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    mixedModel: (data: any) =>
+      this.request<any>(
+        '/api/analysis/glm/mixed-model',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    // Survival analysis
+    kaplanMeier: (data: any) =>
+      this.request<any>(
+        '/api/analysis/survival/kaplan-meier',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    coxRegression: (data: any) =>
+      this.request<any>(
+        '/api/analysis/survival/cox-regression',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    logRankTest: (data: any) =>
+      this.request<any>(
+        '/api/analysis/survival/log-rank-test',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
   };
 
   // Worker API

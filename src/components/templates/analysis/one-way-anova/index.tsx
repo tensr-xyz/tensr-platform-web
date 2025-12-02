@@ -1,5 +1,5 @@
 import { useTabsStore } from '@/stores/tabs-store';
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useMemo, useState, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -8,12 +8,29 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
-import { LuLoader, LuDownload, LuInfo, LuFileText } from 'react-icons/lu';
+import {
+  Loader2 as Loader,
+  Download,
+  Info,
+  FileText,
+  Image,
+  FileSpreadsheet,
+  Copy,
+} from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
 import useAuth from '@/hooks/api/use-auth';
 import { ViewType } from '@/contexts/project-context/types';
+import MarkdownViewer from '@/components/organisms/markdown-viewer';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/molecules/dropdown';
+import { exportTable, copyTableToClipboard } from '@/utils/table-export';
+import { toast } from '@/hooks/ui/use-toast';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
 
@@ -73,6 +90,10 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
   const [activeTab, setActiveTab] = useState('setup');
   const { tokens } = useAuth();
 
+  // Refs for table export
+  const anovaTableRef = useRef<HTMLTableElement>(null);
+  const groupStatsTableRef = useRef<HTMLTableElement>(null);
+
   const token = tokens?.accessToken;
 
   const activeDataTab = useMemo(
@@ -115,21 +136,54 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
     if (!activeDataTab?.data?.initialData || !groupingVariable || !dependentVariable) return {};
 
     const groupedData: Record<string, number[]> = {};
+    const dataDiagnostics: Record<string, { total: number; valid: number; invalid: number }> = {};
 
     activeDataTab.data.initialData.forEach((row: any) => {
-      const group = row[groupingVariable]?.toString();
-      const value =
-        typeof row[dependentVariable] === 'number'
-          ? row[dependentVariable]
-          : parseFloat(row[dependentVariable]);
+      const group = row[groupingVariable]?.toString()?.trim();
+      const rawValue = row[dependentVariable];
 
-      if (group && !isNaN(value)) {
-        if (!groupedData[group]) {
-          groupedData[group] = [];
+      // Initialize diagnostics for this group
+      if (group && !dataDiagnostics[group]) {
+        dataDiagnostics[group] = { total: 0, valid: 0, invalid: 0 };
+      }
+
+      if (group) {
+        dataDiagnostics[group].total++;
+
+        // Try to parse the value
+        let value: number;
+        if (typeof rawValue === 'number') {
+          value = rawValue;
+        } else if (rawValue === null || rawValue === undefined || rawValue === '') {
+          value = NaN;
+        } else {
+          // Remove any whitespace and try parsing
+          const cleanedValue = String(rawValue).trim();
+          value = parseFloat(cleanedValue);
         }
-        groupedData[group].push(value);
+
+        if (!isNaN(value) && isFinite(value)) {
+          if (!groupedData[group]) {
+            groupedData[group] = [];
+          }
+          groupedData[group].push(value);
+          dataDiagnostics[group].valid++;
+        } else {
+          dataDiagnostics[group].invalid++;
+        }
       }
     });
+
+    // Log diagnostics for debugging
+    console.log('ANOVA Data Diagnostics:', dataDiagnostics);
+    console.log(
+      'Grouped Data Summary:',
+      Object.entries(groupedData).map(([group, values]) => ({
+        group,
+        count: values.length,
+        values: values.slice(0, 5), // Show first 5 values
+      }))
+    );
 
     return groupedData;
   };
@@ -141,7 +195,14 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
 
     for (const [group, values] of Object.entries(groupedData)) {
       if (values.length < 2) {
-        return `Group '${group}' has less than 2 valid observations, which is insufficient for ANOVA.`;
+        // Provide more helpful error message with diagnostic info
+        const totalRows = activeDataTab?.data?.initialData?.length || 0;
+        const groupRows =
+          activeDataTab?.data?.initialData?.filter(
+            (row: any) => row[groupingVariable]?.toString()?.trim() === group
+          ).length || 0;
+
+        return `Group '${group}' has only ${values.length} valid observation(s) out of ${groupRows} total row(s) for this group. ANOVA requires at least 2 valid numeric values per group. This usually means some age values are missing, empty, or non-numeric for this player.`;
       }
     }
 
@@ -225,6 +286,71 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
     URL.revokeObjectURL(url);
   };
 
+  const handleExportTable = async (
+    tableRef: React.RefObject<HTMLTableElement>,
+    tableName: string,
+    format: 'png' | 'svg' | 'csv' | 'text' | 'html'
+  ) => {
+    if (!tableRef.current) {
+      toast({
+        title: 'Export failed',
+        description: 'Table not found',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const filename = `anova_${tableName}_${dependentVariable}_by_${groupingVariable}`.replace(
+        /[^a-z0-9]/gi,
+        '_'
+      );
+
+      if (format === 'png') {
+        await exportTable(tableRef.current, { filename, format: 'png' });
+      } else {
+        exportTable(tableRef.current, { filename, format });
+      }
+
+      toast({
+        title: 'Export successful',
+        description: `Table exported as ${format.toUpperCase()}`,
+      });
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: 'Export failed',
+        description: error instanceof Error ? error.message : 'Failed to export table',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleCopyTable = async (tableRef: React.RefObject<HTMLTableElement>) => {
+    if (!tableRef.current) {
+      toast({
+        title: 'Copy failed',
+        description: 'Table not found',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      await copyTableToClipboard(tableRef.current);
+      toast({
+        title: 'Copied to clipboard',
+        description: 'Table copied. You can paste it into Word, Excel, or other applications.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Copy failed',
+        description: 'Failed to copy table to clipboard',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const isSignificant = results && results.p_value < 0.05;
   const effectSizeInterpretation = (eta: number) => {
     if (eta < 0.01) return 'very small';
@@ -236,13 +362,17 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
   return (
     <Dialog>
       {children}
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
-        <DialogHeader>
+      <DialogContent className="max-w-4xl max-h-[90vh] flex flex-col p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle>One-Way ANOVA Analysis</DialogTitle>
         </DialogHeader>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col h-full">
-          <TabsList className="flex w-full h-9 items-center justify-center bg-muted p-1 text-muted-foreground">
+        <Tabs
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="flex flex-col flex-1 min-h-0"
+        >
+          <TabsList className="flex w-full h-9 items-center justify-center bg-muted p-1 text-muted-foreground mx-6">
             <TabsTrigger value="setup" isClosable={false} className="flex-1">
               Setup
             </TabsTrigger>
@@ -254,7 +384,7 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
             </TabsTrigger>
           </TabsList>
 
-          <div className="flex-1 overflow-auto py-2">
+          <div className="flex-1 overflow-y-auto py-4 px-6 min-h-0">
             <TabsContent value="setup" className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <Card>
@@ -315,6 +445,151 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
+
+              {/* Data Preview */}
+              {groupingVariable && dependentVariable && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Data Preview</CardTitle>
+                    <CardDescription>
+                      Preview of how your data will be grouped (shows first 10 groups)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {(() => {
+                      const previewData = prepareData();
+                      const previewEntries = Object.entries(previewData).slice(0, 10);
+                      const totalGroups = Object.keys(previewData).length;
+                      const totalObservations = Object.values(previewData).reduce(
+                        (sum, arr) => sum + arr.length,
+                        0
+                      );
+                      const groupsWithEnoughData = Object.values(previewData).filter(
+                        arr => arr.length >= 2
+                      ).length;
+                      const avgObservationsPerGroup = totalObservations / totalGroups;
+
+                      if (previewEntries.length === 0) {
+                        return (
+                          <Alert>
+                            <AlertDescription>
+                              No valid data found. Please check that:
+                              <ul className="list-disc list-inside mt-2 space-y-1">
+                                <li>Your grouping variable ({groupingVariable}) has values</li>
+                                <li>
+                                  Your dependent variable ({dependentVariable}) contains numeric
+                                  values
+                                </li>
+                                <li>
+                                  There are no missing or non-numeric values in the dependent
+                                  variable
+                                </li>
+                              </ul>
+                            </AlertDescription>
+                          </Alert>
+                        );
+                      }
+
+                      // Check if this is a data structure issue
+                      const isDataStructureIssue =
+                        avgObservationsPerGroup < 1.5 && totalGroups > totalObservations * 0.8;
+
+                      return (
+                        <div className="space-y-3">
+                          {isDataStructureIssue && (
+                            <Alert variant="destructive">
+                              <AlertDescription>
+                                <strong>Data Structure Issue Detected:</strong>
+                                <p className="mt-2">
+                                  You have {totalGroups} groups but only {totalObservations} total
+                                  observations (average of {avgObservationsPerGroup.toFixed(2)} per
+                                  group). Only {groupsWithEnoughData} groups have 2+ observations.
+                                </p>
+                                <p className="mt-2 font-semibold">
+                                  ANOVA requires multiple observations per group to calculate
+                                  variance within groups.
+                                </p>
+                                <p className="mt-2">
+                                  <strong>Your data appears to have only 1 row per player.</strong>{' '}
+                                  For ANOVA, you need:
+                                </p>
+                                <ul className="list-disc list-inside mt-2 space-y-1">
+                                  <li>
+                                    Multiple rows per player (e.g., multiple seasons, games, or
+                                    measurements)
+                                  </li>
+                                  <li>
+                                    Or use a different analysis like{' '}
+                                    <strong>Descriptive Statistics</strong> or{' '}
+                                    <strong>Independent Samples T-Test</strong> if comparing just 2
+                                    groups
+                                  </li>
+                                </ul>
+                              </AlertDescription>
+                            </Alert>
+                          )}
+
+                          <div className="text-sm text-muted-foreground mb-2">
+                            Total groups: {totalGroups} | Total valid observations:{' '}
+                            {totalObservations} | Groups with 2+ observations:{' '}
+                            {groupsWithEnoughData} | Avg per group:{' '}
+                            {avgObservationsPerGroup.toFixed(2)}
+                          </div>
+                          <div className="max-h-60 overflow-y-auto border rounded-md">
+                            <table className="w-full text-sm">
+                              <thead className="sticky top-0 bg-background border-b">
+                                <tr>
+                                  <th className="text-left p-2">Group ({groupingVariable})</th>
+                                  <th className="text-right p-2">Valid Observations</th>
+                                  <th className="text-right p-2">Mean</th>
+                                  <th className="text-right p-2">Sample Values</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {previewEntries.map(([group, values]) => {
+                                  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+                                  const sampleValues = values
+                                    .slice(0, 3)
+                                    .map(v => v.toFixed(1))
+                                    .join(', ');
+                                  const isWarning = values.length < 2;
+
+                                  return (
+                                    <tr
+                                      key={group}
+                                      className={`border-b ${isWarning ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''}`}
+                                    >
+                                      <td
+                                        className={`p-2 ${isWarning ? 'font-semibold text-yellow-700 dark:text-yellow-400' : ''}`}
+                                      >
+                                        {group}
+                                        {isWarning && (
+                                          <span className="ml-2 text-xs">⚠ Needs 2+ values</span>
+                                        )}
+                                      </td>
+                                      <td className="text-right p-2">{values.length}</td>
+                                      <td className="text-right p-2">{mean.toFixed(2)}</td>
+                                      <td className="text-right p-2 text-xs text-muted-foreground">
+                                        {sampleValues}
+                                        {values.length > 3 && '...'}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          {Object.keys(previewData).length > 10 && (
+                            <p className="text-xs text-muted-foreground mt-2">
+                              Showing first 10 of {Object.keys(previewData).length} groups
+                            </p>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </CardContent>
+                </Card>
+              )}
             </TabsContent>
 
             <TabsContent value="results" className="space-y-4">
@@ -324,7 +599,7 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
                   <Card>
                     <CardHeader>
                       <CardTitle className="flex items-center gap-2">
-                        <LuInfo className="h-4 w-4" />
+                        <Info className="h-4 w-4" />
                         ANOVA Results
                       </CardTitle>
                       <CardDescription>
@@ -378,12 +653,70 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
                   {/* Group Descriptives */}
                   <Card>
                     <CardHeader>
-                      <CardTitle>Group Statistics</CardTitle>
-                      <CardDescription>Descriptive statistics for each group</CardDescription>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <CardTitle>Group Statistics</CardTitle>
+                          <CardDescription>Descriptive statistics for each group</CardDescription>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <Download className="h-4 w-4 mr-2" />
+                              Export Table
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleExportTable(groupStatsTableRef, 'group_stats', 'png')
+                              }
+                            >
+                              <Image className="h-4 w-4 mr-2" />
+                              Export as PNG Image
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleExportTable(groupStatsTableRef, 'group_stats', 'svg')
+                              }
+                            >
+                              <Image className="h-4 w-4 mr-2" />
+                              Export as SVG
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleExportTable(groupStatsTableRef, 'group_stats', 'csv')
+                              }
+                            >
+                              <FileSpreadsheet className="h-4 w-4 mr-2" />
+                              Export as CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleExportTable(groupStatsTableRef, 'group_stats', 'text')
+                              }
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              Export as Text (for Word)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleExportTable(groupStatsTableRef, 'group_stats', 'html')
+                              }
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              Export as HTML
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCopyTable(groupStatsTableRef)}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy to Clipboard
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table ref={groupStatsTableRef} className="w-full text-sm">
                           <thead>
                             <tr className="border-b">
                               <th className="text-left p-2">Group</th>
@@ -433,11 +766,61 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
                   {/* ANOVA Table */}
                   <Card>
                     <CardHeader>
-                      <CardTitle>ANOVA Table</CardTitle>
+                      <div className="flex items-center justify-between">
+                        <CardTitle>ANOVA Table</CardTitle>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm">
+                              <Download className="h-4 w-4 mr-2" />
+                              Export Table
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => handleExportTable(anovaTableRef, 'anova_table', 'png')}
+                            >
+                              <Image className="h-4 w-4 mr-2" />
+                              Export as PNG Image
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleExportTable(anovaTableRef, 'anova_table', 'svg')}
+                            >
+                              <Image className="h-4 w-4 mr-2" />
+                              Export as SVG
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleExportTable(anovaTableRef, 'anova_table', 'csv')}
+                            >
+                              <FileSpreadsheet className="h-4 w-4 mr-2" />
+                              Export as CSV
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleExportTable(anovaTableRef, 'anova_table', 'text')
+                              }
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              Export as Text (for Word)
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() =>
+                                handleExportTable(anovaTableRef, 'anova_table', 'html')
+                              }
+                            >
+                              <FileText className="h-4 w-4 mr-2" />
+                              Export as HTML
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCopyTable(anovaTableRef)}>
+                              <Copy className="h-4 w-4 mr-2" />
+                              Copy to Clipboard
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
                     </CardHeader>
                     <CardContent>
                       <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
+                        <table ref={anovaTableRef} className="w-full text-sm">
                           <thead>
                             <tr className="border-b">
                               <th className="text-left p-2">Source</th>
@@ -509,21 +892,19 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
                       </div>
                       <div className="flex gap-2">
                         <Button onClick={createReportTab} variant="outline" size="sm">
-                          <LuFileText className="h-4 w-4 mr-2" />
+                          <FileText className="h-4 w-4 mr-2" />
                           Open in New Tab
                         </Button>
                         <Button onClick={downloadReport} variant="outline" size="sm">
-                          <LuDownload className="h-4 w-4 mr-2" />
+                          <Download className="h-4 w-4 mr-2" />
                           Download Report
                         </Button>
                       </div>
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <div className="bg-accent/30 p-4 rounded-lg">
-                      <pre className="whitespace-pre-wrap text-sm font-mono overflow-auto max-h-96">
-                        {results.report_content}
-                      </pre>
+                    <div className="prose prose-sm max-w-none">
+                      <MarkdownViewer content={results.report_content} editable={false} />
                     </div>
                   </CardContent>
                 </Card>
@@ -532,13 +913,13 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
           </div>
         </Tabs>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 px-6 pb-6">
           {activeTab === 'setup' && (
             <Button
               onClick={calculateAnova}
               disabled={isLoading || !groupingVariable || !dependentVariable}
             >
-              {isLoading ? <LuLoader className="h-4 w-4 animate-spin mr-2" /> : null}
+              {isLoading ? <Loader className="h-4 w-4 animate-spin mr-2" /> : null}
               Calculate ANOVA
             </Button>
           )}
@@ -550,11 +931,11 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
           {activeTab === 'report' && results && (
             <>
               <Button onClick={createReportTab} variant="outline">
-                <LuFileText className="h-4 w-4 mr-2" />
+                <FileText className="h-4 w-4 mr-2" />
                 Open in New Tab
               </Button>
               <Button onClick={downloadReport} variant="outline">
-                <LuDownload className="h-4 w-4 mr-2" />
+                <Download className="h-4 w-4 mr-2" />
                 Download Report
               </Button>
             </>

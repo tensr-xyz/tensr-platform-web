@@ -37,6 +37,14 @@ export interface TabData {
   isInitialized?: boolean;
   cleanValue?: (value: any) => any;
   importSettings?: any;
+  columnFilters?: Array<{
+    id: string;
+    value: {
+      operator: string;
+      value: any;
+    };
+  }>;
+  teachingMode?: boolean;
 }
 
 // Base Tab interface with required fields and optional data fields

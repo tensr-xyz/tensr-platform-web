@@ -1,20 +1,20 @@
-import { IconType } from 'react-icons/lib';
+import { type LucideIcon } from 'lucide-react';
 import {
-  LuBeaker,
-  LuBrainCircuit,
-  LuChartBar,
-  LuDatabase,
-  LuFileSpreadsheet,
-  LuGitBranch,
-  LuNetwork,
-  LuShare2,
-  LuShieldCheck,
-  LuCircleUser,
-  LuUsers,
-  LuHeadphones,
-  LuSettings,
-  LuBuilding,
-} from 'react-icons/lu';
+  Beaker,
+  BrainCircuit,
+  BarChart3 as ChartBar,
+  Database,
+  FileSpreadsheet,
+  GitBranch,
+  Network,
+  Share2,
+  ShieldCheck,
+  CircleUser,
+  Users,
+  Headphones,
+  Settings,
+  Building,
+} from 'lucide-react';
 
 export type TierType = 'education' | 'pro' | 'team' | 'enterprise';
 
@@ -28,7 +28,7 @@ export interface TableFeature {
 }
 
 export interface CardFeature {
-  icon: IconType;
+  icon: LucideIcon;
   text: string;
 }
 
@@ -36,37 +36,37 @@ export type TierFeaturesMap = Record<Uppercase<TierType>, CardFeature[]>;
 
 export const TIER_FEATURES: TierFeaturesMap = {
   EDUCATION: [
-    { icon: LuChartBar, text: 'Complete statistical analysis suite' },
-    { icon: LuFileSpreadsheet, text: 'Data preparation and cleaning tools' },
-    { icon: LuBeaker, text: 'Basic research methods package' },
-    { icon: LuDatabase, text: 'Local data storage' },
-    { icon: LuGitBranch, text: 'Basic visualizations' },
-    { icon: LuCircleUser, text: 'Single user license' },
-    { icon: LuShieldCheck, text: 'Community support' },
+    { icon: ChartBar, text: 'Complete statistical analysis suite' },
+    { icon: FileSpreadsheet, text: 'Data preparation and cleaning tools' },
+    { icon: Beaker, text: 'Basic research methods package' },
+    { icon: Database, text: 'Local data storage' },
+    { icon: GitBranch, text: 'Basic visualizations' },
+    { icon: CircleUser, text: 'Single user license' },
+    { icon: ShieldCheck, text: 'Community support' },
   ],
   PRO: [
-    { icon: LuBrainCircuit, text: 'Advanced statistical methods' },
-    { icon: LuChartBar, text: 'Enhanced visualization capabilities' },
-    { icon: LuFileSpreadsheet, text: 'Advanced data transformation' },
-    { icon: LuNetwork, text: 'API integrations' },
-    { icon: LuHeadphones, text: 'Priority support' },
-    { icon: LuSettings, text: 'Customizable workspace' },
+    { icon: BrainCircuit, text: 'Advanced statistical methods' },
+    { icon: ChartBar, text: 'Enhanced visualization capabilities' },
+    { icon: FileSpreadsheet, text: 'Advanced data transformation' },
+    { icon: Network, text: 'API integrations' },
+    { icon: Headphones, text: 'Priority support' },
+    { icon: Settings, text: 'Customizable workspace' },
   ],
   TEAM: [
-    { icon: LuUsers, text: 'Team collaboration (up to 5 users)' },
-    { icon: LuShare2, text: 'Shared workspaces' },
-    { icon: LuGitBranch, text: 'Version control' },
-    { icon: LuNetwork, text: 'Real-time collaboration' },
-    { icon: LuHeadphones, text: 'Dedicated support' },
-    { icon: LuSettings, text: 'Team administration tools' },
+    { icon: Users, text: 'Team collaboration (up to 5 users)' },
+    { icon: Share2, text: 'Shared workspaces' },
+    { icon: GitBranch, text: 'Version control' },
+    { icon: Network, text: 'Real-time collaboration' },
+    { icon: Headphones, text: 'Dedicated support' },
+    { icon: Settings, text: 'Team administration tools' },
   ],
   ENTERPRISE: [
-    { icon: LuBuilding, text: 'Unlimited team size' },
-    { icon: LuShieldCheck, text: 'Enhanced security features' },
-    { icon: LuNetwork, text: 'Custom API integrations' },
-    { icon: LuSettings, text: 'Custom deployment options' },
-    { icon: LuHeadphones, text: 'Dedicated account manager' },
-    { icon: LuUsers, text: 'Advanced user management' },
+    { icon: Building, text: 'Unlimited team size' },
+    { icon: ShieldCheck, text: 'Enhanced security features' },
+    { icon: Network, text: 'Custom API integrations' },
+    { icon: Settings, text: 'Custom deployment options' },
+    { icon: Headphones, text: 'Dedicated account manager' },
+    { icon: Users, text: 'Advanced user management' },
   ],
 } as const;
 

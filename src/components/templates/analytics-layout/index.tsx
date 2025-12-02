@@ -1,7 +1,13 @@
 import { ReactNode, useState } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/atoms/resizable';
 import { Button } from '@/components/atoms/button';
-import { LuX, LuExpand, LuPanelBottom, LuLayoutPanelLeft, LuShrink } from 'react-icons/lu';
+import {
+  X,
+  Maximize2 as Expand,
+  PanelBottom,
+  LayoutPanelLeft,
+  Minimize2 as Shrink,
+} from 'lucide-react';
 import { useProjectStore, ViewType } from '@/stores/project-store';
 import AnalyticsDashboard from '@/components/templates/analytics-dashboard';
 
@@ -30,10 +36,10 @@ const NavigationBar = ({ viewMode, onViewModeChange, onClose }: NavigationBarPro
             className="h-7 w-7"
             title="Expand"
           >
-            <LuExpand className="h-4 w-4" />
+            <Expand className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7" title="Close">
-            <LuX className="h-4 w-4" />
+            <X className="h-4 w-4" />
           </Button>
         </div>
       </div>
@@ -52,7 +58,7 @@ const NavigationBar = ({ viewMode, onViewModeChange, onClose }: NavigationBarPro
           className="h-7 w-7"
           title="Bottom Panel"
         >
-          <LuPanelBottom className="h-4 w-4" />
+          <PanelBottom className="h-4 w-4" />
         </Button>
         <Button
           variant="ghost"
@@ -62,7 +68,7 @@ const NavigationBar = ({ viewMode, onViewModeChange, onClose }: NavigationBarPro
           className="h-7 w-7"
           title="Split View"
         >
-          <LuLayoutPanelLeft className="h-4 w-4" />
+          <LayoutPanelLeft className="h-4 w-4" />
         </Button>
         {viewMode !== 'full' ? (
           <Button
@@ -72,7 +78,7 @@ const NavigationBar = ({ viewMode, onViewModeChange, onClose }: NavigationBarPro
             className="h-7 w-7"
             title="Full Screen"
           >
-            <LuExpand className="h-4 w-4" />
+            <Expand className="h-4 w-4" />
           </Button>
         ) : (
           <Button
@@ -82,13 +88,13 @@ const NavigationBar = ({ viewMode, onViewModeChange, onClose }: NavigationBarPro
             className="h-7 w-7"
             title="Exit Full Screen"
           >
-            <LuShrink className="h-4 w-4" />
+            <Shrink className="h-4 w-4" />
           </Button>
         )}
       </div>
       <div className="flex items-center gap-1">
         <Button variant="ghost" size="icon" onClick={onClose} className="h-7 w-7" title="Close">
-          <LuX className="h-4 w-4" />
+          <X className="h-4 w-4" />
         </Button>
       </div>
     </div>

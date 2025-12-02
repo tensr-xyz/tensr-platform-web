@@ -11,16 +11,16 @@ import {
 } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
 import {
-  LuUsers,
-  LuShare2,
-  LuGitBranch,
-  LuNetwork,
-  LuHeadphones,
-  LuSettings,
-  LuChevronRight,
-  LuCheck,
-  LuX,
-} from 'react-icons/lu';
+  Users,
+  Share2,
+  GitBranch,
+  Network,
+  Headphones,
+  Settings,
+  ChevronRight,
+  Check,
+  X,
+} from 'lucide-react';
 
 interface PlanCardProps {
   name: string;
@@ -67,7 +67,7 @@ const PlanCard = ({ name, price, description, features, recommended, onClick }: 
         className={`mt-6 w-full ${recommended ? 'bg-blue-500 hover:bg-blue-600' : 'bg-gray-100 text-gray-800 hover:bg-gray-200'}`}
       >
         {recommended ? 'Upgrade Now' : 'Select Plan'}
-        <LuChevronRight className="ml-2 h-4 w-4" />
+        <ChevronRight className="ml-2 h-4 w-4" />
       </Button>
     </div>
   );
@@ -109,27 +109,27 @@ const FeatureComparison = ({ features }: FeatureComparisonProps) => {
               <td className="px-6 py-4 text-sm font-medium text-gray-900">{feature.name}</td>
               <td className="px-6 py-4 text-center">
                 {feature.education === true ? (
-                  <LuCheck className="h-5 w-5 text-green-500 mx-auto" />
+                  <Check className="h-5 w-5 text-green-500 mx-auto" />
                 ) : feature.education === '—' ? (
-                  <LuX className="h-5 w-5 text-gray-300 mx-auto" />
+                  <X className="h-5 w-5 text-gray-300 mx-auto" />
                 ) : (
                   <span className="text-sm text-gray-500">{feature.education}</span>
                 )}
               </td>
               <td className="px-6 py-4 text-center">
                 {feature.pro === true ? (
-                  <LuCheck className="h-5 w-5 text-green-500 mx-auto" />
+                  <Check className="h-5 w-5 text-green-500 mx-auto" />
                 ) : feature.pro === '—' ? (
-                  <LuX className="h-5 w-5 text-gray-300 mx-auto" />
+                  <X className="h-5 w-5 text-gray-300 mx-auto" />
                 ) : (
                   <span className="text-sm text-gray-500">{feature.pro}</span>
                 )}
               </td>
               <td className="px-6 py-4 text-center bg-blue-50">
                 {feature.team === true ? (
-                  <LuCheck className="h-5 w-5 text-green-500 mx-auto" />
+                  <Check className="h-5 w-5 text-green-500 mx-auto" />
                 ) : feature.team === '—' ? (
-                  <LuX className="h-5 w-5 text-gray-300 mx-auto" />
+                  <X className="h-5 w-5 text-gray-300 mx-auto" />
                 ) : (
                   <span className="text-sm font-medium text-gray-900">{feature.team}</span>
                 )}
@@ -153,12 +153,12 @@ export const SubscriptionDialog = ({ open, onClose, onUpgrade }: SubscriptionDia
 
   // Team plan features from your provided data
   const teamFeatures = [
-    { icon: LuUsers, text: 'Team collaboration (up to 5 users)' },
-    { icon: LuShare2, text: 'Shared workspaces' },
-    { icon: LuGitBranch, text: 'Version control' },
-    { icon: LuNetwork, text: 'Real-time collaboration' },
-    { icon: LuHeadphones, text: 'Dedicated support' },
-    { icon: LuSettings, text: 'Team administration tools' },
+    { icon: Users, text: 'Team collaboration (up to 5 users)' },
+    { icon: Share2, text: 'Shared workspaces' },
+    { icon: GitBranch, text: 'Version control' },
+    { icon: Network, text: 'Real-time collaboration' },
+    { icon: Headphones, text: 'Dedicated support' },
+    { icon: Settings, text: 'Team administration tools' },
   ];
 
   // Simplified feature table for comparison
@@ -236,9 +236,9 @@ export const SubscriptionDialog = ({ open, onClose, onUpgrade }: SubscriptionDia
                 price="0"
                 description="Basic features for individuals"
                 features={[
-                  { icon: LuUsers, text: 'Single user only' },
-                  { icon: LuSettings, text: 'Basic features' },
-                  { icon: LuNetwork, text: 'Limited storage' },
+                  { icon: Users, text: 'Single user only' },
+                  { icon: Settings, text: 'Basic features' },
+                  { icon: Network, text: 'Limited storage' },
                 ]}
                 recommended={false}
                 onClick={onClose}
@@ -249,10 +249,10 @@ export const SubscriptionDialog = ({ open, onClose, onUpgrade }: SubscriptionDia
                 price="15"
                 description="Advanced features for power users"
                 features={[
-                  { icon: LuUsers, text: 'Single user only' },
-                  { icon: LuNetwork, text: 'API integrations' },
-                  { icon: LuHeadphones, text: 'Priority support' },
-                  { icon: LuSettings, text: 'Customizable workspace' },
+                  { icon: Users, text: 'Single user only' },
+                  { icon: Network, text: 'API integrations' },
+                  { icon: Headphones, text: 'Priority support' },
+                  { icon: Settings, text: 'Customizable workspace' },
                 ]}
                 recommended={false}
                 onClick={() => alert('Pro plan selected')}

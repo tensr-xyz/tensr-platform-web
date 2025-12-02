@@ -5,7 +5,13 @@ import {
   // ValidationSection,
   // EstimationSection
 } from '@/components/templates/model-builder/sections';
-import { LuCalculator, LuChartBar, LuSettings, LuSquareActivity, LuWaves } from 'react-icons/lu';
+import {
+  Calculator,
+  BarChart3 as ChartBar,
+  Settings,
+  Activity as SquareActivity,
+  Waves,
+} from 'lucide-react';
 import { FC, ReactNode } from 'react';
 
 // Define the possible props that any section component might need
@@ -34,28 +40,28 @@ type PropertiesSectionsType = {
 
 export const PROPERTIES_SECTIONS: PropertiesSectionsType = {
   properties: {
-    icon: <LuSettings className="h-4 w-4" />,
+    icon: <Settings className="h-4 w-4" />,
     title: 'Properties',
     component: PropertiesSection as FC<SectionComponentProps>,
   },
   statistics: {
-    icon: <LuChartBar className="h-4 w-4" />,
+    icon: <ChartBar className="h-4 w-4" />,
     title: 'Statistics',
     component: StatisticsSection as FC<SectionComponentProps>,
   },
   errors: {
     title: 'Error Terms',
-    icon: <LuWaves className="h-4 w-4" />,
+    icon: <Waves className="h-4 w-4" />,
     component: ErrorTermsSection as FC<SectionComponentProps>,
   },
   // validation: {
   //   title: 'Model Fit',
-  //   icon: <LuSquareActivity className="h-4 w-4" />,
+  //   icon: <SquareActivity className="h-4 w-4" />,
   //   component: ValidationSection
   // },
   // estimation: {
   //   title: 'Estimation',
-  //   icon: <LuCalculator className="h-4 w-4" />,
+  //   icon: <Calculator className="h-4 w-4" />,
   //   component: EstimationSection
   // }
 };

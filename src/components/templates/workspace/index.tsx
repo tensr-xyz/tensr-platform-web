@@ -62,7 +62,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
     leftSidebarOpen,
     toggleLeftSidebar,
   } = useProjectStore();
-  const { tabs, activeTabId, addTab, closeTab } = useTabsStore();
+  const { tabs, activeTabId, addTab, closeTab, setActiveTab } = useTabsStore();
   const { tokens, user } = useAuth();
 
   // Make sure we have a valid resource.id before using it
@@ -73,6 +73,20 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
 
   // Add a null check for activeTab
   const activeTab = tabs.find(tab => tab?.id === activeTabId);
+
+  // Ensure activeTab is preserved when navigating from home page
+  // If activeTabId is set but activeTab is not found, it might be a timing issue
+  // This ensures the activeTab is properly set when the workspace loads
+  useEffect(() => {
+    if (activeTabId && !activeTab && tabs.length > 0) {
+      // If we have an activeTabId but no matching tab, try to find it again
+      const foundTab = tabs.find(tab => tab.id === activeTabId);
+      if (foundTab) {
+        // Tab exists, ensure it's set as active
+        setActiveTab(activeTabId);
+      }
+    }
+  }, [activeTabId, activeTab, tabs, setActiveTab]);
 
   // Handle navigation events to cache project data
   useEffect(() => {
@@ -207,19 +221,69 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             ? `users/${userId}/${dataToImport.filePath}/${dataToImport.fileName || 'untitled'}`
             : dataToImport.filePath;
 
-        // For projects, we already have the processed data from the Rust API
-        // For files, we need to fetch the data
+        // For both projects and files, fetch the first 250 rows
         let data;
 
         if (currentResource.type === 'project') {
-          // Use the data that was already processed by the Rust API
-          data = {
-            data: dataToImport.preview,
-            metadata: {
-              rows: dataToImport.totalRows,
-              columns: dataToImport.totalColumns,
-            },
+          // For projects, fetch the first 250 rows instead of using preview
+          const uuidRegex =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          const isProjectFile = uuidRegex.test(dataToImport.filePath);
+
+          let requestBody: any = {
+            path: dataToImport.filePath,
+            start_row: 0,
+            end_row: 250,
           };
+
+          // Get project details to find the file_id
+          const projectResponse = await fetch(
+            `https://api.dev.tensr.xyz/projects/${dataToImport.filePath}`,
+            {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+            }
+          );
+
+          if (!projectResponse.ok) {
+            throw new Error(`Failed to get project details: ${projectResponse.status}`);
+          }
+
+          const projectData = await projectResponse.json();
+          const firstFile = projectData.fileGroups?.data?.[0];
+          if (!firstFile) {
+            throw new Error('No files found in project');
+          }
+
+          requestBody = {
+            ...requestBody,
+            project_id: dataToImport.filePath,
+            file_id: firstFile.fileId,
+          };
+
+          // Fetch data for projects using the file API
+          const response = await fetch(
+            `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(requestBody),
+            }
+          );
+
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Error response:', errorText);
+            throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
+          }
+
+          data = await response.json();
         } else {
           // For files, we need to fetch the data using the file API
           // Check if this is a project file (filePath is a project ID) or a regular file
@@ -230,7 +294,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
           let requestBody: any = {
             path: dataToImport.filePath,
             start_row: 0,
-            end_row: 100,
+            end_row: 250,
           };
 
           // If it's a project file (filePath is a project ID), we need to get the file_id
@@ -491,7 +555,6 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         activeTab={activeTab}
         rightPanelOpen={rightPanelOpen}
         onToggleSidebar={() => setRightPanelOpen(!rightPanelOpen)}
-        onToggleLeftSidebar={() => toggleLeftSidebar(!leftSidebarOpen)}
       >
         <div ref={projectRef} className="relative h-full w-full">
           <TabManager
@@ -499,6 +562,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             tabs={tabs}
             onTabClose={tabId => tabId && closeTab(tabId)}
             onToggleSidebar={() => setRightPanelOpen(!rightPanelOpen)}
+            rightPanelOpen={rightPanelOpen}
           />
         </div>
       </ProjectLayout>

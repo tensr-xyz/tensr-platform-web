@@ -1,7 +1,7 @@
 'use client';
 import { Button } from '@/components/atoms/button';
 import { useRouter } from 'next/navigation';
-import { LuCheck, LuDownload } from 'react-icons/lu';
+import { Check, Download } from 'lucide-react';
 import Image from 'next/image';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
@@ -67,7 +67,7 @@ const PaymentSuccessPage = () => {
         <div className="flex flex-col gap-10">
           <div className="flex flex-col items-center gap-4 px-10">
             <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-              <LuCheck className="h-8 w-8 text-green-600" />
+              <Check className="h-8 w-8 text-green-600" />
             </div>
 
             <div className="text-2xl text-center">Payment Successful!</div>
@@ -109,7 +109,7 @@ const PaymentSuccessPage = () => {
                       console.log('Download invoice');
                     }}
                   >
-                    <LuDownload size={16} />
+                    <Download size={16} />
                     Download Invoice
                   </Button>
                 </div>

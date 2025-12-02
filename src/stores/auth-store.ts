@@ -1,12 +1,11 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { User } from '@/types/user';
-import { storeTokens, removeTokens } from '@/utils/auth';
+import { storeSession, removeSession } from '@/utils/auth';
 
-interface Tokens {
-  accessToken: string;
-  idToken: string;
-  refreshToken: string;
+interface Session {
+  sessionToken: string;
+  sessionJwt?: string;
 }
 
 interface AuthState {
@@ -18,8 +17,8 @@ interface AuthState {
   // User data
   user: User | null;
 
-  // Tokens (matching current context structure)
-  tokens: Tokens | null;
+  // Session (single token instead of multiple Cognito tokens)
+  session: Session | null;
 
   // Session state
   sessionExpired: boolean;
@@ -29,7 +28,7 @@ interface AuthState {
 interface AuthActions {
   // Authentication actions
   setUser: (user: User | null) => void;
-  setTokens: (tokens: Tokens | null) => void;
+  setSession: (session: Session | null) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
 
@@ -38,11 +37,11 @@ interface AuthActions {
   updateLastActivity: () => void;
 
   // Auth state management
-  login: (tokens: Tokens, user: User) => void;
+  login: (session: Session, user: User) => void;
   logout: () => void;
 
-  // Token refresh
-  refreshTokens: (tokens: Tokens) => void;
+  // Session refresh
+  refreshSession: (session: Session) => void;
 
   // Reset actions
   reset: () => void;
@@ -55,7 +54,7 @@ const initialState: AuthState = {
   isLoading: false,
   error: null,
   user: null,
-  tokens: null,
+  session: null,
   sessionExpired: false,
   lastActivity: Date.now(),
 };
@@ -77,23 +76,22 @@ export const useAuthStore = create<AuthStore>()(
           console.log('Zustand setUser complete, new state:', { user, isAuthenticated: !!user });
         },
 
-        setTokens: tokens => {
-          console.log('Zustand setTokens called with:', tokens ? 'tokens present' : 'no tokens');
+        setSession: session => {
+          console.log('Zustand setSession called with:', session ? 'session present' : 'no session');
 
-          // Store tokens in localStorage and cookies
-          if (tokens) {
-            console.log('Calling storeTokens from Zustand...');
-            storeTokens(tokens.accessToken, tokens.idToken, tokens.refreshToken);
+          // Store session in localStorage and cookies
+          if (session) {
+            console.log('Calling storeSession from Zustand...');
+            storeSession(session.sessionToken, session.sessionJwt);
           }
 
           set({
-            tokens,
-            isAuthenticated: !!tokens,
+            session,
+            isAuthenticated: !!session,
             lastActivity: Date.now(),
-            // Don't override isLoading here - let the calling code manage it
           });
 
-          console.log('Zustand state updated, isAuthenticated:', !!tokens);
+          console.log('Zustand state updated, isAuthenticated:', !!session);
         },
 
         setLoading: loading => set({ isLoading: loading }),
@@ -106,9 +104,9 @@ export const useAuthStore = create<AuthStore>()(
         updateLastActivity: () => set({ lastActivity: Date.now() }),
 
         // Auth state management
-        login: (tokens, user) => {
+        login: (session, user) => {
           set({
-            tokens,
+            session,
             user,
             isAuthenticated: true,
             isLoading: false,
@@ -119,11 +117,11 @@ export const useAuthStore = create<AuthStore>()(
         },
 
         logout: () => {
-          // Remove tokens from localStorage and cookies
-          removeTokens();
+          // Remove session from localStorage and cookies
+          removeSession();
 
           set({
-            tokens: null,
+            session: null,
             user: null,
             isAuthenticated: false,
             isLoading: false,
@@ -133,13 +131,13 @@ export const useAuthStore = create<AuthStore>()(
           });
         },
 
-        // Token refresh
-        refreshTokens: tokens => {
-          // Store new tokens in localStorage and cookies
-          storeTokens(tokens.accessToken, tokens.idToken, tokens.refreshToken);
+        // Session refresh
+        refreshSession: session => {
+          // Store new session in localStorage and cookies
+          storeSession(session.sessionToken, session.sessionJwt);
 
           set({
-            tokens,
+            session,
             isAuthenticated: true,
             sessionExpired: false,
             lastActivity: Date.now(),
@@ -152,8 +150,8 @@ export const useAuthStore = create<AuthStore>()(
       {
         name: 'auth-store',
         partialize: state => ({
-          // Only persist tokens and user data - never persist loading state
-          tokens: state.tokens,
+          // Only persist session and user data - never persist loading state
+          session: state.session,
           user: state.user,
           lastActivity: state.lastActivity,
         }),

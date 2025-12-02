@@ -86,19 +86,11 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
     }
   };
 
-  // Load installed plugins from local storage
+  // Load installed plugins - just track IDs in memory
   const loadInstalledPlugins = useCallback(async () => {
-    try {
-      const installed: PluginRecord[] = [];
-      // const installed = await invoke<PluginRecord[]>('get_installed_plugins');
-
-      if (installed.length === 0) {
-      } else {
-        installed.forEach((plugin, index) => {});
-      }
-
-      setInstalledPlugins(installed);
-    } catch (err) {}
+    // For web platform, we just track installed plugin IDs in memory
+    // No local storage needed since we'll always fetch from API
+    setInstalledPlugins([]);
   }, []);
 
   // Initialize plugin data
@@ -186,49 +178,14 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
 
   const installPlugin = async (plugin: PluginRecord) => {
     try {
-      // Get a pre-signed URL from the backend
-      const downloadResponse = await fetch(`${BASE_URL}/plugins/${plugin.pluginId}/download-url`);
-      if (!downloadResponse.ok) {
-        throw new Error(`Failed to get download URL: ${downloadResponse.status}`);
-      }
-
-      const { downloadUrl } = await downloadResponse.json();
-
-      // Download the plugin using the pre-signed URL
-      const pluginResponse = await fetch(downloadUrl);
-      if (!pluginResponse.ok) {
-        throw new Error(`Failed to download plugin: ${pluginResponse.status}`);
-      }
-
-      // Get the binary data
-      const pluginData = await pluginResponse.arrayBuffer();
-
-      // Transform the plugin record to match Rust's snake_case convention
-      const manifest = {
-        plugin_id: plugin.pluginId,
-        version: plugin.version,
-        name: plugin.name,
-        description: plugin.description,
-        author_id: plugin.authorId,
-        language: plugin.language,
-        entry_point: plugin.entryPoint,
-        capabilities: {
-          input_types: plugin.capabilities?.inputTypes || [],
-          output_types: plugin.capabilities?.outputTypes || [],
-        },
-        status: plugin.status,
-        created_at: plugin.createdAt,
-        updated_at: plugin.updatedAt,
-        s3_key: plugin.s3Key,
-      };
-
-      // Install plugin using Rust backend
-      // await invoke('install_plugin', {
-      //   pluginData: new Uint8Array(pluginData),
-      //   manifest,
-      // });
-
-      await loadInstalledPlugins();
+      // For web platform, just track the plugin as installed in memory
+      // We'll fetch from API when needed
+      setInstalledPlugins(prev => {
+        if (prev.some(p => p.pluginId === plugin.pluginId)) {
+          return prev;
+        }
+        return [...prev, plugin];
+      });
     } catch (error) {
       throw error;
     }
@@ -236,8 +193,8 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
 
   const uninstallPlugin = async (pluginId: string) => {
     try {
-      // await invoke('uninstall_plugin', { pluginId });
-      await loadInstalledPlugins();
+      // Remove from installed plugins list
+      setInstalledPlugins(prev => prev.filter(p => p.pluginId !== pluginId));
     } catch (error) {
       throw error;
     }
