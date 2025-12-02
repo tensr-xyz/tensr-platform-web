@@ -1,5 +1,11 @@
 import * as React from 'react';
-import { LuSheet, LuSquareCode, LuSearch, LuSettings, LuBrain } from 'react-icons/lu';
+import {
+  FileSpreadsheet as Sheet,
+  CodeSquare as SquareCode,
+  Search,
+  Settings,
+  Brain,
+} from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -13,8 +19,9 @@ import {
   SidebarProvider,
 } from '@/components/organisms/sidebar';
 import { useProjectStore, ViewType } from '@/stores/project-store';
+import { useTabsStore, Tab } from '@/stores/tabs-store';
 import { ProjectActions } from '@/contexts/project-context/types';
-import { IconType } from 'react-icons';
+import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/utils';
 import {
   CommandDialog,
@@ -31,7 +38,7 @@ import { useRouter } from 'next/navigation';
 interface NavItem {
   title: string;
   url: string;
-  icon: IconType;
+  icon: LucideIcon;
   isActive: boolean;
   component?: () => React.ReactNode;
   isNavigationItem?: boolean;
@@ -49,6 +56,9 @@ export default function ProjectSidebar() {
     activeView,
     setView,
   } = useProjectStore();
+  const { activeTabId, tabs } = useTabsStore();
+  const activeTab: Tab | undefined = tabs.find(t => t.id === activeTabId);
+  const isSpreadsheetContext = activeTab && activeTab.type === ViewType.SPREADSHEET;
   const [isCommandOpen, setIsCommandOpen] = React.useState(false);
   const router = useRouter();
 
@@ -77,19 +87,19 @@ export default function ProjectSidebar() {
       {
         title: 'Spreadsheet',
         url: '#',
-        icon: LuSheet,
+        icon: Sheet,
         action: () => setView(ViewType.SPREADSHEET),
       },
       {
         title: 'Notebook',
         url: '#',
-        icon: LuSquareCode,
+        icon: SquareCode,
         action: () => setView(ViewType.NOTEBOOK),
       },
       {
         title: 'SEM',
         url: '#',
-        icon: LuBrain,
+        icon: Brain,
         action: () => setView(ViewType.SEM),
       },
     ] as NavItem[],
@@ -97,13 +107,13 @@ export default function ProjectSidebar() {
       {
         title: 'Search',
         url: '#',
-        icon: LuSearch,
+        icon: Search,
         onClick: handleOpenSearch,
       },
       {
         title: 'Settings',
         url: '/settings/general',
-        icon: LuSettings,
+        icon: Settings,
         isNavigationItem: true,
         onClick: handleOpenSettings,
       },
@@ -186,7 +196,7 @@ export default function ProjectSidebar() {
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
-                {data.navMain.map(item => {
+                {(isSpreadsheetContext ? [] : data.navMain).map(item => {
                   const active = isItemActive(item);
                   return (
                     <SidebarMenuItem key={item.title}>
@@ -240,7 +250,7 @@ export default function ProjectSidebar() {
           <CommandEmpty>No results found.</CommandEmpty>
           <CommandGroup heading="Quick Actions">
             <CommandItem onSelect={() => router.push('/settings/general')}>
-              <LuSettings />
+              <Settings />
               <span>Open Settings</span>
             </CommandItem>
           </CommandGroup>

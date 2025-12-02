@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useRouter } from 'next/navigation';
 import { Upload, Save, ArrowLeft } from 'lucide-react';
+import { Loader } from '@/components/molecules/loading';
 
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
@@ -491,7 +492,11 @@ export default function PluginUploadForm() {
               Cancel
             </Button>
             <Button type="submit" disabled={isUploading || !selectedFile}>
-              <Upload className="h-4 w-4 mr-2" />
+              {isUploading ? (
+                <Loader size="sm" className="mr-2" />
+              ) : (
+                <Upload className="h-4 w-4 mr-2" />
+              )}
               {isUploading ? 'Uploading...' : 'Upload Plugin'}
             </Button>
           </div>

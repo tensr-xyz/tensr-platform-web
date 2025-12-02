@@ -296,6 +296,10 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
 
 EditableCell.displayName = 'EditableCell';
 
+// Memoize EditableCell to prevent unnecessary re-renders
+// React Compiler will handle this automatically, but explicit memo helps with debugging
+export const MemoizedEditableCell = React.memo(EditableCell);
+
 interface ResizableCellProps {
   width: number;
   height?: number;

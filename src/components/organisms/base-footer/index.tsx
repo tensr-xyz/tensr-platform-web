@@ -7,7 +7,7 @@ import { FOOTER_SECTIONS } from '@/configs/footer-config';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import React, { useState } from 'react';
-import { LuArrowRight, LuGithub, LuTwitter } from 'react-icons/lu';
+import { ArrowRight, Github, Twitter } from 'lucide-react';
 
 interface FooterLink {
   label: string;
@@ -101,7 +101,7 @@ const Footer: React.FC = () => {
                     disabled={status === 'loading'}
                   >
                     {status === 'loading' ? 'Joining...' : 'Join'}
-                    <LuArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-1" />
                   </Button>
                 </div>
                 {status === 'success' && (
@@ -123,13 +123,13 @@ const Footer: React.FC = () => {
               <div className="space-y-4">
                 <div className="flex gap-4">
                   <Link href="#" className="text-gray-500 hover:text-gray-900">
-                    <LuTwitter className="h-5 w-5" />
+                    <Twitter className="h-5 w-5" />
                   </Link>
                   <Link
                     href="https://github.com/tensr-xyz"
                     className="text-gray-500 hover:text-gray-900"
                   >
-                    <LuGithub className="h-5 w-5" />
+                    <Github className="h-5 w-5" />
                   </Link>
                 </div>
                 <div className="text-sm text-gray-500">

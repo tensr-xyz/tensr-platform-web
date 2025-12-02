@@ -2,12 +2,21 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Star, Download, ChevronDown, Zap, User, ArrowRight } from 'lucide-react';
+import {
+  Plus,
+  Search,
+  Star,
+  Download,
+  ChevronDown,
+  Zap,
+  User,
+  ArrowRight,
+} from 'lucide-react';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { PluginRecord } from '@/types/plugin';
 import usePlugins from '@/hooks/api/use-plugin';
-import { Loading } from '@/components/molecules/loading';
+import { Loader } from '@/components/molecules/loading';
 
 interface FilterOptions {
   search: string;
@@ -70,11 +79,11 @@ export default function PluginsLayout() {
   };
 
   if (loading) {
-    return <Loading fullScreen />;
+    return <Loader fullScreen />;
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
+    <div className="mx-auto p-6">
       {/* Top Navigation - Notion Style */}
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-6">

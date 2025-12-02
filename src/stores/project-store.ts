@@ -150,6 +150,14 @@ interface ProjectActions {
 
   // Clear old cache entries
   clearOldCache: () => void;
+
+  // Process a specific file from the project
+  processFile: (
+    projectId: string,
+    fileIndex: number,
+    token: string,
+    userId: string
+  ) => Promise<void>;
 }
 
 type ProjectStore = ProjectState & ProjectActions;
@@ -496,23 +504,34 @@ export const useProjectStore = create<ProjectStore>()(
             // Call the Fargate API to process the specific file
             const processUrl = `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/projects/${projectId}/process`;
 
-            const response = await fetch(processUrl, {
-              method: 'POST',
-              headers: {
-                Authorization: `Bearer ${token}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                userId,
-                fileName: 'Untitled',
-                fileType: 'csv',
-                token,
-                file_index: fileIndex,
-              }),
-            });
+            let response: Response;
+            try {
+              response = await fetch(processUrl, {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  userId,
+                  fileName: 'Untitled',
+                  fileType: 'csv',
+                  token,
+                  file_index: fileIndex,
+                }),
+              });
+            } catch (fetchError) {
+              // Handle network errors (e.g., "Failed to fetch")
+              throw new Error(
+                fetchError instanceof Error
+                  ? `Network error: ${fetchError.message}`
+                  : 'Failed to connect to the server. Please check your connection and try again.'
+              );
+            }
 
             if (!response.ok) {
-              throw new Error(`API error: ${response.status}`);
+              const errorText = await response.text().catch(() => '');
+              throw new Error(errorText || `API error: ${response.status} ${response.statusText}`);
             }
 
             const result = await response.json();

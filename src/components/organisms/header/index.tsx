@@ -12,12 +12,7 @@ import {
   Users,
   LogOut,
   Bell,
-  MessageSquare,
   BookOpen,
-  ArrowRight,
-  Smile,
-  Meh,
-  Frown,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/atoms/button';
@@ -40,18 +35,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { toast } from '@/hooks/ui/use-toast';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { PermissionWrapper } from '@/wrappers/permission';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/atoms/select';
-import { Textarea } from '@/components/atoms/text-area';
-import { CreateFeedbackInput, FeedbackTopic } from '@/types/feedback';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 interface MobileMenuProps {
   isOpen: boolean;
@@ -214,182 +198,9 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
   );
 };
 
-const FeedbackPopover: React.FC = () => {
-  const [topic, setTopic] = useState<FeedbackTopic | ''>('');
-  const [feedback, setFeedback] = useState('');
-  const [rating, setRating] = useState<number | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
-
-  const { user, tokens } = useAuth();
-
-  const submitFeedback = async (feedbackData: CreateFeedbackInput) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/feedback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.idToken}`,
-        },
-        body: JSON.stringify(feedbackData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('Failed to submit feedback:', error);
-      throw error;
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!user) {
-      toast({
-        title: 'Authentication Required',
-        description: 'Please log in to submit feedback.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!topic || !feedback.trim() || rating === null) {
-      toast({
-        title: 'Validation Error',
-        description: 'Please select a topic, provide feedback, and choose a rating.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const feedbackData: CreateFeedbackInput = {
-        userId: user.userId,
-        topic: topic as FeedbackTopic,
-        rating: rating,
-        text: feedback.trim(),
-      };
-
-      await submitFeedback(feedbackData);
-
-      // Reset form
-      setTopic('');
-      setFeedback('');
-      setRating(null);
-      setIsOpen(false);
-
-      toast({
-        title: 'Feedback Submitted',
-        description: 'Thank you for your feedback!',
-      });
-    } catch (error) {
-      toast({
-        title: 'Submission Failed',
-        description: 'Failed to submit feedback. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const topicOptions = [
-    { value: FeedbackTopic.BUG, label: 'Bug Report' },
-    { value: FeedbackTopic.FEATURE, label: 'Feature Request' },
-    { value: FeedbackTopic.GENERAL, label: 'General Feedback' },
-    { value: FeedbackTopic.UI, label: 'UI/Design' },
-    { value: FeedbackTopic.UX, label: 'User Experience' },
-    { value: FeedbackTopic.PERFORMANCE, label: 'Performance' },
-    { value: FeedbackTopic.OTHER, label: 'Other' },
-  ];
-
-  const ratingOptions = [
-    { value: 5, icon: Smile, label: 'Very Satisfied', color: 'text-green-600' },
-    { value: 4, icon: Smile, label: 'Satisfied', color: 'text-green-500' },
-    { value: 3, icon: Meh, label: 'Neutral', color: 'text-yellow-500' },
-    { value: 2, icon: Frown, label: 'Dissatisfied', color: 'text-orange-500' },
-    { value: 1, icon: Frown, label: 'Very Dissatisfied', color: 'text-red-500' },
-  ];
-
-  return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          className="rounded-md px-3 py-1.5 flex items-center space-x-1 border border-border h-8"
-        >
-          Feedback
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-4" align="end" sideOffset={10}>
-        <div className="grid gap-4">
-          <h4 className="font-medium leading-none">Send Feedback</h4>
-          <div className="space-y-4">
-            <Select onValueChange={value => setTopic(value as FeedbackTopic)} value={topic}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a topic..." />
-              </SelectTrigger>
-              <SelectContent>
-                {topicOptions.map(option => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <Textarea
-              placeholder="Your feedback..."
-              value={feedback}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFeedback(e.target.value)}
-              rows={5}
-              disabled={isSubmitting}
-            />
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">How satisfied are you?</label>
-              <div className="flex justify-between items-center bg-gray-50 p-3 -mx-4 rounded-md">
-                <div className="flex space-x-1">
-                  {ratingOptions.map(({ value, icon: Icon, label, color }) => (
-                    <Button
-                      key={value}
-                      variant="ghost"
-                      size="icon"
-                      className={`rounded-full transition-colors ${
-                        rating === value ? 'bg-blue-100 border-blue-300' : 'hover:bg-gray-100'
-                      }`}
-                      onClick={() => setRating(value)}
-                      disabled={isSubmitting}
-                      title={label}
-                    >
-                      <Icon className={`h-4 w-4 ${rating === value ? 'text-blue-600' : color}`} />
-                    </Button>
-                  ))}
-                </div>
-                <Button
-                  onClick={handleSubmit}
-                  className="w-auto px-4 py-2"
-                  disabled={isSubmitting || !topic || !feedback.trim() || rating === null}
-                >
-                  {isSubmitting ? 'Sending...' : 'Send'}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-};
 
 const UserProfileMenu: React.FC = () => {
-  const { user, logout } = useAuth();
+  const { user, handleLogout: logout } = useAuth();
   const router = useRouter();
 
   if (!user) return null;
@@ -460,7 +271,7 @@ const NavigationTabs = () => {
 
 export const AccountSwitcher: React.FC = () => {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, handleLogout: logout } = useAuth();
   const {
     activeOrganization,
     currentUserRole,
@@ -641,7 +452,7 @@ export const AccountSwitcher: React.FC = () => {
 };
 
 export default function Header() {
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated, handleLogout: logout } = useAuth();
   const isMobile = useIsMobile();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -702,7 +513,6 @@ export default function Header() {
           </div>
 
           <div className="flex items-center space-x-2">
-            <FeedbackPopover />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon" className="rounded-full h-8 w-8">

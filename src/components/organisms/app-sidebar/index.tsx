@@ -20,10 +20,6 @@ import {
   Users,
   Bell,
   BookOpen,
-  Smile,
-  Meh,
-  Frown,
-  MessageSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
@@ -62,22 +58,11 @@ import {
   SidebarMenuSubItem,
   useSidebar,
 } from '@/components/organisms/sidebar';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/atoms/select';
-import { Textarea } from '@/components/atoms/text-area';
 import useAuth from '@/hooks/api/use-auth';
 import { User as UserType } from '@/types/user';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { PermissionWrapper } from '@/wrappers/permission';
-import { CreateFeedbackInput, FeedbackTopic } from '@/types/feedback';
 import { toast } from '@/hooks/ui/use-toast';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 const getInitials = (email: string) => {
   if (!email) return '??';
@@ -166,7 +151,7 @@ function ControlCenter() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground cursor-pointer"
               disabled={isSwitching}
             >
               {isPersonalAccount ? (
@@ -350,9 +335,10 @@ function NavMain({
                     tooltip={item.title}
                     isActive={isActive}
                     asChild={!item.items || item.items.length === 0}
+                    className="cursor-pointer"
                   >
                     {!item.items || item.items.length === 0 ? (
-                      <Link href={item.url}>
+                      <Link href={item.url} className="cursor-pointer">
                         {Icon && <Icon />}
                         <span>{item.title}</span>
                       </Link>
@@ -390,88 +376,7 @@ function NavMain({
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { user, isAuthenticated, tokens } = useAuth();
-
-  // Feedback form state
-  const [topic, setTopic] = useState<FeedbackTopic | ''>('');
-  const [feedback, setFeedback] = useState('');
-  const [rating, setRating] = useState<number | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const submitFeedback = async (feedbackData: CreateFeedbackInput) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/feedback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.idToken}`,
-        },
-        body: JSON.stringify(feedbackData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('Failed to submit feedback:', error);
-      throw error;
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (!user) {
-      toast({
-        title: 'Authentication Required',
-        description: 'Please log in to submit feedback.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (!topic || !feedback.trim() || rating === null) {
-      toast({
-        title: 'Validation Error',
-        description: 'Please select a topic, provide feedback, and choose a rating.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    try {
-      const feedbackData: CreateFeedbackInput = {
-        userId: user.userId,
-        topic: topic as FeedbackTopic,
-        rating: rating,
-        text: feedback.trim(),
-      };
-
-      await submitFeedback(feedbackData);
-
-      // Reset form
-      setTopic('');
-      setFeedback('');
-      setRating(null);
-
-      toast({
-        title: 'Feedback Submitted',
-        description: 'Thank you for your feedback!',
-      });
-    } catch (error) {
-      toast({
-        title: 'Submission Failed',
-        description: 'Failed to submit feedback. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const { user, isAuthenticated } = useAuth();
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -501,95 +406,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuItem>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton>
-                    <MessageSquare className="h-4 w-4" />
-                    <span>Feedback</span>
-                  </SidebarMenuButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80">
-                  <div className="p-4">
-                    <h4 className="font-medium leading-none mb-4">Send Feedback</h4>
-                    <div className="space-y-4">
-                      <Select
-                        onValueChange={value => setTopic(value as FeedbackTopic)}
-                        value={topic}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select a topic..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={FeedbackTopic.BUG}>Bug Report</SelectItem>
-                          <SelectItem value={FeedbackTopic.FEATURE}>Feature Request</SelectItem>
-                          <SelectItem value={FeedbackTopic.GENERAL}>General Feedback</SelectItem>
-                          <SelectItem value={FeedbackTopic.UI}>UI/Design</SelectItem>
-                          <SelectItem value={FeedbackTopic.UX}>User Experience</SelectItem>
-                          <SelectItem value={FeedbackTopic.PERFORMANCE}>Performance</SelectItem>
-                          <SelectItem value={FeedbackTopic.OTHER}>Other</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <Textarea
-                        placeholder="Your feedback..."
-                        value={feedback}
-                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                          setFeedback(e.target.value)
-                        }
-                        rows={5}
-                        disabled={isSubmitting}
-                      />
-
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium text-gray-700">
-                          How satisfied are you?
-                        </label>
-                        <div className="flex justify-between items-center bg-gray-50 p-3 rounded-md">
-                          <div className="flex space-x-1">
-                            {[5, 4, 3, 2, 1].map(value => {
-                              const Icon = value >= 4 ? Smile : value === 3 ? Meh : Frown;
-                              const color =
-                                value >= 4
-                                  ? 'text-green-600'
-                                  : value === 3
-                                    ? 'text-yellow-500'
-                                    : 'text-red-500';
-                              return (
-                                <Button
-                                  key={value}
-                                  variant="ghost"
-                                  size="icon"
-                                  className={`rounded-full transition-colors ${
-                                    rating === value
-                                      ? 'bg-blue-100 border-blue-300'
-                                      : 'hover:bg-gray-100'
-                                  }`}
-                                  onClick={() => setRating(value)}
-                                  disabled={isSubmitting}
-                                >
-                                  <Icon
-                                    className={`h-4 w-4 ${rating === value ? 'text-blue-600' : color}`}
-                                  />
-                                </Button>
-                              );
-                            })}
-                          </div>
-                          <Button
-                            onClick={handleSubmit}
-                            className="w-auto px-4 py-2"
-                            disabled={isSubmitting || !topic || !feedback.trim() || rating === null}
-                          >
-                            {isSubmitting ? 'Sending...' : 'Send'}
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <SidebarMenuButton>
+                  <SidebarMenuButton className="cursor-pointer">
                     <Bell className="h-4 w-4" />
                     <span>Notifications</span>
                   </SidebarMenuButton>
@@ -626,7 +443,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               </DropdownMenu>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild>
+              <SidebarMenuButton asChild className="cursor-pointer">
                 <Link href="https://tensr-1.gitbook.io/tensr/">
                   <BookOpen className="h-4 w-4" />
                   <span>Documentation</span>

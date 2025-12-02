@@ -44,6 +44,11 @@ export function ApprovalDialog({
       correlation: 'Correlation Analysis',
       regression: 'Linear Regression',
       transform_data: 'Data Transformation',
+      edit_table: 'Edit Table',
+      update_cells: 'Update Cells',
+      add_rows: 'Add Rows',
+      delete_rows: 'Delete Rows',
+      update_column: 'Update Column',
     };
     return toolNames[tool] || tool;
   };
@@ -78,8 +83,31 @@ export function ApprovalDialog({
             </div>
           )}
 
+          {/* Table edits preview */}
+          {command.tool === 'edit_table' && command.params?.edits && (
+            <div>
+              <h4 className="text-sm font-medium mb-2">Proposed Changes:</h4>
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {(command.params.edits || []).slice(0, 10).map((edit: any, idx: number) => (
+                  <div key={idx} className="bg-muted p-2 rounded-md text-xs">
+                    <div className="font-medium">{edit.type || 'Edit'}:</div>
+                    {edit.rowIndex !== undefined && <div>Row: {edit.rowIndex}</div>}
+                    {edit.columnId && <div>Column: {edit.columnId}</div>}
+                    {edit.oldValue !== undefined && <div>From: {String(edit.oldValue)}</div>}
+                    {edit.newValue !== undefined && <div>To: {String(edit.newValue)}</div>}
+                  </div>
+                ))}
+                {(command.params.edits || []).length > 10 && (
+                  <div className="text-xs text-muted-foreground">
+                    ... and {(command.params.edits || []).length - 10} more changes
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Parameters */}
-          {command.params && Object.keys(command.params).length > 0 && (
+          {command.params && Object.keys(command.params).length > 0 && !command.params.edits && (
             <div>
               <h4 className="text-sm font-medium mb-2">Parameters:</h4>
               <div className="bg-muted p-3 rounded-md text-sm">

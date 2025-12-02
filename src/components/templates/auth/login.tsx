@@ -1,8 +1,8 @@
 'use client';
 import { FloatingLabelInput } from '@/components/molecules/floating-label-input';
 import { Button } from '@/components/atoms/button';
-import { useRouter } from 'next/navigation';
-import React, { FormEvent, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import React, { FormEvent, useState, useEffect, useRef } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/hooks/api/use-auth';
 import Link from 'next/link';
@@ -10,21 +10,77 @@ import Image from 'next/image';
 
 const LoginTemplate = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     initiateAuth,
     verifyAuth,
+    initiateGoogleAuth,
     resendVerificationCode,
     isLoading,
     error: authError,
-    tokens,
+    stytchUser,
+    stytchSession,
+    stytch,
   } = useAuth();
 
   const [email, setEmail] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [error, setError] = useState('');
-  const [session, setSession] = useState('');
-  const [verificationAttempted, setVerificationAttempted] = useState(false);
+  const [methodId, setMethodId] = useState('');
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const hasHandledOAuthRef = useRef(false);
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (stytchUser && stytchSession) {
+      router.push('/');
+    }
+  }, [stytchUser, stytchSession, router]);
+
+  // Handle Google OAuth callback
+  useEffect(() => {
+    if (!stytch) return;
+    const tokenType = searchParams.get('stytch_token_type');
+    const token = searchParams.get('token');
+    if (tokenType !== 'oauth' || !token || hasHandledOAuthRef.current) {
+      return;
+    }
+    hasHandledOAuthRef.current = true;
+    setIsGoogleLoading(true);
+    setError('');
+    stytch.oauth
+      .authenticate(token, { session_duration_minutes: 60 * 24 * 7 })
+      .then(() => {
+        router.replace('/');
+      })
+      .catch((err) => {
+        console.error('Google OAuth authenticate error:', err);
+        setError(err instanceof Error ? err.message : 'Failed to authenticate Google login');
+        hasHandledOAuthRef.current = false;
+      })
+      .finally(() => {
+        setIsGoogleLoading(false);
+      });
+  }, [searchParams, stytch, router]);
+
+  // Handle Google OAuth button click
+  const handleGoogleOAuth = async () => {
+    if (!stytch) return;
+    try {
+      setIsGoogleLoading(true);
+      setError('');
+      const redirectUrl = new URL('/login', window.location.origin).toString();
+      await stytch.oauth.google.start({
+        login_redirect_url: redirectUrl,
+        signup_redirect_url: redirectUrl,
+      });
+    } catch (err) {
+      console.error('Google OAuth start error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to continue with Google');
+      setIsGoogleLoading(false);
+    }
+  };
 
   // Handle email submission (first step)
   const handleEmailSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -35,15 +91,14 @@ const LoginTemplate = () => {
     }
 
     try {
-      setError(''); // Clear any previous errors
+      setError('');
       console.log('Submitting email:', email);
 
       const result = await initiateAuth(email.toLowerCase());
-      console.log('Auth initiated successfully');
+      console.log('Auth initiated successfully:', result);
 
-      // Only proceed if we have a session
-      if (result && result.session) {
-        setSession(result.session);
+      if (result && result.methodId) {
+        setMethodId(result.methodId);
         setIsVerifying(true);
         setError('');
       } else {
@@ -60,44 +115,27 @@ const LoginTemplate = () => {
   // Handle verification submission (second step)
   const handleVerificationSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setVerificationAttempted(true);
 
     if (!verificationCode) {
       setError('Please enter the verification code');
       return;
     }
 
+    if (!methodId) {
+      setError('Session expired. Please request a new code.');
+      return;
+    }
+
     try {
       console.log('Verifying code for email:', email);
-      const result = await verifyAuth(email, verificationCode, session);
+      const result = await verifyAuth(email, verificationCode, methodId);
       console.log('Verification result:', result);
 
       if (result.success) {
-        console.log('login: Verification successful, redirecting');
-        console.log('login: Router object:', router);
-        console.log('login: Current tokens from useAuth:', tokens);
-
-        // Redirect immediately - cookies should be set by now
-        console.log('login: Redirecting to home page...');
-        console.log('login: Cookies before redirect:', document.cookie);
-        console.log(
-          'login: Tokens in Zustand store:',
-          JSON.stringify({
-            accessToken: tokens?.accessToken?.substring(0, 20) + '...',
-            idToken: tokens?.idToken?.substring(0, 20) + '...',
-          })
-        );
-
-        try {
-          window.location.href = '/';
-          console.log('login: Redirect initiated');
-        } catch (error) {
-          console.error('login: Redirect failed:', error);
-          // Fallback: try router.push
-          router.push('/');
-        }
+        console.log('Verification successful, redirecting');
+        window.location.href = '/';
       } else {
-        setError('Verification failed. Please check your code and try again.');
+        setError(result.message || 'Verification failed. Please check your code and try again.');
       }
     } catch (err) {
       console.error('Failed to verify code:', err);
@@ -110,9 +148,10 @@ const LoginTemplate = () => {
     setIsVerifying(false);
     setVerificationCode('');
     setError('');
+    setMethodId('');
   };
 
-  // Handle resend verification
+  // Handle resend email
   const handleResendEmail = async () => {
     if (!email) {
       setError('Email address is missing');
@@ -121,12 +160,11 @@ const LoginTemplate = () => {
 
     try {
       console.log('Resending code to email:', email);
-      const result = await resendVerificationCode(email, session);
+      const result = await resendVerificationCode(email);
       console.log('Resend result:', result);
 
-      // Update session if a new one is provided
-      if (result && result.session) {
-        setSession(result.session);
+      if (result && result.methodId) {
+        setMethodId(result.methodId);
       }
     } catch (err) {
       console.error('Failed to resend code:', err);
@@ -151,20 +189,63 @@ const LoginTemplate = () => {
             <h1 className="text-3xl font-medium border-l-4 !border-primary px-6 lg:px-10">
               Sign up or log in to Tensr
             </h1>
+
+            {/* Google OAuth Button */}
+            <div className="px-6 lg:px-10">
+              <Button
+                type="button"
+                variant="outline"
+                size="lg"
+                className="w-full h-12"
+                onClick={handleGoogleOAuth}
+                disabled={isGoogleLoading || isLoading}
+              >
+                <span className="flex size-6 items-center justify-center mr-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="size-6">
+                    <path
+                      fill="#FFC107"
+                      d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"
+                    />
+                    <path
+                      fill="#FF3D00"
+                      d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"
+                    />
+                    <path
+                      fill="#4CAF50"
+                      d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"
+                    />
+                    <path
+                      fill="#1976D2"
+                      d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"
+                    />
+                  </svg>
+                </span>
+                <span>{isGoogleLoading ? 'Continuing…' : 'Continue with Google'}</span>
+              </Button>
+            </div>
+
+            {/* Divider */}
+            <div className="flex items-center gap-4 px-6 lg:px-10">
+              <div className="h-px flex-1 bg-border" />
+              <span className="text-sm text-muted-foreground">or</span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+
+            {/* Email Form */}
             <form onSubmit={handleEmailSubmit} className="flex flex-col gap-4 px-6 lg:px-10">
               <FloatingLabelInput
                 label="Email address"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                disabled={isLoading}
+                disabled={isLoading || isGoogleLoading}
               />
               <Button
                 className="px-4 py-3 h-12 lg:h-10 w-full lg:w-fit"
                 size="lg"
                 type="submit"
-                disabled={isLoading}
+                disabled={isLoading || isGoogleLoading}
               >
-                {isLoading ? 'Sending...' : 'Continue'}
+                {isLoading ? 'Sending...' : 'Continue with email'}
               </Button>
             </form>
           </div>
@@ -181,14 +262,16 @@ const LoginTemplate = () => {
               Check your email
             </div>
             <p className="px-6 lg:px-10">
-              We sent an email to {email} with a magic link and code for easy login or signup.
+              We sent an email to {email} with a verification code for easy login or signup.
             </p>
             <form onSubmit={handleVerificationSubmit} className="flex flex-col gap-4 px-6 lg:px-10">
               <FloatingLabelInput
-                label="Login or verification code"
+                label="Verification code"
                 value={verificationCode}
                 onChange={e => setVerificationCode(e.target.value)}
                 disabled={isLoading}
+                inputMode="numeric"
+                pattern="[0-9]*"
               />
               <div className="flex flex-row gap-4">
                 <Button
@@ -221,13 +304,6 @@ const LoginTemplate = () => {
               </div>
               <p>If you still have not received an email, please contact us at help@tensr.xyz.</p>
             </div>
-          </div>
-        )}
-
-        {/* Show session expiry error when applicable */}
-        {!session && !error && verificationAttempted && isVerifying && (
-          <div className="text-red-500 mt-4 px-6 lg:px-10">
-            Session expired or not available. Please try again.
           </div>
         )}
 

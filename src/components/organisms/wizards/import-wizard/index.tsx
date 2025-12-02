@@ -7,7 +7,7 @@ import {
 } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
-import { LuFileSpreadsheet, LuTable, LuSettings } from 'react-icons/lu';
+import { FileSpreadsheet, Table as TableIcon, Settings } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import {
   Table,
@@ -418,7 +418,7 @@ export const ImportWizard = ({
       <DialogContent className="max-w-[80vw] h-[80vh] flex flex-col p-0">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle className="flex items-center gap-2">
-            <LuFileSpreadsheet className="h-5 w-5" />
+            <FileSpreadsheet className="h-5 w-5" />
             Import Data
             {totalRows > 0 && (
               <span className="text-sm text-muted-foreground ml-2">
@@ -432,11 +432,11 @@ export const ImportWizard = ({
           <div className="bg-background border-b border-border">
             <TabsList className="rounded-none">
               <TabsTrigger value="preview" className="flex items-center gap-2 py-1.5 rounded">
-                <LuTable className="h-4 w-4" />
+                <TableIcon className="h-4 w-4" />
                 Data Preview
               </TabsTrigger>
               <TabsTrigger value="settings" className="flex items-center gap-2 py-1.5 rounded">
-                <LuSettings className="h-4 w-4" />
+                <Settings className="h-4 w-4" />
                 Import Settings
               </TabsTrigger>
             </TabsList>

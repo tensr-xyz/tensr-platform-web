@@ -11,7 +11,7 @@ import { Button } from '@/components/atoms/button';
 import { Label } from '@/components/atoms/label';
 import { Input } from '@/components/atoms/input';
 import { useTabsStore } from '@/stores/tabs-store';
-import { LuLoader } from 'react-icons/lu';
+import { Loader2 as Loader } from 'lucide-react';
 import useAuth from '@/hooks/api/use-auth';
 import { ColumnSummary } from '@/types/file';
 
@@ -348,7 +348,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
 
         <DialogFooter>
           <Button onClick={handleCount} disabled={isLoading || !activeTab?.data?.filePath}>
-            {isLoading ? <LuLoader className="h-4 w-4 animate-spin" /> : 'Count Values'}
+            {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : 'Count Values'}
           </Button>
         </DialogFooter>
       </DialogContent>

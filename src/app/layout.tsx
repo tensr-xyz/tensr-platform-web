@@ -1,5 +1,4 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import './globals.css';
 import Providers from '@/utils/providers';
 import { AppProvider } from '@/contexts/app-context';
@@ -8,13 +7,7 @@ import { ProjectProvider } from '@/contexts/project-context';
 import { OrganizationProvider } from '@/contexts/organisation-context';
 
 import { ChartProvider } from '@/contexts/chart-context';
-import { SidebarProvider } from '@/components/organisms/sidebar';
 import { Toaster } from '@/components/molecules/toast/toaster';
-
-const inter = Inter({
-  variable: '--font-inter',
-  subsets: ['latin'],
-});
 
 const structuredData = {
   '@context': 'https://schema.org',
@@ -111,17 +104,15 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
       </head>
-      <body className={`${inter.className} antialiased`}>
+      <body className="antialiased">
         <Providers>
           <AppProvider>
             <ThemeProvider>
               <ProjectProvider>
                 <OrganizationProvider>
                   <ChartProvider>
-                    <SidebarProvider>
-                      {children}
-                      <Toaster />
-                    </SidebarProvider>
+                    {children}
+                    <Toaster />
                   </ChartProvider>
                 </OrganizationProvider>
               </ProjectProvider>

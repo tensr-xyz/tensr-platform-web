@@ -7,7 +7,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/molecules/dropdown';
 import { Button } from '@/components/atoms/button';
-import { LuUsers } from 'react-icons/lu';
+import { Users } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/atoms/avatar';
 import { useSession } from '@/hooks/ui/use-session';
 import { Badge } from '@/components/atoms/badge';
@@ -37,12 +37,12 @@ export function CollaborationMenu({ activeTab }: CollaborationMenuProps) {
     <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
       <DropdownMenu open={dropdownOpen} onOpenChange={setDropdownOpen}>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" className="relative">
-            <LuUsers className="h-4 w-4" />
+          <Button variant="ghost" size="icon" className="relative h-10 w-10">
+            <Users className="h-4 w-4" />
             {currentSession && (
               <Badge
                 variant="secondary"
-                className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center"
+                className="absolute -top-1 -right-1 h-4 w-4 p-0 flex items-center justify-center text-[10px]"
               >
                 {currentSession.participantCount}
               </Badge>

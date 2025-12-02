@@ -61,9 +61,15 @@ export const useCollaboration = (projectId: string) => {
 
         // Create connection with session ID and auth token
         const authToken = getIdToken() || '';
-        console.log('[Collaboration] ID Token:', authToken ? `${authToken.substring(0, 20)}...` : 'null');
+        console.log(
+          '[Collaboration] ID Token:',
+          authToken ? `${authToken.substring(0, 20)}...` : 'null'
+        );
         const wsUrlWithParams = `${wsUrl}?sessionId=${sessionId}&userId=${userId}&token=${authToken}`;
-        console.log('[Collaboration] WebSocket URL:', wsUrlWithParams.replace(authToken, '***TOKEN***'));
+        console.log(
+          '[Collaboration] WebSocket URL:',
+          wsUrlWithParams.replace(authToken, '***TOKEN***')
+        );
 
         // Create the WebSocket provider
         const newProvider = new WebsocketProvider(wsUrlWithParams, projectId, ydoc);

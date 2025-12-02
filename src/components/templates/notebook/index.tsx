@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import Editor from '@monaco-editor/react';
-import { LuPlay, LuPlus, LuCircleStop } from 'react-icons/lu';
+import { Play, Plus, StopCircle as CircleStop, FileText } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -10,10 +10,11 @@ import {
 } from '@/components/atoms/select';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useTheme } from '@/contexts/theme-context';
+import MarkdownViewer from '@/components/organisms/markdown-viewer';
 
 interface Cell {
   id: number;
-  type: 'code';
+  type: 'code' | 'markdown';
   content: string;
   stdout: string | null;
   output: OutputContent | null;
@@ -102,6 +103,7 @@ interface NotebookCellProps {
   isExecuting: boolean;
   isSelected: boolean;
   onSelect: (cellId: number) => void;
+  onTypeChange?: (cellId: number, type: 'code' | 'markdown') => void;
 }
 
 const NotebookCell: React.FC<NotebookCellProps> = ({
@@ -112,11 +114,90 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
   isExecuting,
   isSelected,
   onSelect,
+  onTypeChange,
 }) => {
   const { theme } = useTheme();
+  const [isEditing, setIsEditing] = useState(cell.type === 'markdown' && !cell.content.trim());
 
   const isDarkMode = theme === 'dark';
 
+  // For markdown cells, show editor when editing or empty, otherwise show rendered markdown
+  if (cell.type === 'markdown') {
+    return (
+      <div
+        className={`relative group ${isSelected ? 'bg-background' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
+        onClick={() => onSelect(cell.id)}
+      >
+        <div className="absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center text-gray-500 dark:text-gray-400 select-none text-xs">
+          <FileText className="w-4 h-4" />
+        </div>
+
+        <div className="ml-12 border-l border-border group-hover:border-l-2 group-hover:border-accent pl-2 pr-10">
+          {isEditing || !cell.content.trim() ? (
+            <div
+              className="w-full"
+              style={{
+                height: `${Math.max(cell.content.split('\n').length * 20 + 20, 100)}px`,
+                minHeight: '100px',
+              }}
+            >
+              <Editor
+                defaultLanguage="markdown"
+                value={cell.content}
+                onChange={value => onContentChange(cell.id, value || '')}
+                theme={isDarkMode ? 'vs-dark' : 'vs-light'}
+                onBlur={() => {
+                  if (cell.content.trim()) {
+                    setIsEditing(false);
+                  }
+                }}
+                options={{
+                  minimap: { enabled: false },
+                  fontSize: 13,
+                  lineNumbers: 'off',
+                  folding: false,
+                  wordWrap: 'on',
+                  automaticLayout: true,
+                  scrollBeyondLastLine: false,
+                  overviewRulerBorder: false,
+                  lineDecorationsWidth: 0,
+                  scrollbar: {
+                    vertical: 'visible',
+                    horizontal: 'visible',
+                    verticalScrollbarSize: 8,
+                    horizontalScrollbarSize: 8,
+                  },
+                  padding: { top: 4, bottom: 4 },
+                  glyphMargin: false,
+                }}
+              />
+            </div>
+          ) : (
+            <div className="py-2 cursor-text" onDoubleClick={() => setIsEditing(true)}>
+              <MarkdownViewer content={cell.content} />
+            </div>
+          )}
+        </div>
+
+        <div className="absolute right-0 top-0 h-full w-8 flex items-center justify-center invisible group-hover:visible">
+          {onTypeChange && (
+            <button
+              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded mb-8"
+              onClick={e => {
+                e.stopPropagation();
+                onTypeChange(cell.id, 'code');
+              }}
+              title="Convert to code cell"
+            >
+              <Play className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Code cell (existing implementation)
   return (
     <div
       className={`relative group ${isSelected ? 'bg-background' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
@@ -182,6 +263,18 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
       </div>
 
       <div className="absolute right-0 top-0 h-full w-8 flex items-center justify-center invisible group-hover:visible">
+        {onTypeChange && (
+          <button
+            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded mb-8"
+            onClick={e => {
+              e.stopPropagation();
+              onTypeChange(cell.id, 'markdown');
+            }}
+            title="Convert to markdown cell"
+          >
+            <FileText className="w-3 h-3" />
+          </button>
+        )}
         <button
           className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
           onClick={e => {
@@ -190,7 +283,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
           }}
           disabled={isExecuting}
         >
-          {isExecuting ? <LuCircleStop className="w-3 h-3" /> : <LuPlay className="w-3 h-3" />}
+          {isExecuting ? <CircleStop className="w-3 h-3" /> : <Play className="w-3 h-3" />}
         </button>
       </div>
     </div>
@@ -277,17 +370,23 @@ names(df) <- make.names(names(df))`;
     }
   };
 
+  const [newCellType, setNewCellType] = useState<'code' | 'markdown'>('code');
+
   const addCell = () => {
     const newCell: Cell = {
       id: Date.now(),
-      type: 'code',
-      content: '',
+      type: newCellType,
+      content: newCellType === 'markdown' ? '' : '',
       stdout: null,
       output: null,
       error: null,
       executionCount: null,
     };
     setCells([...cells, newCell]);
+  };
+
+  const changeCellType = (cellId: number, newType: 'code' | 'markdown') => {
+    setCells(cells.map(cell => (cell.id === cellId ? { ...cell, type: newType } : cell)));
   };
 
   const updateCellContent = (cellId: number, newContent: string) => {
@@ -331,6 +430,12 @@ names(df) <- make.names(names(df))`;
     try {
       const cell = cells.find(c => c.id === cellId);
       if (!cell) return;
+
+      // Skip execution for markdown cells
+      if (cell.type === 'markdown') {
+        setIsExecuting(false);
+        return;
+      }
 
       const setupCode = generateSetupCode(language);
       const fullCode = setupCode + '\n' + cell.content;
@@ -398,6 +503,9 @@ names(df) <- make.names(names(df))`;
 
   const executeAllCells = async () => {
     for (const cell of cells) {
+      // Skip markdown cells
+      if (cell.type === 'markdown') continue;
+
       setIsExecuting(true);
       try {
         const setupCode = generateSetupCode(language);
@@ -473,7 +581,7 @@ names(df) <- make.names(names(df))`;
             onClick={() => selectedCell && executeCell(selectedCell)}
             disabled={isExecuting || !activeTab?.data?.initialData}
           >
-            <LuPlay className="w-3 h-3" />
+            <Play className="w-3 h-3" />
           </button>
           <Select value={language} onValueChange={value => setLanguage(value as 'python' | 'r')}>
             <SelectTrigger className="h-6 text-xs w-24">
@@ -488,8 +596,28 @@ names(df) <- make.names(names(df))`;
               </SelectItem>
             </SelectContent>
           </Select>
-          <button className="p-1 hover:bg-gray-200 rounded" onClick={addCell}>
-            <LuPlus className="w-3 h-3" />
+          <Select
+            value={newCellType}
+            onValueChange={value => setNewCellType(value as 'code' | 'markdown')}
+          >
+            <SelectTrigger className="h-6 text-xs w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="code" className="text-xs">
+                Code
+              </SelectItem>
+              <SelectItem value="markdown" className="text-xs">
+                Markdown
+              </SelectItem>
+            </SelectContent>
+          </Select>
+          <button
+            className="p-1 hover:bg-gray-200 rounded"
+            onClick={addCell}
+            title={`Add ${newCellType} cell`}
+          >
+            <Plus className="w-3 h-3" />
           </button>
         </div>
       </div>
@@ -506,6 +634,7 @@ names(df) <- make.names(names(df))`;
               isExecuting={isExecuting}
               isSelected={selectedCell === cell.id}
               onSelect={setSelectedCell}
+              onTypeChange={changeCellType}
             />
           ))}
         </div>

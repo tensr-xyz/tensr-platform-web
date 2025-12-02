@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { useTabsStore } from '@/stores/tabs-store';
-import { LuLoader } from 'react-icons/lu';
+import { Loader2 as Loader } from 'lucide-react';
 import { ColumnSummary } from '@/types/file';
 import useAuth from '@/hooks/api/use-auth';
 
@@ -315,7 +315,7 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
 
         <DialogFooter>
           <Button onClick={handleShift} disabled={isLoading || !activeTab?.data?.filePath}>
-            {isLoading ? <LuLoader className="h-4 w-4 animate-spin" /> : 'Shift Values'}
+            {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : 'Shift Values'}
           </Button>
         </DialogFooter>
       </DialogContent>

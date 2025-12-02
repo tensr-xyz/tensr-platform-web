@@ -20,7 +20,7 @@ import { Checkbox } from '@/components/atoms/checkbox';
 import { useProject } from '@/contexts/project-context';
 import { useTabsStore } from '@/stores/tabs-store';
 import { ProjectActions } from '@/contexts/project-context/types';
-import { LuLoader } from 'react-icons/lu';
+import { Loader2 as Loader } from 'lucide-react';
 
 type MissingDataMethod =
   | 'series_mean'
@@ -268,7 +268,7 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
         <DialogFooter>
           <Button onClick={handleAnalyze} disabled={isLoading || !!criticalError}>
             {isLoading ? (
-              <LuLoader className="h-4 w-4 animate-spin" />
+              <Loader className="h-4 w-4 animate-spin" />
             ) : (
               'Analyze & Replace Missing Values'
             )}

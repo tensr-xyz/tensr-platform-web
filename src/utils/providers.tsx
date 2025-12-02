@@ -1,6 +1,8 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { StytchProvider } from '@stytch/nextjs';
+import { createStytchUIClient } from '@stytch/nextjs/ui';
 import { useState } from 'react';
 
 export default function Providers({ children }: { children: React.ReactNode }) {
@@ -34,5 +36,17 @@ export default function Providers({ children }: { children: React.ReactNode }) {
       })
   );
 
-  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+  const publicToken = process.env.NEXT_PUBLIC_STYTCH_PUBLIC_TOKEN;
+
+  if (!publicToken) {
+    throw new Error('Missing NEXT_PUBLIC_STYTCH_PUBLIC_TOKEN environment variable');
+  }
+
+  const stytch = createStytchUIClient(publicToken);
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <StytchProvider stytch={stytch}>{children}</StytchProvider>
+    </QueryClientProvider>
+  );
 }

@@ -1,15 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import {
-  LuArrowRight,
-  LuCircle,
-  LuMove,
-  LuRotateCcw,
-  LuRotateCw,
-  LuSquare,
-  LuMinus,
-  LuPlus,
-} from 'react-icons/lu';
+import { ArrowRight, Circle, Move, RotateCcw, RotateCw, Square, Minus, Plus } from 'lucide-react';
 import { SidebarTrigger, SidebarProvider, SidebarInset } from '@/components/organisms/sidebar';
 import { useTabsStore } from '@/stores/tabs-store';
 import {
@@ -405,28 +396,28 @@ export function ModelBuilder() {
           onClick={() => setSelectedTool('move')}
           title="Move Tool (V)"
         >
-          <LuMove className="w-5 h-5" />
+          <Move className="w-5 h-5" />
         </button>
         <button
           className={`p-2 rounded-sm ${selectedTool === 'observed' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('observed')}
           title="Observed Variable (O)"
         >
-          <LuSquare className="w-5 h-5" />
+          <Square className="w-5 h-5" />
         </button>
         <button
           className={`p-2 rounded-sm ${selectedTool === 'latent' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('latent')}
           title="Latent Variable (L)"
         >
-          <LuCircle className="w-5 h-5" />
+          <Circle className="w-5 h-5" />
         </button>
         <button
           className={`p-2 rounded-sm ${selectedTool === 'path' ? 'bg-blue-500 text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('path')}
           title="Add Path (P)"
         >
-          <LuArrowRight className="w-5 h-5" />
+          <ArrowRight className="w-5 h-5" />
         </button>
       </div>
 
@@ -437,7 +428,7 @@ export function ModelBuilder() {
           disabled={historyIndex <= 0}
           title="Undo (Ctrl+Z)"
         >
-          <LuRotateCcw className="w-5 h-5" />
+          <RotateCcw className="w-5 h-5" />
         </button>
         <button
           className="p-2 rounded-sm hover:bg-gray-100"
@@ -445,7 +436,7 @@ export function ModelBuilder() {
           disabled={historyIndex >= history.length - 1}
           title="Redo (Ctrl+Shift+Z)"
         >
-          <LuRotateCw className="w-5 h-5" />
+          <RotateCw className="w-5 h-5" />
         </button>
       </div>
 
@@ -455,7 +446,7 @@ export function ModelBuilder() {
           onClick={() => setZoom(z => Math.max(z - 0.1, MIN_ZOOM))}
           title="Zoom Out"
         >
-          <LuMinus className="w-5 h-5" />
+          <Minus className="w-5 h-5" />
         </button>
         <span className="text-sm">{Math.round(zoom * 100)}%</span>
         <button
@@ -463,7 +454,7 @@ export function ModelBuilder() {
           onClick={() => setZoom(z => Math.min(z + 0.1, MAX_ZOOM))}
           title="Zoom In"
         >
-          <LuPlus className="w-5 h-5" />
+          <Plus className="w-5 h-5" />
         </button>
       </div>
     </div>
@@ -525,7 +516,7 @@ export function ModelBuilder() {
 
   const renderNode = useCallback(
     (node: Node) => {
-      const NodeComponent = node.type === 'observed' ? LuSquare : LuCircle;
+      const NodeComponent = node.type === 'observed' ? Square : Circle;
       const isSelected = selectedNode?.id === node.id;
 
       // Only render nodes that are within the viewport

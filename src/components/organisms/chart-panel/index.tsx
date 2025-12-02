@@ -16,14 +16,14 @@ import { Badge } from '@/components/atoms/badge';
 import { ScrollArea } from '@/components/atoms/scroll-area';
 import { Card } from '@/components/atoms/card';
 import {
-  LuPlus,
-  LuX,
-  LuLightbulb,
-  LuChartLine,
-  LuChartBar,
-  LuChartScatter,
-  LuChartArea,
-} from 'react-icons/lu';
+  Plus,
+  X,
+  Lightbulb,
+  TrendingUp as ChartLine,
+  BarChart3 as ChartBar,
+  ScatterChart as ChartScatter,
+  AreaChart as ChartArea,
+} from 'lucide-react';
 import { useChartState } from '@/contexts/chart-context';
 import { ChartType } from '@/contexts/chart-context/types';
 import {
@@ -48,10 +48,10 @@ const ChartPanel = ({ columns = [] }: ChartPanelProps) => {
   const { state, dispatch } = useChartState();
 
   const chartTypes = [
-    { id: ChartType.LINE, icon: LuChartLine, label: 'Line' },
-    { id: ChartType.BAR, icon: LuChartBar, label: 'Bar' },
-    { id: ChartType.SCATTER, icon: LuChartScatter, label: 'Scatter' },
-    { id: ChartType.AREA, icon: LuChartArea, label: 'Area' },
+    { id: ChartType.LINE, icon: ChartLine, label: 'Line' },
+    { id: ChartType.BAR, icon: ChartBar, label: 'Bar' },
+    { id: ChartType.SCATTER, icon: ChartScatter, label: 'Scatter' },
+    { id: ChartType.AREA, icon: ChartArea, label: 'Area' },
   ];
 
   const suggestions = [
@@ -101,7 +101,7 @@ const ChartPanel = ({ columns = [] }: ChartPanelProps) => {
                           {suggestion.description}
                         </p>
                       </div>
-                      <LuLightbulb className="h-5 w-5 text-muted-foreground" />
+                      <Lightbulb className="h-5 w-5 text-muted-foreground" />
                     </div>
                   </Card>
                 ))}
@@ -185,7 +185,7 @@ const ChartPanel = ({ columns = [] }: ChartPanelProps) => {
                       size="sm"
                       onClick={() => dispatch(removeSeries(series.id))}
                     >
-                      <LuX className="h-4 w-4" />
+                      <X className="h-4 w-4" />
                     </Button>
                   </div>
                 ))}
@@ -203,7 +203,7 @@ const ChartPanel = ({ columns = [] }: ChartPanelProps) => {
                     )
                   }
                 >
-                  <LuPlus className="h-4 w-4" />
+                  <Plus className="h-4 w-4" />
                   Add Series
                 </Button>
               </div>

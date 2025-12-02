@@ -10,7 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/molecules/dropdown';
 import { Button } from '@/components/atoms/button';
-import { LuChevronDown, LuFile, LuFolder, LuPlus, LuX } from 'react-icons/lu';
+import { ChevronDown, File, Folder, Plus, X } from 'lucide-react';
 
 interface RecentProject {
   path: string;
@@ -57,7 +57,7 @@ export const ProjectMenu = () => {
         id: crypto.randomUUID(),
         name: fileName,
         path: filePath,
-        type: 'file',
+        type: 'file' as const,
       };
 
       setProject(project);
@@ -79,7 +79,7 @@ export const ProjectMenu = () => {
         id: crypto.randomUUID(),
         name: dirPath.split('/').pop() || 'Untitled',
         path: dirPath,
-        type: 'directory',
+        type: 'directory' as const,
       };
 
       setProject(project);
@@ -121,21 +121,21 @@ export const ProjectMenu = () => {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-2">
           {currentProject?.name || 'No Project'}
-          <LuChevronDown />
+          <ChevronDown />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-80">
         <DropdownMenuLabel>Actions</DropdownMenuLabel>
         <DropdownMenuItem disabled={isLoading} onClick={handleNewProject}>
-          <LuPlus className="h-4 w-4 mr-2" />
+          <Plus className="h-4 w-4 mr-2" />
           New Project
         </DropdownMenuItem>
         <DropdownMenuItem disabled={isLoading} onClick={handleOpenFile}>
-          <LuFile className="h-4 w-4 mr-2" />
+          <File className="h-4 w-4 mr-2" />
           Open File
         </DropdownMenuItem>
         <DropdownMenuItem disabled={isLoading} onClick={handleOpenDirectory}>
-          <LuFolder className="h-4 w-4 mr-2" />
+          <Folder className="h-4 w-4 mr-2" />
           Open Folder
         </DropdownMenuItem>
 
@@ -146,9 +146,9 @@ export const ProjectMenu = () => {
             <DropdownMenuLabel>Current Project</DropdownMenuLabel>
             <DropdownMenuItem disabled={isLoading} className="flex items-center gap-2">
               {currentProject.type === 'directory' ? (
-                <LuFolder className="h-4 w-4" />
+                <Folder className="h-4 w-4" />
               ) : (
-                <LuFile className="h-4 w-4" />
+                <File className="h-4 w-4" />
               )}
               <div className="flex flex-col">
                 <span className="font-medium">{currentProject.name}</span>
@@ -170,9 +170,9 @@ export const ProjectMenu = () => {
               >
                 <div className="flex items-center gap-2 min-w-0">
                   {project.entry_type === 'directory' ? (
-                    <LuFolder className="h-4 w-4 shrink-0" />
+                    <Folder className="h-4 w-4 shrink-0" />
                   ) : (
-                    <LuFile className="h-4 w-4 shrink-0" />
+                    <File className="h-4 w-4 shrink-0" />
                   )}
                   <div className="flex flex-col min-w-0">
                     <span className="font-medium truncate">{project.title}</span>
@@ -185,7 +185,7 @@ export const ProjectMenu = () => {
                   className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
                   onClick={e => handleRemoveProject(e, project)}
                 >
-                  <LuX className="h-4 w-4" />
+                  <X className="h-4 w-4" />
                 </Button>
               </DropdownMenuItem>
             ))}

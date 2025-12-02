@@ -230,27 +230,24 @@ export const useProjectFileUpload = ({
           // Step 6: Process the file to get schema and metadata
           setUploadProgress(90);
           console.log('Processing file to extract schema...');
-          
+
           const RUST_API_URL = process.env.NEXT_PUBLIC_RUST_API_URL || 'https://api.dev.tensr.xyz';
           try {
-            const processResponse = await fetch(
-              `${RUST_API_URL}/projects/${projectId}/process`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-                body: JSON.stringify({
-                  file_index: 0, // Process first file
-                }),
-              }
-            );
+            const processResponse = await fetch(`${RUST_API_URL}/projects/${projectId}/process`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                file_index: 0, // Process first file
+              }),
+            });
 
             if (processResponse.ok) {
               const processData = await processResponse.json();
               console.log('File processed successfully, schema extracted:', processData);
-              
+
               // Save schema back to project file metadata
               if (processData.column_summaries && uploadData.fileId) {
                 try {
@@ -276,14 +273,20 @@ export const useProjectFileUpload = ({
                   if (schemaUpdateResponse.ok) {
                     console.log('Schema saved to project file metadata successfully');
                   } else {
-                    console.warn('Failed to save schema to project file metadata:', schemaUpdateResponse.statusText);
+                    console.warn(
+                      'Failed to save schema to project file metadata:',
+                      schemaUpdateResponse.statusText
+                    );
                   }
                 } catch (schemaError) {
                   console.warn('Failed to save schema to project file metadata:', schemaError);
                 }
               }
             } else {
-              console.warn('File processing failed, continuing without schema:', processResponse.statusText);
+              console.warn(
+                'File processing failed, continuing without schema:',
+                processResponse.statusText
+              );
             }
           } catch (processError) {
             console.warn('Failed to process file for schema extraction:', processError);
@@ -291,7 +294,7 @@ export const useProjectFileUpload = ({
           }
 
           setUploadProgress(100);
-          
+
           // Call the completion callback
           onUploadComplete?.(projectId);
 

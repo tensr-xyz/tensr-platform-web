@@ -20,7 +20,7 @@ import { Checkbox } from '@/components/atoms/checkbox';
 import { useProject } from '@/contexts/project-context';
 import { useTabsStore } from '@/stores/tabs-store';
 import { ProjectActions } from '@/contexts/project-context/types';
-import { LuLoader } from 'react-icons/lu';
+import { Loader2 as Loader } from 'lucide-react';
 
 type StandardizationMethod =
   | 'z_score'
@@ -234,7 +234,7 @@ export const StandardizeValuesDialog = ({ children }: StandardizeValuesProps) =>
 
         <DialogFooter>
           <Button onClick={handleStandardize} disabled={isLoading || !!criticalError}>
-            {isLoading ? <LuLoader className="h-4 w-4 animate-spin" /> : 'Standardize Values'}
+            {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : 'Standardize Values'}
           </Button>
         </DialogFooter>
       </DialogContent>

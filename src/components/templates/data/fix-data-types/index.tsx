@@ -20,7 +20,7 @@ import { Checkbox } from '@/components/atoms/checkbox';
 import { useProject } from '@/contexts/project-context';
 import { useTabsStore } from '@/stores/tabs-store';
 import { ProjectActions } from '@/contexts/project-context/types';
-import { LuLoader } from 'react-icons/lu';
+import { Loader2 as Loader } from 'lucide-react';
 
 type DataType = 'string' | 'integer' | 'float' | 'date' | 'boolean' | 'auto';
 
@@ -251,7 +251,7 @@ export const FixDataTypesDialog = ({ children }: FixDataTypesProps) => {
 
         <DialogFooter>
           <Button onClick={handleFixTypes} disabled={isLoading || !!criticalError}>
-            {isLoading ? <LuLoader className="h-4 w-4 animate-spin" /> : 'Fix Data Types'}
+            {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : 'Fix Data Types'}
           </Button>
         </DialogFooter>
       </DialogContent>

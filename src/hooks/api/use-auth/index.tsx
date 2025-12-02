@@ -1,61 +1,57 @@
 'use client';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { useStytch, useStytchUser, useStytchSession } from '@stytch/nextjs';
 import { useAuthStore } from '@/stores/auth-store';
 import { clearAuthData } from '@/utils/auth';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.tensr.xyz';
-
 export const useAuth = () => {
+  const stytch = useStytch();
+  const { user: stytchUser } = useStytchUser();
+  const { session: stytchSession } = useStytchSession();
+  
   const {
     user,
-    tokens,
+    session,
     isLoading,
     error,
     setUser,
-    setTokens,
+    setSession,
     setLoading,
     setError,
     login,
     logout,
   } = useAuthStore();
 
-  // Session state for the current auth flow
-  const [session, setSession] = useState<string | null>(null);
+  // Local state for OTP flow
+  const [methodId, setMethodId] = useState<string | null>(null);
   const router = useRouter();
 
-  // Initiate authentication
+  // Initiate authentication with email OTP
   const initiateAuth = async (email: string) => {
     setLoading(true);
     setError(null);
     try {
-      console.log('Initiating auth for email:', email);
-      const response = await fetch(`${API_BASE_URL}/auth/initiate-auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Authentication failed');
-
-      // Log the complete response for debugging
-      console.log('Auth response received:', JSON.stringify(data));
-      console.log('Session from response:', data.session);
-
-      // Make sure session is being properly set
-      if (data.session) {
-        console.log('Setting session state with:', data.session);
-        setSession(data.session);
-
-        // Store session in localStorage
-        localStorage.setItem('auth_session', data.session);
-      } else {
-        console.error('No session received from API');
+      console.log('Initiating Stytch auth for email:', email);
+      
+      if (!stytch) {
+        throw new Error('Stytch client not initialized');
       }
 
+      const response = await stytch.otps.email.loginOrCreate(email);
+
+      if (response.status_code !== 200) {
+        throw new Error(response.error_message || 'Failed to send verification code');
+      }
+
+      const methodIdValue = response.email_id || response.method_id;
+      setMethodId(methodIdValue || '');
+
       setLoading(false);
-      return data;
+      return {
+        message: 'Verification code sent successfully',
+        methodId: methodIdValue,
+      };
     } catch (error) {
       console.error('Auth initiation failed:', error);
       setError(error instanceof Error ? error.message : 'Authentication failed');
@@ -65,83 +61,73 @@ export const useAuth = () => {
   };
 
   // Verify authentication with OTP
-  const verifyAuth = async (email: string, otp: string, authSession?: string) => {
+  const verifyAuth = async (email: string, otp: string, verifyMethodId?: string) => {
     setLoading(true);
     setError(null);
 
     try {
-      // Use provided session or fall back to state
-      const sessionToUse = authSession || session;
+      const methodIdToUse = verifyMethodId || methodId;
 
-      console.log('Verifying auth with session:', sessionToUse);
+      console.log('Verifying auth with methodId:', methodIdToUse);
 
-      if (!sessionToUse) {
-        console.error('No session available for verification');
-        setError('Your session has expired. Please try again.');
+      if (!methodIdToUse) {
+        console.error('No methodId available for verification');
+        setError('Session expired. Please request a new code.');
         setLoading(false);
         return {
           success: false,
-          code: 'SESSION_EXPIRED',
-          message: 'Your session has expired. Please try again.',
+          code: 'METHOD_ID_MISSING',
+          message: 'Session expired. Please request a new code.',
         };
       }
 
-      const response = await fetch(`${API_BASE_URL}/auth/verify-auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          otp,
-          session: sessionToUse,
-        }),
+      if (!stytch) {
+        throw new Error('Stytch client not initialized');
+      }
+
+      const response = await stytch.otps.authenticate(otp, methodIdToUse, {
+        session_duration_minutes: 60 * 24 * 7, // 7 days
       });
 
-      const responseData = await response.json();
-
-      // Parse the body from the response if it's a stringified JSON
-      let data;
-      if (responseData.body && typeof responseData.body === 'string') {
-        data = JSON.parse(responseData.body);
-      } else {
-        data = responseData;
-      }
-
-      if (!response.ok) {
-        setError(data.message || 'Verification failed');
+      if (response.status_code !== 200) {
+        setError(response.error_message || 'Verification failed');
         setLoading(false);
         return {
           success: false,
-          code: data.code || 'ERROR',
-          message: data.message || 'Verification failed',
+          code: 'VERIFICATION_FAILED',
+          message: response.error_message || 'Verification failed',
         };
       }
 
-      // Handle success case
-      if (data.tokens) {
-        console.log('🔥🔥🔥 NEW AUTH SYSTEM WORKING 🔥🔥🔥');
-        console.log('useAuth: Auth verified successfully, calling setTokens...');
-        const { accessToken, idToken, refreshToken } = data.tokens;
-
-        // Ensure refreshToken is always a string
-        const safeRefreshToken = refreshToken || '';
-
-        console.log('useAuth: Calling Zustand setTokens...');
-        // Store tokens in Zustand store (which will handle localStorage/cookies)
-        setTokens({ accessToken, idToken, refreshToken: safeRefreshToken });
-        console.log('useAuth: setTokens called, tokens should be stored now');
-
-        if (data.user) {
-          console.log('useAuth: Setting user data');
-          setUser(data.user);
-        }
+      // Store session
+      if (response.session_token) {
+        setSession({
+          sessionToken: response.session_token,
+          sessionJwt: response.session_jwt,
+        });
       }
 
-      // Clear session after successful verification
-      setSession(null);
-      localStorage.removeItem('auth_session');
+      // Store user if available
+      if (response.user) {
+        const stytchUserData = response.user as any;
+        const userData = {
+          userId: stytchUserData.user_id,
+          email: stytchUserData.emails?.[0]?.email || email,
+          firstName: stytchUserData.name?.first_name,
+          lastName: stytchUserData.name?.last_name,
+          username: stytchUserData.name?.first_name,
+          status: 'ACTIVE' as const,
+          createdAt: stytchUserData.created_at || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        setUser(userData);
+      }
+
+      // Clear method ID
+      setMethodId(null);
 
       setLoading(false);
-      return { success: true, data };
+      return { success: true };
     } catch (error) {
       console.error('Auth verification failed:', error);
       setError(error instanceof Error ? error.message : 'Verification failed');
@@ -154,55 +140,68 @@ export const useAuth = () => {
     }
   };
 
+  // Handle Google OAuth
+  const initiateGoogleAuth = async () => {
+    if (!stytch) {
+      throw new Error('Stytch client not initialized');
+    }
+
+    try {
+      const redirectUrl = new URL('/login', window.location.origin).toString();
+      await stytch.oauth.google.start({
+        login_redirect_url: redirectUrl,
+        signup_redirect_url: redirectUrl,
+      });
+    } catch (error) {
+      console.error('Google OAuth initiation failed:', error);
+      throw error;
+    }
+  };
+
   // Handle logout
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      if (stytch && stytchSession) {
+        await stytch.session.revoke();
+      }
+    } catch (error) {
+      console.error('Error revoking Stytch session:', error);
+    }
+    
     clearAuthData();
     logout();
-    setSession(null);
-    localStorage.removeItem('auth_session');
+    setMethodId(null);
     router.push('/');
   };
 
   // Resend verification code
-  const resendVerificationCode = async (email: string, authSession?: string) => {
+  const resendVerificationCode = async (email: string) => {
     setLoading(true);
     setError(null);
 
     try {
-      // Use provided session or fall back to state
-      const sessionToUse = authSession || session;
+      console.log('Resending code for email:', email);
 
-      console.log('Resending code for email:', email, 'with session:', sessionToUse);
-
-      if (!sessionToUse) {
-        throw new Error('No active session available');
+      if (!stytch) {
+        throw new Error('Stytch client not initialized');
       }
 
-      const response = await fetch(`${API_BASE_URL}/auth/resend-code`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email,
-          session: sessionToUse,
-        }),
-      });
+      const response = await stytch.otps.email.loginOrCreate(email);
 
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.message || 'Failed to resend code');
-
-      // Parse the data if needed
-      const parsedData = data.body ? JSON.parse(data.body) : data;
-
-      // Update the session state
-      if (parsedData.session) {
-        console.log('New session received:', parsedData.session);
-        setSession(parsedData.session);
+      if (response.status_code !== 200) {
+        throw new Error(response.error_message || 'Failed to resend code');
       }
+
+      const methodIdValue = response.email_id || response.method_id;
+      setMethodId(methodIdValue || '');
 
       setError(null);
       setLoading(false);
 
-      return parsedData;
+      return {
+        message: 'Verification code resent successfully',
+        methodId: methodIdValue,
+      };
     } catch (error) {
       console.error('Resend code failed:', error);
       setError(error instanceof Error ? error.message : 'Failed to resend code');
@@ -213,15 +212,20 @@ export const useAuth = () => {
 
   return {
     user,
-    tokens,
+    session,
     isLoading,
     error,
-    isAuthenticated: !!user,
-    session,
+    isAuthenticated: !!user || !!stytchUser,
+    methodId,
     initiateAuth,
     verifyAuth,
+    initiateGoogleAuth,
     handleLogout,
     resendVerificationCode,
+    // Also expose Stytch hooks for direct access if needed
+    stytchUser,
+    stytchSession,
+    stytch,
   };
 };
 

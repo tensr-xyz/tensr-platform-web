@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules
 import { Download, Star, Eye, Code, FileText, Users, Calendar, Tag } from 'lucide-react';
 import { PluginRecord } from '@/types/plugin';
 import usePlugins from '@/hooks/api/use-plugin';
+import { Loader } from '@/components/molecules/loading';
 
 export default function PluginDetails() {
   const params = useParams();
@@ -63,10 +64,7 @@ export default function PluginDetails() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-4 text-lg">Loading plugin...</p>
-        </div>
+        <Loader fullScreen />
       </div>
     );
   }

@@ -1,8 +1,5 @@
-const TOKEN_KEYS = {
-  ACCESS_TOKEN: 'access_token',
-  ID_TOKEN: 'id_token',
-  REFRESH_TOKEN: 'refresh_token',
-} as const;
+const SESSION_TOKEN_KEY = 'stytch_session_token';
+const SESSION_JWT_KEY = 'stytch_session_jwt';
 
 // Cookie helper functions
 const setCookie = (name: string, value: string, days: number = 7) => {
@@ -18,122 +15,111 @@ const removeCookie = (name: string) => {
   document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Strict`;
 };
 
-export const isTokenValid = (token: string, bufferMinutes = 5) => {
-  if (!token) return false;
+export const isSessionValid = (sessionToken: string, bufferMinutes = 5) => {
+  if (!sessionToken) return false;
 
-  try {
-    // Parse the JWT to get expiration
-    const payload = JSON.parse(atob(token.split('.')[1]));
+  // Check if it's a JWT
+  const parts = sessionToken.split('.');
+  if (parts.length === 3) {
+    try {
+      const payload = JSON.parse(atob(parts[1]));
+      if (!payload.exp) return false;
 
-    if (!payload.exp) return false;
-
-    // Convert to milliseconds and add buffer
-    const expiryTime = payload.exp * 1000;
-    const bufferMs = bufferMinutes * 60 * 1000;
-
-    // Return true if token is still valid with buffer
-    return Date.now() < expiryTime - bufferMs;
-  } catch (e) {
-    console.error('Error validating token:', e);
-    return false;
+      const expiryTime = payload.exp * 1000;
+      const bufferMs = bufferMinutes * 60 * 1000;
+      return Date.now() < expiryTime - bufferMs;
+    } catch (e) {
+      console.error('Error validating session token:', e);
+      return false;
+    }
   }
+
+  // For non-JWT tokens, assume valid (Stytch handles expiry server-side)
+  return true;
 };
 
-export const storeTokens = (accessToken: string, idToken: string, refreshToken: string) => {
+export const storeSession = (sessionToken: string, sessionJwt?: string) => {
   if (typeof window === 'undefined') {
-    console.log('storeTokens called on server side, skipping');
+    console.log('storeSession called on server side, skipping');
     return;
   }
 
-  console.log('storeTokens called on client side!'); // Simple check
+  console.log('storeSession called on client side');
 
   try {
-    // Store in localStorage (keep existing behavior)
-    localStorage.setItem(TOKEN_KEYS.ACCESS_TOKEN, accessToken);
-    localStorage.setItem(TOKEN_KEYS.ID_TOKEN, idToken);
-    localStorage.setItem(TOKEN_KEYS.REFRESH_TOKEN, refreshToken);
+    // Store in localStorage
+    localStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
+    if (sessionJwt) {
+      localStorage.setItem(SESSION_JWT_KEY, sessionJwt);
+    }
 
     // Also store in cookies for middleware
-    setCookie('accessToken', accessToken, 1); // 1 day
-    setCookie('idToken', idToken, 1); // 1 day
-    setCookie('refreshToken', refreshToken, 7); // 7 days
+    setCookie('stytch_session_token', sessionToken, 7);
+    if (sessionJwt) {
+      setCookie('stytch_session_jwt', sessionJwt, 7);
+    }
 
-    console.log('Tokens stored successfully');
-    console.log('Cookies after setting:', document.cookie);
+    console.log('Session stored successfully');
   } catch (error) {
-    console.error('Error storing tokens:', error);
+    console.error('Error storing session:', error);
   }
 };
 
-export const removeTokens = () => {
+export const removeSession = () => {
   if (typeof window === 'undefined') return;
 
   try {
     // Remove from localStorage
-    Object.values(TOKEN_KEYS).forEach(key => {
-      localStorage.removeItem(key);
-    });
+    localStorage.removeItem(SESSION_TOKEN_KEY);
+    localStorage.removeItem(SESSION_JWT_KEY);
 
     // Remove from cookies
-    removeCookie('accessToken');
-    removeCookie('idToken');
-    removeCookie('refreshToken');
+    removeCookie('stytch_session_token');
+    removeCookie('stytch_session_jwt');
+    removeCookie('stytch_session');
   } catch (error) {
-    console.error('Error removing tokens:', error);
+    console.error('Error removing session:', error);
   }
 };
 
-export const getAccessToken = () => {
+export const getSessionToken = () => {
   if (typeof window === 'undefined') return null;
 
   try {
-    return localStorage.getItem(TOKEN_KEYS.ACCESS_TOKEN);
+    return localStorage.getItem(SESSION_TOKEN_KEY);
   } catch (error) {
-    console.error('Error getting access token:', error);
+    console.error('Error getting session token:', error);
     return null;
   }
 };
 
-export const getIdToken = () => {
+export const getSessionJwt = () => {
   if (typeof window === 'undefined') return null;
 
   try {
-    return localStorage.getItem(TOKEN_KEYS.ID_TOKEN);
+    return localStorage.getItem(SESSION_JWT_KEY);
   } catch (error) {
-    console.error('Error getting ID token:', error);
+    console.error('Error getting session JWT:', error);
     return null;
   }
 };
 
-export const getRefreshToken = () => {
+export const getStoredSession = () => {
   if (typeof window === 'undefined') return null;
 
-  try {
-    return localStorage.getItem(TOKEN_KEYS.REFRESH_TOKEN);
-  } catch (error) {
-    console.error('Error getting refresh token:', error);
-    return null;
-  }
-};
+  const sessionToken = localStorage.getItem(SESSION_TOKEN_KEY);
+  const sessionJwt = localStorage.getItem(SESSION_JWT_KEY);
 
-export const getStoredTokens = () => {
-  if (typeof window === 'undefined') return null;
-
-  const accessToken = localStorage.getItem('access_token');
-  const idToken = localStorage.getItem('id_token');
-  const refreshToken = localStorage.getItem('refresh_token');
-
-  if (!accessToken || !idToken) return null;
+  if (!sessionToken) return null;
 
   return {
-    accessToken,
-    idToken,
-    refreshToken,
+    sessionToken,
+    sessionJwt,
   };
 };
 
 export const clearAuthData = () => {
-  removeTokens();
+  removeSession();
   if (typeof window !== 'undefined') {
     // Clear any other auth-related items from localStorage/sessionStorage
     localStorage.removeItem('auth_session');
@@ -141,9 +127,9 @@ export const clearAuthData = () => {
   }
 };
 
-export const decodeIdToken = (idToken: string) => {
+export const decodeSessionJwt = (sessionJwt: string) => {
   try {
-    const base64Url = idToken.split('.')[1];
+    const base64Url = sessionJwt.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
       atob(base64)
@@ -153,18 +139,7 @@ export const decodeIdToken = (idToken: string) => {
     );
     return JSON.parse(jsonPayload);
   } catch (error) {
-    console.error('Error decoding ID token:', error);
+    console.error('Error decoding session JWT:', error);
     return null;
-  }
-};
-
-export const getEligiblePlans = (idToken: string): string[] => {
-  try {
-    const decoded = decodeIdToken(idToken);
-    if (!decoded || !decoded['custom:eligiblePlans']) return [];
-    return JSON.parse(decoded['custom:eligiblePlans']);
-  } catch (error) {
-    console.error('Error getting eligible plans:', error);
-    return [];
   }
 };

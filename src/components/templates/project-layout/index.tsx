@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/atoms/resizable';
-import ProjectSidebar from '@/components/templates/project-sidebar';
+import * as ResizablePrimitive from 'react-resizable-panels';
 import AnalysisSidebar from '@/components/templates/analysis-sidebar';
 import Titlebar from '@/components/organisms/titlebar';
 import Footer from '@/components/organisms/footer';
@@ -15,13 +15,12 @@ import { FileEntry } from '@/types/project';
 import { useCollaboration } from '@/hooks/use-collaboration';
 import Loading from '@/components/molecules/loading';
 import useAuth from '@/hooks/api/use-auth';
-import { FolderComponent } from '@/components/organisms/file-tree';
+import { LeftPanel } from '@/components/organisms/left-panel';
 
 interface ProjectLayoutProps {
   children: React.ReactNode;
   rightPanelOpen: boolean;
   onToggleSidebar: () => void;
-  onToggleLeftSidebar: () => void;
   isMaximized?: boolean;
   activeTab?: Tab;
 }
@@ -30,14 +29,12 @@ const ProjectLayout = ({
   children,
   rightPanelOpen,
   onToggleSidebar,
-  onToggleLeftSidebar,
   isMaximized = false,
   activeTab,
 }: ProjectLayoutProps) => {
   const {
     currentProject,
     leftPanelOpen,
-    leftSidebarOpen,
     leftPanelContent,
     terminalOpen,
     importData,
@@ -68,13 +65,8 @@ const ProjectLayout = ({
     const initializeProject = async () => {
       setIsLoading(true);
 
-      // Set the file tree as the default left panel content
-      setLeftPanelContent(<FolderComponent />);
-
-      // Ensure the left panel is open to show the file tree
-      if (!leftPanelOpen) {
-        toggleLeftPanel(true);
-      }
+      // Set the left panel with tabs (Files and Analysis)
+      setLeftPanelContent(<LeftPanel />);
 
       // For now, just set up basic project structure
       // The actual file processing is handled by the workspace component
@@ -84,13 +76,13 @@ const ProjectLayout = ({
     initializeProject().catch(err => {
       setIsLoading(false);
     });
-  }, [currentProject, addTab, userId, setLeftPanelContent, leftPanelOpen, toggleLeftPanel]);
+  }, [currentProject, addTab, userId, setLeftPanelContent]);
 
-  // Refresh file tree when fileSystem changes
+  // Refresh left panel when fileSystem changes
   useEffect(() => {
     if (currentProject && fileSystem.length > 0) {
-      // Re-render the FolderComponent to show updated files
-      setLeftPanelContent(<FolderComponent />);
+      // Re-render the LeftPanel to show updated files
+      setLeftPanelContent(<LeftPanel />);
     }
   }, [fileSystem, currentProject, setLeftPanelContent]);
 
@@ -131,22 +123,45 @@ const ProjectLayout = ({
       ? (activeTab.data as TabData)?.totalRows || 0
       : 0;
 
+  const leftPanelRef = useRef<React.ComponentRef<typeof ResizablePrimitive.Panel>>(null);
+
+  // Control panel collapse/expand based on leftPanelOpen state
+  useEffect(() => {
+    if (leftPanelRef.current) {
+      if (leftPanelOpen) {
+        leftPanelRef.current.expand();
+      } else {
+        leftPanelRef.current.collapse();
+      }
+    }
+  }, [leftPanelOpen]);
+
   const mainContent = (
     <ResizablePanelGroup
       autoSaveId="conditional"
       direction="horizontal"
-      className="flex-1 overflow-hidden"
+      className="flex-1 min-w-0 overflow-hidden"
     >
-      {leftPanelOpen && (
-        <>
-          <ResizablePanel id="left" order={1} defaultSize={20} minSize={15} maxSize={30}>
-            <div className="h-full bg-background overflow-auto">{leftPanelContent}</div>
-          </ResizablePanel>
-          <ResizableHandle />
-        </>
-      )}
+      <ResizablePrimitive.Panel
+        ref={leftPanelRef}
+        id="left"
+        order={1}
+        defaultSize={leftPanelOpen ? 20 : 0}
+        minSize={0}
+        maxSize={30}
+        collapsible
+        className="min-w-0"
+      >
+        <div className="h-full bg-background min-w-0 overflow-auto">{leftPanelContent}</div>
+      </ResizablePrimitive.Panel>
+      {leftPanelOpen && <ResizableHandle />}
 
-      <ResizablePanel id="center" order={2} defaultSize={rightPanelOpen ? 60 : 80}>
+      <ResizablePanel
+        id="center"
+        order={2}
+        defaultSize={leftPanelOpen ? (rightPanelOpen ? 60 : 80) : rightPanelOpen ? 80 : 100}
+        className="min-w-0"
+      >
         <ResizablePanelGroup direction="vertical" className="h-full">
           <ResizablePanel defaultSize={75} className="overflow-hidden">
             <div className="h-full flex flex-col">
@@ -174,10 +189,10 @@ const ProjectLayout = ({
             order={3}
             defaultSize={20}
             minSize={10}
-            className="overflow-hidden"
+            className="min-w-0 overflow-hidden"
           >
-            <div className="h-full">
-              <AnalysisSidebar onToggleSidebar={onToggleSidebar} />
+            <div className="h-full min-w-0">
+              <AnalysisSidebar />
             </div>
           </ResizablePanel>
         </>
@@ -192,17 +207,11 @@ const ProjectLayout = ({
         isMaximized && 'z-[100]'
       )}
     >
-      <div className="flex flex-1 overflow-hidden">
-        {leftSidebarOpen && (
-          <div className="bg-background">
-            <ProjectSidebar />
-          </div>
-        )}
-        <div className="flex flex-col flex-1">
+      <div className="flex flex-1 min-w-0 overflow-hidden">
+        <div className="flex min-w-0 flex-col flex-1">
           {/* Make sure we safely pass tabs to Titlebar */}
           <Titlebar
             onToggleSidebar={onToggleSidebar}
-            onToggleLeftSidebar={onToggleLeftSidebar}
             tabs={tabs ?? []}
             activeTab={activeTab}
             onTabClose={handleTabClose}

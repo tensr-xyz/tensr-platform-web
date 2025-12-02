@@ -142,7 +142,7 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
               <FileText className="h-5 w-5 text-blue-600" />
             </div>
             <div className="ml-4">
-              <div className="text-sm font-medium text-gray-900">{project.projectName}</div>
+              <div className="text-sm text-gray-900">{project.projectName}</div>
               <div className="text-xs text-gray-500">Created: {formatDate(project.createdAt)}</div>
             </div>
           </div>

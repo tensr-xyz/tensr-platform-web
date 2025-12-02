@@ -55,7 +55,7 @@ export default function ProjectWorkspacePage() {
     if (project) {
       setResource({
         id: projectId,
-        name: project.name || project.projectName || '', // Handle both field names
+        name: (project as any).name || project.projectName || '', // Handle both field names
         path: projectId, // Always use project ID as path for project detection
         type: 'project',
       });

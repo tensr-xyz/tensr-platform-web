@@ -3,7 +3,7 @@
 import { FloatingLabelInput } from '@/components/molecules/floating-label-input';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LuCheck, LuInfo, LuDownload, LuSettings, LuArrowRight } from 'react-icons/lu';
+import { Check, Info, Download, Settings, ArrowRight } from 'lucide-react';
 import { TIER_FEATURES, TierType } from '@/configs/pricing';
 import { useAuth } from '@/hooks/api/use-auth';
 import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js';
@@ -621,7 +621,7 @@ const PaymentPage = () => {
                     .slice(0, 3)
                     .map((feature, index) => (
                       <div key={index} className="flex items-center gap-2">
-                        <LuCheck className="text-primary" size={16} />
+                        <Check className="text-primary" size={16} />
                         <span className="text-sm">{feature.text}</span>
                       </div>
                     ))}
@@ -654,7 +654,7 @@ const PaymentPage = () => {
                         : isDisabled
                           ? 'Not Available'
                           : 'Select Plan'}
-                      {formData.tier === tier && <LuCheck className="ml-2" size={16} />}
+                      {formData.tier === tier && <Check className="ml-2" size={16} />}
                     </Button>
                   )}
                 </div>
@@ -816,7 +816,7 @@ const PaymentPage = () => {
       </div>
 
       <div className="flex items-center gap-2 text-sm p-4 bg-gray-50 rounded-md mt-4">
-        <LuInfo size={16} className="text-gray-500 flex-shrink-0" />
+        <Info size={16} className="text-gray-500 flex-shrink-0" />
         <span>
           By clicking &quot;Subscribe Now&quot;, you&apos;ll be subscribed to the ${currentPrice}{' '}
           {formData.billingType === 'monthly' ? 'monthly' : 'annual'} plan. You can cancel anytime.
@@ -940,7 +940,7 @@ const PaymentPage = () => {
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center">
-          <LuCheck className="h-6 w-6 text-green-600" />
+          <Check className="h-6 w-6 text-green-600" />
         </div>
         <div className="text-xl md:text-2xl">Payment Successful!</div>
       </div>
@@ -999,7 +999,7 @@ const PaymentPage = () => {
             console.log('Download invoice');
           }}
         >
-          <LuDownload size={16} />
+          <Download size={16} />
           <span className="text-sm md:text-base">Download Invoice</span>
         </Button>
 
@@ -1008,7 +1008,7 @@ const PaymentPage = () => {
           className="flex items-center justify-center gap-2"
           onClick={() => router.push('/settings/billing')}
         >
-          <LuSettings size={16} />
+          <Settings size={16} />
           <span className="text-sm md:text-base">Manage Subscription</span>
         </Button>
       </div>
@@ -1141,7 +1141,7 @@ const PaymentPage = () => {
                       : currentStep === steps.length - 1
                         ? 'Go to Dashboard'
                         : 'Continue'}
-                {currentStep === steps.length - 1 && <LuArrowRight size={16} />}
+                {currentStep === steps.length - 1 && <ArrowRight size={16} />}
               </Button>
             </div>
           )}
@@ -1155,7 +1155,7 @@ const PaymentPage = () => {
                 className="flex-1 flex items-center justify-center gap-2"
               >
                 Go to Dashboard
-                <LuArrowRight size={16} />
+                <ArrowRight size={16} />
               </Button>
             </div>
           )}

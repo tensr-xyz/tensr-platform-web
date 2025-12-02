@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/atoms/avatar';
 import { Button } from '@/components/atoms/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import React, { useState, useEffect } from 'react';
-import { LuLink, LuShield, LuSettings } from 'react-icons/lu';
+import { Link, Shield, Settings } from 'lucide-react';
 import { MoreVertical } from 'lucide-react';
 import {
   Tooltip,
@@ -379,7 +379,7 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
-                      <LuShield className="h-4 w-4" />
+                      <Shield className="h-4 w-4" />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>Security Settings</TooltipContent>
@@ -390,7 +390,7 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
-                      <LuSettings className="h-4 w-4" />
+                      <Settings className="h-4 w-4" />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>Collaboration Settings</TooltipContent>
@@ -441,7 +441,7 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
-                      <LuShield className="h-4 w-4" />
+                      <Shield className="h-4 w-4" />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>Security Settings</TooltipContent>
@@ -452,7 +452,7 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
                 <Tooltip>
                   <TooltipTrigger>
                     <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
-                      <LuSettings className="h-4 w-4" />
+                      <Settings className="h-4 w-4" />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent>Collaboration Settings</TooltipContent>
@@ -478,7 +478,7 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
               className="w-full flex items-center gap-2"
               onClick={handleCopyLink}
             >
-              <LuLink size={14} />
+              <Link size={14} />
               Copy Link
             </Button>
           </div>

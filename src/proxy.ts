@@ -16,7 +16,7 @@ function decodeJWT(token: string) {
   }
 }
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   // Skip authentication for tests
   const userAgent = request.headers.get('user-agent') || '';
   const isTest =

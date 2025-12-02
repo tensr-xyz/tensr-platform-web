@@ -10,7 +10,7 @@ import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
 import { Separator } from '@/components/atoms/separator';
-import { LuSave, LuUser, LuMail, LuAtSign, LuSun, LuMonitor, LuMoon } from 'react-icons/lu';
+import { Save, User as UserIcon, Mail, AtSign, Sun, Monitor, Moon } from 'lucide-react';
 
 interface ApiError {
   message: string;
@@ -329,7 +329,7 @@ export default function GeneralSettings() {
                 </div>
               </div>
               <div className="flex items-center">
-                <LuSun className="h-4 w-4 text-yellow-500 mr-2" />
+                <Sun className="h-4 w-4 text-yellow-500 mr-2" />
                 <span className="text-sm text-gray-900 dark:text-white">Light</span>
               </div>
             </div>
@@ -357,7 +357,7 @@ export default function GeneralSettings() {
                 </div>
               </div>
               <div className="flex items-center">
-                <LuMonitor className="h-4 w-4 text-gray-500 mr-2" />
+                <Monitor className="h-4 w-4 text-gray-500 mr-2" />
                 <span className="text-sm text-gray-900 dark:text-white">System</span>
               </div>
             </div>
@@ -383,7 +383,7 @@ export default function GeneralSettings() {
                 </div>
               </div>
               <div className="flex items-center">
-                <LuMoon className="h-4 w-4 text-blue-500 mr-2" />
+                <Moon className="h-4 w-4 text-blue-500 mr-2" />
                 <span className="text-sm text-gray-900 dark:text-white">Dark</span>
               </div>
             </div>

@@ -7,7 +7,7 @@ import {
 } from '@/components/molecules/accordion';
 import { Input } from '@/components/atoms/input';
 import { ScrollArea } from '@/components/atoms/scroll-area';
-import { LuEye, LuEyeOff } from 'react-icons/lu';
+import { Eye, EyeOff } from 'lucide-react';
 import { LoaderCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, ResponsiveContainer, ReferenceArea, YAxis, Cell } from 'recharts';
 import { useVirtualizer } from '@tanstack/react-virtual';
@@ -137,9 +137,9 @@ const FrequencyItem = memo(
       >
         <div className="flex items-center gap-2 min-w-0 flex-1">
           {isSelected ? (
-            <LuEye className="w-4 h-4 flex-shrink-0" />
+            <Eye className="w-4 h-4 flex-shrink-0" />
           ) : (
-            <LuEyeOff className="w-4 h-4 flex-shrink-0" />
+            <EyeOff className="w-4 h-4 flex-shrink-0" />
           )}
           <span className="truncate" style={{ color: backgroundColor }}>
             {value}
@@ -710,9 +710,9 @@ const AccordionHeader = memo(
         </div>
         <button onClick={handleVisibilityClick} className="p-1 hover:bg-accent/50 rounded-sm">
           {isVisible ? (
-            <LuEye className="w-4 h-4" />
+            <Eye className="w-4 h-4" />
           ) : (
-            <LuEyeOff className="w-4 h-4 text-muted-foreground" />
+            <EyeOff className="w-4 h-4 text-muted-foreground" />
           )}
         </button>
       </div>

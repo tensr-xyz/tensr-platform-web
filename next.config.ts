@@ -3,6 +3,19 @@ import type { NextConfig } from 'next';
 const nextConfig: NextConfig = {
   output: 'standalone',
 
+  // Enable React Compiler for automatic memoization (Next.js 16)
+  // This automatically optimizes components and reduces unnecessary re-renders
+  reactCompiler: true,
+
+  // Enable Cache Components for better caching (Next.js 16)
+  // This provides fine-grained control over caching with "use cache" directive
+  cacheComponents: true,
+
+  // Enable Turbopack filesystem caching for faster dev startup (Next.js 16)
+  experimental: {
+    turbopackFileSystemCacheForDev: true,
+  },
+
   // Image optimization
   images: {
     remotePatterns: [

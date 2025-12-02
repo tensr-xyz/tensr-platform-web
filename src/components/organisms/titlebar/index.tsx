@@ -10,8 +10,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/molecules/dropdown';
 import { Button } from '@/components/atoms/button';
-import { LuEllipsisVertical, LuPanelLeft } from 'react-icons/lu';
+import { MoreVertical as EllipsisVertical } from 'lucide-react';
+import { Home } from 'lucide-react';
+import { useRouter, usePathname } from 'next/navigation';
 import { ViewType } from '@/contexts/project-context/types';
+import { Users } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
+import CollaborationPanel from '@/components/organisms/collaboration-panel';
+import { useProjectStore } from '@/stores/project-store';
 
 // Define the SpreadsheetTab interface here to match the Tab interface from your context
 interface SpreadsheetTab extends Tab {
@@ -24,7 +30,6 @@ interface SpreadsheetTab extends Tab {
 
 interface TitlebarProps {
   onToggleSidebar: () => void;
-  onToggleLeftSidebar: () => void;
   tabs?: Tab[];
   activeTab?: Tab;
   onTabClose?: (id: string) => void;
@@ -38,6 +43,64 @@ function isSpreadsheetTab(tab: Tab): tab is SpreadsheetTab {
     tab.data !== null &&
     Array.isArray(tab.data.initialData)
   );
+}
+
+// Extract fileId from file path
+function extractFileId(filePath?: string): string | null {
+  if (!filePath) return null;
+
+  // Check if it's a project ID (UUID) - if so, return null to avoid calling file API
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  if (uuidRegex.test(filePath)) {
+    return null;
+  }
+
+  // If the path contains slashes, it's a full path
+  if (filePath.includes('/')) {
+    const parts = filePath.split('/');
+    if (parts.length >= 3) {
+      return parts[2];
+    }
+  }
+
+  // Otherwise, assume it's a direct fileId
+  return filePath;
+}
+
+// Extract project ID from tab
+function extractProjectId(tab: Tab): string | null {
+  // Check if tab.path is a project ID (UUID)
+  if (tab.path) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(tab.path)) {
+      return tab.path;
+    }
+  }
+
+  // Check tab.data?.filePath for project path
+  if (tab.data?.filePath) {
+    const filePath = tab.data.filePath;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    
+    // If it's a direct UUID, return it
+    if (uuidRegex.test(filePath)) {
+      return filePath;
+    }
+
+    // If the path contains slashes, extract project ID from path structure
+    // Path format: users/{userId}/{projectId}/... or similar
+    if (filePath.includes('/')) {
+      const parts = filePath.split('/');
+      // Look for UUID in the path parts
+      for (const part of parts) {
+        if (uuidRegex.test(part)) {
+          return part;
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 // Utility Types
@@ -69,14 +132,20 @@ function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): Debo
   return debounced;
 }
 
-const Titlebar = ({
-  onToggleSidebar,
-  onToggleLeftSidebar,
-  tabs = [],
-  activeTab,
-  onTabClose,
-}: TitlebarProps) => {
+const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: TitlebarProps) => {
   const { updateTab, setActiveTab, closeAllTabs } = useTabsStore();
+  const { currentProject } = useProjectStore();
+  const router = useRouter();
+  const pathname = usePathname();
+  const isHomePage = pathname === '/';
+
+  // Extract fileId from activeTab for CollaborationPanel
+  const currentFileId =
+    activeTab && isSpreadsheetTab(activeTab)
+      ? extractFileId(activeTab.data?.filePath)
+      : activeTab?.path
+        ? extractFileId(activeTab.path)
+        : null;
 
   const createDebouncedHandler = useCallback(
     (tab: SpreadsheetTab) => {
@@ -108,7 +177,50 @@ const Titlebar = ({
   }, [tabs, createDebouncedHandler]);
 
   const handleTabChange = (value: string) => {
-    setActiveTab(value);
+    console.log('handleTabChange called:', { value, isHomePage, tabs: tabs.length });
+    
+    // If on home page, navigate to workspace with the selected tab
+    if (isHomePage) {
+      const selectedTab = tabs.find(tab => tab.id === value);
+      console.log('Selected tab:', selectedTab);
+      
+      if (selectedTab) {
+        // Set the tab as active first (this ensures context is preserved)
+        // Zustand updates are synchronous, so this will be set immediately
+        setActiveTab(value);
+        
+        // Extract project ID from the tab
+        const projectId = extractProjectId(selectedTab);
+        console.log('Extracted project ID:', projectId);
+        
+        if (projectId) {
+          // Navigate to workspace with the project ID
+          // The workspace will automatically load the active tab from the store
+          console.log('Navigating to:', `/workspace/project/${projectId}`);
+          router.push(`/workspace/project/${projectId}`);
+        } else {
+          // If we can't extract project ID, try to use the tab's path as fallback
+          // This handles edge cases where tab might not have a clear project ID
+          if (selectedTab.path) {
+            // Try using the path directly if it looks like a project ID
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            if (uuidRegex.test(selectedTab.path)) {
+              console.log('Using tab.path as project ID:', selectedTab.path);
+              router.push(`/workspace/project/${selectedTab.path}`);
+            } else {
+              console.warn('Could not extract valid project ID from tab:', selectedTab);
+            }
+          } else {
+            console.warn('Tab has no project ID or path:', selectedTab);
+          }
+        }
+      } else {
+        console.warn('Tab not found:', value);
+      }
+    } else {
+      // On workspace, just switch the active tab
+      setActiveTab(value);
+    }
   };
 
   // Safe tab closing function that checks if onTabClose exists
@@ -124,16 +236,19 @@ const Titlebar = ({
   }, [closeAllTabs, debouncedHandlers]);
 
   return (
-    <div className="h-10 bg-sidebar border-b border-border flex items-stretch relative">
+    <div className="h-10 bg-accent border-b border-border flex items-stretch relative">
       {/* Main titlebar content */}
       <div className="flex-1 flex justify-between items-center">
         {/* Left section */}
         <div className="flex items-center h-full">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={onToggleLeftSidebar} className="h-7 w-7">
-              <LuPanelLeft />
-              <span className="sr-only">Toggle Project Sidebar</span>
-            </Button>
+            <button
+              onClick={() => router.push('/')}
+              className="h-10 w-10 bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
+              aria-label="Home"
+            >
+              <Home className="h-4 w-4" />
+            </button>
             <ProjectMenu />
           </div>
         </div>
@@ -150,6 +265,13 @@ const Titlebar = ({
                       value={tab.id}
                       onClose={() => handleTabClose(tab.id)}
                       isClosable
+                      onClick={(e) => {
+                        // On home page, handle clicks even if tab is already active
+                        if (isHomePage && tab.id === activeTab?.id) {
+                          e.preventDefault();
+                          handleTabChange(tab.id);
+                        }
+                      }}
                       className="shrink-0 h-10 rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:mb-0 text-xs"
                     >
                       {tab.name}
@@ -164,10 +286,27 @@ const Titlebar = ({
 
         {/* Right section */}
         <div className="flex items-center h-full gap-1">
+          {activeTab && isSpreadsheetTab(activeTab) && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-10 w-10">
+                  <Users className="h-4 w-4" />
+                  <span className="sr-only">Toggle User Collaboration</span>
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end">
+                <CollaborationPanel
+                  projectId={currentProject?.id || currentFileId || ''}
+                  activeTab={activeTab}
+                />
+              </PopoverContent>
+            </Popover>
+          )}
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon">
-                <LuEllipsisVertical />
+                <EllipsisVertical />
                 <span className="sr-only">Toggle Menu</span>
               </Button>
             </DropdownMenuTrigger>

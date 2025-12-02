@@ -2,7 +2,7 @@
 import { createContext, useContext, useReducer } from 'react';
 import reducer from './reducer';
 import { ProjectContextProps, ProviderProps, ViewType } from './types';
-import { FolderComponent } from '@/components/organisms/file-tree';
+import { LeftPanel } from '@/components/organisms/left-panel';
 
 const ProjectContext = createContext<ProjectContextProps | undefined>(undefined);
 
@@ -22,7 +22,7 @@ function ProjectProvider({ children }: ProviderProps) {
     error: null,
     importData: null,
     showImportWizard: false,
-    leftPanelContent: <FolderComponent />,
+    leftPanelContent: <LeftPanel />,
   });
 
   const value = { state, dispatch };

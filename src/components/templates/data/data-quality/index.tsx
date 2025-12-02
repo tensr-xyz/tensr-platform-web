@@ -11,7 +11,7 @@ import { Button } from '@/components/atoms/button';
 import { Label } from '@/components/atoms/label';
 import { Checkbox } from '@/components/atoms/checkbox';
 import { useTabsStore } from '@/stores/tabs-store';
-import { LuLoader } from 'react-icons/lu';
+import { Loader2 as Loader } from 'lucide-react';
 
 interface DataQualityMetric {
   total_rows: number;
@@ -342,7 +342,7 @@ export const DataQualityDialog = ({ children }: DataQualityProps) => {
 
         <DialogFooter>
           <Button onClick={handleAnalyze} disabled={isLoading || !!criticalError}>
-            {isLoading ? <LuLoader className="h-4 w-4 animate-spin" /> : 'Analyze Data Quality'}
+            {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : 'Analyze Data Quality'}
           </Button>
         </DialogFooter>
 

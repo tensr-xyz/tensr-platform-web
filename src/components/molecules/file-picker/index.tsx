@@ -1,5 +1,5 @@
 import React, { ReactNode, useRef } from 'react';
-import { LuFileSpreadsheet, LuUpload } from 'react-icons/lu';
+import { FileSpreadsheet, Upload } from 'lucide-react';
 import { useProject } from '@/contexts/project-context';
 import {
   Dialog,
@@ -200,7 +200,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
             }
           }}
         >
-          <LuUpload className="h-8 w-8 mb-4 text-muted-foreground" />
+          <Upload className="h-8 w-8 mb-4 text-muted-foreground" />
           <h3 className="text-lg font-medium mb-1">Upload a file</h3>
           <p className="text-sm text-muted-foreground mb-4 text-center">
             Drag and drop or click to select
@@ -209,7 +209,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
             onClick={handleClick}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
           >
-            <LuFileSpreadsheet className="h-4 w-4" />
+            <FileSpreadsheet className="h-4 w-4" />
             <span>Select File</span>
           </button>
           <p className="text-xs text-muted-foreground mt-4">

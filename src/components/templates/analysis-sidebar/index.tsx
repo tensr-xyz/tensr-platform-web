@@ -1,4 +1,3 @@
-import { LuMinus } from 'react-icons/lu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import {
   Accordion,
@@ -8,23 +7,18 @@ import {
 } from '@/components/molecules/accordion';
 import { DialogTrigger } from '@/components/molecules/dialog';
 import { ScrollArea, ScrollBar } from '@/components/atoms/scroll-area';
-import { Button } from '@/components/atoms/button';
 import FilterPanel from '@/components/organisms/filter-panel';
 import ChartPanel from '@/components/organisms/chart-panel';
 import { useTabsStore } from '@/stores/tabs-store';
 
 import { ANALYSIS_COMPONENTS, MENU_ITEMS, type MenuItems } from '@/configs/analysis-config';
-import PluginPanel from '@/components/organisms/plugin-panel';
-import { ColumnType } from '@tensr/sdk';
 import { AgentPanel } from '@/components/organisms/agent-panel';
 
 interface AnalysisItemProps {
   item: string;
 }
 
-interface AnalysisSidebarProps {
-  onToggleSidebar: () => void;
-}
+interface AnalysisSidebarProps {}
 
 const AnalysisItem = ({ item }: AnalysisItemProps) => {
   const AnalysisComponent = ANALYSIS_COMPONENTS[item];
@@ -55,7 +49,7 @@ const AnalysisItem = ({ item }: AnalysisItemProps) => {
   );
 };
 
-const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
+const AnalysisSidebar = ({}: AnalysisSidebarProps) => {
   const { tabs, activeTabId } = useTabsStore();
   const activeTab = tabs.find(tab => tab.id === activeTabId);
 
@@ -65,11 +59,19 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
   };
 
   const getVisibleMenuItems = (): MenuItems => {
-    // Remove 'data' from the menu items since we've moved it to folder component
-    const filteredItems = { ...MENU_ITEMS };
-    delete filteredItems.data;
+    // Only show agent, actions, and graph_options
+    // The other tabs (transform, analyze, visualization, time_series, ml_ai, syntax, utilities)
+    // have been moved to the left panel Analysis tab
+    // Plugins has been moved to the left panel Plugins tab
+    const visibleKeys = ['agent', 'actions', 'graph_options'] as const;
+    const filteredItems: MenuItems = {};
 
-    // Show all menu items regardless of whether tabs are open
+    visibleKeys.forEach(key => {
+      if (MENU_ITEMS[key]) {
+        filteredItems[key] = MENU_ITEMS[key];
+      }
+    });
+
     return filteredItems;
   };
 
@@ -104,49 +106,6 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
       );
     }
 
-    if (key === 'plugins') {
-      // First ensure we have valid data
-      if (!activeTab?.data?.initialData || !activeTab?.data?.initialColumns) {
-        return <PluginPanel activeFileType={'csv'} />;
-      }
-
-      const { initialData, initialColumns } = activeTab.data;
-
-      // Transform the data into a format plugins can understand
-      // The data is already in object form, we just need to handle number conversion
-      const processedData = initialData.map((row: any) => {
-        const processedRow: Record<string, any> = {};
-        initialColumns.forEach((col: any) => {
-          const value = row[col.id];
-          // Convert numeric strings to numbers if appropriate
-          if (typeof value === 'string' && !isNaN(Number(value)) && value !== '') {
-            processedRow[col.id] = Number(value);
-          } else {
-            processedRow[col.id] = value;
-          }
-        });
-        return processedRow;
-      });
-
-      const dataSet = {
-        data: processedData,
-        metadata: {
-          columns: activeTab.data.initialColumns.map(
-            (col: { id: any; header: any; type: string }) => ({
-              id: col.id,
-              name: col.header,
-              type: col.type as ColumnType,
-            })
-          ),
-          totalRows: activeTab.data.totalRows,
-          totalColumns: activeTab.data.totalColumns,
-          fileType: 'csv',
-        },
-      };
-
-      return <PluginPanel activeFileType={'csv'} activeData={dataSet} />;
-    }
-
     if (key === 'graph_options') {
       const columns =
         activeTab.data.initialColumns?.map((col: any) => ({
@@ -164,46 +123,10 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
     const spreadsheetContent = renderSpreadsheetContent(key);
     if (spreadsheetContent) return spreadsheetContent;
 
-    // Handle special cases for new menu items
-    if (key === 'visualization' || key === 'time_series' || key === 'ml_ai' || key === 'syntax') {
-      return (
-        <div className="space-y-4">
-          {Object.entries(MENU_ITEMS[key].sections).map(([sectionName, items], index) => (
-            <Accordion key={`${key}-${index}`} type="single" collapsible defaultValue="item-1">
-              <AccordionItem value="item-1">
-                <AccordionTrigger className="text-sm font-medium">{sectionName}</AccordionTrigger>
-                <AccordionContent>
-                  <div className="space-y-1">
-                    {items.map((item, itemIndex) => (
-                      <AnalysisItem key={`${sectionName}-${itemIndex}`} item={item} />
-                    ))}
-                  </div>
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          ))}
-        </div>
-      );
-    }
-
-    return (
-      <div className="space-y-4">
-        {Object.entries(MENU_ITEMS[key].sections).map(([sectionName, items], index) => (
-          <Accordion key={`${key}-${index}`} type="single" collapsible defaultValue="item-1">
-            <AccordionItem value="item-1">
-              <AccordionTrigger className="text-sm font-medium">{sectionName}</AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-1">
-                  {items.map((item, itemIndex) => (
-                    <AnalysisItem key={`${sectionName}-${itemIndex}`} item={item} />
-                  ))}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        ))}
-      </div>
-    );
+    // For the remaining tabs (agent, actions, graph_options, plugins),
+    // they don't have sections, so return null or empty content
+    // The actual content is handled by renderSpreadsheetContent
+    return null;
   };
 
   const visibleMenuItems = getVisibleMenuItems();
@@ -212,9 +135,6 @@ const AnalysisSidebar = ({ onToggleSidebar }: AnalysisSidebarProps) => {
   return (
     <Tabs defaultValue={defaultTab} className="flex flex-col h-full">
       <div className="flex items-center bg-background border-b border-border !min-h-10">
-        <Button onClick={onToggleSidebar} size="icon" variant="ghost" className="mx-1">
-          <LuMinus className="h-4 w-4" />
-        </Button>
         <ScrollArea className="flex-1">
           <TabsList className="p-0 rounded-none bg-transparent h-10">
             {Object.entries(visibleMenuItems).map(([key, { icon }]) => (

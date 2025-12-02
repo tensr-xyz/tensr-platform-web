@@ -12,7 +12,7 @@ import { Label } from '@/components/atoms/label';
 import { RadioGroup, RadioGroupItem } from '@/components/atoms/radio-group';
 import { useProject } from '@/contexts/project-context';
 import { ProjectActions } from '@/contexts/project-context/types';
-import { LuLoader } from 'react-icons/lu';
+import { Loader2 as Loader } from 'lucide-react';
 
 const MERGE_TYPES = {
   CASES: 'add_cases',
@@ -200,7 +200,7 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
                 className="flex-1"
                 disabled={isLoading}
               >
-                {isLoading ? <LuLoader className="h-4 w-4 animate-spin" /> : 'Select File'}
+                {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : 'Select File'}
               </Button>
               {secondaryDataset && (
                 <span className="text-sm text-muted-foreground truncate">
