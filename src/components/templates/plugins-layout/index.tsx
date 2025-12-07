@@ -2,16 +2,7 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import {
-  Plus,
-  Search,
-  Star,
-  Download,
-  ChevronDown,
-  Zap,
-  User,
-  ArrowRight,
-} from 'lucide-react';
+import { Plus, Search, Star, Download, ChevronDown, Zap, User, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { PluginRecord } from '@/types/plugin';

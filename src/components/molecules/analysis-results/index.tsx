@@ -34,7 +34,13 @@ import {
 import { AnalysisResult, AnalysisOutput } from '@/types/agent';
 import { apiClient } from '@/lib/api-client';
 import { useTabsStore } from '@/stores/tabs-store';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/molecules/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/molecules/dialog';
 import { Textarea } from '@/components/atoms/text-area';
 
 interface AnalysisResultsProps {
@@ -420,11 +426,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
               <Sparkles className="w-3 h-3 mr-1" />
               Explain
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setRerunDialogOpen(true)}
-            >
+            <Button variant="outline" size="sm" onClick={() => setRerunDialogOpen(true)}>
               <RefreshCw className="w-3 h-3 mr-1" />
               Re-run
             </Button>
@@ -750,11 +752,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
                 <Download className="w-3 h-3 mr-1" />
                 Download
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => copyToClipboard(apaWriteup)}
-              >
+              <Button variant="outline" size="sm" onClick={() => copyToClipboard(apaWriteup)}>
                 <Copy className="w-3 h-3 mr-1" />
                 Copy
               </Button>

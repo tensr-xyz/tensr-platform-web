@@ -18,7 +18,6 @@ import { ProgressIndicator } from '@/components/molecules/progress-indicator';
 export function AgentPanel() {
   const { tabs, activeTabId, updateTab } = useTabsStore();
   const { currentProject } = useProjectStore();
-  const { tokens } = useAuth();
 
   // Get project ID from current project or use default
   const projectId = currentProject?.id || 'default-project';
@@ -90,9 +89,10 @@ export function AgentPanel() {
         );
 
       // Check if this is a data quality scan request
-      const isDataQualityQuery = /(data quality|quality scan|check data|data issues|scan data|data problems)/i.test(
-        currentMessage
-      );
+      const isDataQualityQuery =
+        /(data quality|quality scan|check data|data issues|scan data|data problems)/i.test(
+          currentMessage
+        );
 
       if (isFilterQuery && activeTab?.data?.initialColumns) {
         try {
@@ -210,11 +210,12 @@ export function AgentPanel() {
         try {
           const datasetId = activeTab.data.filePath || activeTab.id;
           const datasetSchema = {
-            columns: activeTab.data.initialColumns?.map((col: any) => ({
-              id: col.id,
-              name: col.header || col.id,
-              type: col.type || 'numeric',
-            })) || [],
+            columns:
+              activeTab.data.initialColumns?.map((col: any) => ({
+                id: col.id,
+                name: col.header || col.id,
+                type: col.type || 'numeric',
+              })) || [],
           };
 
           const qualityReport = await apiClient.ai.dataQualityScan({

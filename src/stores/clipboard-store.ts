@@ -69,7 +69,7 @@ export const useClipboardStore = create<ClipboardStore>()(
       isCut: () => {
         return get().cutMode;
       },
-      
+
       getCutOrigin: () => {
         return get().cutOrigin;
       },
@@ -77,4 +77,3 @@ export const useClipboardStore = create<ClipboardStore>()(
     { name: 'ClipboardStore' }
   )
 );
-

@@ -1,4 +1,5 @@
 'use client';
+import { getIdToken } from '@/utils/auth';
 
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useProjectStore, ViewType } from '@/stores/project-store';
@@ -63,7 +64,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
     toggleLeftSidebar,
   } = useProjectStore();
   const { tabs, activeTabId, addTab, closeTab, setActiveTab } = useTabsStore();
-  const { tokens, user } = useAuth();
+  const { user } = useAuth();
 
   // Make sure we have a valid resource.id before using it
   const resourceId = resource?.id || '';
@@ -110,7 +111,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
     mountedRef.current = true;
 
     // Only load data once when we have all required data
-    if (!hasLoadedRef.current && tokens?.accessToken && userId && resourceId) {
+    if (!hasLoadedRef.current && getIdToken() && userId && resourceId) {
       hasLoadedRef.current = true;
 
       const loadData = async () => {
@@ -124,7 +125,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
 
           // For projects, first get the project details to check for multiple files
           if (resource.type === 'project') {
-            const projectDetails = await getProjectDetails(resourceId, tokens.accessToken, userId);
+            const projectDetails = await getProjectDetails(resourceId, getIdToken(), userId);
 
             if (projectDetails.totalFiles > 1) {
               // Show file selector for multiple files
@@ -135,15 +136,9 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
               return;
             }
             // For single file projects, proceed with normal processing
-            await fetchProjectData(
-              resourceId,
-              tokens.accessToken,
-              userId,
-              0,
-              projectDetails.projectName
-            );
+            await fetchProjectData(resourceId, getIdToken(), userId, 0, projectDetails.projectName);
           } else {
-            await fetchProjectData(resourceId, tokens.accessToken, userId);
+            await fetchProjectData(resourceId, getIdToken(), userId);
           }
           if (mountedRef.current) {
             setIsLoading(false);
@@ -159,7 +154,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
       loadData();
     }
   }, [
-    tokens?.accessToken,
+    getIdToken(),
     userId,
     resourceId,
     fetchProjectData,
@@ -209,7 +204,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         }));
 
         // Get the auth token
-        const token = tokens?.accessToken;
+        const token = getIdToken();
         if (!token) {
           console.error('No access token available');
           return;
@@ -499,13 +494,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         setCurrentResource(fileResource);
 
         // Process the selected file using the project API (since it's still a project file)
-        await fetchProjectData(
-          resourceId,
-          tokens?.accessToken || '',
-          userId,
-          fileIndex,
-          projectName
-        );
+        await fetchProjectData(resourceId, getIdToken() || '', userId, fileIndex, projectName);
 
         if (mountedRef.current) {
           setIsLoading(false);
@@ -517,7 +506,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         }
       }
     },
-    [projectFiles, resourceId, tokens?.accessToken, userId, fetchProjectData]
+    [projectFiles, resourceId, getIdToken(), userId, fetchProjectData]
   );
 
   // Handle file selector close

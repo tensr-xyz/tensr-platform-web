@@ -16,6 +16,7 @@ import { useTabsStore } from '@/stores/tabs-store';
 import _ from 'lodash';
 import useDebounce from '@/hooks/ui/use-debounce';
 import useAuth from '@/hooks/api/use-auth';
+import { getIdToken } from '@/utils/auth';
 import { AlertCircle } from 'lucide-react';
 
 interface VirtualizedListProps {
@@ -724,7 +725,7 @@ AccordionHeader.displayName = 'AccordionHeader';
 // Updated FilterPanel component to use fetch instead of invoke
 const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps) => {
   const { tabs, activeTabId, updateTab } = useTabsStore();
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
   const activeTab = tabs.find(tab => tab.id === activeTabId);
   const columnVisibility = activeTab?.columnVisibility || {};
 
@@ -768,7 +769,7 @@ const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps
           {
             method: 'POST',
             headers: {
-              Authorization: `Bearer ${tokens?.idToken}`,
+              Authorization: `Bearer ${getIdToken()}`,
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(params),
@@ -808,7 +809,7 @@ const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps
         setLoading(prev => ({ ...prev, [columnName]: false }));
       }
     },
-    [filePath, columnData, loading, tokens]
+    [filePath, columnData, loading]
   );
 
   const handleToggleVisibility = useCallback(

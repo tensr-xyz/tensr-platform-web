@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { getIdToken } from '@/utils/auth';
 
 export interface WebSocketMessage {
   type: string;
@@ -10,7 +11,20 @@ interface WebSocketState {
   clientId: string | null;
 }
 
-export function useWebSocket(url: string) {
+interface UseWebSocketOptions {
+  url: string;
+  enabled?: boolean;
+  onOpen?: () => void;
+  onClose?: () => void;
+  onError?: (error: Event) => void;
+}
+
+export function useWebSocket(urlOrOptions: string | UseWebSocketOptions) {
+  const options =
+    typeof urlOrOptions === 'string' ? { url: urlOrOptions, enabled: true } : urlOrOptions;
+
+  const { url, enabled = true, onOpen, onClose, onError } = options;
+
   const [ws, setWs] = useState<WebSocket | null>(null);
   const [state, setState] = useState<WebSocketState>({
     isConnected: false,
@@ -18,14 +32,34 @@ export function useWebSocket(url: string) {
   });
 
   useEffect(() => {
-    const socket = new WebSocket(url);
+    if (!enabled || !url) {
+      return;
+    }
+
+    // Add auth token to URL if not already present
+    let wsUrl = url;
+    if (!url.includes('access_token=') && !url.includes('Authorization')) {
+      const token = getIdToken();
+      if (token) {
+        const separator = url.includes('?') ? '&' : '?';
+        wsUrl = `${url}${separator}access_token=${token}`;
+      }
+    }
+
+    const socket = new WebSocket(wsUrl);
 
     socket.onopen = () => {
       setState(prev => ({ ...prev, isConnected: true }));
+      onOpen?.();
     };
 
     socket.onclose = () => {
       setState(prev => ({ ...prev, isConnected: false }));
+      onClose?.();
+    };
+
+    socket.onerror = error => {
+      onError?.(error);
     };
 
     setWs(socket);
@@ -33,7 +67,7 @@ export function useWebSocket(url: string) {
     return () => {
       socket.close();
     };
-  }, [url]);
+  }, [url, enabled, onOpen, onClose, onError]);
 
   const sendMessage = useCallback(
     (message: WebSocketMessage) => {

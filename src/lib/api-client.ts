@@ -1,4 +1,5 @@
 import { getSessionToken, getSessionJwt } from '@/utils/auth';
+import { getUsageTracker } from '@/utils/usage-tracker';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const FARGATE_API_URL =
@@ -22,21 +23,85 @@ class ApiClient {
     const baseUrl = useFargate ? FARGATE_API_URL : API_BASE_URL;
     const url = `${baseUrl}${endpoint}`;
 
-    const response = await fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...options.headers,
-      },
-    });
+    const startTime = performance.now();
+    let requestSize = 0;
+    let responseSize = 0;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API Error: ${response.status} - ${errorText}`);
+    // Calculate request size
+    if (options.body) {
+      if (options.body instanceof FormData) {
+        // FormData size estimation
+        requestSize = JSON.stringify(Array.from(options.body.entries())).length;
+      } else if (typeof options.body === 'string') {
+        requestSize = new Blob([options.body]).size;
+      } else {
+        requestSize = JSON.stringify(options.body).length;
+      }
     }
 
-    return response.json();
+    try {
+      const response = await fetch(url, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          ...options.headers,
+        },
+      });
+
+      // Calculate response size
+      const responseClone = response.clone();
+      const responseText = await responseClone.text();
+      responseSize = new Blob([responseText]).size;
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`API Error: ${response.status} - ${errorText}`);
+      }
+
+      const duration = performance.now() - startTime;
+      const data = JSON.parse(responseText);
+
+      // Track API usage
+      try {
+        const usageTracker = getUsageTracker(() => getSessionJwt() || getSessionToken());
+        usageTracker.trackAPICall(endpoint, options.method || 'GET', {
+          duration,
+          requestSize,
+          responseSize,
+          dataProcessed: requestSize + responseSize,
+          metadata: {
+            statusCode: response.status,
+            useFargate,
+          },
+        });
+      } catch (trackingError) {
+        // Don't fail the request if tracking fails
+        console.warn('Failed to track API usage:', trackingError);
+      }
+
+      return data;
+    } catch (error) {
+      const duration = performance.now() - startTime;
+
+      // Track failed API call
+      try {
+        const usageTracker = getUsageTracker(() => getSessionJwt() || getSessionToken());
+        usageTracker.trackAPICall(endpoint, options.method || 'GET', {
+          duration,
+          requestSize,
+          responseSize,
+          metadata: {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            useFargate,
+          },
+        });
+      } catch (trackingError) {
+        // Ignore tracking errors
+      }
+
+      throw error;
+    }
   }
 
   // Files API
@@ -862,13 +927,23 @@ class ApiClient {
         body: JSON.stringify(data),
       }),
 
-    fixRow: (data: { datasetId: string; rowId: string; rowData: Record<string, any>; columnStats?: any }) =>
+    fixRow: (data: {
+      datasetId: string;
+      rowId: string;
+      rowData: Record<string, any>;
+      columnStats?: any;
+    }) =>
       this.request<any>('/ai/fix-row', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
-    suggestTransformations: (data: { datasetId: string; columnId: string; columnType?: string; stats?: any }) =>
+    suggestTransformations: (data: {
+      datasetId: string;
+      columnId: string;
+      columnType?: string;
+      stats?: any;
+    }) =>
       this.request<any>('/ai/suggest-transformations', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -892,7 +967,12 @@ class ApiClient {
         body: JSON.stringify(data),
       }),
 
-    explainResult: (data: { analysisType: string; results: any; context?: any; teachingMode?: boolean }) =>
+    explainResult: (data: {
+      analysisType: string;
+      results: any;
+      context?: any;
+      teachingMode?: boolean;
+    }) =>
       this.request<any>('/ai/explain-result', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -1233,6 +1313,17 @@ class ApiClient {
     logRankTest: (data: any) =>
       this.request<any>(
         '/api/analysis/survival/log-rank-test',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
+    // Structural Equation Modeling
+    sem: (data: any) =>
+      this.request<any>(
+        '/api/analysis/sem',
         {
           method: 'POST',
           body: JSON.stringify(data),

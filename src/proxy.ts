@@ -29,21 +29,23 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Get stored tokens from cookies
-  const idToken = request.cookies.get('idToken')?.value;
-  const accessToken = request.cookies.get('accessToken')?.value;
+  // Get Stytch session from cookies
+  const sessionToken = request.cookies.get('stytch_session_token')?.value;
+  const sessionJwt = request.cookies.get('stytch_session_jwt')?.value;
 
   // Check if user is authenticated
-  if (!idToken || !accessToken) {
-    // Redirect to login if no tokens
+  if (!sessionToken) {
+    // Redirect to login if no session
     return NextResponse.redirect(new URL('/login', request.url));
   }
 
-  // Verify token validity (basic check)
-  const decodedToken = decodeJWT(idToken);
-  if (!decodedToken || !decodedToken.exp || decodedToken.exp < Date.now() / 1000) {
-    // Token expired or invalid, redirect to login
-    return NextResponse.redirect(new URL('/login', request.url));
+  // Verify token validity (basic check) - use JWT if available
+  if (sessionJwt) {
+    const decodedToken = decodeJWT(sessionJwt);
+    if (!decodedToken || !decodedToken.exp || decodedToken.exp < Date.now() / 1000) {
+      // Token expired or invalid, redirect to login
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
   }
 
   // User is authenticated, allow request to proceed

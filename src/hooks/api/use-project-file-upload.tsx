@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { useAuth } from '@/hooks/api/use-auth';
+import { getIdToken } from '@/utils/auth';
 import { useProjectStore } from '@/stores/project-store';
 import { ProjectUpload } from '@/types/project';
 
@@ -16,7 +16,7 @@ export const useProjectFileUpload = ({
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
 
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
   const { setProject } = useProjectStore();
 
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -92,7 +92,7 @@ export const useProjectFileUpload = ({
         }
 
         // Check token availability
-        const token = tokens?.accessToken;
+        const token = getIdToken();
         if (!token) {
           throw new Error('Authentication required. Please log in again.');
         }
@@ -311,7 +311,7 @@ export const useProjectFileUpload = ({
         setIsLoading(false);
       }
     },
-    [allowedExtensions, tokens, onUploadComplete, setProject]
+    [allowedExtensions, onUploadComplete, setProject]
   );
 
   return {

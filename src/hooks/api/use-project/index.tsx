@@ -26,7 +26,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
   const getToken = useCallback((): string => {
     // First try from auth context
     if (auth.tokens?.accessToken) {
-      return auth.tokens.accessToken;
+      return auth.getIdToken();
     }
 
     // Then try from localStorage directly

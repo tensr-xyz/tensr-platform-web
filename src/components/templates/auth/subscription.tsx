@@ -28,7 +28,7 @@ import Loading from '@/components/molecules/loading';
 import Link from 'next/link';
 import { ArrowLeft, Mail } from 'lucide-react';
 import Image from 'next/image';
-import { getEligiblePlans, decodeIdToken } from '@/utils/auth';
+import { getEligiblePlans, decodeIdToken, getIdToken } from '@/utils/auth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
@@ -507,12 +507,13 @@ const PaymentPage = () => {
   }, []);
 
   useEffect(() => {
-    if (tokens?.idToken) {
-      const plans = getEligiblePlans(tokens.idToken);
+    const idToken = getIdToken();
+    if (idToken) {
+      const plans = getEligiblePlans(idToken);
       setEligiblePlans(plans);
       setEligibleFrontendPlans(plans.map(plan => PLAN_KEY_MAP[plan] || plan));
       // Get current plan and status from token
-      const decoded = decodeIdToken(tokens.idToken);
+      const decoded = decodeIdToken(idToken);
       if (decoded) {
         setCurrentPlan(
           PLAN_KEY_MAP[decoded['custom:subscriptionTier']] ||
@@ -522,7 +523,7 @@ const PaymentPage = () => {
         setCurrentPlanStatus(decoded['custom:subscriptionStatus'] || null);
       }
     }
-  }, [tokens?.idToken]);
+  }, []);
 
   // Render methods for each step
   const renderPlanSelection = () => (

@@ -81,7 +81,7 @@ function extractProjectId(tab: Tab): string | null {
   if (tab.data?.filePath) {
     const filePath = tab.data.filePath;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    
+
     // If it's a direct UUID, return it
     if (uuidRegex.test(filePath)) {
       return filePath;
@@ -178,21 +178,21 @@ const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: Titleba
 
   const handleTabChange = (value: string) => {
     console.log('handleTabChange called:', { value, isHomePage, tabs: tabs.length });
-    
+
     // If on home page, navigate to workspace with the selected tab
     if (isHomePage) {
       const selectedTab = tabs.find(tab => tab.id === value);
       console.log('Selected tab:', selectedTab);
-      
+
       if (selectedTab) {
         // Set the tab as active first (this ensures context is preserved)
         // Zustand updates are synchronous, so this will be set immediately
         setActiveTab(value);
-        
+
         // Extract project ID from the tab
         const projectId = extractProjectId(selectedTab);
         console.log('Extracted project ID:', projectId);
-        
+
         if (projectId) {
           // Navigate to workspace with the project ID
           // The workspace will automatically load the active tab from the store
@@ -203,7 +203,8 @@ const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: Titleba
           // This handles edge cases where tab might not have a clear project ID
           if (selectedTab.path) {
             // Try using the path directly if it looks like a project ID
-            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+            const uuidRegex =
+              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
             if (uuidRegex.test(selectedTab.path)) {
               console.log('Using tab.path as project ID:', selectedTab.path);
               router.push(`/workspace/project/${selectedTab.path}`);
@@ -265,7 +266,7 @@ const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: Titleba
                       value={tab.id}
                       onClose={() => handleTabClose(tab.id)}
                       isClosable
-                      onClick={(e) => {
+                      onClick={e => {
                         // On home page, handle clicks even if tab is already active
                         if (isHomePage && tab.id === activeTab?.id) {
                           e.preventDefault();

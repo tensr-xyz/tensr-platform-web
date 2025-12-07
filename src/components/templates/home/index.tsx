@@ -161,7 +161,8 @@ const BetaCard: React.FC = () => {
         <div className="flex-1">
           <p className="text-sm font-medium">Welcome to our beta</p>
           <p className="text-xs text-muted-foreground mt-1">
-            We're actively developing and improving the platform. You may encounter features that are still in development. Your feedback helps us build better.
+            We're actively developing and improving the platform. You may encounter features that
+            are still in development. Your feedback helps us build better.
           </p>
         </div>
         <Button
@@ -272,9 +273,7 @@ const HomeTemplate: React.FC = () => {
           <Loading fullScreen />
         ) : projectsError ? (
           <div className="border bg-background p-6 text-center">
-            <p className="text-red-500">
-              Error loading projects: {String(projectsError)}
-            </p>
+            <p className="text-red-500">Error loading projects: {String(projectsError)}</p>
             <Button
               onClick={() => {
                 queryClient.invalidateQueries({ queryKey: projectKeys.lists() });

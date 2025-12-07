@@ -1,4 +1,5 @@
 import { useTabsStore } from '@/stores/tabs-store';
+import { getIdToken } from '@/utils/auth';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
@@ -46,16 +47,16 @@ export const Mean = ({ children }: MeanProps) => {
   const [results, setResults] = useState<Results | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
 
-  const token = tokens?.accessToken;
+  const token = getIdToken();
 
   const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   // Extract variables from the columns
   const variables = useMemo((): Variable[] => {
     if (!activeTab?.data?.initialColumns) return [];
-    return activeTab.data.initialColumns.map((column: { header: any; type: any }) => ({
+    return activeTab.data?.initialColumns?.map((column: { header: any; type: any }) => ({
       name: column.header,
       type: column.type || 'string',
     }));
@@ -66,12 +67,13 @@ export const Mean = ({ children }: MeanProps) => {
     if (!activeTab?.data?.initialData || !selectedVariables.length) return {};
 
     return selectedVariables.reduce<{ [key: string]: number[] }>((acc, varName) => {
-      const values = activeTab.data.initialData
-        .map((row: { [x: string]: any }) => {
-          const val = row[varName];
-          return typeof val === 'number' ? val : parseFloat(val);
-        })
-        .filter((val: number) => !isNaN(val));
+      const values =
+        activeTab.data?.initialData
+          ?.map((row: { [x: string]: any }) => {
+            const val = row[varName];
+            return typeof val === 'number' ? val : parseFloat(val);
+          })
+          .filter((val: number) => !isNaN(val)) || [];
 
       acc[varName] = values;
       return acc;
@@ -125,7 +127,7 @@ export const Mean = ({ children }: MeanProps) => {
     v =>
       v.type === 'number' ||
       (activeTab?.data?.initialData?.[0]?.[v.name] !== undefined &&
-        !isNaN(parseFloat(activeTab.data.initialData[0][v.name])))
+        !isNaN(parseFloat(activeTab.data?.initialData?.[0]?.[v.name] || '')))
   );
 
   return (

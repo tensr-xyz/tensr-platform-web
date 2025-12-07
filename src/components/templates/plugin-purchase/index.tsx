@@ -89,13 +89,12 @@ export default function PluginPurchase() {
   if (error || !plugin) {
     return (
       <div className="max-w-4xl mx-auto p-6">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-red-600 mb-4">Purchase Error</h1>
-            <p className="text-muted-foreground mb-6">
-              {error || 'The requested plugin could not be found.'}
-            </p>
-            <Button onClick={() => router.push('/plugins')}>Back to Marketplace</Button>
-          </div>
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Purchase Error</h1>
+          <p className="text-muted-foreground mb-6">
+            {error || 'The requested plugin could not be found.'}
+          </p>
+          <Button onClick={() => router.push('/plugins')}>Back to Marketplace</Button>
         </div>
       </div>
     );

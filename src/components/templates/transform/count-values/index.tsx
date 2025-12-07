@@ -54,7 +54,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
   const [valuesToCount, setValuesToCount] = useState<ValueToCount[]>([]);
 
   const { tabs, activeTabId, updateTab } = useTabsStore();
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
 
   const token = tokens?.accessToken;
 

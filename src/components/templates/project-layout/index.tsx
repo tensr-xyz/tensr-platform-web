@@ -49,7 +49,7 @@ const ProjectLayout = ({
     toggleTerminal,
   } = useProjectStore();
   const { addTab, closeTab, tabs = [] } = useTabsStore();
-  const { tokens, user } = useAuth();
+  const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   // Make sure we have a valid resource.id before using it

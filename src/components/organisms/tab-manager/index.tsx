@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
-import { useTabsStore, Tab } from '@/stores/tabs-store';
+import { useTabsStore } from '@/stores/tabs-store';
 import { Button } from '@/components/atoms/button';
 import {
   PanelLeftOpen,
@@ -55,6 +55,8 @@ interface TabData {
   initialColumns?: Column[];
   columnStats?: Record<string, any>;
   totalRows?: number;
+  isProjectFile?: boolean;
+  teachingMode?: boolean;
 }
 
 export interface BaseTab {

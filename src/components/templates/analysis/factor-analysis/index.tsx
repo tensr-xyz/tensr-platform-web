@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { getIdToken } from '@/utils/auth';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
@@ -69,9 +70,9 @@ export const FactorAnalysis = ({ children }: FactorAnalysisProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('setup');
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
 
-  const token = tokens?.accessToken;
+  const token = getIdToken();
 
   const activeDataTab = useMemo(
     () => tabs.find(tab => tab.id === activeTabId),
@@ -81,7 +82,7 @@ export const FactorAnalysis = ({ children }: FactorAnalysisProps) => {
   const variables = useMemo(() => {
     if (!activeDataTab?.data?.initialData?.[0]) return [];
 
-    const columnNames = Object.keys(activeDataTab.data.initialData[0]).filter(key => key !== 'id');
+    const columnNames = Object.keys(activeDataTab.data?.initialData[0]).filter(key => key !== 'id');
 
     return columnNames.map(colName => {
       const sampleValues = activeDataTab
@@ -154,7 +155,7 @@ export const FactorAnalysis = ({ children }: FactorAnalysisProps) => {
     v =>
       v.type === 'number' ||
       (activeDataTab?.data?.initialData?.[0]?.[v.name] !== undefined &&
-        !isNaN(parseFloat(activeDataTab.data.initialData[0][v.name])))
+        !isNaN(parseFloat(activeDataTab.data?.initialData[0][v.name])))
   );
 
   const renderFactorLoadings = () => {

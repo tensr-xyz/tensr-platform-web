@@ -57,7 +57,7 @@ export const useFileHandler = ({
   const getToken = useCallback((): string => {
     // First try to get from auth context
     if (auth.tokens?.accessToken) {
-      return auth.tokens.accessToken;
+      return auth.getIdToken();
     }
 
     // Fallback to localStorage directly

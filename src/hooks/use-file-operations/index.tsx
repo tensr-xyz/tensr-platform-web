@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getIdToken } from '@/utils/auth';
 import { useProjectStore } from '@/stores/project-store';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -34,7 +35,7 @@ export const useFileOperations = (currentPath: string, onRefresh: () => Promise<
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.idToken}`,
+          Authorization: `Bearer ${getIdToken()}`,
         },
         body: JSON.stringify({
           structureOperation: {
@@ -86,7 +87,7 @@ export const useFileOperations = (currentPath: string, onRefresh: () => Promise<
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.idToken}`,
+          Authorization: `Bearer ${getIdToken()}`,
         },
         body: JSON.stringify({
           structureOperation: {

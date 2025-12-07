@@ -42,6 +42,7 @@ import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { useProjectStore } from '@/stores/project-store';
 import { useAuth } from '@/hooks/api/use-auth';
+import { getIdToken } from '@/utils/auth';
 import { ImportData } from '@/types/file';
 import { FileResponse } from '@/types/project';
 
@@ -344,7 +345,7 @@ export const FileOperations: React.FC<FileOperationsProps> = ({ onRefresh }) => 
 
 export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefresh }) => {
   const { currentProject } = useProjectStore();
-  const { tokens, user } = useAuth();
+  const { user } = useAuth();
   const [dialog, setDialog] = useState<{ type: FileOperation; isOpen: boolean } | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isOpen, setIsOpen] = useState(true);
@@ -366,10 +367,10 @@ export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefres
         }
 
         // Get auth token and user ID from auth context
-        const token = tokens?.accessToken;
+        const token = getIdToken();
         const userId = user?.userId;
 
-        console.log('Auth debug:', { tokens, user, token, userId });
+        console.log('Auth debug:', { user, token, userId });
 
         if (!token || !userId) {
           console.error('Missing authentication credentials', { token, userId });

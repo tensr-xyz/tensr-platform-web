@@ -143,3 +143,15 @@ export const decodeSessionJwt = (sessionJwt: string) => {
     return null;
   }
 };
+
+// Legacy aliases for backward compatibility
+export const getIdToken = getSessionJwt;
+export const getAccessToken = getSessionToken;
+export const decodeIdToken = decodeSessionJwt;
+
+// Get eligible plans from token (stub - returns all paid plans since free tier removed)
+export const getEligiblePlans = (idToken?: string | null): string[] => {
+  // Since free tier is removed, return all paid plans
+  // In a real implementation, this might check token claims for restrictions
+  return ['pro', 'team', 'enterprise'];
+};

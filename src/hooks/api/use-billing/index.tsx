@@ -111,7 +111,7 @@ export const useBilling = () => {
   const getToken = useCallback((): string => {
     // First try to get from auth context
     if (auth.tokens?.idToken) {
-      return auth.tokens.idToken;
+      return auth.getIdToken();
     }
 
     // Fallback to localStorage or directly via helper function
@@ -627,6 +627,65 @@ export const useBilling = () => {
     }).format(amount);
   };
 
+  // Function to open Stripe Customer Portal
+  const openCustomerPortal = useCallback(async (): Promise<void> => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      if (!API_BASE_URL) {
+        throw new Error('API base URL is not configured');
+      }
+
+      const token = getToken();
+      if (!token) {
+        setError('No authentication token available. Please log in again.');
+        return;
+      }
+
+      const returnUrl = `${window.location.origin}/settings/billing`;
+      const response = await fetch(`${API_BASE_URL}/billing/customer-portal`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ returnUrl }),
+      });
+
+      if (!response.ok) {
+        let errorText = 'Unknown error';
+        try {
+          errorText = await response.text();
+        } catch {
+          errorText = response.statusText || 'Failed to create portal session';
+        }
+        throw new Error(`Failed to create portal session: ${response.status} ${errorText}`);
+      }
+
+      const data = await response.json();
+
+      // Open portal in new window
+      if (data.url) {
+        window.open(data.url, '_blank', 'noopener,noreferrer');
+      } else {
+        throw new Error('No portal URL received from server');
+      }
+    } catch (err: any) {
+      console.error('Error opening Customer Portal:', err);
+      // Provide more helpful error messages
+      if (err.message?.includes('Failed to fetch')) {
+        setError(
+          'Unable to connect to the server. Please check your internet connection and try again.'
+        );
+      } else {
+        setError(err.message || 'Failed to open billing portal');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  }, [getToken]);
+
   return {
     // Data
     subscription,
@@ -652,6 +711,7 @@ export const useBilling = () => {
     deletePaymentMethod,
     updateSubscription,
     loadAllBillingData,
+    openCustomerPortal,
 
     // Helper functions
     formatDate,

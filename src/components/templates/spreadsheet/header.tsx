@@ -305,23 +305,31 @@ const HeaderCell = React.memo<HeaderCellProps>(
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
-                    <DropdownMenuItem onClick={() => onColumnAction?.('suggest-transformations', column.id)}>
+                    <DropdownMenuItem
+                      onClick={() => onColumnAction?.('suggest-transformations', column.id)}
+                    >
                       <Wrench className="mr-2 h-4 w-4" />
                       <span>Suggest transformations</span>
                     </DropdownMenuItem>
                     {stats?.categorical_stats && (
-                      <DropdownMenuItem onClick={() => onColumnAction?.('clean-categories', column.id)}>
+                      <DropdownMenuItem
+                        onClick={() => onColumnAction?.('clean-categories', column.id)}
+                      >
                         <Wrench className="mr-2 h-4 w-4" />
                         <span>Clean categories</span>
                       </DropdownMenuItem>
                     )}
                     {stats?.numeric_stats && (
-                      <DropdownMenuItem onClick={() => onColumnAction?.('detect-outliers', column.id)}>
+                      <DropdownMenuItem
+                        onClick={() => onColumnAction?.('detect-outliers', column.id)}
+                      >
                         <Info className="mr-2 h-4 w-4" />
                         <span>Detect outliers</span>
                       </DropdownMenuItem>
                     )}
-                    <DropdownMenuItem onClick={() => onColumnAction?.('check-relationships', column.id)}>
+                    <DropdownMenuItem
+                      onClick={() => onColumnAction?.('check-relationships', column.id)}
+                    >
                       <Info className="mr-2 h-4 w-4" />
                       <span>Check relationships</span>
                     </DropdownMenuItem>

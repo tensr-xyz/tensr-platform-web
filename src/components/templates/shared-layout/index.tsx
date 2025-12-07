@@ -180,142 +180,149 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
       >
         <div className="flex h-screen w-full flex-col">
           <SharedHeader />
-        <div className="flex h-full w-full overflow-x-hidden">
-          <aside
-            className="group peer sticky top-0 h-full md:block"
-            data-collapsible=""
-            data-side="left"
-            data-state="expanded"
-            data-variant="inset"
-          >
-            <div
-              className="h-full transition-[left,right,width] duration-200 ease-linear left-0"
-              style={{ width: 'var(--sidebar-width)' }}
+          <div className="flex h-full w-full overflow-x-hidden">
+            <aside
+              className="group peer sticky top-0 h-full md:block"
+              data-collapsible=""
+              data-side="left"
+              data-state="expanded"
+              data-variant="inset"
             >
               <div
-                className="flex h-full w-full flex-col bg-background group-data-[variant=floating]:shadow"
-                data-sidebar="sidebar"
+                className="h-full transition-[left,right,width] duration-200 ease-linear left-0"
+                style={{ width: 'var(--sidebar-width)' }}
               >
                 <div
-                  className="min-h-0 flex-1 overflow-auto scrollbar-hide group-data-[collapsible=icon]:overflow-hidden flex h-[calc(100vh-80px-40px)] flex-col gap-0 border-stroke-separator/[0.06] border-r dark:border-stroke-separator/[0.12]"
-                  data-sidebar="content"
+                  className="flex h-full w-full flex-col bg-background group-data-[variant=floating]:shadow"
+                  data-sidebar="sidebar"
                 >
-                  <div className="flex flex-1 flex-col justify-between px-4 py-4">
-                    <ul className="w-full min-w-0 gap-1 flex flex-col" data-sidebar="menu">
-                      <div className="flex flex-col gap-1.5">
-                        <li className="group/menu-item relative" data-sidebar="menu-item">
-                          <Link href="/">
-                            <button
-                              className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
-                              data-active={pathname === '/'}
-                              data-sidebar="menu-button"
-                              data-size="lg"
-                            >
-                              <div className="flex min-w-0 flex-row items-center justify-start gap-3 overflow-hidden">
-                                <LayoutGrid className="h-6 w-6 shrink-0" />
-                                <span className="truncate whitespace-nowrap text-base">Overview</span>
-                              </div>
-                            </button>
-                          </Link>
-                        </li>
-                        <li className="group/menu-item relative" data-sidebar="menu-item">
-                          <Link href="/plugins">
-                            <button
-                              className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
-                              data-active={pathname === '/plugins' || pathname?.startsWith('/plugins/')}
-                              data-sidebar="menu-button"
-                              data-size="lg"
-                            >
-                              <div className="flex min-w-0 flex-row items-center justify-start gap-3 overflow-hidden">
-                                <Compass className="h-6 w-6 shrink-0" />
-                                <span className="truncate whitespace-nowrap text-base">Plugins</span>
-                              </div>
-                            </button>
-                          </Link>
-                        </li>
-                      </div>
-                    </ul>
-                    <div className="flex flex-col gap-1.5">
+                  <div
+                    className="min-h-0 flex-1 overflow-auto scrollbar-hide group-data-[collapsible=icon]:overflow-hidden flex h-[calc(100vh-80px-40px)] flex-col gap-0 border-stroke-separator/[0.06] border-r dark:border-stroke-separator/[0.12]"
+                    data-sidebar="content"
+                  >
+                    <div className="flex flex-1 flex-col justify-between px-4 py-4">
                       <ul className="w-full min-w-0 gap-1 flex flex-col" data-sidebar="menu">
-                        <li className="group/menu-item relative" data-sidebar="menu-item">
-                          <Link href="/settings/general">
+                        <div className="flex flex-col gap-1.5">
+                          <li className="group/menu-item relative" data-sidebar="menu-item">
+                            <Link href="/">
+                              <button
+                                className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
+                                data-active={pathname === '/'}
+                                data-sidebar="menu-button"
+                                data-size="lg"
+                              >
+                                <div className="flex min-w-0 flex-row items-center justify-start gap-3 overflow-hidden">
+                                  <LayoutGrid className="h-6 w-6 shrink-0" />
+                                  <span className="truncate whitespace-nowrap text-base">
+                                    Overview
+                                  </span>
+                                </div>
+                              </button>
+                            </Link>
+                          </li>
+                          <li className="group/menu-item relative" data-sidebar="menu-item">
+                            <Link href="/plugins">
+                              <button
+                                className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
+                                data-active={
+                                  pathname === '/plugins' || pathname?.startsWith('/plugins/')
+                                }
+                                data-sidebar="menu-button"
+                                data-size="lg"
+                              >
+                                <div className="flex min-w-0 flex-row items-center justify-start gap-3 overflow-hidden">
+                                  <Compass className="h-6 w-6 shrink-0" />
+                                  <span className="truncate whitespace-nowrap text-base">
+                                    Plugins
+                                  </span>
+                                </div>
+                              </button>
+                            </Link>
+                          </li>
+                        </div>
+                      </ul>
+                      <div className="flex flex-col gap-1.5">
+                        <ul className="w-full min-w-0 gap-1 flex flex-col" data-sidebar="menu">
+                          <li className="group/menu-item relative" data-sidebar="menu-item">
+                            <Link href="/settings/general">
+                              <button
+                                className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
+                                data-active={pathname?.startsWith('/settings')}
+                                data-sidebar="menu-button"
+                                data-size="lg"
+                              >
+                                <div className="flex min-w-0 flex-row items-center justify-start gap-3 overflow-hidden">
+                                  <Settings className="h-6 w-6 shrink-0" />
+                                  <span className="truncate whitespace-nowrap text-base">
+                                    Settings
+                                  </span>
+                                </div>
+                              </button>
+                            </Link>
+                          </li>
+                          <li className="group/menu-item relative" data-sidebar="menu-item">
                             <button
                               className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
-                              data-active={pathname?.startsWith('/settings')}
+                              data-active="false"
                               data-sidebar="menu-button"
                               data-size="lg"
                             >
-                              <div className="flex min-w-0 flex-row items-center justify-start gap-3 overflow-hidden">
-                                <Settings className="h-6 w-6 shrink-0" />
-                                <span className="truncate whitespace-nowrap text-base">Settings</span>
+                              <div className="flex flex-row items-center justify-center gap-3">
+                                <HelpCircle className="h-6 w-6" />
+                                <span className="text-base">Help</span>
                               </div>
                             </button>
-                          </Link>
-                        </li>
-                        <li className="group/menu-item relative" data-sidebar="menu-item">
-                          <button
-                            className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
-                            data-active="false"
-                            data-sidebar="menu-button"
-                            data-size="lg"
-                          >
-                            <div className="flex flex-row items-center justify-center gap-3">
-                              <HelpCircle className="h-6 w-6" />
-                              <span className="text-base">Help</span>
+                          </li>
+                          <li className="group/menu-item relative" data-sidebar="menu-item">
+                            <button
+                              className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
+                              data-active="false"
+                              data-sidebar="menu-button"
+                              data-size="lg"
+                            >
+                              <div className="flex flex-row items-center justify-center gap-3">
+                                <Monitor className="h-6 w-6" />
+                                <span className="text-base">Theme</span>
+                              </div>
+                            </button>
+                          </li>
+                        </ul>
+                        <div className="mt-4">
+                          <div className="rounded-3xl border border-black/[0.05] bg-background p-4 shadow-sm">
+                            <div className="flex items-center gap-2 text-sm text-gray-900">
+                              <Sparkles className="size-4 text-primary" aria-hidden />
+                              Create
                             </div>
-                          </button>
-                        </li>
-                        <li className="group/menu-item relative" data-sidebar="menu-item">
-                          <button
-                            className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
-                            data-active="false"
-                            data-sidebar="menu-button"
-                            data-size="lg"
-                          >
-                            <div className="flex flex-row items-center justify-center gap-3">
-                              <Monitor className="h-6 w-6" />
-                              <span className="text-base">Theme</span>
-                            </div>
-                          </button>
-                        </li>
-                      </ul>
-                      <div className="mt-4">
-                        <div className="rounded-3xl border border-black/[0.05] bg-background p-4 shadow-sm">
-                          <div className="flex items-center gap-2 text-sm text-gray-900">
-                            <Sparkles className="size-4 text-primary" aria-hidden />
-                            Create
+                            <p className="mt-2 text-xs text-muted-foreground">
+                              Start a new project or upload files to get started with your analysis.
+                            </p>
+                            <Button asChild size="sm" className="mt-4 w-full rounded-full">
+                              <Link href="/project/new">New project</Link>
+                            </Button>
                           </div>
-                          <p className="mt-2 text-xs text-muted-foreground">
-                            Start a new project or upload files to get started with your analysis.
-                          </p>
-                          <Button asChild size="sm" className="mt-4 w-full rounded-full">
-                            <Link href="/project/new">New project</Link>
-                          </Button>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </aside>
-          <main className="flex min-w-0 flex-1 flex-col bg-background overflow-x-hidden h-[calc(100vh-80px-40px)]">
-            <div className="relative h-full">
-              <div className="flex h-full flex-col">
-                <div className="flex flex-1 flex-col overflow-y-auto">
-                  <div className="relative flex w-full flex-1 flex-col bg-background px-2 md:px-8">
-                    <div className="relative flex w-full max-w-[1440px] flex-1 flex-col">
-                      {children}
+            </aside>
+            <main className="flex min-w-0 flex-1 flex-col bg-background overflow-x-hidden h-[calc(100vh-80px-40px)]">
+              <div className="relative h-full">
+                <div className="flex h-full flex-col">
+                  <div className="flex flex-1 flex-col overflow-y-auto">
+                    <div className="relative flex w-full flex-1 flex-col bg-background px-2 md:px-8">
+                      <div className="relative flex w-full max-w-[1440px] flex-1 flex-col">
+                        {children}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          </main>
+            </main>
+          </div>
         </div>
-      </div>
       </div>
     </div>
   );
 };
-

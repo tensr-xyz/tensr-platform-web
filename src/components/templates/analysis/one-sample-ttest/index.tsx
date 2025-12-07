@@ -1,4 +1,5 @@
 import { useTabsStore } from '@/stores/tabs-store';
+import { getIdToken } from '@/utils/auth';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
@@ -54,16 +55,16 @@ export const OneSampleTTest = ({ children }: OneSampleTTestProps) => {
   const [results, setResults] = useState<TTestResult | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
 
-  const token = tokens?.accessToken;
+  const token = getIdToken();
 
   const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
   // Extract variables from the columns
   const variables = useMemo((): Variable[] => {
     if (!activeTab?.data?.initialColumns) return [];
-    return activeTab.data.initialColumns.map((column: { header: any; type: any }) => ({
+    return activeTab.data?.initialColumns.map((column: { header: any; type: any }) => ({
       name: column.header,
       type: column.type || 'string',
     }));
@@ -73,7 +74,7 @@ export const OneSampleTTest = ({ children }: OneSampleTTestProps) => {
   const sampleData = useMemo(() => {
     if (!activeTab?.data?.initialData || !selectedVariable) return [];
 
-    return activeTab.data.initialData
+    return activeTab.data?.initialData
       .map((row: { [x: string]: any }) => {
         const val = row[selectedVariable];
         return typeof val === 'number' ? val : parseFloat(val);
@@ -147,7 +148,7 @@ export const OneSampleTTest = ({ children }: OneSampleTTestProps) => {
     v =>
       v.type === 'number' ||
       (activeTab?.data?.initialData?.[0]?.[v.name] !== undefined &&
-        !isNaN(parseFloat(activeTab.data.initialData[0][v.name])))
+        !isNaN(parseFloat(activeTab.data?.initialData[0][v.name])))
   );
 
   const significanceLevel = results

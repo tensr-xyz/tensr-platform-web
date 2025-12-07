@@ -203,7 +203,7 @@ export function Spreadsheet({
   showMenu = true,
   tabData,
 }: SpreadsheetProps) {
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [containerHeight, setContainerHeight] = useState<number | null>(null);
@@ -229,18 +229,30 @@ export function Spreadsheet({
   const [transformationModalOpen, setTransformationModalOpen] = useState(false);
   const [transformations, setTransformations] = useState<Transformation[]>([]);
   const [transformationLoading, setTransformationLoading] = useState(false);
-  const [currentColumnForTransformation, setCurrentColumnForTransformation] = useState<string | null>(null);
+  const [currentColumnForTransformation, setCurrentColumnForTransformation] = useState<
+    string | null
+  >(null);
   const [categoryCleanerOpen, setCategoryCleanerOpen] = useState(false);
   const [categoryMappings, setCategoryMappings] = useState<CategoryMapping[]>([]);
   const [categoryCleanerLoading, setCategoryCleanerLoading] = useState(false);
-  const [currentColumnForCategoryClean, setCurrentColumnForCategoryClean] = useState<string | null>(null);
+  const [currentColumnForCategoryClean, setCurrentColumnForCategoryClean] = useState<string | null>(
+    null
+  );
   const [outlierRows, setOutlierRows] = useState<Set<number>>(new Set());
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const statsLoadAttempted = useRef(false);
-  
+
   // Clipboard store
-  const { copy: copyToClipboard, cut: cutToClipboard, paste: pasteFromClipboard, clear: clearClipboard, hasData: clipboardHasData, isCut: clipboardIsCut, getCutOrigin } = useClipboardStore();
+  const {
+    copy: copyToClipboard,
+    cut: cutToClipboard,
+    paste: pasteFromClipboard,
+    clear: clearClipboard,
+    hasData: clipboardHasData,
+    isCut: clipboardIsCut,
+    getCutOrigin,
+  } = useClipboardStore();
 
   // Prefetch state management
   const [prefetchedData, setPrefetchedData] = useState<RowType[]>([]);
@@ -1634,14 +1646,14 @@ export function Spreadsheet({
 
   const handleCopy = useCallback(() => {
     if (!focusedCell) return;
-    
+
     const visibleColumns = getVisibleColumns();
     const columnIndex = visibleColumns.findIndex(col => col.id === focusedCell.columnId);
     if (columnIndex === -1) return;
 
     // For now, copy single cell. Can be extended to support multi-cell selection
     const cellValue = data[focusedCell.rowIndex]?.[focusedCell.columnId] ?? '';
-    
+
     const clipboardData: ClipboardData = {
       type: 'cells',
       data: [[cellValue]],
@@ -1654,13 +1666,13 @@ export function Spreadsheet({
 
   const handleCut = useCallback(() => {
     if (!focusedCell) return;
-    
+
     const visibleColumns = getVisibleColumns();
     const columnIndex = visibleColumns.findIndex(col => col.id === focusedCell.columnId);
     if (columnIndex === -1) return;
 
     const cellValue = data[focusedCell.rowIndex]?.[focusedCell.columnId] ?? '';
-    
+
     const clipboardData: ClipboardData = {
       type: 'cells',
       data: [[cellValue]],
@@ -1673,7 +1685,7 @@ export function Spreadsheet({
 
   const handlePaste = useCallback(() => {
     if (!focusedCell) return;
-    
+
     const clipboardData = pasteFromClipboard();
     if (!clipboardData || clipboardData.type !== 'cells') return;
 
@@ -1684,32 +1696,32 @@ export function Spreadsheet({
     // Handle paste - update cells starting from focused cell
     setData(prevData => {
       const newData = [...prevData];
-      
+
       for (let rowOffset = 0; rowOffset < clipboardData.rowCount; rowOffset++) {
         const targetRowIndex = focusedCell.rowIndex + rowOffset;
         if (targetRowIndex >= newData.length) {
           // Add new rows if needed
           newData.push({ id: `row-${targetRowIndex}` });
         }
-        
+
         for (let colOffset = 0; colOffset < clipboardData.columnCount; colOffset++) {
           const targetColumnIndex = startColumnIndex + colOffset;
           if (targetColumnIndex >= visibleColumns.length) break;
-          
+
           const targetColumnId = visibleColumns[targetColumnIndex].id;
           const value = clipboardData.data[rowOffset]?.[colOffset] ?? '';
-          
+
           if (!newData[targetRowIndex]) {
             newData[targetRowIndex] = { id: `row-${targetRowIndex}` };
           }
-          
+
           newData[targetRowIndex] = {
             ...newData[targetRowIndex],
             [targetColumnId]: value,
           };
         }
       }
-      
+
       return newData;
     });
 
@@ -1719,7 +1731,7 @@ export function Spreadsheet({
       if (tabUpdateTimeoutRef.current) {
         clearTimeout(tabUpdateTimeoutRef.current);
       }
-      
+
       tabUpdateTimeoutRef.current = setTimeout(() => {
         setData(currentData => {
           if (activeTab?.data) {
@@ -1739,7 +1751,12 @@ export function Spreadsheet({
     // If this was a cut operation, clear the source cells after paste
     if (clipboardIsCut()) {
       const cutOrigin = getCutOrigin();
-      if (cutOrigin && !(cutOrigin.rowIndex === focusedCell.rowIndex && cutOrigin.columnId === focusedCell.columnId)) {
+      if (
+        cutOrigin &&
+        !(
+          cutOrigin.rowIndex === focusedCell.rowIndex && cutOrigin.columnId === focusedCell.columnId
+        )
+      ) {
         // Clear the original cells that were cut (if pasting to different location)
         setData(prevData => {
           const newData = [...prevData];
@@ -1754,99 +1771,112 @@ export function Spreadsheet({
       }
       clearClipboard();
     }
-  }, [focusedCell, getVisibleColumns, pasteFromClipboard, clipboardIsCut, clearClipboard, getCutOrigin, tabId, activeTab, updateTab]);
+  }, [
+    focusedCell,
+    getVisibleColumns,
+    pasteFromClipboard,
+    clipboardIsCut,
+    clearClipboard,
+    getCutOrigin,
+    tabId,
+    activeTab,
+    updateTab,
+  ]);
 
   const handleDelete = useCallback(() => {
     if (!focusedCell) return;
-    
+
     handleCellEdit(focusedCell.rowIndex, focusedCell.columnId, '');
   }, [focusedCell, handleCellEdit]);
 
   // Column action handler
-  const handleColumnAction = useCallback(async (action: string, columnId: string) => {
-    const datasetId = filePath || tabId;
-    const stats = columnStats?.[columnId];
-    const column = initialColumns.find(col => col.id === columnId);
-    const columnType = stats?.data_type || column?.type || 'unknown';
-    
-    switch (action) {
-      case 'show-insight':
-        // Set selected column - this will trigger Inspector pane if available
-        setSelectedColumnId(columnId);
-        break;
-      case 'suggest-transformations':
-        setCurrentColumnForTransformation(columnId);
-        setTransformationLoading(true);
-        setTransformationModalOpen(true);
-        try {
-          const response = await apiClient.ai.suggestTransformations({
-            datasetId,
-            columnId,
-            columnType,
-            stats,
-            teachingMode: activeTab?.data?.teachingMode || false,
-          });
-          setTransformations(response.transformations || []);
-        } catch (error) {
-          console.error('Failed to get transformations', error);
-          setTransformations([]);
-        } finally {
-          setTransformationLoading(false);
-        }
-        break;
-      case 'clean-categories':
-        setCurrentColumnForCategoryClean(columnId);
-        setCategoryCleanerLoading(true);
-        setCategoryCleanerOpen(true);
-        try {
-          // Get unique values from the column
-          const uniqueValues = Array.from(
-            new Set(
-              data
-                .map(row => row[columnId])
-                .filter(val => val !== null && val !== undefined && val !== '')
-            )
-          ).map(String);
-          
-          const response = await apiClient.ai.cleanCategories({
-            datasetId,
-            columnId,
-            uniqueValues,
-          });
-          setCategoryMappings(response.mapping || []);
-        } catch (error) {
-          console.error('Failed to clean categories', error);
-          setCategoryMappings([]);
-        } finally {
-          setCategoryCleanerLoading(false);
-        }
-        break;
-      case 'detect-outliers':
-        try {
-          const response = await apiClient.ai.detectOutliers({
-            datasetId,
-            columnId,
-            stats,
-          });
-          
-          // Mark outlier rows (we'd need to check actual values against bounds)
-          // For now, just log - full implementation would check all rows
-          console.log('Outlier detection', response);
-          
-          // Highlight outliers - this is a simplified version
-          // In a full implementation, we'd iterate through data and mark rows
-        } catch (error) {
-          console.error('Failed to detect outliers', error);
-        }
-        break;
-      case 'check-relationships':
-        // Set selected column and open relationships tab in Inspector
-        setSelectedColumnId(columnId);
-        break;
-      default:
-        break;
-    }
-  }, [filePath, tabId, columnStats, initialColumns, data, activeTab]);
+  const handleColumnAction = useCallback(
+    async (action: string, columnId: string) => {
+      const datasetId = filePath || tabId;
+      const stats = columnStats?.[columnId];
+      const column = initialColumns.find(col => col.id === columnId);
+      const columnType = stats?.data_type || column?.type || 'unknown';
+
+      switch (action) {
+        case 'show-insight':
+          // Set selected column - this will trigger Inspector pane if available
+          setSelectedColumnId(columnId);
+          break;
+        case 'suggest-transformations':
+          setCurrentColumnForTransformation(columnId);
+          setTransformationLoading(true);
+          setTransformationModalOpen(true);
+          try {
+            const response = await apiClient.ai.suggestTransformations({
+              datasetId,
+              columnId,
+              columnType,
+              stats,
+              teachingMode: activeTab?.data?.teachingMode || false,
+            });
+            setTransformations(response.transformations || []);
+          } catch (error) {
+            console.error('Failed to get transformations', error);
+            setTransformations([]);
+          } finally {
+            setTransformationLoading(false);
+          }
+          break;
+        case 'clean-categories':
+          setCurrentColumnForCategoryClean(columnId);
+          setCategoryCleanerLoading(true);
+          setCategoryCleanerOpen(true);
+          try {
+            // Get unique values from the column
+            const uniqueValues = Array.from(
+              new Set(
+                data
+                  .map(row => row[columnId])
+                  .filter(val => val !== null && val !== undefined && val !== '')
+              )
+            ).map(String);
+
+            const response = await apiClient.ai.cleanCategories({
+              datasetId,
+              columnId,
+              uniqueValues,
+            });
+            setCategoryMappings(response.mapping || []);
+          } catch (error) {
+            console.error('Failed to clean categories', error);
+            setCategoryMappings([]);
+          } finally {
+            setCategoryCleanerLoading(false);
+          }
+          break;
+        case 'detect-outliers':
+          try {
+            const response = await apiClient.ai.detectOutliers({
+              datasetId,
+              columnId,
+              stats,
+            });
+
+            // Mark outlier rows (we'd need to check actual values against bounds)
+            // For now, just log - full implementation would check all rows
+            console.log('Outlier detection', response);
+
+            // Highlight outliers - this is a simplified version
+            // In a full implementation, we'd iterate through data and mark rows
+          } catch (error) {
+            console.error('Failed to detect outliers', error);
+          }
+          break;
+        case 'check-relationships':
+          // Set selected column and open relationships tab in Inspector
+          setSelectedColumnId(columnId);
+          break;
+        default:
+          break;
+      }
+    },
+    [filePath, tabId, columnStats, initialColumns, data, activeTab]
+  );
 
   const HeaderComponentWrapper = useMemo(() => {
     const WrappedHeaderComponent = ({ header }: { header: Header<any, unknown> }) => (
@@ -1864,14 +1894,25 @@ export function Spreadsheet({
 
     WrappedHeaderComponent.displayName = 'HeaderComponentWrapper';
     return WrappedHeaderComponent;
-  }, [table, showStats, columnStats, handleHeaderEdit, isLoadingStats, handleColumnAction, filePath, tabId]);
+  }, [
+    table,
+    showStats,
+    columnStats,
+    handleHeaderEdit,
+    isLoadingStats,
+    handleColumnAction,
+    filePath,
+    tabId,
+  ]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Check for clipboard shortcuts (only when not in input field)
-      const isInputFocused = document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA';
+      const isInputFocused =
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA';
       const isModifierKey = e.metaKey || e.ctrlKey;
-      
+
       if (isModifierKey && !isInputFocused && focusedCell) {
         if (e.key === 'c' || e.key === 'C') {
           e.preventDefault();
@@ -1889,7 +1930,7 @@ export function Spreadsheet({
           return;
         }
       }
-      
+
       // Delete key
       if (e.key === 'Delete' && !isInputFocused && focusedCell) {
         e.preventDefault();
@@ -2150,7 +2191,8 @@ export function Spreadsheet({
                         data-index={rowIndex}
                         className={cn(
                           isRowSelected && 'bg-muted/50',
-                          highlightedRows.has(rowIndex) && 'bg-blue-100 dark:bg-blue-900/30 border-l-4 border-l-blue-500',
+                          highlightedRows.has(rowIndex) &&
+                            'bg-blue-100 dark:bg-blue-900/30 border-l-4 border-l-blue-500',
                           selectedRowId === `row-${rowIndex}` && 'ring-2 ring-primary',
                           '!border-b-0' // Override default TableRow border-b - cells have their own bottom borders
                         )}
@@ -2199,17 +2241,17 @@ export function Spreadsheet({
                             // Set selected row for Inspector pane
                             setSelectedRowId(`row-${rowIndex}`);
                             setSelectedRowData(rowData);
-                            
+
                             // Get dataset ID from filePath or tab data
                             const datasetId = filePath || tabId;
-                            
+
                             const response = await apiClient.ai.rowInsight({
                               datasetId,
                               rowId: `row-${rowIndex}`,
                               rowData,
                               teachingMode: activeTab?.data?.teachingMode || false,
                             });
-                            
+
                             setRowInsight(response);
                             console.info('Row insight', response);
                           } catch (error) {
@@ -2226,7 +2268,7 @@ export function Spreadsheet({
                             // Set selected row for Inspector pane
                             setSelectedRowId(`row-${rowIndex}`);
                             setSelectedRowData(rowData);
-                            
+
                             const datasetId = filePath || tabId;
                             const response = await apiClient.ai.rowInsight({
                               datasetId,
@@ -2235,14 +2277,14 @@ export function Spreadsheet({
                               mode: 'similar',
                               teachingMode: activeTab?.data?.teachingMode || false,
                             });
-                            
+
                             setRowInsight(response);
-                            
+
                             // Highlight similar rows if response includes row indices
                             if (response?.similarRows && Array.isArray(response.similarRows)) {
                               setHighlightedRows(new Set(response.similarRows));
                             }
-                            
+
                             console.info('Similar rows', response);
                           } catch (error) {
                             console.error('Failed to get similar rows insight', error);
@@ -2261,7 +2303,7 @@ export function Spreadsheet({
                             setCurrentRowIndexForFix(rowIndex);
                             setRowFixLoading(true);
                             setRowFixModalOpen(true);
-                            
+
                             const datasetId = filePath || tabId;
                             const response = await apiClient.ai.fixRow({
                               datasetId,
@@ -2270,7 +2312,7 @@ export function Spreadsheet({
                               columnStats: columnStats,
                               teachingMode: activeTab?.data?.teachingMode || false,
                             });
-                            
+
                             setRowFixIssues(response.issues || []);
                             setRowFixSummary(response.summary || '');
                           } catch (error) {
@@ -2292,7 +2334,7 @@ export function Spreadsheet({
           </table>
         </div>
       </div>
-      
+
       {/* Row Fix Modal */}
       <RowFixModal
         open={rowFixModalOpen}
@@ -2302,11 +2344,11 @@ export function Spreadsheet({
         isLoading={rowFixLoading}
         onApply={async (selectedFixes: RowFixIssue[]) => {
           if (currentRowIndexForFix === null) return;
-          
+
           // Apply the fixes to the row
           setData(prevData => {
             const newData = [...prevData];
-            
+
             selectedFixes.forEach(fix => {
               if (!newData[currentRowIndexForFix]) {
                 newData[currentRowIndexForFix] = { id: `row-${currentRowIndexForFix}` };
@@ -2318,16 +2360,16 @@ export function Spreadsheet({
               // Also trigger cell edit for each fix
               handleCellEdit(currentRowIndexForFix, fix.columnId, fix.suggestedValue);
             });
-            
+
             return newData;
           });
-          
+
           // Update tab data
           if (tabId && activeTab?.data) {
             if (tabUpdateTimeoutRef.current) {
               clearTimeout(tabUpdateTimeoutRef.current);
             }
-            
+
             tabUpdateTimeoutRef.current = setTimeout(() => {
               setData(currentData => {
                 if (activeTab?.data && currentRowIndexForFix !== null) {
@@ -2343,12 +2385,12 @@ export function Spreadsheet({
               });
             }, 300);
           }
-          
+
           setRowFixModalOpen(false);
           setCurrentRowIndexForFix(null);
         }}
       />
-      
+
       {/* Transformation Modal */}
       <TransformationModal
         open={transformationModalOpen}
@@ -2356,12 +2398,17 @@ export function Spreadsheet({
         transformations={transformations}
         isLoading={transformationLoading}
         onApply={async (selectedTransformations: Transformation[]) => {
-          if (!selectedTransformations.length || !currentColumnForTransformation || !activeTab?.data) return;
+          if (
+            !selectedTransformations.length ||
+            !currentColumnForTransformation ||
+            !activeTab?.data
+          )
+            return;
 
           try {
             const datasetId = filePath || tabId;
             const sourceColumnId = currentColumnForTransformation;
-            
+
             // For each transformation, create a new column
             for (const transformation of selectedTransformations) {
               // Use the new-column endpoint to create columns from formulas
@@ -2382,15 +2429,18 @@ export function Spreadsheet({
                 // Evaluate the formula for each row
                 const newColumnData: any[] = [];
                 const sourceColumnData = data.map(row => row[sourceColumnId]);
-                
+
                 // Simple formula evaluator for common transformations
                 for (let i = 0; i < data.length; i++) {
                   const sourceValue = sourceColumnData[i];
                   let newValue: any = null;
-                  
+
                   if (sourceValue !== null && sourceValue !== undefined && sourceValue !== '') {
-                    const numValue = typeof sourceValue === 'number' ? sourceValue : parseFloat(String(sourceValue));
-                    
+                    const numValue =
+                      typeof sourceValue === 'number'
+                        ? sourceValue
+                        : parseFloat(String(sourceValue));
+
                     if (!isNaN(numValue)) {
                       switch (transformation.type) {
                         case 'log':
@@ -2399,19 +2449,34 @@ export function Spreadsheet({
                         case 'zscore':
                           // Calculate z-score (would need column stats)
                           const stats = columnStats?.[sourceColumnId]?.numeric_stats;
-                          if (stats && stats.mean !== undefined && stats.std_dev !== undefined && stats.std_dev > 0) {
+                          if (
+                            stats &&
+                            stats.mean !== undefined &&
+                            stats.std_dev !== undefined &&
+                            stats.std_dev > 0
+                          ) {
                             newValue = (numValue - stats.mean) / stats.std_dev;
                           }
                           break;
                         case 'standardize':
                           const stats2 = columnStats?.[sourceColumnId]?.numeric_stats;
-                          if (stats2 && stats2.mean !== undefined && stats2.std_dev !== undefined && stats2.std_dev > 0) {
+                          if (
+                            stats2 &&
+                            stats2.mean !== undefined &&
+                            stats2.std_dev !== undefined &&
+                            stats2.std_dev > 0
+                          ) {
                             newValue = (numValue - stats2.mean) / stats2.std_dev;
                           }
                           break;
                         case 'normalize':
                           const stats3 = columnStats?.[sourceColumnId]?.numeric_stats;
-                          if (stats3 && stats3.min !== undefined && stats3.max !== undefined && stats3.max !== stats3.min) {
+                          if (
+                            stats3 &&
+                            stats3.min !== undefined &&
+                            stats3.max !== undefined &&
+                            stats3.max !== stats3.min
+                          ) {
                             newValue = (numValue - stats3.min) / (stats3.max - stats3.min);
                           }
                           break;
@@ -2434,14 +2499,14 @@ export function Spreadsheet({
 
                 // Update columns - need to update initialColumns ref
                 const updatedColumns = [...initialColumns, newColumn];
-                
+
                 // Update data and tab atomically
                 setData(prevData => {
                   const updatedData = prevData.map((row, idx) => ({
                     ...row,
                     [transformation.name]: newColumnData[idx],
                   }));
-                  
+
                   // Update tab data after data update
                   if (tabId && activeTab?.data) {
                     setTimeout(() => {
@@ -2456,11 +2521,14 @@ export function Spreadsheet({
                       });
                     }, 0);
                   }
-                  
+
                   return updatedData;
                 });
               } catch (error) {
-                console.error(`Failed to create column for transformation ${transformation.name}`, error);
+                console.error(
+                  `Failed to create column for transformation ${transformation.name}`,
+                  error
+                );
               }
             }
           } catch (error) {
@@ -2471,7 +2539,7 @@ export function Spreadsheet({
           }
         }}
       />
-      
+
       {/* Category Cleaner Modal */}
       <CategoryCleaner
         open={categoryCleanerOpen}
@@ -2480,7 +2548,7 @@ export function Spreadsheet({
         isLoading={categoryCleanerLoading}
         onApply={async (mappings: CategoryMapping[]) => {
           if (currentColumnForCategoryClean === null) return;
-          
+
           // Apply category mappings
           setData(prevData => {
             const newData = prevData.map(row => {
@@ -2488,24 +2556,20 @@ export function Spreadsheet({
               mappings.forEach(mapping => {
                 if (mapping.from.includes(String(newRow[currentColumnForCategoryClean]))) {
                   newRow[currentColumnForCategoryClean] = mapping.to;
-                  handleCellEdit(
-                    data.indexOf(row),
-                    currentColumnForCategoryClean,
-                    mapping.to
-                  );
+                  handleCellEdit(data.indexOf(row), currentColumnForCategoryClean, mapping.to);
                 }
               });
               return newRow;
             });
             return newData;
           });
-          
+
           // Update tab data
           if (tabId && activeTab?.data) {
             if (tabUpdateTimeoutRef.current) {
               clearTimeout(tabUpdateTimeoutRef.current);
             }
-            
+
             tabUpdateTimeoutRef.current = setTimeout(() => {
               setData(currentData => {
                 if (activeTab?.data) {
@@ -2521,7 +2585,7 @@ export function Spreadsheet({
               });
             }, 300);
           }
-          
+
           setCategoryCleanerOpen(false);
           setCurrentColumnForCategoryClean(null);
         }}

@@ -1,4 +1,5 @@
 import { useTabsStore } from '@/stores/tabs-store';
+import { getIdToken } from '@/utils/auth';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
@@ -55,9 +56,9 @@ export const ChiSquare = ({ children }: ChiSquareProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('setup');
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
 
-  const token = tokens?.accessToken;
+  const token = getIdToken();
 
   const activeDataTab = useMemo(
     () => tabs.find(tab => tab.id === activeTabId),
@@ -67,7 +68,7 @@ export const ChiSquare = ({ children }: ChiSquareProps) => {
   const variables = useMemo(() => {
     if (!activeDataTab?.data?.initialData?.[0]) return [];
 
-    const columnNames = Object.keys(activeDataTab.data.initialData[0]).filter(key => key !== 'id');
+    const columnNames = Object.keys(activeDataTab.data?.initialData[0]).filter(key => key !== 'id');
 
     return columnNames.map(colName => {
       const sampleValues = activeDataTab

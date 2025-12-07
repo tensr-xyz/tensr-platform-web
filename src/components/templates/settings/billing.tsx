@@ -44,6 +44,7 @@ export default function BillingSettings() {
     formatCurrency,
     cancelSubscription,
     loadAllBillingData,
+    openCustomerPortal,
   } = useBilling();
 
   const handleCancelSubscription = async () => {
@@ -327,23 +328,19 @@ export default function BillingSettings() {
           </div>
 
           <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex flex-wrap gap-3">
-            <Link
-              href="/settings/payment-methods"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm text-gray-700 rounded-md hover:bg-gray-50"
-            >
-              <CreditCard className="h-4 w-4 mr-2" />
-              Manage Payment Methods
-            </Link>
-
-            <Link
-              href="/payment"
+            <Button
+              onClick={openCustomerPortal}
               className="inline-flex items-center px-4 py-2 border border-black bg-black text-sm text-white rounded-md hover:bg-gray-800"
             >
-              <ArrowUpRight className="h-4 w-4 mr-2" />
-              {subscription?.status === 'active' ? 'Change Plan' : 'Upgrade Plan'}
-            </Link>
+              <CreditCard className="h-4 w-4 mr-2" />
+              {subscription?.stripeCustomerId
+                ? 'Manage Billing'
+                : subscription?.status === 'active'
+                  ? 'Change Plan'
+                  : 'Upgrade Plan'}
+            </Button>
 
-            {subscription?.status === 'active' && (
+            {subscription?.status === 'active' && !subscription?.stripeCustomerId && (
               <Button
                 variant="outline"
                 className="border-red-600 text-red-600 hover:bg-red-50 text-sm"

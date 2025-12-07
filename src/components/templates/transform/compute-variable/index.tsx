@@ -103,7 +103,7 @@ export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
   const [constant, setConstant] = useState<string>('');
 
   const { tabs, activeTabId, updateTab } = useTabsStore();
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
   const { dispatch: projectDispatch } = useProject();
 
   const token = tokens?.accessToken;

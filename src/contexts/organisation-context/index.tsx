@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
+import { getIdToken, decodeSessionJwt, getSessionJwt, getSessionToken } from '@/utils/auth';
 import { Organization, OrganizationMember } from '@/hooks/api/use-organisation';
 
 interface OrganizationContextType {
@@ -49,29 +50,8 @@ interface OrganizationProviderProps {
   children: ReactNode;
 }
 
-// Helper function to extract organization claims from JWT token
-const getOrganizationClaimsFromToken = (): Array<{
-  orgId: string;
-  role: OrganizationMember['role'];
-}> => {
-  try {
-    const token = localStorage.getItem('id_token'); // This is actually the ID token
-    if (!token) return [];
-
-    const payload = JSON.parse(atob(token.split('.')[1]));
-    const orgClaimsString = payload['custom:organizations'];
-
-    if (!orgClaimsString) return [];
-
-    return JSON.parse(orgClaimsString);
-  } catch (error) {
-    console.error('Error extracting organization claims from token:', error);
-    return [];
-  }
-};
-
 export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ children }) => {
-  const { user, isAuthenticated, tokens } = useAuth();
+  const { user, isAuthenticated, session } = useAuth();
   const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<OrganizationMember['role'] | null>(null);
   const [isPersonalAccount, setIsPersonalAccount] = useState(true);
@@ -83,15 +63,47 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
   // Get API base URL
   const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
-  // Helper to get auth token (ID token with claims)
+  // Helper to get auth token (Stytch session JWT)
+  // Check both Zustand store and localStorage for reliability
   const getAuthToken = () => {
-    return localStorage.getItem('access_token') || tokens?.idToken || '';
+    // First try Zustand store (most up-to-date)
+    const storeToken = session?.sessionJwt || session?.sessionToken;
+    if (storeToken) {
+      return storeToken;
+    }
+    // Fallback to localStorage (for cases where store hasn't hydrated yet)
+    return getSessionJwt() || getSessionToken() || '';
   };
 
   // Helper to get user ID from multiple possible sources
   const getUserId = () => {
     // Try different possible properties for user ID
     return user?.userId || null;
+  };
+
+  // Get organization claims from JWT token
+  const getOrganizationClaimsFromToken = (): Array<{
+    orgId: string;
+    role: OrganizationMember['role'];
+    joinedAt?: string;
+  }> => {
+    try {
+      const idToken = getIdToken();
+      if (!idToken) {
+        return [];
+      }
+      const decoded = decodeSessionJwt(idToken);
+      if (!decoded) {
+        return [];
+      }
+      // Extract organization claims from token
+      // Assuming organizations are stored in custom claims like 'custom:organizations' or similar
+      const orgs = (decoded as any)['custom:organizations'] || (decoded as any).organizations || [];
+      return Array.isArray(orgs) ? orgs : [];
+    } catch (err) {
+      console.error('Failed to get organization claims from token:', err);
+      return [];
+    }
   };
 
   // Enhanced API call helper with organization context
@@ -249,6 +261,13 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
   const refreshOrganizations = async () => {
     if (!user || !isAuthenticated) return;
 
+    // Check if token is available before making API calls
+    const token = getAuthToken();
+    if (!token) {
+      console.warn('Cannot refresh organizations: no authentication token available');
+      return;
+    }
+
     setIsLoading(true);
     setError(null);
 
@@ -309,7 +328,9 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
   useEffect(() => {
     console.log('Auth state changed:', { isAuthenticated, userId: getUserId() });
 
-    if (isAuthenticated && user) {
+    // Only proceed if authenticated AND token is available
+    const token = getAuthToken();
+    if (isAuthenticated && user && token) {
       // Check for persisted active organization
       const savedOrgId = localStorage.getItem('activeOrganizationId');
       const savedRole = localStorage.getItem(
@@ -360,15 +381,18 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
 
   // Debug effect to log token claims
   useEffect(() => {
-    if (isAuthenticated && tokens?.idToken) {
-      try {
-        const claims = getOrganizationClaimsFromToken();
-        console.log('Organization claims from token:', claims);
-      } catch (err) {
-        console.error('Failed to parse organization claims:', err);
+    if (isAuthenticated) {
+      const idToken = getIdToken();
+      if (idToken) {
+        try {
+          const claims = getOrganizationClaimsFromToken();
+          console.log('Organization claims from token:', claims);
+        } catch (err) {
+          console.error('Failed to parse organization claims:', err);
+        }
       }
     }
-  }, [isAuthenticated, tokens?.idToken]);
+  }, [isAuthenticated]);
 
   const value: OrganizationContextType = {
     activeOrganization,

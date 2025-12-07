@@ -21,6 +21,10 @@ const navigationItems = [
         url: '/settings/billing',
       },
       {
+        title: 'Usage',
+        url: '/settings/usage',
+      },
+      {
         title: 'Organisation',
         url: '/settings/organisation',
       },

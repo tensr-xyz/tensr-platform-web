@@ -3,13 +3,13 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useStytch, useStytchUser, useStytchSession } from '@stytch/nextjs';
 import { useAuthStore } from '@/stores/auth-store';
-import { clearAuthData } from '@/utils/auth';
+import { clearAuthData, storeSession } from '@/utils/auth';
 
 export const useAuth = () => {
   const stytch = useStytch();
   const { user: stytchUser } = useStytchUser();
   const { session: stytchSession } = useStytchSession();
-  
+
   const {
     user,
     session,
@@ -33,7 +33,7 @@ export const useAuth = () => {
     setError(null);
     try {
       console.log('Initiating Stytch auth for email:', email);
-      
+
       if (!stytch) {
         throw new Error('Stytch client not initialized');
       }
@@ -85,8 +85,9 @@ export const useAuth = () => {
         throw new Error('Stytch client not initialized');
       }
 
+      // Use a safe session duration (30 minutes) that should be within Stytch's limits
       const response = await stytch.otps.authenticate(otp, methodIdToUse, {
-        session_duration_minutes: 60 * 24 * 7, // 7 days
+        session_duration_minutes: 30,
       });
 
       if (response.status_code !== 200) {
@@ -105,6 +106,8 @@ export const useAuth = () => {
           sessionToken: response.session_token,
           sessionJwt: response.session_jwt,
         });
+        // Persist to localStorage and cookies
+        storeSession(response.session_token, response.session_jwt);
       }
 
       // Store user if available
@@ -167,7 +170,7 @@ export const useAuth = () => {
     } catch (error) {
       console.error('Error revoking Stytch session:', error);
     }
-    
+
     clearAuthData();
     logout();
     setMethodId(null);

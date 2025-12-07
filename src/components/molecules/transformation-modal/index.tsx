@@ -53,7 +53,9 @@ export function TransformationModal({
   };
 
   const handleApply = () => {
-    const transformationsToApply = transformations.filter((_, index) => selectedTransformations.has(index));
+    const transformationsToApply = transformations.filter((_, index) =>
+      selectedTransformations.has(index)
+    );
     onApply(transformationsToApply);
     setSelectedTransformations(new Set());
   };
@@ -79,10 +81,14 @@ export function TransformationModal({
         <ScrollArea className="max-h-[400px] pr-4">
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium">Available Transformations ({transformations.length})</h4>
+              <h4 className="text-sm font-medium">
+                Available Transformations ({transformations.length})
+              </h4>
               {transformations.length > 0 && (
                 <Button variant="ghost" size="sm" onClick={handleSelectAll}>
-                  {selectedTransformations.size === transformations.length ? 'Deselect All' : 'Select All'}
+                  {selectedTransformations.size === transformations.length
+                    ? 'Deselect All'
+                    : 'Select All'}
                 </Button>
               )}
             </div>
@@ -107,7 +113,9 @@ export function TransformationModal({
 
                     <div className="text-sm">
                       <span className="text-muted-foreground">Formula: </span>
-                      <code className="bg-muted px-2 py-0.5 rounded text-xs">{transformation.formula}</code>
+                      <code className="bg-muted px-2 py-0.5 rounded text-xs">
+                        {transformation.formula}
+                      </code>
                     </div>
 
                     {transformation.reason && (
@@ -132,10 +140,7 @@ export function TransformationModal({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
             Cancel
           </Button>
-          <Button
-            onClick={handleApply}
-            disabled={selectedTransformations.size === 0 || isLoading}
-          >
+          <Button onClick={handleApply} disabled={selectedTransformations.size === 0 || isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -150,8 +155,3 @@ export function TransformationModal({
     </Dialog>
   );
 }
-
-
-
-
-

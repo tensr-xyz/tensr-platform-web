@@ -15,11 +15,12 @@ import { Textarea } from '@/components/atoms/text-area';
 import { CreateFeedbackInput, FeedbackTopic } from '@/types/feedback';
 import useAuth from '@/hooks/api/use-auth';
 import { toast } from '@/hooks/ui/use-toast';
+import { getSessionJwt, getSessionToken } from '@/utils/auth';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 interface FeedbackButtonProps {
-  variant?: 'default' | 'icon' | 'outline';
+  variant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'link' | 'destructive';
   size?: 'default' | 'sm' | 'lg' | 'icon';
   className?: string;
 }
@@ -35,7 +36,7 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
 
-  const { user, tokens } = useAuth();
+  const { user } = useAuth();
 
   const submitFeedback = async (feedbackData: CreateFeedbackInput) => {
     try {
@@ -43,7 +44,7 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.idToken}`,
+          Authorization: `Bearer ${getSessionJwt() || getSessionToken()}`,
         },
         body: JSON.stringify(feedbackData),
       });
@@ -116,11 +117,7 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant={variant}
-          size={size}
-          className={`rounded-full h-10 ${className}`}
-        >
+        <Button variant={variant} size={size} className={`rounded-full h-10 ${className}`}>
           <MessageSquare className="h-4 w-4 mr-2" />
           Feedback
         </Button>
@@ -147,17 +144,13 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
             <Textarea
               placeholder="Your feedback..."
               value={feedback}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                setFeedback(e.target.value)
-              }
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFeedback(e.target.value)}
               rows={5}
               disabled={isSubmitting}
             />
 
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                How satisfied are you?
-              </label>
+              <label className="text-sm font-medium text-gray-700">How satisfied are you?</label>
               <div className="flex justify-between items-center bg-gray-50 p-3 -mx-4 rounded-md">
                 <div className="flex space-x-1">
                   {[5, 4, 3, 2, 1].map(value => {
@@ -174,16 +167,12 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
                         variant="ghost"
                         size="icon"
                         className={`rounded-full transition-colors ${
-                          rating === value
-                            ? 'bg-blue-100 border-blue-300'
-                            : 'hover:bg-gray-100'
+                          rating === value ? 'bg-blue-100 border-blue-300' : 'hover:bg-gray-100'
                         }`}
                         onClick={() => setRating(value)}
                         disabled={isSubmitting}
                       >
-                        <Icon
-                          className={`h-4 w-4 ${rating === value ? 'text-blue-600' : color}`}
-                        />
+                        <Icon className={`h-4 w-4 ${rating === value ? 'text-blue-600' : color}`} />
                       </Button>
                     );
                   })}
@@ -203,4 +192,3 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
     </Popover>
   );
 };
-

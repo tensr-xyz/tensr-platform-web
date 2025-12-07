@@ -36,7 +36,6 @@ import { toast } from '@/hooks/ui/use-toast';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { PermissionWrapper } from '@/wrappers/permission';
 
-
 interface MobileMenuProps {
   isOpen: boolean;
   onClose: () => void;
@@ -197,7 +196,6 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
     </div>
   );
 };
-
 
 const UserProfileMenu: React.FC = () => {
   const { user, handleLogout: logout } = useAuth();

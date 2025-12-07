@@ -161,4 +161,3 @@ export default function PluginUIRenderer({ plugin, result, onClose }: PluginUIRe
     </div>
   );
 }
-

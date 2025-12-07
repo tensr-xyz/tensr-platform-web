@@ -1,4 +1,5 @@
 import { useTabsStore } from '@/stores/tabs-store';
+import { getIdToken } from '@/utils/auth';
 import { ReactNode, useMemo, useState, useRef } from 'react';
 import {
   Dialog,
@@ -88,13 +89,13 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('setup');
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
 
   // Refs for table export
   const anovaTableRef = useRef<HTMLTableElement>(null);
   const groupStatsTableRef = useRef<HTMLTableElement>(null);
 
-  const token = tokens?.accessToken;
+  const token = getIdToken();
 
   const activeDataTab = useMemo(
     () => tabs.find(tab => tab.id === activeTabId),
@@ -104,13 +105,16 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
   const variables = useMemo(() => {
     if (!activeDataTab?.data?.initialData?.[0]) return [];
 
-    const columnNames = Object.keys(activeDataTab.data.initialData[0]).filter(key => key !== 'id');
+    const columnNames = Object.keys(activeDataTab.data?.initialData?.[0] || {}).filter(
+      key => key !== 'id'
+    );
 
     return columnNames.map(colName => {
-      const sampleValues = activeDataTab.data.initialData
-        .slice(0, 5)
-        .map((row: { [x: string]: any }) => row[colName])
-        .filter((val: string | null) => val != null && val !== '');
+      const sampleValues =
+        activeDataTab.data?.initialData
+          ?.slice(0, 5)
+          .map((row: { [x: string]: any }) => row[colName])
+          .filter((val: string | null) => val != null && val !== '') || [];
 
       const numericValues = sampleValues.map((val: { toString: () => string }) =>
         parseFloat(val.toString())
@@ -138,7 +142,7 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
     const groupedData: Record<string, number[]> = {};
     const dataDiagnostics: Record<string, { total: number; valid: number; invalid: number }> = {};
 
-    activeDataTab.data.initialData.forEach((row: any) => {
+    activeDataTab.data?.initialData.forEach((row: any) => {
       const group = row[groupingVariable]?.toString()?.trim();
       const rawValue = row[dependentVariable];
 
@@ -287,7 +291,7 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
   };
 
   const handleExportTable = async (
-    tableRef: React.RefObject<HTMLTableElement>,
+    tableRef: React.RefObject<HTMLTableElement | null>,
     tableName: string,
     format: 'png' | 'svg' | 'csv' | 'text' | 'html'
   ) => {
@@ -326,7 +330,7 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
     }
   };
 
-  const handleCopyTable = async (tableRef: React.RefObject<HTMLTableElement>) => {
+  const handleCopyTable = async (tableRef: React.RefObject<HTMLTableElement | null>) => {
     if (!tableRef.current) {
       toast({
         title: 'Copy failed',

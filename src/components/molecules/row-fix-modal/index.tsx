@@ -94,10 +94,7 @@ export function RowFixModal({
             </div>
 
             {issues.map((issue, index) => (
-              <div
-                key={`${issue.columnId}-${index}`}
-                className="border rounded-md p-4 space-y-2"
-              >
+              <div key={`${issue.columnId}-${index}`} className="border rounded-md p-4 space-y-2">
                 <div className="flex items-start gap-3">
                   <Checkbox
                     checked={selectedFixes.has(issue.columnId)}
@@ -156,10 +153,7 @@ export function RowFixModal({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>
             Cancel
           </Button>
-          <Button
-            onClick={handleApply}
-            disabled={selectedFixes.size === 0 || isLoading}
-          >
+          <Button onClick={handleApply} disabled={selectedFixes.size === 0 || isLoading}>
             {isLoading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -174,8 +168,3 @@ export function RowFixModal({
     </Dialog>
   );
 }
-
-
-
-
-

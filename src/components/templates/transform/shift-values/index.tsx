@@ -61,7 +61,7 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
   const [customMissingValue, setCustomMissingValue] = useState<string>('');
 
   const { tabs, activeTabId, updateTab } = useTabsStore();
-  const { tokens } = useAuth();
+  // Removed tokens - using getIdToken() directly
 
   const token = tokens?.accessToken;
 

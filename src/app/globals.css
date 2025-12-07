@@ -308,12 +308,4 @@
       -apple-system,
       sans-serif;
   }
-
-  h1 {
-    color: #002b31;
-  }
-
-  .dark h1 {
-    color: #004a54;
-  }
 }

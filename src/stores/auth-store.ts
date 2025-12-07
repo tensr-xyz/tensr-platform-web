@@ -17,7 +17,7 @@ interface AuthState {
   // User data
   user: User | null;
 
-  // Session (single token instead of multiple Cognito tokens)
+  // Session (Stytch session with single token)
   session: Session | null;
 
   // Session state
@@ -77,7 +77,10 @@ export const useAuthStore = create<AuthStore>()(
         },
 
         setSession: session => {
-          console.log('Zustand setSession called with:', session ? 'session present' : 'no session');
+          console.log(
+            'Zustand setSession called with:',
+            session ? 'session present' : 'no session'
+          );
 
           // Store session in localStorage and cookies
           if (session) {
