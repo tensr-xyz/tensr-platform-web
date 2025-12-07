@@ -766,6 +766,17 @@ class ApiClient {
         true
       ),
 
+    // Structural Equation Modeling
+    sem: (data: any) =>
+      this.request<any>(
+        '/api/analysis/sem',
+        {
+          method: 'POST',
+          body: JSON.stringify(data),
+        },
+        true
+      ),
+
     // Regression
     regression: (data: any) =>
       this.request<any>(
