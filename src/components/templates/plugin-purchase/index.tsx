@@ -289,7 +289,9 @@ export default function PluginPurchase() {
                   </div>
                   <div className="flex justify-between">
                     <span>Creator:</span>
-                    <span className="font-medium">{plugin.authorName}</span>
+                    <span className="font-medium">
+                      {(plugin as any).authorName || (plugin as any).author || 'Unknown'}
+                    </span>
                   </div>
                 </div>
               </div>

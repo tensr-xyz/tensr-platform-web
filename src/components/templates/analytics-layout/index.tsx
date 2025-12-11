@@ -102,11 +102,11 @@ const NavigationBar = ({ viewMode, onViewModeChange, onClose }: NavigationBarPro
 };
 
 const AnalyticsLayout = ({ children, columns, filePath }: AnalyticsLayoutProps) => {
-  const { activeView, setActiveView } = useProjectStore();
+  const { activeView, setView } = useProjectStore();
   const [viewMode, setViewMode] = useState('bottom');
 
   const toggleAnalytics = () => {
-    setActiveView(activeView === ViewType.CHARTS ? ViewType.SPREADSHEET : ViewType.CHARTS);
+    setView(activeView === ViewType.CHARTS ? ViewType.SPREADSHEET : ViewType.CHARTS);
   };
 
   const safeColumns = columns || [];

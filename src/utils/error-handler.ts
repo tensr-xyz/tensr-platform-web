@@ -116,7 +116,7 @@ export class AgentErrorHandler {
         'Contact support if the issue persists',
       ];
     } else if (error.status >= 500) {
-      type = 'external_service';
+      type = 'api_error';
       severity = 'medium';
       suggestions = [
         'Try again in a few minutes',
@@ -196,7 +196,6 @@ export class AgentErrorHandler {
         analysisTask,
         datasetContext,
         executionEnvironment: analysisTask.libraries.includes('pandas') ? 'python' : 'r',
-        code,
       },
       suggestions
     );
@@ -265,7 +264,7 @@ export class AgentErrorHandler {
       'data_processing',
       severity,
       error.message || `Data processing failed during ${operation}`,
-      { ...context, datasetContext, operation },
+      { ...context, datasetContext },
       suggestions
     );
   }
@@ -433,7 +432,6 @@ export class AgentErrorHandler {
   private logError(error: AgentError): void {
     const logEntry: ErrorLogEntry = {
       error,
-      timestamp: new Date().toISOString(),
       requestId: this.generateRequestId(),
     };
 

@@ -109,15 +109,10 @@ export const useBilling = () => {
 
   // Helper function to get access token
   const getToken = useCallback((): string => {
-    // First try to get from auth context
-    if (auth.tokens?.idToken) {
-      return auth.getIdToken();
-    }
-
-    // Fallback to localStorage or directly via helper function
+    // Get token directly from localStorage via helper function
     const token = getIdToken() || '';
     return token;
-  }, [auth.tokens]);
+  }, []);
 
   // Helper function to get user ID
   const getUserId = useCallback((): string => {
@@ -644,7 +639,7 @@ export const useBilling = () => {
       }
 
       const returnUrl = `${window.location.origin}/settings/billing`;
-      const response = await fetch(`${API_BASE_URL}/billing/customer-portal`, {
+      const response = await fetch(`${API_BASE_URL}/billing/portal`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

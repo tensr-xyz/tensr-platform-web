@@ -71,8 +71,8 @@ export interface ComplianceStatus {
 
 export class DataPrivacyManager {
   private config: PrivacyConfig;
-  private piiPatterns: Map<PIIType, RegExp[]>;
-  private sensitiveKeywords: Set<string>;
+  private piiPatterns!: Map<PIIType, RegExp[]>;
+  private sensitiveKeywords!: Set<string>;
 
   constructor(config: Partial<PrivacyConfig> = {}) {
     this.config = {
@@ -296,7 +296,7 @@ export class DataPrivacyManager {
       recommendations.push('Implement end-to-end encryption');
     }
 
-    if (piiType === 'medical_id' || piiType === 'medical') {
+    if (piiType === 'medical_id' || (piiType as string) === 'medical') {
       recommendations.push('Ensure HIPAA compliance for healthcare data');
       recommendations.push('Implement data de-identification techniques');
     }

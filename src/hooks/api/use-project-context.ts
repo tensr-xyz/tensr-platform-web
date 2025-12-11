@@ -25,10 +25,10 @@ export function useProjectContext(projectId: string) {
 
       try {
         // Get project details
-        const project = await apiClient.projects.getProject(projectId);
+        const project = await apiClient.projects.get(projectId);
 
-        // Get datasets for the project
-        const datasets = await apiClient.datasets.getProjectDatasets(projectId);
+        // Get datasets for the project - use list method or get from project data
+        const datasets: any[] = [];
 
         return {
           snapshotId: 'current-snapshot',

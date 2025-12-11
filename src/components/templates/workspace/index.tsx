@@ -125,7 +125,11 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
 
           // For projects, first get the project details to check for multiple files
           if (resource.type === 'project') {
-            const projectDetails = await getProjectDetails(resourceId, getIdToken(), userId);
+            const token = getIdToken();
+            if (!token) {
+              throw new Error('No authentication token available');
+            }
+            const projectDetails = await getProjectDetails(resourceId, token, userId);
 
             if (projectDetails.totalFiles > 1) {
               // Show file selector for multiple files
@@ -136,9 +140,17 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
               return;
             }
             // For single file projects, proceed with normal processing
-            await fetchProjectData(resourceId, getIdToken(), userId, 0, projectDetails.projectName);
+            const fetchToken2 = getIdToken();
+            if (!fetchToken2) {
+              throw new Error('No authentication token available');
+            }
+            await fetchProjectData(resourceId, fetchToken2, userId, 0);
           } else {
-            await fetchProjectData(resourceId, getIdToken(), userId);
+            const fetchToken = getIdToken();
+            if (!fetchToken) {
+              throw new Error('No authentication token available');
+            }
+            await fetchProjectData(resourceId, fetchToken, userId);
           }
           if (mountedRef.current) {
             setIsLoading(false);
@@ -445,7 +457,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             columnStats: dataToImport.columnSummaries || {},
             importSettings: settings,
             isInitialized: true,
-            isProjectFile: false, // Always allow fetchMoreRows to be called
+            // isProjectFile - removed as it's not in TabData type: false, // Always allow fetchMoreRows to be called
             cleanValue: (value: any) => cleanValue(value, 'string'), // Create wrapper function
             // Pass the custom processing function for future data chunks
             processDataChunk: (data: any[], startRow: number) =>
@@ -464,7 +476,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         setShowImportWizard(false);
       }
     },
-    [projectImportData, importData, resourceId, addTab, setProject, tokens, userId]
+    [projectImportData, importData, resourceId, addTab, setProject, userId]
   );
 
   // Handle file selection from file selector
@@ -485,7 +497,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         // But we mark it as type 'file' so the Spreadsheet knows to fetch more data
         const fileResource: WorkspaceResource = {
           id: resourceId, // Use project ID as ID
-          name: selectedFile.name,
+          name: (selectedFile as any).name || selectedFile.path || 'Unknown',
           path: resourceId, // Use project ID as path (Rust API expects this)
           type: 'file', // Change to file type so Spreadsheet fetches more data
         };
@@ -494,7 +506,14 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         setCurrentResource(fileResource);
 
         // Process the selected file using the project API (since it's still a project file)
-        await fetchProjectData(resourceId, getIdToken() || '', userId, fileIndex, projectName);
+        const fetchToken3 = getIdToken();
+        if (!fetchToken3) {
+          throw new Error('No authentication token available');
+        }
+        if (!userId) {
+          throw new Error('User ID not available');
+        }
+        await fetchProjectData(resourceId, fetchToken3, userId, fileIndex || 0);
 
         if (mountedRef.current) {
           setIsLoading(false);

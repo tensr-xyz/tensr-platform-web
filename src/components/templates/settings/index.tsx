@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogTrigger } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
-import { Settings } from 'lucide-react';
+import { Settings as SettingsIcon } from 'lucide-react';
 import { useState } from 'react';
 import { SettingsSidebar } from '@/components/templates/settings/settings-sidebar';
 
@@ -22,7 +22,7 @@ export const Settings = ({ trigger }: SettingsProps) => {
       >
         {trigger || (
           <Button variant="ghost" size="icon" title="Settings" className="h-8">
-            <Settings className="size-4" />
+            <SettingsIcon className="size-4" />
           </Button>
         )}
       </DialogTrigger>

@@ -123,7 +123,7 @@ interface PaymentPageProps {
 
 const PaymentPage = () => {
   const router = useRouter();
-  const { user, tokens } = useAuth();
+  const { user, session } = useAuth();
   const stripe = useStripe();
   const elements = useElements();
 
@@ -360,7 +360,7 @@ const PaymentPage = () => {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${tokens?.idToken}`,
+            Authorization: `Bearer ${session?.sessionJwt}`,
           },
           body: JSON.stringify({
             tier: formData.tier,
@@ -411,7 +411,7 @@ const PaymentPage = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${tokens?.idToken}`,
+          Authorization: `Bearer ${session?.sessionJwt}`,
         },
         body: JSON.stringify({
           paymentMethodId: paymentMethod.id,

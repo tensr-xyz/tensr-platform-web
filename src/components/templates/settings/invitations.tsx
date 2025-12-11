@@ -33,9 +33,12 @@ export default function Invitations() {
     isLoading,
   } = useOrganization();
   const [isAddingInvitation, setIsAddingInvitation] = useState(false);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    email: string;
+    role: 'ADMIN' | 'MEMBER' | 'VIEWER';
+  }>({
     email: '',
-    role: 'MEMBER' as const,
+    role: 'MEMBER',
   });
 
   // Load invitations when component mounts or organization changes

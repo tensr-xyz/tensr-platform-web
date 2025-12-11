@@ -145,7 +145,7 @@ export const FixDataTypesDialog = ({ children }: FixDataTypesProps) => {
           (acc, col) => {
             acc[col.name] = {
               type: col.selected ? col.targetType : 'auto',
-              valid_count: activeTab.data.initialData?.length || 0,
+              valid_count: activeTab.data?.initialData?.length || 0,
               missing_count: 0,
             };
             return acc;

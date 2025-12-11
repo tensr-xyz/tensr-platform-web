@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useTabsStore } from '@/stores/tabs-store';
-import { DatasetContext, AnalysisTask, findAnalysesByIntent } from '@/types/agent';
+import { DatasetContext, AnalysisTask, findAnalysesByIntent, DataType } from '@/types/agent';
 
 export const useAgentContext = () => {
   const { tabs, activeTabId } = useTabsStore();
@@ -28,7 +28,7 @@ export const useAgentContext = () => {
       const missingPercentage = (missingCount / values.length) * 100;
 
       // Enhanced data type detection
-      let dataType = 'string';
+      let dataType: DataType = 'text';
       if (values.every((v: any) => typeof v === 'number' || !isNaN(Number(v)))) {
         dataType = 'numeric';
       } else if (uniqueValues <= 2) {
@@ -117,7 +117,6 @@ export const useAgentContext = () => {
       dataQuality: qualityMetrics,
       totalRows: data.length,
       totalColumns: columns.length,
-      dataQualityIssues,
     };
   }, [activeTab]);
 
@@ -201,11 +200,9 @@ export const useAgentContext = () => {
     if (!datasetContext) return false;
 
     // Check for critical data quality issues
-    const criticalIssues =
-      datasetContext.dataQualityIssues?.filter(issue => issue.severity === 'high') || [];
     const hasTooManyMissingValues = datasetContext.schema.some(col => col.missingPercentage > 50);
 
-    return criticalIssues.length === 0 && !hasTooManyMissingValues;
+    return !hasTooManyMissingValues;
   }, [datasetContext]);
 
   // Get preprocessing recommendations
@@ -224,7 +221,7 @@ export const useAgentContext = () => {
 
     // Check for data type mismatches
     const potentialTypeIssues = datasetContext.schema.filter(
-      col => col.dataType === 'string' && col.uniqueValues < 20
+      col => col.dataType === 'text' && col.uniqueValues < 20
     );
     if (potentialTypeIssues.length > 0) {
       recommendations.push(

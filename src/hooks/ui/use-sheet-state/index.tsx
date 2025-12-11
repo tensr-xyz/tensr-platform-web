@@ -162,7 +162,7 @@ export function useSheetState({
         ...op,
         actor: 'user', // Will be replaced by backend with actual userId
         timestamp: new Date().toISOString(),
-      };
+      } as SheetOp;
 
       // Optimistically apply to local state
       const optimisticState = applyOpToState(fullOp, state);
@@ -206,54 +206,55 @@ export function useSheetState({
   useEffect(() => {
     if (!enabled) return;
 
-    const unsubscribe = wsSubscribe((message: ServerMessage) => {
-      switch (message.type) {
+    const unsubscribe = wsSubscribe(message => {
+      const serverMessage = message as ServerMessage;
+      switch (serverMessage.type) {
         case 'initial_state': {
           const initialState: SheetState = {
-            sheetId: message.sheetId,
-            version: message.version,
-            schema: message.schema,
-            data: message.initialRows || [],
-            columns: message.schema.map(s => s.name),
-            metadata: message.metadata,
+            sheetId: serverMessage.sheetId,
+            version: serverMessage.version,
+            schema: serverMessage.schema,
+            data: serverMessage.initialRows || [],
+            columns: serverMessage.schema.map(s => s.name),
+            metadata: serverMessage.metadata,
           };
           setState(initialState);
-          setVersion(message.version);
+          setVersion(serverMessage.version);
           setIsLoading(false);
           setError(null);
           break;
         }
 
         case 'op_applied': {
-          if (message.sheetId === sheetId && state) {
-            const newState = applyOpToState(message.op, state);
-            newState.version = message.version;
+          if (serverMessage.sheetId === sheetId && state) {
+            const newState = applyOpToState(serverMessage.op, state);
+            newState.version = serverMessage.version;
             setState(newState);
-            setVersion(message.version);
+            setVersion(serverMessage.version);
           }
           break;
         }
 
         case 'op_rejected': {
-          if (message.sheetId === sheetId) {
-            setError(message.reason);
+          if (serverMessage.sheetId === sheetId) {
+            setError(serverMessage.reason);
             // Revert to server version if needed
             // For now, just log the error
-            console.warn('Operation rejected:', message.reason);
+            console.warn('Operation rejected:', serverMessage.reason);
           }
           break;
         }
 
         case 'snapshot_saved': {
-          if (message.sheetId === sheetId) {
+          if (serverMessage.sheetId === sheetId) {
             // Optionally show a "Saved" indicator
-            console.log('Snapshot saved at version', message.version);
+            console.log('Snapshot saved at version', serverMessage.version);
           }
           break;
         }
 
         case 'error': {
-          setError(message.message);
+          setError(serverMessage.message);
           break;
         }
       }

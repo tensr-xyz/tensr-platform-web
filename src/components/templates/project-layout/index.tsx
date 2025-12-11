@@ -163,7 +163,12 @@ const ProjectLayout = ({
         className="min-w-0"
       >
         <ResizablePanelGroup direction="vertical" className="h-full">
-          <ResizablePanel defaultSize={75} className="overflow-hidden">
+          <ResizablePanel
+            id="main-content"
+            order={1}
+            defaultSize={terminalOpen ? 75 : 100}
+            className="overflow-hidden"
+          >
             <div className="h-full flex flex-col">
               <div className="flex-1 overflow-hidden">{renderContent()}</div>
               <Footer isLoading={isLoading} activeTab={activeTab} rowCount={rowCount} />
@@ -173,7 +178,7 @@ const ProjectLayout = ({
           {terminalOpen && (
             <>
               <ResizableHandle />
-              <ResizablePanel defaultSize={25}>
+              <ResizablePanel id="terminal" order={2} defaultSize={25}>
                 <Terminal />
               </ResizablePanel>
             </>

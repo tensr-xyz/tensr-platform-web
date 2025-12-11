@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { getIdToken } from '@/utils/auth';
 import { useProjectStore } from '@/stores/project-store';
-import { useAuthStore } from '@/stores/auth-store';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
@@ -9,7 +8,6 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 export const useFileOperations = (currentPath: string, onRefresh: () => Promise<void>) => {
   const [error, setError] = useState('');
   const { currentProject } = useProjectStore();
-  const { tokens } = useAuthStore();
 
   const createFile = async (name: string): Promise<boolean> => {
     try {
@@ -28,7 +26,7 @@ export const useFileOperations = (currentPath: string, onRefresh: () => Promise<
         ? `${currentPath}${currentPath.endsWith('/') ? '' : '/'}${sanitizedName}`
         : sanitizedName;
 
-      console.log(`Creating file: ${filePath} in project ${currentProject.projectId}`);
+      console.log(`Creating file: ${filePath} in project ${currentProject.id}`);
 
       // Call the project update API
       const response = await fetch(`${API_BASE_URL}/projects/${currentProject.id}`, {
@@ -80,7 +78,7 @@ export const useFileOperations = (currentPath: string, onRefresh: () => Promise<
         ? `${currentPath}${currentPath.endsWith('/') ? '' : '/'}${sanitizedName}`
         : sanitizedName;
 
-      console.log(`Creating folder: ${folderPath} in project ${currentProject.projectId}`);
+      console.log(`Creating folder: ${folderPath} in project ${currentProject.id}`);
 
       // Call the project update API
       const response = await fetch(`${API_BASE_URL}/projects/${currentProject.id}`, {

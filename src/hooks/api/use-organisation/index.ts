@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
+import { getIdToken } from '@/utils/auth';
 
 // API base URL - should be configured via environment variable
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
@@ -161,15 +162,10 @@ export const useOrganization = (): UseOrganizationReturn => {
 
   // Helper function to get access token
   const getToken = useCallback((): string => {
-    // First try to get from auth context
-    if (auth.tokens?.accessToken) {
-      return auth.getIdToken();
-    }
-
-    // Fallback to localStorage directly
-    const token = localStorage.getItem('access_token');
-    return token || '';
-  }, [auth.tokens]);
+    // Get token directly from localStorage via helper function
+    const token = getIdToken() || localStorage.getItem('access_token') || '';
+    return token;
+  }, []);
 
   // Function to fetch user's organizations
   const fetchOrganizations = useCallback(async (): Promise<Organization[]> => {

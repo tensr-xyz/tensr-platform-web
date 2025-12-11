@@ -61,7 +61,7 @@ export class AgentContextBuilder {
     const categoricalColumns = schema.filter(
       col => col.dataType === 'categorical' || col.dataType === 'binary'
     ).length;
-    const textColumns = schema.filter(col => col.dataType === 'string').length;
+    const textColumns = schema.filter(col => col.dataType === 'text').length;
 
     return `Dataset Overview:
 - Total rows: ${totalRows.toLocaleString()}
@@ -145,7 +145,7 @@ export class AgentContextBuilder {
     // Identify potential issues
     const highMissingColumns = schema.filter(col => col.missingPercentage > 20);
     const lowCardinalityColumns = schema.filter(
-      col => col.uniqueValues < 5 && col.dataType === 'string'
+      col => col.uniqueValues < 5 && col.dataType === 'text'
     );
 
     if (highMissingColumns.length > 0) {

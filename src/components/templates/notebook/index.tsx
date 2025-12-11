@@ -146,11 +146,6 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
                 value={cell.content}
                 onChange={value => onContentChange(cell.id, value || '')}
                 theme={isDarkMode ? 'vs-dark' : 'vs-light'}
-                onBlur={() => {
-                  if (cell.content.trim()) {
-                    setIsEditing(false);
-                  }
-                }}
                 options={{
                   minimap: { enabled: false },
                   fontSize: 13,

@@ -259,12 +259,13 @@ export function Spreadsheet({
   const isPrefetchingRef = useRef(false);
   const prefetchedRowRangeRef = useRef<{ start: number; end: number } | null>(null);
 
-  const idTokenRef = useRef(tokens?.idToken);
+  const { session } = useAuth();
+  const idTokenRef = useRef(session?.sessionJwt || null);
 
   // Update token ref when it changes
   useEffect(() => {
-    idTokenRef.current = tokens?.idToken;
-  }, [tokens?.idToken]);
+    idTokenRef.current = session?.sessionJwt || null;
+  }, [session?.sessionJwt]);
 
   // Memoize the decoded file path
   const decodedFilePath = useMemo(
@@ -1024,7 +1025,7 @@ export function Spreadsheet({
         updateTab(activeTab.id, {
           data: {
             ...activeTab.data,
-            columnFilters: newFilters,
+            columnFilters: newFilters as any,
           },
         });
       }
@@ -1795,7 +1796,7 @@ export function Spreadsheet({
       const datasetId = filePath || tabId;
       const stats = columnStats?.[columnId];
       const column = initialColumns.find(col => col.id === columnId);
-      const columnType = stats?.data_type || column?.type || 'unknown';
+      const columnType = stats?.data_type || (column as any)?.type || 'unknown';
 
       switch (action) {
         case 'show-insight':
@@ -1813,7 +1814,7 @@ export function Spreadsheet({
               columnType,
               stats,
               teachingMode: activeTab?.data?.teachingMode || false,
-            });
+            } as any);
             setTransformations(response.transformations || []);
           } catch (error) {
             console.error('Failed to get transformations', error);
@@ -2250,7 +2251,7 @@ export function Spreadsheet({
                               rowId: `row-${rowIndex}`,
                               rowData,
                               teachingMode: activeTab?.data?.teachingMode || false,
-                            });
+                            } as any);
 
                             setRowInsight(response);
                             console.info('Row insight', response);
@@ -2276,7 +2277,7 @@ export function Spreadsheet({
                               rowData,
                               mode: 'similar',
                               teachingMode: activeTab?.data?.teachingMode || false,
-                            });
+                            } as any);
 
                             setRowInsight(response);
 
@@ -2311,7 +2312,7 @@ export function Spreadsheet({
                               rowData,
                               columnStats: columnStats,
                               teachingMode: activeTab?.data?.teachingMode || false,
-                            });
+                            } as any);
 
                             setRowFixIssues(response.issues || []);
                             setRowFixSummary(response.summary || '');
@@ -2514,8 +2515,8 @@ export function Spreadsheet({
                         data: {
                           ...activeTab.data,
                           initialData: updatedData,
-                          initialColumns: updatedColumns,
-                          totalColumns: (activeTab.data.totalColumns || 0) + 1,
+                          initialColumns: updatedColumns as any,
+                          totalColumns: (activeTab.data?.totalColumns || 0) + 1,
                         },
                         isDirty: true,
                       });

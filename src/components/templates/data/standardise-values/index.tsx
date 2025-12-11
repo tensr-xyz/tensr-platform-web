@@ -76,7 +76,8 @@ export const StandardizeValuesDialog = ({ children }: StandardizeValuesProps) =>
       .filter(key => key !== 'id')
       .reduce(
         (acc, key) => {
-          acc[key] = activeTab.data.initialData.map((row: { [x: string]: any }) => row[key]);
+          acc[key] =
+            activeTab.data?.initialData?.map((row: { [x: string]: any }) => row[key]) || [];
           return acc;
         },
         {} as Record<string, any[]>

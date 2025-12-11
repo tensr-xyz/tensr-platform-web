@@ -55,8 +55,9 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
 
   const { tabs, activeTabId, updateTab } = useTabsStore();
   // Removed tokens - using getIdToken() directly
+  const { session } = useAuth();
 
-  const token = tokens?.accessToken;
+  const token = session?.sessionJwt || null;
 
   const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
@@ -207,17 +208,15 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
       };
 
       // Update the tab with the new data
-      tabDispatch(
-        updateTab(activeTab.id, {
-          data: {
-            ...activeTab.data,
-            initialData: updatedData,
-            initialColumns: updatedColumns,
-            columnStats: updatedStats,
-            totalColumns: (activeTab.data.totalColumns || 0) + 1,
-          },
-        })
-      );
+      updateTab(activeTab.id, {
+        data: {
+          ...activeTab.data,
+          initialData: updatedData,
+          initialColumns: updatedColumns,
+          columnStats: updatedStats,
+          totalColumns: (activeTab.data.totalColumns || 0) + 1,
+        },
+      });
 
       // Reset form
       setTargetVariable('');

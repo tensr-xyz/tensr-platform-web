@@ -142,8 +142,12 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
               <FileText className="h-5 w-5 text-blue-600" />
             </div>
             <div className="ml-4">
-              <div className="text-sm text-gray-900">{project.projectName}</div>
-              <div className="text-xs text-gray-500">Created: {formatDate(project.createdAt)}</div>
+              <div className="text-sm text-gray-900">
+                {(project as any).projectName || (project as any).name}
+              </div>
+              <div className="text-xs text-gray-500">
+                Created: {formatDate((project as any).createdAt || (project as any).created)}
+              </div>
             </div>
           </div>
         );
@@ -268,7 +272,9 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
                     'ProjectsTable - Open project clicked with projectId:',
                     project.projectId
                   );
-                  onRowClick(project.projectId);
+                  if (project.projectId) {
+                    onRowClick(project.projectId);
+                  }
                 }}
               >
                 Open project
@@ -368,7 +374,10 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
                   data-state={row.getIsSelected() && 'selected'}
                   onClick={() => {
                     console.log('ProjectsTable - Row clicked, row.original:', row.original);
-                    onRowClick(row.original.projectId || row.original.id);
+                    const projectId = row.original.projectId || row.original.id;
+                    if (projectId) {
+                      onRowClick(projectId);
+                    }
                   }}
                   className="cursor-pointer"
                 >

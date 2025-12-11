@@ -41,10 +41,10 @@ export const useAuth = () => {
       const response = await stytch.otps.email.loginOrCreate(email);
 
       if (response.status_code !== 200) {
-        throw new Error(response.error_message || 'Failed to send verification code');
+        throw new Error((response as any).error_message || 'Failed to send verification code');
       }
 
-      const methodIdValue = response.email_id || response.method_id;
+      const methodIdValue = (response as any).email_id || (response as any).method_id;
       setMethodId(methodIdValue || '');
 
       setLoading(false);
@@ -91,12 +91,12 @@ export const useAuth = () => {
       });
 
       if (response.status_code !== 200) {
-        setError(response.error_message || 'Verification failed');
+        setError((response as any).error_message || 'Verification failed');
         setLoading(false);
         return {
           success: false,
           code: 'VERIFICATION_FAILED',
-          message: response.error_message || 'Verification failed',
+          message: (response as any).error_message || 'Verification failed',
         };
       }
 
@@ -192,10 +192,10 @@ export const useAuth = () => {
       const response = await stytch.otps.email.loginOrCreate(email);
 
       if (response.status_code !== 200) {
-        throw new Error(response.error_message || 'Failed to resend code');
+        throw new Error((response as any).error_message || 'Failed to resend code');
       }
 
-      const methodIdValue = response.email_id || response.method_id;
+      const methodIdValue = (response as any).email_id || (response as any).method_id;
       setMethodId(methodIdValue || '');
 
       setError(null);

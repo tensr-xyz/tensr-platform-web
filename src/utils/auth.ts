@@ -1,5 +1,8 @@
 const SESSION_TOKEN_KEY = 'stytch_session_token';
 const SESSION_JWT_KEY = 'stytch_session_jwt';
+const REFRESH_TOKEN_KEY = 'stytch_refresh_token';
+const ACCESS_TOKEN_KEY = 'stytch_access_token';
+const ID_TOKEN_KEY = 'stytch_id_token';
 
 // Cookie helper functions
 const setCookie = (name: string, value: string, days: number = 7) => {
@@ -123,6 +126,12 @@ export const clearAuthData = () => {
   if (typeof window !== 'undefined') {
     // Clear any other auth-related items from localStorage/sessionStorage
     localStorage.removeItem('auth_session');
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(ID_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    removeCookie('stytch_access_token');
+    removeCookie('stytch_id_token');
+    removeCookie('stytch_refresh_token');
     sessionStorage.clear();
   }
 };
@@ -154,4 +163,40 @@ export const getEligiblePlans = (idToken?: string | null): string[] => {
   // Since free tier is removed, return all paid plans
   // In a real implementation, this might check token claims for restrictions
   return ['pro', 'team', 'enterprise'];
+};
+
+// Get refresh token
+export const getRefreshToken = (): string | null => {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    return localStorage.getItem(REFRESH_TOKEN_KEY);
+  } catch (error) {
+    console.error('Error getting refresh token:', error);
+    return null;
+  }
+};
+
+// Store tokens (access token, id token, refresh token)
+export const storeTokens = (accessToken: string, idToken: string, refreshToken: string) => {
+  if (typeof window === 'undefined') {
+    console.log('storeTokens called on server side, skipping');
+    return;
+  }
+
+  try {
+    // Store in localStorage
+    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+    localStorage.setItem(ID_TOKEN_KEY, idToken);
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+
+    // Also store in cookies for middleware
+    setCookie('stytch_access_token', accessToken, 7);
+    setCookie('stytch_id_token', idToken, 7);
+    setCookie('stytch_refresh_token', refreshToken, 7);
+
+    console.log('Tokens stored successfully');
+  } catch (error) {
+    console.error('Error storing tokens:', error);
+  }
 };

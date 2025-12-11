@@ -36,6 +36,12 @@ export interface ColumnStatistics {
   text?: TextStatistics;
 }
 
+export interface ValueFrequency {
+  value: any;
+  frequency: number;
+  percentage: number;
+}
+
 export interface NumericStatistics {
   mean: number;
   median: number;
@@ -277,7 +283,7 @@ export class DataProfiler {
       .slice(0, 5)
       .map(([value, count]) => ({
         value,
-        count,
+        frequency: count,
         percentage: Math.round((count / total) * 1000) / 10,
       }));
 
@@ -349,7 +355,12 @@ export class DataProfiler {
     }
 
     // Data type suggestions
-    if (stats.dataType === 'string' && stats.uniqueCount < 20 && stats.uniqueCount > 2) {
+    if (
+      column &&
+      (column.type === 'string' || column.dataType === 'text') &&
+      stats.uniqueCount < 20 &&
+      stats.uniqueCount > 2
+    ) {
       suggestions.push('Consider converting to categorical type');
     }
 
@@ -433,7 +444,11 @@ export class DataProfiler {
     }
 
     // Data type recommendations
-    if (stats.dataType === 'string' && stats.uniqueCount < 20) {
+    if (
+      column &&
+      (column.type === 'string' || column.dataType === 'text') &&
+      stats.uniqueCount < 20
+    ) {
       recommendations.push('Convert to categorical type for better analysis performance');
     }
 

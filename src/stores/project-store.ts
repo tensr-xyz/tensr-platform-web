@@ -158,6 +158,17 @@ interface ProjectActions {
     token: string,
     userId: string
   ) => Promise<void>;
+
+  // Get project details (list of files) without processing
+  getProjectDetails: (
+    projectId: string,
+    token: string,
+    userId: string
+  ) => Promise<{
+    projectName: string;
+    files: any[];
+    totalFiles: number;
+  }>;
 }
 
 type ProjectStore = ProjectState & ProjectActions;

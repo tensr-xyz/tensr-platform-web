@@ -100,6 +100,8 @@ export class CodeExecutor {
 
       return {
         ...processedResult,
+        success: processedResult.success ?? true,
+        warnings: processedResult.warnings ?? [],
         executionTime: Date.now() - startTime,
         metadata: this.buildMetadata(analysisTask, code, 'python'),
       };
@@ -152,6 +154,8 @@ export class CodeExecutor {
 
       return {
         ...processedResult,
+        success: processedResult.success ?? true,
+        warnings: processedResult.warnings ?? [],
         executionTime: Date.now() - startTime,
         metadata: this.buildMetadata(analysisTask, code, 'r'),
       };
@@ -225,7 +229,7 @@ export class CodeExecutor {
     // Best practice checks
     if (code.includes('import *')) {
       warnings.push({
-        type: 'best_practice',
+        type: 'style',
         message: 'Wildcard imports not recommended',
         suggestion: 'Import specific functions/modules',
       });
@@ -295,7 +299,7 @@ export class CodeExecutor {
     // R-specific best practices
     if (code.includes('attach(')) {
       warnings.push({
-        type: 'best_practice',
+        type: 'style',
         message: 'Avoid attach() function',
         suggestion: 'Use explicit data frame references',
       });
@@ -435,7 +439,11 @@ export class CodeExecutor {
     const warnings: string[] = [];
 
     // Check output size
-    if (result.output && JSON.stringify(result.output).length > options.maxOutputSize) {
+    if (
+      result.output &&
+      options.maxOutputSize &&
+      JSON.stringify(result.output).length > options.maxOutputSize
+    ) {
       warnings.push('Output size exceeds limit - truncating results');
       result.output = this.truncateOutput(result.output, options.maxOutputSize);
     }

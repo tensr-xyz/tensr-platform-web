@@ -28,10 +28,14 @@ export default function Teams() {
     useOrganization();
   const [isAddingTeam, setIsAddingTeam] = useState(false);
   const [editingTeam, setEditingTeam] = useState<Team | null>(null);
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    description: string;
+    accessLevel: 'READ_ONLY' | 'READ_WRITE' | 'ADMIN';
+  }>({
     name: '',
     description: '',
-    accessLevel: 'READ_WRITE' as const,
+    accessLevel: 'READ_WRITE',
   });
 
   // Load teams when component mounts or organization changes

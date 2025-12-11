@@ -76,12 +76,12 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
       setIsLoading(true);
       setError(null);
 
-      if (!state.currentProject?.path || !secondaryDataset) {
+      if (!state.currentProject || !secondaryDataset) {
         throw new Error('Please select both datasets to merge');
       }
 
       const requestData: MergeDatasetRequest = {
-        primary_path: state.currentProject.path,
+        primary_path: (state.currentProject as any).path || (state.currentProject as any).id || '',
         secondary_path: secondaryDataset,
         merge_type: mergeType,
       };

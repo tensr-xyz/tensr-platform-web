@@ -24,15 +24,10 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
 
   // Get token with fallback to localStorage if auth context doesn't have it
   const getToken = useCallback((): string => {
-    // First try from auth context
-    if (auth.tokens?.accessToken) {
-      return auth.getIdToken();
-    }
-
-    // Then try from localStorage directly
+    // Get token directly from localStorage via helper function
     const token = getAccessToken();
     return token || '';
-  }, [auth.tokens]);
+  }, []);
 
   // Get all projects
   const getProjects = useCallback(async (): Promise<Project[]> => {

@@ -62,8 +62,9 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
 
   const { tabs, activeTabId, updateTab } = useTabsStore();
   // Removed tokens - using getIdToken() directly
+  const { session } = useAuth();
 
-  const token = tokens?.accessToken;
+  const token = session?.sessionJwt || null;
 
   const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
@@ -183,15 +184,13 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
       }
 
       // Update the tab with the new data
-      dispatch(
-        updateTab(activeTab.id, {
-          data: {
-            ...activeTab.data,
-            initialData: updatedData,
-            columnStats: updatedStats,
-          },
-        })
-      );
+      updateTab(activeTab.id, {
+        data: {
+          ...activeTab.data,
+          initialData: updatedData,
+          columnStats: updatedStats,
+        },
+      });
 
       // Reset form after successful operation
       setSelectedVariables([]);

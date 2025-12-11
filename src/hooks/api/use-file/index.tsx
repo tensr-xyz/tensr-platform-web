@@ -55,15 +55,10 @@ export const useFileHandler = ({
 
   // Helper function to get access token
   const getToken = useCallback((): string => {
-    // First try to get from auth context
-    if (auth.tokens?.accessToken) {
-      return auth.getIdToken();
-    }
-
-    // Fallback to localStorage directly
-    const token = localStorage.getItem('access_token');
+    // Get token directly from localStorage via helper function
+    const token = getIdToken() || localStorage.getItem('access_token') || '';
     return token || '';
-  }, [auth.tokens]);
+  }, []);
 
   // Helper function to get user ID from multiple sources
   const getUserId = useCallback((): string => {

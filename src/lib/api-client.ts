@@ -811,6 +811,75 @@ class ApiClient {
     list: (datasetId: string) => this.request<any[]>(`/datasets/${datasetId}/analyses`),
 
     get: (analysisId: string) => this.request<any>(`/analysis/${analysisId}`),
+
+    // Clustering (structured)
+    clustering: {
+      kmeans: (data: {
+        datasetId: string;
+        variables: string[];
+        k: number;
+        maxIterations?: number;
+        tolerance?: number;
+        projectId?: string;
+      }) =>
+        this.request<any>('/analysis/clustering/kmeans', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+
+      hierarchical: (data: {
+        datasetId: string;
+        variables: string[];
+        linkage?: string;
+        distanceMetric?: string;
+        nClusters?: number;
+        projectId?: string;
+      }) =>
+        this.request<any>('/analysis/clustering/hierarchical', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+
+      dbscan: (data: {
+        datasetId: string;
+        variables: string[];
+        eps: number;
+        minSamples: number;
+        projectId?: string;
+      }) =>
+        this.request<any>('/analysis/clustering/dbscan', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+    },
+
+    // Simulations
+    simulation: {
+      power: (data: {
+        analysisType: string;
+        effectSize?: number;
+        sampleSizes?: number[];
+        alpha?: number;
+        power?: number;
+        alternative?: string;
+        testType?: string;
+      }) =>
+        this.request<any>('/analysis/simulation/power', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+
+      whatIf: (data: {
+        analysisId: string;
+        scenario: string;
+        variableChanges?: Record<string, any>;
+        datasetId?: string;
+      }) =>
+        this.request<any>('/analysis/simulation/what-if', {
+          method: 'POST',
+          body: JSON.stringify(data),
+        }),
+    },
   };
 
   // Transform API
@@ -1018,329 +1087,6 @@ class ApiClient {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-  };
-
-  // Analysis API (extend existing)
-  analysis = {
-    // ... existing analysis methods ...
-    regression: (data: any) =>
-      this.request<any>('/analysis/regression', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    anova: (data: any) =>
-      this.request<any>('/analysis/anova', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    correlations: (data: any) =>
-      this.request<any>('/analysis/correlations', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    list: (datasetId: string) => this.request<any[]>(`/datasets/${datasetId}/analyses`),
-
-    get: (analysisId: string) => this.request<any>(`/analysis/${analysisId}`),
-
-    // Clustering
-    clustering: {
-      kmeans: (data: {
-        datasetId: string;
-        variables: string[];
-        k: number;
-        maxIterations?: number;
-        tolerance?: number;
-        projectId?: string;
-      }) =>
-        this.request<any>('/analysis/clustering/kmeans', {
-          method: 'POST',
-          body: JSON.stringify(data),
-        }),
-
-      hierarchical: (data: {
-        datasetId: string;
-        variables: string[];
-        linkage?: string;
-        distanceMetric?: string;
-        nClusters?: number;
-        projectId?: string;
-      }) =>
-        this.request<any>('/analysis/clustering/hierarchical', {
-          method: 'POST',
-          body: JSON.stringify(data),
-        }),
-
-      dbscan: (data: {
-        datasetId: string;
-        variables: string[];
-        eps: number;
-        minSamples: number;
-        projectId?: string;
-      }) =>
-        this.request<any>('/analysis/clustering/dbscan', {
-          method: 'POST',
-          body: JSON.stringify(data),
-        }),
-    },
-
-    // Simulations
-    simulation: {
-      power: (data: {
-        analysisType: string;
-        effectSize?: number;
-        sampleSizes?: number[];
-        alpha?: number;
-        power?: number;
-        alternative?: string;
-        testType?: string;
-      }) =>
-        this.request<any>('/analysis/simulation/power', {
-          method: 'POST',
-          body: JSON.stringify(data),
-        }),
-
-      whatIf: (data: {
-        analysisId: string;
-        scenario: string;
-        variableChanges?: Record<string, any>;
-        datasetId?: string;
-      }) =>
-        this.request<any>('/analysis/simulation/what-if', {
-          method: 'POST',
-          body: JSON.stringify(data),
-        }),
-    },
-
-    // Factor analysis
-    pca: (data: any) =>
-      this.request<any>(
-        '/api/analysis/perform-pca',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    efa: (data: any) =>
-      this.request<any>(
-        '/api/analysis/perform-efa',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    factorAnalysis: (data: any) =>
-      this.request<any>(
-        '/api/analysis/factor-analysis',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    // Clustering
-    kmeans: (data: any) =>
-      this.request<any>(
-        '/api/analysis/clustering/kmeans',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    hierarchicalClustering: (data: any) =>
-      this.request<any>(
-        '/api/analysis/clustering/hierarchical',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    dbscan: (data: any) =>
-      this.request<any>(
-        '/api/analysis/clustering/dbscan',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    // Time series
-    arima: (data: any) =>
-      this.request<any>(
-        '/api/analysis/time-series/arima',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    exponentialSmoothing: (data: any) =>
-      this.request<any>(
-        '/api/analysis/time-series/exponential-smoothing',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    seasonalDecomposition: (data: any) =>
-      this.request<any>(
-        '/api/analysis/time-series/seasonal-decomposition',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    // Machine learning
-    decisionTree: (data: any) =>
-      this.request<any>(
-        '/api/analysis/ml/decision-tree',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    randomForest: (data: any) =>
-      this.request<any>(
-        '/api/analysis/ml/random-forest',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    neuralNetwork: (data: any) =>
-      this.request<any>(
-        '/api/analysis/ml/neural-network',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    svm: (data: any) =>
-      this.request<any>(
-        '/api/analysis/ml/svm',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    // Model selection
-    automatedModelSelection: (data: any) =>
-      this.request<any>(
-        '/api/analysis/model-selection/automated',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    hyperparameterTuning: (data: any) =>
-      this.request<any>(
-        '/api/analysis/model-selection/hyperparameter-tuning',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    // GLM models
-    logisticRegression: (data: any) =>
-      this.request<any>(
-        '/api/analysis/glm/logistic',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    poissonRegression: (data: any) =>
-      this.request<any>(
-        '/api/analysis/glm/poisson',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    mixedModel: (data: any) =>
-      this.request<any>(
-        '/api/analysis/glm/mixed-model',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    // Survival analysis
-    kaplanMeier: (data: any) =>
-      this.request<any>(
-        '/api/analysis/survival/kaplan-meier',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    coxRegression: (data: any) =>
-      this.request<any>(
-        '/api/analysis/survival/cox-regression',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    logRankTest: (data: any) =>
-      this.request<any>(
-        '/api/analysis/survival/log-rank-test',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
-
-    // Structural Equation Modeling
-    sem: (data: any) =>
-      this.request<any>(
-        '/api/analysis/sem',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
   };
 
   // Worker API

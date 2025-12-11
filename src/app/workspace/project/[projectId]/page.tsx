@@ -8,7 +8,7 @@ import Loading from '@/components/molecules/loading';
 import { ImportData } from '@/types/file';
 import { Project } from '@/types/project';
 
-export default function ProjectWorkspacePage() {
+function ProjectWorkspaceContent() {
   const params = useParams();
   const projectId = params.projectId as string;
 
@@ -95,9 +95,13 @@ export default function ProjectWorkspacePage() {
   //   );
   // }
 
+  return <Workspace resource={resource} processData={processProjectData} />;
+}
+
+export default function ProjectWorkspacePage() {
   return (
-    <Suspense fallback={<Loading />}>
-      <Workspace resource={resource} processData={processProjectData} />
+    <Suspense fallback={<Loading fullScreen />}>
+      <ProjectWorkspaceContent />
     </Suspense>
   );
 }

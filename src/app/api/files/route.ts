@@ -4,8 +4,14 @@ import { cookies } from 'next/headers';
 export async function GET(request: NextRequest) {
   try {
     // Get the token from cookies
-    const cookieStore = await cookies();
-    const token = cookieStore.get('idToken')?.value;
+    let token: string | undefined;
+    try {
+      const cookieStore = await cookies();
+      token = cookieStore.get('idToken')?.value;
+    } catch (error) {
+      // During prerendering, cookies() may reject - handle gracefully
+      console.warn('Could not access cookies during prerender:', error);
+    }
 
     if (!token) {
       console.error('No access token found in cookies');

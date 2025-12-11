@@ -375,9 +375,9 @@ export function ModelBuilder() {
   // Update available variables when active tab changes
   useEffect(() => {
     if (activeTab?.data?.initialData) {
-      const variables = Object.keys(activeTab.data.initialData[0] || {}).map(key => ({
+      const variables = Object.keys(activeTab.data?.initialData?.[0] || {}).map(key => ({
         name: key,
-        statistics: calculateStatistics(activeTab.data.initialData, key) || {
+        statistics: calculateStatistics(activeTab.data?.initialData || [], key) || {
           mean: 0,
           sd: 0,
           n: 0,

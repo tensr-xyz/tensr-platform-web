@@ -439,7 +439,7 @@ export const renderPromptTemplate = (template: PromptTemplate, context: PromptCo
       .map(msg => `${msg.role}: ${msg.content}`)
       .join('\n');
     rendered = rendered.replace(
-      /\{\{#each conversationHistory\}\}(.*?)\{\{\/each\}\}/gs,
+      /\{\{#each conversationHistory\}\}([\s\S]*?)\{\{\/each\}\}/g,
       historyText
     );
   }
@@ -447,7 +447,10 @@ export const renderPromptTemplate = (template: PromptTemplate, context: PromptCo
   // Replace data quality issues
   if (context.dataQualityIssues) {
     const issuesText = context.dataQualityIssues.map(issue => `- ${issue}`).join('\n');
-    rendered = rendered.replace(/\{\{#each dataQualityIssues\}\}(.*?)\{\{\/each\}\}/gs, issuesText);
+    rendered = rendered.replace(
+      /\{\{#each dataQualityIssues\}\}([\s\S]*?)\{\{\/each\}\}/g,
+      issuesText
+    );
   }
 
   // Replace dataset schema
@@ -458,7 +461,10 @@ export const renderPromptTemplate = (template: PromptTemplate, context: PromptCo
           `- **${col.name}** (${col.dataType}): ${col.uniqueValues} unique values, ${col.missingPercentage}% missing`
       )
       .join('\n');
-    rendered = rendered.replace(/\{\{#each dataset\.schema\}\}(.*?)\{\{\/each\}\}/gs, schemaText);
+    rendered = rendered.replace(
+      /\{\{#each dataset\.schema\}\}([\s\S]*?)\{\{\/each\}\}/g,
+      schemaText
+    );
   }
 
   // Replace sample data
@@ -472,7 +478,7 @@ export const renderPromptTemplate = (template: PromptTemplate, context: PromptCo
       )
       .join('\n\n');
     rendered = rendered.replace(
-      /\{\{#each dataset\.sampleData\}\}(.*?)\{\{\/each\}\}/gs,
+      /\{\{#each dataset\.sampleData\}\}([\s\S]*?)\{\{\/each\}\}/g,
       sampleText
     );
   }

@@ -212,8 +212,12 @@ const TerminalComponent: React.FC<TerminalComponentProps> = ({ onCommand }) => {
 
     // Handle resize
     const handleResize = () => {
-      if (fitAddonRef.current) {
-        fitAddonRef.current.fit();
+      if (fitAddonRef.current && xtermRef.current) {
+        try {
+          fitAddonRef.current.fit();
+        } catch (error) {
+          console.warn('Terminal fit error:', error);
+        }
       }
     };
 
@@ -222,8 +226,12 @@ const TerminalComponent: React.FC<TerminalComponentProps> = ({ onCommand }) => {
     // Add ResizeObserver to handle panel resizing
     const resizeObserver = new ResizeObserver(() => {
       setTimeout(() => {
-        if (fitAddonRef.current) {
-          fitAddonRef.current.fit();
+        if (fitAddonRef.current && xtermRef.current) {
+          try {
+            fitAddonRef.current.fit();
+          } catch (error) {
+            console.warn('Terminal fit error:', error);
+          }
         }
       }, 10);
     });
