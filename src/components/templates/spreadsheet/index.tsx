@@ -76,7 +76,7 @@ const MemoizedTableCell = React.memo<{
   isCellFocused: boolean;
   isCellSelected: boolean;
   cellRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
-  handleCellEdit: (rowIndex: number, columnId: string, value: any) => void;
+  handleCellEdit: (rowIndex: number, columnId: string, value: any) => void | Promise<void>;
   setFocusedCell: (position: { rowIndex: number; columnId: string }) => void;
   onMouseDown?: (e: React.MouseEvent, rowIndex: number, columnId: string) => void;
   onMouseEnter?: (e: React.MouseEvent, rowIndex: number, columnId: string) => void;
@@ -2043,7 +2043,7 @@ export function Spreadsheet({
   }, [focusedCell, handleCellEdit]);
 
   const handleFill = useCallback(
-    (cells: CellPosition[], values: (string | number)[]) => {
+    async (cells: CellPosition[], values: (string | number)[]) => {
       setData(prevData => {
         const newData = [...prevData];
         cells.forEach((cell, index) => {
@@ -2054,7 +2054,10 @@ export function Spreadsheet({
             ...newData[cell.rowIndex],
             [cell.columnId]: values[index] ?? '',
           };
-          handleCellEdit(cell.rowIndex, cell.columnId, values[index] ?? '');
+          // Fire-and-forget async call for sheet operations
+          handleCellEdit(cell.rowIndex, cell.columnId, values[index] ?? '').catch(err =>
+            console.error('Error in handleCellEdit during fill:', err)
+          );
         });
         return newData;
       });
@@ -2309,7 +2312,10 @@ export function Spreadsheet({
                   ...newData[cell.rowIndex],
                   [cell.columnId]: value,
                 };
-                handleCellEdit(cell.rowIndex, cell.columnId, value);
+                // Fire-and-forget async call for sheet operations
+                handleCellEdit(cell.rowIndex, cell.columnId, value).catch(err =>
+                  console.error('Error in handleCellEdit during fill range:', err)
+                );
               });
               return newData;
             });
@@ -2322,7 +2328,9 @@ export function Spreadsheet({
           e.preventDefault();
           if (focusedCell && focusedCell.rowIndex > 0) {
             const value = data[focusedCell.rowIndex - 1]?.[focusedCell.columnId] ?? '';
-            handleCellEdit(focusedCell.rowIndex, focusedCell.columnId, value);
+            handleCellEdit(focusedCell.rowIndex, focusedCell.columnId, value).catch(err =>
+              console.error('Error in handleCellEdit during fill down:', err)
+            );
           }
           return;
         }
@@ -2338,7 +2346,9 @@ export function Spreadsheet({
             if (currentColIndex > 0) {
               const leftColumnId = visibleColumns[currentColIndex - 1].id;
               const value = data[focusedCell.rowIndex]?.[leftColumnId] ?? '';
-              handleCellEdit(focusedCell.rowIndex, focusedCell.columnId, value);
+              handleCellEdit(focusedCell.rowIndex, focusedCell.columnId, value).catch(err =>
+                console.error('Error in handleCellEdit during fill right:', err)
+              );
             }
           }
           return;
@@ -2809,8 +2819,10 @@ export function Spreadsheet({
                 ...newData[currentRowIndexForFix],
                 [fix.columnId]: fix.suggestedValue,
               };
-              // Also trigger cell edit for each fix
-              handleCellEdit(currentRowIndexForFix, fix.columnId, fix.suggestedValue);
+              // Also trigger cell edit for each fix (fire-and-forget for sheet operations)
+              handleCellEdit(currentRowIndexForFix, fix.columnId, fix.suggestedValue).catch(err =>
+                console.error('Error in handleCellEdit during row fix:', err)
+              );
             });
 
             return newData;
@@ -3008,7 +3020,14 @@ export function Spreadsheet({
               mappings.forEach(mapping => {
                 if (mapping.from.includes(String(newRow[currentColumnForCategoryClean]))) {
                   newRow[currentColumnForCategoryClean] = mapping.to;
-                  handleCellEdit(data.indexOf(row), currentColumnForCategoryClean, mapping.to);
+                  // Fire-and-forget async call for sheet operations
+                  handleCellEdit(
+                    data.indexOf(row),
+                    currentColumnForCategoryClean,
+                    mapping.to
+                  ).catch(err =>
+                    console.error('Error in handleCellEdit during category clean:', err)
+                  );
                 }
               });
               return newRow;
