@@ -45,6 +45,7 @@ export interface TabData {
     };
   }>;
   teachingMode?: boolean;
+  sheetId?: string; // For real-time sheet collaboration
 }
 
 // Base Tab interface with required fields and optional data fields

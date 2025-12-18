@@ -206,6 +206,9 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
       const dataToImport = projectImportData || importData;
       if (!dataToImport) return;
 
+      // Track sheetId for this import
+      let sheetId: string | undefined;
+
       try {
         const columns = settings.columnNames.map(name => ({
           id: name,
@@ -265,11 +268,43 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             throw new Error('No files found in project');
           }
 
+          const fileId = firstFile.fileId;
+
           requestBody = {
             ...requestBody,
             project_id: dataToImport.filePath,
-            file_id: firstFile.fileId,
+            file_id: fileId,
           };
+
+          // Create or fetch sheet for real-time collaboration
+          try {
+            const sheetResponse = await fetch(
+              `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.dev.tensr.xyz'}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+            if (sheetResponse.ok) {
+              const sheetData = await sheetResponse.json();
+              const createdSheetId = sheetData.sheet?.sheetId;
+              if (createdSheetId) {
+                sheetId = createdSheetId;
+                console.log('Created/fetched sheet for project file:', sheetId);
+              }
+            } else {
+              console.warn(
+                'Failed to create/fetch sheet, continuing without real-time collaboration'
+              );
+            }
+          } catch (error) {
+            console.error('Error creating/fetching sheet:', error);
+            // Continue without sheet - fallback to local mode
+          }
 
           // Fetch data for projects using the file API
           const response = await fetch(
@@ -328,11 +363,44 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
               throw new Error('No files found in project');
             }
 
+            const fileId = firstFile.fileId;
+
             requestBody = {
               ...requestBody,
               project_id: dataToImport.filePath,
-              file_id: firstFile.fileId,
+              file_id: fileId,
             };
+
+            // Create or fetch sheet for real-time collaboration (for file type resource)
+            // sheetId is already declared at the top of the function
+            try {
+              const sheetResponse = await fetch(
+                `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.dev.tensr.xyz'}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
+              );
+
+              if (sheetResponse.ok) {
+                const sheetData = await sheetResponse.json();
+                const createdSheetId = sheetData.sheet?.sheetId;
+                if (createdSheetId) {
+                  sheetId = createdSheetId;
+                  console.log('Created/fetched sheet for file resource:', sheetId);
+                }
+              } else {
+                console.warn(
+                  'Failed to create/fetch sheet, continuing without real-time collaboration'
+                );
+              }
+            } catch (error) {
+              console.error('Error creating/fetching sheet:', error);
+              // Continue without sheet - fallback to local mode
+            }
           } else {
             // For regular files, check if filePath contains project structure
             const isProjectFilePath =
@@ -442,6 +510,9 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         // Use the file path from import data (which is now correctly formatted with leading /)
         const filePath = dataToImport.filePath;
 
+        // sheetId is already set above for project files, or will be undefined for regular files
+        // (regular files don't support sheets yet - only project files do)
+
         // Create a new tab with the correct type
         const newTab: Omit<Tab, 'id'> = {
           name: dataToImport.fileName || 'Untitled',
@@ -457,6 +528,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             columnStats: dataToImport.columnSummaries || {},
             importSettings: settings,
             isInitialized: true,
+            sheetId, // Add sheetId for real-time collaboration
             // isProjectFile - removed as it's not in TabData type: false, // Always allow fetchMoreRows to be called
             cleanValue: (value: any) => cleanValue(value, 'string'), // Create wrapper function
             // Pass the custom processing function for future data chunks

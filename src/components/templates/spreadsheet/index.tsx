@@ -26,8 +26,15 @@ import { cn } from '@/utils';
 import { useTabsStore } from '@/stores/tabs-store';
 import { ColumnSummary } from '@/types/file';
 import Filters from '@/components/templates/spreadsheet/filters';
-import { CellPosition, SortConfig, SpreadsheetProps } from '@/types/spreadsheet';
+import {
+  CellPosition,
+  CellRange,
+  SelectionMode,
+  SortConfig,
+  SpreadsheetProps,
+} from '@/types/spreadsheet';
 import { handleKeyboardNavigation } from '@/utils/spreadsheet';
+import { isCellInRange, getCellsInRange, rangeToNotation } from '@/utils/range-utils';
 import _ from 'lodash';
 import useAuth from '@/hooks/api/use-auth';
 import { Column } from '@/stores/tabs-store';
@@ -47,6 +54,8 @@ import { Copy, Scissors, Clipboard, Trash2 } from 'lucide-react';
 import { RowFixModal, RowFixIssue } from '@/components/molecules/row-fix-modal';
 import { TransformationModal, Transformation } from '@/components/molecules/transformation-modal';
 import { CategoryCleaner, CategoryMapping } from '@/components/molecules/category-cleaner';
+import { FillHandle } from '@/components/molecules/fill-handle';
+import { useSheetState } from '@/hooks/ui/use-sheet-state';
 
 const INITIAL_EMPTY_ROWS = 200;
 const ROWS_PER_BATCH = 250;
@@ -65,9 +74,12 @@ const MemoizedTableCell = React.memo<{
   columnId: string;
   cellKey: string;
   isCellFocused: boolean;
+  isCellSelected: boolean;
   cellRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
   handleCellEdit: (rowIndex: number, columnId: string, value: any) => void;
   setFocusedCell: (position: { rowIndex: number; columnId: string }) => void;
+  onMouseDown?: (e: React.MouseEvent, rowIndex: number, columnId: string) => void;
+  onMouseEnter?: (e: React.MouseEvent, rowIndex: number, columnId: string) => void;
   onCopy: () => void;
   onCut: () => void;
   onPaste: () => void;
@@ -80,9 +92,12 @@ const MemoizedTableCell = React.memo<{
     columnId,
     cellKey,
     isCellFocused,
+    isCellSelected,
     cellRefs,
     handleCellEdit,
     setFocusedCell,
+    onMouseDown,
+    onMouseEnter,
     onCopy,
     onCut,
     onPaste,
@@ -118,9 +133,24 @@ const MemoizedTableCell = React.memo<{
                 cellRefs.current.delete(cellKey);
               }
             }}
+            onMouseDown={e => {
+              if (onMouseDown) {
+                onMouseDown(e, rowIndex, columnId);
+              }
+            }}
+            onMouseEnter={e => {
+              if (onMouseEnter && e.buttons === 1) {
+                // Only trigger on mouse enter if mouse button is pressed (dragging)
+                onMouseEnter(e, rowIndex, columnId);
+              }
+            }}
             className={cn(
               'border-r border-b border-border last:border-r-0 tabular-nums',
-              isCellFocused && 'relative z-10'
+              isCellFocused && 'relative z-10 ring-2 ring-primary ring-offset-0',
+              isCellSelected && !isCellFocused && 'bg-blue-100/50 dark:bg-blue-900/20',
+              isCellSelected &&
+                isCellFocused &&
+                'bg-blue-200 dark:bg-blue-800/30 ring-2 ring-blue-500'
             )}
             style={{
               width: columnSize,
@@ -177,12 +207,17 @@ const MemoizedTableCell = React.memo<{
     // This prevents all cells from re-rendering when any cell is edited
     const cellValueChanged = prevProps.cell.getValue() !== nextProps.cell.getValue();
     const focusChanged = prevProps.isCellFocused !== nextProps.isCellFocused;
+    const selectionChanged = prevProps.isCellSelected !== nextProps.isCellSelected;
     const sizeChanged = prevProps.cell.column.getSize() !== nextProps.cell.column.getSize();
     const clipboardChanged = prevProps.clipboardHasData !== nextProps.clipboardHasData;
 
     // Only re-render if something actually changed for this specific cell
     // Return true means "props are equal, skip render", false means "props changed, render"
-    return !cellValueChanged && !focusChanged && !sizeChanged && !clipboardChanged;
+    // Note: onMouseDown and onMouseEnter are functions and may change on every render,
+    // but they don't affect the visual appearance, so we ignore them in comparison
+    return (
+      !cellValueChanged && !focusChanged && !selectionChanged && !sizeChanged && !clipboardChanged
+    );
   }
 );
 
@@ -213,10 +248,9 @@ export function Spreadsheet({
     Record<string, ColumnSummary> | undefined
   >(undefined);
   const [focusedCell, setFocusedCell] = useState<CellPosition | null>(null);
-  const [cellSelection, setCellSelection] = useState<{
-    start: CellPosition;
-    end: CellPosition;
-  } | null>(null);
+  const [cellSelection, setCellSelection] = useState<CellRange | null>(null);
+  const [selectionMode, setSelectionMode] = useState<SelectionMode>('single');
+  const [selectionAnchor, setSelectionAnchor] = useState<CellPosition | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
   const [selectedRowData, setSelectedRowData] = useState<Record<string, any> | null>(null);
   const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
@@ -266,6 +300,22 @@ export function Spreadsheet({
   useEffect(() => {
     idTokenRef.current = session?.sessionJwt || null;
   }, [session?.sessionJwt]);
+
+  // Get sheetId from tabData if available
+  const sheetId = tabData?.sheetId;
+
+  // Use sheet state hook when sheetId is provided (real-time collaboration mode)
+  const {
+    state: sheetState,
+    version: sheetVersion,
+    isConnected: isSheetConnected,
+    isLoading: isSheetLoading,
+    error: sheetError,
+    applyOperation: applySheetOperation,
+  } = useSheetState({
+    sheetId: sheetId || '',
+    enabled: !!sheetId,
+  });
 
   // Memoize the decoded file path
   const decodedFilePath = useMemo(
@@ -365,6 +415,20 @@ export function Spreadsheet({
         }));
     }
   });
+
+  // Sync sheet state to local data when sheet state is available (real-time mode)
+  useEffect(() => {
+    if (sheetState && sheetState.data && Array.isArray(sheetState.data)) {
+      // Convert sheet state data array to RowType format
+      const sheetRows: RowType[] = sheetState.data.map(
+        (row: Record<string, any>, index: number) => ({
+          id: `row-${index}`,
+          ...row,
+        })
+      );
+      setData(sheetRows);
+    }
+  }, [sheetState]);
 
   // Track previous data length to prevent infinite loops (must be after data state declaration)
   const previousDataLengthRef = useRef(data.length);
@@ -1190,6 +1254,113 @@ export function Spreadsheet({
   const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const tabUpdateTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Selection management helpers
+  const getVisibleColumns = useCallback(() => {
+    return table.getAllColumns().filter(col => col.getIsVisible() && col.id !== 'select');
+  }, [table]);
+
+  const updateSelection = useCallback(
+    (position: CellPosition, extendSelection: boolean = false) => {
+      if (extendSelection && selectionAnchor) {
+        // Extending selection from anchor
+        setSelectionMode('extending');
+        setCellSelection({
+          start: selectionAnchor,
+          end: position,
+        });
+        setFocusedCell(position);
+      } else {
+        // New single cell selection
+        setSelectionMode('single');
+        setSelectionAnchor(position);
+        setFocusedCell(position);
+        setCellSelection(null);
+      }
+    },
+    [selectionAnchor]
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectionMode('single');
+    setCellSelection(null);
+    setSelectionAnchor(null);
+  }, []);
+
+  const isCellSelected = useCallback(
+    (rowIndex: number, columnId: string): boolean => {
+      if (!cellSelection) return false;
+      const visibleColumns = getVisibleColumns().map(col => col.id);
+      return isCellInRange({ rowIndex, columnId }, cellSelection, visibleColumns);
+    },
+    [cellSelection, getVisibleColumns]
+  );
+
+  // Mouse drag selection handlers
+  const isDraggingRef = useRef(false);
+  const dragStartCellRef = useRef<CellPosition | null>(null);
+
+  const handleCellMouseDown = useCallback(
+    (e: React.MouseEvent, rowIndex: number, columnId: string) => {
+      // Don't start drag if clicking on input or if it's a right click
+      if (e.button !== 0 || (e.target as HTMLElement).tagName === 'INPUT') {
+        return;
+      }
+
+      const cell: CellPosition = { rowIndex, columnId };
+
+      if (e.shiftKey && selectionAnchor) {
+        // Shift+Click: Extend selection from anchor
+        setSelectionMode('extending');
+        setCellSelection({
+          start: selectionAnchor,
+          end: cell,
+        });
+        setFocusedCell(cell);
+      } else {
+        // Regular click: Start new selection
+        isDraggingRef.current = true;
+        dragStartCellRef.current = cell;
+        setSelectionAnchor(cell);
+        setFocusedCell(cell);
+        setCellSelection(null);
+        setSelectionMode('single');
+      }
+    },
+    [selectionAnchor]
+  );
+
+  const handleCellMouseEnter = useCallback(
+    (e: React.MouseEvent, rowIndex: number, columnId: string) => {
+      if (!isDraggingRef.current || !dragStartCellRef.current) return;
+
+      const cell: CellPosition = { rowIndex, columnId };
+      setSelectionMode('extending');
+      setCellSelection({
+        start: dragStartCellRef.current,
+        end: cell,
+      });
+      setFocusedCell(cell);
+    },
+    []
+  );
+
+  // Handle mouse up to end drag
+  useEffect(() => {
+    const handleMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        if (dragStartCellRef.current && cellSelection) {
+          // Selection is complete
+          setSelectionMode('range');
+        }
+        dragStartCellRef.current = null;
+      }
+    };
+
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => document.removeEventListener('mouseup', handleMouseUp);
+  }, [cellSelection]);
+
   // Ensure the focused cell is in view - optimized to use refs instead of DOM queries
   useEffect(() => {
     if (!focusedCell || !tableContainerRef.current) return;
@@ -1579,11 +1750,31 @@ export function Spreadsheet({
 
   // Update the handleCellEdit function - optimized to avoid expensive operations
   const handleCellEdit = useCallback(
-    (rowIndex: number, columnId: string, value: any) => {
+    async (rowIndex: number, columnId: string, value: any) => {
       // If the columnId has [object Object] in it, use the numeric part instead
       const useColumnId = /object Object/.test(columnId)
         ? columnId.replace(/\[object Object\](_duplicated_)?/, '')
         : columnId;
+
+      // If sheetId is available, use sheet operations for real-time collaboration
+      if (sheetId && applySheetOperation && sheetState) {
+        try {
+          const currentValue = data[rowIndex]?.[useColumnId];
+          const op = {
+            kind: 'update_cell' as const,
+            row: rowIndex,
+            column: useColumnId,
+            oldValue: currentValue,
+            newValue: value,
+          };
+          const success = await applySheetOperation(op);
+          // Optimistic update will be handled by sheet state sync via useEffect
+          if (success) return;
+        } catch (error) {
+          console.error('Failed to apply sheet operation:', error);
+          // Fall through to local update as fallback
+        }
+      }
 
       // Update local state immediately with the cleaned column ID
       setData(prevData => {
@@ -1641,48 +1832,109 @@ export function Spreadsheet({
   );
 
   // Clipboard handlers
-  const getVisibleColumns = useCallback(() => {
-    return table.getAllColumns().filter(col => col.getIsVisible() && col.id !== 'select');
-  }, [table]);
-
   const handleCopy = useCallback(() => {
     if (!focusedCell) return;
 
     const visibleColumns = getVisibleColumns();
-    const columnIndex = visibleColumns.findIndex(col => col.id === focusedCell.columnId);
-    if (columnIndex === -1) return;
+    const visibleColumnIds = visibleColumns.map(col => col.id);
 
-    // For now, copy single cell. Can be extended to support multi-cell selection
-    const cellValue = data[focusedCell.rowIndex]?.[focusedCell.columnId] ?? '';
+    // If there's a range selection, copy the entire range
+    if (cellSelection) {
+      const cells = getCellsInRange(cellSelection, visibleColumnIds);
+      const startRow = Math.min(cellSelection.start.rowIndex, cellSelection.end.rowIndex);
+      const endRow = Math.max(cellSelection.start.rowIndex, cellSelection.end.rowIndex);
+      const startColIndex = visibleColumnIds.indexOf(cellSelection.start.columnId);
+      const endColIndex = visibleColumnIds.indexOf(cellSelection.end.columnId);
+      const minColIndex = Math.min(startColIndex, endColIndex);
+      const maxColIndex = Math.max(startColIndex, endColIndex);
 
-    const clipboardData: ClipboardData = {
-      type: 'cells',
-      data: [[cellValue]],
-      rowCount: 1,
-      columnCount: 1,
-    };
+      const rowCount = endRow - startRow + 1;
+      const columnCount = maxColIndex - minColIndex + 1;
+      const clipboardData: string[][] = [];
 
-    copyToClipboard(clipboardData);
-  }, [focusedCell, data, getVisibleColumns, copyToClipboard]);
+      for (let rowOffset = 0; rowOffset < rowCount; rowOffset++) {
+        const row: string[] = [];
+        for (let colOffset = 0; colOffset < columnCount; colOffset++) {
+          const rowIndex = startRow + rowOffset;
+          const columnId = visibleColumnIds[minColIndex + colOffset];
+          const value = data[rowIndex]?.[columnId] ?? '';
+          row.push(String(value));
+        }
+        clipboardData.push(row);
+      }
+
+      copyToClipboard({
+        type: 'cells',
+        data: clipboardData,
+        rowCount,
+        columnCount,
+      });
+    } else {
+      // Single cell copy
+      const cellValue = data[focusedCell.rowIndex]?.[focusedCell.columnId] ?? '';
+      copyToClipboard({
+        type: 'cells',
+        data: [[String(cellValue)]],
+        rowCount: 1,
+        columnCount: 1,
+      });
+    }
+  }, [focusedCell, cellSelection, data, getVisibleColumns, copyToClipboard]);
 
   const handleCut = useCallback(() => {
     if (!focusedCell) return;
 
     const visibleColumns = getVisibleColumns();
-    const columnIndex = visibleColumns.findIndex(col => col.id === focusedCell.columnId);
-    if (columnIndex === -1) return;
+    const visibleColumnIds = visibleColumns.map(col => col.id);
 
-    const cellValue = data[focusedCell.rowIndex]?.[focusedCell.columnId] ?? '';
+    // If there's a range selection, cut the entire range
+    if (cellSelection) {
+      const cells = getCellsInRange(cellSelection, visibleColumnIds);
+      const startRow = Math.min(cellSelection.start.rowIndex, cellSelection.end.rowIndex);
+      const endRow = Math.max(cellSelection.start.rowIndex, cellSelection.end.rowIndex);
+      const startColIndex = visibleColumnIds.indexOf(cellSelection.start.columnId);
+      const endColIndex = visibleColumnIds.indexOf(cellSelection.end.columnId);
+      const minColIndex = Math.min(startColIndex, endColIndex);
+      const maxColIndex = Math.max(startColIndex, endColIndex);
 
-    const clipboardData: ClipboardData = {
-      type: 'cells',
-      data: [[cellValue]],
-      rowCount: 1,
-      columnCount: 1,
-    };
+      const rowCount = endRow - startRow + 1;
+      const columnCount = maxColIndex - minColIndex + 1;
+      const clipboardData: string[][] = [];
 
-    cutToClipboard(clipboardData, focusedCell);
-  }, [focusedCell, data, getVisibleColumns, cutToClipboard]);
+      for (let rowOffset = 0; rowOffset < rowCount; rowOffset++) {
+        const row: string[] = [];
+        for (let colOffset = 0; colOffset < columnCount; colOffset++) {
+          const rowIndex = startRow + rowOffset;
+          const columnId = visibleColumnIds[minColIndex + colOffset];
+          const value = data[rowIndex]?.[columnId] ?? '';
+          row.push(String(value));
+        }
+        clipboardData.push(row);
+      }
+
+      cutToClipboard(
+        {
+          type: 'cells',
+          data: clipboardData,
+          rowCount,
+          columnCount,
+        },
+        cellSelection.start
+      );
+    } else {
+      // Single cell cut
+      const cellValue = data[focusedCell.rowIndex]?.[focusedCell.columnId] ?? '';
+      cutToClipboard(
+        {
+          type: 'cells',
+          data: [[String(cellValue)]],
+          rowCount: 1,
+          columnCount: 1,
+        },
+        focusedCell
+      );
+    }
+  }, [focusedCell, cellSelection, data, getVisibleColumns, cutToClipboard]);
 
   const handlePaste = useCallback(() => {
     if (!focusedCell) return;
@@ -1789,6 +2041,47 @@ export function Spreadsheet({
 
     handleCellEdit(focusedCell.rowIndex, focusedCell.columnId, '');
   }, [focusedCell, handleCellEdit]);
+
+  const handleFill = useCallback(
+    (cells: CellPosition[], values: (string | number)[]) => {
+      setData(prevData => {
+        const newData = [...prevData];
+        cells.forEach((cell, index) => {
+          if (!newData[cell.rowIndex]) {
+            newData[cell.rowIndex] = { id: `row-${cell.rowIndex}` };
+          }
+          newData[cell.rowIndex] = {
+            ...newData[cell.rowIndex],
+            [cell.columnId]: values[index] ?? '',
+          };
+          handleCellEdit(cell.rowIndex, cell.columnId, values[index] ?? '');
+        });
+        return newData;
+      });
+
+      // Update tab data after fill
+      if (tabId && activeTab?.data) {
+        if (tabUpdateTimeoutRef.current) {
+          clearTimeout(tabUpdateTimeoutRef.current);
+        }
+        tabUpdateTimeoutRef.current = setTimeout(() => {
+          setData(currentData => {
+            if (activeTab?.data) {
+              updateTab(tabId, {
+                data: {
+                  ...activeTab.data,
+                  initialData: currentData,
+                },
+                isDirty: true,
+              });
+            }
+            return currentData;
+          });
+        }, 300);
+      }
+    },
+    [tabId, activeTab, updateTab, handleCellEdit]
+  );
 
   // Column action handler
   const handleColumnAction = useCallback(
@@ -1939,6 +2232,119 @@ export function Spreadsheet({
         return;
       }
 
+      // Handle Excel-style selection shortcuts
+      if (focusedCell && !isInputFocused) {
+        // Ctrl/Cmd + Space: Select entire column
+        if (isModifierKey && e.key === ' ') {
+          e.preventDefault();
+          const visibleColumns = table
+            .getAllColumns()
+            .filter(col => col.getIsVisible() && col.id !== 'select');
+          const currentColIndex = visibleColumns.findIndex(col => col.id === focusedCell.columnId);
+          if (currentColIndex !== -1) {
+            setSelectionAnchor({ rowIndex: 0, columnId: focusedCell.columnId });
+            setCellSelection({
+              start: { rowIndex: 0, columnId: focusedCell.columnId },
+              end: { rowIndex: rows.length - 1, columnId: focusedCell.columnId },
+            });
+            setSelectionMode('range');
+          }
+          return;
+        }
+
+        // Shift + Space: Select entire row
+        if (e.shiftKey && e.key === ' ' && !isModifierKey) {
+          e.preventDefault();
+          const visibleColumns = table
+            .getAllColumns()
+            .filter(col => col.getIsVisible() && col.id !== 'select');
+          if (visibleColumns.length > 0) {
+            setSelectionAnchor({ rowIndex: focusedCell.rowIndex, columnId: visibleColumns[0].id });
+            setCellSelection({
+              start: { rowIndex: focusedCell.rowIndex, columnId: visibleColumns[0].id },
+              end: {
+                rowIndex: focusedCell.rowIndex,
+                columnId: visibleColumns[visibleColumns.length - 1].id,
+              },
+            });
+            setSelectionMode('range');
+          }
+          return;
+        }
+
+        // Ctrl/Cmd + A: Select all cells
+        if (isModifierKey && (e.key === 'a' || e.key === 'A')) {
+          e.preventDefault();
+          const visibleColumns = table
+            .getAllColumns()
+            .filter(col => col.getIsVisible() && col.id !== 'select');
+          if (visibleColumns.length > 0 && rows.length > 0) {
+            setSelectionAnchor({ rowIndex: 0, columnId: visibleColumns[0].id });
+            setCellSelection({
+              start: { rowIndex: 0, columnId: visibleColumns[0].id },
+              end: {
+                rowIndex: rows.length - 1,
+                columnId: visibleColumns[visibleColumns.length - 1].id,
+              },
+            });
+            setSelectionMode('range');
+          }
+          return;
+        }
+
+        // Ctrl/Cmd + Enter: Fill selected range with current value
+        if (isModifierKey && e.key === 'Enter') {
+          e.preventDefault();
+          if (cellSelection && focusedCell) {
+            const visibleColumns = getVisibleColumns().map(col => col.id);
+            const cells = getCellsInRange(cellSelection, visibleColumns);
+            const value = data[focusedCell.rowIndex]?.[focusedCell.columnId] ?? '';
+            setData(prevData => {
+              const newData = [...prevData];
+              cells.forEach(cell => {
+                if (!newData[cell.rowIndex]) {
+                  newData[cell.rowIndex] = { id: `row-${cell.rowIndex}` };
+                }
+                newData[cell.rowIndex] = {
+                  ...newData[cell.rowIndex],
+                  [cell.columnId]: value,
+                };
+                handleCellEdit(cell.rowIndex, cell.columnId, value);
+              });
+              return newData;
+            });
+          }
+          return;
+        }
+
+        // Ctrl/Cmd + D: Fill down (copy from cell above)
+        if (isModifierKey && (e.key === 'd' || e.key === 'D')) {
+          e.preventDefault();
+          if (focusedCell && focusedCell.rowIndex > 0) {
+            const value = data[focusedCell.rowIndex - 1]?.[focusedCell.columnId] ?? '';
+            handleCellEdit(focusedCell.rowIndex, focusedCell.columnId, value);
+          }
+          return;
+        }
+
+        // Ctrl/Cmd + R: Fill right (copy from cell left)
+        if (isModifierKey && (e.key === 'r' || e.key === 'R')) {
+          e.preventDefault();
+          if (focusedCell) {
+            const visibleColumns = getVisibleColumns();
+            const currentColIndex = visibleColumns.findIndex(
+              col => col.id === focusedCell.columnId
+            );
+            if (currentColIndex > 0) {
+              const leftColumnId = visibleColumns[currentColIndex - 1].id;
+              const value = data[focusedCell.rowIndex]?.[leftColumnId] ?? '';
+              handleCellEdit(focusedCell.rowIndex, focusedCell.columnId, value);
+            }
+          }
+          return;
+        }
+      }
+
       if (focusedCell) {
         handleKeyboardNavigation({
           e,
@@ -1946,7 +2352,7 @@ export function Spreadsheet({
           table,
           rows,
           onPositionChange: newPosition => {
-            setFocusedCell(newPosition);
+            updateSelection(newPosition, e.shiftKey);
             requestAnimationFrame(() => {
               const cellRef = cellRefs.current.get(
                 `${newPosition.rowIndex}-${newPosition.columnId}`
@@ -1954,13 +2360,40 @@ export function Spreadsheet({
               if (cellRef) cellRef.focus();
             });
           },
+          onRangeChange: range => {
+            setCellSelection(range);
+            if (range) {
+              setSelectionMode('range');
+            } else {
+              setSelectionMode('single');
+            }
+          },
+          selectionMode,
+          selectionAnchor,
+          extendSelection: e.shiftKey,
         });
       }
     };
 
     window.addEventListener('keydown', handleKeyDown, { capture: true });
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
-  }, [focusedCell, table, rows.length, handleCopy, handleCut, handlePaste, handleDelete]);
+  }, [
+    focusedCell,
+    table,
+    rows.length,
+    handleCopy,
+    handleCut,
+    handlePaste,
+    handleDelete,
+    handleCellEdit,
+    cellSelection,
+    selectionMode,
+    selectionAnchor,
+    updateSelection,
+    getVisibleColumns,
+    data,
+    rows,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -2212,6 +2645,7 @@ export function Spreadsheet({
                           const columnId = cell.column.id;
                           const cellKey = `${rowIndex}-${columnId}`;
                           const isCellFocused = isFocused && focusedCell?.columnId === columnId;
+                          const cellIsSelected = isCellSelected(rowIndex, columnId);
 
                           return (
                             <MemoizedTableCell
@@ -2221,9 +2655,12 @@ export function Spreadsheet({
                               columnId={columnId}
                               cellKey={cellKey}
                               isCellFocused={isCellFocused}
+                              isCellSelected={cellIsSelected}
                               cellRefs={cellRefs}
                               handleCellEdit={handleCellEdit}
                               setFocusedCell={setFocusedCell}
+                              onMouseDown={handleCellMouseDown}
+                              onMouseEnter={handleCellMouseEnter}
                               onCopy={handleCopy}
                               onCut={handleCut}
                               onPaste={handlePaste}
@@ -2333,6 +2770,20 @@ export function Spreadsheet({
               })}
             </TableBody>
           </table>
+          {/* Fill Handle - shown when cells are selected */}
+          {focusedCell && (
+            <FillHandle
+              selection={
+                cellSelection || {
+                  start: focusedCell,
+                  end: focusedCell,
+                }
+              }
+              visibleColumns={getVisibleColumns().map(col => col.id)}
+              data={data}
+              onFill={handleFill}
+            />
+          )}
         </div>
       </div>
 

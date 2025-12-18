@@ -6,6 +6,13 @@ export interface CellPosition {
   columnId: string;
 }
 
+export interface CellRange {
+  start: CellPosition;
+  end: CellPosition;
+}
+
+export type SelectionMode = 'single' | 'range' | 'extending';
+
 export interface SpreadsheetProps {
   initialData: Record<string, any>[];
   initialColumns: ColumnDef<any>[];
@@ -19,7 +26,7 @@ export interface SpreadsheetProps {
   showFilters?: boolean;
   onCloseFilters?: () => void;
   onSelectionChange?: (selection: Record<string, boolean>) => void;
-  tabData?: { isProjectFile?: boolean };
+  tabData?: { isProjectFile?: boolean; sheetId?: string };
 }
 
 export interface SortConfig {

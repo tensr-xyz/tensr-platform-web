@@ -109,7 +109,9 @@ interface EditableCellProps {
   onFocus?: () => void;
   onBlur?: () => void;
   onNavigate?: (direction: 'up' | 'down' | 'left' | 'right') => void;
-  onKeyDown?: (e: React.KeyboardEvent<HTMLDivElement | HTMLInputElement>) => void;
+  onKeyDown?: (
+    e: React.KeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLTextAreaElement>
+  ) => void;
 }
 
 const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
@@ -129,8 +131,10 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
   ) => {
     const [value, setValue] = React.useState<string>(initialValue?.toString() ?? '');
     const [isEditing, setIsEditing] = React.useState(false);
+    const [isMultiline, setIsMultiline] = React.useState(false);
     const divRef = React.useRef<HTMLDivElement>(null);
     const inputRef = React.useRef<HTMLInputElement>(null);
+    const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
     // Update local value when prop changes
     React.useEffect(() => {
@@ -144,7 +148,10 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
 
         // Use requestAnimationFrame to ensure the DOM is updated
         requestAnimationFrame(() => {
-          if (inputRef.current) {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+            textareaRef.current.select();
+          } else if (inputRef.current) {
             inputRef.current.focus();
             inputRef.current.select();
           } else if (divRef.current) {
@@ -154,7 +161,9 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
       },
     }));
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement | HTMLInputElement>) => {
+    const handleKeyDown = (
+      e: React.KeyboardEvent<HTMLDivElement | HTMLInputElement | HTMLTextAreaElement>
+    ) => {
       if (onKeyDown) {
         onKeyDown(e);
 
@@ -169,16 +178,28 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
       }
 
       if (isEditing) {
-        if (e.key === 'Enter') {
+        if (e.key === 'Enter' && !e.altKey) {
+          // Enter: Save and move down (unless Alt is held for new line)
           setIsEditing(false);
           if (value !== initialValue?.toString()) {
             onEdit(value);
           }
           onBlur?.();
+          // Trigger navigation down after a brief delay to allow state to update
+          if (onNavigate) {
+            setTimeout(() => {
+              onNavigate('down');
+            }, 0);
+          }
           e.preventDefault();
+        } else if (e.key === 'Enter' && e.altKey) {
+          // Alt+Enter: Insert newline (only for multiline mode)
+          setIsMultiline(true);
+          // Don't prevent default - allow textarea to handle it
         } else if (e.key === 'Escape') {
           setValue(initialValue?.toString() ?? '');
           setIsEditing(false);
+          setIsMultiline(false);
           onBlur?.();
           e.preventDefault();
         }
@@ -208,14 +229,19 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
     // When isFocused changes to true, focus the appropriate element
     React.useEffect(() => {
       if (isFocused) {
-        if (isEditing && inputRef.current) {
-          inputRef.current.focus();
-          inputRef.current.select();
+        if (isEditing) {
+          if (isMultiline && textareaRef.current) {
+            textareaRef.current.focus();
+            textareaRef.current.select();
+          } else if (inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.select();
+          }
         } else if (divRef.current) {
           divRef.current.focus();
         }
       }
-    }, [isFocused, isEditing]);
+    }, [isFocused, isEditing, isMultiline]);
 
     return (
       <>
@@ -230,26 +256,54 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
               outlineOffset: isFocused && !inputClassName ? '-2px' : undefined,
             }}
           >
-            <Input
-              ref={inputRef}
-              value={value}
-              onChange={e => setValue(e.target.value)}
-              onBlur={() => {
-                setIsEditing(false);
-                if (value !== initialValue?.toString()) {
-                  onEdit(value);
-                }
-                onBlur?.();
-              }}
-              onKeyDown={handleKeyDown}
-              variant="ghost"
-              className={cn(
-                'h-7 w-full text-xs',
-                'align-middle [&:has([role=checkbox])]:pr-0',
-                className
-              )}
-              autoFocus
-            />
+            {isMultiline ? (
+              <textarea
+                ref={textareaRef}
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                onBlur={() => {
+                  setIsEditing(false);
+                  setIsMultiline(false);
+                  if (value !== initialValue?.toString()) {
+                    onEdit(value);
+                  }
+                  onBlur?.();
+                }}
+                onKeyDown={handleKeyDown}
+                className={cn(
+                  'min-h-[28px] w-full text-xs resize-none',
+                  'px-2 py-1 rounded-md border border-input bg-background',
+                  'focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2',
+                  'disabled:cursor-not-allowed disabled:opacity-50',
+                  'align-middle',
+                  className
+                )}
+                autoFocus
+                rows={Math.max(1, Math.min(5, value.split('\n').length))}
+              />
+            ) : (
+              <Input
+                ref={inputRef}
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                onBlur={() => {
+                  setIsEditing(false);
+                  setIsMultiline(false);
+                  if (value !== initialValue?.toString()) {
+                    onEdit(value);
+                  }
+                  onBlur?.();
+                }}
+                onKeyDown={handleKeyDown}
+                variant="ghost"
+                className={cn(
+                  'h-7 w-full text-xs',
+                  'align-middle [&:has([role=checkbox])]:pr-0',
+                  className
+                )}
+                autoFocus
+              />
+            )}
           </div>
         ) : (
           <div
