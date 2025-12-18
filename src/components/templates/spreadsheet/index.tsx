@@ -416,19 +416,50 @@ export function Spreadsheet({
     }
   });
 
-  // Sync sheet state to local data when sheet state is available (real-time mode)
+  // Track if we've initialized from sheet state to avoid overwriting local edits
+  const sheetStateInitializedRef = useRef(false);
+  const lastSheetStateVersionRef = useRef<number>(0);
+
+  // Sync sheet state to local data when sheet state is first available (real-time mode)
+  // Only sync on initial load or when version increases significantly (server updates)
+  // Don't sync on every change to avoid overwriting local edits
   useEffect(() => {
-    if (sheetState && sheetState.data && Array.isArray(sheetState.data)) {
-      // Convert sheet state data array to RowType format
-      const sheetRows: RowType[] = sheetState.data.map(
-        (row: Record<string, any>, index: number) => ({
-          id: `row-${index}`,
-          ...row,
-        })
-      );
-      setData(sheetRows);
+    if (
+      sheetState &&
+      sheetState.data &&
+      Array.isArray(sheetState.data) &&
+      sheetState.version > lastSheetStateVersionRef.current
+    ) {
+      // Only sync if:
+      // 1. We haven't initialized yet (first load), OR
+      // 2. Version jumped significantly (likely a server-side update, not our own edit)
+      const versionDiff = sheetState.version - lastSheetStateVersionRef.current;
+      const shouldSync =
+        !sheetStateInitializedRef.current || (versionDiff > 1 && sheetState.data.length > 0);
+
+      if (shouldSync && sheetState.data.length > 0) {
+        // Convert sheet state data array to RowType format
+        const sheetRows: RowType[] = sheetState.data.map(
+          (row: Record<string, any>, index: number) => ({
+            id: `row-${index}`,
+            ...row,
+          })
+        );
+        setData(sheetRows);
+        sheetStateInitializedRef.current = true;
+        lastSheetStateVersionRef.current = sheetState.version;
+      } else {
+        // Just update the version ref to track it
+        lastSheetStateVersionRef.current = sheetState.version;
+      }
     }
   }, [sheetState]);
+
+  // Reset initialization flag when sheetId changes
+  useEffect(() => {
+    sheetStateInitializedRef.current = false;
+    lastSheetStateVersionRef.current = 0;
+  }, [sheetId]);
 
   // Track previous data length to prevent infinite loops (must be after data state declaration)
   const previousDataLengthRef = useRef(data.length);
@@ -1768,8 +1799,49 @@ export function Spreadsheet({
             newValue: value,
           };
           const success = await applySheetOperation(op);
-          // Optimistic update will be handled by sheet state sync via useEffect
-          if (success) return;
+          // If operation succeeded, still update local state for immediate UI feedback
+          // The sheet state will sync back via WebSocket, but we want immediate updates
+          if (success) {
+            // Update local state for immediate feedback
+            setData(prevData => {
+              const newData = [...prevData];
+              if (!newData[rowIndex]) {
+                newData[rowIndex] = { id: `row-${rowIndex}` };
+              }
+              newData[rowIndex] = {
+                ...newData[rowIndex],
+                [useColumnId]: value,
+              };
+              return newData;
+            });
+            // Still update tab data
+            if (tabId && activeTab?.data) {
+              if (tabUpdateTimeoutRef.current) {
+                clearTimeout(tabUpdateTimeoutRef.current);
+              }
+              tabUpdateTimeoutRef.current = setTimeout(() => {
+                setData(currentData => {
+                  const rowToUpdate = currentData[rowIndex];
+                  if (rowToUpdate && activeTab?.data) {
+                    const updatedRow = { ...rowToUpdate, [useColumnId]: value };
+                    updateTab(tabId, {
+                      data: {
+                        ...activeTab.data,
+                        initialData: activeTab.data.initialData
+                          ? activeTab.data.initialData.map((row, idx) =>
+                              idx === rowIndex ? updatedRow : row
+                            )
+                          : [updatedRow],
+                      },
+                      isDirty: true,
+                    });
+                  }
+                  return currentData;
+                });
+              }, 300);
+            }
+            return;
+          }
         } catch (error) {
           console.error('Failed to apply sheet operation:', error);
           // Fall through to local update as fallback
@@ -1828,7 +1900,17 @@ export function Spreadsheet({
         wsService.sendCellUpdate(tabId, rowIndex, useColumnId, value);
       }
     },
-    [tabId, activeTab, updateTab, wsReady, currentSession]
+    [
+      tabId,
+      activeTab,
+      updateTab,
+      wsReady,
+      currentSession,
+      sheetId,
+      applySheetOperation,
+      sheetState,
+      data,
+    ]
   );
 
   // Clipboard handlers
