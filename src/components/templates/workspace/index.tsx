@@ -263,47 +263,86 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
           }
 
           const projectData = await projectResponse.json();
-          const firstFile = projectData.fileGroups?.data?.[0];
-          if (!firstFile) {
+
+          // Use the same approach as processFile - get fileId from fileSystem in store
+          // which is populated from projectData and includes fileId when available
+          const { fileSystem } = useProjectStore.getState();
+          let fileId: string | undefined;
+
+          if (fileSystem && fileSystem.length > 0) {
+            // Try to match by path or name from importData, or use first file
+            const matchingFile =
+              fileSystem.find(
+                (f: any) => f.path === dataToImport.filePath || f.name === dataToImport.fileName
+              ) || fileSystem[0];
+            fileId = matchingFile?.fileId;
+            console.log('FileId from fileSystem:', {
+              fileId,
+              matchingFile,
+              fileSystemLength: fileSystem.length,
+            });
+          }
+
+          // Fallback: try to get from projectData directly if fileSystem doesn't have it
+          if (!fileId) {
+            // Try all fileGroups categories, not just 'data'
+            for (const category of Object.keys(projectData.fileGroups || {})) {
+              const files = projectData.fileGroups[category];
+              if (Array.isArray(files) && files.length > 0) {
+                const firstFile = files[0];
+                if (firstFile?.fileId) {
+                  fileId = firstFile.fileId;
+                  console.log('FileId from fileGroups:', { fileId, category, firstFile });
+                  break;
+                }
+              }
+            }
+          }
+
+          if (!fileId && (!fileSystem || fileSystem.length === 0)) {
             throw new Error('No files found in project');
           }
 
-          const fileId = firstFile.fileId;
+          console.log('Final fileId for sheet creation:', fileId);
 
           requestBody = {
             ...requestBody,
             project_id: dataToImport.filePath,
-            file_id: fileId,
+            ...(fileId && { file_id: fileId }),
           };
 
-          // Create or fetch sheet for real-time collaboration
-          try {
-            const sheetResponse = await fetch(
-              `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.dev.tensr.xyz'}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
-
-            if (sheetResponse.ok) {
-              const sheetData = await sheetResponse.json();
-              const createdSheetId = sheetData.sheet?.sheetId;
-              if (createdSheetId) {
-                sheetId = createdSheetId;
-                console.log('Created/fetched sheet for project file:', sheetId);
-              }
-            } else {
-              console.warn(
-                'Failed to create/fetch sheet, continuing without real-time collaboration'
+          // Create or fetch sheet for real-time collaboration (only if fileId exists)
+          if (fileId) {
+            try {
+              const sheetResponse = await fetch(
+                `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.dev.tensr.xyz'}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
+                {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${token}`,
+                  },
+                }
               );
+
+              if (sheetResponse.ok) {
+                const sheetData = await sheetResponse.json();
+                const createdSheetId = sheetData.sheet?.sheetId;
+                if (createdSheetId) {
+                  sheetId = createdSheetId;
+                  console.log('Created/fetched sheet for project file:', sheetId);
+                }
+              } else {
+                console.warn(
+                  'Failed to create/fetch sheet, continuing without real-time collaboration'
+                );
+              }
+            } catch (error) {
+              console.error('Error creating/fetching sheet:', error);
+              // Continue without sheet - fallback to local mode
             }
-          } catch (error) {
-            console.error('Error creating/fetching sheet:', error);
-            // Continue without sheet - fallback to local mode
+          } else {
+            console.warn('No fileId found, skipping sheet creation');
           }
 
           // Fetch data for projects using the file API
@@ -358,48 +397,90 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             }
 
             const projectData = await projectResponse.json();
-            const firstFile = projectData.fileGroups?.data?.[0];
-            if (!firstFile) {
+
+            // Use the same approach as processFile - get fileId from fileSystem in store
+            // which is populated from projectData and includes fileId when available
+            const { fileSystem } = useProjectStore.getState();
+            let fileId: string | undefined;
+
+            if (fileSystem && fileSystem.length > 0) {
+              // Try to match by path or name from importData, or use first file
+              const matchingFile =
+                fileSystem.find(
+                  (f: any) => f.path === dataToImport.filePath || f.name === dataToImport.fileName
+                ) || fileSystem[0];
+              fileId = matchingFile?.fileId;
+              console.log('FileId from fileSystem (file type):', {
+                fileId,
+                matchingFile,
+                fileSystemLength: fileSystem.length,
+              });
+            }
+
+            // Fallback: try to get from projectData directly if fileSystem doesn't have it
+            if (!fileId) {
+              // Try all fileGroups categories, not just 'data'
+              for (const category of Object.keys(projectData.fileGroups || {})) {
+                const files = projectData.fileGroups[category];
+                if (Array.isArray(files) && files.length > 0) {
+                  const firstFile = files[0];
+                  if (firstFile?.fileId) {
+                    fileId = firstFile.fileId;
+                    console.log('FileId from fileGroups (file type):', {
+                      fileId,
+                      category,
+                      firstFile,
+                    });
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (!fileId && (!fileSystem || fileSystem.length === 0)) {
               throw new Error('No files found in project');
             }
 
-            const fileId = firstFile.fileId;
+            console.log('Final fileId for sheet creation (file type):', fileId);
 
             requestBody = {
               ...requestBody,
               project_id: dataToImport.filePath,
-              file_id: fileId,
+              ...(fileId && { file_id: fileId }),
             };
 
-            // Create or fetch sheet for real-time collaboration (for file type resource)
-            // sheetId is already declared at the top of the function
-            try {
-              const sheetResponse = await fetch(
-                `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.dev.tensr.xyz'}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                  },
-                }
-              );
-
-              if (sheetResponse.ok) {
-                const sheetData = await sheetResponse.json();
-                const createdSheetId = sheetData.sheet?.sheetId;
-                if (createdSheetId) {
-                  sheetId = createdSheetId;
-                  console.log('Created/fetched sheet for file resource:', sheetId);
-                }
-              } else {
-                console.warn(
-                  'Failed to create/fetch sheet, continuing without real-time collaboration'
+            // Create or fetch sheet for real-time collaboration (only if fileId exists)
+            if (fileId) {
+              try {
+                const sheetResponse = await fetch(
+                  `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.dev.tensr.xyz'}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${token}`,
+                    },
+                  }
                 );
+
+                if (sheetResponse.ok) {
+                  const sheetData = await sheetResponse.json();
+                  const createdSheetId = sheetData.sheet?.sheetId;
+                  if (createdSheetId) {
+                    sheetId = createdSheetId;
+                    console.log('Created/fetched sheet for file resource:', sheetId);
+                  }
+                } else {
+                  console.warn(
+                    'Failed to create/fetch sheet, continuing without real-time collaboration'
+                  );
+                }
+              } catch (error) {
+                console.error('Error creating/fetching sheet:', error);
+                // Continue without sheet - fallback to local mode
               }
-            } catch (error) {
-              console.error('Error creating/fetching sheet:', error);
-              // Continue without sheet - fallback to local mode
+            } else {
+              console.warn('No fileId found, skipping sheet creation');
             }
           } else {
             // For regular files, check if filePath contains project structure

@@ -212,8 +212,8 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                                 data-size="lg"
                               >
                                 <div className="flex min-w-0 flex-row items-center justify-start gap-3 overflow-hidden">
-                                  <LayoutGrid className="h-6 w-6 shrink-0" />
-                                  <span className="truncate whitespace-nowrap text-base">
+                                  <LayoutGrid className="size-4 shrink-0" />
+                                  <span className="truncate whitespace-nowrap text-sm">
                                     Overview
                                   </span>
                                 </div>
@@ -231,8 +231,8 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                                 data-size="lg"
                               >
                                 <div className="flex min-w-0 flex-row items-center justify-start gap-3 overflow-hidden">
-                                  <Compass className="h-6 w-6 shrink-0" />
-                                  <span className="truncate whitespace-nowrap text-base">
+                                  <Compass className="size-4 shrink-0" />
+                                  <span className="truncate whitespace-nowrap text-sm">
                                     Plugins
                                   </span>
                                 </div>
@@ -252,8 +252,8 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                                 data-size="lg"
                               >
                                 <div className="flex min-w-0 flex-row items-center justify-start gap-3 overflow-hidden">
-                                  <Settings className="h-6 w-6 shrink-0" />
-                                  <span className="truncate whitespace-nowrap text-base">
+                                  <Settings className="size-4 shrink-0" />
+                                  <span className="truncate whitespace-nowrap text-sm">
                                     Settings
                                   </span>
                                 </div>
@@ -268,8 +268,8 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                               data-size="lg"
                             >
                               <div className="flex flex-row items-center justify-center gap-3">
-                                <HelpCircle className="h-6 w-6" />
-                                <span className="text-base">Help</span>
+                                <HelpCircle className="size-4" />
+                                <span className="text-sm">Help</span>
                               </div>
                             </button>
                           </li>
@@ -281,8 +281,8 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                               data-size="lg"
                             >
                               <div className="flex flex-row items-center justify-center gap-3">
-                                <Monitor className="h-6 w-6" />
-                                <span className="text-base">Theme</span>
+                                <Monitor className="size-4" />
+                                <span className="text-sm">Theme</span>
                               </div>
                             </button>
                           </li>

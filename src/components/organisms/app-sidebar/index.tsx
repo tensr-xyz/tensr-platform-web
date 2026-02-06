@@ -339,13 +339,13 @@ function NavMain({
                   >
                     {!item.items || item.items.length === 0 ? (
                       <Link href={item.url} className="cursor-pointer">
-                        {Icon && <Icon />}
-                        <span>{item.title}</span>
+                        {Icon && <Icon className="size-4" />}
+                        <span className="text-sm">{item.title}</span>
                       </Link>
                     ) : (
                       <>
-                        {Icon && <Icon />}
-                        <span>{item.title}</span>
+                        {Icon && <Icon className="size-4" />}
+                        <span className="text-sm">{item.title}</span>
                         <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                       </>
                     )}
@@ -407,8 +407,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <SidebarMenuButton className="cursor-pointer">
-                    <Bell className="h-4 w-4" />
-                    <span>Notifications</span>
+                    <Bell className="size-4" />
+                    <span className="text-sm">Notifications</span>
                   </SidebarMenuButton>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -445,8 +445,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuItem>
               <SidebarMenuButton asChild className="cursor-pointer">
                 <Link href="https://tensr-1.gitbook.io/tensr/">
-                  <BookOpen className="h-4 w-4" />
-                  <span>Documentation</span>
+                  <BookOpen className="size-4" />
+                  <span className="text-sm">Documentation</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
