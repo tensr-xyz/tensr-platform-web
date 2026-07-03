@@ -14,9 +14,9 @@ import { Input } from '@/components/atoms/input';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Loader2 as Loader } from 'lucide-react';
 import useAuth from '@/hooks/api/use-auth';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 
-// API base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
+const API_BASE_URL = getTensrApiBaseUrl();
 
 interface OneSampleTTestProps {
   children: ReactNode;

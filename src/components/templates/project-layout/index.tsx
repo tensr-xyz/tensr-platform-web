@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/atoms/resizable';
 import * as ResizablePrimitive from 'react-resizable-panels';
-import AnalysisSidebar from '@/components/templates/analysis-sidebar';
+import WorkspaceRightPanel from '@/components/organisms/workspace-right-panel';
 import Titlebar from '@/components/organisms/titlebar';
 import Footer from '@/components/organisms/footer';
-import Terminal from '@/components/organisms/terminal';
+import WorkspaceTerminal from '@/components/organisms/terminal/workspace-terminal';
 import { cn } from '@/utils';
 import { Column, Tab, TabData } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -16,6 +16,10 @@ import { useCollaboration } from '@/hooks/use-collaboration';
 import Loading from '@/components/molecules/loading';
 import useAuth from '@/hooks/api/use-auth';
 import { LeftPanel } from '@/components/organisms/left-panel';
+import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
+import { WorkspaceErrorBoundary } from '@/components/molecules/workspace-error-boundary';
+import { canRedoTab, canUndoTab, redoTab, undoTab } from '@/lib/tab-history';
+import { isEditableKeyboardTarget, isTerminalToggleShortcut } from '@/utils/keyboard-shortcuts';
 
 interface ProjectLayoutProps {
   children: React.ReactNode;
@@ -24,6 +28,15 @@ interface ProjectLayoutProps {
   isMaximized?: boolean;
   activeTab?: Tab;
 }
+
+/** Horizontal split sizes (% of group). Right assistant panel stays wider than the left sidebar. */
+const LEFT_PANEL_MIN_SIZE = 18;
+const LEFT_PANEL_DEFAULT_SIZE = 18;
+const LEFT_PANEL_MAX_SIZE = 28;
+
+const RIGHT_PANEL_MIN_SIZE = 22;
+const RIGHT_PANEL_DEFAULT_SIZE = 28;
+const RIGHT_PANEL_MAX_SIZE = 40;
 
 const ProjectLayout = ({
   children,
@@ -37,13 +50,9 @@ const ProjectLayout = ({
     leftPanelOpen,
     leftPanelContent,
     terminalOpen,
-    importData,
-    showImportWizard,
     fileSystem,
     setProject,
     setFileSystem,
-    setImportData,
-    setShowImportWizard,
     toggleLeftPanel,
     setLeftPanelContent,
     toggleTerminal,
@@ -86,26 +95,46 @@ const ProjectLayout = ({
     }
   }, [fileSystem, currentProject, setLeftPanelContent]);
 
-  // Add keyboard shortcut for terminal toggle
+  // Workspace keyboard shortcuts (terminal, undo/redo)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Ctrl/Cmd + ` to toggle terminal
-      if ((event.ctrlKey || event.metaKey) && event.key === '`') {
+      const mod = event.ctrlKey || event.metaKey;
+
+      if (isTerminalToggleShortcut(event)) {
         event.preventDefault();
+        event.stopPropagation();
         toggleTerminal(!terminalOpen);
+        return;
+      }
+
+      if (mod && !event.altKey && (event.key === 'z' || event.key === 'Z')) {
+        if (isEditableKeyboardTarget(event.target)) return;
+        const tabId = activeTab?.id;
+        if (!tabId) return;
+
+        if (event.shiftKey) {
+          if (!canRedoTab(tabId)) return;
+          event.preventDefault();
+          redoTab(tabId);
+        } else {
+          if (!canUndoTab(tabId)) return;
+          event.preventDefault();
+          undoTab(tabId);
+        }
+      }
+
+      if (mod && !event.shiftKey && !event.altKey && (event.key === 'y' || event.key === 'Y')) {
+        if (isEditableKeyboardTarget(event.target)) return;
+        const tabId = activeTab?.id;
+        if (!tabId || !canRedoTab(tabId)) return;
+        event.preventDefault();
+        redoTab(tabId);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [terminalOpen, toggleTerminal]);
-
-  // Handle import data changes
-  useEffect(() => {
-    if (importData && !showImportWizard) {
-      setShowImportWizard(true);
-    }
-  }, [importData, showImportWizard, setShowImportWizard]);
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    return () => window.removeEventListener('keydown', handleKeyDown, { capture: true });
+  }, [terminalOpen, toggleTerminal, activeTab?.id]);
 
   const handleTabClose = (tabId: string) => {
     if (tabId) {
@@ -118,48 +147,65 @@ const ProjectLayout = ({
     return children;
   };
 
+  const isAnalysisReportView = activeTab?.type === ViewType.ANALYSIS_REPORT;
+
   const rowCount =
     activeTab?.type === 'spreadsheet' && activeTab.data
       ? (activeTab.data as TabData)?.totalRows || 0
       : 0;
 
-  const leftPanelRef = useRef<React.ComponentRef<typeof ResizablePrimitive.Panel>>(null);
+  const closedLeftPanelForReportRef = useRef<string | null>(null);
 
-  // Control panel collapse/expand based on leftPanelOpen state
+  // Sheet chrome (column panel) does not apply to analysis report tabs.
   useEffect(() => {
-    if (leftPanelRef.current) {
-      if (leftPanelOpen) {
-        leftPanelRef.current.expand();
-      } else {
-        leftPanelRef.current.collapse();
-      }
+    if (!isAnalysisReportView) {
+      closedLeftPanelForReportRef.current = null;
+      return;
     }
-  }, [leftPanelOpen]);
+    if (activeTab?.id && closedLeftPanelForReportRef.current !== activeTab.id && leftPanelOpen) {
+      toggleLeftPanel(false);
+      closedLeftPanelForReportRef.current = activeTab.id;
+    }
+  }, [activeTab?.id, isAnalysisReportView, leftPanelOpen, toggleLeftPanel]);
 
-  const mainContent = (
+  const mainContent = isAnalysisReportView ? (
+    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">{renderContent()}</div>
+  ) : (
     <ResizablePanelGroup
       autoSaveId="conditional"
       direction="horizontal"
       className="flex-1 min-w-0 overflow-hidden"
     >
-      <ResizablePrimitive.Panel
-        ref={leftPanelRef}
-        id="left"
-        order={1}
-        defaultSize={leftPanelOpen ? 20 : 0}
-        minSize={0}
-        maxSize={30}
-        collapsible
-        className="min-w-0"
-      >
-        <div className="h-full bg-background min-w-0 overflow-auto">{leftPanelContent}</div>
-      </ResizablePrimitive.Panel>
-      {leftPanelOpen && <ResizableHandle />}
+      {leftPanelOpen ? (
+        <>
+          <ResizablePrimitive.Panel
+            id="left"
+            order={1}
+            defaultSize={LEFT_PANEL_DEFAULT_SIZE}
+            minSize={LEFT_PANEL_MIN_SIZE}
+            maxSize={LEFT_PANEL_MAX_SIZE}
+            className="min-w-0"
+          >
+            <div className="h-full min-w-[16rem] bg-background overflow-auto">
+              {leftPanelContent}
+            </div>
+          </ResizablePrimitive.Panel>
+          <ResizableHandle />
+        </>
+      ) : null}
 
       <ResizablePanel
         id="center"
         order={2}
-        defaultSize={leftPanelOpen ? (rightPanelOpen ? 60 : 80) : rightPanelOpen ? 80 : 100}
+        defaultSize={
+          leftPanelOpen
+            ? rightPanelOpen
+              ? 100 - LEFT_PANEL_DEFAULT_SIZE - RIGHT_PANEL_DEFAULT_SIZE
+              : 100 - LEFT_PANEL_DEFAULT_SIZE
+            : rightPanelOpen
+              ? 100 - RIGHT_PANEL_DEFAULT_SIZE
+              : 100
+        }
         className="min-w-0"
       >
         <ResizablePanelGroup direction="vertical" className="h-full">
@@ -170,7 +216,11 @@ const ProjectLayout = ({
             className="overflow-hidden"
           >
             <div className="h-full flex flex-col">
-              <div className="flex-1 overflow-hidden">{renderContent()}</div>
+              <div className="flex-1 overflow-hidden">
+                <WorkspaceErrorBoundary title="Workspace panel error">
+                  {renderContent()}
+                </WorkspaceErrorBoundary>
+              </div>
               <Footer isLoading={isLoading} activeTab={activeTab} rowCount={rowCount} />
             </div>
           </ResizablePanel>
@@ -179,7 +229,7 @@ const ProjectLayout = ({
             <>
               <ResizableHandle />
               <ResizablePanel id="terminal" order={2} defaultSize={25}>
-                <Terminal />
+                <WorkspaceTerminal />
               </ResizablePanel>
             </>
           )}
@@ -192,12 +242,15 @@ const ProjectLayout = ({
           <ResizablePanel
             id="right"
             order={3}
-            defaultSize={20}
-            minSize={10}
+            defaultSize={RIGHT_PANEL_DEFAULT_SIZE}
+            minSize={RIGHT_PANEL_MIN_SIZE}
+            maxSize={RIGHT_PANEL_MAX_SIZE}
             className="min-w-0 overflow-hidden"
           >
-            <div className="h-full min-w-0">
-              <AnalysisSidebar />
+            <div className="h-full min-w-[18rem]">
+              <WorkspaceErrorBoundary title="Assistant panel error">
+                <WorkspaceRightPanel />
+              </WorkspaceErrorBoundary>
             </div>
           </ResizablePanel>
         </>
@@ -206,29 +259,27 @@ const ProjectLayout = ({
   );
 
   return (
-    <div
-      className={cn(
-        'fixed inset-0 bg-background text-foreground z-50 flex flex-col',
-        isMaximized && 'z-[100]'
-      )}
-    >
-      <div className="flex flex-1 min-w-0 overflow-hidden">
-        <div className="flex min-w-0 flex-col flex-1">
-          {/* Make sure we safely pass tabs to Titlebar */}
-          <Titlebar
-            onToggleSidebar={onToggleSidebar}
-            tabs={tabs ?? []}
-            activeTab={activeTab}
-            onTabClose={handleTabClose}
-          />
-          {mainContent}
+    <>
+      <AnalysisSetupHost />
+      <div
+        className={cn(
+          'fixed inset-0 bg-background text-foreground z-50 flex flex-col',
+          isMaximized && 'z-[100]'
+        )}
+      >
+        <div className="flex min-h-0 flex-1 min-w-0 overflow-hidden">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <Titlebar
+              onToggleSidebar={onToggleSidebar}
+              tabs={tabs ?? []}
+              activeTab={activeTab}
+              onTabClose={handleTabClose}
+            />
+            {mainContent}
+          </div>
         </div>
       </div>
-
-      {/*{projectState.footerOpen && (*/}
-      {/*  <Footer isLoading={isLoading} activeTab={activeTab} rowCount={rowCount} />*/}
-      {/*)}*/}
-    </div>
+    </>
   );
 };
 

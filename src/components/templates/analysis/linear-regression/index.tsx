@@ -14,9 +14,8 @@ import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
 import useAuth from '@/hooks/api/use-auth';
-
-// API base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
+import { adaptLinearRegressionResults, runDatasetAnalysis } from '@/lib/workspace-analysis';
+import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 
 interface LinearRegressionProps {
   children: ReactNode;
@@ -132,29 +131,17 @@ export const LinearRegression = ({ children }: LinearRegressionProps) => {
       setIsLoading(true);
       setError(null);
 
-      const regressionRequest: LinearRegressionRequest = {
-        dependent_variable: dependentVariable,
-        independent_variables: independentVariables,
-        data: data,
-      };
-
-      // Make the API call to the backend
-      const response = await fetch(`${API_BASE_URL}/api/statistics/perform-linear-regression`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(regressionRequest),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Failed to calculate linear regression');
+      const datasetId = getDatasetIdFromTab(activeDataTab);
+      if (!datasetId) {
+        throw new Error(WORKSPACE_DATASET_REQUIRED);
       }
 
-      const result: LinearRegressionResponse = await response.json();
-      setResults(result.results);
+      const envelope = await runDatasetAnalysis(datasetId, 'linear_regression', {
+        dependent: dependentVariable,
+        independents: independentVariables,
+      });
+      // Legacy template expects a slightly different shape than tensr-api returns.
+      setResults(adaptLinearRegressionResults(envelope) as unknown as LinearRegressionResult);
       setActiveTab('results');
     } catch (error) {
       console.error('Failed to calculate linear regression:', error);

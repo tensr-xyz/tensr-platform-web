@@ -1,9 +1,16 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MessageSquare, Smile, Meh, Frown } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/molecules/dialog';
 import {
   Select,
   SelectContent,
@@ -16,51 +23,47 @@ import { CreateFeedbackInput, FeedbackTopic } from '@/types/feedback';
 import useAuth from '@/hooks/api/use-auth';
 import { toast } from '@/hooks/ui/use-toast';
 import { getSessionJwt, getSessionToken } from '@/utils/auth';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+async function submitFeedbackRequest(feedbackData: CreateFeedbackInput) {
+  const response = await fetch(tensrApiUrl('/feedback'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getSessionJwt() || getSessionToken()}`,
+    },
+    body: JSON.stringify(feedbackData),
+  });
 
-interface FeedbackButtonProps {
-  variant?: 'default' | 'outline' | 'secondary' | 'ghost' | 'link' | 'destructive';
-  size?: 'default' | 'sm' | 'lg' | 'icon';
-  className?: string;
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+  }
+
+  return response.json();
 }
 
-export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
-  variant = 'outline',
-  size = 'default',
-  className = '',
-}) => {
+export interface FeedbackDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
   const [topic, setTopic] = useState<FeedbackTopic | ''>('');
   const [feedback, setFeedback] = useState('');
   const [rating, setRating] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isOpen, setIsOpen] = useState(false);
 
   const { user } = useAuth();
 
-  const submitFeedback = async (feedbackData: CreateFeedbackInput) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/feedback`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${getSessionJwt() || getSessionToken()}`,
-        },
-        body: JSON.stringify(feedbackData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-      return result;
-    } catch (error) {
-      console.error('Failed to submit feedback:', error);
-      throw error;
+  useEffect(() => {
+    if (!open) {
+      setTopic('');
+      setFeedback('');
+      setRating(null);
+      setIsSubmitting(false);
     }
-  };
+  }, [open]);
 
   const handleSubmit = async () => {
     if (!user) {
@@ -87,23 +90,19 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
       const feedbackData: CreateFeedbackInput = {
         userId: user.userId,
         topic: topic as FeedbackTopic,
-        rating: rating,
+        rating,
         text: feedback.trim(),
       };
 
-      await submitFeedback(feedbackData);
+      await submitFeedbackRequest(feedbackData);
 
-      // Reset form
-      setTopic('');
-      setFeedback('');
-      setRating(null);
-      setIsOpen(false);
+      onOpenChange(false);
 
       toast({
         title: 'Feedback Submitted',
         description: 'Thank you for your feedback!',
       });
-    } catch (error) {
+    } catch {
       toast({
         title: 'Submission Failed',
         description: 'Failed to submit feedback. Please try again.',
@@ -115,80 +114,93 @@ export const FeedbackButton: React.FC<FeedbackButtonProps> = ({
   };
 
   return (
-    <Popover open={isOpen} onOpenChange={setIsOpen}>
-      <PopoverTrigger asChild>
-        <Button variant={variant} size={size} className={`rounded-full h-10 ${className}`}>
-          <MessageSquare className="h-4 w-4 mr-2" />
-          Feedback
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80 p-4" align="end" sideOffset={10}>
-        <div className="grid gap-4">
-          <h4 className="font-medium leading-none">Send Feedback</h4>
-          <div className="space-y-4">
-            <Select onValueChange={value => setTopic(value as FeedbackTopic)} value={topic}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a topic..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={FeedbackTopic.BUG}>Bug Report</SelectItem>
-                <SelectItem value={FeedbackTopic.FEATURE}>Feature Request</SelectItem>
-                <SelectItem value={FeedbackTopic.GENERAL}>General Feedback</SelectItem>
-                <SelectItem value={FeedbackTopic.UI}>UI/Design</SelectItem>
-                <SelectItem value={FeedbackTopic.UX}>User Experience</SelectItem>
-                <SelectItem value={FeedbackTopic.PERFORMANCE}>Performance</SelectItem>
-                <SelectItem value={FeedbackTopic.OTHER}>Other</SelectItem>
-              </SelectContent>
-            </Select>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            Send feedback
+          </DialogTitle>
+          <DialogDescription>
+            Tell us what&apos;s working, what isn&apos;t, or what you&apos;d like next.
+          </DialogDescription>
+        </DialogHeader>
 
-            <Textarea
-              placeholder="Your feedback..."
-              value={feedback}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFeedback(e.target.value)}
-              rows={5}
-              disabled={isSubmitting}
-            />
+        <div className="grid gap-4 py-2">
+          <Select onValueChange={value => setTopic(value as FeedbackTopic)} value={topic}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a topic..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={FeedbackTopic.BUG}>Bug Report</SelectItem>
+              <SelectItem value={FeedbackTopic.FEATURE}>Feature Request</SelectItem>
+              <SelectItem value={FeedbackTopic.GENERAL}>General Feedback</SelectItem>
+              <SelectItem value={FeedbackTopic.UI}>UI/Design</SelectItem>
+              <SelectItem value={FeedbackTopic.UX}>User Experience</SelectItem>
+              <SelectItem value={FeedbackTopic.PERFORMANCE}>Performance</SelectItem>
+              <SelectItem value={FeedbackTopic.OTHER}>Other</SelectItem>
+            </SelectContent>
+          </Select>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">How satisfied are you?</label>
-              <div className="flex justify-between items-center bg-gray-50 p-3 -mx-4 rounded-md">
-                <div className="flex space-x-1">
-                  {[5, 4, 3, 2, 1].map(value => {
-                    const Icon = value >= 4 ? Smile : value === 3 ? Meh : Frown;
-                    const color =
-                      value >= 4
-                        ? 'text-green-600'
-                        : value === 3
-                          ? 'text-yellow-500'
-                          : 'text-red-500';
-                    return (
-                      <Button
-                        key={value}
-                        variant="ghost"
-                        size="icon"
-                        className={`rounded-full transition-colors ${
-                          rating === value ? 'bg-blue-100 border-blue-300' : 'hover:bg-gray-100'
-                        }`}
-                        onClick={() => setRating(value)}
-                        disabled={isSubmitting}
-                      >
-                        <Icon className={`h-4 w-4 ${rating === value ? 'text-blue-600' : color}`} />
-                      </Button>
-                    );
-                  })}
-                </div>
-                <Button
-                  onClick={handleSubmit}
-                  className="w-auto px-4 py-2"
-                  disabled={isSubmitting || !topic || !feedback.trim() || rating === null}
-                >
-                  {isSubmitting ? 'Sending...' : 'Send'}
-                </Button>
+          <Textarea
+            placeholder="Your feedback..."
+            value={feedback}
+            onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFeedback(e.target.value)}
+            rows={5}
+            disabled={isSubmitting}
+          />
+
+          <div className="space-y-2">
+            <span className="text-sm font-medium">How satisfied are you?</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/40 p-3">
+              <div className="flex gap-1">
+                {[5, 4, 3, 2, 1].map(value => {
+                  const Icon = value >= 4 ? Smile : value === 3 ? Meh : Frown;
+                  const color =
+                    value >= 4
+                      ? 'text-green-600'
+                      : value === 3
+                        ? 'text-yellow-500'
+                        : 'text-red-500';
+                  return (
+                    <Button
+                      key={value}
+                      variant="ghost"
+                      size="icon"
+                      type="button"
+                      className={`rounded-full ${
+                        rating === value ? 'bg-accent ring-1 ring-ring' : ''
+                      }`}
+                      onClick={() => setRating(value)}
+                      disabled={isSubmitting}
+                    >
+                      <Icon className={`h-4 w-4 ${rating === value ? 'text-foreground' : color}`} />
+                    </Button>
+                  );
+                })}
               </div>
             </div>
           </div>
         </div>
-      </PopoverContent>
-    </Popover>
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSubmitting || !topic || !feedback.trim() || rating === null}
+          >
+            {isSubmitting ? 'Sending…' : 'Send'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
-};
+}

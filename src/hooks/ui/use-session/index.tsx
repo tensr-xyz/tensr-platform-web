@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api-client';
+import { ApiRequestError } from '@/lib/api-error';
+import { getTensrWebSocketUrl } from '@/lib/tensr-api-url';
 import { getIdToken } from '@/utils/auth';
 
 type Listener<T> = (value: T) => void;
@@ -21,6 +23,7 @@ class EventEmitter<T> {
 
 interface Session {
   id: string;
+  datasetId?: string;
   fileName: string;
   filePath: string;
   ownerName: string;
@@ -88,10 +91,21 @@ class WebSocketService {
       this.ws.close();
     }
 
+    const token = getIdToken();
+    const wsBase =
+      process.env.NEXT_PUBLIC_WEBSOCKET_URL?.replace(/\/$/, '') || getTensrWebSocketUrl('/ws');
+    const wsUrl = token
+      ? `${wsBase}${wsBase.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`
+      : wsBase;
+    if (!token) {
+      console.warn('Authentication required for collaboration WebSocket');
+      return;
+    }
+
     // Clear presence when setting up new connection
     this._presence.clear();
 
-    this.ws = new WebSocket('ws://localhost:3000');
+    this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
       this._wsReady = true;
@@ -237,19 +251,7 @@ class WebSocketService {
     }
 
     try {
-      // Send leave request to server
-      const response = await fetch(`http://localhost:3000/api/sessions/${this._session.id}/leave`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: this.userId,
-          userName: this.userName,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to leave session');
-      }
+      await apiClient.collaboration.leaveSession(this._session.id);
 
       // Close WebSocket connection
       this.ws.close();
@@ -320,28 +322,42 @@ export function useSession() {
     });
 
     // Fetch available sessions initially and then periodically
+    let collaborationUnavailable = false;
+    let interval: ReturnType<typeof setInterval> | undefined;
+
     const fetchSessions = async () => {
+      if (collaborationUnavailable) return;
       try {
         const response = await apiClient.collaboration.sessions();
         setSessions(response || []);
       } catch (error) {
-        console.error('Failed to fetch sessions:', error);
+        if (error instanceof ApiRequestError && error.status === 404) {
+          // AuthStack must be redeployed with /api/sessions routes (see tensr-api/infra/stacks/auth_stack.py).
+          collaborationUnavailable = true;
+          if (interval) clearInterval(interval);
+          return;
+        }
+        console.warn('Collaboration sessions unavailable:', error);
         setSessions([]);
       }
     };
 
-    fetchSessions();
-    const interval = setInterval(fetchSessions, 5000);
+    void fetchSessions();
+    interval = setInterval(fetchSessions, 5000);
 
     return () => {
       wsReadyCleanup();
       sessionCleanup();
       presenceCleanup();
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
   }, []);
 
-  const createSession = async (filePath: string, fileName: string) => {
+  const createSession = async (params: {
+    datasetId?: string;
+    filePath?: string;
+    fileName: string;
+  }) => {
     try {
       const idToken = getIdToken();
       if (!idToken) {
@@ -349,8 +365,7 @@ export function useSession() {
       }
 
       const session = await apiClient.collaboration.createSession({
-        filePath,
-        fileName,
+        ...params,
         userName: wsService.userName,
       });
 
@@ -362,14 +377,19 @@ export function useSession() {
     }
   };
 
-  const joinSession = async (sessionId: string) => {
+  const joinSession = async (sessionId: string, options?: { userName?: string }) => {
     try {
       const idToken = getIdToken();
       if (!idToken) {
         throw new Error('Authentication required');
       }
 
-      const session = await apiClient.collaboration.joinSession(sessionId);
+      const userName = options?.userName?.trim() || wsService.userName;
+      if (userName) {
+        wsService.userName = userName;
+      }
+
+      const session = await apiClient.collaboration.joinSession(sessionId, { userName });
       wsService.setupWebSocket(session.id);
       return session;
     } catch (error) {

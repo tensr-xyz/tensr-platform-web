@@ -3,7 +3,6 @@ import React from 'react';
 export enum DialogType {
   NEW_PROJECT = 'new-project',
   SETTINGS = 'settings',
-  IMPORT_WIZARD = 'import-wizard',
 }
 
 export enum AppActions {

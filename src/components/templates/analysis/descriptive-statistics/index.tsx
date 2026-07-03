@@ -15,6 +15,8 @@ import { apiClient } from '@/lib/api-client';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useToast } from '@/hooks/ui/use-toast';
 import { getNumericColumns } from '@/utils/data-utils';
+import { runDatasetAnalysis } from '@/lib/workspace-analysis';
+import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 
 interface DescriptiveStatisticsProps {
   children: React.ReactNode;
@@ -138,14 +140,15 @@ export const DescriptiveStatistics = ({
           .filter((val: any) => val !== null)
       );
 
-      const requestData = {
-        ...formData,
-        data: numericData,
-        variables: numericColumns.map((col: any) => col.header),
-      };
+      const datasetId = getDatasetIdFromTab(activeTab);
+      if (!datasetId) {
+        throw new Error(WORKSPACE_DATASET_REQUIRED);
+      }
 
-      const result = await apiClient.statistics.comprehensiveDescriptives(requestData);
-      setResults(result);
+      const envelope = await runDatasetAnalysis(datasetId, 'descriptives', {
+        columns: numericColumns.map((col: { id: string }) => col.id),
+      });
+      setResults(envelope.result);
       toast({
         title: 'Success',
         description: 'Analysis completed successfully!',

@@ -1,20 +1,18 @@
 'use client';
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { useProject } from '@/hooks/api/use-project';
 import Workspace, { WorkspaceResource } from '@/components/templates/workspace';
+import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import Loading from '@/components/molecules/loading';
-import { ImportData } from '@/types/file';
 import { Project } from '@/types/project';
+import { Button } from '@/components/atoms/button';
 
 function ProjectWorkspaceContent() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.projectId as string;
-
-  // Debug logging
-  console.log('ProjectWorkspacePage - params:', params);
-  console.log('ProjectWorkspacePage - projectId:', projectId);
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,33 +67,29 @@ function ProjectWorkspaceContent() {
     }
   }, [projectError]);
 
-  // Define the data processing function for projects with correct return type
-  const processProjectData = async (): Promise<{
-    importData?: ImportData | null;
-    showImportWizard?: boolean;
-  }> => {
-    // For projects, we don't need to process import data like files
-    // The project data is already loaded via the useProject hook
-    return {
-      importData: null,
-      showImportWizard: false,
-    };
-  };
-
   if (isLoading || projectLoading) {
     return <Loading fullScreen />;
   }
 
-  // if (error) {
-  //   return (
-  //     <div className="flex flex-col justify-center items-center min-h-screen">
-  //       <h2 className="text-xl font-bold text-red-600 mb-4">Error</h2>
-  //       <p className="text-gray-700">{error}</p>
-  //     </div>
-  //   );
-  // }
+  if (error) {
+    return (
+      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-6 text-center">
+        <h2 className="text-xl font-normal tracking-tighter text-foreground">
+          Unable to open workspace
+        </h2>
+        <p className="max-w-md text-sm font-medium text-muted-foreground">{error}</p>
+        <Button type="button" variant="outline" onClick={() => router.push('/dashboard')}>
+          Back to overview
+        </Button>
+      </div>
+    );
+  }
 
-  return <Workspace resource={resource} processData={processProjectData} />;
+  return (
+    <SubscriptionGate>
+      <Workspace resource={resource} />
+    </SubscriptionGate>
+  );
 }
 
 export default function ProjectWorkspacePage() {

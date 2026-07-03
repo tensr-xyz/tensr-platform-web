@@ -1,5 +1,4 @@
 import { useTabsStore } from '@/stores/tabs-store';
-import { getIdToken } from '@/utils/auth';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
@@ -11,10 +10,8 @@ import {
 import { Button } from '@/components/atoms/button';
 import { Loader2 as Loader } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
-import useAuth from '@/hooks/api/use-auth';
-
-// API base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
+import { adaptDescriptivesToMeans, runDatasetAnalysis } from '@/lib/workspace-analysis';
+import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 
 interface MeanProps {
   children: ReactNode;
@@ -34,11 +31,6 @@ interface DescriptiveStats {
   median?: number;
 }
 
-interface MeansRequest {
-  variables: string[];
-  data: Record<string, number[]>;
-}
-
 type Results = Record<string, DescriptiveStats>;
 
 export const Mean = ({ children }: MeanProps) => {
@@ -48,8 +40,6 @@ export const Mean = ({ children }: MeanProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Removed tokens - using getIdToken() directly
-
-  const token = getIdToken();
 
   const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
 
@@ -93,28 +83,15 @@ export const Mean = ({ children }: MeanProps) => {
       setIsLoading(true);
       setError(null);
 
-      const meansRequest: MeansRequest = {
-        variables: selectedVariables,
-        data: data,
-      };
-
-      // Make the API call to the backend
-      const response = await fetch(`${API_BASE_URL}/api/statistics/calculate-means`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(meansRequest),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Failed to calculate means');
+      const datasetId = getDatasetIdFromTab(activeTab);
+      if (!datasetId) {
+        throw new Error(WORKSPACE_DATASET_REQUIRED);
       }
 
-      const result: Results = await response.json();
-      setResults(result);
+      const envelope = await runDatasetAnalysis(datasetId, 'descriptives', {
+        columns: selectedVariables,
+      });
+      setResults(adaptDescriptivesToMeans(envelope.result));
     } catch (error) {
       console.error('Failed to calculate means:', error);
       setError(error instanceof Error ? error.message : 'Failed to calculate means');

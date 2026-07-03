@@ -1,7 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { PluginRecord } from '@/types/plugin';
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { getSessionJwt, getSessionToken } from '@/utils/auth';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { handleUnauthorizedResponse } from '@/lib/session-expired';
+
+function pluginHeaders(): HeadersInit {
+  const token = getSessionJwt() || getSessionToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 interface PaginatedResponse<T> {
   items: T[];
@@ -49,9 +56,13 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
       }
 
       const queryString = queryParams.toString();
-      const url = `${BASE_URL}/plugins${queryString ? `?${queryString}` : ''}`;
+      const url = `${tensrApiUrl('/plugins')}${queryString ? `?${queryString}` : ''}`;
 
-      const response = await fetch(url);
+      const response = await fetch(url, { headers: pluginHeaders() });
+
+      if (handleUnauthorizedResponse(response)) {
+        throw new Error('Session expired');
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -134,8 +145,12 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
 
   const getPlugin = async (pluginId: string, version?: string): Promise<PluginRecord> => {
     const versionParam = version ? `?version=${version}` : '';
-    const url = `${BASE_URL}/plugins/${pluginId}${versionParam}`;
-    const response = await fetch(url);
+    const url = `${tensrApiUrl(`/plugins/${pluginId}`)}${versionParam}`;
+    const response = await fetch(url, { headers: pluginHeaders() });
+
+    if (handleUnauthorizedResponse(response)) {
+      throw new Error('Session expired');
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -163,8 +178,12 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
   };
 
   const getPluginVersions = async (pluginId: string): Promise<PluginRecord[]> => {
-    const url = `${BASE_URL}/plugins/${pluginId}/versions`;
-    const response = await fetch(url);
+    const url = tensrApiUrl(`/plugins/${pluginId}/versions`);
+    const response = await fetch(url, { headers: pluginHeaders() });
+
+    if (handleUnauthorizedResponse(response)) {
+      throw new Error('Session expired');
+    }
 
     if (!response.ok) {
       const errorText = await response.text();

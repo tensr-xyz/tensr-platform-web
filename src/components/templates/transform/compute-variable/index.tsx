@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogTrigger,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
@@ -21,6 +22,9 @@ import { useTabsStore } from '@/stores/tabs-store';
 import { useProject } from '@/contexts/project-context';
 import { Loader2 as Loader } from 'lucide-react';
 import useAuth from '@/hooks/api/use-auth';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+
+const API_BASE_URL = getTensrApiBaseUrl();
 
 const COMPUTATION_TYPES = {
   arithmetic: 'arithmetic',
@@ -86,9 +90,6 @@ interface ColumnInfo {
 interface ComputeVariablesProps {
   children: ReactNode;
 }
-
-// API base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
 
 export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -267,7 +268,7 @@ export const ComputeVariablesDialog = ({ children }: ComputeVariablesProps) => {
 
   return (
     <Dialog>
-      {children}
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Compute Variables</DialogTitle>

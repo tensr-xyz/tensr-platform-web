@@ -14,7 +14,7 @@ interface PendingCommand {
   tool: string;
   params: any;
   description: string;
-  variables: string[];
+  variables?: string[];
   estimatedTime?: string;
 }
 
@@ -39,6 +39,7 @@ export function ApprovalDialog({
 
   const getToolDisplayName = (tool: string) => {
     const toolNames: Record<string, string> = {
+      run_analysis: 'Run analysis',
       descriptive_stats: 'Descriptive Statistics',
       t_test: 'T-Test',
       correlation: 'Correlation Analysis',
@@ -70,11 +71,11 @@ export function ApprovalDialog({
 
         <div className="space-y-4">
           {/* Variables */}
-          {command.variables.length > 0 && (
+          {(command.variables?.length ?? 0) > 0 && (
             <div>
               <h4 className="text-sm font-medium mb-2">Variables to analyze:</h4>
               <div className="flex flex-wrap gap-1">
-                {command.variables.map((variable, index) => (
+                {(command.variables ?? []).map((variable, index) => (
                   <Badge key={index} variant="secondary" className="text-xs">
                     {variable}
                   </Badge>

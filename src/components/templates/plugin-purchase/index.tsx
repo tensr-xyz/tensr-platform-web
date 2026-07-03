@@ -10,6 +10,7 @@ import { ArrowLeft, CreditCard, Shield, Download, CheckCircle } from 'lucide-rea
 import { PluginRecord } from '@/types/plugin';
 import usePlugins from '@/hooks/api/use-plugin';
 import { Loader } from '@/components/molecules/loading';
+import { devLog } from '@/lib/dev-log';
 
 export default function PluginPurchase() {
   const params = useParams();
@@ -65,11 +66,11 @@ export default function PluginPurchase() {
       if (result.clientSecret) {
         // Handle Stripe payment
         // This would integrate with Stripe Elements in a real implementation
-        console.log('Payment intent created:', result);
+        devLog('Payment intent created:', result);
         setPurchaseComplete(true);
       } else if (result.subscriptionId) {
         // Subscription created
-        console.log('Subscription created:', result);
+        devLog('Subscription created:', result);
         setPurchaseComplete(true);
       } else {
         // Free plugin or direct purchase

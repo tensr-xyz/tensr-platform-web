@@ -29,6 +29,8 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/atoms/card';
 import { Switch } from '@/components/atoms/switch';
 import { Label } from '@/components/atoms/label';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { getIdToken } from '@/utils/auth';
 
 // Form schema for plugin upload
 const pluginUploadSchema = z.object({
@@ -100,45 +102,100 @@ export default function PluginUploadForm() {
     setUploadProgress(0);
 
     try {
-      const formData = new FormData();
-
-      // Add file
-      formData.append('plugin', selectedFile);
-
-      // Add form fields
-      Object.entries(values).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          formData.append(key, String(value));
-        }
-      });
-
-      // Simulate upload progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress(prev => {
-          if (prev >= 90) {
-            clearInterval(progressInterval);
-            return 90;
-          }
-          return prev + 10;
-        });
-      }, 200);
-
-      const response = await fetch('/api/plugins/upload', {
+      const token = getIdToken();
+      if (!token) {
+        throw new Error('Authentication required');
+      }
+      const uploadUrlRes = await fetch(tensrApiUrl('/plugins/upload-url'), {
         method: 'POST',
-        body: formData,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          version: values.version,
+          name: values.name,
+          description: values.description,
+          entryPoint: values.entryPoint,
+          language: values.language,
+          content_type: 'application/zip',
+        }),
       });
+      if (!uploadUrlRes.ok) {
+        throw new Error(await uploadUrlRes.text());
+      }
+      const uploadUrlData = (await uploadUrlRes.json()) as {
+        mode?: string;
+        plugin_id?: string;
+        upload_url?: string;
+        s3_key?: string;
+      };
 
-      clearInterval(progressInterval);
-      setUploadProgress(100);
-
-      if (!response.ok) {
-        throw new Error('Upload failed');
+      if (
+        uploadUrlData.mode === 's3' &&
+        uploadUrlData.upload_url &&
+        uploadUrlData.plugin_id &&
+        uploadUrlData.s3_key
+      ) {
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.upload.addEventListener('progress', event => {
+            if (event.lengthComputable) {
+              const pct = Math.round((event.loaded / event.total) * 90);
+              setUploadProgress(pct);
+            }
+          });
+          xhr.addEventListener('load', () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new Error(`S3 upload failed (${xhr.status})`));
+          });
+          xhr.addEventListener('error', () => reject(new Error('Network error during S3 upload')));
+          xhr.open('PUT', uploadUrlData.upload_url!);
+          xhr.setRequestHeader('Content-Type', 'application/zip');
+          xhr.send(selectedFile);
+        });
+        setUploadProgress(96);
+        const completeRes = await fetch(
+          tensrApiUrl(`/plugins/${uploadUrlData.plugin_id}/complete-upload`),
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              s3_key: uploadUrlData.s3_key,
+              version: values.version,
+              name: values.name,
+              description: values.description,
+              entryPoint: values.entryPoint,
+              language: values.language,
+            }),
+          }
+        );
+        if (!completeRes.ok) {
+          throw new Error(await completeRes.text());
+        }
+      } else {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('name', values.name);
+        formData.append('version', values.version);
+        formData.append('description', values.description);
+        formData.append('entryPoint', values.entryPoint);
+        formData.append('language', values.language);
+        const response = await fetch(tensrApiUrl('/plugins/upload'), {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        });
+        if (!response.ok) {
+          throw new Error(await response.text());
+        }
       }
 
-      const result = await response.json();
-
-      // Redirect to plugin management
-      router.push('/creator/plugins');
+      setUploadProgress(100);
+      router.push('/creator');
     } catch (error) {
       console.error('Upload error:', error);
       alert('Upload failed. Please try again.');

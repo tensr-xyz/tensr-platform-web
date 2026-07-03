@@ -13,6 +13,12 @@ export interface CellRange {
 
 export type SelectionMode = 'single' | 'range' | 'extending';
 
+export interface SheetStatusSnapshot {
+  visibleColumns: number;
+  totalColumns: number;
+  cellRef: string | null;
+}
+
 export interface SpreadsheetProps {
   initialData: Record<string, any>[];
   initialColumns: ColumnDef<any>[];
@@ -25,8 +31,14 @@ export interface SpreadsheetProps {
   tabId: string;
   showFilters?: boolean;
   onCloseFilters?: () => void;
+  /** Reveal the filter row (e.g. from the column header dropdown "Filter…"). */
+  onRequestShowFilters?: () => void;
   onSelectionChange?: (selection: Record<string, boolean>) => void;
-  tabData?: { isProjectFile?: boolean; sheetId?: string };
+  onSheetStatusChange?: (status: SheetStatusSnapshot) => void;
+  tabData?: { isProjectFile?: boolean; sheetId?: string; datasetId?: string };
+  /** Row operations (e.g. context menu); indices are 0-based sheet row indices. */
+  onInsertRow?: (rowIndex: number, placement: 'above' | 'below') => void;
+  onDeleteRows?: (rowIndices: number[]) => void;
 }
 
 export interface SortConfig {

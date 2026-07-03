@@ -33,6 +33,7 @@ import { useIsMobile } from '@/hooks/ui/use-mobile';
 import { User as UserType } from '@/types/user';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from '@/hooks/ui/use-toast';
+import { NotificationsMenu } from '@/components/molecules/notifications-menu';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { PermissionWrapper } from '@/wrappers/permission';
 
@@ -87,7 +88,7 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
     >
       {/* Mobile Menu Header */}
       <div className="flex items-center justify-between p-4 h-[72px] border-b border-border">
-        <Link href="/" className="flex" onClick={onClose}>
+        <Link href="/dashboard" className="flex" onClick={onClose}>
           <Button variant="link" size="sm">
             <Image
               src="/tensr_logo_light.png"
@@ -154,7 +155,7 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
             <div className="text-sm font-medium text-gray-500 mb-2">Organization Actions</div>
 
             <PermissionWrapper requireOrgAdmin>
-              <Link href="/settings/organization" onClick={onClose}>
+              <Link href="/settings/organisation" onClick={onClose}>
                 <div className="flex items-center gap-2 text-sm font-medium p-2 hover:bg-gray-50 rounded">
                   <Settings className="w-4 h-4" />
                   Organization Settings
@@ -243,9 +244,9 @@ const NavigationTabs = () => {
     <div className="sticky top-0 bg-background z-50 border-b border-border">
       <div className="flex items-center px-4">
         <Link
-          href="/"
+          href="/dashboard"
           className={`inline-flex items-center justify-center border-b-2 p-3 text-sm font-medium transition-colors ${
-            pathname === '/'
+            pathname === '/dashboard'
               ? 'border-black text-foreground'
               : 'border-transparent text-muted-foreground hover:text-foreground hover:border-gray-300'
           }`}
@@ -430,7 +431,7 @@ export const AccountSwitcher: React.FC = () => {
             </DropdownMenuLabel>
 
             {canManageOrganization() && (
-              <DropdownMenuItem onClick={() => router.push('/settings/organization')}>
+              <DropdownMenuItem onClick={() => router.push('/settings/organisation')}>
                 <Settings className="mr-2 h-4 w-4" />
                 Organization Settings
               </DropdownMenuItem>
@@ -459,7 +460,7 @@ export default function Header() {
       <>
         <header className="w-full bg-background z-40">
           <div className="flex items-center justify-between p-4 h-[72px]">
-            <Link href="/" className="flex">
+            <Link href="/dashboard" className="flex">
               <Button className="h-12 w-24" variant="ghost" size="icon">
                 <Image
                   src="/tensr_logo_light.png"
@@ -496,7 +497,7 @@ export default function Header() {
       <header className="w-full bg-background z-40 relative">
         <div className="flex justify-between items-center h-16 px-4">
           <div className="flex items-center space-x-1">
-            <Link href="/" className="flex">
+            <Link href="/dashboard" className="flex">
               <Button variant="link" size="sm">
                 <Image
                   src="/tensr_logo_light.png"
@@ -511,42 +512,14 @@ export default function Header() {
           </div>
 
           <div className="flex items-center space-x-2">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <NotificationsMenu
+              align="end"
+              trigger={
                 <Button variant="outline" size="icon" className="rounded-full h-8 w-8">
                   <Bell className="h-5 w-5" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {/* Mock Notifications */}
-                <DropdownMenuItem className="flex flex-col items-start gap-1">
-                  <p className="text-sm font-medium leading-none">Goal Due Soon</p>
-                  <p className="text-xs leading-snug text-muted-foreground">
-                    Your goal Finish header is due tomorrow.
-                  </p>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex flex-col items-start gap-1">
-                  <p className="text-sm font-medium leading-none">New Comment</p>
-                  <p className="text-xs leading-snug text-muted-foreground">
-                    New comment on ticket #101.
-                  </p>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex flex-col items-start gap-1">
-                  <p className="text-sm font-medium leading-none">Workspace Invitation</p>
-                  <p className="text-xs leading-snug text-muted-foreground">
-                    Oliver Darby invited you to a workspace.
-                  </p>
-                </DropdownMenuItem>
-                <DropdownMenuItem className="flex flex-col items-start gap-1">
-                  <p className="text-sm font-medium leading-none">Report Ready</p>
-                  <p className="text-xs leading-snug text-muted-foreground">
-                    Weekly progress report is ready.
-                  </p>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+              }
+            />
             <Link href="https://tensr-1.gitbook.io/tensr/">
               <Button variant="outline" size="icon" className="rounded-full h-8 w-8">
                 <BookOpen className="h-5 w-5" />

@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import './globals.css';
 import Providers from '@/utils/providers';
 import { AppProvider } from '@/contexts/app-context';
@@ -84,11 +85,6 @@ export const metadata: Metadata = {
     images: ['/twitter-image.png'],
   },
   category: 'Statistical Analysis Software',
-
-  // Add structured data as a script
-  other: {
-    'script:ld+json': JSON.stringify(structuredData),
-  },
 };
 
 export default function RootLayout({
@@ -98,13 +94,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <script
+      <body className="antialiased">
+        <Script
+          id="tensr-structured-data"
           type="application/ld+json"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
         />
-      </head>
-      <body className="antialiased">
         <Providers>
           <AppProvider>
             <ThemeProvider>

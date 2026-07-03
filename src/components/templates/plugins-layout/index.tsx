@@ -1,67 +1,352 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Star, Download, ChevronDown, Zap, User, ArrowRight } from 'lucide-react';
+import { Search, Star, Download, Zap, Check, Plus, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { PluginRecord } from '@/types/plugin';
 import usePlugins from '@/hooks/api/use-plugin';
 import { Loader } from '@/components/molecules/loading';
+import { cn } from '@/utils';
 
-interface FilterOptions {
-  search: string;
-  category: string;
+const DISCOVER_FILTERS = ['all', 'work', 'life', 'school'] as const;
+type DiscoverFilter = (typeof DISCOVER_FILTERS)[number];
+
+const DISCOVER_LABELS: Record<DiscoverFilter, string> = {
+  all: 'All',
+  work: 'Work',
+  life: 'Life',
+  school: 'School',
+};
+
+const PLUGIN_COLORS = [
+  'hsl(250, 100%, 63%)',
+  '#0EA5E9',
+  '#16A34A',
+  '#EA580C',
+  '#DB2777',
+  '#7C3AED',
+  '#0F766E',
+  '#9333EA',
+  '#CA8A04',
+];
+
+const LANG_COLORS: Record<string, string> = {
+  python: '#3776AB',
+  r: '#198CE7',
+  javascript: '#F7DF1E',
+  typescript: '#3178C6',
+};
+
+function pluginColor(pluginId: string): string {
+  let hash = 0;
+  for (let i = 0; i < pluginId.length; i++) hash += pluginId.charCodeAt(i);
+  return PLUGIN_COLORS[hash % PLUGIN_COLORS.length];
+}
+
+function formatPrice(plugin: PluginRecord): string {
+  if (!plugin.isPaid) return 'Free';
+  const price = plugin.pricing?.price;
+  const interval = plugin.pricing?.subscriptionInterval;
+  if (price == null) return 'Paid';
+  const formatted = `$${price}`;
+  return interval === 'monthly'
+    ? `${formatted}/mo`
+    : interval === 'yearly'
+      ? `${formatted}/yr`
+      : formatted;
+}
+
+function formatDownloads(n?: number): string {
+  const count = n ?? 0;
+  if (count >= 1000) return `${(count / 1000).toFixed(1)}k`;
+  return String(count);
+}
+
+function DiscoverPill({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full border px-4 py-1.5 text-[13px] font-medium transition-colors',
+        active
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-border bg-background text-muted-foreground hover:bg-muted/50 hover:text-foreground'
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function LangChip({ lang }: { lang: string }) {
+  const key = lang.toLowerCase();
+  const label = lang.charAt(0).toUpperCase() + lang.slice(1);
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+      <span
+        className="size-2 shrink-0 rounded-full"
+        style={{ background: LANG_COLORS[key] ?? '#888' }}
+        aria-hidden
+      />
+      {label}
+    </span>
+  );
+}
+
+function PluginCardThumb({ color, pluginId }: { color: string; pluginId: string }) {
+  return (
+    <div
+      className="relative flex h-[120px] items-end overflow-hidden p-4"
+      style={{
+        background: `linear-gradient(135deg, ${color} 0%, color-mix(in oklab, ${color} 40%, black) 100%)`,
+      }}
+    >
+      <svg className="pointer-events-none absolute inset-0 size-full opacity-[0.18]" aria-hidden>
+        <defs>
+          <pattern
+            id={`p-${pluginId}`}
+            width="20"
+            height="20"
+            patternUnits="userSpaceOnUse"
+            patternTransform="rotate(20)"
+          >
+            <circle cx="10" cy="10" r="1" fill="white" />
+          </pattern>
+        </defs>
+        <rect width="100%" height="100%" fill={`url(#p-${pluginId})`} />
+      </svg>
+      <div
+        className="relative grid size-11 place-items-center rounded-lg bg-white shadow-md"
+        style={{ color }}
+      >
+        <Zap className="size-5" aria-hidden />
+      </div>
+    </div>
+  );
+}
+
+function PluginCard({
+  plugin,
+  onInstall,
+  onViewDetails,
+  isInstalled,
+  installing,
+}: {
+  plugin: PluginRecord;
+  onInstall: (plugin: PluginRecord) => void;
+  onViewDetails: (plugin: PluginRecord) => void;
+  isInstalled: boolean;
+  installing: boolean;
+}) {
+  const color = pluginColor(plugin.pluginId);
+  const price = formatPrice(plugin);
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-shadow hover:shadow-md">
+      <PluginCardThumb color={color} pluginId={plugin.pluginId} />
+      <div className="flex flex-1 flex-col p-4">
+        <div className="mb-1.5 flex items-start justify-between gap-2">
+          <button
+            type="button"
+            onClick={() => onViewDetails(plugin)}
+            className="text-left text-sm font-medium text-foreground hover:underline"
+          >
+            {plugin.name}
+          </button>
+          <span
+            className={cn(
+              'shrink-0 font-mono text-[11px]',
+              price === 'Free' ? 'text-emerald-600 dark:text-emerald-400' : 'text-muted-foreground'
+            )}
+          >
+            {price}
+          </span>
+        </div>
+        <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+          <span className="truncate">{plugin.authorId}</span>
+          <span>·</span>
+          <LangChip lang={plugin.language} />
+        </div>
+        <p className="line-clamp-2 flex-1 text-[13px] leading-snug text-muted-foreground">
+          {plugin.description}
+        </p>
+        <div className="mt-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span className="inline-flex items-center gap-1">
+              <Star className="size-3 fill-amber-400 text-amber-400" aria-hidden />
+              <span className="font-mono tabular-nums">4.6</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Download className="size-3" aria-hidden />
+              <span className="font-mono tabular-nums">
+                {formatDownloads(plugin.revenue?.totalDownloads)}
+              </span>
+            </span>
+          </div>
+          {isInstalled ? (
+            <span className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+              <Check className="size-3" aria-hidden />
+              Installed
+            </span>
+          ) : (
+            <Button
+              type="button"
+              size="sm"
+              disabled={installing || plugin.status !== 'APPROVED'}
+              className="h-8 shrink-0 rounded-full px-3 text-xs"
+              onClick={() => onInstall(plugin)}
+            >
+              {installing ? '…' : price === 'Free' ? 'Install' : 'Get'}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FeaturedPlugin({
+  plugin,
+  onInstall,
+  isInstalled,
+}: {
+  plugin: PluginRecord;
+  onInstall: (plugin: PluginRecord) => void;
+  isInstalled: boolean;
+}) {
+  const color = pluginColor(plugin.pluginId);
+  const router = useRouter();
+
+  return (
+    <div className="mb-8 grid w-full overflow-hidden rounded-2xl border border-border bg-card lg:grid-cols-[1.1fr_1fr]">
+      <div className="flex flex-col justify-between p-6 md:p-8">
+        <div>
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <span className="inline-flex h-6 items-center rounded-full bg-primary/10 px-2.5 text-[11px] font-medium text-primary">
+              Editor&apos;s pick
+            </span>
+            <LangChip lang={plugin.language} />
+          </div>
+          <h2 className="text-2xl font-medium tracking-tight text-foreground">{plugin.name}</h2>
+          <p className="mt-3 max-w-md text-[15px] leading-relaxed text-muted-foreground">
+            {plugin.description}
+          </p>
+        </div>
+        <div className="mt-6 flex flex-wrap items-center gap-2">
+          {isInstalled ? (
+            <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 text-sm font-medium text-emerald-600">
+              <Check className="size-3.5" aria-hidden />
+              Installed
+            </span>
+          ) : (
+            <Button className="h-9 rounded-full px-4" onClick={() => onInstall(plugin)}>
+              Install plugin
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            className="h-9 rounded-full"
+            onClick={() => router.push(`/plugins/${plugin.pluginId}`)}
+          >
+            View details
+          </Button>
+          <div className="flex items-center gap-3 text-xs text-muted-foreground sm:ml-auto">
+            <span className="inline-flex items-center gap-1">
+              <Star className="size-3 fill-amber-400 text-amber-400" aria-hidden />
+              <span className="font-mono tabular-nums">4.8</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <Download className="size-3" aria-hidden />
+              <span className="font-mono tabular-nums">
+                {formatDownloads(plugin.revenue?.totalDownloads)}
+              </span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div
+        className="relative min-h-[200px] overflow-hidden p-6 lg:min-h-[280px]"
+        style={{
+          background: `linear-gradient(135deg, ${color}, color-mix(in oklab, ${color} 50%, black))`,
+        }}
+      >
+        <div
+          className="absolute bottom-6 left-6 right-6 rounded-xl border border-white/15 bg-black/35 p-3.5 font-mono text-xs leading-relaxed text-white/90 backdrop-blur-sm"
+          aria-hidden
+        >
+          <div className="text-white/60">
+            $ tensr plugin install {plugin.pluginId.slice(0, 12)}…
+          </div>
+          <div>✓ Fetching manifest…</div>
+          <div>✓ Installed statistical operators</div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function PluginsLayout() {
   const router = useRouter();
-  const { plugins, isPluginInstalled, installPlugin } = usePlugins();
-
-  const [loading, setLoading] = useState(true);
-  const [filters, setFilters] = useState<FilterOptions>({
-    search: '',
-    category: '',
-  });
-
-  useEffect(() => {
-    if (plugins.length > 0 || !loading) {
-      setLoading(false);
-    }
-  }, [plugins, loading]);
+  const { plugins, isPluginInstalled, installPlugin, loading, error } = usePlugins();
+  const [search, setSearch] = useState('');
+  const [discoverFilter, setDiscoverFilter] = useState<DiscoverFilter>('all');
+  const [installingId, setInstallingId] = useState<string | null>(null);
 
   const filteredPlugins = useMemo(() => {
     return plugins.filter(plugin => {
-      if (
-        filters.search &&
-        !plugin.name.toLowerCase().includes(filters.search.toLowerCase()) &&
-        !plugin.description.toLowerCase().includes(filters.search.toLowerCase())
-      ) {
-        return false;
+      if (search) {
+        const q = search.toLowerCase();
+        if (
+          !plugin.name.toLowerCase().includes(q) &&
+          !plugin.description.toLowerCase().includes(q)
+        ) {
+          return false;
+        }
       }
-
-      if (filters.category && plugin.language !== filters.category) {
-        return false;
+      if (discoverFilter !== 'all') {
+        const tags = (plugin.tags ?? []).map(t => t.toLowerCase());
+        if (tags.length > 0 && !tags.includes(discoverFilter)) return false;
       }
-
       return true;
     });
-  }, [plugins, filters]);
+  }, [plugins, search, discoverFilter]);
 
-  const categories = useMemo(() => {
-    const cats = [...new Set(plugins.map(p => p.language))];
-    return cats.sort();
-  }, [plugins]);
+  const featuredPlugin = useMemo(() => {
+    if (filteredPlugins.length === 0) return null;
+    return [...filteredPlugins].sort(
+      (a, b) => (b.revenue?.totalDownloads ?? 0) - (a.revenue?.totalDownloads ?? 0)
+    )[0];
+  }, [filteredPlugins]);
+
+  const gridPlugins = useMemo(() => {
+    if (!featuredPlugin) return filteredPlugins;
+    return filteredPlugins.filter(p => p.pluginId !== featuredPlugin.pluginId);
+  }, [filteredPlugins, featuredPlugin]);
 
   const handleInstall = async (plugin: PluginRecord) => {
     try {
+      setInstallingId(plugin.pluginId);
       if (plugin.isPaid) {
         router.push(`/plugins/${plugin.pluginId}/purchase`);
       } else {
         await installPlugin(plugin);
       }
-    } catch (error) {
-      console.error('Error installing plugin:', error);
+    } catch (err) {
+      console.error('Error installing plugin:', err);
+    } finally {
+      setInstallingId(null);
     }
   };
 
@@ -73,294 +358,182 @@ export default function PluginsLayout() {
     return <Loader fullScreen />;
   }
 
+  if (error) {
+    return (
+      <div className="w-full py-12 text-left">
+        <p className="text-sm text-muted-foreground">{error.message}</p>
+        <Button variant="outline" className="mt-4" onClick={() => window.location.reload()}>
+          Retry
+        </Button>
+      </div>
+    );
+  }
+
+  const hasFilters = search.length > 0 || discoverFilter !== 'all';
+  const isMarketplaceEmpty = plugins.length === 0;
+  const isFilterEmpty = !isMarketplaceEmpty && filteredPlugins.length === 0;
+
   return (
-    <div className="mx-auto p-6">
-      {/* Top Navigation - Notion Style */}
-      <div className="flex items-center justify-between mb-8">
-        <div className="flex items-center gap-6">
-          <h1 className="text-xl font-semibold text-gray-900">Discover</h1>
-          <div className="flex items-center gap-4 text-gray-600">
-            <span className="flex items-center gap-1 cursor-pointer hover:text-gray-900">
-              Work <ChevronDown className="h-4 w-4" />
-            </span>
-            <span className="flex items-center gap-1 cursor-pointer hover:text-gray-900">
-              Life <ChevronDown className="h-4 w-4" />
-            </span>
-            <span className="flex items-center gap-1 cursor-pointer hover:text-gray-900">
-              School <ChevronDown className="h-4 w-4" />
-            </span>
-          </div>
-        </div>
+    <div className="w-full pb-10 text-left">
+      <header className="mb-8 pt-6 md:pt-8">
+        <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+          Plugin marketplace
+        </p>
+        <h1 className="text-2xl font-medium tracking-tight text-foreground md:text-3xl">
+          Discover
+        </h1>
+        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
+          Extend your agent and add analysis capabilities. {plugins.length} plugins, free and paid,
+          built by the community.
+        </p>
+      </header>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-          <Input
-            placeholder="Try 'data analysis'"
-            value={filters.search}
-            onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
-            className="pl-10 w-64 border-gray-200 focus:border-gray-400 focus:ring-0"
-          />
-        </div>
-      </div>
-
-      {/* Category Pills - Exact Notion Style */}
-      <div className="flex flex-wrap gap-2 mb-8">
-        <button
-          onClick={() => setFilters(prev => ({ ...prev, category: '' }))}
-          className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
-            filters.category === ''
-              ? 'bg-gray-100 text-gray-900 border-gray-200'
-              : 'text-gray-600 hover:bg-gray-50 border-gray-200'
-          }`}
-        >
-          All
-        </button>
-        {categories.map(category => (
-          <button
-            key={category}
-            onClick={() => setFilters(prev => ({ ...prev, category }))}
-            className={`px-3 py-1.5 text-sm rounded-full border transition-colors ${
-              filters.category === category
-                ? 'bg-gray-100 text-gray-900 border-gray-200'
-                : 'text-gray-600 hover:bg-gray-50 border-gray-200'
-            }`}
-          >
-            {category}
-          </button>
-        ))}
-      </div>
-
-      {/* Main Content Cards */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* AI Section Card */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-6 h-6 bg-blue-100 rounded flex items-center justify-center">
-              <Zap className="h-4 w-4 text-blue-600" />
-            </div>
-            <span className="text-sm font-medium text-gray-900">AI</span>
-          </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Your agent, your rules</h2>
-          <p className="text-gray-600 mb-4">
-            Connect any page to your agent to customize how your agent talks, thinks, and works
-          </p>
-          <div className="flex items-center gap-2 text-blue-600 font-medium">
-            <span>Explore</span>
-            <ArrowRight className="h-4 w-4" />
-          </div>
-          {/* Illustration placeholder */}
-          <div className="mt-4 flex justify-center">
-            <div className="w-32 h-32 bg-gray-100 rounded-full flex items-center justify-center">
-              <div className="text-gray-400 text-sm">AI Agent</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Top Creator Card */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="w-6 h-6 bg-gray-100 rounded flex items-center justify-center">
-              <User className="h-4 w-4 text-gray-600" />
-            </div>
-            <span className="text-sm font-medium text-gray-900">Top creator</span>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-              <User className="h-6 w-6 text-gray-600" />
-            </div>
-            <div className="flex-1">
-              <h3 className="font-semibold text-gray-900 mb-1">Plugin Creator</h3>
-              <p className="text-gray-600 text-sm">
-                Beginner-friendly analysis plugins for everyday data processing and insights
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Featured Plugins Section */}
-      <div className="mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Star className="h-5 w-5 text-gray-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Featured plugins</h2>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {filteredPlugins.slice(0, 3).map(plugin => (
-            <FeaturedPluginCard
-              key={plugin.pluginId}
-              plugin={plugin}
-              onInstall={handleInstall}
-              onViewDetails={handleViewDetails}
-              isInstalled={isPluginInstalled(plugin.pluginId)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {/* All Plugins Grid */}
-      {filteredPlugins.length > 3 && (
-        <div>
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">All plugins</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredPlugins.slice(3).map(plugin => (
-              <PluginCard
-                key={plugin.pluginId}
-                plugin={plugin}
-                onInstall={handleInstall}
-                onViewDetails={handleViewDetails}
-                isInstalled={isPluginInstalled(plugin.pluginId)}
-              />
+      <section className="mb-8">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            {DISCOVER_FILTERS.map(key => (
+              <DiscoverPill
+                key={key}
+                active={discoverFilter === key}
+                onClick={() => setDiscoverFilter(key)}
+              >
+                {DISCOVER_LABELS[key]}
+                {key === 'all' ? (
+                  <span
+                    className={cn(
+                      'font-mono text-[10px]',
+                      discoverFilter === key
+                        ? 'text-primary-foreground/70'
+                        : 'text-muted-foreground/80'
+                    )}
+                  >
+                    {plugins.length}
+                  </span>
+                ) : null}
+              </DiscoverPill>
             ))}
           </div>
-        </div>
-      )}
 
-      {filteredPlugins.length === 0 && (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Search className="h-8 w-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No plugins found</h3>
-          <p className="text-gray-600 mb-4">Try adjusting your search terms or filters.</p>
-          <Button
-            variant="outline"
-            onClick={() => setFilters({ search: '', category: '' })}
-            className="border-gray-200 text-gray-600 hover:bg-gray-50"
-          >
-            Clear filters
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// Featured Plugin Card - Exact Notion Template Style
-function FeaturedPluginCard({
-  plugin,
-  onInstall,
-  onViewDetails,
-  isInstalled,
-}: {
-  plugin: PluginRecord;
-  onInstall: (plugin: PluginRecord) => void;
-  onViewDetails: (plugin: PluginRecord) => void;
-  isInstalled: boolean;
-}) {
-  return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden hover:border-gray-300 transition-colors">
-      {/* Template Preview */}
-      <div className="aspect-video bg-gray-100 flex items-center justify-center">
-        {plugin.thumbnailUrl ? (
-          <img src={plugin.thumbnailUrl} alt={plugin.name} className="w-full h-full object-cover" />
-        ) : (
-          <div className="text-gray-400 text-sm">Template Preview</div>
-        )}
-      </div>
-
-      {/* Template Info */}
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-medium text-gray-900">{plugin.name}</h3>
-          <div className="flex items-center gap-1 text-xs text-gray-500">
-            <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-            <span>4.6</span>
-          </div>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-gray-600">Free</span>
-          <Button
-            onClick={() => onViewDetails(plugin)}
-            size="sm"
-            className="text-xs bg-gray-900 hover:bg-gray-800 text-white"
-          >
-            View
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Plugin Card Component - Notion Style
-function PluginCard({
-  plugin,
-  onInstall,
-  onViewDetails,
-  isInstalled,
-}: {
-  plugin: PluginRecord;
-  onInstall: (plugin: PluginRecord) => void;
-  onViewDetails: (plugin: PluginRecord) => void;
-  isInstalled: boolean;
-}) {
-  return (
-    <div className="group border border-gray-200 rounded-lg p-6 hover:border-gray-300 transition-colors bg-white">
-      {/* Plugin Preview/Thumbnail */}
-      <div className="aspect-video bg-gray-100 rounded-md mb-4 flex items-center justify-center">
-        {plugin.thumbnailUrl ? (
-          <img
-            src={plugin.thumbnailUrl}
-            alt={plugin.name}
-            className="w-full h-full object-cover rounded-md"
-          />
-        ) : (
-          <div className="text-gray-400 text-sm">Preview</div>
-        )}
-      </div>
-
-      {/* Plugin Info */}
-      <div className="space-y-3">
-        <div>
-          <h3 className="font-medium text-gray-900 mb-1">{plugin.name}</h3>
-          <p className="text-sm text-gray-600 line-clamp-2">{plugin.description}</p>
-        </div>
-
-        {/* Stats */}
-        <div className="flex items-center gap-4 text-xs text-gray-500">
-          <div className="flex items-center gap-1">
-            <Download className="h-3 w-3" />
-            <span>{plugin.revenue?.totalDownloads || 0}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Star className="h-3 w-3" />
-            <span>4.6</span>
-          </div>
-          <span className="text-gray-400">•</span>
-          <span className="capitalize">{plugin.language}</span>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-2 pt-2">
-          <Button
-            onClick={() => onViewDetails(plugin)}
-            variant="outline"
-            size="sm"
-            className="flex-1 border-gray-200 text-gray-600 hover:bg-gray-50"
-          >
-            View Details
-          </Button>
-
-          {!isInstalled && plugin.status === 'APPROVED' ? (
-            <Button
-              onClick={() => onInstall(plugin)}
-              size="sm"
-              className="flex-1 bg-gray-900 hover:bg-gray-800 text-white"
-            >
-              {plugin.isPaid ? 'Purchase' : 'Install'}
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <div className="relative w-full sm:w-72">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Try 'time series'…"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                className="h-9 rounded-full border-border bg-background pl-9 text-[13px] shadow-none"
+              />
+            </div>
+            <Button variant="outline" className="h-9 shrink-0 gap-2 rounded-full" asChild>
+              <Link href="/plugins/upload">
+                <Plus className="size-4" aria-hidden />
+                Publish
+              </Link>
             </Button>
-          ) : (
-            <Button
-              disabled
-              size="sm"
-              className="flex-1 bg-gray-100 text-gray-400 cursor-not-allowed"
-            >
-              {isInstalled ? 'Installed' : 'Unavailable'}
-            </Button>
-          )}
+          </div>
         </div>
-      </div>
+      </section>
+
+      {isMarketplaceEmpty ? (
+        <div className="rounded-xl border border-border bg-card p-8 md:p-12">
+          <h3 className="text-lg font-medium text-foreground">No plugins in the marketplace yet</h3>
+          <p className="mt-2 max-w-md text-sm text-muted-foreground">
+            Be the first to publish a plugin, or check back soon as creators add new analysis tools.
+          </p>
+          <Button className="mt-6 rounded-full" asChild>
+            <Link href="/plugins/upload">Publish a plugin</Link>
+          </Button>
+        </div>
+      ) : isFilterEmpty ? (
+        <div className="rounded-xl border border-border bg-card p-8 md:p-12">
+          <Search className="mb-3 size-8 text-muted-foreground/50" aria-hidden />
+          <h3 className="text-lg font-medium text-foreground">No plugins match your filters</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Try adjusting your search or category filters.
+          </p>
+          {hasFilters ? (
+            <Button
+              variant="outline"
+              className="mt-4 rounded-full"
+              onClick={() => {
+                setSearch('');
+                setDiscoverFilter('all');
+              }}
+            >
+              Clear filters
+            </Button>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          {featuredPlugin ? (
+            <FeaturedPlugin
+              plugin={featuredPlugin}
+              onInstall={handleInstall}
+              isInstalled={isPluginInstalled(featuredPlugin.pluginId)}
+            />
+          ) : null}
+
+          {gridPlugins.length > 0 ? (
+            <>
+              <div className="mb-4 flex items-end justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-medium tracking-tight text-foreground">
+                    Featured plugins
+                  </h2>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Hand-picked by the Tensr team.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="inline-flex shrink-0 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  View all
+                  <ArrowRight className="size-4" aria-hidden />
+                </button>
+              </div>
+              <div className="mb-10 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {gridPlugins.slice(0, 4).map(plugin => (
+                  <PluginCard
+                    key={plugin.pluginId}
+                    plugin={plugin}
+                    onInstall={handleInstall}
+                    onViewDetails={handleViewDetails}
+                    isInstalled={isPluginInstalled(plugin.pluginId)}
+                    installing={installingId === plugin.pluginId}
+                  />
+                ))}
+              </div>
+
+              {gridPlugins.length > 4 ? (
+                <>
+                  <div className="mb-4 flex items-center justify-between">
+                    <h2 className="text-lg font-medium tracking-tight text-foreground">
+                      All plugins
+                    </h2>
+                    <span className="font-mono text-xs text-muted-foreground">
+                      {gridPlugins.length} results
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                    {gridPlugins.slice(4).map(plugin => (
+                      <PluginCard
+                        key={plugin.pluginId}
+                        plugin={plugin}
+                        onInstall={handleInstall}
+                        onViewDetails={handleViewDetails}
+                        isInstalled={isPluginInstalled(plugin.pluginId)}
+                        installing={installingId === plugin.pluginId}
+                      />
+                    ))}
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }

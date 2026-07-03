@@ -14,9 +14,8 @@ import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
 import useAuth from '@/hooks/api/use-auth';
-
-// API base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
+import { adaptCorrelationResults, runDatasetAnalysis } from '@/lib/workspace-analysis';
+import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 
 interface CorrelationProps {
   children: ReactNode;
@@ -118,29 +117,16 @@ export const Correlation = ({ children }: CorrelationProps) => {
       setIsLoading(true);
       setError(null);
 
-      const correlationRequest: CorrelationRequest = {
-        variables: selectedVariables,
-        correlation_type: correlationType,
-        data: data,
-      };
-
-      // Make the API call to the backend
-      const response = await fetch(`${API_BASE_URL}/api/statistics/calculate-correlation`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(correlationRequest),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Failed to calculate correlation');
+      const datasetId = getDatasetIdFromTab(activeDataTab);
+      if (!datasetId) {
+        throw new Error(WORKSPACE_DATASET_REQUIRED);
       }
 
-      const result: CorrelationResponse = await response.json();
-      setResults(result.results);
+      const envelope = await runDatasetAnalysis(datasetId, 'correlation', {
+        columns: selectedVariables,
+        method: correlationType,
+      });
+      setResults(adaptCorrelationResults(envelope));
       setActiveTab('results');
     } catch (error) {
       console.error('Failed to calculate correlation:', error);

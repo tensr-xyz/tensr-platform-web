@@ -11,9 +11,6 @@ const compat = new FlatCompat({
   baseDirectory: __dirname,
 });
 
-// Get TypeScript ESLint configurations from the compat layer
-const typescriptEslintConfigs = compat.extends('plugin:@typescript-eslint/recommended');
-
 const eslintConfig = [
   // Ignore patterns (replaces .eslintignore)
   {
@@ -54,11 +51,8 @@ const eslintConfig = [
     ],
   },
 
-  // Base configs from Next.js
+  // Base configs from Next.js (next/typescript already includes typescript-eslint recommended)
   ...compat.extends('next/core-web-vitals', 'next/typescript'),
-
-  // Add TypeScript ESLint configs
-  ...typescriptEslintConfigs,
 
   // Add Prettier as a separate config (this must come after other style configs)
   prettierConfig,

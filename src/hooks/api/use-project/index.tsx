@@ -1,10 +1,9 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Project, ProjectUpload } from '@/types/project';
 import useAuth from '@/hooks/api/use-auth';
-import { getAccessToken } from '@/utils/auth';
-
-// API Base URL from environment variable
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { getAccessToken, getTensrApiHeaders } from '@/utils/auth';
+import { devLog } from '@/lib/dev-log';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
 
 interface UseProjectProps {
   projectId?: string;
@@ -42,7 +41,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
     setError(null);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/projects`, {
+      const response = await fetch(tensrApiUrl('/projects'), {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -56,7 +55,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
       }
 
       const data = await response.json();
-      console.log('Projects API response:', data);
+      devLog('Projects API response:', data);
 
       // Check if the response has a projects property that's an array
       if (data && data.projects && Array.isArray(data.projects)) {
@@ -109,7 +108,41 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/projects/${id}`, {
+        // tensr-api: UUID opens as /datasets/:id — avoid a pointless GET /projects/:id (404)
+        const dsRes = await fetch(tensrApiUrl(`/datasets/${id}/schema`), {
+          headers: getTensrApiHeaders(),
+        });
+
+        if (dsRes.ok) {
+          const schema = await dsRes.json();
+          const label = (schema.original_filename && String(schema.original_filename)) || 'Dataset';
+          const transformedProject = {
+            projectId: id,
+            projectName: label,
+            id,
+            name: label,
+            path: id,
+            sourceType: 'file',
+          };
+
+          setProject(transformedProject as unknown as Project);
+          return transformedProject as unknown as Project;
+        }
+
+        // Dataset exists but this session/org cannot access it — do not fall through to /projects (misleading 404)
+        if (dsRes.status === 403) {
+          throw new Error(
+            'This dataset is not available in your current organization. Switch to Personal account or the team that owns the dataset, then try again.'
+          );
+        }
+
+        // Only try legacy /projects when the id is not a dataset (404), not on other failures
+        if (dsRes.status !== 404) {
+          const errorText = await dsRes.text();
+          throw new Error(`Failed to load dataset: ${dsRes.status} ${errorText}`);
+        }
+
+        const response = await fetch(tensrApiUrl(`/projects/${id}`), {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
@@ -123,15 +156,13 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
         }
 
         const data = await response.json();
-        console.log('Project API response:', data);
+        devLog('Project API response:', data);
 
-        // Transform the API response to match component expectations
         const transformedProject = {
           ...data,
-          // Add properties expected by components
           id: data.projectId,
           name: data.projectName,
-          path: data.projectId, // Use projectId as path if not available
+          path: data.projectId,
         };
 
         setProject(transformedProject);
@@ -161,7 +192,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/projects/create`, {
+        const response = await fetch(tensrApiUrl('/projects/create'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -206,7 +237,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/projects/${id}`, {
+        const response = await fetch(tensrApiUrl(`/projects/${id}`), {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -254,7 +285,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/projects/${id}`, {
+        const response = await fetch(tensrApiUrl(`/projects/${id}`), {
           method: 'DELETE',
           headers: {
             'Content-Type': 'application/json',
@@ -298,7 +329,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
 
       try {
         const response = await fetch(
-          `${API_BASE_URL}/projects/${id}/upload-url?fileName=${encodeURIComponent(fileName)}`,
+          tensrApiUrl(`/projects/${id}/upload-url?fileName=${encodeURIComponent(fileName)}`),
           {
             method: 'GET',
             headers: {
@@ -339,7 +370,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
       setError(null);
 
       try {
-        const response = await fetch(`${API_BASE_URL}/projects/${id}/complete-upload`, {
+        const response = await fetch(tensrApiUrl(`/projects/${id}/complete-upload`), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -379,7 +410,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
       const token = getToken();
 
       if (token) {
-        console.log('Initial data load: token available');
+        devLog('Initial data load: token available');
         initialLoadDoneRef.current = true; // Mark initial load as done
 
         // Load the specific project if ID is provided
@@ -399,7 +430,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
   useEffect(() => {
     // Only refresh data if auth changes and we're already past the initial load
     if (initialLoadDoneRef.current && auth.isAuthenticated) {
-      console.log('Auth changed, refreshing project data');
+      devLog('Auth changed, refreshing project data');
 
       if (projectId) {
         getProject(projectId).catch(err => console.error('Error refreshing project:', err));

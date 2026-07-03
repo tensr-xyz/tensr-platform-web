@@ -2,7 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/atoms/avatar';
 import { Button } from '@/components/atoms/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import React, { useState, useEffect } from 'react';
-import { Link, Shield, Settings } from 'lucide-react';
+import { Link, Shield, Settings, type LucideIcon } from 'lucide-react';
 import { MoreVertical } from 'lucide-react';
 import {
   Tooltip,
@@ -20,11 +20,36 @@ import {
 import { useCollaboration, UserPresence } from '@/hooks/use-collaboration';
 import { useAuth } from '@/hooks/api/use-auth';
 import { useProjectStore } from '@/stores/project-store';
-import { getIdToken } from '@/utils/auth';
 import { apiClient } from '@/lib/api-client';
+import { getIdToken } from '@/utils/auth';
+import { buildCollaborateUrl } from '@/lib/collaboration-url';
 
-// API Base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+/** Hover-only hint; not in tab order so opening the share popover does not flash a tooltip. */
+function PanelIconHint({ label, icon: Icon }: { label: string; icon: LucideIcon }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          tabIndex={-1}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-secondary/80 hover:text-foreground"
+          aria-label={label}
+        >
+          <Icon className="h-4 w-4" aria-hidden />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="bottom">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function CollaborationIconRow() {
+  return (
+    <div className="flex items-center gap-1">
+      <PanelIconHint label="Security settings" icon={Shield} />
+      <PanelIconHint label="Collaboration settings" icon={Settings} />
+    </div>
+  );
+}
 
 // Utility to get initials from a name
 const getInitials = (name: string) => {
@@ -174,7 +199,7 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
         awareness.off('change', updateCollaborators);
       };
     }
-  }, [collaborationState, currentUserId, user]);
+  }, [collaborationState, currentUserId, user?.userId, user?.email]);
 
   const handleStartSession = async () => {
     try {
@@ -188,31 +213,30 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
         throw new Error('You must be logged in to start a session');
       }
 
-      // Get current file information from either project context or active tab
-      let filePath: string;
       let fileName: string;
+      let datasetId: string | undefined;
+      let filePath: string | undefined;
 
-      if (activeTab && activeTab.data && activeTab.data.filePath) {
-        // File workspace context - get info from active tab
-        // Ensure file path starts with / for API compatibility
-        filePath = activeTab.data.filePath.startsWith('/')
-          ? activeTab.data.filePath
-          : `/${activeTab.data.filePath}`;
+      if (activeTab && activeTab.data && (activeTab.data.datasetId || activeTab.data.filePath)) {
+        datasetId =
+          activeTab.data.datasetId || activeTab.data.filePath?.replace(/^\//, '') || undefined;
         fileName = activeTab.name;
+        if (!datasetId && activeTab.data.filePath) {
+          filePath = activeTab.data.filePath.startsWith('/')
+            ? activeTab.data.filePath
+            : `/${activeTab.data.filePath}`;
+        }
       } else {
-        // Project workspace context - get info from project context
         const currentFile = fileSystem.find(file => file.path === selectedPath);
         if (!currentFile) {
           throw new Error('No file is currently selected. Please select a file to collaborate on.');
         }
-        // Ensure file path starts with / for API compatibility
         filePath = currentFile.path.startsWith('/') ? currentFile.path : `/${currentFile.path}`;
         fileName = currentFile.name;
       }
 
-      // Create a new session by calling the API with the correct data
       const sessionData = await apiClient.collaboration.createSession({
-        filePath,
+        ...(datasetId ? { datasetId } : { filePath: filePath! }),
         fileName,
         userName: user?.email || 'Anonymous',
       });
@@ -252,36 +276,9 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
   };
 
   const joinSession = async (id: string) => {
-    try {
-      // Get the ID token for authentication
-      const idToken = getIdToken();
-
-      if (!idToken) {
-        throw new Error('You must be logged in to join a session');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/sessions/${id}/join`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          userId: user?.userId || currentUserId,
-          userName: user?.email || 'Anonymous',
-        }),
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to join session: ${response.status}`);
-      }
-
-      return await response.json();
-    } catch (err) {
-      console.error('Error joining session:', err);
-      throw err;
-    }
+    return apiClient.collaboration.joinSession(id, {
+      userName: user?.email || 'Anonymous',
+    });
   };
 
   const handleEndSession = async () => {
@@ -290,25 +287,7 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
     try {
       setIsLoading(true);
 
-      // Get the ID token for authentication
-      const idToken = getIdToken();
-
-      if (!idToken) {
-        throw new Error('You must be logged in to end a session');
-      }
-
-      // First leave the session
-      await fetch(`${API_BASE_URL}/sessions/${sessionId}/leave`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          userId: user?.userId || currentUserId,
-        }),
-        credentials: 'include',
-      });
+      await apiClient.collaboration.leaveSession(sessionId);
 
       if (collaborationState) {
         // Disconnect the WebSocket
@@ -325,12 +304,15 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
     }
   };
 
-  const handleCopyLink = () => {
+  const handleCopyLink = async () => {
     if (!sessionId) return;
 
-    // In a real implementation, this would copy a collaboration link
-    const collaborationLink = `${window.location.origin}/collaborate/${projectId}?session=${sessionId}`;
-    navigator.clipboard.writeText(collaborationLink);
+    const collaborationLink = `${window.location.origin}${buildCollaborateUrl({ sessionId })}`;
+    try {
+      await navigator.clipboard.writeText(collaborationLink);
+    } catch {
+      setError('Could not copy link to clipboard');
+    }
   };
 
   const handleRoleChange = (userId: string, role: string) => {
@@ -360,164 +342,116 @@ const CollaborationPanel = ({ projectId, activeTab }: CollaborationPanelProps) =
   };
 
   return (
-    <div className="w-full">
-      {error && <div className="text-sm text-destructive mb-2">{error}</div>}
+    <TooltipProvider delayDuration={400}>
+      <div className="w-full">
+        {error && <div className="text-sm text-destructive mb-2">{error}</div>}
 
-      {!isAuthenticated && (
-        <div className="p-4 bg-amber-50 text-amber-800 rounded-md mb-4">
-          You need to be logged in to start or join a collaboration session.
-        </div>
-      )}
+        {!isAuthenticated && (
+          <div className="p-4 bg-amber-50 text-amber-800 rounded-md mb-4">
+            You need to be logged in to start or join a collaboration session.
+          </div>
+        )}
 
-      {!isSessionActive ? (
-        // Not in session view
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              {/* Fixed TooltipTrigger to avoid nested button issue */}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
-                      <Shield className="h-4 w-4" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>Security Settings</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+        {!isSessionActive ? (
+          // Not in session view
+          <div className="flex flex-col gap-4">
+            <CollaborationIconRow />
 
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
-                      <Settings className="h-4 w-4" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>Collaboration Settings</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+            <div className="flex gap-2">
+              <Select value={accessLevel} onValueChange={handleAccessLevelChange}>
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Read Only" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="read-only">Read Only</SelectItem>
+                  <SelectItem value="edit">Edit</SelectItem>
+                  <SelectItem value="full-access">Full Access</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                className="w-full"
+                onClick={handleStartSession}
+                disabled={
+                  isLoading ||
+                  (!activeTab?.data?.filePath &&
+                    (!selectedPath || !fileSystem.find(file => file.path === selectedPath)))
+                }
+              >
+                {isLoading ? 'Starting...' : 'Start Session'}
+              </Button>
             </div>
+
+            <p className="text-xs text-muted-foreground">
+              {!activeTab?.data?.filePath &&
+              (!selectedPath || !fileSystem.find(file => file.path === selectedPath))
+                ? 'Select a file to start a collaboration session'
+                : 'Start a collaboration session, share link and work together on this file with your teammates.'}
+            </p>
           </div>
+        ) : (
+          // In session view
+          <div className="flex flex-col gap-4">
+            <CollaborationIconRow />
 
-          <div className="flex gap-2">
-            <Select value={accessLevel} onValueChange={handleAccessLevelChange}>
-              <SelectTrigger className="h-8">
-                <SelectValue placeholder="Read Only" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="read-only">Read Only</SelectItem>
-                <SelectItem value="edit">Edit</SelectItem>
-                <SelectItem value="full-access">Full Access</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              size="sm"
-              className="w-full"
-              onClick={handleStartSession}
-              disabled={
-                isLoading ||
-                (!activeTab?.data?.filePath &&
-                  (!selectedPath || !fileSystem.find(file => file.path === selectedPath)))
-              }
-            >
-              {isLoading ? 'Starting...' : 'Start Session'}
-            </Button>
-          </div>
-
-          <p className="text-xs text-muted-foreground">
-            {!activeTab?.data?.filePath &&
-            (!selectedPath || !fileSystem.find(file => file.path === selectedPath))
-              ? 'Select a file to start a collaboration session'
-              : 'Start a collaboration session, share link and work together on this file with your teammates.'}
-          </p>
-        </div>
-      ) : (
-        // In session view
-        <div className="flex flex-col gap-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
-              {/* Fixed TooltipTrigger to avoid nested button issue */}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
-                      <Shield className="h-4 w-4" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>Security Settings</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger>
-                    <div className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-secondary/80">
-                      <Settings className="h-4 w-4" />
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>Collaboration Settings</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+            <div className="flex gap-2">
+              <Select value={accessLevel} onValueChange={handleAccessLevelChange}>
+                <SelectTrigger className="h-8">
+                  <SelectValue placeholder="Read Only" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="read-only">Read Only</SelectItem>
+                  <SelectItem value="edit">Edit</SelectItem>
+                  <SelectItem value="full-access">Full Access</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full flex items-center gap-2"
+                onClick={handleCopyLink}
+              >
+                <Link size={14} />
+                Copy Link
+              </Button>
             </div>
-          </div>
 
-          <div className="flex gap-2">
-            <Select value={accessLevel} onValueChange={handleAccessLevelChange}>
-              <SelectTrigger className="h-8">
-                <SelectValue placeholder="Read Only" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="read-only">Read Only</SelectItem>
-                <SelectItem value="edit">Edit</SelectItem>
-                <SelectItem value="full-access">Full Access</SelectItem>
-              </SelectContent>
-            </Select>
             <Button
               size="sm"
               variant="outline"
-              className="w-full flex items-center gap-2"
-              onClick={handleCopyLink}
+              className="w-full text-destructive hover:text-destructive"
+              onClick={handleEndSession}
+              disabled={isLoading}
             >
-              <Link size={14} />
-              Copy Link
+              {isLoading ? 'Ending...' : 'End Session'}
             </Button>
-          </div>
 
-          <Button
-            size="sm"
-            variant="outline"
-            className="w-full text-destructive hover:text-destructive"
-            onClick={handleEndSession}
-            disabled={isLoading}
-          >
-            {isLoading ? 'Ending...' : 'End Session'}
-          </Button>
+            {collaborators.length > 0 && (
+              <div className="mt-2">
+                <div className="text-sm text-muted-foreground mb-2">
+                  In Session: {collaborators.length}
+                </div>
+                <div className="flex flex-col">
+                  {collaborators.map(user => (
+                    <CollaboratorItem
+                      key={user.userId}
+                      user={user}
+                      currentUser={user.userId === currentUserId}
+                      onRoleChange={handleRoleChange}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
 
-          {collaborators.length > 0 && (
-            <div className="mt-2">
-              <div className="text-sm text-muted-foreground mb-2">
-                In Session: {collaborators.length}
-              </div>
-              <div className="flex flex-col">
-                {collaborators.map(user => (
-                  <CollaboratorItem
-                    key={user.userId}
-                    user={user}
-                    currentUser={user.userId === currentUserId}
-                    onRoleChange={handleRoleChange}
-                  />
-                ))}
-              </div>
+            <div className="text-xs text-green-500 flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-green-500"></span>
+              Connected to session
             </div>
-          )}
-
-          <div className="text-xs text-green-500 flex items-center gap-1">
-            <span className="h-2 w-2 rounded-full bg-green-500"></span>
-            Connected to session
           </div>
-        </div>
-      )}
-    </div>
+        )}
+      </div>
+    </TooltipProvider>
   );
 };
 

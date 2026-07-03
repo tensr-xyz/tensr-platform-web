@@ -21,7 +21,6 @@ function ProjectProvider({ children }: ProviderProps) {
     isLoading: false,
     error: null,
     importData: null,
-    showImportWizard: false,
     leftPanelContent: <LeftPanel />,
   });
 

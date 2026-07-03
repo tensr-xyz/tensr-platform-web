@@ -1,4 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ColumnFiltersState,
@@ -10,7 +18,13 @@ import {
   useReactTable,
   VisibilityState,
   OnChangeFn,
+  type ColumnPinningState,
 } from '@tanstack/react-table';
+import {
+  computeColumnHeatmapScale,
+  heatmapBackgroundForValue,
+  parseNumericCellValue,
+} from '@/lib/column-heatmap';
 import {
   EditableCell,
   TableBody,
@@ -38,6 +52,7 @@ import { isCellInRange, getCellsInRange, rangeToNotation } from '@/utils/range-u
 import _ from 'lodash';
 import useAuth from '@/hooks/api/use-auth';
 import { Column } from '@/stores/tabs-store';
+import { resolveColumnIsNumeric } from '@/components/molecules/column-type-badge';
 import { Input } from '@/components/atoms/input';
 import { Button } from '@/components/atoms/button';
 import {
@@ -56,16 +71,231 @@ import { TransformationModal, Transformation } from '@/components/molecules/tran
 import { CategoryCleaner, CategoryMapping } from '@/components/molecules/category-cleaner';
 import { FillHandle } from '@/components/molecules/fill-handle';
 import { useSheetState } from '@/hooks/ui/use-sheet-state';
+import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { handleUnauthorizedResponse } from '@/lib/session-expired';
+import { getDatasetIdFromPath } from '@/lib/workspace-dataset';
+import { useProjectStore } from '@/stores/project-store';
+import Loading from '@/components/molecules/loading';
+import { applyClientColumnFilters } from '@/utils/column-filters';
+import { toast } from '@/hooks/ui/use-toast';
+import {
+  fetchDatasetColumnMetadata,
+  patchColumnMetadata,
+  type ColumnMetadataMap,
+} from '@/lib/dataset-metadata';
+import type { MeasurementLevel } from '@/lib/measurement-level';
+import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
+import { recordTabSnapshot } from '@/lib/tab-history';
+import { SPREADSHEET_EVENTS, type TabColumnFilterPayload } from '@/lib/spreadsheet-commands';
 
 const INITIAL_EMPTY_ROWS = 200;
 const ROWS_PER_BATCH = 250;
 const EXTRA_COLUMNS = 10;
 const DEFAULT_COLUMN_WIDTH = 150;
-const SCROLL_PERCENTAGE_THRESHOLD = 0.7; // Load new data when user scrolls to 70%
-const PREFETCH_THRESHOLD = 0.3; // Start prefetching when user scrolls to 30%
-const INITIAL_PREFETCH_DELAY = 100; // Delay before initial prefetch (ms)
+const ROW_HEIGHT_PX = 36;
+const SCROLL_PERCENTAGE_THRESHOLD = 0.7;
+const PREFETCH_THRESHOLD = 0.3;
+const INITIAL_PREFETCH_DELAY = 50;
+/** Rows to load beyond the last visible virtual row (fast scroll buffer). */
+const LOAD_AHEAD_ROWS = 180;
+/** Datasets at or below this size load entirely (one preview fetch for UUID datasets). */
+const SMALL_DATASET_EAGER_LOAD = 2500;
+/** Extra rows rendered above/below viewport — more while paginating to reduce blank flashes. */
+const VIRTUAL_OVERSCAN_LOADED = 40;
+const VIRTUAL_OVERSCAN_LOADING = 80;
+
+function rowsFromColumnMajorPage(
+  processedData: unknown[][],
+  columns: Column[],
+  startRow: number
+): RowType[] {
+  if (!processedData[0]) return [];
+  return processedData[0].map((_: unknown, rowIndex: number) => {
+    const row: RowType = { id: `row-${startRow + rowIndex}` };
+    columns.forEach((col, colIndex) => {
+      if (col.id) {
+        row[col.id] = processedData[colIndex][rowIndex];
+      }
+    });
+    return row;
+  });
+}
+
+function formatCellDisplayValue(value: unknown): string {
+  if (value === null || value === undefined) return '';
+  return String(value);
+}
+
+/** Merge a fetched page without duplicating rows when hydrate and pagination race. */
+function mergeRowPage(
+  prev: RowType[],
+  startRow: number,
+  newRows: RowType[],
+  totalRows: number
+): RowType[] {
+  if (newRows.length === 0 || totalRows <= 0) return prev.slice(0, totalRows);
+  if (startRow >= totalRows) return prev.slice(0, totalRows);
+  const merged =
+    startRow >= prev.length ? [...prev, ...newRows] : [...prev.slice(0, startRow), ...newRows];
+  return merged.slice(0, totalRows);
+}
 
 type RowType = Record<string, any> & { id: string };
+
+/** Empty grid row for virtual slots not yet loaded from the server. */
+function VirtualSheetPlaceholderRow({
+  rowIndex,
+  translateY,
+  columns,
+  rowHeightPx,
+}: {
+  rowIndex: number;
+  translateY: number;
+  columns: { id: string; getSize: () => number }[];
+  rowHeightPx: number;
+}) {
+  return (
+    <TableRow
+      data-index={rowIndex}
+      aria-busy="true"
+      className="!border-b-0"
+      style={{
+        height: `${rowHeightPx}px`,
+        transform: `translateY(${translateY}px)`,
+        display: 'flex',
+        width: '100%',
+        minWidth: '100%',
+        borderBottom: 'none',
+        boxSizing: 'border-box',
+        backgroundColor: 'var(--background)',
+      }}
+    >
+      {columns.map(column => {
+        const width = column.getSize() || DEFAULT_COLUMN_WIDTH;
+        return (
+          <TableCell
+            key={column.id}
+            style={{
+              width,
+              minWidth: width,
+              flexShrink: 0,
+              height: rowHeightPx,
+              padding: 0,
+              boxSizing: 'border-box',
+              borderRight: '1px solid var(--border)',
+              borderBottom: '1px solid var(--border)',
+            }}
+          />
+        );
+      })}
+    </TableRow>
+  );
+}
+
+type UuidDatasetGridCache = Map<
+  string,
+  { headers: string[]; variableNames: string[]; rows: unknown[][] }
+>;
+
+function compareSpreadsheetCellValues(av: unknown, bv: unknown, desc: boolean): number {
+  if (av == null && bv == null) return 0;
+  if (av == null) return desc ? 1 : -1;
+  if (bv == null) return desc ? -1 : 1;
+  if (typeof av === 'number' && typeof bv === 'number') {
+    return desc ? bv - av : av - bv;
+  }
+  const an = Number(av);
+  const bn = Number(bv);
+  if (!Number.isNaN(an) && !Number.isNaN(bn) && av !== '' && bv !== '') {
+    return desc ? bn - an : an - bn;
+  }
+  const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true });
+  return desc ? -cmp : cmp;
+}
+
+function sortSpreadsheetRows<T extends Record<string, unknown>>(
+  rows: T[],
+  sortConfig: SortConfig[]
+): T[] {
+  if (sortConfig.length === 0) return rows;
+  return [...rows].sort((a, b) => {
+    for (const sort of sortConfig) {
+      const cmp = compareSpreadsheetCellValues(a[sort.column], b[sort.column], sort.desc);
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
+  });
+}
+
+function sortDatasetPreviewRows(
+  rows: unknown[][],
+  headers: string[],
+  variableNames: string[],
+  sortConfig: SortConfig[]
+): unknown[][] {
+  if (sortConfig.length === 0) return rows;
+  const columnIndex = (columnId: string) => {
+    const byVar = variableNames.indexOf(columnId);
+    if (byVar >= 0) return byVar;
+    return headers.indexOf(columnId);
+  };
+
+  return [...rows].sort((a, b) => {
+    for (const sort of sortConfig) {
+      const idx = columnIndex(sort.column);
+      if (idx < 0) continue;
+      const cmp = compareSpreadsheetCellValues(a[idx], b[idx], sort.desc);
+      if (cmp !== 0) return cmp;
+    }
+    return 0;
+  });
+}
+
+/** tensr-api dataset as grid: cache preview once, slice rows into fetch-page column-major `data`. */
+async function fetchDatasetGridSliceForSpreadsheet(
+  datasetId: string,
+  token: string | null,
+  startRow: number,
+  endRow: number,
+  cache: UuidDatasetGridCache,
+  sortConfig?: SortConfig[]
+): Promise<{ data: unknown[][] } | null> {
+  if (!token) return null;
+  const headers = { Authorization: `Bearer ${token}` };
+
+  let entry = cache.get(datasetId);
+  if (!entry) {
+    const schemaRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/schema`), { headers });
+    if (!schemaRes.ok) return null;
+    const previewRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/preview?limit=5000`), {
+      headers,
+    });
+    if (!previewRes.ok) return null;
+    const preview = (await previewRes.json()) as {
+      headers?: string[];
+      variable_names?: string[];
+      rows?: unknown[][];
+    };
+    entry = {
+      headers: preview.headers || [],
+      variableNames: preview.variable_names || preview.headers || [],
+      rows: preview.rows || [],
+    };
+    cache.set(datasetId, entry);
+  }
+
+  const sortedRows = sortDatasetPreviewRows(
+    entry.rows,
+    entry.headers,
+    entry.variableNames,
+    sortConfig ?? []
+  );
+  const slice = sortedRows.slice(startRow, endRow);
+  const processedData = entry.headers.map((_, colIdx) =>
+    slice.map(row => (row as unknown[])[colIdx])
+  );
+  return { data: processedData };
+}
 
 // Memoized cell component to prevent unnecessary re-renders
 const MemoizedTableCell = React.memo<{
@@ -85,6 +315,10 @@ const MemoizedTableCell = React.memo<{
   onPaste: () => void;
   onDelete: () => void;
   clipboardHasData: boolean;
+  onSelectRow?: (rowIndex: number) => void;
+  onCellContextMenu?: (rowIndex: number, columnId: string) => void;
+  isNumericColumn?: boolean;
+  heatmapBackgroundColor?: string;
 }>(
   ({
     cell,
@@ -103,6 +337,10 @@ const MemoizedTableCell = React.memo<{
     onPaste,
     onDelete,
     clipboardHasData,
+    onSelectRow,
+    onCellContextMenu,
+    isNumericColumn = false,
+    heatmapBackgroundColor,
   }) => {
     // Memoize callbacks to prevent recreation on every render
     const onEdit = useCallback(
@@ -119,87 +357,90 @@ const MemoizedTableCell = React.memo<{
     // Extract values once to avoid repeated calls during render
     const cellValue = cell.getValue();
     const columnSize = cell.column.getSize() || 150;
+    const pinned = cell.column.getIsPinned();
+    const hasHeatmap = !!heatmapBackgroundColor;
+    const showCellHover = columnId !== 'select' && !isCellFocused;
 
     return (
-      <ContextMenu>
-        <ContextMenuTrigger asChild>
-          <TableCell
-            data-row-index={rowIndex}
-            data-column-id={columnId}
-            ref={cellRef => {
-              if (cellRef) {
-                cellRefs.current.set(cellKey, cellRef);
-              } else {
-                cellRefs.current.delete(cellKey);
+      <TableCell
+        data-row-index={rowIndex}
+        data-column-id={columnId}
+        ref={cellRef => {
+          if (cellRef) {
+            cellRefs.current.set(cellKey, cellRef);
+          } else {
+            cellRefs.current.delete(cellKey);
+          }
+        }}
+        onContextMenu={() => {
+          onCellContextMenu?.(rowIndex, columnId);
+        }}
+        onMouseDown={e => {
+          if (columnId === 'select') {
+            e.preventDefault();
+            onSelectRow?.(rowIndex);
+            return;
+          }
+          onMouseDown?.(e, rowIndex, columnId);
+        }}
+        onMouseEnter={e => {
+          if (onMouseEnter && e.buttons === 1) {
+            onMouseEnter(e, rowIndex, columnId);
+          }
+        }}
+        className={cn(
+          'border-r border-b border-border/70 last:border-r-0 text-[13px] tabular-nums transition-colors',
+          columnId === 'select' && 'bg-muted/20 hover:bg-muted/50',
+          isNumericColumn && columnId !== 'select' && 'justify-end',
+          showCellHover && !hasHeatmap && 'hover:bg-muted/55',
+          showCellHover &&
+            hasHeatmap &&
+            'relative hover:after:pointer-events-none hover:after:absolute hover:after:inset-0 hover:after:bg-muted/50 hover:after:content-[""]',
+          isCellFocused &&
+            'relative z-10 bg-background outline outline-2 outline-primary outline-offset-[-2px]',
+          isCellSelected && !isCellFocused && 'bg-primary/5',
+          isCellSelected && isCellFocused && 'bg-background'
+        )}
+        style={{
+          width: columnSize,
+          minWidth: columnSize,
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          padding: 0,
+          height: 36,
+          boxSizing: 'border-box',
+          backgroundColor: heatmapBackgroundColor,
+          ...(pinned
+            ? {
+                position: 'sticky',
+                left: cell.column.getStart(pinned as 'left'),
+                zIndex: 1,
               }
-            }}
-            onMouseDown={e => {
-              if (onMouseDown) {
-                onMouseDown(e, rowIndex, columnId);
-              }
-            }}
-            onMouseEnter={e => {
-              if (onMouseEnter && e.buttons === 1) {
-                // Only trigger on mouse enter if mouse button is pressed (dragging)
-                onMouseEnter(e, rowIndex, columnId);
-              }
-            }}
+            : {}),
+        }}
+      >
+        {columnId === 'select' ? (
+          flexRender(cell.column.columnDef.cell, cell.getContext())
+        ) : isCellFocused ? (
+          <EditableCell
+            value={(cellValue as string | number | null) || ''}
+            onEdit={onEdit}
+            className={cn('h-9 w-full px-3.5', isNumericColumn && 'text-right font-mono')}
+            isFocused
+            onFocus={onFocus}
+          />
+        ) : (
+          <div
             className={cn(
-              'border-r border-b border-border last:border-r-0 tabular-nums',
-              isCellFocused && 'relative z-10 ring-2 ring-primary ring-offset-0',
-              isCellSelected && !isCellFocused && 'bg-blue-100/50 dark:bg-blue-900/20',
-              isCellSelected &&
-                isCellFocused &&
-                'bg-blue-200 dark:bg-blue-800/30 ring-2 ring-blue-500'
+              'flex h-9 w-full min-w-0 items-center truncate px-3.5',
+              isNumericColumn && 'justify-end font-mono'
             )}
-            style={{
-              width: columnSize,
-              minWidth: columnSize,
-              display: 'flex',
-              alignItems: 'center',
-              padding: 0,
-              borderRight: '1px solid #e5e7eb',
-              borderBottom: '1px solid #e5e7eb',
-              boxSizing: 'border-box',
-            }}
           >
-            {columnId === 'select' ? (
-              flexRender(cell.column.columnDef.cell, cell.getContext())
-            ) : (
-              <EditableCell
-                value={(cellValue as string | number | null) || ''}
-                onEdit={onEdit}
-                className="h-7 w-full px-2"
-                isFocused={isCellFocused}
-                onFocus={onFocus}
-              />
-            )}
-          </TableCell>
-        </ContextMenuTrigger>
-        <ContextMenuContent>
-          <ContextMenuItem onClick={onCopy}>
-            <Copy className="mr-2 h-4 w-4" />
-            Copy
-            <ContextMenuShortcut>⌘C</ContextMenuShortcut>
-          </ContextMenuItem>
-          <ContextMenuItem onClick={onCut}>
-            <Scissors className="mr-2 h-4 w-4" />
-            Cut
-            <ContextMenuShortcut>⌘X</ContextMenuShortcut>
-          </ContextMenuItem>
-          <ContextMenuItem onClick={onPaste} disabled={!clipboardHasData}>
-            <Clipboard className="mr-2 h-4 w-4" />
-            Paste
-            <ContextMenuShortcut>⌘V</ContextMenuShortcut>
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onClick={onDelete} variant="destructive">
-            <Trash2 className="mr-2 h-4 w-4" />
-            Delete
-            <ContextMenuShortcut>Del</ContextMenuShortcut>
-          </ContextMenuItem>
-        </ContextMenuContent>
-      </ContextMenu>
+            {formatCellDisplayValue(cellValue)}
+          </div>
+        )}
+      </TableCell>
     );
   },
   (prevProps, nextProps) => {
@@ -210,13 +451,21 @@ const MemoizedTableCell = React.memo<{
     const selectionChanged = prevProps.isCellSelected !== nextProps.isCellSelected;
     const sizeChanged = prevProps.cell.column.getSize() !== nextProps.cell.column.getSize();
     const clipboardChanged = prevProps.clipboardHasData !== nextProps.clipboardHasData;
+    const numericChanged = prevProps.isNumericColumn !== nextProps.isNumericColumn;
+    const heatmapChanged = prevProps.heatmapBackgroundColor !== nextProps.heatmapBackgroundColor;
 
     // Only re-render if something actually changed for this specific cell
     // Return true means "props are equal, skip render", false means "props changed, render"
     // Note: onMouseDown and onMouseEnter are functions and may change on every render,
     // but they don't affect the visual appearance, so we ignore them in comparison
     return (
-      !cellValueChanged && !focusChanged && !selectionChanged && !sizeChanged && !clipboardChanged
+      !cellValueChanged &&
+      !focusChanged &&
+      !selectionChanged &&
+      !sizeChanged &&
+      !clipboardChanged &&
+      !numericChanged &&
+      !heatmapChanged
     );
   }
 );
@@ -232,18 +481,32 @@ export function Spreadsheet({
   tabId,
   showFilters = false,
   onCloseFilters,
+  onRequestShowFilters,
   onSelectionChange,
+  onSheetStatusChange,
   onChange,
   columnStats,
   showMenu = true,
   tabData,
+  onInsertRow,
+  onDeleteRows,
 }: SpreadsheetProps) {
   // Removed tokens - using getIdToken() directly
   const tableContainerRef = useRef<HTMLDivElement | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [containerHeight, setContainerHeight] = useState<number | null>(null);
+  const waitingForDatasetRows = !!filePath && initialData.length === 0 && (totalRowCount ?? 0) > 0;
+  const [isLoading, setIsLoading] = useState(() => waitingForDatasetRows);
   const loadingRef = useRef(false);
-  const lastLoadedRowRef = useRef(initialData.length);
+  /** Cached dataset preview when filePath is a dataset UUID (tensr-api has no /projects/:id). */
+  const uuidDatasetGridCacheRef = useRef<UuidDatasetGridCache>(new Map());
+  const lastLoadedRowRef = useRef(
+    totalRowCount && initialData.length >= totalRowCount ? totalRowCount : initialData.length
+  );
+  /** Invalidate in-flight pagination when full hydrate replaces grid data. */
+  const loadGenerationRef = useRef(0);
+  /** Cached row count for pagination guards (avoids stale closure during async fetch). */
+  const dataLengthRef = useRef(initialData.length);
+  /** Catch-up target end row for the next fetch (set by virtualizer / ensureRowsLoaded). */
+  const pendingLoadEndRef = useRef(0);
   const [localColumnStats, setLocalColumnStats] = useState<
     Record<string, ColumnSummary> | undefined
   >(undefined);
@@ -252,6 +515,9 @@ export function Spreadsheet({
   const [selectionMode, setSelectionMode] = useState<SelectionMode>('single');
   const [selectionAnchor, setSelectionAnchor] = useState<CellPosition | null>(null);
   const [selectedRowId, setSelectedRowId] = useState<string | null>(null);
+  /** Row/column captured on right-click — drives the single shared ContextMenu. */
+  const [ctxMenuRowIndex, setCtxMenuRowIndex] = useState<number | null>(null);
+  const [ctxMenuColumnId, setCtxMenuColumnId] = useState<string | null>(null);
   const [selectedRowData, setSelectedRowData] = useState<Record<string, any> | null>(null);
   const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
   const [rowInsight, setRowInsight] = useState<any | null>(null);
@@ -295,6 +561,8 @@ export function Spreadsheet({
 
   const { session } = useAuth();
   const idTokenRef = useRef(session?.sessionJwt || null);
+  const [columnHeaderOverrides, setColumnHeaderOverrides] = useState<Record<string, string>>({});
+  const [columnMetadata, setColumnMetadata] = useState<ColumnMetadataMap>({});
 
   // Update token ref when it changes
   useEffect(() => {
@@ -323,6 +591,10 @@ export function Spreadsheet({
     [filePath]
   );
 
+  useEffect(() => {
+    uuidDatasetGridCacheRef.current.clear();
+  }, [decodedFilePath]);
+
   // Reset stats when file path changes
   useEffect(() => {
     if (filePath) {
@@ -331,65 +603,20 @@ export function Spreadsheet({
     }
   }, [filePath]);
 
+  /** Tab props may omit stats; `/api/analysis/analyze-file` fills `localColumnStats`. */
+  const mergedColumnStats = useMemo(
+    (): Record<string, ColumnSummary> => ({
+      ...(columnStats ?? {}),
+      ...(localColumnStats ?? {}),
+    }),
+    [columnStats, localColumnStats]
+  );
+
   // Check if this is a project file (selected from a multi-file project)
   // Only skip fetchMoreRows for project files, not for projects themselves
   const isProjectFile = useMemo(() => {
     return tabData?.isProjectFile === true;
   }, [tabData?.isProjectFile]);
-
-  // Load statistics
-  const loadColumnStats = useCallback(async () => {
-    if (!showStats || !decodedFilePath || statsLoadAttempted.current) {
-      return;
-    }
-
-    // For projects, we already have column stats from the processed data
-    if (isProjectFile) {
-      console.log('Project file data already has column stats, skipping analysis');
-      return;
-    }
-
-    try {
-      setIsLoadingStats(true);
-      statsLoadAttempted.current = true;
-
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/analysis/analyze-file`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idTokenRef.current}`,
-          },
-          body: JSON.stringify({
-            path: decodedFilePath,
-          }),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Error analyzing file: ${response.statusText}`);
-      }
-
-      const stats = await response.json();
-
-      if (!stats || typeof stats !== 'object') {
-        throw new Error('Invalid statistics data received');
-      }
-
-      setLocalColumnStats(stats);
-    } catch (error) {
-    } finally {
-      setIsLoadingStats(false);
-    }
-  }, [decodedFilePath, showStats, localColumnStats, isProjectFile]);
-
-  // Trigger statistics loading when needed
-  useEffect(() => {
-    if (showStats && decodedFilePath && !localColumnStats && !isLoadingStats) {
-      loadColumnStats();
-    }
-  }, [showStats, decodedFilePath, localColumnStats, isLoadingStats, loadColumnStats]);
 
   const isFileMode = !!filePath;
 
@@ -406,14 +633,17 @@ export function Spreadsheet({
           ])
         ),
       }));
-    } else {
-      // Empty file or spreadsheet mode: Initialize with blank rows
-      return Array(INITIAL_EMPTY_ROWS)
-        .fill(null)
-        .map((_, index) => ({
-          id: `row-${index}`,
-        }));
     }
+    if (waitingForDatasetRows) {
+      // Dataset-backed tab: wait for fetch/hydrate instead of showing blank placeholder rows
+      return [];
+    }
+    // Empty file or spreadsheet mode: Initialize with blank rows
+    return Array(INITIAL_EMPTY_ROWS)
+      .fill(null)
+      .map((_, index) => ({
+        id: `row-${index}`,
+      }));
   });
 
   // Track if we've initialized from sheet state to avoid overwriting local edits
@@ -466,82 +696,371 @@ export function Spreadsheet({
 
   const { tabs, activeTabId, updateTab } = useTabsStore();
   const activeTab = tabs.find(tab => tab.id === activeTabId);
+  const projectFileSystem = useProjectStore(s => s.fileSystem);
+  const currentProjectId = useProjectStore(s => s.currentProject?.id);
+
+  /** tensr-api dataset id — explicit on tab, else file in project, else path when it is a dataset. */
+  const gridDatasetId = useMemo(() => {
+    const explicit = tabData?.datasetId ?? activeTab?.data?.datasetId;
+    if (explicit) return explicit;
+
+    const pathId = getDatasetIdFromPath(decodedFilePath ?? undefined);
+    if (pathId && currentProjectId && pathId === currentProjectId) {
+      const fileEntry = projectFileSystem.find(f => f.fileId);
+      return fileEntry?.fileId ?? null;
+    }
+    return pathId;
+  }, [
+    tabData?.datasetId,
+    activeTab?.data?.datasetId,
+    decodedFilePath,
+    currentProjectId,
+    projectFileSystem,
+  ]);
+
+  const refreshColumnHeadersFromSchema = useCallback(async () => {
+    if (!gridDatasetId || !idTokenRef.current) return;
+    const res = await fetch(tensrApiUrl(`/datasets/${gridDatasetId}/schema`), {
+      headers: { Authorization: `Bearer ${idTokenRef.current}` },
+    });
+    if (handleUnauthorizedResponse(res)) return;
+    if (!res.ok) return;
+    const json = (await res.json()) as {
+      schema?: { name: string; label?: string | null }[];
+    };
+    const map: Record<string, string> = {};
+    for (const col of json.schema || []) {
+      map[col.name] = String(col.label || col.name);
+    }
+    setColumnHeaderOverrides(map);
+  }, [gridDatasetId]);
+
+  useEffect(() => {
+    void refreshColumnHeadersFromSchema();
+  }, [refreshColumnHeadersFromSchema]);
+
+  useEffect(() => {
+    if (!gridDatasetId || !idTokenRef.current) {
+      setColumnMetadata({});
+      return;
+    }
+    let cancelled = false;
+    void fetchDatasetColumnMetadata(gridDatasetId, idTokenRef.current)
+      .then(meta => {
+        if (!cancelled) setColumnMetadata(meta);
+      })
+      .catch(() => {
+        if (!cancelled) setColumnMetadata({});
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gridDatasetId]);
+
+  const handleMeasurementLevelChange = useCallback(
+    async (columnId: string, level: MeasurementLevel) => {
+      if (!gridDatasetId || !idTokenRef.current) return;
+
+      const previous = columnMetadata[columnId];
+      setColumnMetadata(prev => ({
+        ...prev,
+        [columnId]: { ...(prev[columnId] ?? { name: columnId }), name: columnId, measure: level },
+      }));
+
+      try {
+        const updated = await patchColumnMetadata(
+          gridDatasetId,
+          columnId,
+          { measure: level },
+          idTokenRef.current
+        );
+        setColumnMetadata(updated);
+      } catch (err) {
+        setColumnMetadata(prev => {
+          if (previous) {
+            return { ...prev, [columnId]: previous };
+          }
+          const { [columnId]: _removed, ...rest } = prev;
+          return rest;
+        });
+        toast({
+          title: 'Could not save measurement level',
+          description: err instanceof Error ? err.message : 'Please try again.',
+          variant: 'destructive',
+        });
+      }
+    },
+    [columnMetadata, gridDatasetId]
+  );
+
+  useEffect(() => {
+    if (!activeTab?.data || activeTab.data.datasetId || !gridDatasetId) return;
+    updateTab(activeTab.id, {
+      data: { ...activeTab.data, datasetId: gridDatasetId },
+    });
+  }, [activeTab, gridDatasetId, updateTab]);
+
+  const isFullyLoadedInMemory = useMemo(
+    () => !!totalRowCount && data.length >= totalRowCount,
+    [totalRowCount, data.length]
+  );
+
+  /** Centered spinner only while the grid has no rows yet (initial open / hydrate / sort reset). */
+  const showInitialGridLoader = useMemo(() => {
+    if (data.length > 0) return false;
+    if (isFileMode) {
+      return !!totalRowCount && isLoading;
+    }
+    // Real-time sheet tabs: wait for WS snapshot before first paint.
+    return !!sheetId && isSheetLoading;
+  }, [data.length, isFileMode, totalRowCount, isLoading, sheetId, isSheetLoading]);
+
+  const hasUsableColumnStats = useMemo(() => {
+    const merged = { ...(columnStats ?? {}), ...(localColumnStats ?? {}) };
+    return Object.values(merged).some(
+      s =>
+        s?.numeric_stats ||
+        s?.categorical_stats ||
+        (s?.data_type && s.data_type !== 'object' && s.data_type !== 'string')
+    );
+  }, [columnStats, localColumnStats]);
+
+  const columnSampleValues = useMemo(() => {
+    const samples: Record<string, unknown[]> = {};
+    for (const col of initialColumns) {
+      if (!col.id || col.id === 'select') continue;
+      samples[col.id] = [];
+    }
+    for (const row of data.slice(0, 80)) {
+      for (const col of initialColumns) {
+        if (!col.id || col.id === 'select') continue;
+        const v = (row as Record<string, unknown>)[col.id];
+        if (v !== undefined && v !== '') {
+          samples[col.id]?.push(v);
+        }
+      }
+    }
+    return samples;
+  }, [data, initialColumns]);
+
+  const loadColumnStats = useCallback(async () => {
+    const statsPath = gridDatasetId ?? decodedFilePath;
+    if (!statsPath || statsLoadAttempted.current || isProjectFile || hasUsableColumnStats) {
+      return;
+    }
+
+    try {
+      setIsLoadingStats(true);
+      statsLoadAttempted.current = true;
+
+      const response = await fetch(tensrApiUrl('/api/analysis/analyze-file'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idTokenRef.current}`,
+        },
+        body: JSON.stringify({
+          path: statsPath,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Error analyzing file: ${response.statusText}`);
+      }
+
+      const stats = await response.json();
+
+      if (!stats || typeof stats !== 'object') {
+        throw new Error('Invalid statistics data received');
+      }
+
+      setLocalColumnStats(stats);
+
+      if (tabId) {
+        const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+        if (tab?.data) {
+          updateTab(tabId, {
+            data: {
+              ...tab.data,
+              columnStats: {
+                ...(tab.data.columnStats ?? {}),
+                ...stats,
+              },
+            },
+          });
+        }
+      }
+    } catch {
+      statsLoadAttempted.current = false;
+    } finally {
+      setIsLoadingStats(false);
+    }
+  }, [decodedFilePath, gridDatasetId, isProjectFile, hasUsableColumnStats, tabId, updateTab]);
+
+  useEffect(() => {
+    const statsPath = gridDatasetId ?? decodedFilePath;
+    if (statsPath && !hasUsableColumnStats && !isLoadingStats && !isProjectFile) {
+      loadColumnStats();
+    }
+  }, [
+    decodedFilePath,
+    gridDatasetId,
+    hasUsableColumnStats,
+    isLoadingStats,
+    isProjectFile,
+    loadColumnStats,
+  ]);
+
+  useEffect(() => {
+    const statsPath = gridDatasetId ?? decodedFilePath;
+    if (showStats && statsPath && !localColumnStats && !isLoadingStats && !isProjectFile) {
+      statsLoadAttempted.current = false;
+      loadColumnStats();
+    }
+  }, [
+    showStats,
+    decodedFilePath,
+    gridDatasetId,
+    localColumnStats,
+    isLoadingStats,
+    isProjectFile,
+    loadColumnStats,
+  ]);
+
   const [sorting, setSorting] = useState<SortingState>([]);
+  const sortingRef = useRef<SortingState>([]);
+  useEffect(() => {
+    sortingRef.current = sorting;
+  }, [sorting]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(
     activeTab?.data?.columnFilters || []
   );
+
+  useEffect(() => {
+    dataLengthRef.current = data.length;
+    if (totalRowCount && data.length >= totalRowCount) {
+      lastLoadedRowRef.current = totalRowCount;
+    }
+  }, [data.length, totalRowCount]);
+
+  // If tab has preview rows but local grid was cleared (sort/filter race), restore once.
+  useEffect(() => {
+    if (!isFileMode || initialData.length === 0 || data.length > 0) return;
+    if (columnFilters.length > 0 || sorting.length > 0 || loadingRef.current) return;
+
+    setData(
+      initialData.map((row, index) => ({
+        id: `row-${index}`,
+        ...Object.fromEntries(
+          Object.entries(row).map(([key, value]) => [
+            key,
+            typeof value === 'string' ? value.replace(/^"|"$/g, '').trim() : value,
+          ])
+        ),
+      }))
+    );
+    lastLoadedRowRef.current = initialData.length;
+  }, [isFileMode, initialData, data.length, columnFilters.length, sorting.length]);
+
   const [columnSizing, setColumnSizing] = useState({});
   const [extraColumnsCount, setExtraColumnsCount] = useState(EXTRA_COLUMNS);
   const [rowSelection, setRowSelection] = useState({});
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
+    const vis: VisibilityState = {};
+    const tabVis = activeTab?.columnVisibility;
+    for (const col of initialColumns) {
+      if (!col.id) continue;
+      if (tabVis?.[col.id] === false) vis[col.id] = false;
+    }
+    return vis;
+  });
+
+  useEffect(() => {
+    const vis: VisibilityState = {};
+    const tabVis = activeTab?.columnVisibility;
+    for (const col of initialColumns) {
+      if (!col.id) continue;
+      if (tabVis?.[col.id] === false) vis[col.id] = false;
+    }
+    setColumnVisibility(vis);
+  }, [activeTabId, activeTab?.columnVisibility, initialColumns]);
+
+  const handleColumnVisibilityChange = useCallback(
+    (updater: VisibilityState | ((old: VisibilityState) => VisibilityState)) => {
+      setColumnVisibility(prev => {
+        const next = typeof updater === 'function' ? updater(prev) : updater;
+        if (activeTab && tabId) {
+          const tabVis: Record<string, boolean> = { ...(activeTab.columnVisibility ?? {}) };
+          for (const col of initialColumns) {
+            if (!col.id) continue;
+            tabVis[col.id] = next[col.id] !== false;
+          }
+          updateTab(activeTab.id, { columnVisibility: tabVis });
+        }
+        return next;
+      });
+    },
+    [activeTab, tabId, initialColumns, updateTab]
+  );
+
+  const displayColumns = useMemo(
+    () =>
+      initialColumns.map(col => ({
+        ...col,
+        header: (col.id && columnHeaderOverrides[col.id]) || col.header || col.id,
+      })),
+    [initialColumns, columnHeaderOverrides]
+  );
 
   const columns = useMemo(
     () =>
       createColumns({
-        initialColumns: initialColumns,
+        initialColumns: displayColumns,
         extraColumnsCount,
         setData: setData as React.Dispatch<React.SetStateAction<Record<string, any>[]>>,
         DEFAULT_COLUMN_WIDTH,
       } as CreateColumnsProps),
-    [initialColumns, extraColumnsCount]
+    [displayColumns, extraColumnsCount]
   );
 
   const fetchMoreRows = useCallback(async () => {
-    // Early returns - check these BEFORE setting loading flag
     if (!decodedFilePath) {
-      console.log('[Pagination Debug] fetchMoreRows early return: no decodedFilePath');
       return;
     }
 
-    // For project files (selected from multi-file projects), we already have all the data
     if (isProjectFile) {
-      console.log('Project file data already loaded, skipping fetchMoreRows');
       return;
     }
 
-    // Guard: Don't fetch if we've already loaded all rows
+    if (totalRowCount && dataLengthRef.current >= totalRowCount) {
+      lastLoadedRowRef.current = totalRowCount;
+      return;
+    }
     if (lastLoadedRowRef.current >= (totalRowCount || 0)) {
-      console.log('[Pagination Debug] All rows loaded:', {
-        lastLoadedRow: lastLoadedRowRef.current,
-        totalRowCount,
-      });
       return;
     }
 
-    // Guard: Calculate and check if we have valid range to fetch
     const startRow = lastLoadedRowRef.current;
-    const endRow = Math.min(startRow + ROWS_PER_BATCH, totalRowCount || 0);
+    const batchEnd = startRow + ROWS_PER_BATCH;
+    const catchUpEnd = pendingLoadEndRef.current;
+    pendingLoadEndRef.current = 0;
+    const endRow = Math.min(
+      Math.max(batchEnd, catchUpEnd > startRow ? catchUpEnd : batchEnd),
+      totalRowCount || 0
+    );
+    const requestedCatchUpEnd = catchUpEnd;
 
     if (startRow >= endRow) {
-      console.log('[Pagination Debug] Invalid range:', { startRow, endRow });
       return;
     }
 
-    // Check loading flag AFTER all other checks - if already loading, skip
     if (loadingRef.current) {
-      console.log('[Pagination Debug] fetchMoreRows already in progress, skipping');
       return;
     }
 
-    console.log('[Pagination Debug] fetchMoreRows called', {
-      startRow,
-      endRow,
-      lastLoadedRow: lastLoadedRowRef.current,
-      totalRowCount,
-      dataLength: data.length,
-      rowsLength: rows.length,
-    });
-
-    // Set loading flag atomically - do this LAST after all checks pass
     loadingRef.current = true;
     setIsLoading(true);
-
-    // Performance monitoring
-    const perfStartTime = performance.now();
-    let networkStartTime: number | null = null;
-    let networkEndTime: number | null = null;
-    let parseStartTime: number | null = null;
-    let parseEndTime: number | null = null;
+    const fetchGeneration = loadGenerationRef.current;
 
     try {
       // Check if we have prefetched data for this range
@@ -551,15 +1070,14 @@ export function Spreadsheet({
         prefetchedRowRangeRef.current.start === startRow &&
         prefetchedRowRangeRef.current.end === endRow
       ) {
-        // Use prefetched data - wrap in transition for non-urgent update
-        startTransition(() => {
-          setData(prevData => [...prevData, ...prefetchedData]);
-          setPrefetchedData([]);
-          prefetchedRowRangeRef.current = null;
-        });
+        if (fetchGeneration !== loadGenerationRef.current) return;
+        setData(prevData =>
+          mergeRowPage(prevData, startRow, prefetchedData, totalRowCount || prevData.length)
+        );
+        setPrefetchedData([]);
+        prefetchedRowRangeRef.current = null;
 
-        const newLastLoadedRow = lastLoadedRowRef.current + ROWS_PER_BATCH;
-        lastLoadedRowRef.current = newLastLoadedRow;
+        lastLoadedRowRef.current = Math.min(endRow, totalRowCount || endRow);
 
         // Start prefetching the next page
         setTimeout(() => prefetchNextPage(), 0);
@@ -567,9 +1085,10 @@ export function Spreadsheet({
       }
 
       // Convert TanStack Table sorting state to backend format
+      const activeSorting = sortingRef.current;
       const sortConfig: SortConfig[] | undefined =
-        sorting.length > 0
-          ? sorting.map(sort => ({
+        activeSorting.length > 0
+          ? activeSorting.map(sort => ({
               column: sort.id,
               desc: sort.desc,
             }))
@@ -588,62 +1107,76 @@ export function Spreadsheet({
         };
       });
 
-      // Check if this is a project (UUID) or a file path
+      // Prefer tensr-api dataset preview (fast, cached) when we know the dataset id.
       const uuidRegex =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      const isProject = uuidRegex.test(decodedFilePath);
+      const isProjectPath = decodedFilePath ? uuidRegex.test(decodedFilePath) : false;
 
-      let response;
-      if (isProject) {
-        // For projects, we need to get the actual file path from the project data
-        // First, get the project details to find the file path
-        const projectResponse = await fetch(
-          `https://api.dev.tensr.xyz/projects/${decodedFilePath}`,
-          {
-            method: 'GET',
+      let response: Response | undefined;
+      let data: { data?: unknown[][] };
+
+      if (gridDatasetId) {
+        const dsPage = await fetchDatasetGridSliceForSpreadsheet(
+          gridDatasetId,
+          idTokenRef.current,
+          startRow,
+          endRow,
+          uuidDatasetGridCacheRef.current,
+          sortConfig
+        );
+        if (dsPage) {
+          data = dsPage;
+        } else if (isProjectPath && decodedFilePath) {
+          const projectResponse = await fetch(
+            `${getTensrApiBaseUrl()}/projects/${decodedFilePath}`,
+            {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${idTokenRef.current}`,
+              },
+            }
+          );
+
+          if (!projectResponse.ok) {
+            throw new Error(`Failed to get project details: ${projectResponse.status}`);
+          }
+
+          const projectData = await projectResponse.json();
+          const firstFile = projectData.fileGroups?.data?.[0];
+          if (!firstFile) {
+            throw new Error('No files found in project');
+          }
+
+          response = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
+            method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${idTokenRef.current}`,
             },
+            body: JSON.stringify({
+              path: firstFile.path,
+              start_row: startRow,
+              end_row: endRow,
+              sort_config: sortConfig,
+              filter_config: filterConfig,
+              project_id: decodedFilePath,
+              file_id: firstFile.fileId,
+            }),
+          });
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
           }
-        );
-
-        if (!projectResponse.ok) {
-          throw new Error(`Failed to get project details: ${projectResponse.status}`);
+          data = await response.json();
+        } else {
+          throw new Error('Could not load dataset grid slice');
         }
-
-        const projectData = await projectResponse.json();
-
-        // Get the first file from the project (assuming single file for now)
-        const firstFile = projectData.fileGroups?.data?.[0];
-        if (!firstFile) {
-          throw new Error('No files found in project');
-        }
-
-        // Use file API with project context - send the file_id directly
-        networkStartTime = performance.now();
-        response = await fetch(`${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idTokenRef.current}`,
-          },
-          body: JSON.stringify({
-            path: firstFile.path, // Send the original filename
-            start_row: startRow,
-            end_row: endRow,
-            sort_config: sortConfig,
-            filter_config: filterConfig,
-            project_id: decodedFilePath,
-            file_id: firstFile.fileId, // This is the key field!
-          }),
-        });
       } else {
-        // Determine if this is a project file by checking if filePath contains project structure
-        const isProjectFile =
+        const isProjectFilePath =
           decodedFilePath.includes('/users/') && decodedFilePath.includes('/projects/');
 
-        let requestBody: any = {
+        let requestBody: Record<string, unknown> = {
           path: decodedFilePath,
           start_row: startRow,
           end_row: endRow,
@@ -651,16 +1184,14 @@ export function Spreadsheet({
           filter_config: filterConfig,
         };
 
-        // If it's a project file, extract project context
-        if (isProjectFile) {
+        if (isProjectFilePath) {
           const pathParts = decodedFilePath.split('/');
           const usersIndex = pathParts.indexOf('users');
           const projectsIndex = pathParts.indexOf('projects');
 
           if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
-            const userId = pathParts[usersIndex + 1];
             const projectId = pathParts[projectsIndex + 1];
-            const fileId = pathParts[projectsIndex + 3]; // files/{fileId}/{fileName}
+            const fileId = pathParts[projectsIndex + 3];
 
             requestBody = {
               ...requestBody,
@@ -670,9 +1201,7 @@ export function Spreadsheet({
           }
         }
 
-        // Use file API for regular files
-        networkStartTime = performance.now();
-        response = await fetch(`${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`, {
+        response = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -680,18 +1209,12 @@ export function Spreadsheet({
           },
           body: JSON.stringify(requestBody),
         });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
+        }
+        data = await response.json();
       }
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Error response:', errorText);
-        throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
-      }
-
-      networkEndTime = performance.now();
-      parseStartTime = performance.now();
-      const data = await response.json();
-      parseEndTime = performance.now();
 
       if (startRow >= (totalRowCount || 0)) {
         setData(prevData => [
@@ -703,64 +1226,27 @@ export function Spreadsheet({
             })),
         ]);
       } else {
-        // Both projects and files now use the file API, so data format is consistent
-        const processedData = data.data;
+        // Column-major pages: legacy fetch-page or tensr-api dataset preview slice
+        const processedData = data?.data;
 
         if (processedData && processedData[0]) {
-          const newRows = processedData[0].map((_: any, rowIndex: number) => {
-            const row: RowType = { id: `row-${startRow + rowIndex}` };
-            initialColumns.forEach((col, colIndex) => {
-              if (col.id) {
-                row[col.id] = processedData[colIndex][rowIndex];
-              }
-            });
-            return row;
-          });
+          const newRows = rowsFromColumnMajorPage(
+            processedData as unknown[][],
+            initialColumns as any,
+            startRow
+          );
 
-          // Use transition for non-urgent data updates to keep UI responsive
-          startTransition(() => {
-            setData(prevData => {
-              const updated = [...prevData, ...newRows];
-              console.log('[Pagination Debug] Data updated', {
-                prevLength: prevData.length,
-                newLength: updated.length,
-                newRowsCount: newRows.length,
-                lastLoadedRowBefore: lastLoadedRowRef.current,
-              });
-              return updated;
-            });
-          });
+          if (fetchGeneration !== loadGenerationRef.current) return;
+
+          setData(prevData =>
+            mergeRowPage(prevData, startRow, newRows, totalRowCount || prevData.length)
+          );
         }
       }
 
-      const newLastLoadedRow = lastLoadedRowRef.current + ROWS_PER_BATCH;
-      lastLoadedRowRef.current = newLastLoadedRow;
+      lastLoadedRowRef.current = Math.min(endRow, totalRowCount || endRow);
 
-      // Performance logging
-      const perfEndTime = performance.now();
-      const totalTime = perfEndTime - perfStartTime;
-      const networkTime =
-        networkStartTime && networkEndTime ? networkEndTime - networkStartTime : 0;
-      const parseTime = parseStartTime && parseEndTime ? parseEndTime - parseStartTime : 0;
-      const processingTime = totalTime - networkTime - parseTime;
-
-      console.log('[Performance] Data fetch metrics', {
-        rowsFetched: endRow - startRow,
-        networkTime: `${networkTime.toFixed(2)}ms`,
-        parseTime: `${parseTime.toFixed(2)}ms`,
-        processingTime: `${processingTime.toFixed(2)}ms`,
-        totalTime: `${totalTime.toFixed(2)}ms`,
-        rowsPerSecond: ((endRow - startRow) / (totalTime / 1000)).toFixed(0),
-      });
-
-      console.log('[Pagination Debug] lastLoadedRowRef updated', {
-        newLastLoadedRow,
-        totalRowCount,
-        remaining: (totalRowCount || 0) - newLastLoadedRow,
-      });
-
-      // Immediately start prefetching the next page after loading
-      if (newLastLoadedRow < (totalRowCount || 0)) {
+      if (endRow < (totalRowCount || 0)) {
         setTimeout(() => {
           if (!isPrefetchingRef.current) {
             prefetchNextPage();
@@ -768,15 +1254,49 @@ export function Spreadsheet({
         }, 0);
       }
     } catch (error) {
+      console.error('[Pagination] load rows failed', error);
     } finally {
       setIsLoading(false);
       loadingRef.current = false;
+      if (
+        requestedCatchUpEnd > lastLoadedRowRef.current &&
+        requestedCatchUpEnd <= (totalRowCount || 0)
+      ) {
+        pendingLoadEndRef.current = requestedCatchUpEnd;
+        queueMicrotask(() => {
+          if (!loadingRef.current) void fetchMoreRows();
+        });
+      }
     }
-  }, [decodedFilePath, initialColumns, totalRowCount, sorting, columnFilters, isProjectFile]);
+  }, [decodedFilePath, gridDatasetId, initialColumns, totalRowCount, columnFilters, isProjectFile]);
+
+  const ensureRowsLoaded = useCallback(
+    (throughIndex: number) => {
+      if (!isFileMode || isProjectFile || !totalRowCount) return;
+      if (dataLengthRef.current >= totalRowCount) {
+        lastLoadedRowRef.current = totalRowCount;
+        return;
+      }
+      if (lastLoadedRowRef.current >= totalRowCount) return;
+
+      const targetEnd = Math.min(throughIndex + LOAD_AHEAD_ROWS, totalRowCount);
+      if (dataLengthRef.current >= targetEnd || lastLoadedRowRef.current >= targetEnd) return;
+
+      pendingLoadEndRef.current = Math.max(pendingLoadEndRef.current, targetEnd);
+
+      if (loadingRef.current) return;
+
+      void fetchMoreRows();
+    },
+    [isFileMode, isProjectFile, totalRowCount, fetchMoreRows]
+  );
 
   // Prefetch function - loads data in background without showing loading state
   const prefetchNextPage = useCallback(async () => {
     if (!decodedFilePath || isPrefetchingRef.current || isProjectFile) {
+      return;
+    }
+    if (totalRowCount && dataLengthRef.current >= totalRowCount) {
       return;
     }
 
@@ -797,9 +1317,10 @@ export function Spreadsheet({
       isPrefetchingRef.current = true;
 
       // Convert TanStack Table sorting state to backend format
+      const activeSorting = sortingRef.current;
       const sortConfig: SortConfig[] | undefined =
-        sorting.length > 0
-          ? sorting.map(sort => ({
+        activeSorting.length > 0
+          ? activeSorting.map(sort => ({
               column: sort.id,
               desc: sort.desc,
             }))
@@ -817,57 +1338,73 @@ export function Spreadsheet({
         };
       });
 
-      // Check if this is a project (UUID) or a file path
       const uuidRegex =
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      const isProject = uuidRegex.test(decodedFilePath);
+      const isProjectPath = decodedFilePath ? uuidRegex.test(decodedFilePath) : false;
 
-      let response;
-      if (isProject) {
-        // For projects, get the project details to find the file path
-        const projectResponse = await fetch(
-          `https://api.dev.tensr.xyz/projects/${decodedFilePath}`,
-          {
-            method: 'GET',
+      let data: { data?: unknown[][] } | undefined;
+
+      if (gridDatasetId) {
+        const dsPage = await fetchDatasetGridSliceForSpreadsheet(
+          gridDatasetId,
+          idTokenRef.current,
+          nextStartRow,
+          nextEndRow,
+          uuidDatasetGridCacheRef.current,
+          sortConfig
+        );
+        if (dsPage) {
+          data = dsPage;
+        } else if (isProjectPath && decodedFilePath) {
+          const projectResponse = await fetch(
+            `${getTensrApiBaseUrl()}/projects/${decodedFilePath}`,
+            {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${idTokenRef.current}`,
+              },
+            }
+          );
+
+          if (!projectResponse.ok) {
+            return;
+          }
+
+          const projectData = await projectResponse.json();
+          const firstFile = projectData.fileGroups?.data?.[0];
+          if (!firstFile) {
+            return;
+          }
+
+          const pageRes = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
+            method: 'POST',
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${idTokenRef.current}`,
             },
+            body: JSON.stringify({
+              path: firstFile.path,
+              start_row: nextStartRow,
+              end_row: nextEndRow,
+              sort_config: sortConfig,
+              filter_config: filterConfig,
+              project_id: decodedFilePath,
+              file_id: firstFile.fileId,
+            }),
+          });
+
+          if (!pageRes.ok) {
+            return;
           }
-        );
 
-        if (!projectResponse.ok) {
-          throw new Error(`Failed to get project details: ${projectResponse.status}`);
+          data = await pageRes.json();
         }
-
-        const projectData = await projectResponse.json();
-        const firstFile = projectData.fileGroups?.data?.[0];
-        if (!firstFile) {
-          throw new Error('No files found in project');
-        }
-
-        response = await fetch(`${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idTokenRef.current}`,
-          },
-          body: JSON.stringify({
-            path: firstFile.path,
-            start_row: nextStartRow,
-            end_row: nextEndRow,
-            sort_config: sortConfig,
-            filter_config: filterConfig,
-            project_id: decodedFilePath,
-            file_id: firstFile.fileId,
-          }),
-        });
       } else {
-        // Handle regular files and project files
-        const isProjectFile =
+        const isProjectFilePath =
           decodedFilePath.includes('/users/') && decodedFilePath.includes('/projects/');
 
-        let requestBody: any = {
+        let requestBody: Record<string, unknown> = {
           path: decodedFilePath,
           start_row: nextStartRow,
           end_row: nextEndRow,
@@ -875,13 +1412,12 @@ export function Spreadsheet({
           filter_config: filterConfig,
         };
 
-        if (isProjectFile) {
+        if (isProjectFilePath) {
           const pathParts = decodedFilePath.split('/');
           const usersIndex = pathParts.indexOf('users');
           const projectsIndex = pathParts.indexOf('projects');
 
           if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
-            const userId = pathParts[usersIndex + 1];
             const projectId = pathParts[projectsIndex + 1];
             const fileId = pathParts[projectsIndex + 3];
 
@@ -893,7 +1429,7 @@ export function Spreadsheet({
           }
         }
 
-        response = await fetch(`${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`, {
+        const pageRes = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -901,54 +1437,60 @@ export function Spreadsheet({
           },
           body: JSON.stringify(requestBody),
         });
+
+        if (!pageRes.ok) {
+          return;
+        }
+
+        data = await pageRes.json();
       }
 
-      if (!response.ok) {
-        console.warn('Prefetch failed:', response.status);
-        return;
-      }
-
-      const data = await response.json();
-      const processedData = data.data;
+      const processedData = data?.data;
 
       if (processedData && processedData[0]) {
-        const newRows = processedData[0].map((_: any, rowIndex: number) => {
-          const row: RowType = { id: `row-${nextStartRow + rowIndex}` };
-          initialColumns.forEach((col, colIndex) => {
-            if (col.id) {
-              row[col.id] = processedData[colIndex][rowIndex];
-            }
-          });
-          return row;
-        });
+        const newRows = rowsFromColumnMajorPage(
+          processedData as unknown[][],
+          initialColumns as any,
+          nextStartRow
+        );
 
-        // Prefetch updates are non-urgent - use transition
-        startTransition(() => {
-          setPrefetchedData(newRows);
-          prefetchedRowRangeRef.current = { start: nextStartRow, end: nextEndRow };
-        });
+        setPrefetchedData(newRows);
+        prefetchedRowRangeRef.current = { start: nextStartRow, end: nextEndRow };
       }
-    } catch (error) {
-      console.warn('Prefetch error:', error);
+    } catch {
+      // Prefetch is best-effort
     } finally {
       isPrefetchingRef.current = false;
     }
-  }, [decodedFilePath, initialColumns, totalRowCount, sorting, columnFilters, isProjectFile]);
+  }, [decodedFilePath, gridDatasetId, initialColumns, totalRowCount, columnFilters, isProjectFile]);
 
   // Initial data loading - consolidated into single effect with proper guards
   const initialLoadDoneRef = useRef(false);
   useEffect(() => {
     if (!isProjectFile && decodedFilePath && !initialLoadDoneRef.current && !loadingRef.current) {
-      // Check if we need to load more data
+      const datasetId = gridDatasetId;
+      const smallDataset =
+        totalRowCount && totalRowCount <= SMALL_DATASET_EAGER_LOAD && !!datasetId;
+
+      // Small UUID datasets: full-hydrate effect loads everything; skip paginated fetch.
+      if (smallDataset && dataLengthRef.current < (totalRowCount || 0)) {
+        initialLoadDoneRef.current = true;
+        return;
+      }
+
       const needsMoreData =
         totalRowCount &&
         totalRowCount > initialData.length &&
+        dataLengthRef.current < totalRowCount &&
         lastLoadedRowRef.current < totalRowCount;
 
       if (needsMoreData) {
         initialLoadDoneRef.current = true;
         const timer = setTimeout(() => {
-          if (!loadingRef.current) {
+          if (!loadingRef.current && totalRowCount && dataLengthRef.current < totalRowCount) {
+            if (totalRowCount <= SMALL_DATASET_EAGER_LOAD) {
+              pendingLoadEndRef.current = totalRowCount;
+            }
             fetchMoreRows();
           }
         }, INITIAL_PREFETCH_DELAY);
@@ -960,6 +1502,91 @@ export function Spreadsheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [decodedFilePath, isProjectFile, totalRowCount, initialData.length]);
 
+  useEffect(() => {
+    if (totalRowCount && data.length > totalRowCount) {
+      setData(prev => prev.slice(0, totalRowCount));
+    }
+  }, [data.length, totalRowCount]);
+
+  /** Hydrate full in-memory grid for small dataset-backed tabs (instant scroll, no void). */
+  const fullHydrateStartedRef = useRef(false);
+  useEffect(() => {
+    fullHydrateStartedRef.current = false;
+  }, [decodedFilePath]);
+
+  useEffect(() => {
+    if (fullHydrateStartedRef.current || isProjectFile || !decodedFilePath || !totalRowCount) {
+      return;
+    }
+    const datasetId = gridDatasetId;
+    if (!datasetId || totalRowCount > SMALL_DATASET_EAGER_LOAD) return;
+    if (data.length >= totalRowCount || initialData.length >= totalRowCount) {
+      lastLoadedRowRef.current = totalRowCount;
+      return;
+    }
+
+    fullHydrateStartedRef.current = true;
+    loadGenerationRef.current += 1;
+    const hydrateGeneration = loadGenerationRef.current;
+    let cancelled = false;
+    setIsLoading(true);
+
+    (async () => {
+      try {
+        const hydrateSortConfig: SortConfig[] | undefined =
+          sortingRef.current.length > 0
+            ? sortingRef.current.map(sort => ({
+                column: sort.id,
+                desc: sort.desc,
+              }))
+            : undefined;
+        const page = await fetchDatasetGridSliceForSpreadsheet(
+          datasetId,
+          idTokenRef.current,
+          0,
+          totalRowCount,
+          uuidDatasetGridCacheRef.current,
+          hydrateSortConfig
+        );
+        if (cancelled || hydrateGeneration !== loadGenerationRef.current || !page?.data?.[0]) {
+          if (!cancelled && hydrateGeneration === loadGenerationRef.current) {
+            fullHydrateStartedRef.current = false;
+            pendingLoadEndRef.current = totalRowCount;
+            void fetchMoreRows();
+          }
+          return;
+        }
+
+        const allRows = rowsFromColumnMajorPage(page.data as unknown[][], initialColumns as any, 0);
+        if (allRows.length === 0) {
+          if (hydrateGeneration === loadGenerationRef.current) {
+            fullHydrateStartedRef.current = false;
+            pendingLoadEndRef.current = totalRowCount;
+            void fetchMoreRows();
+          }
+          return;
+        }
+        if (hydrateGeneration !== loadGenerationRef.current) return;
+        setData(allRows.slice(0, totalRowCount));
+        lastLoadedRowRef.current = totalRowCount;
+      } catch (err) {
+        console.error('[Spreadsheet] full dataset hydrate failed', err);
+        fullHydrateStartedRef.current = false;
+        pendingLoadEndRef.current = totalRowCount;
+        void fetchMoreRows();
+      } finally {
+        if (!cancelled && hydrateGeneration === loadGenerationRef.current) {
+          setIsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      setIsLoading(false);
+    };
+  }, [gridDatasetId, isProjectFile, totalRowCount, data.length, initialColumns, fetchMoreRows]);
+
   // Reset initial load flag when file path changes
   useEffect(() => {
     initialLoadDoneRef.current = false;
@@ -967,28 +1594,39 @@ export function Spreadsheet({
 
   const handleSortingChange: OnChangeFn<SortingState> = useCallback(
     async updaterOrValue => {
-      // Reset the data and pagination state when sort changes
-      setData([]);
-      lastLoadedRowRef.current = 0;
-      // Clear prefetched data since sorting changed
+      const newSorting =
+        typeof updaterOrValue === 'function' ? updaterOrValue(sortingRef.current) : updaterOrValue;
+      sortingRef.current = newSorting;
+
+      loadGenerationRef.current += 1;
       setPrefetchedData([]);
       prefetchedRowRangeRef.current = null;
 
-      // Update the sorting state
-      const newSorting =
-        typeof updaterOrValue === 'function' ? updaterOrValue(sorting) : updaterOrValue;
       setSorting(newSorting);
+
+      if (!decodedFilePath) {
+        if (newSorting.length > 0) {
+          const sortConfig = newSorting.map(sort => ({
+            column: sort.id,
+            desc: sort.desc,
+          }));
+          setData(prev => sortSpreadsheetRows(prev, sortConfig));
+        }
+        return;
+      }
+
+      // Reset the data and pagination state when sort changes
+      setData([]);
+      lastLoadedRowRef.current = 0;
 
       // Refetch data with new sorting
       await fetchMoreRows();
     },
-    [fetchMoreRows, sorting]
+    [decodedFilePath, fetchMoreRows]
   );
 
   const fetchFilteredData = useCallback(
     (newFilters: ColumnFiltersState) => {
-      console.log('Fetching filtered data with filters:', newFilters);
-
       // Directly set column filters
       setColumnFilters(newFilters);
 
@@ -1048,17 +1686,14 @@ export function Spreadsheet({
             }
           }
 
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${idTokenRef.current}`,
-              },
-              body: JSON.stringify(requestBody),
-            }
-          );
+          const response = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${idTokenRef.current}`,
+            },
+            body: JSON.stringify(requestBody),
+          });
 
           if (!response.ok) {
             const errorText = await response.text();
@@ -1097,8 +1732,54 @@ export function Spreadsheet({
     [decodedFilePath, initialColumns]
   );
 
+  const isDatasetWorkspace = useMemo(() => !!gridDatasetId, [gridDatasetId]);
+
+  const tableData = useMemo(() => {
+    let rows: RowType[] =
+      !isDatasetWorkspace || !columnFilters.length
+        ? data
+        : applyClientColumnFilters(
+            data as RowType[],
+            columnFilters as { id: string; value: { operator: string; value: unknown } }[]
+          );
+    if (totalRowCount && rows.length > totalRowCount) {
+      rows = rows.slice(0, totalRowCount);
+    }
+    return rows;
+  }, [data, columnFilters, isDatasetWorkspace, totalRowCount]);
+
+  const heatmapColumns =
+    (tabData as any)?.heatmapColumns ?? (activeTab?.data as any)?.heatmapColumns ?? {};
+  const freezeUpToColumnId =
+    (tabData as any)?.freezeUpToColumnId ?? (activeTab?.data as any)?.freezeUpToColumnId ?? null;
+
+  const visibleLeafColumnIds = useMemo(() => {
+    const vis = columnVisibility;
+    const ids = [
+      'select',
+      ...initialColumns.filter(c => c.id && vis[c.id] !== false).map(c => c.id as string),
+    ];
+    return ids;
+  }, [initialColumns, columnVisibility]);
+
+  const columnPinning = useMemo((): ColumnPinningState => {
+    if (!freezeUpToColumnId) return { left: [], right: [] };
+    const idx = visibleLeafColumnIds.indexOf(freezeUpToColumnId);
+    if (idx < 0) return { left: [], right: [] };
+    return { left: visibleLeafColumnIds.slice(0, idx + 1), right: [] };
+  }, [freezeUpToColumnId, visibleLeafColumnIds]);
+
+  const heatmapScales = useMemo(() => {
+    const scales: Record<string, ReturnType<typeof computeColumnHeatmapScale>> = {};
+    for (const [colId, enabled] of Object.entries(heatmapColumns)) {
+      if (!enabled) continue;
+      scales[colId] = computeColumnHeatmapScale(tableData as Record<string, unknown>[], colId);
+    }
+    return scales;
+  }, [heatmapColumns, tableData]);
+
   const table = useReactTable({
-    data,
+    data: tableData,
     columns,
     state: {
       sorting,
@@ -1106,6 +1787,7 @@ export function Spreadsheet({
       columnVisibility,
       rowSelection,
       columnSizing,
+      columnPinning,
     },
     onRowSelectionChange: setRowSelection,
     onSortingChange: handleSortingChange,
@@ -1113,7 +1795,6 @@ export function Spreadsheet({
       const newFilters =
         typeof filtersOrUpdater === 'function' ? filtersOrUpdater(columnFilters) : filtersOrUpdater;
 
-      console.log('Table column filters change:', newFilters);
       setColumnFilters(newFilters);
       // Update tab store with new filters
       if (activeTab) {
@@ -1125,161 +1806,203 @@ export function Spreadsheet({
         });
       }
     },
-    onColumnVisibilityChange: setColumnVisibility,
+    onColumnVisibilityChange: handleColumnVisibilityChange,
     onColumnSizingChange: setColumnSizing,
+    columnResizeMode: 'onChange',
+    defaultColumn: {
+      minSize: 56,
+      maxSize: 800,
+    },
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     autoResetPageIndex: false,
     enableMultiSort: true,
     manualSorting: true,
     manualFiltering: true,
+    enableRowSelection: true,
+    enableColumnPinning: true,
   });
 
   const { rows } = table.getRowModel();
 
-  // Virtualization count: For file mode, use totalRowCount to enable scrolling
-  // The virtualizer needs to know the total height to create a scrollable area
-  // It will only render the visible rows that exist in data, but needs total count for scroll calculations
+  const totalTableWidth = useMemo(
+    () =>
+      table
+        .getVisibleLeafColumns()
+        .reduce((sum, col) => sum + (col.getSize() || DEFAULT_COLUMN_WIDTH), 0),
+    [table, columnSizing, columnVisibility]
+  );
+
+  // ─── Agent / chat driven controls ───────────────────────────────────────
+  // The agent panel dispatches window CustomEvents so chat commands like
+  // "sort by X desc", "hide column Y", "show hidden columns" can drive the
+  // grid without needing direct refs into the spreadsheet.
+  useEffect(() => {
+    const onSort = (e: Event) => {
+      const detail = (e as CustomEvent).detail as
+        | { columnId?: string; direction?: 'asc' | 'desc' }
+        | undefined;
+      if (!detail?.columnId) return;
+      const col = table.getColumn(detail.columnId);
+      if (!col) return;
+      const desc = detail.direction === 'desc';
+
+      // Always update the sort state so headers show the indicator.
+      setSorting([{ id: detail.columnId, desc }]);
+
+      // Client-side sort the currently loaded rows. This is what makes the
+      // sort visible for in-memory dataset tabs (where there's no backend
+      // refetch); for paginated/file-backed tabs the loaded window is also
+      // sorted, and the user's next interaction will refetch via the normal
+      // `handleSortingChange` path if needed.
+      setData(prev => {
+        const colId = detail.columnId!;
+        const next = [...prev].sort((a, b) => {
+          const av = (a as Record<string, unknown>)[colId];
+          const bv = (b as Record<string, unknown>)[colId];
+          if (av == null && bv == null) return 0;
+          if (av == null) return desc ? 1 : -1;
+          if (bv == null) return desc ? -1 : 1;
+          if (typeof av === 'number' && typeof bv === 'number') {
+            return desc ? bv - av : av - bv;
+          }
+          const an = Number(av);
+          const bn = Number(bv);
+          if (!Number.isNaN(an) && !Number.isNaN(bn) && av !== '' && bv !== '') {
+            return desc ? bn - an : an - bn;
+          }
+          const cmp = String(av).localeCompare(String(bv), undefined, { numeric: true });
+          return desc ? -cmp : cmp;
+        });
+        return next;
+      });
+    };
+    const onClearSort = () => setSorting([]);
+    const onHideColumn = (e: Event) => {
+      const detail = (e as CustomEvent).detail as { columnId?: string } | undefined;
+      if (!detail?.columnId) return;
+      const col = table.getColumn(detail.columnId);
+      if (!col) return;
+      col.toggleVisibility(false);
+      toast({
+        title: 'Column hidden',
+        description: 'Use the column menu or say "show hidden columns" to restore.',
+      });
+    };
+    const onShowHidden = () => {
+      const hidden = table.getAllLeafColumns().filter(c => c.getCanHide() && !c.getIsVisible());
+      hidden.forEach(c => c.toggleVisibility(true));
+      if (hidden.length > 0) {
+        toast({
+          title: `Restored ${hidden.length} hidden column${hidden.length === 1 ? '' : 's'}`,
+        });
+      }
+    };
+
+    const onApplyFilters = (e: Event) => {
+      const detail = (e as CustomEvent<{ filters?: TabColumnFilterPayload[] }>).detail;
+      const filters = (detail?.filters ?? []) as ColumnFiltersState;
+      setColumnFilters(filters);
+      if (!getDatasetIdFromPath(activeTab?.data?.filePath)) {
+        fetchFilteredData(filters);
+      }
+    };
+
+    const onClearFilters = () => {
+      setColumnFilters([]);
+      if (!getDatasetIdFromPath(activeTab?.data?.filePath)) {
+        setData([]);
+        lastLoadedRowRef.current = 0;
+        setPrefetchedData([]);
+        prefetchedRowRangeRef.current = null;
+        fetchMoreRows();
+      }
+    };
+
+    window.addEventListener(SPREADSHEET_EVENTS.SORT, onSort as EventListener);
+    window.addEventListener(SPREADSHEET_EVENTS.CLEAR_SORT, onClearSort as EventListener);
+    window.addEventListener(SPREADSHEET_EVENTS.HIDE_COLUMN, onHideColumn as EventListener);
+    window.addEventListener(SPREADSHEET_EVENTS.SHOW_HIDDEN_COLUMNS, onShowHidden as EventListener);
+    window.addEventListener(SPREADSHEET_EVENTS.APPLY_FILTERS, onApplyFilters as EventListener);
+    window.addEventListener(SPREADSHEET_EVENTS.CLEAR_FILTERS, onClearFilters as EventListener);
+    return () => {
+      window.removeEventListener(SPREADSHEET_EVENTS.SORT, onSort as EventListener);
+      window.removeEventListener(SPREADSHEET_EVENTS.CLEAR_SORT, onClearSort as EventListener);
+      window.removeEventListener(SPREADSHEET_EVENTS.HIDE_COLUMN, onHideColumn as EventListener);
+      window.removeEventListener(
+        SPREADSHEET_EVENTS.SHOW_HIDDEN_COLUMNS,
+        onShowHidden as EventListener
+      );
+      window.removeEventListener(SPREADSHEET_EVENTS.APPLY_FILTERS, onApplyFilters as EventListener);
+      window.removeEventListener(SPREADSHEET_EVENTS.CLEAR_FILTERS, onClearFilters as EventListener);
+    };
+  }, [table, activeTab?.data?.filePath, fetchFilteredData, fetchMoreRows]);
+
+  // Full scroll height in file mode so unloaded rows render empty grid placeholders.
   const virtualizationCount = useMemo(() => {
-    // For file mode with pagination, use totalRowCount so the virtualizer creates the full scrollable height
-    // The virtualizer will only render rows that exist in the data array, but the scroll area will be correct
     if (isFileMode && totalRowCount) {
       return totalRowCount;
     }
-    // For spreadsheet mode, use the actual data length
     return rows.length;
   }, [isFileMode, totalRowCount, rows.length]);
 
-  // Use React 19 useTransition for non-urgent updates (data loading)
-  const [isPending, startTransition] = useTransition();
+  // data.length = rows fetched so far; tableData may be smaller if client filters applied
+  const loadedRowCount = data.length;
+  const hasUnloadedRows = isFileMode && !!totalRowCount && loadedRowCount < virtualizationCount;
+
+  const gridColumns = table.getAllColumns();
+
+  /**
+   * Pre-compute per-column metadata once per render instead of O(n) inside
+   * each cell render (initialColumns.find per cell = O(cols²) per scroll).
+   */
+  const colMetaById = useMemo(() => new Map(initialColumns.map(c => [c.id, c])), [initialColumns]);
+
+  const colIsNumericById = useMemo(() => {
+    const map = new Map<string, boolean>();
+    for (const col of initialColumns) {
+      if (!col.id) continue;
+      map.set(
+        col.id,
+        resolveColumnIsNumeric(
+          col.id,
+          mergedColumnStats,
+          (col as any).type as string | undefined,
+          undefined,
+          columnSampleValues[col.id]
+        )
+      );
+    }
+    return map;
+  }, [initialColumns, mergedColumnStats, columnSampleValues]);
+
+  /** Single clipboard check per render — not once per cell (was ×30 per row). */
+  const clipboardHasDataNow = clipboardHasData();
+
+  const [, startTransition] = useTransition();
 
   const rowVirtualizer = useVirtualizer({
     count: virtualizationCount,
     getScrollElement: () => tableContainerRef.current,
-    estimateSize: useCallback(() => 28, []),
-    overscan: 5, // Further reduced for better performance - only render what's needed
-    // Enable range extractor for better performance with large datasets
-    rangeExtractor: useCallback((range: { startIndex: number; endIndex: number }) => {
-      const indexes: number[] = [];
-      for (let i = range.startIndex; i <= range.endIndex; i++) {
-        indexes.push(i);
-      }
-      return indexes;
-    }, []),
-    // Disable measurement for better performance - we know the size
-    measureElement: undefined,
-    // Enable horizontal scrolling optimization
-    horizontal: false,
+    estimateSize: useCallback(() => ROW_HEIGHT_PX, []),
+    overscan: hasUnloadedRows ? VIRTUAL_OVERSCAN_LOADING : VIRTUAL_OVERSCAN_LOADED,
   });
 
-  // Use ResizeObserver to measure and constrain container height
-  useEffect(() => {
-    if (!tableContainerRef.current) return;
+  const virtualItems = rowVirtualizer.getVirtualItems();
+  const virtualStartIndex = virtualItems.length ? virtualItems[0]!.index : -1;
+  const virtualEndIndex = virtualItems.length ? virtualItems[virtualItems.length - 1]!.index : -1;
 
-    const container = tableContainerRef.current;
-    const parent = container.parentElement;
-
-    if (!parent) return;
-
-    const updateHeight = () => {
-      // Try multiple methods to get the parent's constrained height
-      const parentRect = parent.getBoundingClientRect();
-      const parentHeight = parentRect.height;
-      const parentComputedHeight = window.getComputedStyle(parent).height;
-
-      console.log('[ResizeObserver Debug]', {
-        parentHeight,
-        parentComputedHeight,
-        parentRect: { top: parentRect.top, bottom: parentRect.bottom, height: parentRect.height },
-        viewportHeight: window.innerHeight,
-      });
-
-      // If parent has a fixed height, use it directly
-      if (
-        parentComputedHeight &&
-        parentComputedHeight !== 'auto' &&
-        !parentComputedHeight.includes('%')
-      ) {
-        const heightValue = parseFloat(parentComputedHeight);
-        if (!isNaN(heightValue) && heightValue > 0) {
-          // Use the exact parent height to fill the container
-          setContainerHeight(Math.max(100, heightValue));
-          return;
-        }
-      }
-
-      // Use bounding rect height if it's reasonable and less than viewport
-      if (parentHeight > 0 && parentHeight < window.innerHeight && parentHeight < 2000) {
-        // Use the exact parent height to fill the container
-        setContainerHeight(Math.max(100, parentHeight));
-      } else {
-        // Fallback: use viewport height minus a reasonable offset
-        const viewportHeight = window.innerHeight;
-        const estimatedHeight = Math.max(100, viewportHeight - 250); // Account for headers, titlebar, etc.
-        setContainerHeight(estimatedHeight);
-      }
-    };
-
-    // Initial measurement
-    updateHeight();
-
-    const resizeObserver = new ResizeObserver(entries => {
-      updateHeight();
-    });
-
-    // Observe both parent and container
-    resizeObserver.observe(parent);
-    resizeObserver.observe(container);
-
-    // Also listen to window resize
-    window.addEventListener('resize', updateHeight);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', updateHeight);
-    };
-  }, []);
-
-  // Debug: Log virtualizer and container dimensions
-  useEffect(() => {
-    if (tableContainerRef.current && rowVirtualizer) {
-      const container = tableContainerRef.current;
-      const totalSize = rowVirtualizer.getTotalSize();
-      const virtualItems = rowVirtualizer.getVirtualItems();
-      const parent = container.parentElement;
-
-      console.log('[Scroll Debug]', {
-        virtualizationCount,
-        totalSize,
-        virtualItemsCount: virtualItems.length,
-        containerScrollHeight: container.scrollHeight,
-        containerClientHeight: container.clientHeight,
-        containerHeight: container.offsetHeight,
-        containerHeightState: containerHeight,
-        containerComputedHeight: window.getComputedStyle(container).height,
-        containerComputedMaxHeight: window.getComputedStyle(container).maxHeight,
-        containerComputedOverflow: window.getComputedStyle(container).overflow,
-        parentHeight: parent?.offsetHeight,
-        parentClientHeight: parent?.clientHeight,
-        parentComputedHeight: parent ? window.getComputedStyle(parent).height : null,
-        parentComputedDisplay: parent ? window.getComputedStyle(parent).display : null,
-        canScroll: container.scrollHeight > container.clientHeight,
-        // The critical check: container should be smaller than content
-        needsConstraint: container.scrollHeight === container.clientHeight,
-        rowsLength: rows.length,
-        totalRowCount,
-        isFileMode,
-        // Check if container is actually constrained
-        isConstrained: container.clientHeight < container.scrollHeight,
-      });
-    }
+  useLayoutEffect(() => {
+    if (!isFileMode || isProjectFile || virtualEndIndex < 0 || isFullyLoadedInMemory) return;
+    const throughIndex = Math.max(virtualEndIndex, virtualStartIndex);
+    ensureRowsLoaded(throughIndex);
   }, [
-    virtualizationCount,
-    rowVirtualizer,
-    rows.length,
-    totalRowCount,
+    virtualStartIndex,
+    virtualEndIndex,
     isFileMode,
-    containerHeight,
+    isProjectFile,
+    isFullyLoadedInMemory,
+    ensureRowsLoaded,
   ]);
 
   const cellRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -1459,12 +2182,14 @@ export function Spreadsheet({
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const handleScroll = useCallback(
     (e: React.UIEvent<HTMLDivElement>) => {
-      // Clear any pending scroll handler
+      if (totalRowCount && dataLengthRef.current >= totalRowCount) {
+        return;
+      }
+
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current);
       }
 
-      // Debounce scroll handling to prevent excessive calls
       scrollTimeoutRef.current = setTimeout(() => {
         const target = e.target as HTMLDivElement;
         const { scrollHeight, scrollTop, clientHeight, scrollWidth, scrollLeft, clientWidth } =
@@ -1475,23 +2200,37 @@ export function Spreadsheet({
           return;
         }
 
+        const allRowsLoaded = !!totalRowCount && dataLengthRef.current >= totalRowCount;
+
         // Vertical scroll check
         const verticalScrollPercentage = (scrollTop + clientHeight) / scrollHeight;
 
         // Prefetch trigger - start prefetching at 30% scroll
-        if (verticalScrollPercentage > PREFETCH_THRESHOLD && !isPrefetchingRef.current) {
+        if (
+          !allRowsLoaded &&
+          verticalScrollPercentage > PREFETCH_THRESHOLD &&
+          !isPrefetchingRef.current
+        ) {
           if (isFileMode && lastLoadedRowRef.current < (totalRowCount || 0)) {
             prefetchNextPage();
           }
         }
 
+        if (allRowsLoaded) {
+          const horizontalScrollPercentage = (scrollLeft + clientWidth) / scrollWidth;
+          if (horizontalScrollPercentage > SCROLL_PERCENTAGE_THRESHOLD) {
+            addExtraColumns();
+          }
+          return;
+        }
+
         // Load trigger - use a more intelligent approach
         // Instead of percentage, check if we're near the bottom of currently loaded data
-        const rowsPerPage = Math.floor(clientHeight / 28); // Approximate rows visible
+        const rowsPerPage = Math.max(1, Math.floor(clientHeight / ROW_HEIGHT_PX));
         const currentLoadedRows = lastLoadedRowRef.current;
-        const virtualScrollPosition = Math.floor(scrollTop / 28); // Approximate row position
+        const virtualScrollPosition = Math.floor(scrollTop / ROW_HEIGHT_PX);
 
-        // Load more data when we're within 3 pages of the end of loaded data (more aggressive)
+        // Load more data when we're within 3 viewports of the end of loaded data
         const shouldLoadMore = virtualScrollPosition + rowsPerPage * 3 >= currentLoadedRows;
 
         // Only trigger if not already loading and we haven't loaded all rows
@@ -1562,7 +2301,7 @@ export function Spreadsheet({
         if (horizontalScrollPercentage > SCROLL_PERCENTAGE_THRESHOLD) {
           addExtraColumns();
         }
-      }, 100); // 100ms debounce
+      }, 32);
     },
     [isLoading, isFileMode, fetchMoreRows, addEmptyRows, totalRowCount, prefetchNextPage]
   );
@@ -1581,6 +2320,29 @@ export function Spreadsheet({
       onSelectionChange(rowSelection);
     }
   }, [rowSelection, onSelectionChange]);
+
+  useEffect(() => {
+    if (!onSheetStatusChange) return;
+
+    const dataColumns = table.getAllColumns().filter(col => col.id !== 'select');
+    const visibleColumns = getVisibleColumns().length;
+    const totalColumns = dataColumns.length;
+
+    let cellRef: string | null = null;
+    if (focusedCell) {
+      const column = table.getColumn(focusedCell.columnId);
+      const header = column?.columnDef.header;
+      const label =
+        typeof header === 'string'
+          ? header
+          : typeof header === 'function'
+            ? focusedCell.columnId
+            : focusedCell.columnId;
+      cellRef = `${label}${focusedCell.rowIndex + 1}`;
+    }
+
+    onSheetStatusChange({ visibleColumns, totalColumns, cellRef });
+  }, [focusedCell, columnVisibility, table, getVisibleColumns, onSheetStatusChange]);
 
   const saveSpreadsheetState = useCallback(
     _.debounce(() => {
@@ -2124,6 +2886,31 @@ export function Spreadsheet({
     handleCellEdit(focusedCell.rowIndex, focusedCell.columnId, '');
   }, [focusedCell, handleCellEdit]);
 
+  const handleSelectRow = useCallback(
+    (rowIndex: number) => {
+      setRowSelection({ [rowIndex]: true });
+      const visibleColumns = getVisibleColumns();
+      const firstDataColumn = visibleColumns.find(col => col.id !== 'select');
+      if (firstDataColumn) {
+        setFocusedCell({ rowIndex, columnId: firstDataColumn.id });
+      }
+    },
+    [getVisibleColumns]
+  );
+
+  const handleCellContextMenu = useCallback(
+    (rowIndex: number, columnId: string) => {
+      setCtxMenuRowIndex(rowIndex);
+      setCtxMenuColumnId(columnId);
+      if (columnId === 'select') {
+        handleSelectRow(rowIndex);
+      } else {
+        setFocusedCell({ rowIndex, columnId });
+      }
+    },
+    [handleSelectRow]
+  );
+
   const handleFill = useCallback(
     async (cells: CellPosition[], values: (string | number)[]) => {
       setData(prevData => {
@@ -2171,8 +2958,8 @@ export function Spreadsheet({
   // Column action handler
   const handleColumnAction = useCallback(
     async (action: string, columnId: string) => {
-      const datasetId = filePath || tabId;
-      const stats = columnStats?.[columnId];
+      const datasetId = gridDatasetId || tabId;
+      const stats = mergedColumnStats[columnId];
       const column = initialColumns.find(col => col.id === columnId);
       const columnType = stats?.data_type || (column as any)?.type || 'unknown';
 
@@ -2237,9 +3024,6 @@ export function Spreadsheet({
             });
 
             // Mark outlier rows (we'd need to check actual values against bounds)
-            // For now, just log - full implementation would check all rows
-            console.log('Outlier detection', response);
-
             // Highlight outliers - this is a simplified version
             // In a full implementation, we'd iterate through data and mark rows
           } catch (error) {
@@ -2250,39 +3034,175 @@ export function Spreadsheet({
           // Set selected column and open relationships tab in Inspector
           setSelectedColumnId(columnId);
           break;
+
+        case 'filter':
+          onRequestShowFilters?.();
+          requestAnimationFrame(() => {
+            window.dispatchEvent(
+              new CustomEvent(SPREADSHEET_EVENTS.FILTER_FOCUS, {
+                detail: { columnId, showFilters: true },
+              })
+            );
+          });
+          break;
+
+        case 'toggle-heatmap': {
+          if (!activeTab?.data) break;
+          const prev = activeTab.data.heatmapColumns ?? {};
+          updateTab(activeTab.id, {
+            data: {
+              ...activeTab.data,
+              heatmapColumns: {
+                ...prev,
+                [columnId]: !prev[columnId],
+              },
+            },
+          });
+          break;
+        }
+
+        case 'copy-column': {
+          const values = (tableData as Record<string, unknown>[]).map(row => {
+            const v = row[columnId];
+            return v === null || v === undefined ? '' : String(v);
+          });
+          try {
+            await navigator.clipboard.writeText(values.join('\n'));
+            toast({ title: 'Column copied', description: `${values.length} values copied.` });
+          } catch {
+            toast({
+              title: 'Copy failed',
+              description: 'Could not access the clipboard.',
+              variant: 'destructive',
+            });
+          }
+          break;
+        }
+
+        case 'toggle-freeze-column': {
+          if (!activeTab?.data) break;
+          const next = activeTab.data.freezeUpToColumnId === columnId ? null : columnId;
+          updateTab(activeTab.id, {
+            data: {
+              ...activeTab.data,
+              freezeUpToColumnId: next,
+            },
+          });
+          break;
+        }
+
+        case 'hide-column':
+          // Visibility was already toggled in the dropdown; surface a toast so users
+          // know how to recover (and don't think the column was deleted).
+          toast({
+            title: 'Column hidden',
+            description: `"${column?.header || columnId}" was hidden. Use "Show hidden columns" in any column header to bring it back.`,
+          });
+          break;
+
+        case 'show-hidden-columns': {
+          const hiddenCols = table
+            .getAllLeafColumns()
+            .filter(c => c.id !== 'select' && !c.getIsVisible());
+          if (hiddenCols.length === 0) {
+            toast({ title: 'No hidden columns' });
+            break;
+          }
+          for (const c of hiddenCols) c.toggleVisibility(true);
+          toast({
+            title: 'Showed hidden columns',
+            description: `${hiddenCols.length} column${hiddenCols.length === 1 ? '' : 's'} restored.`,
+          });
+          break;
+        }
+
+        case 'group-by':
+        case 'aggregate-by':
+          // No bespoke grouping UI yet — open the Aggregate / Compute Variable
+          // dialog which is the closest available flow.
+          useAnalysisSetupStore.getState().openDialog('Aggregate Data');
+          break;
+
+        case 'delete-column': {
+          if (!activeTab || !activeTab.data) {
+            toast({ title: "Can't delete", description: 'No active tab.' });
+            break;
+          }
+          const cols = activeTab.data.initialColumns ?? [];
+          const target = cols.find(c => c.id === columnId);
+          if (!target) {
+            toast({ title: "Can't delete", description: 'Column not found.' });
+            break;
+          }
+          if (cols.length <= 1) {
+            toast({
+              title: "Can't delete the last column",
+              description: 'A dataset needs at least one column.',
+            });
+            break;
+          }
+
+          recordTabSnapshot(activeTab.id, `Delete column ${target.header}`);
+
+          const nextCols = cols.filter(c => c.id !== columnId);
+          const nextRows = (activeTab.data.initialData ?? []).map(row => {
+            const { [columnId]: _drop, ...rest } = row;
+            return rest;
+          });
+          updateTab(activeTab.id, {
+            data: {
+              ...activeTab.data,
+              initialColumns: nextCols,
+              initialData: nextRows,
+              totalColumns: nextCols.length,
+            },
+            isDirty: true,
+          });
+
+          const liveNote = activeTab.data?.sheetId
+            ? ' (live-collab tab — applied locally, not broadcast)'
+            : '';
+          toast({
+            title: `Deleted column "${target.header}"`,
+            description: `Press ⌘Z to undo.${liveNote}`,
+          });
+          break;
+        }
+
         default:
           break;
       }
     },
-    [filePath, tabId, columnStats, initialColumns, data, activeTab]
+    [
+      filePath,
+      tabId,
+      tableData,
+      mergedColumnStats,
+      initialColumns,
+      data,
+      activeTab,
+      table,
+      onRequestShowFilters,
+      updateTab,
+    ]
   );
 
-  const HeaderComponentWrapper = useMemo(() => {
-    const WrappedHeaderComponent = ({ header }: { header: Header<any, unknown> }) => (
-      <HeaderComponent
-        header={header}
-        table={table}
-        showStats={showStats}
-        columnStats={columnStats}
-        onHeaderEdit={handleHeaderEdit}
-        isLoadingStats={isLoadingStats}
-        onColumnAction={handleColumnAction}
-        datasetId={filePath || tabId}
-      />
-    );
-
-    WrappedHeaderComponent.displayName = 'HeaderComponentWrapper';
-    return WrappedHeaderComponent;
-  }, [
+  const headerComponentProps = {
     table,
     showStats,
-    columnStats,
-    handleHeaderEdit,
+    columnStats: mergedColumnStats,
+    initialColumns,
+    columnSampleValues,
+    onHeaderEdit: handleHeaderEdit,
     isLoadingStats,
-    handleColumnAction,
-    filePath,
-    tabId,
-  ]);
+    onColumnAction: handleColumnAction,
+    datasetId: gridDatasetId || tabId,
+    metadataDatasetId: gridDatasetId,
+    columnMetadata,
+    onMeasurementLevelChange: handleMeasurementLevelChange,
+    heatmapColumns,
+    freezeUpToColumnId,
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -2497,17 +3417,24 @@ export function Spreadsheet({
     };
   }, [saveSpreadsheetState]);
 
-  // Sync filters from tab store when they change externally (e.g., from Agent Panel)
+  // Sync filters from tab store when they change externally (e.g., agent panel).
   useEffect(() => {
-    if (activeTab?.data?.columnFilters) {
-      const tabFilters = activeTab.data.columnFilters;
-      // Only update if filters are different to avoid infinite loops
-      const currentFiltersStr = JSON.stringify(columnFilters);
-      const tabFiltersStr = JSON.stringify(tabFilters);
-      if (tabFiltersStr !== currentFiltersStr && tabFiltersStr !== '[]') {
-        setColumnFilters(tabFilters);
-        // Apply the filters to fetch filtered data
+    if (!activeTab?.data) return;
+    const tabFilters = activeTab.data.columnFilters ?? [];
+    const currentFiltersStr = JSON.stringify(columnFilters);
+    const tabFiltersStr = JSON.stringify(tabFilters);
+    if (tabFiltersStr === currentFiltersStr) return;
+
+    setColumnFilters(tabFilters);
+    if (!getDatasetIdFromPath(activeTab.data.filePath)) {
+      if (tabFilters.length > 0) {
         fetchFilteredData(tabFilters);
+      } else {
+        setData([]);
+        lastLoadedRowRef.current = 0;
+        setPrefetchedData([]);
+        prefetchedRowRangeRef.current = null;
+        fetchMoreRows();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2543,340 +3470,351 @@ export function Spreadsheet({
       <div
         ref={tableContainerRef}
         onScroll={handleScroll}
-        className="relative flex-1 overflow-auto"
+        className="relative min-h-0 flex-1 overflow-auto"
         style={{
-          // CRITICAL: Container must have a constrained height for scrolling to work
-          // Use measured height if available, otherwise use viewport calculation
-          height: containerHeight ? `${containerHeight}px` : 'calc(100vh - 250px)',
-          maxHeight: containerHeight ? `${containerHeight}px` : 'calc(100vh - 250px)',
-          minHeight: 0,
           width: '100%',
-          // Ensure overflow is set for scrolling
-          overflow: 'auto',
           position: 'relative',
           padding: 0,
           margin: 0,
         }}
       >
-        {/* Wrapper div with total height - enables scrolling */}
-        <div
+        {showInitialGridLoader ? (
+          <div
+            className="absolute inset-0 z-20 flex items-center justify-center bg-background"
+            aria-busy="true"
+            aria-live="polite"
+            role="status"
+          >
+            <Loading />
+          </div>
+        ) : null}
+        {/*
+          Outer wrapper: sticky header + tall scroll-space div.
+          The scroll-space div holds the full virtual height so the scrollbar
+          is correct. Inside it the <table> body rows are in normal flow but
+          shifted via translateY (official TanStack table virtualizer pattern).
+          The background on the scroll-space div shows row/column grid lines
+          even during fast-scroll before React can paint new rows.
+        */}
+        <table
+          className="w-full border-collapse text-xs"
           style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            position: 'relative',
+            tableLayout: 'fixed',
+            display: 'block',
+            width: `${totalTableWidth}px`,
+            minWidth: `${totalTableWidth}px`,
             padding: 0,
             margin: 0,
           }}
         >
-          <table
-            className="w-full border-collapse text-xs"
+          <TableHeader
+            className="bg-muted/40"
             style={{
-              tableLayout: 'fixed',
-              display: 'block', // Keep original block display for custom layout
-              width: '100%',
-              padding: 0,
-              margin: 0,
+              display: 'block',
+              position: 'sticky',
+              top: 0,
+              zIndex: 2,
             }}
           >
-            <TableHeader
-              style={{
-                display: 'block',
-                position: 'sticky',
-                top: 0,
-                zIndex: 1,
-                background: 'white',
-              }}
-            >
-              {table.getHeaderGroups().map(headerGroup => (
-                <TableRow
-                  key={headerGroup.id}
-                  className="!border-none" // Remove default border
-                  style={{ display: 'flex', width: '100%' }}
-                >
-                  {headerGroup.headers.map(header => (
-                    <TableHead
-                      key={header.id}
-                      className="sticky top-0 flex items-center whitespace-nowrap bg-background border-r border-b border-border last:border-r-0"
-                      style={{
-                        width: header.getSize() || 150,
-                        minWidth: header.getSize() || 150,
-                        height: showStats ? '250px' : '28px',
-                        padding: 0,
-                      }}
-                    >
-                      <HeaderComponentWrapper header={header} />
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-
-            {/* Table body with virtualized rows - restore original structure */}
-            <TableBody
-              style={{
-                display: 'block',
-                height: `${rowVirtualizer.getTotalSize()}px`,
-                minHeight: `${rowVirtualizer.getTotalSize()}px`,
-                position: 'relative',
-                width: '100%',
-                boxSizing: 'border-box',
-                padding: 0,
-                margin: 0,
-              }}
-            >
-              {rowVirtualizer.getVirtualItems().map(virtualRow => {
-                const row = rows[virtualRow.index];
-                const rowIndex = virtualRow.index;
-
-                // If row doesn't exist yet but we're in file mode, show loading placeholder
-                if (!row && isFileMode && rowIndex < (totalRowCount || 0)) {
-                  // Trigger fetch if we're trying to render unloaded rows
-                  // This handles fast scrolling where virtualizer tries to render rows beyond loaded data
-                  // Trigger if rowIndex is >= lastLoadedRowRef (we're past loaded data) or within 30 rows of it
-                  const rowsAhead = rowIndex - lastLoadedRowRef.current;
-                  if (
-                    rowsAhead >= -30 &&
-                    !loadingRef.current &&
-                    lastLoadedRowRef.current < (totalRowCount || 0)
-                  ) {
-                    // Trigger fetch immediately when we try to render unloaded rows
-                    // Don't set loadingRef here - let fetchMoreRows handle it
-                    setTimeout(() => {
-                      if (!loadingRef.current && lastLoadedRowRef.current < (totalRowCount || 0)) {
-                        console.log(
-                          '[Pagination Debug] Triggering fetchMoreRows from placeholder',
-                          {
-                            rowIndex,
-                            lastLoadedRow: lastLoadedRowRef.current,
-                            totalRowCount,
-                            rowsAhead,
-                            dataLength: data.length,
-                            rowsLength: rows.length,
+            {table.getHeaderGroups().map(headerGroup => (
+              <TableRow
+                key={headerGroup.id}
+                className="!border-none hover:bg-transparent"
+                style={{
+                  display: 'flex',
+                  width: `${totalTableWidth}px`,
+                  minWidth: `${totalTableWidth}px`,
+                }}
+              >
+                {headerGroup.headers.map(header => (
+                  <TableHead
+                    key={header.id}
+                    className={cn(
+                      'sticky top-0 flex items-stretch whitespace-nowrap border-r border-b border-border/70 bg-muted/40 p-0 last:border-r-0',
+                      header.id === 'select' && 'border-border'
+                    )}
+                    style={{
+                      width: header.getSize() || 150,
+                      minWidth: header.getSize() || 150,
+                      flexShrink: 0,
+                      height: showStats ? '250px' : '32px',
+                      padding: 0,
+                      ...(header.column.getIsPinned()
+                        ? {
+                            position: 'sticky',
+                            left: header.column.getStart(header.column.getIsPinned() as 'left'),
+                            zIndex: 4,
                           }
-                        );
-                        // fetchMoreRows will set loadingRef.current = true internally
-                        fetchMoreRows().catch(error => {
-                          console.error('[Pagination Debug] fetchMoreRows error:', error);
-                          loadingRef.current = false;
-                        });
-                      }
-                    }, 0);
+                        : {}),
+                    }}
+                  >
+                    <HeaderComponent header={header} {...headerComponentProps} />
+                  </TableHead>
+                ))}
+              </TableRow>
+            ))}
+          </TableHeader>
+
+          {/* Tall scroll-space div: creates the full virtual scroll height.
+                Background shows grid lines during fast scroll before React re-paints. */}
+          {/* Single shared ContextMenu for all rows — eliminates per-row Radix portals
+                which were blocking the main thread for 400-600ms on every scroll. */}
+          <ContextMenu>
+            <ContextMenuTrigger asChild>
+              <TableBody
+                style={{
+                  display: 'block',
+                  height: `${rowVirtualizer.getTotalSize()}px`,
+                  position: 'relative',
+                  width: '100%',
+                }}
+              >
+                {rowVirtualizer.getVirtualItems().map((virtualRow, index) => {
+                  const rowIndex = virtualRow.index;
+                  const placeholderColumns = gridColumns;
+                  const isUnloadedRow =
+                    hasUnloadedRows && rowIndex >= loadedRowCount && rowIndex < virtualizationCount;
+
+                  // Per-row translateY offset for the TanStack table virtualizer pattern:
+                  // rows are in normal flow so we subtract their natural stacked offset.
+                  const translateY = virtualRow.start - index * virtualRow.size;
+
+                  if (isUnloadedRow) {
+                    return (
+                      <VirtualSheetPlaceholderRow
+                        key={`placeholder-${rowIndex}`}
+                        rowIndex={rowIndex}
+                        translateY={translateY}
+                        columns={placeholderColumns}
+                        rowHeightPx={ROW_HEIGHT_PX}
+                      />
+                    );
                   }
 
-                  // Render loading placeholder
+                  const row = rows[rowIndex];
+                  if (!row) return null;
+
+                  const isRowSelected = row.getIsSelected();
+                  const isFocused = focusedCell?.rowIndex === rowIndex;
+
                   return (
                     <TableRow
-                      key={`loading-${rowIndex}`}
+                      key={row.id}
                       data-index={rowIndex}
-                      className="bg-muted/20 animate-pulse !border-b-0"
+                      className={cn(
+                        isRowSelected && 'bg-primary/5',
+                        highlightedRows.has(rowIndex) &&
+                          'border-l-4 border-l-primary bg-primary/10',
+                        selectedRowId === `row-${rowIndex}` && 'bg-primary/5',
+                        '!border-b-0 hover:bg-transparent'
+                      )}
                       style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        transform: `translateY(${virtualRow.start}px)`,
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${translateY}px)`,
                         display: 'flex',
-                        height: '28px',
-                        borderBottom: 'none', // Explicitly remove border
+                        width: `${totalTableWidth}px`,
+                        minWidth: `${totalTableWidth}px`,
+                        borderBottom: 'none',
                         boxSizing: 'border-box',
+                        backgroundColor: 'var(--background)',
                       }}
                     >
-                      {table.getAllColumns().map(column => {
-                        const columnId = column.id;
+                      {row.getVisibleCells().map(cell => {
+                        const columnId = cell.column.id;
+                        const cellKey = `${rowIndex}-${columnId}`;
+                        const isCellFocused = isFocused && focusedCell?.columnId === columnId;
+                        const cellIsSelected = isCellSelected(rowIndex, columnId);
+                        const colMeta = colMetaById.get(columnId);
+                        const isNumericColumn = colIsNumericById.get(columnId) ?? false;
+
+                        let heatmapBackgroundColor: string | undefined;
+                        if (heatmapColumns[columnId] && columnId !== 'select') {
+                          const scale = heatmapScales[columnId];
+                          const n = parseNumericCellValue(cell.getValue());
+                          if (scale && n !== null) {
+                            heatmapBackgroundColor = heatmapBackgroundForValue(n, scale);
+                          }
+                        }
+
                         return (
-                          <TableCell
-                            key={columnId}
-                            className="border-r border-b border-border last:border-r-0"
-                            style={{
-                              width: column.getSize() || 150,
-                              minWidth: column.getSize() || 150,
-                              height: '28px',
-                              padding: 0,
-                              borderRight: '1px solid #e5e7eb',
-                              borderBottom: '1px solid #e5e7eb',
-                              boxSizing: 'border-box',
-                            }}
-                          >
-                            <div className="h-full w-full bg-muted/30" />
-                          </TableCell>
+                          <MemoizedTableCell
+                            key={cell.id}
+                            cell={cell}
+                            rowIndex={rowIndex}
+                            columnId={columnId}
+                            cellKey={cellKey}
+                            isCellFocused={isCellFocused}
+                            isCellSelected={cellIsSelected}
+                            isNumericColumn={isNumericColumn}
+                            heatmapBackgroundColor={heatmapBackgroundColor}
+                            cellRefs={cellRefs}
+                            handleCellEdit={handleCellEdit}
+                            setFocusedCell={setFocusedCell}
+                            onMouseDown={handleCellMouseDown}
+                            onMouseEnter={handleCellMouseEnter}
+                            onCopy={handleCopy}
+                            onCut={handleCut}
+                            onPaste={handlePaste}
+                            onDelete={handleDelete}
+                            clipboardHasData={clipboardHasDataNow}
+                            onSelectRow={handleSelectRow}
+                            onCellContextMenu={handleCellContextMenu}
+                          />
                         );
                       })}
                     </TableRow>
                   );
-                }
-
-                // If row doesn't exist and we're past total, return null
-                if (!row) return null;
-
-                const isRowSelected = row.getIsSelected();
-                const isFocused = focusedCell?.rowIndex === rowIndex;
-
+                })}
+              </TableBody>
+            </ContextMenuTrigger>
+            {/* Single ContextMenuContent — reads ctxMenuRowIndex / ctxMenuColumnId on right-click */}
+            <ContextMenuContent>
+              {(() => {
+                const ri = ctxMenuRowIndex;
+                const ctxRow = ri !== null ? rows[ri] : null;
+                if (!ctxRow || ri === null) return null;
+                const rowData = ctxRow.original as Record<string, any>;
+                const datasetId = gridDatasetId || tabId;
+                const isRowGutter = ctxMenuColumnId === 'select';
                 return (
-                  <ContextMenu key={row.id}>
-                    <ContextMenuTrigger asChild>
-                      <TableRow
-                        data-index={rowIndex}
-                        className={cn(
-                          isRowSelected && 'bg-muted/50',
-                          highlightedRows.has(rowIndex) &&
-                            'bg-blue-100 dark:bg-blue-900/30 border-l-4 border-l-blue-500',
-                          selectedRowId === `row-${rowIndex}` && 'ring-2 ring-primary',
-                          '!border-b-0' // Override default TableRow border-b - cells have their own bottom borders
+                  <>
+                    {(onInsertRow || onDeleteRows) && (
+                      <>
+                        {onInsertRow && (
+                          <>
+                            <ContextMenuItem onClick={() => onInsertRow(ri, 'above')}>
+                              Insert row above
+                            </ContextMenuItem>
+                            <ContextMenuItem onClick={() => onInsertRow(ri, 'below')}>
+                              Insert row below
+                            </ContextMenuItem>
+                          </>
                         )}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '100%',
-                          transform: `translateY(${virtualRow.start}px)`,
-                          display: 'flex',
-                          borderBottom: 'none', // Explicitly remove border
-                          boxSizing: 'border-box',
-                        }}
-                      >
-                        {row.getVisibleCells().map(cell => {
-                          const columnId = cell.column.id;
-                          const cellKey = `${rowIndex}-${columnId}`;
-                          const isCellFocused = isFocused && focusedCell?.columnId === columnId;
-                          const cellIsSelected = isCellSelected(rowIndex, columnId);
-
-                          return (
-                            <MemoizedTableCell
-                              key={cell.id}
-                              cell={cell}
-                              rowIndex={rowIndex}
-                              columnId={columnId}
-                              cellKey={cellKey}
-                              isCellFocused={isCellFocused}
-                              isCellSelected={cellIsSelected}
-                              cellRefs={cellRefs}
-                              handleCellEdit={handleCellEdit}
-                              setFocusedCell={setFocusedCell}
-                              onMouseDown={handleCellMouseDown}
-                              onMouseEnter={handleCellMouseEnter}
-                              onCopy={handleCopy}
-                              onCut={handleCut}
-                              onPaste={handlePaste}
-                              onDelete={handleDelete}
-                              clipboardHasData={clipboardHasData()}
-                            />
-                          );
-                        })}
-                      </TableRow>
-                    </ContextMenuTrigger>
-                    <ContextMenuContent>
-                      <ContextMenuItem
-                        onClick={async () => {
-                          try {
-                            const rowData = row.original as Record<string, any>;
-                            // Set selected row for Inspector pane
-                            setSelectedRowId(`row-${rowIndex}`);
-                            setSelectedRowData(rowData);
-
-                            // Get dataset ID from filePath or tab data
-                            const datasetId = filePath || tabId;
-
-                            const response = await apiClient.ai.rowInsight({
-                              datasetId,
-                              rowId: `row-${rowIndex}`,
-                              rowData,
-                              teachingMode: activeTab?.data?.teachingMode || false,
-                            } as any);
-
-                            setRowInsight(response);
-                            console.info('Row insight', response);
-                          } catch (error) {
-                            console.error('Failed to get row insight', error);
+                        {onDeleteRows && (
+                          <ContextMenuItem variant="destructive" onClick={() => onDeleteRows([ri])}>
+                            Delete row
+                          </ContextMenuItem>
+                        )}
+                        <ContextMenuSeparator />
+                      </>
+                    )}
+                    <ContextMenuItem
+                      onClick={async () => {
+                        try {
+                          setSelectedRowId(`row-${ri}`);
+                          setSelectedRowData(rowData);
+                          const response = await apiClient.ai.rowInsight({
+                            datasetId,
+                            rowId: `row-${ri}`,
+                            rowData,
+                            teachingMode: activeTab?.data?.teachingMode || false,
+                          } as any);
+                          setRowInsight(response);
+                        } catch (error) {
+                          console.error('Failed to get row insight', error);
+                        }
+                      }}
+                    >
+                      Why is this row unusual?
+                    </ContextMenuItem>
+                    <ContextMenuItem
+                      onClick={async () => {
+                        try {
+                          setSelectedRowId(`row-${ri}`);
+                          setSelectedRowData(rowData);
+                          const response = await apiClient.ai.rowInsight({
+                            datasetId,
+                            rowId: `row-${ri}`,
+                            rowData,
+                            mode: 'similar',
+                            teachingMode: activeTab?.data?.teachingMode || false,
+                          } as any);
+                          setRowInsight(response);
+                          if (response?.similarRows && Array.isArray(response.similarRows)) {
+                            setHighlightedRows(new Set(response.similarRows));
                           }
-                        }}
-                      >
-                        Why is this row unusual?
-                      </ContextMenuItem>
-                      <ContextMenuItem
-                        onClick={async () => {
-                          try {
-                            const rowData = row.original as Record<string, any>;
-                            // Set selected row for Inspector pane
-                            setSelectedRowId(`row-${rowIndex}`);
-                            setSelectedRowData(rowData);
-
-                            const datasetId = filePath || tabId;
-                            const response = await apiClient.ai.rowInsight({
-                              datasetId,
-                              rowId: `row-${rowIndex}`,
-                              rowData,
-                              mode: 'similar',
-                              teachingMode: activeTab?.data?.teachingMode || false,
-                            } as any);
-
-                            setRowInsight(response);
-
-                            // Highlight similar rows if response includes row indices
-                            if (response?.similarRows && Array.isArray(response.similarRows)) {
-                              setHighlightedRows(new Set(response.similarRows));
-                            }
-
-                            console.info('Similar rows', response);
-                          } catch (error) {
-                            console.error('Failed to get similar rows insight', error);
-                          }
-                        }}
-                      >
-                        Show similar rows
-                      </ContextMenuItem>
-                      <ContextMenuSeparator />
-                      <ContextMenuItem
-                        onClick={async () => {
-                          try {
-                            const rowData = row.original as Record<string, any>;
-                            setSelectedRowId(`row-${rowIndex}`);
-                            setSelectedRowData(rowData);
-                            setCurrentRowIndexForFix(rowIndex);
-                            setRowFixLoading(true);
-                            setRowFixModalOpen(true);
-
-                            const datasetId = filePath || tabId;
-                            const response = await apiClient.ai.fixRow({
-                              datasetId,
-                              rowId: `row-${rowIndex}`,
-                              rowData,
-                              columnStats: columnStats,
-                              teachingMode: activeTab?.data?.teachingMode || false,
-                            } as any);
-
-                            setRowFixIssues(response.issues || []);
-                            setRowFixSummary(response.summary || '');
-                          } catch (error) {
-                            console.error('Failed to get row fixes', error);
-                            setRowFixIssues([]);
-                            setRowFixSummary('Failed to analyze row issues.');
-                          } finally {
-                            setRowFixLoading(false);
-                          }
-                        }}
-                      >
-                        Fix row issues
-                      </ContextMenuItem>
-                    </ContextMenuContent>
-                  </ContextMenu>
+                        } catch (error) {
+                          console.error('Failed to get similar rows insight', error);
+                        }
+                      }}
+                    >
+                      Show similar rows
+                    </ContextMenuItem>
+                    <ContextMenuSeparator />
+                    <ContextMenuItem
+                      onClick={async () => {
+                        try {
+                          setSelectedRowId(`row-${ri}`);
+                          setSelectedRowData(rowData);
+                          setCurrentRowIndexForFix(ri);
+                          setRowFixLoading(true);
+                          setRowFixModalOpen(true);
+                          const response = await apiClient.ai.fixRow({
+                            datasetId,
+                            rowId: `row-${ri}`,
+                            rowData,
+                            columnStats: mergedColumnStats,
+                            teachingMode: activeTab?.data?.teachingMode || false,
+                          } as any);
+                          setRowFixIssues(response.issues || []);
+                          setRowFixSummary(response.summary || '');
+                        } catch (error) {
+                          console.error('Failed to get row fixes', error);
+                          setRowFixIssues([]);
+                          setRowFixSummary('Failed to analyze row issues.');
+                        } finally {
+                          setRowFixLoading(false);
+                        }
+                      }}
+                    >
+                      Fix row issues
+                    </ContextMenuItem>
+                    {!isRowGutter && (
+                      <>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem onClick={handleCopy}>
+                          <Copy className="mr-2 h-4 w-4" />
+                          Copy
+                          <ContextMenuShortcut>⌘C</ContextMenuShortcut>
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={handleCut}>
+                          <Scissors className="mr-2 h-4 w-4" />
+                          Cut
+                          <ContextMenuShortcut>⌘X</ContextMenuShortcut>
+                        </ContextMenuItem>
+                        <ContextMenuItem onClick={handlePaste} disabled={!clipboardHasDataNow}>
+                          <Clipboard className="mr-2 h-4 w-4" />
+                          Paste
+                          <ContextMenuShortcut>⌘V</ContextMenuShortcut>
+                        </ContextMenuItem>
+                        <ContextMenuSeparator />
+                        <ContextMenuItem onClick={handleDelete} variant="destructive">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                          <ContextMenuShortcut>Del</ContextMenuShortcut>
+                        </ContextMenuItem>
+                      </>
+                    )}
+                  </>
                 );
-              })}
-            </TableBody>
-          </table>
-          {/* Fill Handle - shown when cells are selected */}
-          {focusedCell && (
-            <FillHandle
-              selection={
-                cellSelection || {
-                  start: focusedCell,
-                  end: focusedCell,
-                }
+              })()}
+            </ContextMenuContent>
+          </ContextMenu>
+        </table>
+        {/* Fill Handle - shown when cells are selected */}
+        {focusedCell && (
+          <FillHandle
+            selection={
+              cellSelection || {
+                start: focusedCell,
+                end: focusedCell,
               }
-              visibleColumns={getVisibleColumns().map(col => col.id)}
-              data={data}
-              onFill={handleFill}
-            />
-          )}
-        </div>
+            }
+            visibleColumns={getVisibleColumns().map(col => col.id)}
+            data={data}
+            onFill={handleFill}
+          />
+        )}
       </div>
 
       {/* Row Fix Modal */}
@@ -2952,7 +3890,7 @@ export function Spreadsheet({
             return;
 
           try {
-            const datasetId = filePath || tabId;
+            const datasetId = gridDatasetId || tabId;
             const sourceColumnId = currentColumnForTransformation;
 
             // For each transformation, create a new column
@@ -2994,7 +3932,7 @@ export function Spreadsheet({
                           break;
                         case 'zscore':
                           // Calculate z-score (would need column stats)
-                          const stats = columnStats?.[sourceColumnId]?.numeric_stats;
+                          const stats = mergedColumnStats[sourceColumnId]?.numeric_stats;
                           if (
                             stats &&
                             stats.mean !== undefined &&
@@ -3005,7 +3943,7 @@ export function Spreadsheet({
                           }
                           break;
                         case 'standardize':
-                          const stats2 = columnStats?.[sourceColumnId]?.numeric_stats;
+                          const stats2 = mergedColumnStats[sourceColumnId]?.numeric_stats;
                           if (
                             stats2 &&
                             stats2.mean !== undefined &&
@@ -3016,7 +3954,7 @@ export function Spreadsheet({
                           }
                           break;
                         case 'normalize':
-                          const stats3 = columnStats?.[sourceColumnId]?.numeric_stats;
+                          const stats3 = mergedColumnStats[sourceColumnId]?.numeric_stats;
                           if (
                             stats3 &&
                             stats3.min !== undefined &&

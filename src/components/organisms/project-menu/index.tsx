@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/molecules/dropdown';
 import { Button } from '@/components/atoms/button';
+import { FolderComponent } from '@/components/organisms/file-tree';
 import { ChevronDown, File, Folder, Plus, X } from 'lucide-react';
 
 interface RecentProject {
@@ -119,12 +120,12 @@ export const ProjectMenu = () => {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2">
+        <Button variant="ghost" className="h-11 gap-2 rounded-none px-3 text-xs font-normal">
           {currentProject?.name || 'No Project'}
           <ChevronDown />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-80">
+      <DropdownMenuContent align="start" className="w-80 max-h-[min(80vh,28rem)] overflow-y-auto">
         <DropdownMenuLabel>Actions</DropdownMenuLabel>
         <DropdownMenuItem disabled={isLoading} onClick={handleNewProject}>
           <Plus className="h-4 w-4 mr-2" />
@@ -139,10 +140,14 @@ export const ProjectMenu = () => {
           Open Folder
         </DropdownMenuItem>
 
-        <DropdownMenuSeparator />
-
-        {currentProject && (
+        {currentProject ? (
           <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel>Project files</DropdownMenuLabel>
+            <div className="px-1 py-1" onPointerDown={e => e.stopPropagation()}>
+              <FolderComponent />
+            </div>
+            <DropdownMenuSeparator />
             <DropdownMenuLabel>Current Project</DropdownMenuLabel>
             <DropdownMenuItem disabled={isLoading} className="flex items-center gap-2">
               {currentProject.type === 'directory' ? (
@@ -155,12 +160,12 @@ export const ProjectMenu = () => {
                 <span className="text-xs text-muted-foreground">{currentProject.path}</span>
               </div>
             </DropdownMenuItem>
-            <DropdownMenuSeparator />
           </>
-        )}
+        ) : null}
 
         {recentProjects.length > 0 && (
           <>
+            <DropdownMenuSeparator />
             <DropdownMenuLabel>Recent Projects</DropdownMenuLabel>
             {recentProjects.map(project => (
               <DropdownMenuItem

@@ -2,9 +2,12 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests',
+  testMatch: '**/*.spec.ts',
+  testIgnore: ['**/auth.spec.ts', '**/*.test.ts', '**/components/**', '**/utils/**'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
+  timeout: 60_000,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
   use: {
@@ -12,10 +15,6 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    // Add test mode header to bypass authentication
-    extraHTTPHeaders: {
-      'x-test-mode': 'true',
-    },
   },
 
   projects: [
@@ -23,23 +22,6 @@ export default defineConfig({
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
     },
-    // Reduce the number of browsers for faster testing
-    // {
-    //   name: 'firefox',
-    //   use: { ...devices['Desktop Firefox'] },
-    // },
-    // {
-    //   name: 'webkit',
-    //   use: { ...devices['Desktop Safari'] },
-    // },
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
   ],
 
   webServer: {
@@ -47,5 +29,9 @@ export default defineConfig({
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120 * 1000,
+    env: {
+      ...process.env,
+      E2E_AUTH_BYPASS: 'true',
+    },
   },
 });

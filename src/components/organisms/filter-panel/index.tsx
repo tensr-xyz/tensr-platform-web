@@ -9,15 +9,24 @@ import { Input } from '@/components/atoms/input';
 import { ScrollArea } from '@/components/atoms/scroll-area';
 import { Eye, EyeOff } from 'lucide-react';
 import { LoaderCircle } from 'lucide-react';
+import Loader from '@/components/molecules/loading';
 import { BarChart, Bar, XAxis, ResponsiveContainer, ReferenceArea, YAxis, Cell } from 'recharts';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRef } from 'react';
 import { useTabsStore } from '@/stores/tabs-store';
 import _ from 'lodash';
 import useDebounce from '@/hooks/ui/use-debounce';
-import useAuth from '@/hooks/api/use-auth';
 import { getIdToken } from '@/utils/auth';
+import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { cn } from '@/utils';
 import { AlertCircle } from 'lucide-react';
+import {
+  ColumnTypeBadge,
+  isNumericDataType,
+  resolveColumnIsNumeric,
+} from '@/components/molecules/column-type-badge';
+import type { ColumnSummary } from '@/types/file';
+import type { Column } from '@/stores/tabs-store';
 
 interface VirtualizedListProps {
   itemCount: number;
@@ -79,9 +88,24 @@ interface ColumnFrequencyResponse {
   column_type: string;
 }
 
+const DATASET_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Dataset tabs may store a bare UUID or a path segment that contains one. */
+function resolveDatasetIdForAnalysis(filePath: string): string | null {
+  const trimmed = filePath.trim();
+  if (DATASET_ID_RE.test(trimmed)) {
+    return trimmed;
+  }
+  const embedded = trimmed.match(DATASET_ID_RE);
+  return embedded ? embedded[0] : null;
+}
+
 interface FilterPanelProps {
   filePath?: string;
   columnNames: string[];
+  columnStats?: Record<string, ColumnSummary>;
+  initialColumns?: Column[];
+  columnSampleValues?: Record<string, unknown[]>;
   onFilterChange: (columnName: string, values: Set<string>) => void;
 }
 
@@ -91,16 +115,27 @@ interface RangeState {
   isDragging: boolean;
 }
 
-const generateColor = (input: string) => {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    hash = input.charCodeAt(i) + ((hash << 5) - hash);
-  }
+const CHART_FILLS = [
+  'var(--chart-1)',
+  'var(--chart-2)',
+  'var(--chart-3)',
+  'var(--chart-4)',
+  'var(--chart-5)',
+] as const;
 
-  // Generate HSL with good saturation and lightness for visibility
-  const h = Math.abs(hash) % 360;
-  return `hsl(${h}, 70%, 50%)`;
-};
+/** Stable accent per column — matches shadcn/tensr-style theme chart tokens in `globals.css`. */
+function columnChartFill(columnName: string): string {
+  let hash = 0;
+  for (let i = 0; i < columnName.length; i++) {
+    hash = columnName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return CHART_FILLS[Math.abs(hash) % CHART_FILLS.length];
+}
+
+/** Categorical list: fixed row height + gap so virtualizer stride matches painted layout */
+const LIST_ROW_GAP_PX = 4;
+const LIST_ROW_HEIGHT_PX = 28;
+const LIST_ROW_STRIDE_PX = LIST_ROW_HEIGHT_PX + LIST_ROW_GAP_PX;
 
 // Create FrequencyItem component with displayName
 const FrequencyItem = memo(
@@ -110,44 +145,59 @@ const FrequencyItem = memo(
     percentage,
     isSelected,
     onToggle,
-    backgroundColor,
+    accentColor,
+    rowIndex,
+    isLast,
   }: {
     value: string;
     count: number;
     percentage: number;
     isSelected: boolean;
     onToggle: () => void;
-    backgroundColor: string;
+    accentColor: string;
+    rowIndex: number;
+    isLast: boolean;
   }) => {
-    const getBackgroundWithOpacity = (color: string) => {
-      // If color is HSL format
-      if (color.startsWith('hsl')) {
-        return color.replace('hsl', 'hsla').replace(')', ', 0.1)');
-      }
-      return color + '1A'; // Hex opacity
-    };
+    const rowBg = isSelected
+      ? `color-mix(in oklch, ${accentColor} 26%, var(--background))`
+      : rowIndex % 2 === 0
+        ? `color-mix(in oklch, ${accentColor} 18%, var(--background))`
+        : `color-mix(in oklch, ${accentColor} 10%, var(--background))`;
 
     return (
       <div
+        role="button"
+        tabIndex={0}
         onClick={onToggle}
-        className="flex items-center justify-between py-1 px-2 hover:opacity-90 cursor-pointer"
-        style={{
-          backgroundColor: getBackgroundWithOpacity(backgroundColor),
-          color: backgroundColor,
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onToggle();
+          }
         }}
+        className={cn(
+          'flex w-full cursor-pointer items-center justify-between gap-2 px-2 text-[10px] leading-snug transition-[filter] hover:brightness-[0.98]',
+          !isLast && 'mb-1'
+        )}
+        style={{ background: rowBg, height: LIST_ROW_HEIGHT_PX }}
       >
-        <div className="flex items-center gap-2 min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5">
           {isSelected ? (
-            <Eye className="w-4 h-4 flex-shrink-0" />
+            <Eye className="h-3 w-3 shrink-0 text-foreground" />
           ) : (
-            <EyeOff className="w-4 h-4 flex-shrink-0" />
+            <EyeOff className="h-3 w-3 shrink-0 text-muted-foreground" />
           )}
-          <span className="truncate" style={{ color: backgroundColor }}>
+          <span className="truncate font-medium text-foreground" title={value}>
             {value}
           </span>
         </div>
-        <span className="ml-2 flex-shrink-0" style={{ color: backgroundColor }}>
-          {count.toLocaleString()} ({percentage.toFixed(1)}%)
+        <span className="shrink-0 tabular-nums">
+          <span className="font-semibold" style={{ color: accentColor }}>
+            {count.toLocaleString()}
+          </span>{' '}
+          <span className="font-normal text-muted-foreground opacity-90">
+            ({percentage.toFixed(1)}%)
+          </span>
         </span>
       </div>
     );
@@ -205,9 +255,8 @@ ErrorDisplay.displayName = 'ErrorDisplay';
 
 // Add displayName to LoadingContent
 const LoadingContent = memo(() => (
-  <div className="flex flex-col items-center justify-center h-64 space-y-4">
-    <LoaderCircle className="w-8 h-8 animate-spin text-primary" />
-    <p className="text-sm text-muted-foreground">Loading data...</p>
+  <div className="flex items-center justify-center h-64">
+    <Loader size="sm" />
   </div>
 ));
 LoadingContent.displayName = 'LoadingContent';
@@ -293,7 +342,7 @@ export const NumericFrequencyContent = memo(
         return {
           domain: [0, 10] as [number, number],
           tickFormatter: (value: number) => value.toString(),
-          color: generateColor(columnName),
+          color: columnChartFill(columnName),
         };
       }
 
@@ -308,7 +357,7 @@ export const NumericFrequencyContent = memo(
         tickFormatter: shouldUseKFormat
           ? (value: number) => `${(value / 1000).toFixed(1)}K`
           : (value: number) => value.toFixed(distinctCount <= 30 ? 0 : 1),
-        color: generateColor(columnName),
+        color: columnChartFill(columnName),
       };
     }, [chartData, distinctCount, columnName]);
 
@@ -348,6 +397,23 @@ export const NumericFrequencyContent = memo(
       [range]
     );
 
+    /** Full-span ReferenceArea looks like a chart "background" tint; only show when the user narrowed from full extent. */
+    const showRangeHighlight = useMemo(() => {
+      if (range.start === range.end) return false;
+      if (!data?.frequencies?.length) return false;
+      const vals = data.frequencies.map(f => parseFloat(f.value)).filter(Number.isFinite);
+      if (vals.length === 0) return false;
+      const dMin = Math.min(...vals);
+      const dMax = Math.max(...vals);
+      if (!(dMax > dMin)) return false;
+      const span = dMax - dMin;
+      const tol = Math.max(span * 1e-4, 1e-6);
+      const r0 = Math.min(range.start, range.end);
+      const r1 = Math.max(range.start, range.end);
+      const coversFullExtent = r0 <= dMin + tol && r1 >= dMax - tol;
+      return !coversFullExtent;
+    }, [data, range.start, range.end]);
+
     // If data is not valid, show a message
     if (!isDataValid) {
       return <EmptyContent />;
@@ -364,11 +430,13 @@ export const NumericFrequencyContent = memo(
           <span>{distinctCount.toLocaleString()} distinct values</span>
           <span>{totalCount.toLocaleString()} total</span>
         </div>
-        <div className="h-64">
+        <div className="h-64 text-muted-foreground [&_.recharts-surface]:bg-transparent [&_.recharts-surface]:outline-none [&_svg]:bg-transparent">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={chartData}
+              margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
               barCategoryGap={1}
+              style={{ backgroundColor: 'transparent' }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -379,36 +447,35 @@ export const NumericFrequencyContent = memo(
                 domain={domain}
                 tickFormatter={tickFormatter}
                 scale="linear"
+                tick={{ fontSize: 8, fill: 'var(--muted-foreground)' }}
+                axisLine={{ stroke: 'var(--border)', strokeWidth: 1 }}
+                tickLine={false}
+                height={22}
               />
-              <YAxis hide />
-              <Bar
-                dataKey="count"
-                fill={color}
-                opacity={0.7}
-                maxBarSize={distinctCount <= 30 ? 20 : 40}
-              >
+              <YAxis hide domain={[0, 'dataMax']} />
+              <Bar dataKey="count" radius={[2, 2, 0, 0]} maxBarSize={distinctCount <= 30 ? 20 : 40}>
                 {chartData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
                     fill={color}
-                    opacity={isInRange(entry.value) ? 1 : 0.3}
+                    opacity={isInRange(entry.value) ? 1 : 0.35}
                   />
                 ))}
               </Bar>
-              {range.start !== range.end && (
+              {showRangeHighlight && (
                 <ReferenceArea
                   x1={Math.min(range.start, range.end)}
                   x2={Math.max(range.start, range.end)}
                   fill={color}
-                  fillOpacity={0.1}
-                  strokeOpacity={0.5}
+                  fillOpacity={0.12}
+                  strokeOpacity={0.4}
                 />
               )}
             </BarChart>
           </ResponsiveContainer>
         </div>
         <div className="text-xs text-muted-foreground">
-          Range: {Math.min(range.start, range.end).toFixed(1)} -{' '}
+          Range: {Math.min(range.start, range.end).toFixed(1)} —{' '}
           {Math.max(range.start, range.end).toFixed(1)}
         </div>
       </div>
@@ -438,8 +505,7 @@ const TextFrequencyContent = memo(
     totalCount: number;
     columnName: string;
   }) => {
-    // Generate a consistent color for the entire column
-    const backgroundColor = useMemo(() => generateColor(columnName), [columnName]);
+    const accentFill = useMemo(() => columnChartFill(columnName), [columnName]);
 
     // Safely filter the frequencies with validation
     const filteredFrequencies = useMemo(() => {
@@ -464,34 +530,34 @@ const TextFrequencyContent = memo(
 
         const item = filteredFrequencies[index];
         return (
-          <div style={style}>
+          <div className="h-full w-full" style={style}>
             <FrequencyItem
               value={item.value}
               count={item.count}
               percentage={item.percentage}
               isSelected={selectedValues.has(item.value)}
               onToggle={() => onToggleValue(item.value)}
-              backgroundColor={backgroundColor}
+              accentColor={accentFill}
+              rowIndex={index}
+              isLast={index === filteredFrequencies.length - 1}
             />
           </div>
         );
       },
-      [filteredFrequencies, selectedValues, onToggleValue, backgroundColor]
+      [filteredFrequencies, selectedValues, onToggleValue, accentFill]
     );
 
     // Show user-friendly empty state if no values match filter
     const renderEmptyState = () => (
-      <div className="px-4 py-6 text-sm text-muted-foreground text-center">
+      <div className="px-4 py-6 text-center text-xs text-muted-foreground">
         {valueFilter ? 'No values match your search filter' : 'No values available'}
       </div>
     );
 
     return (
       <div className="space-y-4">
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <div className="flex items-center gap-1">
-            <span>{distinctCount.toLocaleString()} distinct values</span>
-          </div>
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <span>{distinctCount.toLocaleString()} distinct values</span>
           <span>{totalCount.toLocaleString()} total</span>
         </div>
 
@@ -508,7 +574,7 @@ const TextFrequencyContent = memo(
           <div className="h-[300px]">
             <VirtualizedList
               itemCount={filteredFrequencies.length}
-              itemSize={28}
+              itemSize={LIST_ROW_STRIDE_PX}
               renderRow={renderRow}
             />
           </div>
@@ -538,17 +604,7 @@ const ColumnContent = memo(
     const [selectedValues, setSelectedValues] = useState(new Set<string>());
     const [debouncedFilter] = useDebounce(valueFilter, 300); // Assuming useDebounce is imported
 
-    const isNumericColumn = useCallback((columnType: string) => {
-      if (!columnType) return false;
-      const type = columnType.toLowerCase();
-      return (
-        type === 'numeric' || // Check for exact "numeric" type first
-        type.startsWith('i') ||
-        type.startsWith('f') ||
-        type.includes('int') ||
-        type.includes('float')
-      );
-    }, []);
+    const isNumericColumn = useCallback((columnType: string) => isNumericDataType(columnType), []);
 
     // Initialize range state safely with null checks
     const [range, setRange] = useState<RangeState>(() => {
@@ -689,33 +745,50 @@ const AccordionHeader = memo(
   ({
     columnName,
     isVisible,
-    onToggleVisibility,
+    isNumeric,
     isLoading,
+    onToggleVisibility,
   }: {
     columnName: string;
     isVisible: boolean;
-    onToggleVisibility: () => void;
+    isNumeric: boolean;
     isLoading: boolean;
+    onToggleVisibility: () => void;
   }) => {
-    // Stop event propagation to prevent accordion from toggling
-    const handleVisibilityClick = (e: React.MouseEvent) => {
-      e.stopPropagation();
-      onToggleVisibility();
-    };
+    const stop = (e: React.SyntheticEvent) => e.stopPropagation();
 
     return (
-      <div className="flex items-center justify-between w-full">
-        <div className="flex items-center gap-2">
-          <span>{columnName}</span>
-          {isLoading && <LoaderCircle className="w-4 h-4 animate-spin" />}
-        </div>
-        <button onClick={handleVisibilityClick} className="p-1 hover:bg-accent/50 rounded-sm">
-          {isVisible ? (
-            <Eye className="w-4 h-4" />
-          ) : (
-            <EyeOff className="w-4 h-4 text-muted-foreground" />
+      <div className="flex h-[30px] w-full min-w-0 items-center gap-2 rounded-lg px-2.5 text-xs font-medium transition-colors hover:bg-muted/80">
+        <ColumnTypeBadge isNumeric={isNumeric} />
+        <span
+          className={cn(
+            'min-w-0 flex-1 truncate text-left',
+            isVisible ? 'text-foreground' : 'text-muted-foreground/60'
           )}
-        </button>
+        >
+          {columnName}
+        </span>
+        {isLoading ? (
+          <LoaderCircle className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+        ) : null}
+        <span
+          role="button"
+          tabIndex={0}
+          className="grid size-5 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-muted"
+          onClick={e => {
+            stop(e);
+            onToggleVisibility();
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              stop(e);
+              onToggleVisibility();
+            }
+          }}
+          aria-label={isVisible ? `Hide ${columnName}` : `Show ${columnName}`}
+        >
+          {isVisible ? <Eye className="size-[11px]" /> : <EyeOff className="size-[11px]" />}
+        </span>
       </div>
     );
   }
@@ -723,7 +796,14 @@ const AccordionHeader = memo(
 AccordionHeader.displayName = 'AccordionHeader';
 
 // Updated FilterPanel component to use fetch instead of invoke
-const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps) => {
+const FilterPanel = ({
+  filePath,
+  columnNames,
+  columnStats,
+  initialColumns,
+  columnSampleValues,
+  onFilterChange,
+}: FilterPanelProps) => {
   const { tabs, activeTabId, updateTab } = useTabsStore();
   // Removed tokens - using getIdToken() directly
   const activeTab = tabs.find(tab => tab.id === activeTabId);
@@ -751,12 +831,17 @@ const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps
     async (columnName: string) => {
       if (!filePath || columnData[columnName] || loading[columnName]) return;
 
-      const params = {
-        request: {
-          path: filePath,
-        },
-        column_name: columnName,
-      };
+      const base = getTensrApiBaseUrl();
+      const datasetId = resolveDatasetIdForAnalysis(filePath);
+      const url = datasetId
+        ? tensrApiUrl(`/datasets/${datasetId}/explore/column_frequencies`)
+        : `${base}/api/analysis/column-frequencies`;
+      const body = datasetId
+        ? { column: columnName }
+        : {
+            request: { path: filePath },
+            column_name: columnName,
+          };
 
       try {
         // Set loading state
@@ -764,21 +849,30 @@ const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps
         setErrors(prev => ({ ...prev, [columnName]: null }));
 
         // Use fetch for the HTTP request
-        const response = await fetch(
-          `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/analysis/column-frequencies`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${getIdToken()}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(params),
-          }
-        );
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${getIdToken()}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(body),
+        });
 
         if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Failed to load data for column: ${columnName}`);
+          let message = `Failed to load data for column: ${columnName} (${response.status})`;
+          try {
+            const errBody = (await response.json()) as { detail?: unknown; error?: string };
+            if (typeof errBody.detail === 'string') {
+              message = errBody.detail;
+            } else if (Array.isArray(errBody.detail) && errBody.detail[0]?.msg) {
+              message = String(errBody.detail[0].msg);
+            } else if (errBody.error) {
+              message = errBody.error;
+            }
+          } catch {
+            /* non-JSON error body */
+          }
+          throw new Error(message);
         }
 
         const data = await response.json();
@@ -838,25 +932,36 @@ const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps
   );
 
   return (
-    <div className="h-full flex flex-col">
-      <ScrollArea className="flex-1">
-        <Accordion
-          type="multiple"
-          className="w-full"
-          value={expandedColumns}
-          onValueChange={handleAccordionChange}
-        >
-          {columnNames.map(columnName => (
-            <AccordionItem key={columnName} value={columnName}>
-              <AccordionTrigger className="hover:no-underline">
+    <div className="flex flex-col px-1.5 pb-1">
+      <Accordion
+        type="multiple"
+        className="w-full"
+        value={expandedColumns}
+        onValueChange={handleAccordionChange}
+      >
+        {columnNames.map(columnName => {
+          const loadedType = columnData[columnName]?.column_type;
+          const col = initialColumns?.find(c => c.id === columnName);
+          const isNumeric = resolveColumnIsNumeric(
+            columnName,
+            columnStats,
+            col?.type,
+            loadedType,
+            columnSampleValues?.[columnName]
+          );
+
+          return (
+            <AccordionItem key={columnName} value={columnName} className="border-none">
+              <AccordionTrigger className="h-[30px] w-full flex-none p-0 hover:no-underline [&>svg]:hidden">
                 <AccordionHeader
                   columnName={columnName}
+                  isNumeric={isNumeric}
                   isVisible={columnVisibility[columnName] !== false}
                   onToggleVisibility={() => handleToggleVisibility(columnName)}
                   isLoading={loading[columnName]}
                 />
               </AccordionTrigger>
-              <AccordionContent className="hover:bg-transparent">
+              <AccordionContent className="cursor-default bg-transparent hover:bg-transparent">
                 {errors[columnName] ? (
                   <div className="p-2">
                     <ErrorDisplay message={errors[columnName] || 'An error occurred'} />
@@ -877,9 +982,9 @@ const FilterPanel = ({ filePath, columnNames, onFilterChange }: FilterPanelProps
                 )}
               </AccordionContent>
             </AccordionItem>
-          ))}
-        </Accordion>
-      </ScrollArea>
+          );
+        })}
+      </Accordion>
     </div>
   );
 };

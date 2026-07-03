@@ -1,19 +1,14 @@
 import type { NextConfig } from 'next';
+import path from 'node:path';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
 
-  // Enable React Compiler for automatic memoization (Next.js 16)
-  // This automatically optimizes components and reduces unnecessary re-renders
-  reactCompiler: true,
+  // React Compiler + unstable object deps caused hard freezes; keep deps primitive.
+  reactCompiler: false,
 
-  // Enable Cache Components for better caching (Next.js 16)
-  // This provides fine-grained control over caching with "use cache" directive
-  cacheComponents: true,
-
-  // Enable Turbopack filesystem caching for faster dev startup (Next.js 16)
-  experimental: {
-    turbopackFileSystemCacheForDev: true,
+  turbopack: {
+    root: path.resolve(__dirname),
   },
 
   // Image optimization
@@ -30,7 +25,6 @@ const nextConfig: NextConfig = {
     imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
     minimumCacheTTL: 60,
     unoptimized: process.env.NODE_ENV === 'development',
-    domains: ['localhost'],
   },
 
   // Compression and optimization

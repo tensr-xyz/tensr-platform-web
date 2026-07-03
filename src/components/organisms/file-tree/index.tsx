@@ -25,6 +25,7 @@ import {
   Database,
   RefreshCw,
 } from 'lucide-react';
+import { devLog } from '@/lib/dev-log';
 import {
   Collapsible,
   CollapsibleContent,
@@ -370,7 +371,7 @@ export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefres
         const token = getIdToken();
         const userId = user?.userId;
 
-        console.log('Auth debug:', { user, token, userId });
+        devLog('Auth debug:', { user, token, userId });
 
         if (!token || !userId) {
           console.error('Missing authentication credentials', { token, userId });
@@ -492,11 +493,7 @@ const DataOperationItem = ({ item }: { item: string }) => {
   const AnalysisComponent = ANALYSIS_COMPONENTS[item];
 
   if (!AnalysisComponent) {
-    return (
-      <div className="py-2 px-2">
-        <div className="px-2 py-1 opacity-50 cursor-not-allowed">{item} (Coming Soon)</div>
-      </div>
-    );
+    return null;
   }
 
   return (

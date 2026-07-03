@@ -30,11 +30,16 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { Mail, UserPlus, Trash, Settings } from 'lucide-react';
-import { SubscriptionDialog } from '@/components/organisms/subscription-dialog';
 
 export default function TeamMembers() {
-  const { activeOrganization, members, fetchMembers, addMember, removeMember, updateMemberRole } =
-    useOrganization();
+  const {
+    activeOrganization,
+    members,
+    fetchMembers,
+    createInvitation,
+    removeMember,
+    updateMemberRole,
+  } = useOrganization();
 
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -47,42 +52,14 @@ export default function TeamMembers() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editRole, setEditRole] = useState<'ADMIN' | 'MEMBER' | 'VIEWER'>('MEMBER');
 
-  // New state variables for subscription
-  const [hasTeamSubscription, setHasTeamSubscription] = useState(false);
-  const [showSubscriptionDialog, setShowSubscriptionDialog] = useState(false);
-
   // Load members when active organization changes
   useEffect(() => {
     if (activeOrganization) {
       fetchMembers(activeOrganization.id);
-
-      // In a real app, you would check subscription status from a backend API
-      // For demo purposes, we're using local state
-      // Example: checkSubscriptionStatus(activeOrganization.id)
     }
   }, [activeOrganization, fetchMembers]);
 
   const handleAddButtonClick = () => {
-    // Check if user has team subscription before allowing to add members
-    if (!hasTeamSubscription && members.length >= 1) {
-      // If already has at least one member and no team subscription, show subscription dialog
-      setShowSubscriptionDialog(true);
-    } else {
-      // Otherwise, show normal add dialog
-      setShowAddDialog(true);
-    }
-  };
-
-  const handleSubscriptionUpgrade = () => {
-    // In a real app, this would open payment processing, redirect to subscription page, etc.
-    setHasTeamSubscription(true);
-    toast({
-      title: 'Subscription upgraded',
-      description: 'Your account has been upgraded to the Team plan',
-    });
-
-    // Close subscription dialog and open add member dialog
-    setShowSubscriptionDialog(false);
     setShowAddDialog(true);
   };
 
@@ -91,16 +68,14 @@ export default function TeamMembers() {
 
     setIsAdding(true);
     try {
-      // In a real app, you'd probably want to search for the user by email first
-      // Here we're assuming the email directly maps to a userId, which isn't realistic
-      // This is just for demonstration purposes
-      const userId = `user-${Date.now()}`; // Mock user ID
-
-      await addMember(activeOrganization.id, userId, newMemberRole);
+      await createInvitation(activeOrganization.id, {
+        email: newMemberEmail.trim(),
+        role: newMemberRole,
+      });
 
       toast({
-        title: 'Team member added',
-        description: `Invitation sent to ${newMemberEmail}`,
+        title: 'Invitation sent',
+        description: `${newMemberEmail} can join once they sign up with this email.`,
       });
 
       setShowAddDialog(false);
@@ -290,13 +265,6 @@ export default function TeamMembers() {
           </TableBody>
         </Table>
       </div>
-
-      {/* Use the imported Subscription Dialog component */}
-      <SubscriptionDialog
-        open={showSubscriptionDialog}
-        onClose={() => setShowSubscriptionDialog(false)}
-        onUpgrade={handleSubscriptionUpgrade}
-      />
 
       {/* Add Member Dialog */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>

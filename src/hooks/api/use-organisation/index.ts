@@ -1,9 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
 import { getIdToken } from '@/utils/auth';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+import { devLog } from '@/lib/dev-log';
 
-// API base URL - should be configured via environment variable
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL = getTensrApiBaseUrl();
+
+function mapApiOrganization(raw: Record<string, unknown>): Organization {
+  const roleRaw = String(raw.role ?? '').toLowerCase();
+  const role: OrganizationMember['role'] =
+    roleRaw === 'owner' || roleRaw === 'admin'
+      ? 'ADMIN'
+      : roleRaw === 'viewer'
+        ? 'VIEWER'
+        : 'MEMBER';
+  const now = new Date().toISOString();
+  return {
+    id: String(raw.id ?? ''),
+    name: String(raw.name ?? 'Organization'),
+    createdAt: String(raw.created_at ?? raw.createdAt ?? now),
+    updatedAt: String(raw.updated_at ?? raw.updatedAt ?? now),
+    role,
+    description: raw.description as string | undefined,
+    slug: raw.slug as string | undefined,
+    logoUrl: raw.logo_url as string | undefined,
+  };
+}
 
 // Organization types
 export interface Organization {
@@ -179,8 +201,8 @@ export const useOrganization = (): UseOrganizationReturn => {
         return [];
       }
 
-      console.log('Fetching organizations with token');
-      const response = await fetch(`${API_BASE_URL}/organizations`, {
+      devLog('Fetching organizations with token');
+      const response = await fetch(`${API_BASE_URL}/api/organizations`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -193,7 +215,10 @@ export const useOrganization = (): UseOrganizationReturn => {
       }
 
       const data = await response.json();
-      const userOrgs = data.organizations || [];
+      const rawOrgs = data.organizations || [];
+      const userOrgs = Array.isArray(rawOrgs)
+        ? rawOrgs.map(o => mapApiOrganization(o as Record<string, unknown>))
+        : [];
       setOrganizations(userOrgs);
 
       // If we have organizations but no active one, set the first as active
@@ -229,13 +254,13 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations`, {
+      const response = await fetch(`${API_BASE_URL}/api/organizations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ name: data.name }),
       });
 
       if (!response.ok) {
@@ -245,7 +270,9 @@ export const useOrganization = (): UseOrganizationReturn => {
         );
       }
 
-      const newOrg = await response.json();
+      const created = await response.json();
+      const rawOrg = (created.organization ?? created) as Record<string, unknown>;
+      const newOrg = mapApiOrganization(rawOrg);
 
       // Update local state
       setOrganizations(prev => [...prev, newOrg]);
@@ -278,7 +305,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -325,7 +352,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -376,7 +403,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         return [];
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/members`, {
+      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/members`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -416,13 +443,20 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/members`, {
+      if (!userId.includes('@')) {
+        throw new Error('Adding organization members requires an email address.');
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/members`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ userId, role }),
+        body: JSON.stringify({
+          email: userId.trim(),
+          role: role === 'ADMIN' ? 'owner' : 'member',
+        }),
       });
 
       if (!response.ok) {
@@ -430,7 +464,8 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error(`Failed to add member: ${errorData.message || response.statusText}`);
       }
 
-      const newMember = await response.json();
+      const memberPayload = await response.json();
+      const newMember = memberPayload.member ?? memberPayload;
 
       // Update local state
       setMembers(prev => [...prev, newMember]);
@@ -456,7 +491,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/members/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/members/${userId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -497,7 +532,7 @@ export const useOrganization = (): UseOrganizationReturn => {
       }
 
       const response = await fetch(
-        `${API_BASE_URL}/organizations/${orgId}/members/${userId}/role`,
+        `${API_BASE_URL}/api/organizations/${orgId}/members/${userId}/role`,
         {
           method: 'PUT',
           headers: {
@@ -548,13 +583,13 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/teams`, {
+      const response = await fetch(`${API_BASE_URL}/api/teams`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ name: data.name }),
       });
 
       if (!response.ok) {
@@ -562,7 +597,17 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error(`Failed to create team: ${errorData.message || response.statusText}`);
       }
 
-      const newTeam = await response.json();
+      const payload = await response.json();
+      const rawTeam = (payload.team ?? payload) as Record<string, unknown>;
+      const newTeam: Team = {
+        id: String(rawTeam.id ?? ''),
+        organizationId: orgId,
+        name: String(rawTeam.name ?? data.name),
+        description: data.description,
+        accessLevel: data.accessLevel ?? 'READ_WRITE',
+        createdAt: String(rawTeam.created_at ?? rawTeam.createdAt ?? new Date().toISOString()),
+        updatedAt: String(rawTeam.updated_at ?? rawTeam.updatedAt ?? new Date().toISOString()),
+      };
 
       // Update local state
       setTeams(prev => [...prev, newTeam]);
@@ -595,7 +640,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/teams/${teamId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/teams/${teamId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -634,7 +679,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/teams/${teamId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/teams/${teamId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -670,7 +715,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         return [];
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/teams`, {
+      const response = await fetch(`${API_BASE_URL}/api/teams`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -683,7 +728,17 @@ export const useOrganization = (): UseOrganizationReturn => {
       }
 
       const data = await response.json();
-      const orgTeams = data.teams || [];
+      const rawTeams = data.teams || [];
+      const orgTeams: Team[] = Array.isArray(rawTeams)
+        ? rawTeams.map((t: Record<string, unknown>) => ({
+            id: String(t.id ?? ''),
+            organizationId: orgId,
+            name: String(t.name ?? ''),
+            createdAt: String(t.created_at ?? t.createdAt ?? new Date().toISOString()),
+            updatedAt: String(t.updated_at ?? t.updatedAt ?? new Date().toISOString()),
+            accessLevel: 'READ_WRITE',
+          }))
+        : [];
       setTeams(orgTeams);
 
       return orgTeams;
@@ -708,7 +763,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         return [];
       }
 
-      const response = await fetch(`${API_BASE_URL}/teams/${teamId}/members`, {
+      const response = await fetch(`${API_BASE_URL}/api/teams/${teamId}/members`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -750,7 +805,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/teams/${teamId}/members`, {
+      const response = await fetch(`${API_BASE_URL}/api/teams/${teamId}/members`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -787,7 +842,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/teams/${teamId}/members/${userId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/teams/${teamId}/members/${userId}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -827,7 +882,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/teams/${teamId}/members/${userId}/role`, {
+      const response = await fetch(`${API_BASE_URL}/api/teams/${teamId}/members/${userId}/role`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -873,21 +928,28 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/invitations`, {
+      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/invitations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          email: data.email.trim(),
+          role: data.role === 'ADMIN' ? 'owner' : 'member',
+        }),
       });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(`Failed to create invitation: ${errorData.message || response.statusText}`);
+        const detail = errorData.detail;
+        const message =
+          typeof detail === 'string' ? detail : errorData.message || response.statusText;
+        throw new Error(`Failed to create invitation: ${message}`);
       }
 
-      const newInvitation = await response.json();
+      const payload = await response.json();
+      const newInvitation = payload.invitation ?? payload;
       // Update local state
       setInvitations(prev => [...prev, newInvitation]);
       return newInvitation;
@@ -911,7 +973,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         return [];
       }
 
-      const response = await fetch(`${API_BASE_URL}/organizations/${orgId}/invitations`, {
+      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/invitations`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -947,7 +1009,7 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/invitations/${invitationToken}`, {
+      const response = await fetch(`${API_BASE_URL}/api/invitations/${invitationToken}`, {
         method: 'DELETE',
         headers: {
           Authorization: `Bearer ${token}`,

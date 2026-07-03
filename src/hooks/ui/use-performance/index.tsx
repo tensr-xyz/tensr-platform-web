@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { devLog } from '@/lib/dev-log';
 
 interface PerformanceMetrics {
   renderTime: number;
@@ -24,12 +25,12 @@ export function usePerformance(componentName: string) {
     metrics.current.componentMounts++;
 
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[Performance] ${componentName} mounted in ${mountDuration.toFixed(2)}ms`);
+      devLog(`[Performance] ${componentName} mounted in ${mountDuration.toFixed(2)}ms`);
     }
 
     return () => {
       if (process.env.NODE_ENV === 'development') {
-        console.log(
+        devLog(
           `[Performance] ${componentName} unmounted after ${metrics.current.reRenders} re-renders`
         );
       }
@@ -106,7 +107,7 @@ export function useOperationTimer(operationName: string) {
       const duration = performance.now() - startTime.current;
 
       if (process.env.NODE_ENV === 'development') {
-        console.log(`[Performance] ${operationName} took ${duration.toFixed(2)}ms`);
+        devLog(`[Performance] ${operationName} took ${duration.toFixed(2)}ms`);
       }
 
       startTime.current = 0;

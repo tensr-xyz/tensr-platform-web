@@ -3,20 +3,15 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '@/contexts/theme-context';
 import { useAuthStore } from '@/stores/auth-store';
-import { getAccessToken } from '@/utils/auth';
 import { User } from '@/types/user';
+import { updateProfile } from '@/lib/business-api';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
 import { Separator } from '@/components/atoms/separator';
 import { Save, User as UserIcon, Mail, AtSign, Sun, Monitor, Moon } from 'lucide-react';
-
-interface ApiError {
-  message: string;
-  code: string;
-  errors?: string[];
-}
+import { devLog } from '@/lib/dev-log';
 
 export default function GeneralSettings() {
   const { user: contextUser, isLoading: authLoading } = useAuthStore();
@@ -26,8 +21,6 @@ export default function GeneralSettings() {
   const [originalUser, setOriginalUser] = useState<User | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'success' | 'error'>('idle');
   const [mounted, setMounted] = useState(false);
-
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
   // Ensure component doesn't render until mounted to prevent hydration issues
   useEffect(() => {
@@ -42,37 +35,7 @@ export default function GeneralSettings() {
     }
   }, [contextUser]);
 
-  const updateUser = async (updates: Partial<User>): Promise<User> => {
-    const token = getAccessToken();
-
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-
-    if (!user?.userId) {
-      throw new Error('User ID not available');
-    }
-
-    if (!API_BASE_URL) {
-      throw new Error('API base URL not configured');
-    }
-
-    const response = await fetch(`${API_BASE_URL}/users/${user.userId}`, {
-      method: 'PUT',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(updates),
-    });
-
-    if (!response.ok) {
-      const errorData: ApiError = await response.json();
-      throw new Error(errorData.message || 'Failed to update user');
-    }
-
-    return response.json();
-  };
+  const updateUser = async (updates: Partial<User>): Promise<User> => updateProfile(updates);
 
   const hasChanges = (): boolean => {
     if (!user || !originalUser) return false;
@@ -115,7 +78,7 @@ export default function GeneralSettings() {
       setSaveStatus('success');
 
       // Show success toast - using console for now as toast is not imported
-      console.log('Profile updated successfully');
+      devLog('Profile updated successfully');
 
       // Clear success message after 3 seconds
       setTimeout(() => setSaveStatus('idle'), 3000);
@@ -159,7 +122,7 @@ export default function GeneralSettings() {
   if (authLoading || !mounted) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="text-gray-500">Loading settings...</div>
+        <p className="text-sm text-muted-foreground">Loading settings...</p>
       </div>
     );
   }
@@ -185,19 +148,18 @@ export default function GeneralSettings() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-medium">General Settings</h1>
-        <p className="text-gray-500 text-sm mt-1">Manage your account and display preferences</p>
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-lg font-medium tracking-tight">General</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage your account and display preferences
+        </p>
       </div>
 
-      {/* Account Information Section */}
-      <div className="border border-gray-200 rounded-md overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white">Account Information</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Update your personal details
-          </p>
+      <section className="overflow-hidden rounded-lg border border-border bg-background">
+        <div className="border-b border-border px-6 py-4">
+          <h3 className="text-base font-medium">Account information</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Update your personal details</p>
         </div>
 
         <form onSubmit={handleProfileUpdate}>
@@ -274,29 +236,21 @@ export default function GeneralSettings() {
             </div>
           </div>
 
-          <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 bg-gray-50 dark:bg-gray-800 flex justify-between items-center">
-            <div className="text-sm text-gray-500 dark:text-gray-400">
-              {hasChanges() && 'You have unsaved changes'}
-            </div>
-
-            <Button
-              type="submit"
-              disabled={saveStatus === 'saving' || !hasChanges()}
-              className="bg-black hover:bg-gray-800 text-white disabled:opacity-50 disabled:cursor-not-allowed dark:bg-white dark:text-black dark:hover:bg-gray-200"
-            >
-              {saveStatus === 'saving' ? 'Saving...' : 'Save Changes'}
+          <div className="flex items-center justify-between border-t border-border bg-muted/30 px-6 py-4">
+            <p className="text-sm text-muted-foreground">
+              {hasChanges() ? 'You have unsaved changes' : null}
+            </p>
+            <Button type="submit" disabled={saveStatus === 'saving' || !hasChanges()}>
+              {saveStatus === 'saving' ? 'Saving...' : 'Save changes'}
             </Button>
           </div>
         </form>
-      </div>
+      </section>
 
-      {/* Theme Settings Section */}
-      <div className="border border-gray-200 rounded-md overflow-hidden bg-white dark:bg-gray-800 dark:border-gray-700">
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-medium text-gray-900 dark:text-white">Display Preferences</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Choose your preferred theme
-          </p>
+      <section className="overflow-hidden rounded-lg border border-border bg-background">
+        <div className="border-b border-border px-6 py-4">
+          <h3 className="text-base font-medium">Display preferences</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Choose your preferred theme</p>
         </div>
 
         <div className="p-6">
@@ -305,8 +259,8 @@ export default function GeneralSettings() {
             <div
               className={`flex items-center p-3 rounded-md cursor-pointer border transition-colors ${
                 theme === 'light'
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-600 dark:hover:border-gray-500'
+                  ? 'border-primary bg-muted'
+                  : 'border-border hover:border-foreground/20'
               }`}
               onClick={() => handleThemeChange('light')}
             >
@@ -331,8 +285,8 @@ export default function GeneralSettings() {
             <div
               className={`flex items-center p-3 rounded-md cursor-pointer border transition-colors ${
                 theme === 'system'
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-600 dark:hover:border-gray-500'
+                  ? 'border-primary bg-muted'
+                  : 'border-border hover:border-foreground/20'
               }`}
               onClick={() => handleThemeChange('system')}
             >
@@ -359,8 +313,8 @@ export default function GeneralSettings() {
             <div
               className={`flex items-center p-3 rounded-md cursor-pointer border transition-colors ${
                 theme === 'dark'
-                  ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                  : 'border-gray-200 hover:border-gray-300 dark:border-gray-600 dark:hover:border-gray-500'
+                  ? 'border-primary bg-muted'
+                  : 'border-border hover:border-foreground/20'
               }`}
               onClick={() => handleThemeChange('dark')}
             >
@@ -382,7 +336,7 @@ export default function GeneralSettings() {
             </div>
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

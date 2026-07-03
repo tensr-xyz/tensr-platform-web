@@ -3,7 +3,32 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
 import { getIdToken, decodeSessionJwt, getSessionJwt, getSessionToken } from '@/utils/auth';
+import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { handleUnauthorizedResponse, SessionExpiredError } from '@/lib/session-expired';
 import { Organization, OrganizationMember } from '@/hooks/api/use-organisation';
+import { authTrace } from '@/lib/auth-trace';
+import { devLog } from '@/lib/dev-log';
+
+/** Shown until organisation name is loaded from the API (never expose raw org ids in the UI). */
+export const PENDING_ORGANISATION_NAME = 'Your organisation';
+
+function normalizeOrganization(raw: Record<string, unknown>): Organization {
+  const roleRaw = String(raw.role ?? '').toLowerCase();
+  const role: OrganizationMember['role'] =
+    roleRaw === 'owner' || roleRaw === 'admin'
+      ? 'ADMIN'
+      : roleRaw === 'viewer'
+        ? 'VIEWER'
+        : 'MEMBER';
+  const now = new Date().toISOString();
+  return {
+    id: String(raw.id ?? ''),
+    name: String(raw.name ?? '').trim() || PENDING_ORGANISATION_NAME,
+    createdAt: String(raw.created_at ?? raw.createdAt ?? now),
+    updatedAt: String(raw.updated_at ?? raw.updatedAt ?? now),
+    role,
+  };
+}
 
 interface OrganizationContextType {
   // Current active organization and user's role in it
@@ -51,17 +76,21 @@ interface OrganizationProviderProps {
 }
 
 export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ children }) => {
-  const { user, isAuthenticated, session } = useAuth();
+  const { user, isAuthenticated, isAuthReady, session } = useAuth();
+  const [mounted, setMounted] = useState(false);
   const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<OrganizationMember['role'] | null>(null);
   const [isPersonalAccount, setIsPersonalAccount] = useState(true);
   const [userOrganizations, setUserOrganizations] = useState<Organization[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [orgsLoading, setOrgsLoading] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Get API base URL
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const API_BASE_URL = getTensrApiBaseUrl();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   // Helper to get auth token (Stytch session JWT)
   // Check both Zustand store and localStorage for reliability
@@ -124,12 +153,18 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
       headers['X-Organization-Id'] = orgId;
     }
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers,
-    });
+    const response = await fetch(
+      tensrApiUrl(endpoint.startsWith('/') ? endpoint : `/${endpoint}`),
+      {
+        ...options,
+        headers,
+      }
+    );
 
     if (!response.ok) {
+      if (handleUnauthorizedResponse(response, `org:${endpoint}`)) {
+        throw new SessionExpiredError();
+      }
       const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
       throw new Error(errorData.message || response.statusText);
     }
@@ -142,7 +177,7 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     const claims = getOrganizationClaimsFromToken();
     return claims.map(claim => ({
       id: claim.orgId,
-      name: `Organization ${claim.orgId.slice(0, 8)}...`, // Placeholder name
+      name: PENDING_ORGANISATION_NAME,
       role: claim.role,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -152,20 +187,26 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
   // Fetch full organization details from API
   const fetchUserOrganizations = async (): Promise<Organization[]> => {
     try {
-      const data = await apiCall('/organizations');
-      return data.organizations || [];
+      const data = await apiCall('/api/organizations');
+      const raw = data.organizations || [];
+      return Array.isArray(raw)
+        ? raw.map(o => normalizeOrganization(o as Record<string, unknown>))
+        : [];
     } catch (err) {
+      if (err instanceof SessionExpiredError) {
+        throw err;
+      }
       console.error('Error fetching user organizations:', err);
 
-      // Fallback to token claims if API fails
-      console.log('Falling back to organization claims from token');
+      // Fallback to token claims if API fails (network/server errors only)
+      devLog('Falling back to organization claims from token');
       return getOrganizationsFromToken();
     }
   };
 
   // Switch to personal account
   const switchToPersonalAccount = () => {
-    console.log('Switching to personal account');
+    devLog('Switching to personal account');
 
     setActiveOrganization(null);
     setCurrentUserRole(null);
@@ -199,7 +240,7 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     if (!organization) {
       organization = {
         id: orgId,
-        name: `Organization ${orgId.slice(0, 8)}...`,
+        name: PENDING_ORGANISATION_NAME,
         role: orgClaim.role,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -225,7 +266,7 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
 
   // Switch to a different organization or personal account
   const switchOrganization = async (orgId: string | null) => {
-    console.log('Switching organization to:', orgId);
+    devLog('Switching organization to:', orgId);
 
     if (!user || !isAuthenticated) {
       throw new Error('User not authenticated');
@@ -244,7 +285,7 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
       // Use JWT claims for instant switching (no API call needed)
       switchOrganizationFromClaims(orgId);
 
-      console.log('Successfully switched to organization using JWT claims');
+      devLog('Successfully switched to organization using JWT claims');
     } catch (err: any) {
       console.error('Error switching organization:', err);
       setError(err.message);
@@ -259,7 +300,7 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
 
   // Refresh organizations list
   const refreshOrganizations = async () => {
-    if (!user || !isAuthenticated) return;
+    if (!isAuthenticated) return;
 
     // Check if token is available before making API calls
     const token = getAuthToken();
@@ -268,14 +309,14 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
       return;
     }
 
-    setIsLoading(true);
+    setOrgsLoading(true);
     setError(null);
 
     try {
       const orgs = await fetchUserOrganizations();
       setUserOrganizations(orgs);
 
-      console.log(`Refreshed ${orgs.length} organizations`);
+      devLog(`Refreshed ${orgs.length} organizations`);
     } catch (err: any) {
       console.error('Error refreshing organizations:', err);
       setError(err.message);
@@ -284,12 +325,12 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
       try {
         const tokenOrgs = getOrganizationsFromToken();
         setUserOrganizations(tokenOrgs);
-        console.log(`Using ${tokenOrgs.length} organizations from token claims`);
+        devLog(`Using ${tokenOrgs.length} organizations from token claims`);
       } catch (tokenErr) {
         console.error('Failed to get organizations from token:', tokenErr);
       }
     } finally {
-      setIsLoading(false);
+      setOrgsLoading(false);
     }
   };
 
@@ -298,13 +339,14 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     if (!activeOrganization || isPersonalAccount) return;
 
     try {
-      const data = await apiCall(
-        `/organizations/${activeOrganization.id}`,
-        {},
-        activeOrganization.id
+      const data = await apiCall('/api/me', {}, activeOrganization.id);
+      const match = (data.organizations || []).find(
+        (o: { id: string }) => o.id === activeOrganization.id
       );
-      setActiveOrganization(data);
-      console.log('Refreshed current organization details');
+      if (match) {
+        setActiveOrganization(normalizeOrganization(match as Record<string, unknown>));
+      }
+      devLog('Refreshed current organization details');
     } catch (err: any) {
       console.error('Error refreshing current organization:', err);
       setError(err.message);
@@ -324,30 +366,33 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     return ROLE_HIERARCHY[currentUserRole] >= ROLE_HIERARCHY[minRole];
   };
 
-  // Initialize on auth change
+  // Initialize on auth change (client-only — avoids SSR/localStorage hydration mismatch)
   useEffect(() => {
-    console.log('Auth state changed:', { isAuthenticated, userId: getUserId() });
+    if (!mounted || !isAuthReady) return;
+
+    devLog('Auth state changed:', { isAuthenticated, userId: getUserId() });
+    authTrace('org:auth-state-changed', { isAuthenticated, userId: getUserId() });
 
     // Only proceed if authenticated AND token is available
     const token = getAuthToken();
-    if (isAuthenticated && user && token) {
+    if (isAuthenticated && token) {
       // Check for persisted active organization
       const savedOrgId = localStorage.getItem('activeOrganizationId');
       const savedRole = localStorage.getItem(
         'activeOrganizationRole'
       ) as OrganizationMember['role'];
 
-      console.log('Found saved org state:', { savedOrgId, savedRole });
+      devLog('Found saved org state:', { savedOrgId, savedRole });
 
       // First, always refresh organizations (this will also populate from token claims)
       refreshOrganizations()
         .then(() => {
           if (savedOrgId && savedOrgId !== PERSONAL_ACCOUNT_KEY && savedRole) {
-            console.log('Attempting to restore saved organization');
+            devLog('Attempting to restore saved organization');
             // Try to switch to the saved organization using claims (fast)
             try {
               switchOrganizationFromClaims(savedOrgId);
-              console.log('Successfully restored organization from claims');
+              devLog('Successfully restored organization from claims');
             } catch (err) {
               console.warn(
                 'Failed to restore saved organization from claims, using personal account:',
@@ -356,7 +401,7 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
               switchToPersonalAccount();
             }
           } else {
-            console.log('No saved organization or personal account saved, defaulting to personal');
+            devLog('No saved organization or personal account saved, defaulting to personal');
             switchToPersonalAccount();
           }
         })
@@ -364,20 +409,21 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
           console.error('Failed to refresh organizations:', err);
           switchToPersonalAccount();
         });
-    } else {
-      console.log('User not authenticated, clearing state');
+    } else if (!isAuthenticated && !getSessionJwt() && !getSessionToken()) {
+      devLog('User not authenticated, clearing state');
+      authTrace('org:clearing-state');
       // Clear state on logout
       setActiveOrganization(null);
       setCurrentUserRole(null);
       setIsPersonalAccount(true);
       setUserOrganizations([]);
-      setIsLoading(false);
+      setOrgsLoading(false);
       setIsSwitching(false);
       setError(null);
       localStorage.removeItem('activeOrganizationId');
       localStorage.removeItem('activeOrganizationRole');
     }
-  }, [isAuthenticated, getUserId()]);
+  }, [mounted, isAuthReady, isAuthenticated, user?.userId]);
 
   // Debug effect to log token claims
   useEffect(() => {
@@ -386,7 +432,7 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
       if (idToken) {
         try {
           const claims = getOrganizationClaimsFromToken();
-          console.log('Organization claims from token:', claims);
+          devLog('Organization claims from token:', claims);
         } catch (err) {
           console.error('Failed to parse organization claims:', err);
         }
@@ -406,7 +452,7 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     canViewMembers,
     hasRole,
     hasMinimumRole,
-    isLoading,
+    isLoading: orgsLoading,
     isSwitching,
     error,
     refreshOrganizations,

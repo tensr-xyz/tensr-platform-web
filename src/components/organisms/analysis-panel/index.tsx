@@ -7,7 +7,6 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/molecules/accordion';
-import { DialogTrigger } from '@/components/molecules/dialog';
 import { ScrollArea } from '@/components/atoms/scroll-area';
 import { SidebarContent, SidebarGroupContent } from '@/components/organisms/sidebar';
 import {
@@ -16,17 +15,7 @@ import {
   groupAnalysisItems,
   type AnalysisItem,
 } from '@/configs/analysis-config/utils';
-import { ANALYSIS_COMPONENTS } from '@/configs/analysis-config';
-
-const CATEGORY_LABELS: Record<string, string> = {
-  transform: 'Transform',
-  analyze: 'Analyze',
-  visualization: 'Visualization',
-  time_series: 'Time Series',
-  ml_ai: 'ML/AI',
-  syntax: 'Syntax',
-  utilities: 'Utilities',
-};
+import { PALETTE_TAB_LABELS } from '@/configs/analysis-config/utils';
 
 interface AnalysisItemComponentProps {
   item: AnalysisItem;
@@ -36,20 +25,17 @@ const AnalysisItemComponent = ({ item }: AnalysisItemComponentProps) => {
   const AnalysisComponent = item.component;
 
   if (!AnalysisComponent) {
-    return (
-      <div className="px-2 py-1 opacity-50 cursor-not-allowed text-sm">
-        {item.name} (Coming Soon)
-      </div>
-    );
+    return null;
   }
 
   return (
     <AnalysisComponent>
-      <DialogTrigger asChild>
-        <div className="px-2 py-1 cursor-pointer hover:bg-accent rounded-sm text-sm">
-          {item.name}
-        </div>
-      </DialogTrigger>
+      <button
+        type="button"
+        className="w-full px-2 py-1 text-left text-sm rounded-sm hover:bg-accent cursor-pointer"
+      >
+        {item.name}
+      </button>
     </AnalysisComponent>
   );
 };
@@ -94,7 +80,7 @@ export const AnalysisPanel: React.FC = () => {
               {Object.entries(groupedItems).map(([category, sections]) => (
                 <div key={category}>
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2 px-2">
-                    {CATEGORY_LABELS[category] || category}
+                    {PALETTE_TAB_LABELS[category] || category}
                   </h3>
                   {Object.entries(sections).map(([sectionName, items], sectionIndex) => {
                     const accordionKey = `${category}-${sectionName}`;

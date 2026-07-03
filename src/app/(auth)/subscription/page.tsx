@@ -1,5 +1,10 @@
-import PaymentPage from '@/components/templates/auth/subscription';
+import { Suspense } from 'react';
+import SubscriptionCheckoutPage from '@/components/templates/auth/subscription';
 
 export default function SubscriptionPage() {
-  return <PaymentPage />;
+  return (
+    <Suspense fallback={null}>
+      <SubscriptionCheckoutPage />
+    </Suspense>
+  );
 }

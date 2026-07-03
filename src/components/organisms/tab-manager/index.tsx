@@ -8,29 +8,45 @@ import {
   PanelRightClose,
   Folder,
   Filter,
-  Menu,
-  Minus,
-  Plus,
-  Activity,
   BarChart3,
   Save,
+  Undo2,
+  Redo2,
   History,
   Clock,
   Download,
   RotateCcw,
-  GraduationCap,
+  Play,
+  Plus,
+  CircleStop,
 } from 'lucide-react';
+import { FEATURE_FLAGS } from '@/lib/feature-flags';
+import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
+import { AnalysisResultPlaceholder } from '@/components/organisms/analysis-result-placeholder';
+import { cn } from '@/utils';
+import { useNotebookWorkspaceStore } from '@/stores/notebook-workspace-store';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/atoms/select';
 import Spreadsheet from '@/components/templates/spreadsheet';
+import { useWorkspaceSheetStatusStore } from '@/stores/workspace-sheet-status-store';
 import { useProjectStore } from '@/stores/project-store';
-import { ViewType } from '@/stores/tabs-store';
+import { ViewType as TabViewType } from '@/stores/tabs-store';
+import { ViewType } from '@/stores/project-store';
 import { Notebook } from '@/components/templates/notebook';
 import MarkdownViewer from '@/components/organisms/markdown-viewer';
-import { ModelBuilder } from '@/components/templates/model-builder';
+import { AnalysisReportLayout } from '@/components/organisms/analysis-report-layout';
 import AnalyticsLayout from '@/components/templates/analytics-layout';
 import { Separator } from '@/components/atoms/separator';
 // Removed context actions import - using store actions instead
 import { LeftPanel } from '@/components/organisms/left-panel';
 import { useFileHandler } from '@/hooks/api/use-file';
+import { redoTab, undoTab } from '@/lib/tab-history';
+import { useTabHistoryStore } from '@/stores/tab-history-store';
 import { toast } from '@/hooks/ui/use-toast';
 import {
   Dialog,
@@ -41,79 +57,25 @@ import {
 } from '@/components/molecules/dialog';
 import Loading from '@/components/molecules/loading';
 
-interface Column {
-  id: string;
-  accessor: string;
-  header: string;
-  width: number;
-  type: string;
+type StoreTab = import('@/stores/tabs-store').Tab;
+type RowSelection = Record<string, boolean>;
+type SpreadsheetTab = StoreTab & {
+  type: TabViewType.SPREADSHEET;
+  data: import('@/stores/tabs-store').TabData;
+};
+
+function isSpreadsheetTab(tab: StoreTab | undefined | null): tab is SpreadsheetTab {
+  return !!tab && tab.type === TabViewType.SPREADSHEET && !!tab.data;
 }
 
-interface TabData {
-  filePath?: string;
-  initialData?: Record<string, any>[];
-  initialColumns?: Column[];
-  columnStats?: Record<string, any>;
-  totalRows?: number;
-  isProjectFile?: boolean;
-  teachingMode?: boolean;
-}
-
-export interface BaseTab {
-  id: string;
-  name: string;
-  type: ViewType;
-  isDirty: boolean;
-  path?: string;
-}
-
-export interface SpreadsheetTab extends BaseTab {
-  type: ViewType.SPREADSHEET;
-  data: Required<TabData>;
-}
-
-export interface MarkdownTab extends BaseTab {
-  type: ViewType.MARKDOWN;
-  path: string;
-  content?: string;
-}
-
-interface RowSelection {
-  [key: string]: boolean;
-}
-
-export type Tab = SpreadsheetTab | MarkdownTab | BaseTab;
-
-// Type guard with null/undefined check
-function isSpreadsheetTab(tab: Tab | undefined | null): tab is SpreadsheetTab {
-  return tab !== undefined && tab !== null && tab.type === ViewType.SPREADSHEET;
-}
-
-// Extract fileId from file path
-// This handles both formats:
-// 1. Full path: users/userId/fileId/filename
-// 2. Direct fileId
-// 3. Project ID (UUID) - return null to avoid calling file API
-function extractFileId(filePath?: string): string | null {
-  if (!filePath) return null;
-
-  // Check if it's a project ID (UUID) - if so, return null to avoid calling file API
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  if (uuidRegex.test(filePath)) {
-    console.log('Detected project ID, returning null to avoid file API calls');
-    return null;
-  }
-
-  // If the path contains slashes, it's a full path
-  if (filePath.includes('/')) {
-    const parts = filePath.split('/');
-    if (parts.length >= 3) {
-      return parts[2];
-    }
-  }
-
-  // Otherwise, assume it's a direct fileId
-  return filePath;
+function extractFileId(tab: StoreTab): string | null {
+  // Prefer tensr-api dataset id if present; fall back to path/filePath.
+  return (
+    getDatasetIdFromTab(tab) ??
+    tab.path ??
+    (tab.data as { filePath?: string } | undefined)?.filePath ??
+    null
+  );
 }
 
 // Utility Types
@@ -147,8 +109,8 @@ function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): Debo
 
 // Props interface
 interface TabManagerProps {
-  activeTab?: Tab;
-  tabs: Tab[];
+  activeTab?: StoreTab;
+  tabs: StoreTab[];
   onTabClose: (id: string) => void;
   onToggleSidebar: () => void;
   rightPanelOpen?: boolean;
@@ -164,11 +126,35 @@ const TabManager: React.FC<TabManagerProps> = ({
 }) => {
   // State
   const [showStats, setShowStats] = useState(false);
-  const [showMenu, setShowMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showVersionHistory, setShowVersionHistory] = useState(false);
+
+  // Reveal the filter row when chat / column menu requests it.
+  useEffect(() => {
+    const onFilterColumn = (event: Event) => {
+      const detail = (event as CustomEvent<{ showFilters?: boolean; showFilterBar?: boolean }>)
+        .detail;
+      if (detail?.showFilters || detail?.showFilterBar) setShowFilters(true);
+    };
+    const onApplyFilters = (event: Event) => {
+      const detail = (event as CustomEvent<{ showFilterBar?: boolean }>).detail;
+      if (detail?.showFilterBar) setShowFilters(true);
+    };
+    window.addEventListener('tensr:filter-column', onFilterColumn as EventListener);
+    window.addEventListener('tensr:apply-column-filters', onApplyFilters as EventListener);
+    return () => {
+      window.removeEventListener('tensr:filter-column', onFilterColumn as EventListener);
+      window.removeEventListener('tensr:apply-column-filters', onApplyFilters as EventListener);
+    };
+  }, []);
   const [savingStatus, setSavingStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+
+  const activeHistory = useTabHistoryStore(s =>
+    activeTab?.id ? s.byTab[activeTab.id] : undefined
+  );
+  const canUndo = (activeHistory?.past.length ?? 0) > 0;
+  const canRedo = (activeHistory?.future.length ?? 0) > 0;
   const [fileVersions, setFileVersions] = useState<any[]>([]);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
   const [reverting, setReverting] = useState(false);
@@ -183,6 +169,16 @@ const TabManager: React.FC<TabManagerProps> = ({
     setLeftPanelContent,
     setView,
   } = useProjectStore();
+
+  useEffect(() => {
+    if (activeView === ViewType.SEM) {
+      setView(ViewType.SPREADSHEET);
+    }
+    if (!FEATURE_FLAGS.CHARTS_TAB_ENABLED && activeView === ViewType.CHARTS) {
+      setView(ViewType.SPREADSHEET);
+    }
+  }, [activeView, setView]);
+
   const {
     saveFile,
     isSaving,
@@ -193,23 +189,22 @@ const TabManager: React.FC<TabManagerProps> = ({
     setupAutoSave,
   } = useFileHandler({});
 
-  const [activeRowSelection, setActiveRowSelection] = useState<RowSelection>({});
+  const [, setActiveRowSelection] = useState<RowSelection>({});
+  const setSheetStatus = useWorkspaceSheetStatusStore(s => s.setStatus);
+  const clearSheetStatus = useWorkspaceSheetStatusStore(s => s.clearStatus);
   const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get current file ID - with null checks
   const currentFileId = useMemo(() => {
     if (!activeTab) return null;
-
-    console.log('Active Tab:', activeTab);
-    console.log('Is Spreadsheet Tab:', isSpreadsheetTab(activeTab));
-    console.log('Active Tab isDirty:', activeTab.isDirty);
-
     if (isSpreadsheetTab(activeTab)) {
-      return extractFileId(activeTab.data.filePath);
-    } else if (activeTab.path) {
-      return extractFileId(activeTab.path);
+      return extractFileId(activeTab);
     }
-
+    if (activeTab.path) {
+      const parts = activeTab.path.split('/');
+      if (parts.length >= 3) return parts[2];
+      return activeTab.path;
+    }
     return null;
   }, [activeTab]);
 
@@ -261,11 +256,15 @@ const TabManager: React.FC<TabManagerProps> = ({
     );
   }, [tabs, createDebouncedHandler]);
 
+  useEffect(() => {
+    if (!activeTab || !isSpreadsheetTab(activeTab)) {
+      clearSheetStatus();
+    }
+  }, [activeTab?.id, activeTab?.type, clearSheetStatus]);
+
   // Handle save
   const handleSaveFile = async () => {
-    console.log('handleSaveFile called');
     if (!activeTab || !isSpreadsheetTab(activeTab)) {
-      console.log('handleSaveFile: No active spreadsheet tab');
       toast({
         title: 'Cannot save',
         description: 'No active file',
@@ -275,7 +274,6 @@ const TabManager: React.FC<TabManagerProps> = ({
     }
 
     if (!currentFileId) {
-      console.log('handleSaveFile: No currentFileId');
       toast({
         title: 'Save As required',
         description: 'This file has not been saved before. Please use "Save As" to save it.',
@@ -286,7 +284,6 @@ const TabManager: React.FC<TabManagerProps> = ({
 
     // Don't save if the file isn't dirty
     if (!activeTab.isDirty) {
-      console.log('handleSaveFile: Tab is not dirty');
       toast({
         title: 'No changes to save',
         description: 'The file is already up to date',
@@ -294,22 +291,28 @@ const TabManager: React.FC<TabManagerProps> = ({
       return;
     }
 
-    console.log('handleSaveFile: Setting savingStatus to saving');
     setSavingStatus('saving');
 
     try {
-      console.log('handleSaveFile: Calling saveFile with fileId', currentFileId);
-      // Save the file content
-      const success = await saveFile(currentFileId, activeTab.data.initialData);
+      const data = (activeTab.data as { initialData?: Record<string, any>[] } | undefined)
+        ?.initialData;
+      if (!data) {
+        toast({
+          title: 'Nothing to save',
+          description: 'This tab has no loaded rows yet.',
+          variant: 'destructive',
+        });
+        setSavingStatus('error');
+        return;
+      }
+      const success = await saveFile(currentFileId, data);
 
       if (success) {
-        console.log('handleSaveFile: saveFile succeeded');
         // Update tab to mark as no longer dirty
         updateTab(activeTab.id, {
           isDirty: false,
         });
 
-        console.log('handleSaveFile: Setting savingStatus to saved');
         setSavingStatus('saved');
         toast({
           title: 'File saved',
@@ -325,11 +328,8 @@ const TabManager: React.FC<TabManagerProps> = ({
         variant: 'destructive',
       });
     } finally {
-      console.log('handleSaveFile: Finally block executed');
-      // Reset status after a delay
       setTimeout(() => {
         if (savingStatus === 'saved' || savingStatus === 'error') {
-          console.log('handleSaveFile: Resetting savingStatus to idle');
           setSavingStatus('idle');
         }
       }, 3000);
@@ -440,104 +440,73 @@ const TabManager: React.FC<TabManagerProps> = ({
   };
 
   const handleToggleFolder = useCallback(() => {
-    console.log('Toggle folder clicked, current state:', leftPanelOpen);
     if (!leftPanelOpen) {
-      // Set panel content first, then open the panel
       setLeftPanelContent(<LeftPanel />);
       toggleLeftPanel(true);
     } else {
-      // Just close the panel
       toggleLeftPanel(false);
     }
   }, [leftPanelOpen, setLeftPanelContent, toggleLeftPanel]);
 
   const [spreadsheetVersion, setSpreadsheetVersion] = useState(0);
 
-  // Handle adding a row
-  const handleAddRow = useCallback(() => {
-    if (!activeTab || !isSpreadsheetTab(activeTab)) {
-      return;
-    }
-
-    try {
-      // Get the current data
-      const currentData = [...activeTab.data.initialData];
-
-      // Create an empty row
-      const emptyRow: Record<string, any> = {};
-
-      // Fill with empty values
-      activeTab.data.initialColumns.forEach(col => {
-        emptyRow[col.id] = '';
-      });
-
-      // Find insertion index
-      let insertIndex = currentData.length;
-      const selectedIndices = Object.keys(activeRowSelection)
-        .filter(key => activeRowSelection[key])
-        .map(key => parseInt(key, 10));
-
-      if (selectedIndices.length > 0) {
-        insertIndex = selectedIndices[0] + 1;
+  const insertRowRelativeTo = useCallback(
+    (rowIndex: number, placement: 'above' | 'below') => {
+      if (!activeTab || !isSpreadsheetTab(activeTab)) return;
+      try {
+        const data = activeTab.data as
+          | { initialData?: Record<string, any>[]; initialColumns?: { id: string }[] }
+          | undefined;
+        if (!data?.initialData || !data.initialColumns) return;
+        const currentData = [...data.initialData];
+        const emptyRow: Record<string, any> = {};
+        data.initialColumns.forEach(col => {
+          emptyRow[col.id] = '';
+        });
+        const insertIndex = placement === 'above' ? rowIndex : rowIndex + 1;
+        const clamped = Math.max(0, Math.min(insertIndex, currentData.length));
+        currentData.splice(clamped, 0, emptyRow);
+        updateTab(activeTab.id, {
+          data: {
+            ...(activeTab.data ?? {}),
+            initialData: currentData,
+          },
+          isDirty: true,
+        });
+        setSpreadsheetVersion(prev => prev + 1);
+      } catch (e) {
+        console.error('Error inserting row:', e);
       }
+    },
+    [activeTab, updateTab]
+  );
 
-      // Insert the new row
-      currentData.splice(insertIndex, 0, emptyRow);
-
-      // Update tab data
-      updateTab(activeTab.id, {
-        data: {
-          ...activeTab.data,
-          initialData: currentData,
-        },
-        isDirty: true,
-      });
-
-      // Force re-render of the spreadsheet
-      setSpreadsheetVersion(prev => prev + 1);
-    } catch (e) {
-      console.error('Error adding row:', e);
-    }
-  }, [activeTab, activeRowSelection]);
-
-  // Handle deleting rows
-  const handleDeleteRows = useCallback(() => {
-    if (!activeTab || !isSpreadsheetTab(activeTab)) return;
-
-    try {
-      // Get the current data
-      const currentData = [...activeTab.data.initialData];
-
-      // Get selected row indices from the activeRowSelection object
-      const indicesToDelete = Object.keys(activeRowSelection)
-        .filter(key => activeRowSelection[key])
-        .map(key => parseInt(key, 10))
-        .sort((a, b) => b - a); // Sort in descending order
-
-      if (indicesToDelete.length === 0) {
-        return; // Nothing to delete
+  const deleteRowsAtIndices = useCallback(
+    (indices: number[]) => {
+      if (!activeTab || !isSpreadsheetTab(activeTab)) return;
+      if (indices.length === 0) return;
+      try {
+        const currentData = [...(activeTab.data.initialData ?? [])];
+        const sorted = [...new Set(indices)].sort((a, b) => b - a);
+        sorted.forEach(index => {
+          if (index >= 0 && index < currentData.length) {
+            currentData.splice(index, 1);
+          }
+        });
+        updateTab(activeTab.id, {
+          data: {
+            ...activeTab.data,
+            initialData: currentData,
+          },
+          isDirty: true,
+        });
+        setSpreadsheetVersion(prev => prev + 1);
+      } catch (e) {
+        console.error('Error deleting rows:', e);
       }
-
-      // Delete rows starting from the highest index to avoid shifting issues
-      indicesToDelete.forEach(index => {
-        currentData.splice(index, 1);
-      });
-
-      // Update the tab data
-      updateTab(activeTab.id, {
-        data: {
-          ...activeTab.data,
-          initialData: currentData,
-        },
-        isDirty: true,
-      });
-
-      // Force re-render of the spreadsheet
-      setSpreadsheetVersion(prev => prev + 1);
-    } catch (e) {
-      console.error('Error deleting rows:', e);
-    }
-  }, [activeTab, activeRowSelection]);
+    },
+    [activeTab, updateTab]
+  );
 
   // Cleanup
   useEffect(() => {
@@ -561,33 +530,79 @@ const TabManager: React.FC<TabManagerProps> = ({
     <div className="h-full">
       <Spreadsheet
         key={`${tab.id}-${spreadsheetVersion}`}
-        initialData={tab.data.initialData}
-        initialColumns={tab.data.initialColumns}
-        columnStats={tab.data.columnStats}
-        showMenu={showMenu}
+        initialData={tab.data.initialData ?? []}
+        initialColumns={tab.data.initialColumns ?? []}
+        columnStats={tab.data.columnStats ?? {}}
         showStats={showStats}
         showFilters={showFilters}
         onCloseFilters={() => setShowFilters(false)}
+        onRequestShowFilters={() => setShowFilters(true)}
         onChange={debouncedHandlers[tab.id]}
         filePath={tab.data.filePath}
-        totalRowCount={tab.data.totalRows}
+        totalRowCount={tab.data.totalRows ?? 0}
         tabId={tab.id}
         onSelectionChange={setActiveRowSelection}
+        onSheetStatusChange={setSheetStatus}
         tabData={tab.data}
+        onInsertRow={insertRowRelativeTo}
+        onDeleteRows={deleteRowsAtIndices}
       />
     </div>
   );
 
-  const renderTabContent = (tab: Tab) => {
+  const renderTabContent = (tab: StoreTab) => {
     // First check if we have an active tab
     if (!activeTab || tab.id !== activeTab.id) return null;
 
-    if (tab.type === ViewType.MARKDOWN) {
-      const markdownTab = tab as MarkdownTab;
+    if (tab.type === TabViewType.MARKDOWN) {
+      const markdownTab = tab as StoreTab;
       return (
         <div className="h-full overflow-auto bg-background">
           <MarkdownViewer filePath={markdownTab.path || ''} content={markdownTab.content} />
         </div>
+      );
+    }
+
+    if (tab.type === TabViewType.ANALYSIS_REPORT) {
+      const reportTab = tab as import('@/stores/tabs-store').Tab;
+      if (!reportTab.data?.analysisReport) {
+        return (
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+            No report data for this tab.
+          </div>
+        );
+      }
+      return (
+        <AnalysisReportLayout
+          report={reportTab.data.analysisReport}
+          rawResult={reportTab.data.analysisResult ?? null}
+          sourceDatasetId={reportTab.data.sourceDatasetId}
+          analysisOp={reportTab.data.analysisOp}
+          analysisRunId={reportTab.data.analysisRunId}
+        />
+      );
+    }
+
+    if (tab.type === TabViewType.ANALYSIS_RESULT) {
+      const resultTab = tab as import('@/stores/tabs-store').Tab;
+      if (resultTab.data?.analysisReport) {
+        return (
+          <AnalysisReportLayout
+            report={resultTab.data.analysisReport}
+            rawResult={resultTab.data.analysisResult ?? null}
+            sourceDatasetId={resultTab.data.sourceDatasetId}
+            analysisOp={resultTab.data.analysisOp}
+            analysisRunId={resultTab.data.analysisRunId}
+          />
+        );
+      }
+      return (
+        <AnalysisResultPlaceholder
+          title={resultTab.name}
+          analysisOp={resultTab.data?.analysisOp}
+          parameters={resultTab.data?.analysisParameters}
+          sourceDatasetId={resultTab.data?.sourceDatasetId}
+        />
       );
     }
 
@@ -597,24 +612,18 @@ const TabManager: React.FC<TabManagerProps> = ({
 
       switch (activeView) {
         case ViewType.SPREADSHEET:
+          return spreadsheetContent;
+
         case ViewType.CHARTS:
-          return (
-            <AnalyticsLayout filePath={tab.data.filePath} columns={tab.data.initialColumns}>
-              {spreadsheetContent}
-            </AnalyticsLayout>
-          );
+          if (!FEATURE_FLAGS.CHARTS_TAB_ENABLED) {
+            return spreadsheetContent;
+          }
+          return <AnalyticsLayout filePath={tab.data.filePath} columns={tab.data.initialColumns} />;
 
         case ViewType.NOTEBOOK:
           return (
             <div className="h-full">
               <Notebook />
-            </div>
-          );
-
-        case ViewType.SEM:
-          return (
-            <div className="h-full">
-              <ModelBuilder />
             </div>
           );
 
@@ -635,181 +644,302 @@ const TabManager: React.FC<TabManagerProps> = ({
     );
   };
 
+  const hideWorkspaceToolbar = activeTab?.type === TabViewType.ANALYSIS_REPORT;
+  const notebookControls = useNotebookWorkspaceStore(s => s.controls);
+  const isNotebookView = activeView === ViewType.NOTEBOOK;
+
+  const datasetContextId = useMemo(() => {
+    if (!activeTab) return null;
+    const storeTab = activeTab as import('@/stores/tabs-store').Tab;
+    if (isSpreadsheetTab(activeTab)) return getDatasetIdFromTab(storeTab);
+    if (activeTab.type === TabViewType.ANALYSIS_RESULT) {
+      return storeTab.data?.sourceDatasetId ?? getDatasetIdFromTab(storeTab);
+    }
+    return null;
+  }, [activeTab]);
+
+  const sourceSpreadsheetTab = useMemo(
+    () =>
+      datasetContextId
+        ? tabs.find(
+            t =>
+              isSpreadsheetTab(t) &&
+              getDatasetIdFromTab(t as import('@/stores/tabs-store').Tab) === datasetContextId
+          )
+        : undefined,
+    [tabs, datasetContextId]
+  );
+
+  const showDatasetWorkspaceBar =
+    !!datasetContextId &&
+    (isSpreadsheetTab(activeTab) || activeTab?.type === TabViewType.ANALYSIS_RESULT);
+
+  const workspaceFixedViews = useMemo(
+    () => [
+      { key: ViewType.SPREADSHEET, label: 'Sheet' },
+      ...(FEATURE_FLAGS.CHARTS_TAB_ENABLED
+        ? [{ key: ViewType.CHARTS, label: 'Charts' as const }]
+        : []),
+      { key: ViewType.NOTEBOOK, label: 'Notebook' },
+    ],
+    []
+  );
+
+  const activateWorkspaceView = useCallback(
+    (view: ViewType) => {
+      if (
+        activeTab?.type === TabViewType.ANALYSIS_RESULT &&
+        sourceSpreadsheetTab &&
+        view !== ViewType.CHARTS
+      ) {
+        setActiveTab(sourceSpreadsheetTab.id);
+      }
+      setView(view);
+    },
+    [activeTab?.type, sourceSpreadsheetTab, setActiveTab, setView]
+  );
+
   return (
-    <div className="flex h-full flex-col bg-background">
-      <div className="flex h-10 items-center justify-between border-b border-border bg-sidebar z-10">
-        <div className="flex flex-row items-center gap-2">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      {!hideWorkspaceToolbar ? (
+        <div className="flex h-[40px] min-h-[40px] items-center gap-1 border-b border-border bg-sidebar z-10 px-1">
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 mx-2"
+            className="h-8 w-8 shrink-0"
             onClick={handleToggleFolder}
             data-state={leftPanelOpen ? 'active' : 'inactive'}
-            title={leftPanelOpen ? 'Close Left Panel' : 'Open Left Panel'}
+            title={leftPanelOpen ? 'Hide analysis tools' : 'Show analysis tools'}
           >
             {leftPanelOpen ? <PanelLeftClose /> : <PanelLeftOpen />}
           </Button>
-          <h1 className="text-sm font-medium">
-            {activeTab?.name}
-            {activeTab?.isDirty && <span className="ml-1 text-muted-foreground">*</span>}
-          </h1>
-          {lastSavedTime && (
-            <span className="text-xs text-muted-foreground ml-2">
-              Last saved: {new Date(lastSavedTime).toLocaleTimeString()}
-            </span>
-          )}
-        </div>
-        <div className="flex-none flex items-center px-2">
-          {/* Save Button - show for any spreadsheet tab */}
-          {activeTab && isSpreadsheetTab(activeTab) && currentFileId && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 relative"
-              onClick={handleSaveFile}
-              disabled={savingStatus === 'saving' || !activeTab.isDirty}
-              title="Save"
-            >
-              <Save className={savingStatus === 'saving' ? 'animate-pulse' : ''} />
-              {activeTab.isDirty && (
-                <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-primary"></span>
-              )}
-              <span className="sr-only">Save</span>
-            </Button>
-          )}
 
-          {/* Version History Button - show for any spreadsheet tab */}
-          {activeTab && isSpreadsheetTab(activeTab) && currentFileId && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={handleOpenVersionHistory}
-              title="Version History"
-            >
-              <History />
-              <span className="sr-only">Version History</span>
-            </Button>
-          )}
-
-          {activeTab && isSpreadsheetTab(activeTab) && (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => {
-                // Toggle teaching mode - store in tab data or global state
-                const currentTeachingMode = activeTab.data?.teachingMode || false;
-                updateTab(activeTab.id, {
-                  data: {
-                    ...activeTab.data,
-                    teachingMode: !currentTeachingMode,
-                  },
-                });
-              }}
-              title="Toggle teaching mode"
-            >
-              <GraduationCap className="h-3 w-3 mr-1" />
-              Teaching: {activeTab.data?.teachingMode ? 'ON' : 'OFF'}
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => setShowMenu(prev => !prev)}
-            data-state={showMenu ? 'active' : 'inactive'}
-          >
-            <Menu />
-            <span className="sr-only">Toggle Menu</span>
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onToggleSidebar}
-            className="h-7 w-7"
-            title={rightPanelOpen ? 'Close Right Panel' : 'Open Right Panel'}
-          >
-            {rightPanelOpen ? <PanelRightClose /> : <PanelRightOpen />}
-            <span className="sr-only">Toggle Right Panel</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* Secondary View Switcher: shown only for spreadsheet tabs */}
-      {activeTab && isSpreadsheetTab(activeTab) && (
-        <div className="flex items-center gap-1 border-b border-border bg-muted/30 h-8">
-          {[
-            { key: ViewType.SPREADSHEET, label: 'Sheet' },
-            { key: ViewType.CHARTS, label: 'Charts' },
-            { key: ViewType.NOTEBOOK, label: 'Notebook' },
-            { key: ViewType.SEM, label: 'SEM' },
-          ].map(v => (
-            <Button
-              key={v.key}
-              variant={activeView === v.key ? 'secondary' : 'ghost'}
-              size="sm"
-              onClick={() => setView(v.key)}
-            >
-              {v.label}
-            </Button>
-          ))}
-        </div>
-      )}
-
-      {/* Tab Content Area - Tabs are now only responsible for rendering content */}
-      <div className="flex-1 bg-background">
-        {/* Add check to ensure tabs is an array */}
-        {Array.isArray(tabs) &&
-          tabs.map(tab => (
-            <div
-              key={tab.id}
-              className="h-full flex flex-col bg-background"
-              style={{ display: activeTab?.id === tab.id ? 'flex' : 'none' }}
-            >
-              {showMenu && (
-                <div className="flex flex-row items-center justify-between bg-background border-b border-border px-1 min-h-8">
-                  <div className="flex flex-row items-center">
-                    <Button size="icon" variant="ghost" onClick={handleAddRow}>
-                      <Plus />
-                    </Button>
-                    <Button size="icon" variant="ghost" onClick={handleDeleteRows}>
-                      <Minus />
-                    </Button>
-                    <Separator orientation="vertical" className="h-4 mx-2" />
+          {showDatasetWorkspaceBar && (
+            <>
+              <div className="flex items-center gap-0.5 shrink-0 min-w-0">
+                {workspaceFixedViews.map(v => (
+                  <Button
+                    key={v.key}
+                    variant={
+                      isSpreadsheetTab(activeTab) && activeView === v.key ? 'secondary' : 'ghost'
+                    }
+                    size="sm"
+                    className="h-8 px-2 text-xs shrink-0"
+                    onClick={() => activateWorkspaceView(v.key)}
+                  >
+                    {v.label}
+                  </Button>
+                ))}
+              </div>
+              {isNotebookView ? (
+                <>
+                  <Separator orientation="vertical" className="h-5 shrink-0" />
+                  <div className="flex items-center gap-0.5 shrink-0">
                     <Button
                       variant="ghost"
-                      size="icon"
-                      onClick={() => setView(ViewType.CHARTS)}
-                      data-state={activeView === ViewType.CHARTS ? 'active' : 'inactive'}
+                      size="sm"
+                      className="h-8 gap-1 px-2 text-xs"
+                      onClick={notebookControls.runAll}
+                      disabled={notebookControls.isExecuting || !notebookControls.canRun}
                     >
-                      <Activity />
-                      <span className="sr-only">Toggle Analytics</span>
+                      Run all
                     </Button>
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8"
+                      onClick={notebookControls.runSelected}
+                      disabled={notebookControls.isExecuting || !notebookControls.canRun}
+                      title="Run selected cell"
+                    >
+                      {notebookControls.isExecuting ? (
+                        <CircleStop className="size-3.5" />
+                      ) : (
+                        <Play className="size-3.5" />
+                      )}
+                      <span className="sr-only">Run cell</span>
+                    </Button>
+                    <Select
+                      value={notebookControls.language}
+                      onValueChange={v => notebookControls.setLanguage(v as 'python' | 'r')}
+                    >
+                      <SelectTrigger className="h-8 w-[5.5rem] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="python" className="text-xs">
+                          Python
+                        </SelectItem>
+                        <SelectItem value="r" className="text-xs">
+                          R
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select
+                      value={notebookControls.newCellType}
+                      onValueChange={v => notebookControls.setNewCellType(v as 'code' | 'markdown')}
+                    >
+                      <SelectTrigger className="h-8 w-[5.25rem] text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="code" className="text-xs">
+                          Code
+                        </SelectItem>
+                        <SelectItem value="markdown" className="text-xs">
+                          Markdown
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={notebookControls.addCell}
+                      title={`Add ${notebookControls.newCellType} cell`}
+                    >
+                      <Plus className="size-3.5" />
+                      <span className="sr-only">Add cell</span>
+                    </Button>
+                  </div>
+                </>
+              ) : activeView === ViewType.SPREADSHEET ||
+                (FEATURE_FLAGS.CHARTS_TAB_ENABLED && activeView === ViewType.CHARTS) ? (
+                <>
+                  <Separator orientation="vertical" className="h-5 shrink-0" />
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
                       onClick={() => setShowStats(prev => !prev)}
                       data-state={showStats ? 'active' : 'inactive'}
+                      title="Toggle column stats"
                     >
                       <BarChart3 />
                       <span className="sr-only">Toggle Stats</span>
                     </Button>
-                  </div>
-                  <div className="flex flex-row items-center">
                     <Button
-                      size="icon"
                       variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
                       onClick={() => setShowFilters(!showFilters)}
+                      data-state={showFilters ? 'active' : 'inactive'}
+                      title="Filters"
                     >
                       <Filter />
+                      <span className="sr-only">Filters</span>
                     </Button>
                   </div>
+                </>
+              ) : null}
+            </>
+          )}
+
+          <div className="flex-1 min-w-0" />
+
+          {lastSavedTime && activeTab && isSpreadsheetTab(activeTab) && !isNotebookView && (
+            <span className="text-xs text-muted-foreground truncate hidden sm:inline max-w-[140px]">
+              Saved {new Date(lastSavedTime).toLocaleTimeString()}
+            </span>
+          )}
+
+          <div className="flex items-center shrink-0">
+            {activeTab && isSpreadsheetTab(activeTab) && !isNotebookView && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => activeTab && undoTab(activeTab.id)}
+                  disabled={!canUndo}
+                  title="Undo (⌘Z)"
+                >
+                  <Undo2 />
+                  <span className="sr-only">Undo</span>
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => activeTab && redoTab(activeTab.id)}
+                  disabled={!canRedo}
+                  title="Redo (⌘⇧Z)"
+                >
+                  <Redo2 />
+                  <span className="sr-only">Redo</span>
+                </Button>
+              </>
+            )}
+
+            {activeTab && isSpreadsheetTab(activeTab) && currentFileId && !isNotebookView && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 relative"
+                onClick={handleSaveFile}
+                disabled={savingStatus === 'saving' || !activeTab.isDirty}
+                title="Save"
+              >
+                <Save className={savingStatus === 'saving' ? 'animate-pulse' : ''} />
+                {activeTab.isDirty && (
+                  <span className="absolute top-0.5 right-0.5 h-2 w-2 rounded-full bg-primary" />
+                )}
+                <span className="sr-only">Save</span>
+              </Button>
+            )}
+
+            {activeTab && isSpreadsheetTab(activeTab) && currentFileId && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={handleOpenVersionHistory}
+                title="Version History"
+              >
+                <History />
+                <span className="sr-only">Version History</span>
+              </Button>
+            )}
+
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={onToggleSidebar}
+              className="h-8 w-8"
+              title={rightPanelOpen ? 'Close Right Panel' : 'Open Right Panel'}
+            >
+              {rightPanelOpen ? <PanelRightClose /> : <PanelRightOpen />}
+              <span className="sr-only">Toggle Right Panel</span>
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {/* Tab Content Area - Tabs are now only responsible for rendering content */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+        {/* Add check to ensure tabs is an array */}
+        {Array.isArray(tabs) &&
+          tabs.map(tab => {
+            const isReport =
+              tab.type === TabViewType.ANALYSIS_REPORT || tab.type === TabViewType.ANALYSIS_RESULT;
+            return (
+              <div
+                key={tab.id}
+                className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background"
+                style={{ display: activeTab?.id === tab.id ? 'flex' : 'none' }}
+              >
+                <div
+                  className={cn(
+                    'min-h-0 flex-1',
+                    isReport ? 'flex flex-col overflow-hidden' : 'relative overflow-hidden'
+                  )}
+                >
+                  {renderTabContent(tab)}
                 </div>
-              )}
-              <div className="flex-1 relative">{renderTabContent(tab)}</div>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         {(!Array.isArray(tabs) || tabs.length === 0) && (
           <div className="flex h-full flex-col items-center justify-center bg-background text-muted-foreground">
             <Folder className="h-12 w-12 mb-4" />

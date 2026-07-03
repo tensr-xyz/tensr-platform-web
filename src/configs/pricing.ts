@@ -70,6 +70,77 @@ export const TIER_FEATURES: TierFeaturesMap = {
   ],
 } as const;
 
+/** Paid tiers available at checkout — matches tensr-api PLANS (pro, pro_plus, teams). */
+export type SubscriptionTier = 'pro' | 'pro_plus' | 'team';
+
+export const SUBSCRIPTION_TIERS: SubscriptionTier[] = ['pro', 'pro_plus', 'team'];
+
+export const DEFAULT_TEAM_SEATS = 3;
+export const MIN_TEAM_SEATS = 1;
+export const MAX_TEAM_SEATS = 500;
+
+export const SUBSCRIPTION_TIER_LABELS: Record<SubscriptionTier, string> = {
+  pro: 'Pro',
+  pro_plus: 'Pro+',
+  team: 'Teams',
+};
+
+export const ANNUAL_MONTHLY_DISCOUNT = 0.8;
+
+export const DEFAULT_SUBSCRIPTION_PRICING: Record<
+  SubscriptionTier,
+  { monthly: number; annual: number; description: string }
+> = {
+  pro: {
+    monthly: 20,
+    annual: 16,
+    description: 'For individual professionals',
+  },
+  pro_plus: {
+    monthly: 60,
+    annual: 48,
+    description: 'For power users and heavy AI workflows',
+  },
+  team: {
+    monthly: 40,
+    annual: 32,
+    description: 'Per seat, for teams and organizations',
+  },
+};
+
+/** `annual` prices are monthly equivalents (20% off), not lump-sum yearly totals. */
+export function monthlyEquivalentRate(monthly: number): number {
+  return Math.round(monthly * ANNUAL_MONTHLY_DISCOUNT * 100) / 100;
+}
+
+export function unitPriceForBilling(
+  pricing: { monthly: number; annual: number },
+  billingType: 'monthly' | 'annual'
+): number {
+  return billingType === 'annual' ? pricing.annual : pricing.monthly;
+}
+
+export function formatBillingCadence(
+  billingType: 'monthly' | 'annual',
+  tier?: SubscriptionTier
+): string {
+  if (billingType === 'annual') {
+    return tier === 'team' ? 'per seat / mo, billed annually' : '/mo, billed annually';
+  }
+  return tier === 'team' ? 'per seat / month' : '/month';
+}
+
+export const SUBSCRIPTION_TIER_FEATURES: Record<'PRO' | 'PRO_PLUS' | 'TEAM', CardFeature[]> = {
+  PRO: TIER_FEATURES.PRO,
+  PRO_PLUS: [
+    { icon: BrainCircuit, text: 'Everything in Pro' },
+    { icon: BrainCircuit, text: '5× AI assistant usage' },
+    { icon: ChartBar, text: 'Higher report limits' },
+    { icon: Headphones, text: 'Priority support' },
+  ],
+  TEAM: TIER_FEATURES.TEAM,
+};
+
 export const FEATURES: TableFeature[] = [
   {
     name: 'Statistical Analysis',

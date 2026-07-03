@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogTrigger,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
@@ -14,9 +15,9 @@ import { useTabsStore } from '@/stores/tabs-store';
 import { Loader2 as Loader } from 'lucide-react';
 import useAuth from '@/hooks/api/use-auth';
 import { ColumnSummary } from '@/types/file';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 
-// API base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
+const API_BASE_URL = getTensrApiBaseUrl();
 
 interface ValueToCount {
   type_: 'single' | 'range' | 'sysmis'; // Changed from 'type' to 'type_' to match Rust
@@ -231,7 +232,7 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
 
   return (
     <Dialog>
-      {children}
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Count Values</DialogTitle>

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Table } from '@tanstack/react-table';
 import { Button } from '@/components/atoms/button';
 import {
@@ -36,6 +36,33 @@ const Filters = ({
   const [selectedColumn, setSelectedColumn] = useState('');
   const [selectedOperator, setSelectedOperator] = useState('greaterThan');
   const [filterValue, setFilterValue] = useState('');
+  const valueInputRef = useRef<HTMLInputElement>(null);
+
+  // Listen for "filter this column" requests from the column header dropdown
+  // and from the agent panel (chat). The agent payload may include an
+  // operator/value so the filter row is pre-populated.
+  useEffect(() => {
+    const onFilterColumn = (event: Event) => {
+      const detail = (
+        event as CustomEvent<{
+          columnId?: string;
+          operator?: string;
+          value?: unknown;
+        }>
+      ).detail;
+      if (!detail?.columnId) return;
+      setSelectedColumn(detail.columnId);
+      if (detail.operator && detail.operator in FILTER_OPERATORS) {
+        setSelectedOperator(detail.operator);
+      }
+      if (detail.value !== undefined && detail.value !== null) {
+        setFilterValue(String(detail.value));
+      }
+      requestAnimationFrame(() => valueInputRef.current?.focus());
+    };
+    window.addEventListener('tensr:filter-column', onFilterColumn as EventListener);
+    return () => window.removeEventListener('tensr:filter-column', onFilterColumn as EventListener);
+  }, []);
 
   const columns = useMemo(() => {
     return table
@@ -118,11 +145,18 @@ const Filters = ({
 
       {/* Value Input */}
       <Input
+        ref={valueInputRef}
         className="max-w-xs"
         inputSize="sm"
         variant="outline"
         value={filterValue}
         onChange={e => setFilterValue(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            applyFilter();
+          }
+        }}
       />
 
       <Separator orientation="vertical" className="h-4 mx-2" />

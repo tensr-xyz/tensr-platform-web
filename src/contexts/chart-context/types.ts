@@ -19,6 +19,8 @@ export enum Actions {
   REMOVE_SERIES = 'REMOVE_SERIES',
   UPDATE_SERIES = 'UPDATE_SERIES',
   SET_SUGGESTION = 'SET_SUGGESTION',
+  SET_COLOR_AXIS = 'SET_COLOR_AXIS',
+  SET_SIZE_AXIS = 'SET_SIZE_AXIS',
 }
 
 export interface ActionProps {
@@ -37,6 +39,8 @@ export interface StateProps {
   type: ChartType;
   xAxis: string | null;
   yAxis: string | null;
+  colorAxis: string | null;
+  sizeAxis: string | null;
   series: ChartSeries[];
   activeSuggestion: string | null;
 }

@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { getIdToken } from '@/utils/auth';
 import { useProjectStore } from '@/stores/project-store';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+import { devLog } from '@/lib/dev-log';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL = getTensrApiBaseUrl();
 
 // Updated type definition to accept a function that returns Promise<void>
 export const useFileOperations = (currentPath: string, onRefresh: () => Promise<void>) => {
@@ -26,7 +28,7 @@ export const useFileOperations = (currentPath: string, onRefresh: () => Promise<
         ? `${currentPath}${currentPath.endsWith('/') ? '' : '/'}${sanitizedName}`
         : sanitizedName;
 
-      console.log(`Creating file: ${filePath} in project ${currentProject.id}`);
+      devLog(`Creating file: ${filePath} in project ${currentProject.id}`);
 
       // Call the project update API
       const response = await fetch(`${API_BASE_URL}/projects/${currentProject.id}`, {
@@ -49,7 +51,7 @@ export const useFileOperations = (currentPath: string, onRefresh: () => Promise<
         throw new Error(data.error || 'Failed to create file');
       }
 
-      console.log('File created successfully');
+      devLog('File created successfully');
 
       // Refresh the file system after successful creation
       await onRefresh();
@@ -78,7 +80,7 @@ export const useFileOperations = (currentPath: string, onRefresh: () => Promise<
         ? `${currentPath}${currentPath.endsWith('/') ? '' : '/'}${sanitizedName}`
         : sanitizedName;
 
-      console.log(`Creating folder: ${folderPath} in project ${currentProject.id}`);
+      devLog(`Creating folder: ${folderPath} in project ${currentProject.id}`);
 
       // Call the project update API
       const response = await fetch(`${API_BASE_URL}/projects/${currentProject.id}`, {
@@ -100,7 +102,7 @@ export const useFileOperations = (currentPath: string, onRefresh: () => Promise<
         throw new Error(data.error || 'Failed to create folder');
       }
 
-      console.log('Folder created successfully');
+      devLog('Folder created successfully');
 
       // Refresh the file system after successful creation
       await onRefresh();

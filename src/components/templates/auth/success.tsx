@@ -6,6 +6,7 @@ import Image from 'next/image';
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
 import Link from 'next/link';
+import { devLog } from '@/lib/dev-log';
 
 const PaymentSuccessPage = () => {
   const router = useRouter();
@@ -106,7 +107,7 @@ const PaymentSuccessPage = () => {
                     className="w-full flex items-center justify-center gap-2"
                     onClick={() => {
                       // Logic to download invoice
-                      console.log('Download invoice');
+                      devLog('Download invoice');
                     }}
                   >
                     <Download size={16} />

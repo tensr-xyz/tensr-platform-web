@@ -105,16 +105,10 @@ export default function reducer(state: ProjectState, action: ActionProps): Proje
         ...state,
         importData: action.payload,
       };
-    case ProjectActions.SET_SHOW_IMPORT_WIZARD:
-      return {
-        ...state,
-        showImportWizard: action.payload,
-      };
     case ProjectActions.CLEAR_IMPORT_DATA:
       return {
         ...state,
         importData: null,
-        showImportWizard: false,
       };
     default: {
       throw new Error('Unhandled action type');

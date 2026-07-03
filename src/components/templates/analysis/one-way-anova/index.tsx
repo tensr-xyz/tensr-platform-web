@@ -8,6 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/molecules/dialog';
+import { devLog } from '@/lib/dev-log';
 import { Button } from '@/components/atoms/button';
 import {
   Loader2 as Loader,
@@ -33,7 +34,8 @@ import {
 import { exportTable, copyTableToClipboard } from '@/utils/table-export';
 import { toast } from '@/hooks/ui/use-toast';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
+import { adaptAnovaResults, runDatasetAnalysis } from '@/lib/workspace-analysis';
+import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 
 interface AnovaProps {
   children: ReactNode;
@@ -179,8 +181,8 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
     });
 
     // Log diagnostics for debugging
-    console.log('ANOVA Data Diagnostics:', dataDiagnostics);
-    console.log(
+    devLog('ANOVA Data Diagnostics:', dataDiagnostics);
+    devLog(
       'Grouped Data Summary:',
       Object.entries(groupedData).map(([group, values]) => ({
         group,
@@ -218,35 +220,24 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
       setError(null);
       setIsLoading(true);
 
-      const groupedData = prepareData();
-      const validationError = validateData(groupedData);
-      if (validationError) {
-        setError(validationError);
+      if (!groupingVariable || !dependentVariable) {
+        setError('Select both a grouping variable and a dependent variable.');
         setIsLoading(false);
         return;
       }
 
-      const request: AnovaRequest = {
-        groups: groupedData,
-      };
-
-      const response = await fetch(`${API_BASE_URL}/api/statistics/calculate-anova`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(request),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Failed to calculate ANOVA');
+      const datasetId = getDatasetIdFromTab(activeDataTab);
+      if (!datasetId) {
+        throw new Error(WORKSPACE_DATASET_REQUIRED);
       }
 
-      const result: AnovaResponse = await response.json();
-      setResults(result.results);
-      setActiveTab('results'); // Switch to results tab after calculation
+      const envelope = await runDatasetAnalysis(datasetId, 'anova_oneway', {
+        group_column: groupingVariable,
+        value_column: dependentVariable,
+        post_hoc: 'none',
+      });
+      setResults(adaptAnovaResults(envelope) as AnovaResult);
+      setActiveTab('results');
     } catch (error) {
       console.error('Error calculating ANOVA:', error);
       setError(error instanceof Error ? error.message : 'Failed to calculate ANOVA');

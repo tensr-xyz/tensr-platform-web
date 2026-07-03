@@ -1,4 +1,5 @@
 import { AnalysisTask, DatasetContext } from '@/types/agent';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 
 export interface ExecutionOptions {
   timeout?: number;
@@ -400,11 +401,7 @@ export class CodeExecutor {
     language: 'python' | 'r',
     options: ExecutionOptions
   ): Promise<any> {
-    const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
-
-    if (!API_BASE_URL) {
-      throw new Error('Code execution API not configured');
-    }
+    const API_BASE_URL = getTensrApiBaseUrl();
 
     const endpoint = `${API_BASE_URL}/api/execute/${language}`;
 

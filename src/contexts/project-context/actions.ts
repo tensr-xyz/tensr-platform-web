@@ -41,9 +41,5 @@ export const setMaximized = (isMaximized: boolean): ActionProps => ({
   payload: isMaximized,
 });
 
-export const closeImportWizard = (): ActionProps => ({
-  type: ProjectActions.CLEAR_IMPORT_DATA,
-});
-
 // REMOVED: refreshFileSystem function that was calling wrong internal API endpoint
 // This functionality is now handled by the Zustand store with proper external API calls

@@ -1,19 +1,14 @@
 import React from 'react';
-import { SettingsSidebar } from '@/components/templates/settings/settings-sidebar';
+import { SettingsNav } from '@/components/templates/settings/settings-nav';
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-1 flex-col mb-4 md:mb-8">
-      {/* Header - responsive padding */}
-      <div className="px-4 py-6 md:p-12 border-b border-border hidden md:block">
-        <h1 className="text-2xl md:text-3xl font-medium">Settings</h1>
+    <div className="mx-auto flex w-full max-w-3xl flex-col items-center px-4 sm:px-0">
+      <div className="w-full pt-10 text-center">
+        <h1 className="font-normal text-xl tracking-tighter md:text-3xl">Settings</h1>
       </div>
-
-      {/* Main content - responsive layout */}
-      <div className="flex flex-col md:flex-row flex-1 px-4 py-6 md:px-12 md:py-12 gap-6 md:gap-16">
-        <SettingsSidebar />
-        <div className="flex-1 max-w-4xl">{children}</div>
-      </div>
+      <SettingsNav className="w-full justify-center" />
+      <div className="mt-8 w-full">{children}</div>
     </div>
   );
 }

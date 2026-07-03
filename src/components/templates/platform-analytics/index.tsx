@@ -62,8 +62,7 @@ export default function PlatformAnalytics() {
 
   const fetchAnalytics = async () => {
     try {
-      // In a real implementation, these would be API calls
-      // For now, using mock data
+      // Demo data only — replace with platform analytics API when available.
       setStats({
         totalPlugins: 156,
         totalUsers: 2847,
@@ -143,7 +142,11 @@ export default function PlatformAnalytics() {
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    <div className="max-w-7xl mx-auto p-6 space-y-6">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+        <strong>Demo data.</strong> Platform analytics below are sample figures for layout preview
+        only — not live production metrics.
+      </div>
       {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Platform Analytics</h1>

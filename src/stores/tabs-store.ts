@@ -10,6 +10,10 @@ export enum ViewType {
   PLUGINS = 'plugins',
   MARKDOWN = 'markdown',
   SEM = 'sem',
+  /** Structured statistical report (tensr-api report + raw result). */
+  ANALYSIS_REPORT = 'analysis_report',
+  /** Workspace results tab (placeholder shell; deduped by analysisFingerprint). */
+  ANALYSIS_RESULT = 'analysis_result',
 }
 
 export interface ColumnVisibility {
@@ -27,6 +31,8 @@ export interface Column {
 
 // TabData interface with specific spreadsheet data
 export interface TabData {
+  /** Dataset workspace id when the tab is backed by tensr-api /datasets. */
+  datasetId?: string;
   filePath?: string;
   initialData?: Record<string, any>[];
   initialColumns?: Column[];
@@ -46,6 +52,34 @@ export interface TabData {
   }>;
   teachingMode?: boolean;
   sheetId?: string; // For real-time sheet collaboration
+  /** Completed agent-driven statistical runs for this tab (restorable from the analysis panel). */
+  analysisHistory?: AgentAnalysisHistoryEntry[];
+  /** Populated on ANALYSIS_REPORT tabs. */
+  analysisReport?: import('@/lib/analysis-report-types').AnalysisReport;
+  analysisResult?: Record<string, unknown>;
+  analysisOp?: string;
+  sourceDatasetId?: string;
+  analysisRunId?: string;
+  /** Dedupe key for workspace results tabs (op + sorted parameters). */
+  analysisFingerprint?: string;
+  analysisParameters?: Record<string, unknown>;
+  /** Per-column heatmap toggles (numeric columns). */
+  heatmapColumns?: Record<string, boolean>;
+  /** Left-pinned through this column id (inclusive). */
+  freezeUpToColumnId?: string | null;
+}
+
+/** One saved analysis outcome from the agent panel (e.g. regression / ANOVA / correlations). */
+export interface AgentAnalysisHistoryEntry {
+  id: string;
+  createdAt: string;
+  analysisType: string;
+  /** Full assistant-style markdown shown in chat when the run completed. */
+  content: string;
+  /** Short line for the list (e.g. dependent ~ predictors). */
+  subtitle?: string;
+  /** tensr-api analysis_runs id — reload full report from server. */
+  runId?: string;
 }
 
 // Base Tab interface with required fields and optional data fields
@@ -195,9 +229,11 @@ export const useTabsStore = create<TabStore>()(
 
       updateTab: (id, updates) =>
         set(state => ({
-          tabs: state.tabs.map(tab =>
-            tab.id === id ? { ...tab, ...updates, lastAccessed: Date.now() } : tab
-          ),
+          // Intentionally do NOT touch lastAccessed here — frequent debounced edits
+          // (cell typing, applying filters, etc.) would otherwise rewrite the array
+          // identity on every keystroke and force every useTabsStore consumer to
+          // rerender. lastAccessed is updated by setActiveTab / activate{Next,Previous}Tab.
+          tabs: state.tabs.map(tab => (tab.id === id ? { ...tab, ...updates } : tab)),
         })),
 
       setActiveTab: id =>

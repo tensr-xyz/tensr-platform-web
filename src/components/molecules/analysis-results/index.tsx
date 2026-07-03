@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/molecules/table';
+import { devLog } from '@/lib/dev-log';
 import { ScrollArea } from '@/components/atoms/scroll-area';
 import { Separator } from '@/components/atoms/separator';
 import {
@@ -702,7 +703,7 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
                 onClick={() => {
                   // This would trigger a re-run through the agent panel
                   // For now, just log and close
-                  console.log('Re-run requested with modification:', modificationNote);
+                  devLog('Re-run requested with modification:', modificationNote);
                   setRerunDialogOpen(false);
                   setModificationNote('');
                 }}

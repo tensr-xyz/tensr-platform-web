@@ -11,6 +11,8 @@ function ChartProvider({ children }: ProviderProps) {
     type: ChartType.LINE,
     xAxis: null,
     yAxis: null,
+    colorAxis: null,
+    sizeAxis: null,
     series: [],
     activeSuggestion: null,
   });

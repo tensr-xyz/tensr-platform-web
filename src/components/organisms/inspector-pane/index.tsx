@@ -134,8 +134,9 @@ export function InspectorPane({
 
     try {
       setLoading(true);
-      const results = await apiClient.analysis.list(datasetId);
-      setAnalyses(results);
+      const results = await apiClient.datasets.analyze.listRuns(datasetId);
+      const runs = Array.isArray(results) ? results : (results?.runs ?? []);
+      setAnalyses(runs as AnalysisResult[]);
     } catch (error) {
       console.error('Failed to load analyses:', error);
     } finally {

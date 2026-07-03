@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogTrigger,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
@@ -139,17 +140,12 @@ export const StandardizeValuesDialog = ({ children }: StandardizeValuesProps) =>
         payload: {
           fileName: 'standardized_dataset.csv',
           filePath: response.path,
-          preview: response.metadata.preview,
+          fileId: response.path,
           columnNames: response.metadata.column_names,
           totalRows: response.metadata.rows,
           totalColumns: response.metadata.columns,
           columnSummaries: response.column_summaries || null,
         },
-      });
-
-      dispatch({
-        type: ProjectActions.SET_SHOW_IMPORT_WIZARD,
-        payload: true,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to standardize values');
@@ -160,7 +156,7 @@ export const StandardizeValuesDialog = ({ children }: StandardizeValuesProps) =>
 
   return (
     <Dialog>
-      {children}
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Standardize Values</DialogTitle>

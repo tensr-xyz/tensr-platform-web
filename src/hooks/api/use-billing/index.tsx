@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
 import { getIdToken } from '@/utils/auth';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+import { devLog } from '@/lib/dev-log';
 
-// API base URL - should be configured via environment variable
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL = getTensrApiBaseUrl();
 
 // Updated Subscription interface to match your API response
 export interface Subscription {
@@ -157,7 +158,7 @@ export const useBilling = () => {
         return null;
       }
 
-      const response = await fetch(`${API_BASE_URL}/billing/subscription`, {
+      const response = await fetch(`${API_BASE_URL}/api/billing/subscription`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -196,7 +197,7 @@ export const useBilling = () => {
         return [];
       }
 
-      const response = await fetch(`${API_BASE_URL}/billing/invoices`, {
+      const response = await fetch(`${API_BASE_URL}/api/billing/invoices`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -233,7 +234,7 @@ export const useBilling = () => {
         return null;
       }
 
-      const response = await fetch(`${API_BASE_URL}/usage/stats`, {
+      const response = await fetch(`${API_BASE_URL}/api/billing/usage`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -269,7 +270,7 @@ export const useBilling = () => {
         return [];
       }
 
-      const response = await fetch(`${API_BASE_URL}/billing/payment-methods`, {
+      const response = await fetch(`${API_BASE_URL}/api/billing/payment-methods`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -301,7 +302,7 @@ export const useBilling = () => {
       setError(null);
 
       // This endpoint is public and doesn't require authentication
-      const response = await fetch(`${API_BASE_URL}/billing/plans`, {
+      const response = await fetch(`${API_BASE_URL}/api/billing/plans`, {
         method: 'GET',
       });
 
@@ -334,7 +335,7 @@ export const useBilling = () => {
         return false;
       }
 
-      const response = await fetch(`${API_BASE_URL}/billing/cancel-subscription`, {
+      const response = await fetch(`${API_BASE_URL}/api/billing/cancel-subscription`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -377,7 +378,7 @@ export const useBilling = () => {
         }
 
         const userId = getUserId();
-        const response = await fetch(`${API_BASE_URL}/billing/create-payment-intent`, {
+        const response = await fetch(`${API_BASE_URL}/api/billing/create-payment-intent`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -425,7 +426,7 @@ export const useBilling = () => {
           throw new Error('No authentication token available. Please log in again.');
         }
 
-        const response = await fetch(`${API_BASE_URL}/billing/payment-methods`, {
+        const response = await fetch(`${API_BASE_URL}/api/billing/payment-methods`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -468,12 +469,15 @@ export const useBilling = () => {
           throw new Error('No authentication token available. Please log in again.');
         }
 
-        const response = await fetch(`${API_BASE_URL}/billing/payment-methods/${paymentMethodId}`, {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+        const response = await fetch(
+          `${API_BASE_URL}/api/billing/payment-methods/${paymentMethodId}`,
+          {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
         if (!response.ok) {
           const errorText = await response.text();
@@ -506,7 +510,7 @@ export const useBilling = () => {
           throw new Error('No authentication token available. Please log in again.');
         }
 
-        const response = await fetch(`${API_BASE_URL}/billing/update-subscription`, {
+        const response = await fetch(`${API_BASE_URL}/api/billing/update-subscription`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${token}`,
@@ -559,7 +563,7 @@ export const useBilling = () => {
       ]);
 
       // Data is already set in individual fetch functions
-      console.log('All billing data loaded successfully');
+      devLog('All billing data loaded successfully');
     } catch (err: any) {
       console.error('Error loading all billing data:', err);
       setError(err.message || 'Failed to load billing information');
@@ -581,7 +585,7 @@ export const useBilling = () => {
     const token = getToken();
 
     if (token && !initialFetchDoneRef.current) {
-      console.log('Initial load: Token available, fetching billing data');
+      devLog('Initial load: Token available, fetching billing data');
       initialFetchDoneRef.current = true; // Mark that we've done the initial fetch
 
       // Load public plans regardless of authentication
@@ -602,7 +606,7 @@ export const useBilling = () => {
   useEffect(() => {
     // If auth changes and we become authenticated, fetch data
     if (auth.isAuthenticated && initialFetchDoneRef.current) {
-      console.log('Auth changed, refreshing billing data');
+      devLog('Auth changed, refreshing billing data');
       loadAllBillingData().catch(err => {
         console.error('Failed to refresh billing data after auth change:', err);
       });
@@ -628,10 +632,6 @@ export const useBilling = () => {
       setIsLoading(true);
       setError(null);
 
-      if (!API_BASE_URL) {
-        throw new Error('API base URL is not configured');
-      }
-
       const token = getToken();
       if (!token) {
         setError('No authentication token available. Please log in again.');
@@ -639,7 +639,7 @@ export const useBilling = () => {
       }
 
       const returnUrl = `${window.location.origin}/settings/billing`;
-      const response = await fetch(`${API_BASE_URL}/billing/portal`, {
+      const response = await fetch(`${API_BASE_URL}/api/billing/portal`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

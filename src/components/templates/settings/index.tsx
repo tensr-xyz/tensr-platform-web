@@ -26,10 +26,11 @@ export const Settings = ({ trigger }: SettingsProps) => {
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-7xl h-[90vh] bg-foreground overflow-hidden p-0">
-        <div className="relative flex w-full h-full overflow-hidden">
-          <SettingsSidebar />
+      <DialogContent className="max-h-[90vh] max-w-md overflow-hidden p-0">
+        <div className="border-b border-border px-4 py-3">
+          <p className="text-sm font-medium">Settings</p>
         </div>
+        <SettingsSidebar orientation="vertical" />
       </DialogContent>
     </Dialog>
   );

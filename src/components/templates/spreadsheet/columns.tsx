@@ -1,5 +1,4 @@
 import { ColumnDef } from '@tanstack/react-table';
-import { Checkbox } from '@/components/atoms/checkbox';
 import React from 'react';
 import { EditableCell } from '@/components/molecules/table';
 
@@ -23,7 +22,7 @@ interface CellRendererProps {
 
 // Define CellRenderer once, outside of createColumns
 const CellRenderer = React.memo(function CellRenderer({ value, onEdit }: CellRendererProps) {
-  return <EditableCell value={value ?? ''} onEdit={onEdit} className="h-7" />;
+  return <EditableCell value={value ?? ''} onEdit={onEdit} className="h-9 px-3.5" />;
 });
 
 CellRenderer.displayName = 'CellRenderer';
@@ -32,20 +31,15 @@ CellRenderer.displayName = 'CellRenderer';
 const selectColumn: ColumnDef<any> = {
   id: 'select',
   cell: ({ row }) => (
-    <div className="flex w-full items-center gap-2 pl-2">
-      <Checkbox
-        checked={row.getIsSelected()}
-        onCheckedChange={checked => {
-          row.toggleSelected(!!checked);
-        }}
-        aria-label="Select row"
-      />
-      <span className="text-xs font-medium">{row.index + 1}</span>
+    <div className="flex h-full w-full items-center justify-start px-3.5">
+      <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+        {row.index + 1}
+      </span>
     </div>
   ),
   enableSorting: false,
   enableHiding: false,
-  size: 70,
+  size: 56,
 };
 
 export const createColumns = ({

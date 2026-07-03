@@ -28,7 +28,8 @@ const inputVariants = cva(
 );
 
 export interface InputProps
-  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>, // Omit the HTML size attribute
+  extends
+    Omit<React.InputHTMLAttributes<HTMLInputElement>, 'size'>, // Omit the HTML size attribute
     VariantProps<typeof inputVariants> {}
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(

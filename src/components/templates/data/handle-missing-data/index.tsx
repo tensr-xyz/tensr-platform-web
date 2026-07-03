@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogTrigger,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
@@ -17,9 +18,11 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { Checkbox } from '@/components/atoms/checkbox';
-import { useProject } from '@/contexts/project-context';
+import { useRouter } from 'next/navigation';
+import { getAccessToken } from '@/utils/auth';
+import { imputeDatasetMissing } from '@/lib/dataset-data-ops';
+import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
-import { ProjectActions } from '@/contexts/project-context/types';
 import { Loader2 as Loader } from 'lucide-react';
 
 type MissingDataMethod =
@@ -43,42 +46,25 @@ interface HandleMissingDataProps {
   children: ReactNode;
 }
 
-interface HandleMissingDataRequest {
-  path: string;
-  columns: string[];
-  method: MissingDataMethod;
-  custom_value?: string | null;
-}
-
-interface HandleMissingDataResponse {
-  path: string;
-  metadata: {
-    rows: number;
-    columns: number;
-    column_names: string[];
-    preview: any[];
-  };
-  column_summaries?: Record<string, any>;
-  replaced_values_count?: number;
-}
-
 export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) => {
+  const router = useRouter();
+  const token = getAccessToken();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [method, setMethod] = useState<MissingDataMethod>('series_mean');
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [customValue, setCustomValue] = useState<string>('');
   const { tabs, activeTabId } = useTabsStore();
-  const { dispatch } = useProject();
 
   const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
+  const datasetId = getDatasetIdFromTab(activeTab);
 
   const criticalError = useMemo(() => {
     if (!activeTab) return 'Please open a dataset first';
     if (!activeTab.data?.initialData) return 'No data available';
-    if (!activeTab.data?.filePath) return 'No file path available';
+    if (!datasetId) return WORKSPACE_DATASET_REQUIRED;
     return null;
-  }, [activeTab]);
+  }, [activeTab, datasetId]);
 
   const columnNames = useMemo(() => {
     if (!activeTab?.data?.initialData?.[0]) {
@@ -99,8 +85,8 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
 
   const handleAnalyze = async () => {
     try {
-      if (!activeTab?.data?.filePath) {
-        setError('File path not available');
+      if (!datasetId) {
+        setError(WORKSPACE_DATASET_REQUIRED);
         return;
       }
 
@@ -117,68 +103,19 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
       setIsLoading(true);
       setError(null);
 
-      const requestData: HandleMissingDataRequest = {
-        path: activeTab.data.filePath,
-        columns: selectedColumns,
-        method,
-        custom_value: method === 'custom_value' ? customValue : null,
-      };
-
-      // Create a mock response for type checking while we implement the API
-      const mockResponse: HandleMissingDataResponse = {
-        path: activeTab.data.filePath.replace('.csv', '_imputed.csv'),
-        metadata: {
-          rows: activeTab.data.initialData?.length || 0,
-          columns: columnNames.length,
-          column_names: columnNames,
-          preview: activeTab.data.initialData?.slice(0, 5) || [],
+      const response = await imputeDatasetMissing(
+        datasetId,
+        {
+          columns: selectedColumns,
+          method,
+          custom_value: method === 'custom_value' ? customValue : null,
         },
-        column_summaries: selectedColumns.reduce(
-          (acc, col) => {
-            acc[col] = {
-              type: 'numeric', // Assuming numeric for simplicity
-              missing_before: Math.floor(Math.random() * 20), // Random number for demonstration
-              missing_after: 0,
-              method: method,
-            };
-            return acc;
-          },
-          {} as Record<string, any>
-        ),
-        replaced_values_count: Math.floor(Math.random() * 50) + 10, // Random count between 10-60
-      };
+        token
+      );
 
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/handle-missing-data', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({ request: requestData }),
-      // });
-      // const data: HandleMissingDataResponse = await response.json();
-
-      // Using mock response for now
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API delay
-      const response = mockResponse;
-
-      dispatch({
-        type: ProjectActions.SET_IMPORT_DATA,
-        payload: {
-          fileName: 'processed_dataset.csv',
-          filePath: response.path,
-          preview: response.metadata.preview,
-          columnNames: response.metadata.column_names,
-          totalRows: response.metadata.rows,
-          totalColumns: response.metadata.columns,
-          columnSummaries: response.column_summaries || null,
-        },
-      });
-
-      dispatch({
-        type: ProjectActions.SET_SHOW_IMPORT_WIZARD,
-        payload: true,
-      });
+      router.push(
+        `/workspace/dataset/${response.dataset_id}?name=${encodeURIComponent(response.original_filename)}`
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to process missing data');
     } finally {
@@ -188,7 +125,7 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
 
   return (
     <Dialog>
-      {children}
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Handle Missing Data</DialogTitle>
@@ -259,10 +196,6 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
-
-          <div className="text-sm text-gray-500">
-            File: {activeTab?.data?.filePath || 'No file selected'}
-          </div>
         </div>
 
         <DialogFooter>

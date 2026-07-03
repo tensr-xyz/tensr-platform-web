@@ -5,6 +5,9 @@ import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
+import { useProjectStore } from '@/stores/project-store';
+import { isTerminalToggleShortcut } from '@/utils/keyboard-shortcuts';
+import { devLog } from '@/lib/dev-log';
 
 // Add custom CSS to constrain terminal width and fix theming
 const terminalStyles = `
@@ -46,7 +49,8 @@ if (typeof document !== 'undefined') {
 }
 
 export interface TerminalComponentProps {
-  onCommand?: (command: string) => void;
+  /** Return a string to print, `__CLEAR__` to clear, or `null` to use built-in demo commands. */
+  onCommand?: (command: string) => string | null;
 }
 
 const TerminalComponent: React.FC<TerminalComponentProps> = ({ onCommand }) => {
@@ -61,11 +65,11 @@ const TerminalComponent: React.FC<TerminalComponentProps> = ({ onCommand }) => {
   // Initialize terminal
   useEffect(() => {
     if (!terminalRef.current) {
-      console.log('Terminal ref not available');
+      devLog('Terminal ref not available');
       return;
     }
 
-    console.log('Initializing terminal...');
+    devLog('Initializing terminal...');
     const terminal = new XTerm({
       theme: {
         background: 'transparent',
@@ -106,10 +110,19 @@ const TerminalComponent: React.FC<TerminalComponentProps> = ({ onCommand }) => {
     terminal.open(terminalRef.current);
     fitAddon.fit();
 
+    terminal.attachCustomKeyEventHandler(event => {
+      if (event.type !== 'keydown' || !isTerminalToggleShortcut(event)) {
+        return true;
+      }
+      const { terminalOpen, toggleTerminal } = useProjectStore.getState();
+      toggleTerminal(!terminalOpen);
+      return false;
+    });
+
     xtermRef.current = terminal;
     fitAddonRef.current = fitAddon;
 
-    console.log('Terminal opened successfully');
+    devLog('Terminal opened successfully');
 
     // Initial welcome message
     terminal.writeln('Welcome to Tensr Terminal');
@@ -129,11 +142,17 @@ const TerminalComponent: React.FC<TerminalComponentProps> = ({ onCommand }) => {
           setCommandHistory(prev => [...prev, command]);
           setHistoryIndex(-1);
 
-          // Execute command
-          executeCommand(command, terminal);
-
           if (onCommand) {
-            onCommand(command);
+            const workspaceResult = onCommand(command);
+            if (workspaceResult === '__CLEAR__') {
+              terminal.clear();
+            } else if (workspaceResult != null) {
+              workspaceResult.split('\n').forEach(line => terminal.writeln(line));
+            } else {
+              executeCommand(command, terminal);
+            }
+          } else {
+            executeCommand(command, terminal);
           }
         }
 

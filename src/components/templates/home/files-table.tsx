@@ -335,8 +335,8 @@ export const FilesTable = ({
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline">
-                  Columns <ChevronDown className="ml-2 h-4 w-4" />
+                <Button variant="outline" className="gap-2 shrink-0">
+                  Columns <ChevronDown className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">

@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
-import { getAccessToken, getIdToken } from '@/utils/auth';
+import { getIdToken } from '@/utils/auth';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
 
 export interface FileMetadata {
   fileId: string;
@@ -35,18 +36,10 @@ async function fetchFiles(options: UseFilesOptions = {}): Promise<FilesResponse>
     throw new Error('No authentication token found');
   }
 
-  // Build query parameters
-  const params = new URLSearchParams();
   const context = options.context || 'personal';
-  params.append('context', context);
 
-  if (context === 'organization' && options.organizationId) {
-    params.append('organizationId', options.organizationId);
-  }
-
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.tensr.xyz';
-  const url = `${API_BASE_URL}/files?${params.toString()}`;
-  console.log('Fetching files from:', url);
+  const scope = context === 'organization' ? 'team' : context === 'personal' ? 'personal' : 'all';
+  const url = tensrApiUrl(`/datasets/?scope=${scope}`);
 
   const response = await fetch(url, {
     headers: {
@@ -61,7 +54,29 @@ async function fetchFiles(options: UseFilesOptions = {}): Promise<FilesResponse>
   }
 
   const data = await response.json();
-  return data;
+  const rows = Array.isArray(data) ? data : [];
+  const files: FileMetadata[] = rows.map((row: Record<string, unknown>) => {
+    const updated = String(row.updated_at ?? '');
+    return {
+      fileId: String(row.dataset_id ?? ''),
+      fileName: String(row.original_filename ?? 'dataset'),
+      fileType: 'csv',
+      size: 0,
+      createdAt: updated,
+      updatedAt: updated,
+      uploadedAt: updated,
+    };
+  });
+
+  return {
+    files,
+    context: {
+      type: context === 'organization' ? 'organization' : 'personal',
+      organizationId: options.organizationId,
+      organizationRole: undefined,
+    },
+    total: files.length,
+  };
 }
 
 export const useFiles = (options: UseFilesOptions = {}) => {
@@ -78,16 +93,6 @@ export const useFiles = (options: UseFilesOptions = {}) => {
     gcTime: 10 * 60 * 1000, // Keep in cache for 10 minutes (renamed from cacheTime)
   });
 
-  // Debug logging
-  console.log('useFiles hook - query state:', {
-    data: query.data,
-    isLoading: query.isLoading,
-    error: query.error,
-    isSuccess: query.isSuccess,
-    isError: query.isError,
-    queryKey,
-  });
-
   const result = {
     files: query.data?.files || [],
     contextInfo: query.data?.context || null,
@@ -101,6 +106,5 @@ export const useFiles = (options: UseFilesOptions = {}) => {
     organizationRole: query.data?.context?.organizationRole,
   };
 
-  console.log('useFiles hook - returning result:', result);
   return result;
 };

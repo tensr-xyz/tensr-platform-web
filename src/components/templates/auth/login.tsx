@@ -6,6 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import React, { FormEvent, useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Eye, EyeOff, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/api/use-auth';
+import { redeemStoredInvitation, storePendingInviteToken } from '@/lib/business-api';
+import { subscriptionRedirectPath } from '@/lib/subscription';
+import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
+import { dumpAuthTrace, authTrace } from '@/lib/auth-trace';
 import { storeSession } from '@/utils/auth';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -19,9 +23,10 @@ const LoginTemplate = () => {
     initiateGoogleAuth,
     resendVerificationCode,
     isLoading,
+    isAuthenticated,
+    isAuthReady,
+    hasActiveSubscription,
     error: authError,
-    stytchUser,
-    stytchSession,
     stytch,
   } = useAuth();
 
@@ -35,12 +40,27 @@ const LoginTemplate = () => {
   const [showPassword, setShowPassword] = useState(false);
   const hasHandledOAuthRef = useRef(false);
 
-  // Redirect if already logged in
+  // Persist invite token from email links (?invite=...) for accept after sign-in.
   useEffect(() => {
-    if (stytchUser && stytchSession) {
-      router.push('/');
+    dumpAuthTrace('Auth trace (survived redirect to login)');
+    const invite = searchParams.get('invite');
+    if (invite) {
+      storePendingInviteToken(invite);
     }
-  }, [stytchUser, stytchSession, router]);
+  }, [searchParams]);
+
+  // Redirect if already logged in (AuthProvider owns session/user sync)
+  useEffect(() => {
+    if (isLoading || !isAuthenticated || !isAuthReady) return;
+
+    authTrace('login:redirect-after-auth');
+
+    void redeemStoredInvitation().finally(() => {
+      const returnTo = searchParams.get('returnTo');
+      const target = returnTo && returnTo.startsWith('/') ? returnTo : '/dashboard';
+      router.push(hasActiveSubscription ? target : subscriptionRedirectPath(target));
+    });
+  }, [isAuthenticated, isLoading, isAuthReady, hasActiveSubscription, router, searchParams]);
 
   // Handle OAuth callback (Google or GitHub)
   useEffect(() => {
@@ -56,14 +76,14 @@ const LoginTemplate = () => {
     setError('');
     stytch.oauth
       .authenticate(token, {
-        session_duration_minutes: 30,
+        session_duration_minutes: STYTCH_SESSION_DURATION_MINUTES,
       })
-      .then(response => {
-        // Persist session tokens to localStorage and cookies
+      .then(async response => {
         if (response.session_token) {
           storeSession(response.session_token, response.session_jwt);
         }
-        router.replace('/');
+        await redeemStoredInvitation();
+        // Session + profile sync handled by AuthProvider; redirect useEffect runs when ready.
       })
       .catch(err => {
         console.error('OAuth authenticate error:', err);
@@ -114,38 +134,30 @@ const LoginTemplate = () => {
 
   // Handle email submission (first step)
   const handleEmailSubmit = async () => {
-    console.log('handleEmailSubmit called', { email, isLoading, hasStytch: !!stytch });
-
     const trimmedEmail = email.trim();
     if (!trimmedEmail) {
       setError('Please enter an email address');
-      console.log('No email provided');
       return;
     }
 
     if (!stytch) {
       setError('Authentication service not ready. Please refresh the page.');
-      console.error('Stytch client not initialized');
       return;
     }
 
     // Prevent multiple submissions
     if (isLoading) {
-      console.log('Already loading, preventing duplicate submission');
       return;
     }
 
     try {
       setError('');
-      console.log('Submitting email for authentication:', trimmedEmail);
       const result = await initiateAuth(trimmedEmail.toLowerCase());
-      console.log('initiateAuth result:', result);
 
       if (result && result.methodId) {
         setMethodId(result.methodId);
         setIsVerifying(true);
         setError('');
-        console.log('Verification code sent successfully, methodId:', result.methodId);
       } else {
         setError('Failed to initialize authentication. Please try again.');
         console.error('No methodId returned from initiateAuth', result);
@@ -177,8 +189,8 @@ const LoginTemplate = () => {
       const result = await verifyAuth(email, verificationCode, methodId);
 
       if (result.success) {
-        // Use Next.js router for client-side navigation instead of full page reload
-        router.push('/');
+        const returnTo = searchParams.get('returnTo');
+        router.push(returnTo && returnTo.startsWith('/') ? returnTo : '/dashboard');
       } else {
         setError(result.message || 'Verification failed. Please check your code and try again.');
       }

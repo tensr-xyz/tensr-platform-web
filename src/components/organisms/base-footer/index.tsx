@@ -132,9 +132,7 @@ const Footer: React.FC = () => {
                     <Github className="h-5 w-5" />
                   </Link>
                 </div>
-                <div className="text-sm text-gray-500">
-                  © {new Date().getFullYear()} Tensr Inc.
-                </div>
+                <div className="text-sm text-gray-500">© {new Date().getFullYear()} Tensr Inc.</div>
               </div>
             </div>
           </div>

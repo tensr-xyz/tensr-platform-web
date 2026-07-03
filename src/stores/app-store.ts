@@ -5,7 +5,6 @@ import { devtools } from 'zustand/middleware';
 export enum DialogType {
   NEW_PROJECT = 'new-project',
   SETTINGS = 'settings',
-  IMPORT_WIZARD = 'import-wizard',
 }
 
 interface AppState {

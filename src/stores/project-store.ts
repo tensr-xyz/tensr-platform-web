@@ -1,5 +1,18 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { columnNamesFromSchemaResponse } from '@/lib/dataset-schema';
+import { FEATURE_FLAGS } from '@/lib/feature-flags';
+import { getTensrApiHeaders } from '@/utils/auth';
+import { handleUnauthorizedResponse } from '@/lib/session-expired';
+import { devLog } from '@/lib/dev-log';
+
+function datasetAuthHeaders(token: string): HeadersInit {
+  return {
+    ...getTensrApiHeaders(),
+    Authorization: `Bearer ${token}`,
+  };
+}
 
 // Define a simplified Project interface for the store
 interface Project {
@@ -34,11 +47,57 @@ interface ImportData {
   fileName: string;
   filePath: string;
   fileId: string;
-  preview: string[][];
   columnNames: string[];
   totalRows: number;
   totalColumns: number;
   columnSummaries?: Record<string, any>;
+}
+
+const SMALL_DATASET_EAGER_LOAD = 2500;
+
+/** Dataset-backed workspace: tensr-api exposes /datasets/* (no /projects/:id). */
+async function fetchDatasetWorkspacePayload(
+  baseUrl: string,
+  datasetId: string,
+  token: string,
+  projectName?: string
+): Promise<{
+  importData: ImportData;
+  label: string;
+} | null> {
+  const authHeaders = datasetAuthHeaders(token);
+  const schemaRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/schema`), {
+    headers: authHeaders,
+  });
+  if (
+    handleUnauthorizedResponse(schemaRes, `project-store:fetchDatasetWorkspacePayload:${datasetId}`)
+  ) {
+    return null;
+  }
+  if (!schemaRes.ok) {
+    return null;
+  }
+  const schemaJson = (await schemaRes.json()) as {
+    n_rows?: number;
+    n_cols?: number;
+    original_filename?: string | null;
+    schema?: { name: string }[];
+  };
+  const columnNames = columnNamesFromSchemaResponse(schemaJson);
+  const label =
+    projectName ||
+    (schemaJson.original_filename ? String(schemaJson.original_filename) : '') ||
+    'Dataset';
+  const importData: ImportData = {
+    fileName: label,
+    filePath: datasetId,
+    fileId: datasetId,
+    columnNames,
+    totalRows: schemaJson.n_rows ?? columnNames.length,
+    totalColumns: schemaJson.n_cols ?? columnNames.length,
+    columnSummaries: {},
+  };
+  return { importData, label };
 }
 
 export enum ViewType {
@@ -49,6 +108,8 @@ export enum ViewType {
   PLUGINS = 'plugins',
   MARKDOWN = 'markdown',
   SEM = 'sem',
+  ANALYSIS_REPORT = 'analysis_report',
+  ANALYSIS_RESULT = 'analysis_result',
 }
 
 interface ProjectState {
@@ -72,7 +133,6 @@ interface ProjectState {
 
   // Import State
   importData: ImportData | null;
-  showImportWizard: boolean;
 
   // UI Content
   leftPanelContent: React.ReactNode;
@@ -108,12 +168,11 @@ interface ProjectActions {
     token: string,
     userId: string,
     fileIndex?: number
-  ) => Promise<{ importData: ImportData; showImportWizard: boolean }>;
+  ) => Promise<{ importData: ImportData | null }>;
   clearProject: () => void;
 
   // Import Actions
   setImportData: (data: ImportData | null) => void;
-  setShowImportWizard: (show: boolean) => void;
   clearImportData: () => void;
 
   // UI Content Actions
@@ -194,7 +253,6 @@ const initialState: ProjectState = {
 
   // Import State
   importData: null,
-  showImportWizard: false,
 
   // UI Content
   leftPanelContent: null,
@@ -217,7 +275,13 @@ export const useProjectStore = create<ProjectStore>()(
         ...initialState,
 
         // View Actions
-        setView: (view: ViewType) => set({ activeView: view }),
+        setView: (view: ViewType) => {
+          if (view === ViewType.CHARTS && !FEATURE_FLAGS.CHARTS_TAB_ENABLED) {
+            set({ activeView: ViewType.SPREADSHEET });
+            return;
+          }
+          set({ activeView: view });
+        },
 
         // Panel Actions
         toggleRightPanel: (open: boolean) => set({ rightPanelOpen: open }),
@@ -257,21 +321,19 @@ export const useProjectStore = create<ProjectStore>()(
             // Check if we already have this project data loaded
             const state = get();
             if (state.currentProject?.id === projectId && state.importData?.fileId === projectId) {
-              console.log('Project data already loaded, skipping API call');
+              devLog('Project data already loaded, skipping API call');
               return {
                 importData: state.importData,
-                showImportWizard: state.showImportWizard,
               };
             }
 
             // Try to restore from cache first
             const restored = get().restoreFromCache(projectId);
             if (restored) {
-              console.log('Project restored from cache, skipping API call');
+              devLog('Project restored from cache, skipping API call');
               const currentState = get();
               return {
-                importData: currentState.importData,
-                showImportWizard: currentState.showImportWizard,
+                importData: currentState.importData!,
               };
             }
 
@@ -287,9 +349,42 @@ export const useProjectStore = create<ProjectStore>()(
 
             set({ currentProject: project });
 
-            // Fetch project metadata from TypeScript API (not processing)
-            const projectUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/projects/${projectId}`;
+            const base = getTensrApiBaseUrl();
+            const datasetPayload = await fetchDatasetWorkspacePayload(
+              base,
+              projectId,
+              token,
+              projectName
+            );
+            if (datasetPayload) {
+              const { importData, label } = datasetPayload;
+              const updatedProject = {
+                ...project,
+                name: label,
+                description: '',
+              };
+              const fileSystem = [
+                {
+                  name: label,
+                  path: label,
+                  entry_type: 'file',
+                  fileId: projectId,
+                },
+              ];
+              set({
+                currentProject: updatedProject,
+                fileSystem,
+                importData,
+                isLoading: false,
+                error: null,
+              });
+              return {
+                importData,
+              };
+            }
 
+            // Legacy multi-file project API (Rust / gateway)
+            const projectUrl = `${base}/projects/${projectId}`;
             const response = await fetch(projectUrl, {
               method: 'GET',
               headers: {
@@ -299,7 +394,9 @@ export const useProjectStore = create<ProjectStore>()(
             });
 
             if (!response.ok) {
-              throw new Error(`API error: ${response.status}`);
+              throw new Error(
+                `API error: ${response.status} ${await response.text().catch(() => '')}`
+              );
             }
 
             const projectData = await response.json();
@@ -325,12 +422,10 @@ export const useProjectStore = create<ProjectStore>()(
               fileSystem,
               isLoading: false,
               error: null,
-              showImportWizard: false, // Don't show import wizard automatically
             });
 
             return {
-              importData: null, // No import data until user selects a file
-              showImportWizard: false,
+              importData: null,
             };
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -347,13 +442,42 @@ export const useProjectStore = create<ProjectStore>()(
           try {
             set({ isLoading: true, error: null });
 
-            // Get project details from TypeScript API
-            const projectUrl = `${process.env.NEXT_PUBLIC_API_BASE_URL}/projects/${projectId}`;
+            const base = getTensrApiBaseUrl();
+            const authHeaders = datasetAuthHeaders(token);
+            const dsSchema = await fetch(tensrApiUrl(`/datasets/${projectId}/schema`), {
+              headers: authHeaders,
+            });
+            if (
+              handleUnauthorizedResponse(dsSchema, `project-store:getProjectDetails:${projectId}`)
+            ) {
+              set({ isLoading: false, error: 'Session expired' });
+              return null;
+            }
+            if (dsSchema.ok) {
+              const schemaJson = (await dsSchema.json()) as {
+                original_filename?: string | null;
+              };
+              const name =
+                (schemaJson.original_filename && String(schemaJson.original_filename)) || 'Dataset';
+              set({ isLoading: false, error: null });
+              return {
+                projectName: name,
+                files: [
+                  {
+                    path: name,
+                    type: 'tabular',
+                    size: 0,
+                    fileId: projectId,
+                  },
+                ],
+                totalFiles: 1,
+              };
+            }
+
+            const projectUrl = `${base}/projects/${projectId}`;
             const response = await fetch(projectUrl, {
               method: 'GET',
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
+              headers: authHeaders,
             });
 
             if (!response.ok) {
@@ -362,6 +486,7 @@ export const useProjectStore = create<ProjectStore>()(
 
             const projectData = await response.json();
 
+            set({ isLoading: false, error: null });
             return {
               projectName: projectData.projectName || 'Untitled',
               files: projectData.files || [],
@@ -404,11 +529,10 @@ export const useProjectStore = create<ProjectStore>()(
           const cached = state.projectCache.get(projectId);
           if (cached && Date.now() - cached.timestamp < 30 * 60 * 1000) {
             // 30 minute cache
-            console.log('Restoring project from cache:', projectId);
+            devLog('Restoring project from cache:', projectId);
             set({
               currentProject: cached.project,
               importData: cached.importData,
-              showImportWizard: false, // Don't show wizard when restoring
               error: null,
             });
             return true;
@@ -442,8 +566,7 @@ export const useProjectStore = create<ProjectStore>()(
 
         // Import Actions
         setImportData: (data: ImportData | null) => set({ importData: data }),
-        setShowImportWizard: (show: boolean) => set({ showImportWizard: show }),
-        clearImportData: () => set({ importData: null, showImportWizard: false }),
+        clearImportData: () => set({ importData: null }),
 
         // UI Content Actions
         setLeftPanelContent: (content: React.ReactNode) => set({ leftPanelContent: content }),
@@ -507,32 +630,49 @@ export const useProjectStore = create<ProjectStore>()(
           projectId: string,
           fileIndex: number,
           token: string,
-          userId: string
+          _userId: string
         ) => {
           try {
             set({ isLoading: true, error: null });
 
-            // Call the Fargate API to process the specific file
-            const processUrl = `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/projects/${projectId}/process`;
+            const { fileSystem } = get();
+            const fileInfo = fileSystem[fileIndex];
+            const datasetId = fileInfo?.fileId;
+            if (!datasetId) {
+              throw new Error(
+                'This file has no dataset id. Open a dataset-backed file or re-upload via Datasets.'
+              );
+            }
 
-            let response: Response;
+            const base = getTensrApiBaseUrl();
+            const authHeaders = datasetAuthHeaders(token);
+
+            let schemaRes: Response;
+            let schemaJson: {
+              n_rows?: number;
+              n_cols?: number;
+              schema?: { name: string }[];
+            };
             try {
-              response = await fetch(processUrl, {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  userId,
-                  fileName: 'Untitled',
-                  fileType: 'csv',
-                  token,
-                  file_index: fileIndex,
-                }),
+              schemaRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/schema`), {
+                headers: authHeaders,
               });
+              if (
+                handleUnauthorizedResponse(schemaRes, `project-store:fetchImportGrid:${datasetId}`)
+              ) {
+                set({ isLoading: false, error: 'Session expired' });
+                return null;
+              }
+              if (!schemaRes.ok) {
+                const detail = await schemaRes.text().catch(() => '');
+                throw new Error(detail || `Could not load dataset schema (${schemaRes.status})`);
+              }
+              schemaJson = (await schemaRes.json()) as {
+                n_rows?: number;
+                n_cols?: number;
+                schema?: { name: string }[];
+              };
             } catch (fetchError) {
-              // Handle network errors (e.g., "Failed to fetch")
               throw new Error(
                 fetchError instanceof Error
                   ? `Network error: ${fetchError.message}`
@@ -540,39 +680,26 @@ export const useProjectStore = create<ProjectStore>()(
               );
             }
 
-            if (!response.ok) {
-              const errorText = await response.text().catch(() => '');
-              throw new Error(errorText || `API error: ${response.status} ${response.statusText}`);
-            }
+            const columnNames = columnNamesFromSchemaResponse(schemaJson);
+            const fileName = fileInfo?.name || 'Untitled';
 
-            const result = await response.json();
-
-            // Get file information from the file system
-            const { fileSystem } = get();
-            const fileInfo = fileSystem[fileIndex];
-            const fileName = fileInfo?.name || result.fileName || 'Untitled';
-            const filePath = fileInfo?.path || result.fileName || 'Untitled';
-
-            // Set import data for the processed file
             const importData = {
               fileName,
-              filePath: projectId, // Use project ID so Spreadsheet can detect it's a project
-              fileId: fileInfo?.fileId || projectId,
-              preview: result.metadata?.preview || [],
-              columnNames: result.metadata?.column_names || [],
-              totalRows: result.metadata?.rows || 0,
-              totalColumns: result.metadata?.columns || 0,
-              columnSummaries: result.column_summaries || {},
+              filePath: projectId,
+              fileId: datasetId,
+              columnNames,
+              totalRows: schemaJson.n_rows ?? columnNames.length,
+              totalColumns: schemaJson.n_cols ?? columnNames.length,
+              columnSummaries: {} as Record<string, unknown>,
             };
 
             set({
               importData,
-              showImportWizard: true,
               isLoading: false,
               error: null,
             });
 
-            return { importData, showImportWizard: true };
+            return { importData };
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error';
             set({

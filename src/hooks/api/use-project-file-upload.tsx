@@ -2,6 +2,8 @@ import { useState, useCallback } from 'react';
 import { getIdToken } from '@/utils/auth';
 import { useProjectStore } from '@/stores/project-store';
 import { ProjectUpload } from '@/types/project';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+import { devLog } from '@/lib/dev-log';
 
 interface UseProjectFileUploadProps {
   allowedExtensions?: string[];
@@ -19,7 +21,7 @@ export const useProjectFileUpload = ({
   // Removed tokens - using getIdToken() directly
   const { setProject } = useProjectStore();
 
-  const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const API_BASE_URL = getTensrApiBaseUrl();
 
   const getFileTypeFromExtension = (fileName: string): string => {
     const extension = fileName.split('.').pop()?.toLowerCase();
@@ -73,7 +75,7 @@ export const useProjectFileUpload = ({
 
   const uploadFile = useCallback(
     async (file: File): Promise<string | null> => {
-      console.log('uploadFile called with file:', file.name, file.size);
+      devLog('uploadFile called with file:', file.name, file.size);
       setIsLoading(true);
       setError(null);
       setUploadProgress(0);
@@ -81,7 +83,7 @@ export const useProjectFileUpload = ({
       try {
         const fileName = file.name;
         const fileExtension = fileName.split('.').pop()?.toLowerCase();
-        console.log('File extension:', fileExtension);
+        devLog('File extension:', fileExtension);
 
         if (
           !fileExtension ||
@@ -98,7 +100,7 @@ export const useProjectFileUpload = ({
         }
 
         // Step 1: Create blank project first
-        console.log('Creating blank project');
+        devLog('Creating blank project');
         setUploadProgress(5);
 
         const projectInfo = {
@@ -125,10 +127,10 @@ export const useProjectFileUpload = ({
 
         const projectData = await createResponse.json();
         const projectId = projectData.projectId;
-        console.log('Created project with ID:', projectId);
+        devLog('Created project with ID:', projectId);
 
         // Step 2: Get upload URL for the project
-        console.log('Getting upload URL for project');
+        devLog('Getting upload URL for project');
         setUploadProgress(10);
 
         const fileInfo = {
@@ -158,7 +160,7 @@ export const useProjectFileUpload = ({
         }
 
         const uploadDataArray = await uploadResponse.json();
-        console.log('Got upload URL for project:', projectId);
+        devLog('Got upload URL for project:', projectId);
 
         // Get the first (and only) upload URL from the array
         const uploadData = uploadDataArray[0];
@@ -179,7 +181,7 @@ export const useProjectFileUpload = ({
           }
 
           setUploadProgress(70);
-          console.log('Upload to S3 successful');
+          devLog('Upload to S3 successful');
 
           // Step 4: Confirm file upload (adds file to project)
           setUploadProgress(75);
@@ -204,7 +206,7 @@ export const useProjectFileUpload = ({
             throw new Error('Failed to confirm file upload');
           }
 
-          console.log('File upload confirmed');
+          devLog('File upload confirmed');
 
           // Step 5: Complete the project upload
           const completeResponse = await fetch(`${API_BASE_URL}/projects/${projectId}/complete`, {
@@ -221,7 +223,7 @@ export const useProjectFileUpload = ({
           }
 
           setUploadProgress(85);
-          console.log('Project creation and file upload completed successfully');
+          devLog('Project creation and file upload completed successfully');
 
           // Update the project store with the new project
           const finalProjectData = await completeResponse.json();
@@ -229,11 +231,10 @@ export const useProjectFileUpload = ({
 
           // Step 6: Process the file to get schema and metadata
           setUploadProgress(90);
-          console.log('Processing file to extract schema...');
+          devLog('Processing file to extract schema...');
 
-          const RUST_API_URL = process.env.NEXT_PUBLIC_RUST_API_URL || 'https://api.dev.tensr.xyz';
           try {
-            const processResponse = await fetch(`${RUST_API_URL}/projects/${projectId}/process`, {
+            const processResponse = await fetch(`${API_BASE_URL}/projects/${projectId}/process`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
@@ -246,7 +247,7 @@ export const useProjectFileUpload = ({
 
             if (processResponse.ok) {
               const processData = await processResponse.json();
-              console.log('File processed successfully, schema extracted:', processData);
+              devLog('File processed successfully, schema extracted:', processData);
 
               // Save schema back to project file metadata
               if (processData.column_summaries && uploadData.fileId) {
@@ -271,7 +272,7 @@ export const useProjectFileUpload = ({
                   );
 
                   if (schemaUpdateResponse.ok) {
-                    console.log('Schema saved to project file metadata successfully');
+                    devLog('Schema saved to project file metadata successfully');
                   } else {
                     console.warn(
                       'Failed to save schema to project file metadata:',

@@ -1,12 +1,10 @@
 'use client';
 import { getIdToken } from '@/utils/auth';
 
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import { useProjectStore, ViewType } from '@/stores/project-store';
-import { ImportData } from '@/types/file';
 import { useTabsStore } from '@/stores/tabs-store';
 import TabManager from '@/components/organisms/tab-manager';
-import { ImportWizard, ImportSettings } from '@/components/organisms/wizards/import-wizard';
 import { FileSelector, ProjectFile } from '@/components/molecules/file-selector';
 import { cleanValue } from '@/utils/project';
 import ProjectLayout from '@/components/templates/project-layout';
@@ -15,6 +13,10 @@ import Loading from '@/components/molecules/loading';
 import useAuth from '@/hooks/api/use-auth';
 import { Tab } from '@/stores/tabs-store';
 import PluginsLayout from '@/components/templates/plugins-layout';
+import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { buildDefaultImportSettings, type ImportSettings } from '@/lib/import-settings';
+import { FEATURE_FLAGS, MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
+import { SpssWorkspaceWalkthrough } from '@/components/templates/auth/spss-switcher-flow';
 
 export interface WorkspaceResource {
   id: string;
@@ -25,16 +27,61 @@ export interface WorkspaceResource {
 
 interface WorkspaceProps {
   resource: WorkspaceResource;
-  processData: (resource: WorkspaceResource) => Promise<{
-    importData?: ImportData | null;
-    showImportWizard?: boolean;
-  }>;
 }
 
-export default function Workspace({ resource, processData }: WorkspaceProps) {
+const UUID_PATH_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const SMALL_DATASET_EAGER_LOAD = 2500;
+
+function importRowLimit(totalRows?: number): number {
+  const n = totalRows ?? SMALL_DATASET_EAGER_LOAD;
+  return Math.min(Math.max(n, 1), SMALL_DATASET_EAGER_LOAD);
+}
+
+/** Column-major grid payload matching legacy `fetch-page` `data` for spreadsheet import */
+async function fetchDatasetImportGrid(
+  datasetId: string,
+  token: string,
+  rowLimit: number
+): Promise<{ data: unknown[][] }> {
+  const base = getTensrApiBaseUrl();
+  const headers = { Authorization: `Bearer ${token}` };
+  const previewRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/preview?limit=${rowLimit}`), {
+    headers,
+  });
+  if (!previewRes.ok) {
+    const text = await previewRes.text();
+    throw new Error(`Dataset preview failed: ${previewRes.status} ${text}`);
+  }
+  const preview = (await previewRes.json()) as { headers?: string[]; rows?: unknown[][] };
+  const hdrs = preview.headers || [];
+  const rows = preview.rows || [];
+  const processedData = hdrs.map((_, colIdx) => rows.map(row => (row as unknown[])[colIdx]));
+  return { data: processedData };
+}
+
+/** If `filePath` is a tensr-api dataset id, return grid data; if not found (404), return null */
+async function tryDatasetImportGridFromUuidPath(
+  filePath: string,
+  token: string,
+  rowLimit: number
+): Promise<{ data: unknown[][] } | null> {
+  if (!UUID_PATH_REGEX.test(filePath)) return null;
+  const base = getTensrApiBaseUrl();
+  const schemaRes = await fetch(tensrApiUrl(`/datasets/${filePath}/schema`), {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (schemaRes.status === 404) return null;
+  if (!schemaRes.ok) {
+    const text = await schemaRes.text();
+    throw new Error(`Dataset error: ${schemaRes.status} ${text}`);
+  }
+  return fetchDatasetImportGrid(filePath, token, rowLimit);
+}
+
+export default function Workspace({ resource }: WorkspaceProps) {
   // State
-  const [importData, setImportData] = useState<ImportData | null>(null);
-  const [showImportWizard, setShowImportWizard] = useState(false);
   const [showFileSelector, setShowFileSelector] = useState(false);
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
   const [projectName, setProjectName] = useState<string>('');
@@ -52,7 +99,6 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
   const {
     setProject,
     importData: projectImportData,
-    setImportData: setProjectImportData,
     clearImportData,
     fetchProjectData,
     getProjectDetails,
@@ -62,9 +108,19 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
     error: storeError,
     leftSidebarOpen,
     toggleLeftSidebar,
+    activeView,
   } = useProjectStore();
   const { tabs, activeTabId, addTab, closeTab, setActiveTab } = useTabsStore();
-  const { user } = useAuth();
+
+  useEffect(() => {
+    if (
+      activeView === ViewType.NOTEBOOK ||
+      (activeView === ViewType.CHARTS && FEATURE_FLAGS.CHARTS_TAB_ENABLED)
+    ) {
+      setRightPanelOpen(true);
+    }
+  }, [activeView]);
+  const { user, isAuthReady } = useAuth();
 
   // Make sure we have a valid resource.id before using it
   const resourceId = resource?.id || '';
@@ -105,12 +161,12 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
     };
   }, [resourceId, cacheProject]);
 
-  // Proper useEffect with mounted guard - only runs once when auth is ready
+  // Load workspace data only after Stytch + AuthProvider have finished bootstrapping.
   useEffect(() => {
-    // Mark as mounted
     mountedRef.current = true;
 
-    // Only load data once when we have all required data
+    if (!isAuthReady) return;
+
     if (!hasLoadedRef.current && getIdToken() && userId && resourceId) {
       hasLoadedRef.current = true;
 
@@ -118,7 +174,6 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         try {
           // Check if project is already loaded before making API call
           if (isProjectLoaded(resourceId)) {
-            console.log('Project already loaded, skipping API call');
             setIsLoading(false);
             return;
           }
@@ -132,11 +187,22 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             const projectDetails = await getProjectDetails(resourceId, token, userId);
 
             if (projectDetails.totalFiles > 1) {
-              // Show file selector for multiple files
-              setProjectFiles(projectDetails.files);
-              setProjectName(projectDetails.projectName);
-              setShowFileSelector(true);
-              setIsLoading(false);
+              if (MULTI_FILE_PROJECTS_ENABLED) {
+                setProjectFiles(projectDetails.files);
+                setProjectName(projectDetails.projectName);
+                setShowFileSelector(true);
+                setIsLoading(false);
+                return;
+              }
+              // Launch: import the first file only (multi-file picker descoped).
+              const fetchTokenMulti = getIdToken();
+              if (!fetchTokenMulti) {
+                throw new Error('No authentication token available');
+              }
+              await fetchProjectData(resourceId, fetchTokenMulti, userId, 0);
+              if (mountedRef.current) {
+                setIsLoading(false);
+              }
               return;
             }
             // For single file projects, proceed with normal processing
@@ -150,7 +216,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             if (!fetchToken) {
               throw new Error('No authentication token available');
             }
-            await fetchProjectData(resourceId, fetchToken, userId);
+            await fetchProjectData(resourceId, fetchToken, userId, 0);
           }
           if (mountedRef.current) {
             setIsLoading(false);
@@ -166,9 +232,10 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
       loadData();
     }
   }, [
-    getIdToken(),
+    isAuthReady,
     userId,
     resourceId,
+    resource.name,
     fetchProjectData,
     getProjectDetails,
     isProjectLoaded,
@@ -186,25 +253,23 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
     };
   }, [resourceId, cacheProject]);
 
-  // Monitor project state's importData changes - WITH PROTECTION AGAINST DUPLICATE UPDATES
-  useEffect(() => {
-    // Skip if we're already showing the import wizard with the same data
-    if (showImportWizard && importData && projectImportData?.fileId === importData.fileId) {
-      return;
-    }
-
-    // Process import data for both files and projects
-    if (projectImportData) {
-      setProjectImportData(projectImportData);
-      setShowImportWizard(true);
-    }
-  }, [projectImportData, showImportWizard, importData]);
-
   // Handle import completion
   const handleImport = useCallback(
     async (settings: ImportSettings) => {
-      const dataToImport = projectImportData || importData;
+      const dataToImport = projectImportData;
       if (!dataToImport) return;
+
+      const alreadyOpen = useTabsStore
+        .getState()
+        .tabs.some(
+          t =>
+            t.type === ViewType.SPREADSHEET &&
+            (t.data?.filePath === dataToImport.filePath || t.data?.filePath === dataToImport.fileId)
+        );
+      if (alreadyOpen) {
+        clearImportData();
+        return;
+      }
 
       // Track sheetId for this import
       let sheetId: string | undefined;
@@ -231,158 +296,28 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             ? `users/${userId}/${dataToImport.filePath}/${dataToImport.fileName || 'untitled'}`
             : dataToImport.filePath;
 
-        // For both projects and files, fetch the first 250 rows
+        const rowLimit = importRowLimit(dataToImport.totalRows);
+
+        // Load the full dataset (up to SMALL_DATASET_EAGER_LOAD) so scroll is instant
         let data;
 
         if (currentResource.type === 'project') {
-          // For projects, fetch the first 250 rows instead of using preview
-          const uuidRegex =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-          const isProjectFile = uuidRegex.test(dataToImport.filePath);
-
-          let requestBody: any = {
-            path: dataToImport.filePath,
-            start_row: 0,
-            end_row: 250,
-          };
-
-          // Get project details to find the file_id
-          const projectResponse = await fetch(
-            `https://api.dev.tensr.xyz/projects/${dataToImport.filePath}`,
-            {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-            }
+          const preloaded = await tryDatasetImportGridFromUuidPath(
+            dataToImport.filePath,
+            token,
+            rowLimit
           );
-
-          if (!projectResponse.ok) {
-            throw new Error(`Failed to get project details: ${projectResponse.status}`);
-          }
-
-          const projectData = await projectResponse.json();
-
-          // Use the same approach as processFile - get fileId from fileSystem in store
-          // which is populated from projectData and includes fileId when available
-          const { fileSystem } = useProjectStore.getState();
-          let fileId: string | undefined;
-
-          if (fileSystem && fileSystem.length > 0) {
-            // Try to match by path or name from importData, or use first file
-            const matchingFile =
-              fileSystem.find(
-                (f: any) => f.path === dataToImport.filePath || f.name === dataToImport.fileName
-              ) || fileSystem[0];
-            fileId = matchingFile?.fileId;
-            console.log('FileId from fileSystem:', {
-              fileId,
-              matchingFile,
-              fileSystemLength: fileSystem.length,
-            });
-          }
-
-          // Fallback: try to get from projectData directly if fileSystem doesn't have it
-          if (!fileId) {
-            // Try all fileGroups categories, not just 'data'
-            for (const category of Object.keys(projectData.fileGroups || {})) {
-              const files = projectData.fileGroups[category];
-              if (Array.isArray(files) && files.length > 0) {
-                const firstFile = files[0];
-                if (firstFile?.fileId) {
-                  fileId = firstFile.fileId;
-                  console.log('FileId from fileGroups:', { fileId, category, firstFile });
-                  break;
-                }
-              }
-            }
-          }
-
-          if (!fileId && (!fileSystem || fileSystem.length === 0)) {
-            throw new Error('No files found in project');
-          }
-
-          console.log('Final fileId for sheet creation:', fileId);
-
-          requestBody = {
-            ...requestBody,
-            project_id: dataToImport.filePath,
-            ...(fileId && { file_id: fileId }),
-          };
-
-          // Create or fetch sheet for real-time collaboration (only if fileId exists)
-          if (fileId) {
-            try {
-              const sheetResponse = await fetch(
-                `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.dev.tensr.xyz'}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
-                {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `Bearer ${token}`,
-                  },
-                }
-              );
-
-              if (sheetResponse.ok) {
-                const sheetData = await sheetResponse.json();
-                const createdSheetId = sheetData.sheet?.sheetId;
-                if (createdSheetId) {
-                  sheetId = createdSheetId;
-                  console.log('Created/fetched sheet for project file:', sheetId);
-                }
-              } else {
-                console.warn(
-                  'Failed to create/fetch sheet, continuing without real-time collaboration'
-                );
-              }
-            } catch (error) {
-              console.error('Error creating/fetching sheet:', error);
-              // Continue without sheet - fallback to local mode
-            }
+          if (preloaded) {
+            data = preloaded;
           } else {
-            console.warn('No fileId found, skipping sheet creation');
-          }
+            let requestBody: Record<string, unknown> = {
+              path: dataToImport.filePath,
+              start_row: 0,
+              end_row: rowLimit,
+            };
 
-          // Fetch data for projects using the file API
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify(requestBody),
-            }
-          );
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
-          }
-
-          data = await response.json();
-        } else {
-          // For files, we need to fetch the data using the file API
-          // Check if this is a project file (filePath is a project ID) or a regular file
-          const uuidRegex =
-            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-          const isProjectFile = uuidRegex.test(dataToImport.filePath);
-
-          let requestBody: any = {
-            path: dataToImport.filePath,
-            start_row: 0,
-            end_row: 250,
-          };
-
-          // If it's a project file (filePath is a project ID), we need to get the file_id
-          if (isProjectFile) {
-            // For project files, we need to fetch the project data to get the file_id
             const projectResponse = await fetch(
-              `https://api.dev.tensr.xyz/projects/${dataToImport.filePath}`,
+              `${getTensrApiBaseUrl()}/projects/${dataToImport.filePath}`,
               {
                 method: 'GET',
                 headers: {
@@ -398,39 +333,25 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
 
             const projectData = await projectResponse.json();
 
-            // Use the same approach as processFile - get fileId from fileSystem in store
-            // which is populated from projectData and includes fileId when available
             const { fileSystem } = useProjectStore.getState();
             let fileId: string | undefined;
 
             if (fileSystem && fileSystem.length > 0) {
-              // Try to match by path or name from importData, or use first file
               const matchingFile =
                 fileSystem.find(
-                  (f: any) => f.path === dataToImport.filePath || f.name === dataToImport.fileName
+                  (f: { path?: string; name?: string; fileId?: string }) =>
+                    f.path === dataToImport.filePath || f.name === dataToImport.fileName
                 ) || fileSystem[0];
               fileId = matchingFile?.fileId;
-              console.log('FileId from fileSystem (file type):', {
-                fileId,
-                matchingFile,
-                fileSystemLength: fileSystem.length,
-              });
             }
 
-            // Fallback: try to get from projectData directly if fileSystem doesn't have it
             if (!fileId) {
-              // Try all fileGroups categories, not just 'data'
               for (const category of Object.keys(projectData.fileGroups || {})) {
                 const files = projectData.fileGroups[category];
                 if (Array.isArray(files) && files.length > 0) {
                   const firstFile = files[0];
                   if (firstFile?.fileId) {
                     fileId = firstFile.fileId;
-                    console.log('FileId from fileGroups (file type):', {
-                      fileId,
-                      category,
-                      firstFile,
-                    });
                     break;
                   }
                 }
@@ -441,19 +362,16 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
               throw new Error('No files found in project');
             }
 
-            console.log('Final fileId for sheet creation (file type):', fileId);
-
             requestBody = {
               ...requestBody,
               project_id: dataToImport.filePath,
               ...(fileId && { file_id: fileId }),
             };
 
-            // Create or fetch sheet for real-time collaboration (only if fileId exists)
             if (fileId) {
               try {
                 const sheetResponse = await fetch(
-                  `${process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.dev.tensr.xyz'}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
+                  `${getTensrApiBaseUrl()}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
                   {
                     method: 'POST',
                     headers: {
@@ -468,22 +386,132 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
                   const createdSheetId = sheetData.sheet?.sheetId;
                   if (createdSheetId) {
                     sheetId = createdSheetId;
-                    console.log('Created/fetched sheet for file resource:', sheetId);
                   }
-                } else {
-                  console.warn(
-                    'Failed to create/fetch sheet, continuing without real-time collaboration'
-                  );
                 }
-              } catch (error) {
-                console.error('Error creating/fetching sheet:', error);
-                // Continue without sheet - fallback to local mode
+              } catch {
+                // Continue without sheet
               }
-            } else {
-              console.warn('No fileId found, skipping sheet creation');
             }
-          } else {
-            // For regular files, check if filePath contains project structure
+
+            const response = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
+            }
+
+            data = await response.json();
+          }
+        } else {
+          const isUuidPath = UUID_PATH_REGEX.test(dataToImport.filePath);
+
+          let requestBody: Record<string, unknown> = {
+            path: dataToImport.filePath,
+            start_row: 0,
+            end_row: rowLimit,
+          };
+
+          let skipFetchPage = false;
+
+          if (isUuidPath) {
+            const preloaded = await tryDatasetImportGridFromUuidPath(
+              dataToImport.filePath,
+              token,
+              rowLimit
+            );
+            if (preloaded) {
+              data = preloaded;
+              skipFetchPage = true;
+            }
+          }
+
+          if (!skipFetchPage && isUuidPath) {
+            const projectResponse = await fetch(
+              `${getTensrApiBaseUrl()}/projects/${dataToImport.filePath}`,
+              {
+                method: 'GET',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${token}`,
+                },
+              }
+            );
+
+            if (!projectResponse.ok) {
+              throw new Error(`Failed to get project details: ${projectResponse.status}`);
+            }
+
+            const projectData = await projectResponse.json();
+
+            const { fileSystem } = useProjectStore.getState();
+            let fileId: string | undefined;
+
+            if (fileSystem && fileSystem.length > 0) {
+              const matchingFile =
+                fileSystem.find(
+                  (f: { path?: string; name?: string; fileId?: string }) =>
+                    f.path === dataToImport.filePath || f.name === dataToImport.fileName
+                ) || fileSystem[0];
+              fileId = matchingFile?.fileId;
+            }
+
+            if (!fileId) {
+              for (const category of Object.keys(projectData.fileGroups || {})) {
+                const files = projectData.fileGroups[category];
+                if (Array.isArray(files) && files.length > 0) {
+                  const firstFile = files[0];
+                  if (firstFile?.fileId) {
+                    fileId = firstFile.fileId;
+                    break;
+                  }
+                }
+              }
+            }
+
+            if (!fileId && (!fileSystem || fileSystem.length === 0)) {
+              throw new Error('No files found in project');
+            }
+
+            requestBody = {
+              ...requestBody,
+              project_id: dataToImport.filePath,
+              ...(fileId && { file_id: fileId }),
+            };
+
+            if (fileId) {
+              try {
+                const sheetResponse = await fetch(
+                  `${getTensrApiBaseUrl()}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
+                  {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      Authorization: `Bearer ${token}`,
+                    },
+                  }
+                );
+
+                if (sheetResponse.ok) {
+                  const sheetData = await sheetResponse.json();
+                  const createdSheetId = sheetData.sheet?.sheetId;
+                  if (createdSheetId) {
+                    sheetId = createdSheetId;
+                  }
+                }
+              } catch {
+                // Continue without sheet
+              }
+            }
+          }
+
+          if (!skipFetchPage && !isUuidPath) {
             const isProjectFilePath =
               dataToImport.filePath.includes('/users/') &&
               dataToImport.filePath.includes('/projects/');
@@ -494,9 +522,8 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
               const projectsIndex = pathParts.indexOf('projects');
 
               if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
-                const userId = pathParts[usersIndex + 1];
                 const projectId = pathParts[projectsIndex + 1];
-                const fileId = pathParts[projectsIndex + 3]; // files/{fileId}/{fileName}
+                const fileId = pathParts[projectsIndex + 3];
 
                 requestBody = {
                   ...requestBody,
@@ -507,26 +534,23 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
             }
           }
 
-          // Fetch data for files using the updated approach
-          const response = await fetch(
-            `${process.env.NEXT_PUBLIC_FARGATE_API_URL}/api/files/fetch-page`,
-            {
+          if (!skipFetchPage) {
+            const response = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify(requestBody),
+            });
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
             }
-          );
 
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
+            data = await response.json();
           }
-
-          data = await response.json();
         }
 
         // Define types for data processing
@@ -582,6 +606,10 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
           return processedData;
         };
 
+        if (!data?.data || !Array.isArray(data.data)) {
+          throw new Error('No tabular data returned for import');
+        }
+
         // Process the column-oriented data
         const fullData = processColumnOrientedData(data.data, columns);
 
@@ -602,6 +630,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
           isDirty: false,
           data: {
             filePath,
+            datasetId: dataToImport.fileId,
             initialData: fullData,
             initialColumns: columns,
             totalRows: dataToImport.totalRows,
@@ -619,18 +648,60 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         };
 
         addTab({ ...newTab });
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem(`tensr:autoImport:${dataToImport.fileId}`);
+        }
         clearImportData();
-        setImportData(null);
-        setShowImportWizard(false);
       } catch (err) {
         console.error('Import failed:', err);
+        if (typeof window !== 'undefined' && dataToImport.fileId) {
+          sessionStorage.removeItem(`tensr:autoImport:${dataToImport.fileId}`);
+        }
         clearImportData();
-        setImportData(null);
-        setShowImportWizard(false);
       }
     },
-    [projectImportData, importData, resourceId, addTab, setProject, userId]
+    [
+      projectImportData,
+      resourceId,
+      addTab,
+      setProject,
+      userId,
+      currentResource.type,
+      clearImportData,
+    ]
   );
+
+  // Auto-open dataset when import payload is ready (no confirmation dialog).
+  useEffect(() => {
+    if (!projectImportData) return;
+
+    const alreadyOpen = useTabsStore
+      .getState()
+      .tabs.some(
+        t =>
+          t.type === ViewType.SPREADSHEET &&
+          (t.data?.filePath === projectImportData.filePath ||
+            t.data?.filePath === projectImportData.fileId)
+      );
+    if (alreadyOpen) {
+      clearImportData();
+      return;
+    }
+
+    const fid = projectImportData.fileId;
+    if (typeof window !== 'undefined') {
+      const sessionKey = `tensr:autoImport:${fid}`;
+      if (sessionStorage.getItem(sessionKey)) return;
+      sessionStorage.setItem(sessionKey, '1');
+    }
+
+    const settings = buildDefaultImportSettings(
+      projectImportData.columnNames,
+      ',',
+      projectImportData.columnSummaries
+    );
+    void handleImport(settings);
+  }, [projectImportData, handleImport, clearImportData]);
 
   // Handle file selection from file selector
   const handleFileSelect = useCallback(
@@ -678,7 +749,7 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         }
       }
     },
-    [projectFiles, resourceId, getIdToken(), userId, fetchProjectData]
+    [projectFiles, resourceId, resource.name, getIdToken(), userId, fetchProjectData]
   );
 
   // Handle file selector close
@@ -688,14 +759,18 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
     setError('No file selected for import');
   }, []);
 
-  // Handle import wizard close
-  const handleWizardClose = useCallback(() => {
-    setShowImportWizard(false);
-    setImportData(null);
-    clearImportData();
-  }, [clearImportData]);
+  const awaitingDatasetTab = useMemo(() => {
+    if (!projectImportData) return false;
+    return !tabs.some(
+      t =>
+        t.type === ViewType.SPREADSHEET &&
+        (t.data?.filePath === projectImportData.filePath ||
+          t.data?.filePath === projectImportData.fileId ||
+          t.data?.datasetId === projectImportData.fileId)
+    );
+  }, [projectImportData, tabs]);
 
-  if (isLoading) {
+  if (isLoading || awaitingDatasetTab) {
     return <Loading fullScreen />;
   }
 
@@ -718,6 +793,9 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         onToggleSidebar={() => setRightPanelOpen(!rightPanelOpen)}
       >
         <div ref={projectRef} className="relative h-full w-full">
+          <div className="absolute left-3 right-3 top-2 z-20 pointer-events-none [&>*]:pointer-events-auto">
+            <SpssWorkspaceWalkthrough />
+          </div>
           <TabManager
             activeTab={activeTab}
             tabs={tabs}
@@ -728,28 +806,13 @@ export default function Workspace({ resource, processData }: WorkspaceProps) {
         </div>
       </ProjectLayout>
 
-      {/* File selector for multi-file projects */}
-      {showFileSelector && (
+      {MULTI_FILE_PROJECTS_ENABLED && showFileSelector && (
         <FileSelector
           isOpen={showFileSelector}
           onClose={handleFileSelectorClose}
           onFileSelect={handleFileSelect}
           projectName={projectName}
           files={projectFiles}
-        />
-      )}
-
-      {/* Import wizard rendered OUTSIDE the layout component */}
-      {projectImportData && (
-        <ImportWizard
-          isOpen={true}
-          onClose={handleWizardClose}
-          previewData={projectImportData.preview}
-          columnNames={projectImportData.columnNames}
-          totalRows={projectImportData.totalRows}
-          totalColumns={projectImportData.totalColumns}
-          columnSummaries={projectImportData.columnSummaries}
-          onImport={handleImport}
         />
       )}
     </>

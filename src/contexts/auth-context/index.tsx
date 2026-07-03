@@ -5,9 +5,9 @@ import { clearAuthData, getRefreshToken, storeTokens } from '@/utils/auth';
 
 import reducer from './reducer';
 import { Actions, AuthContextProps, ProviderProps } from './types';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 
-// Make sure API_BASE_URL is properly defined
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const API_BASE_URL = getTensrApiBaseUrl();
 
 const AuthContext = createContext<AuthContextProps | undefined>(undefined);
 

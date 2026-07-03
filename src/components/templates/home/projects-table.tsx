@@ -1,3 +1,5 @@
+'use client';
+
 import { Button } from '@/components/atoms/button';
 import { Checkbox } from '@/components/atoms/checkbox';
 import {
@@ -10,6 +12,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/molecules/dropdown';
 import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/molecules/table';
+import {
   ColumnDef,
   ColumnFiltersState,
   flexRender,
@@ -21,82 +31,74 @@ import {
   useReactTable,
   VisibilityState,
 } from '@tanstack/react-table';
-import {
-  AlertCircle,
-  Archive,
-  ArrowUpDown,
-  CheckCircle,
-  ChevronDown,
-  FileText,
-  MoreHorizontal,
-} from 'lucide-react';
-import { useState } from 'react';
-import { Input } from '@/components/atoms/input';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/molecules/table';
+import { ArrowUpDown, ChevronDown, FileText, Filter, Folder, MoreHorizontal } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Project, ProjectStatus } from '@/types/project';
+import { cn } from '@/utils';
 
-interface Project {
-  id?: string;
-  projectId?: string;
-  name: string;
-  created: string;
-  status: 'Active' | 'Completed' | 'Archived' | string;
-  dataPoints: number;
-  analysisTypes: string[];
-  lastModified: string;
-}
+type DisplayStatus = 'Active' | 'Completed' | 'Archived';
+
+const STATUS_FILTERS = ['all', 'active', 'completed', 'archived'] as const;
+type StatusFilter = (typeof STATUS_FILTERS)[number];
+
+const STATUS_STYLES: Record<DisplayStatus, { bg: string; fg: string }> = {
+  Active: { bg: 'bg-emerald-500/10', fg: 'text-emerald-600 dark:text-emerald-400' },
+  Completed: { bg: 'bg-primary/10', fg: 'text-primary' },
+  Archived: { bg: 'bg-muted', fg: 'text-muted-foreground' },
+};
 
 interface ProjectsTableProps {
   data: Project[];
   onRowClick: (id: string) => void;
+  statusFilterFn: (project: Project, filter: string) => boolean;
+  projectColor: (id: string) => string;
+  displayStatus: (status: ProjectStatus) => DisplayStatus;
 }
 
-export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
-  // Debug logging
-  console.log('ProjectsTable - data received:', data);
-  console.log('ProjectsTable - first project:', data[0]);
+function formatDate(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMin = Math.floor((now.getTime() - date.getTime()) / 60000);
+    if (diffMin < 60) return `${diffMin} min ago`;
+    const diffHr = Math.floor(diffMin / 60);
+    if (diffHr < 24) return `${diffHr} hr ago`;
+    if (date.toDateString() === now.toDateString()) {
+      return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    if (date.toDateString() === yesterday.toDateString()) return 'yesterday';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  } catch {
+    return 'Unknown';
+  }
+}
 
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+export const ProjectsTable = ({
+  data,
+  onRowClick,
+  statusFilterFn,
+  projectColor,
+  displayStatus,
+}: ProjectsTableProps) => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
-  // Format date function
-  const formatDate = (dateString: string): string => {
-    try {
-      const date = new Date(dateString);
-      const now = new Date();
+  const filteredData = useMemo(
+    () => data.filter(p => statusFilterFn(p, statusFilter)),
+    [data, statusFilter, statusFilterFn]
+  );
 
-      // If today
-      if (date.toDateString() === now.toDateString()) {
-        return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-      }
-
-      // If yesterday
-      const yesterday = new Date(now);
-      yesterday.setDate(now.getDate() - 1);
-      if (date.toDateString() === yesterday.toDateString()) {
-        return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-      }
-
-      // Otherwise show the full date
-      return date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-      });
-    } catch (e) {
-      return 'Unknown date';
-    }
-  };
-
-  // Define columns
   const columns: ColumnDef<Project>[] = [
     {
       id: 'select',
@@ -123,30 +125,40 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
     },
     {
       accessorKey: 'projectName',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Project Name
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        );
-      },
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          className="-ml-3 h-8 gap-1 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
+          Dataset
+          <ArrowUpDown className="size-3" aria-hidden />
+        </Button>
+      ),
       cell: ({ row }) => {
         const project = row.original;
+        const color = projectColor(project.projectId);
+        const isFolder = project.sourceType === 'folder' || project.sourceType === 'git';
+        const fileCount = project.files?.length ?? 0;
+
         return (
-          <div className="flex items-center">
-            <div className="shrink-0 h-10 w-10 flex items-center justify-center bg-blue-50 rounded-sm">
-              <FileText className="h-5 w-5 text-blue-600" />
-            </div>
-            <div className="ml-4">
-              <div className="text-sm text-gray-900">
-                {(project as any).projectName || (project as any).name}
-              </div>
-              <div className="text-xs text-gray-500">
-                Created: {formatDate((project as any).createdAt || (project as any).created)}
+          <div className="flex items-center gap-3">
+            <span
+              className="grid size-9 shrink-0 place-items-center rounded-xl border border-border bg-muted/30"
+              style={{ color }}
+            >
+              {isFolder ? (
+                <Folder className="size-4" aria-hidden />
+              ) : (
+                <FileText className="size-4" aria-hidden />
+              )}
+            </span>
+            <div className="min-w-0">
+              <div className="truncate font-medium text-foreground">{project.projectName}</div>
+              <div className="text-xs text-muted-foreground">
+                {fileCount > 0
+                  ? `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`
+                  : project.sourceType}
               </div>
             </div>
           </div>
@@ -154,113 +166,97 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
       },
     },
     {
-      accessorKey: 'status',
-      header: 'Status',
+      id: 'displayStatus',
+      header: () => (
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Status
+        </span>
+      ),
       cell: ({ row }) => {
-        const status = row.getValue('status') as string;
-        const getStatusColor = (status: string): string => {
-          switch (status) {
-            case 'Active':
-              return 'bg-green-100 text-green-800';
-            case 'Completed':
-              return 'bg-blue-100 text-blue-800';
-            case 'Archived':
-              return 'bg-gray-100 text-gray-800';
-            default:
-              return 'bg-yellow-100 text-yellow-800';
-          }
-        };
-
-        const getStatusIcon = (status: string) => {
-          switch (status) {
-            case 'Active':
-              return <CheckCircle className="mr-1 h-4 w-4" />;
-            case 'Completed':
-              return <CheckCircle className="mr-1 h-4 w-4" />;
-            case 'Archived':
-              return <Archive className="mr-1 h-4 w-4" />;
-            default:
-              return <AlertCircle className="mr-1 h-4 w-4" />;
-          }
-        };
-
+        const status = displayStatus(row.original.status);
+        const style = STATUS_STYLES[status];
         return (
-          <div
-            className={`flex items-center px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(status)}`}
+          <span
+            className={cn(
+              'inline-flex h-[22px] items-center gap-1.5 rounded-full px-2.5 text-xs font-medium',
+              style.bg,
+              style.fg
+            )}
           >
-            {getStatusIcon(status)}
-            <span>{status}</span>
-          </div>
+            <span className="size-1.5 rounded-full bg-current" aria-hidden />
+            {status}
+          </span>
         );
       },
     },
     {
       accessorKey: 'size',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Size
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        );
-      },
-      cell: ({ row }) => {
-        const size = row.getValue('size') as number;
-        const formatSize = (bytes: number): string => {
-          if (bytes === 0) return '0 B';
-          const k = 1024;
-          const sizes = ['B', 'KB', 'MB', 'GB'];
-          const i = Math.floor(Math.log(bytes) / Math.log(k));
-          return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-        };
-        return <div className="text-sm">{formatSize(size || 0)}</div>;
-      },
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          className="-ml-3 h-8 gap-1 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
+          Size
+          <ArrowUpDown className="size-3" aria-hidden />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <span className="text-sm tabular-nums text-muted-foreground">
+          {formatSize((row.getValue('size') as number) || 0)}
+        </span>
+      ),
     },
     {
-      accessorKey: 'fileCount',
-      header: 'Files',
+      id: 'fileCount',
+      header: () => (
+        <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          Files
+        </span>
+      ),
       cell: ({ row }) => {
-        const fileCount = (row.getValue('fileCount') as number) || 0;
+        const fileCount = row.original.files?.length ?? 0;
         return (
-          <div className="text-sm">
-            {fileCount} file{fileCount !== 1 ? 's' : ''}
-          </div>
+          <span className="text-sm tabular-nums text-muted-foreground">
+            {fileCount} {fileCount === 1 ? 'file' : 'files'}
+          </span>
         );
       },
     },
     {
       accessorKey: 'updatedAt',
-      header: ({ column }) => {
-        return (
-          <Button
-            variant="ghost"
-            onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-          >
-            Last Modified
-            <ArrowUpDown className="ml-2 h-4 w-4" />
-          </Button>
-        );
-      },
-      cell: ({ row }) => {
-        const updatedAt = row.getValue('updatedAt') as string;
-        return <div className="text-sm">{formatDate(updatedAt || '')}</div>;
-      },
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          className="-ml-3 h-8 gap-1 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
+          Updated
+          <ArrowUpDown className="size-3" aria-hidden />
+        </Button>
+      ),
+      cell: ({ row }) => (
+        <span className="text-sm text-muted-foreground">
+          {formatDate((row.getValue('updatedAt') as string) || row.original.createdAt || '')}
+        </span>
+      ),
     },
     {
       id: 'actions',
       enableHiding: false,
       cell: ({ row }) => {
         const project = row.original;
-
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-8 w-8 p-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="size-8"
+                onClick={e => e.stopPropagation()}
+              >
+                <MoreHorizontal className="size-4" aria-hidden />
                 <span className="sr-only">Open menu</span>
-                <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -268,27 +264,14 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
               <DropdownMenuItem
                 onClick={e => {
                   e.stopPropagation();
-                  console.log(
-                    'ProjectsTable - Open project clicked with projectId:',
-                    project.projectId
-                  );
-                  if (project.projectId) {
-                    onRowClick(project.projectId);
-                  }
+                  onRowClick(project.projectId);
                 }}
               >
-                Open project
+                Open dataset
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={e => e.stopPropagation()}>Export data</DropdownMenuItem>
-              <DropdownMenuItem onClick={e => e.stopPropagation()}>Share project</DropdownMenuItem>
-              <DropdownMenuItem onClick={e => e.stopPropagation()}>
-                Duplicate project
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={e => e.stopPropagation()} className="text-red-600">
-                Delete project
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={e => e.stopPropagation()}>Share dataset</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         );
@@ -297,7 +280,7 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
   ];
 
   const table = useReactTable({
-    data,
+    data: filteredData,
     columns,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
@@ -307,82 +290,87 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
     getFilteredRowModel: getFilteredRowModel(),
     onColumnVisibilityChange: setColumnVisibility,
     onRowSelectionChange: setRowSelection,
-    state: {
-      sorting,
-      columnFilters,
-      columnVisibility,
-      rowSelection,
-    },
+    state: { sorting, columnFilters, columnVisibility, rowSelection },
   });
 
   return (
-    <div className="w-full">
-      <div className="flex items-center py-4">
-        <Input
-          placeholder="Filter projects..."
-          value={(table.getColumn('projectName')?.getFilterValue() as string) ?? ''}
-          onChange={event => table.getColumn('projectName')?.setFilterValue(event.target.value)}
-          className="max-w-sm bg-background"
-        />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="ml-auto">
-              Columns <ChevronDown className="ml-2 h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {table
-              .getAllColumns()
-              .filter(column => column.getCanHide())
-              .map(column => {
-                return (
-                  <DropdownMenuCheckboxItem
-                    key={column.id}
-                    className="capitalize"
-                    checked={column.getIsVisible()}
-                    onCheckedChange={value => column.toggleVisibility(!!value)}
-                  >
-                    {column.id}
-                  </DropdownMenuCheckboxItem>
-                );
-              })}
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
-      <div className="rounded-md border border-border bg-background">
+    <div className="w-full text-left">
+      <div className="overflow-hidden rounded-xl border border-border bg-card">
+        <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-foreground">All datasets</span>
+            <span className="font-mono text-xs text-muted-foreground">{filteredData.length}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-0.5 rounded-full border border-border bg-muted/40 p-0.5">
+              {STATUS_FILTERS.map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  onClick={() => setStatusFilter(f)}
+                  className={cn(
+                    'h-7 shrink-0 whitespace-nowrap rounded-full px-2.5 text-xs font-medium capitalize transition-colors',
+                    statusFilter === f
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  )}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-full text-xs">
+                  <Filter className="size-3" aria-hidden />
+                  Columns
+                  <ChevronDown className="size-3" aria-hidden />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {table
+                  .getAllColumns()
+                  .filter(column => column.getCanHide())
+                  .map(column => (
+                    <DropdownMenuCheckboxItem
+                      key={column.id}
+                      className="capitalize"
+                      checked={column.getIsVisible()}
+                      onCheckedChange={value => column.toggleVisibility(!!value)}
+                    >
+                      {column.id}
+                    </DropdownMenuCheckboxItem>
+                  ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map(headerGroup => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map(header => {
-                  return (
-                    <TableHead key={header.id}>
-                      {header.isPlaceholder
-                        ? null
-                        : flexRender(header.column.columnDef.header, header.getContext())}
-                    </TableHead>
-                  );
-                })}
+              <TableRow key={headerGroup.id} className="bg-muted/30 hover:bg-muted/30">
+                {headerGroup.headers.map(header => (
+                  <TableHead key={header.id} className="h-10">
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
+                  </TableHead>
+                ))}
               </TableRow>
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows?.length ? (
+            {table.getRowModel().rows.length ? (
               table.getRowModel().rows.map(row => (
                 <TableRow
                   key={row.id}
                   data-state={row.getIsSelected() && 'selected'}
-                  onClick={() => {
-                    console.log('ProjectsTable - Row clicked, row.original:', row.original);
-                    const projectId = row.original.projectId || row.original.id;
-                    if (projectId) {
-                      onRowClick(projectId);
-                    }
-                  }}
                   className="cursor-pointer"
+                  onClick={() => onRowClick(row.original.projectId)}
                 >
                   {row.getVisibleCells().map(cell => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} className="py-3">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -390,23 +378,30 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
+                <TableCell colSpan={columns.length} className="py-12 text-left">
+                  <p className="text-sm font-medium text-foreground">No datasets to show</p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {data.length === 0
+                      ? 'Upload a dataset using the actions above.'
+                      : 'Try a different status filter or clear your search.'}
+                  </p>
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </div>
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <div className="flex-1 text-sm text-muted-foreground">
+
+      <div className="flex flex-wrap items-center justify-between gap-2 py-4">
+        <p className="text-sm text-muted-foreground">
           {table.getFilteredSelectedRowModel().rows.length} of{' '}
-          {table.getFilteredRowModel().rows.length} row(s) selected.
-        </div>
-        <div className="space-x-2">
+          {table.getFilteredRowModel().rows.length} selected
+        </p>
+        <div className="flex gap-2">
           <Button
             variant="outline"
             size="sm"
+            className="rounded-full"
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
           >
@@ -415,6 +410,7 @@ export const ProjectsTable = ({ data, onRowClick }: ProjectsTableProps) => {
           <Button
             variant="outline"
             size="sm"
+            className="rounded-full"
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
           >

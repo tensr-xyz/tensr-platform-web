@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+import { devLog } from '@/lib/dev-log';
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,14 +33,14 @@ export async function GET(request: NextRequest) {
     }
 
     // Use the same API URL as the client
-    const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+    const apiUrl = getTensrApiBaseUrl();
     if (!apiUrl) {
       console.error('API URL not configured');
       return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
     }
 
     const fetchUrl = `${apiUrl}/files?${queryParams.toString()}`;
-    console.log('Fetching files from:', fetchUrl);
+    devLog('Fetching files from:', fetchUrl);
 
     const response = await fetch(fetchUrl, {
       headers: {

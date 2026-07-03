@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
+import { devLog } from '@/lib/dev-log';
 
 import { useProjectStore } from '@/stores/project-store';
 import { getIdToken } from '@/utils/auth';
+import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 
-// API base URL - should be configured via environment variable
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+const apiBase = () => getTensrApiBaseUrl();
 
 interface UseFileHandlerProps {
   allowedExtensions?: string[];
@@ -102,7 +103,7 @@ export const useFileHandler = ({
         console.warn('Unable to determine user ID - will use token authorization only');
       }
 
-      const response = await fetch(`${API_BASE_URL}/files`, {
+      const response = await fetch(tensrApiUrl('/datasets/?scope=all'), {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -115,7 +116,19 @@ export const useFileHandler = ({
       }
 
       const data = await response.json();
-      const userFiles = data.files || [];
+      const rows = Array.isArray(data) ? data : [];
+      const userFiles: FileMetadata[] = rows.map((row: Record<string, unknown>) => {
+        const updated = String(row.updated_at ?? '');
+        return {
+          fileId: String(row.dataset_id ?? ''),
+          fileName: String(row.original_filename ?? 'dataset'),
+          fileType: 'csv',
+          size: 0,
+          createdAt: updated,
+          updatedAt: updated,
+          uploadedAt: updated,
+        };
+      });
       setFiles(userFiles);
       return userFiles;
     } catch (err: any) {
@@ -129,7 +142,7 @@ export const useFileHandler = ({
 
   // Main file handler function
   const handleFile = async (file: File): Promise<boolean> => {
-    console.log('handleFile called with file:', file.name, file.size);
+    devLog('handleFile called with file:', file.name, file.size);
     setIsLoading(true);
     setError(null);
     setUploadProgress(0);
@@ -137,7 +150,7 @@ export const useFileHandler = ({
     try {
       const fileName = file.name;
       const fileExtension = fileName.split('.').pop()?.toLowerCase();
-      console.log('File extension:', fileExtension);
+      devLog('File extension:', fileExtension);
 
       if (
         !fileExtension ||
@@ -153,85 +166,150 @@ export const useFileHandler = ({
         throw new Error('Authentication required. Please log in again.');
       }
 
-      // Step 1: Get pre-signed URL for S3 upload
-      console.log('Getting pre-signed URL for S3 upload');
-      setUploadProgress(5);
-      const fileInfo = {
-        fileName: file.name,
-        fileType: file.type || getFileTypeFromExtension(file.name),
-        fileSize: file.size,
-      };
-
-      // Get upload URL
-      const response = await fetch(`${API_BASE_URL}/files/upload-url`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(fileInfo),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Failed to get upload URL: ${response.statusText}`);
-      }
-
-      const uploadData = await response.json();
-      console.log('Got presigned URL for fileId:', uploadData.fileId);
-
-      // Step 2: Upload directly to S3 using presigned URL
+      devLog('Uploading dataset via tensr-api');
       setUploadProgress(10);
+
       try {
-        const uploadResponse = await uploadFileToS3(uploadData.uploadUrl, file, progress => {
-          // Scale progress to 0-60% range for the upload portion
-          setUploadProgress(10 + Math.floor(progress * 0.5));
+        const scope = 'personal';
+        const uploadUrlRes = await fetch(tensrApiUrl(`/datasets/upload-url?scope=${scope}`), {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            filename: fileName,
+            content_type: file.type || 'application/octet-stream',
+          }),
         });
-
-        if (!uploadResponse.ok) {
-          throw new Error('Failed to upload file to storage');
+        if (!uploadUrlRes.ok) {
+          throw new Error(await uploadUrlRes.text());
         }
+        const uploadUrlData = (await uploadUrlRes.json()) as {
+          mode?: string;
+          dataset_id?: string;
+          upload_url?: string;
+          s3_key?: string;
+        };
 
-        setUploadProgress(60);
-        console.log('Upload to S3 successful');
+        const uploadViaXhr = (
+          method: string,
+          url: string,
+          body: FormData | File,
+          withAuth: boolean
+        ): Promise<{ dataset_id: string }> =>
+          new Promise((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.upload.addEventListener('progress', event => {
+              if (event.lengthComputable) {
+                const pct = Math.round((event.loaded / event.total) * 90);
+                setUploadProgress(10 + pct);
+              }
+            });
+            xhr.addEventListener('load', () => {
+              if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                  resolve(JSON.parse(xhr.responseText || '{}'));
+                } catch {
+                  reject(new Error('Invalid upload response'));
+                }
+              } else {
+                reject(new Error(xhr.responseText || `Upload failed (${xhr.status})`));
+              }
+            });
+            xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+            xhr.open(method, url);
+            if (withAuth) {
+              xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+            }
+            if (body instanceof File && file.type) {
+              xhr.setRequestHeader('Content-Type', file.type);
+            }
+            xhr.send(body);
+          });
 
-        // Step 3: Mark upload as complete
-        const completeResponse = await fetch(
-          `${API_BASE_URL}/files/${uploadData.fileId}/complete`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
+        let uploadData: { dataset_id: string };
+
+        if (
+          uploadUrlData.mode === 's3' &&
+          uploadUrlData.upload_url &&
+          uploadUrlData.dataset_id &&
+          uploadUrlData.s3_key
+        ) {
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.upload.addEventListener('progress', event => {
+              if (event.lengthComputable) {
+                const pct = Math.round((event.loaded / event.total) * 85);
+                setUploadProgress(10 + pct);
+              }
+            });
+            xhr.addEventListener('load', () => {
+              if (xhr.status >= 200 && xhr.status < 300) resolve();
+              else reject(new Error(`S3 upload failed (${xhr.status})`));
+            });
+            xhr.addEventListener('error', () =>
+              reject(new Error('Network error during S3 upload'))
+            );
+            xhr.open('PUT', uploadUrlData.upload_url!);
+            if (file.type) xhr.setRequestHeader('Content-Type', file.type);
+            xhr.send(file);
+          });
+          setUploadProgress(96);
+          const completeRes = await fetch(
+            tensrApiUrl(`/datasets/${uploadUrlData.dataset_id}/complete-upload?scope=${scope}`),
+            {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${token}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                s3_key: uploadUrlData.s3_key,
+                filename: fileName,
+              }),
+            }
+          );
+          if (!completeRes.ok) {
+            throw new Error(await completeRes.text());
           }
-        );
-
-        if (!completeResponse.ok) {
-          throw new Error('Failed to complete upload');
+          uploadData = (await completeRes.json()) as { dataset_id: string };
+        } else {
+          const formData = new FormData();
+          formData.append('file', file);
+          uploadData = await uploadViaXhr(
+            'POST',
+            tensrApiUrl(`/datasets/upload?scope=${scope}`),
+            formData,
+            true
+          );
+        }
+        const datasetId = uploadData.dataset_id;
+        if (!datasetId) {
+          throw new Error('Upload succeeded but no dataset_id was returned');
         }
 
         setUploadProgress(100);
-        console.log('Marked upload as complete');
 
-        // Refresh the files list
         await fetchUserFiles();
 
-        // Notify caller of completion
         if (onUploadComplete) {
-          console.log('Calling onUploadComplete with fileId:', uploadData.fileId);
-          onUploadComplete(uploadData.fileId);
+          onUploadComplete(datasetId);
         }
 
         return true;
-      } catch (uploadError: any) {
-        console.error('S3 upload failed:', uploadError);
-        throw new Error(`Failed to upload file: ${uploadError.message}`);
+      } catch (uploadError: unknown) {
+        console.error('Dataset upload failed:', uploadError);
+        throw new Error(
+          uploadError instanceof Error ? uploadError.message : 'Failed to upload file'
+        );
       }
     } catch (err: any) {
       console.error('File upload/processing error:', err);
       setError(err.message || 'Failed to upload file');
       return false;
     } finally {
-      console.log('Setting isLoading to false');
+      devLog('Setting isLoading to false');
       setIsLoading(false);
     }
   };
@@ -242,20 +320,20 @@ export const useFileHandler = ({
     file: File,
     onProgress?: (progress: number) => void
   ): Promise<Response> => {
-    console.log('uploadFileToS3 called with AES256 encryption header');
+    devLog('uploadFileToS3 called with AES256 encryption header');
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
 
       xhr.upload.addEventListener('progress', event => {
         if (event.lengthComputable && onProgress) {
           const percentComplete = Math.round((event.loaded / event.total) * 100);
-          console.log('Upload progress:', percentComplete);
+          devLog('Upload progress:', percentComplete);
           onProgress(percentComplete);
         }
       });
 
       xhr.addEventListener('load', () => {
-        console.log('Upload completed with status:', xhr.status);
+        devLog('Upload completed with status:', xhr.status);
         if (xhr.status >= 200 && xhr.status < 300) {
           resolve(
             new Response(null, {
@@ -297,7 +375,7 @@ export const useFileHandler = ({
         xhr.setRequestHeader('x-amz-server-side-encryption', 'AES256');
 
         // Don't set Content-Type or any other headers
-        console.log('Starting S3 upload with AES256 encryption header');
+        devLog('Starting S3 upload with AES256 encryption header');
         xhr.send(file);
       } catch (error) {
         console.error('Error preparing S3 upload:', error);
@@ -323,7 +401,7 @@ export const useFileHandler = ({
   };
 
   const openFile = async (fileId: string): Promise<boolean> => {
-    console.log('openFile called with fileId:', fileId);
+    devLog('openFile called with fileId:', fileId);
     setIsLoading(true);
     setError(null);
 
@@ -342,7 +420,7 @@ export const useFileHandler = ({
         throw new Error(`File with ID ${fileId} not found`);
       }
 
-      console.log('Found file in user files:', fileInfo.fileName);
+      devLog('Found file in user files:', fileInfo.fileName);
 
       // Create minimal project context with the file info
       const project = {
@@ -353,7 +431,7 @@ export const useFileHandler = ({
       };
 
       // Update project context
-      console.log('Setting project in store');
+      devLog('Setting project in store');
       setProject(project);
 
       // Create minimal import data
@@ -361,7 +439,6 @@ export const useFileHandler = ({
         fileName: fileInfo.fileName,
         filePath: fileInfo.fileName,
         fileId,
-        preview: [], // No preview without backend processing
         columnNames: [],
         totalRows: 0,
         totalColumns: 0,
@@ -387,7 +464,7 @@ export const useFileHandler = ({
 
   // Save file content - creates a new version in S3
   const saveFile = async (fileId: string, content: any): Promise<boolean> => {
-    console.log('saveFile called with fileId:', fileId);
+    devLog('saveFile called with fileId:', fileId);
     setIsSaving(true);
     setError(null);
 
@@ -398,10 +475,10 @@ export const useFileHandler = ({
       }
 
       // 1. Get a pre-signed URL for updating the file
-      console.log('Getting pre-signed URL for file update');
+      devLog('Getting pre-signed URL for file update');
       const fileSize = new Blob([JSON.stringify(content)]).size;
 
-      const updateResponse = await fetch(`${API_BASE_URL}/files/${fileId}/update-url`, {
+      const updateResponse = await fetch(`${apiBase()}/files/${fileId}/update-url`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -416,10 +493,10 @@ export const useFileHandler = ({
       }
 
       const updateData = await updateResponse.json();
-      console.log('Got presigned URL for updating fileId:', fileId);
+      devLog('Got presigned URL for updating fileId:', fileId);
 
       // 2. Upload content to S3
-      console.log('Uploading file content to S3');
+      devLog('Uploading file content to S3');
       const uploadResponse = await fetch(updateData.uploadUrl, {
         method: 'PUT',
         body: JSON.stringify(content),
@@ -434,8 +511,8 @@ export const useFileHandler = ({
       }
 
       // 3. Mark the upload as complete
-      console.log('Marking update as complete');
-      const completeResponse = await fetch(`${API_BASE_URL}/files/${fileId}/complete`, {
+      devLog('Marking update as complete');
+      const completeResponse = await fetch(`${apiBase()}/files/${fileId}/complete`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -450,7 +527,7 @@ export const useFileHandler = ({
       const now = new Date();
       setLastSavedTime(now);
 
-      console.log('File saved successfully');
+      devLog('File saved successfully');
       return true;
     } catch (err: any) {
       console.error('Error saving file:', err);
@@ -463,7 +540,7 @@ export const useFileHandler = ({
 
   // Get file version history
   const getFileVersions = async (fileId: string): Promise<FileVersion[]> => {
-    console.log('getFileVersions called with fileId:', fileId);
+    devLog('getFileVersions called with fileId:', fileId);
     setIsLoadingVersions(true);
     setError(null);
 
@@ -473,7 +550,7 @@ export const useFileHandler = ({
         throw new Error('Authentication required. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/files/${fileId}/versions`, {
+      const response = await fetch(`${apiBase()}/files/${fileId}/versions`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -503,7 +580,7 @@ export const useFileHandler = ({
     fileId: string,
     versionId: string
   ): Promise<{ downloadUrl: string; fileName: string; expiresAt: string }> => {
-    console.log('getFileVersion called with fileId:', fileId, 'versionId:', versionId);
+    devLog('getFileVersion called with fileId:', fileId, 'versionId:', versionId);
     setIsLoading(true);
     setError(null);
 
@@ -513,7 +590,7 @@ export const useFileHandler = ({
         throw new Error('Authentication required. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/files/${fileId}/versions/${versionId}`, {
+      const response = await fetch(`${apiBase()}/files/${fileId}/versions/${versionId}`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -538,7 +615,7 @@ export const useFileHandler = ({
 
   // Revert to a specific version
   const revertToVersion = async (fileId: string, versionId: string): Promise<boolean> => {
-    console.log('revertToVersion called with fileId:', fileId, 'versionId:', versionId);
+    devLog('revertToVersion called with fileId:', fileId, 'versionId:', versionId);
     setIsLoading(true);
     setError(null);
 
@@ -548,7 +625,7 @@ export const useFileHandler = ({
         throw new Error('Authentication required. Please log in again.');
       }
 
-      const response = await fetch(`${API_BASE_URL}/files/${fileId}/revert/${versionId}`, {
+      const response = await fetch(`${apiBase()}/files/${fileId}/revert/${versionId}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
@@ -591,19 +668,19 @@ export const useFileHandler = ({
     }
 
     if (!enabled) {
-      console.log('Auto-save disabled');
+      devLog('Auto-save disabled');
       return () => {};
     }
 
-    console.log(`Setting up auto-save every ${interval / 1000} seconds`);
+    devLog(`Setting up auto-save every ${interval / 1000} seconds`);
 
     // Set up new auto-save timer
     autoSaveTimerRef.current = setInterval(() => {
-      console.log('Auto-save triggered');
+      devLog('Auto-save triggered');
       saveFile(fileId, content)
         .then(success => {
           if (success) {
-            console.log('Auto-save completed successfully');
+            devLog('Auto-save completed successfully');
           } else {
             console.error('Auto-save failed');
           }

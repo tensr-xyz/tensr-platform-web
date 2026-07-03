@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { SheetState, SheetOp, ServerMessage, ClientMessage, ColumnSchema } from '@/types/sheet';
 import { useWebSocket } from '../use-websocket';
 import { getIdToken } from '@/utils/auth';
+import { getTensrWebSocketUrl } from '@/lib/tensr-api-url';
+import { devLog } from '@/lib/dev-log';
 
 interface UseSheetStateOptions {
   sheetId: string;
@@ -31,19 +33,21 @@ export function useSheetState({
   const [isConnected, setIsConnected] = useState(false);
   const pendingOpsRef = useRef<Map<number, SheetOp>>(new Map());
   const opSequenceRef = useRef<number>(0);
+  // Mirror `state` into a ref so the WS message effect doesn't need to re-subscribe
+  // on every server-applied op (which would cause subscribe/unsubscribe churn and
+  // CPU spikes under live-collab load).
+  const stateRef = useRef<SheetState | null>(null);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
 
   // Get WebSocket URL from environment or config
   const getWebSocketUrl = useCallback(() => {
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    // Get WebSocket URL from environment or construct from API URL
-    const wsBaseUrl = process.env.NEXT_PUBLIC_WEBSOCKET_URL;
-    if (wsBaseUrl) {
-      return `${wsBaseUrl}?sheetId=${sheetId}`;
-    }
-    // Fallback: construct from API URL
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/^https?:\/\//, '') || 'api.tensr.com';
-    return `${wsProtocol}//${apiUrl.replace(/^https?:\/\//, '').replace(/\/$/, '')}/realtime?sheetId=${sheetId}`;
+    const wsBaseUrl =
+      process.env.NEXT_PUBLIC_WEBSOCKET_URL?.replace(/\/$/, '') ||
+      getTensrWebSocketUrl('/realtime');
+    const separator = wsBaseUrl.includes('?') ? '&' : '?';
+    return `${wsBaseUrl}${separator}sheetId=${encodeURIComponent(sheetId)}`;
   }, [sheetId]);
 
   const {
@@ -151,55 +155,54 @@ export function useSheetState({
     // WebSocket cleanup handled by useWebSocket hook
   }, []);
 
-  // Apply operation
+  // Apply operation. Read state via ref so this callback stays stable across
+  // state updates — Spreadsheet uses it in effect deps.
   const applyOperation = useCallback(
     async (op: Omit<SheetOp, 'actor' | 'timestamp'>): Promise<boolean> => {
-      if (!state || !wsConnected) {
+      const current = stateRef.current;
+      if (!current || !wsConnected) {
         return false;
       }
 
       const fullOp: SheetOp = {
         ...op,
-        actor: 'user', // Will be replaced by backend with actual userId
+        actor: 'user',
         timestamp: new Date().toISOString(),
       } as SheetOp;
 
-      // Optimistically apply to local state
-      const optimisticState = applyOpToState(fullOp, state);
+      const optimisticState = applyOpToState(fullOp, current);
       setState(optimisticState);
-      // Version will be updated when we receive op_applied from server
 
-      // Send to server
       const message: ClientMessage = {
         type: 'op',
         sheetId,
-        baseVersion: state.version,
+        baseVersion: current.version,
         op: fullOp,
       };
 
       sendMessage(message);
-
       return true;
     },
-    [state, wsConnected, sheetId, sendMessage, applyOpToState]
+    [wsConnected, sheetId, sendMessage, applyOpToState]
   );
 
   // Request AI analysis
   const requestAI = useCallback(
     (prompt: string, channelId: string) => {
-      if (!state || !wsConnected) return;
+      const current = stateRef.current;
+      if (!current || !wsConnected) return;
 
       const message: ClientMessage = {
         type: 'request_ai',
         sheetId,
-        version: state.version,
+        version: current.version,
         channelId,
         prompt,
       };
 
       sendMessage(message);
     },
-    [state, wsConnected, sheetId, sendMessage]
+    [wsConnected, sheetId, sendMessage]
   );
 
   // Handle WebSocket messages
@@ -226,8 +229,8 @@ export function useSheetState({
         }
 
         case 'op_applied': {
-          if (serverMessage.sheetId === sheetId && state) {
-            const newState = applyOpToState(serverMessage.op, state);
+          if (serverMessage.sheetId === sheetId && stateRef.current) {
+            const newState = applyOpToState(serverMessage.op, stateRef.current);
             newState.version = serverMessage.version;
             setState(newState);
             setVersion(serverMessage.version);
@@ -248,7 +251,7 @@ export function useSheetState({
         case 'snapshot_saved': {
           if (serverMessage.sheetId === sheetId) {
             // Optionally show a "Saved" indicator
-            console.log('Snapshot saved at version', serverMessage.version);
+            devLog('Snapshot saved at version', serverMessage.version);
           }
           break;
         }
@@ -261,7 +264,7 @@ export function useSheetState({
     });
 
     return unsubscribe;
-  }, [enabled, sheetId, state, wsSubscribe, applyOpToState]);
+  }, [enabled, sheetId, wsSubscribe, applyOpToState]);
 
   // Auto-subscribe when connected
   useEffect(() => {

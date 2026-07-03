@@ -3,19 +3,25 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { useStytch, useStytchUser, useStytchSession } from '@stytch/nextjs';
 import { useAuthStore } from '@/stores/auth-store';
-import { clearAuthData, storeSession } from '@/utils/auth';
+import { clearAuthData, getStoredSession, storeSession } from '@/utils/auth';
+import { fetchMeProfile, redeemStoredInvitation } from '@/lib/business-api';
+import { hasActiveSubscription } from '@/lib/subscription';
+import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
+import { devLog } from '@/lib/dev-log';
 
 export const useAuth = () => {
   const stytch = useStytch();
   const { user: stytchUser } = useStytchUser();
-  const { session: stytchSession } = useStytchSession();
+  const { session: stytchSession, isInitialized } = useStytchSession();
 
   const {
     user,
+    entitlements,
     session,
     isLoading,
     error,
     setUser,
+    setEntitlements,
     setSession,
     setLoading,
     setError,
@@ -23,16 +29,18 @@ export const useAuth = () => {
     logout,
   } = useAuthStore();
 
-  // Local state for OTP flow
   const [methodId, setMethodId] = useState<string | null>(null);
   const router = useRouter();
 
-  // Initiate authentication with email OTP
+  const isAuthenticated = isInitialized && (!!stytchSession || !!session || !!getStoredSession());
+  const isAuthReady = isInitialized && !isLoading;
+  const hasSubscription = hasActiveSubscription(entitlements);
+
   const initiateAuth = async (email: string) => {
     setLoading(true);
     setError(null);
     try {
-      console.log('Initiating Stytch auth for email:', email);
+      devLog('Initiating Stytch auth for email:', email);
 
       if (!stytch) {
         throw new Error('Stytch client not initialized');
@@ -60,7 +68,6 @@ export const useAuth = () => {
     }
   };
 
-  // Verify authentication with OTP
   const verifyAuth = async (email: string, otp: string, verifyMethodId?: string) => {
     setLoading(true);
     setError(null);
@@ -68,7 +75,7 @@ export const useAuth = () => {
     try {
       const methodIdToUse = verifyMethodId || methodId;
 
-      console.log('Verifying auth with methodId:', methodIdToUse);
+      devLog('Verifying auth with methodId:', methodIdToUse);
 
       if (!methodIdToUse) {
         console.error('No methodId available for verification');
@@ -85,9 +92,8 @@ export const useAuth = () => {
         throw new Error('Stytch client not initialized');
       }
 
-      // Use a safe session duration (30 minutes) that should be within Stytch's limits
       const response = await stytch.otps.authenticate(otp, methodIdToUse, {
-        session_duration_minutes: 30,
+        session_duration_minutes: STYTCH_SESSION_DURATION_MINUTES,
       });
 
       if (response.status_code !== 200) {
@@ -100,35 +106,37 @@ export const useAuth = () => {
         };
       }
 
-      // Store session
       if (response.session_token) {
+        storeSession(response.session_token, response.session_jwt);
         setSession({
           sessionToken: response.session_token,
           sessionJwt: response.session_jwt,
         });
-        // Persist to localStorage and cookies
-        storeSession(response.session_token, response.session_jwt);
       }
 
-      // Store user if available
-      if (response.user) {
-        const stytchUserData = response.user as any;
-        const userData = {
-          userId: stytchUserData.user_id,
-          email: stytchUserData.emails?.[0]?.email || email,
-          firstName: stytchUserData.name?.first_name,
-          lastName: stytchUserData.name?.last_name,
-          username: stytchUserData.name?.first_name,
-          status: 'ACTIVE' as const,
-          createdAt: stytchUserData.created_at || new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        setUser(userData);
+      try {
+        const profile = await fetchMeProfile();
+        setUser(profile.user);
+        setEntitlements(profile.entitlements);
+        await redeemStoredInvitation();
+      } catch (syncError) {
+        console.warn('Failed to sync user from tensr-api:', syncError);
+        if (response.user) {
+          const stytchUserData = response.user as any;
+          setUser({
+            userId: stytchUserData.user_id,
+            email: stytchUserData.emails?.[0]?.email || email,
+            firstName: stytchUserData.name?.first_name,
+            lastName: stytchUserData.name?.last_name,
+            username: stytchUserData.name?.first_name,
+            status: 'ACTIVE',
+            createdAt: stytchUserData.created_at || new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          });
+        }
       }
 
-      // Clear method ID
       setMethodId(null);
-
       setLoading(false);
       return { success: true };
     } catch (error) {
@@ -143,7 +151,6 @@ export const useAuth = () => {
     }
   };
 
-  // Handle Google OAuth
   const initiateGoogleAuth = async () => {
     if (!stytch) {
       throw new Error('Stytch client not initialized');
@@ -161,7 +168,6 @@ export const useAuth = () => {
     }
   };
 
-  // Handle logout
   const handleLogout = async () => {
     try {
       if (stytch && stytchSession) {
@@ -174,16 +180,15 @@ export const useAuth = () => {
     clearAuthData();
     logout();
     setMethodId(null);
-    router.push('/');
+    router.push('/login');
   };
 
-  // Resend verification code
   const resendVerificationCode = async (email: string) => {
     setLoading(true);
     setError(null);
 
     try {
-      console.log('Resending code for email:', email);
+      devLog('Resending code for email:', email);
 
       if (!stytch) {
         throw new Error('Stytch client not initialized');
@@ -215,17 +220,23 @@ export const useAuth = () => {
 
   return {
     user,
+    entitlements,
     session,
     isLoading,
     error,
-    isAuthenticated: !!user || !!stytchUser,
+    isInitialized,
+    isAuthenticated,
+    isAuthReady,
+    hasActiveSubscription: hasSubscription,
     methodId,
     initiateAuth,
     verifyAuth,
     initiateGoogleAuth,
     handleLogout,
     resendVerificationCode,
-    // Also expose Stytch hooks for direct access if needed
+    login,
+    setUser,
+    setSession,
     stytchUser,
     stytchSession,
     stytch,

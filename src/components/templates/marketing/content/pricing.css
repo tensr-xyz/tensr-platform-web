@@ -1,0 +1,31 @@
+.tensr-marketing .page-head {
+  position: relative;
+  padding-top: clamp(64px, 8vw, 104px);
+  padding-bottom: clamp(28px, 4vw, 44px);
+  overflow: hidden;
+}
+.tensr-marketing .page-head .wash {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(820px 420px at 50% -12%, hsl(250 100% 63% / 0.09), transparent 62%);
+}
+.tensr-marketing .page-head .wrap {
+  position: relative;
+  z-index: 1;
+}
+.tensr-marketing .cmp-wrap {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+}
+.tensr-marketing .pricing-note {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 22px;
+  font-size: 14px;
+  color: var(--ink-3);
+}

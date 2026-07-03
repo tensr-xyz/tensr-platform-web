@@ -7,6 +7,7 @@ export interface ProviderProps {
 }
 
 export enum ViewType {
+  // keep in sync with stores/tabs-store and stores/project-store
   SPREADSHEET = 'spreadsheet',
   CHARTS = 'charts',
   MODEL_BUILDER = 'model_builder',
@@ -14,6 +15,8 @@ export enum ViewType {
   PLUGINS = 'plugins',
   MARKDOWN = 'markdown',
   SEM = 'sem',
+  ANALYSIS_REPORT = 'analysis_report',
+  ANALYSIS_RESULT = 'analysis_result',
 }
 
 export enum ProjectActions {
@@ -31,7 +34,6 @@ export enum ProjectActions {
   SET_ERROR = 'SET_ERROR',
   CLEAR_PROJECT = 'CLEAR_PROJECT',
   SET_IMPORT_DATA = 'SET_IMPORT_DATA',
-  SET_SHOW_IMPORT_WIZARD = 'SET_SHOW_IMPORT_WIZARD',
   CLEAR_IMPORT_DATA = 'CLEAR_IMPORT_DATA',
   SET_LEFT_PANEL_CONTENT = 'SET_LEFT_PANEL_CONTENT',
 }
@@ -55,7 +57,6 @@ export interface ProjectState {
   isLoading: boolean;
   error: string | null;
   importData: ImportData | null;
-  showImportWizard: boolean;
   leftPanelContent: React.ReactNode;
 }
 

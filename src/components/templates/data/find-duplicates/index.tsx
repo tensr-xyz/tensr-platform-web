@@ -5,9 +5,13 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
+  DialogTrigger,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/atoms/alert';
 import { Copy } from 'lucide-react';
+import { getAccessToken } from '@/utils/auth';
+import { findDatasetDuplicates } from '@/lib/dataset-data-ops';
+import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
 
 interface DuplicateDialogProps {
@@ -27,14 +31,8 @@ interface DuplicateDetectionResponse {
   affected_rows: number[];
 }
 
-interface FindDuplicatesRequest {
-  path: string;
-  columns: string[];
-  match_case: boolean;
-  first_case_only: boolean;
-}
-
 export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
+  const token = getAccessToken();
   const { tabs, activeTabId } = useTabsStore();
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [matchCase, setMatchCase] = useState(true);
@@ -58,9 +56,15 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
     );
   };
 
+  const datasetId = getDatasetIdFromTab(activeTab);
+
   const findDuplicates = async () => {
-    if (!activeTab?.data?.filePath || selectedColumns.length === 0) {
-      setError('Invalid file path or no columns selected');
+    if (!datasetId) {
+      setError(WORKSPACE_DATASET_REQUIRED);
+      return;
+    }
+    if (selectedColumns.length === 0) {
+      setError('Select at least one column');
       return;
     }
 
@@ -68,81 +72,15 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
     setError(null);
 
     try {
-      const requestData: FindDuplicatesRequest = {
-        path: activeTab.data.filePath,
-        columns: selectedColumns,
-        match_case: matchCase,
-        first_case_only: firstCaseOnly,
-      };
-
-      // Mock implementation of invoke until the actual API call is implemented
-      // In a real implementation, you would use fetch or another HTTP client
-      const mockResponse: DuplicateDetectionResponse = {
-        duplicates: [
-          {
-            row_index: 1,
-            values: selectedColumns.reduce(
-              (acc, col) => {
-                acc[col] = `Sample ${col} value`;
-                return acc;
-              },
-              {} as Record<string, string>
-            ),
-            duplicate_group: 0,
-          },
-          {
-            row_index: 3,
-            values: selectedColumns.reduce(
-              (acc, col) => {
-                acc[col] = `Sample ${col} value`;
-                return acc;
-              },
-              {} as Record<string, string>
-            ),
-            duplicate_group: 0,
-          },
-          {
-            row_index: 5,
-            values: selectedColumns.reduce(
-              (acc, col) => {
-                acc[col] = `Another ${col} value`;
-                return acc;
-              },
-              {} as Record<string, string>
-            ),
-            duplicate_group: 1,
-          },
-          {
-            row_index: 8,
-            values: selectedColumns.reduce(
-              (acc, col) => {
-                acc[col] = `Another ${col} value`;
-                return acc;
-              },
-              {} as Record<string, string>
-            ),
-            duplicate_group: 1,
-          },
-        ],
-        total_duplicates: 4,
-        duplicate_groups: 2,
-        affected_rows: [1, 3, 5, 8],
-      };
-
-      // TODO: Replace with actual API call
-      // const response = await fetch('/api/find-duplicates', {
-      //   method: 'POST',
-      //   headers: {
-      //     'Content-Type': 'application/json',
-      //   },
-      //   body: JSON.stringify({ request: requestData }),
-      // });
-      // const data = await response.json();
-
-      // Using mock response for now
-      await new Promise(resolve => setTimeout(resolve, 500)); // Simulate API delay
-      const response = mockResponse;
-
+      const response = await findDatasetDuplicates(
+        datasetId,
+        {
+          columns: selectedColumns,
+          match_case: matchCase,
+          first_case_only: firstCaseOnly,
+        },
+        token
+      );
       setResults(response);
     } catch (err) {
       let errorMessage = 'An unknown error occurred';
@@ -161,11 +99,11 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
     }
   };
 
-  const isFileLoaded = Boolean(activeTab?.data?.filePath && activeTab?.data?.initialData);
+  const isFileLoaded = Boolean(datasetId && activeTab?.data?.initialData);
 
   return (
     <Dialog>
-      {children}
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Find Duplicate Cases</DialogTitle>

@@ -1,60 +1,65 @@
 import { NextResponse, NextRequest } from 'next/server';
 
-function decodeJWT(token: string) {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch (error) {
-    return null;
-  }
+/** Public routes that never require authentication. */
+export const PUBLIC_PATHS = new Set([
+  '/',
+  '/login',
+  '/register',
+  '/features',
+  '/pricing',
+  '/enterprise',
+  '/download',
+  '/visualiser',
+]);
+
+function isPublicPath(pathname: string): boolean {
+  if (PUBLIC_PATHS.has(pathname)) return true;
+  if (pathname.startsWith('/_next')) return true;
+  if (pathname.startsWith('/api')) return true;
+  if (/\.(ico|png|jpg|jpeg|svg|webp|gif|txt|xml)$/i.test(pathname)) return true;
+  return false;
 }
 
-export function proxy(request: NextRequest) {
-  // Skip authentication for tests
-  const userAgent = request.headers.get('user-agent') || '';
-  const isTest =
-    userAgent.includes('playwright') ||
-    userAgent.includes('test') ||
-    process.env.NODE_ENV === 'test' ||
-    request.headers.get('x-test-mode') === 'true';
+function shouldBypassAuth(request: NextRequest): boolean {
+  if (process.env.NODE_ENV === 'production') return false;
+  return process.env.E2E_AUTH_BYPASS === 'true';
+}
 
-  if (isTest) {
+export function validateStytchSession(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+
+  if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
 
-  // Get Stytch session from cookies
+  if (shouldBypassAuth(request)) {
+    return NextResponse.next();
+  }
+
+  // Opaque session token is the long-lived credential; JWT is short-lived and refreshed client-side.
   const sessionToken = request.cookies.get('stytch_session_token')?.value;
-  const sessionJwt = request.cookies.get('stytch_session_jwt')?.value;
 
-  // Check if user is authenticated
   if (!sessionToken) {
-    // Redirect to login if no session
-    return NextResponse.redirect(new URL('/login', request.url));
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('returnTo', pathname + request.nextUrl.search);
+    return NextResponse.redirect(loginUrl);
   }
 
-  // Verify token validity (basic check) - use JWT if available
-  if (sessionJwt) {
-    const decodedToken = decodeJWT(sessionJwt);
-    if (!decodedToken || !decodedToken.exp || decodedToken.exp < Date.now() / 1000) {
-      // Token expired or invalid, redirect to login
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-  }
-
-  // User is authenticated, allow request to proceed
   return NextResponse.next();
+}
+
+export function proxy(request: NextRequest) {
+  return validateStytchSession(request);
 }
 
 export const config = {
   matcher: [
-    // Apply to all routes except auth-related ones and static assets
-    '/((?!login|register|api|_next/static|_next/image|favicon.ico|tensr_logo_light.png|tensr_logo_dark.png|tensr_icon_light.png|tensr_icon_dark.png).*)',
+    '/dashboard/:path*',
+    '/workspace/:path*',
+    '/settings/:path*',
+    '/plugins/:path*',
+    '/creator/:path*',
+    '/project/:path*',
+    '/subscription',
   ],
 };

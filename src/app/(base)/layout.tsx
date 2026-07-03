@@ -10,7 +10,13 @@ export default function BaseLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-[60vh] w-full items-center justify-center">
+          <Loading />
+        </div>
+      }
+    >
       <SharedLayout>{children}</SharedLayout>
     </Suspense>
   );

@@ -9,12 +9,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
-      url: 'https://www.tensr.xyz/documentation',
-      lastModified: new Date(),
-      changeFrequency: 'weekly',
-      priority: 0.8,
-    },
-    {
       url: 'https://www.tensr.xyz/download',
       lastModified: new Date(),
       changeFrequency: 'weekly',
@@ -33,19 +27,19 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
-      url: 'https://www.tensr.xyz/settings/account',
+      url: 'https://www.tensr.xyz/enterprise',
       lastModified: new Date(),
       changeFrequency: 'monthly',
-      priority: 0.5,
+      priority: 0.8,
+    },
+    {
+      url: 'https://www.tensr.xyz/visualiser',
+      lastModified: new Date(),
+      changeFrequency: 'monthly',
+      priority: 0.7,
     },
     {
       url: 'https://www.tensr.xyz/settings/billing',
-      lastModified: new Date(),
-      changeFrequency: 'monthly',
-      priority: 0.5,
-    },
-    {
-      url: 'https://www.tensr.xyz/settings/plugins',
       lastModified: new Date(),
       changeFrequency: 'monthly',
       priority: 0.5,

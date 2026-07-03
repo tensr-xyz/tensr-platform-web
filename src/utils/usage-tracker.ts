@@ -1,6 +1,11 @@
 // Usage tracking utility for comprehensive user activity monitoring
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { handleUnauthorizedResponse } from '@/lib/session-expired';
+
+const USAGE_TRACKING_DISABLED =
+  process.env.NEXT_PUBLIC_DISABLE_USAGE_TRACKING === '1' ||
+  process.env.NEXT_PUBLIC_DISABLE_USAGE_TRACKING === 'true';
 
 interface UsageEvent {
   operationType: string;
@@ -24,16 +29,67 @@ interface QueuedEvent extends UsageEvent {
   timestamp: number;
 }
 
+/** Coerce to integer for tensr-api (Pydantic rejects JSON floats for int fields). */
+function coerceUsageInt(value: unknown): number | undefined {
+  if (value == null || value === '') return undefined;
+  if (typeof value === 'number' && Number.isFinite(value)) return Math.round(value);
+  if (typeof value === 'string' && value.trim() !== '') {
+    const n = Number(value);
+    if (Number.isFinite(n)) return Math.round(n);
+  }
+  return undefined;
+}
+
+function sanitizeUsageMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(metadata)) {
+    if (value === undefined) continue;
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      out[key] = Math.round(value);
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
+/** Payload accepted by tensr-api POST /usage/track (strip extras, coerce ints). */
+export function toUsageTrackPayload(event: QueuedEvent): Record<string, unknown> {
+  const metadata: Record<string, unknown> = sanitizeUsageMetadata({ ...(event.metadata ?? {}) });
+  if (event.apiEndpoint) metadata.endpoint = event.apiEndpoint;
+  if (event.httpMethod) metadata.method = event.httpMethod;
+  if (event.featureName) metadata.feature = event.featureName;
+  if (event.requestSize != null) metadata.requestSize = coerceUsageInt(event.requestSize);
+  if (event.responseSize != null) metadata.responseSize = coerceUsageInt(event.responseSize);
+
+  const dataProcessed = coerceUsageInt(event.dataProcessed);
+  const executionTime = coerceUsageInt(event.executionTime);
+
+  return {
+    operationType: String(event.operationType || 'unknown').slice(0, 120),
+    ...(dataProcessed != null ? { dataProcessed } : {}),
+    ...(executionTime != null ? { executionTime } : {}),
+    ...(Object.keys(metadata).length ? { metadata } : {}),
+    ...(event.source ? { source: event.source } : {}),
+  };
+}
+
 class UsageTracker {
   private eventQueue: QueuedEvent[] = [];
   private batchSize: number = 10;
   private flushInterval: number = 5000; // 5 seconds
   private flushTimer: NodeJS.Timeout | null = null;
   private getToken: (() => string | null) | null = null;
+  /** Avoid overlapping flushes (interval + batch trigger + await re-entrancy). */
+  private flushInProgress = false;
+  private flushAgain = false;
+  private readonly maxQueue = 80;
 
   constructor(getTokenFn?: () => string | null) {
     this.getToken = getTokenFn || null;
-    this.startAutoFlush();
+    if (!USAGE_TRACKING_DISABLED) {
+      this.startAutoFlush();
+    }
   }
 
   /**
@@ -170,14 +226,20 @@ class UsageTracker {
    * Queue an event for batch processing
    */
   private queueEvent(event: UsageEvent) {
+    if (USAGE_TRACKING_DISABLED) {
+      return;
+    }
     this.eventQueue.push({
       ...event,
       timestamp: Date.now(),
     });
+    while (this.eventQueue.length > this.maxQueue) {
+      this.eventQueue.shift();
+    }
 
     // Flush if queue reaches batch size
     if (this.eventQueue.length >= this.batchSize) {
-      this.flush();
+      void this.flush();
     }
   }
 
@@ -185,41 +247,65 @@ class UsageTracker {
    * Flush queued events to the API
    */
   async flush(): Promise<void> {
-    if (this.eventQueue.length === 0) return;
-
-    const eventsToSend = [...this.eventQueue];
-    this.eventQueue = [];
-
-    const token = this.getToken?.();
-    if (!token) {
-      console.warn('UsageTracker: No token available, events will be lost');
+    if (this.eventQueue.length === 0 || USAGE_TRACKING_DISABLED) {
       return;
     }
+    if (this.flushInProgress) {
+      this.flushAgain = true;
+      return;
+    }
+    this.flushInProgress = true;
 
     try {
-      // Send events in parallel
-      await Promise.all(
-        eventsToSend.map(event =>
-          fetch(`${API_BASE_URL}/usage/track`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(event),
-          }).catch(err => {
-            console.error('Failed to track usage event:', err);
-            // Re-queue failed events (with limit to prevent infinite growth)
-            if (this.eventQueue.length < 100) {
-              this.eventQueue.push(event);
+      const token = this.getToken?.();
+      if (!token) {
+        this.eventQueue = [];
+        console.warn('UsageTracker: No token available, events will be lost');
+        return;
+      }
+
+      while (this.eventQueue.length > 0) {
+        const eventsToSend = this.eventQueue.splice(0, this.batchSize);
+        for (const event of eventsToSend) {
+          try {
+            const res = await fetch(tensrApiUrl('/usage/track'), {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(toUsageTrackPayload(event)),
+            });
+            if (handleUnauthorizedResponse(res)) {
+              return;
             }
-          })
-        )
-      );
+            // tensr-api and many local backends omit usage ingestion
+            if (res.status === 404 || res.status === 405) {
+              continue;
+            }
+            // Never re-queue 4xx: invalid payload (422) would spin forever and freeze the tab.
+            if (!res.ok && res.status >= 400 && res.status < 500) {
+              continue;
+            }
+            if (!res.ok) {
+              // 5xx: drop (avoid storms); sampling can be re-added with bounded retry if needed.
+              continue;
+            }
+          } catch {
+            // Network failure: drop this event to avoid unbounded growth / tight loops.
+            continue;
+          }
+        }
+      }
     } catch (error) {
       console.error('Error flushing usage events:', error);
-      // Re-queue events on error
-      this.eventQueue.unshift(...eventsToSend);
+    } finally {
+      this.flushInProgress = false;
+      const again = this.flushAgain;
+      this.flushAgain = false;
+      if (again && this.eventQueue.length > 0) {
+        void this.flush();
+      }
     }
   }
 
@@ -227,11 +313,14 @@ class UsageTracker {
    * Start automatic flushing at intervals
    */
   private startAutoFlush() {
+    if (USAGE_TRACKING_DISABLED) {
+      return;
+    }
     if (this.flushTimer) {
       clearInterval(this.flushTimer);
     }
     this.flushTimer = setInterval(() => {
-      this.flush();
+      void this.flush();
     }, this.flushInterval);
   }
 

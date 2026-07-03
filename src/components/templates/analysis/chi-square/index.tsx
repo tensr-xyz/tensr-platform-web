@@ -14,9 +14,8 @@ import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
 import useAuth from '@/hooks/api/use-auth';
-
-// API base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
+import { adaptChiSquareResults, runDatasetAnalysis } from '@/lib/workspace-analysis';
+import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 
 interface ChiSquareProps {
   children: ReactNode;
@@ -109,28 +108,20 @@ export const ChiSquare = ({ children }: ChiSquareProps) => {
       setIsLoading(true);
       setError(null);
 
-      const chiSquareRequest: ChiSquareRequest = {
-        variables: selectedVariables,
-        data: data,
-      };
-
-      // Make the API call to the backend
-      const response = await fetch(`${API_BASE_URL}/api/statistics/perform-chi-square-test`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(chiSquareRequest),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(errorText || 'Failed to calculate chi-square test');
+      if (selectedVariables.length !== 2) {
+        throw new Error('Select exactly two categorical variables.');
       }
 
-      const result: ChiSquareResponse = await response.json();
-      setResults(result.results);
+      const datasetId = getDatasetIdFromTab(activeDataTab);
+      if (!datasetId) {
+        throw new Error(WORKSPACE_DATASET_REQUIRED);
+      }
+
+      const envelope = await runDatasetAnalysis(datasetId, 'chi_square', {
+        column_a: selectedVariables[0],
+        column_b: selectedVariables[1],
+      });
+      setResults(adaptChiSquareResults(envelope) as ChiSquareResult);
       setActiveTab('results');
     } catch (error) {
       console.error('Failed to calculate chi-square test:', error);

@@ -5,6 +5,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogTrigger,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
@@ -21,11 +22,12 @@ import { useTabsStore } from '@/stores/tabs-store';
 import { Loader2 as Loader } from 'lucide-react';
 import { ColumnSummary } from '@/types/file';
 import useAuth from '@/hooks/api/use-auth';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+
+const API_BASE_URL = getTensrApiBaseUrl();
 
 type ShiftDirection = 'previous' | 'next';
 type MissingValueHandling = 'sysmis' | 'value' | 'preserve';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
 
 interface ShiftValuesRequest {
   path: string;
@@ -207,7 +209,7 @@ export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
 
   return (
     <Dialog>
-      {children}
+      <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
           <DialogTitle>Shift Values</DialogTitle>

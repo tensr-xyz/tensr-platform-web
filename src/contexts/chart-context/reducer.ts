@@ -46,6 +46,18 @@ export default function reducer(state: StateProps, action: ActionProps): StatePr
         activeSuggestion: action.payload,
       };
     }
+    case Actions.SET_COLOR_AXIS: {
+      return {
+        ...state,
+        colorAxis: action.payload,
+      };
+    }
+    case Actions.SET_SIZE_AXIS: {
+      return {
+        ...state,
+        sizeAxis: action.payload,
+      };
+    }
     default: {
       throw new Error('Unhandled action type');
     }

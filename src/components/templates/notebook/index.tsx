@@ -1,16 +1,14 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { useNotebookWorkspaceStore } from '@/stores/notebook-workspace-store';
+import { cn } from '@/utils';
 import Editor from '@monaco-editor/react';
-import { Play, Plus, StopCircle as CircleStop, FileText } from 'lucide-react';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/atoms/select';
+import { Play, StopCircle as CircleStop, FileText } from 'lucide-react';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useTheme } from '@/contexts/theme-context';
 import MarkdownViewer from '@/components/organisms/markdown-viewer';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
+import { apiClient } from '@/lib/api-client';
 
 interface Cell {
   id: number;
@@ -128,11 +126,11 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
         className={`relative group ${isSelected ? 'bg-background' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
         onClick={() => onSelect(cell.id)}
       >
-        <div className="absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center text-gray-500 dark:text-gray-400 select-none text-xs">
-          <FileText className="w-4 h-4" />
+        <div className="absolute left-0 top-0 bottom-0 flex w-11 shrink-0 items-start justify-end border-r border-border bg-muted/25 pt-2 pr-1.5">
+          <FileText className="size-3.5 text-muted-foreground/70" aria-hidden />
         </div>
 
-        <div className="ml-12 border-l border-border group-hover:border-l-2 group-hover:border-accent pl-2 pr-10">
+        <div className="ml-11 border-l border-border/80 pl-2 pr-10 group-hover:border-primary/30">
           {isEditing || !cell.content.trim() ? (
             <div
               className="w-full"
@@ -198,11 +196,19 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
       className={`relative group ${isSelected ? 'bg-background' : 'hover:bg-gray-50 dark:hover:bg-gray-800'}`}
       onClick={() => onSelect(cell.id)}
     >
-      <div className="absolute left-0 top-0 bottom-0 w-12 flex items-center justify-center text-gray-500 dark:text-gray-400 select-none text-xs">
-        {`[${cell.executionCount !== null ? cell.executionCount : ' '}]:`}
+      <div
+        className={cn(
+          'absolute left-0 top-0 bottom-0 flex w-11 shrink-0 flex-col items-end justify-start border-r border-border bg-muted/25 pt-2 pr-2 font-mono text-[11px] tabular-nums leading-none',
+          cell.executionCount !== null ? 'text-muted-foreground' : 'text-muted-foreground/40'
+        )}
+        aria-label={
+          cell.executionCount !== null ? `Execution ${cell.executionCount}` : 'Not executed'
+        }
+      >
+        <span>[{cell.executionCount !== null ? cell.executionCount : ' '}]</span>
       </div>
 
-      <div className="ml-12 border-l border-border group-hover:border-l-2 group-hover:border-accent pl-2 pr-10">
+      <div className="ml-11 border-l border-border/80 pl-2 pr-10 group-hover:border-primary/30">
         <div
           className="w-full"
           style={{
@@ -304,8 +310,7 @@ export const Notebook: React.FC = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const [language, setLanguage] = useState<'python' | 'r'>('python');
 
-  // API base URL
-  const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
+  const API_BASE_URL = getTensrApiBaseUrl();
 
   const generateSetupCode = (lang: 'python' | 'r'): string => {
     if (!activeTab?.data?.initialData) return '';
@@ -313,6 +318,23 @@ export const Notebook: React.FC = () => {
     const data = activeTab.data.initialData;
 
     if (lang === 'python') {
+      // When a dataset_id is available the backend already loads df into the
+      // execution namespace — skip inlining to avoid the 50k char API limit.
+      if (getDatasetIdFromTab(activeTab)) {
+        return `import pandas as pd
+import matplotlib.pyplot as plt
+import base64
+from io import BytesIO
+
+# df is pre-loaded by the backend from the active dataset`;
+      }
+
+      // No dataset_id — inline the data, but cap at 200 rows so the request
+      // body stays well under the API's 50 000-character limit.
+      const MAX_INLINE_ROWS = 200;
+      const inlineData = Array.isArray(data) ? data.slice(0, MAX_INLINE_ROWS) : data;
+      const truncated = Array.isArray(data) && data.length > MAX_INLINE_ROWS;
+
       return `import pandas as pd
 import json
 import io
@@ -321,8 +343,8 @@ import base64
 from io import BytesIO
 
 # Create DataFrame from the tab's data
-data_dict = ${JSON.stringify(data)}
-df = pd.DataFrame(data_dict)
+data_dict = ${JSON.stringify(inlineData)}
+df = pd.DataFrame(data_dict)${truncated ? `\n# Note: showing first ${MAX_INLINE_ROWS} of ${data.length} rows` : ''}
 
 # Note: The backend already sets up __output__ capture system`;
     } else {
@@ -390,27 +412,15 @@ names(df) <- make.names(names(df))`;
 
   // Remove mockExecuteCode and replace with real API call
   const executeCode = async (code: string, language: 'python' | 'r'): Promise<ExecutionResult> => {
-    const endpoint =
-      language === 'python'
-        ? `${API_BASE_URL}/api/execute/python`
-        : `${API_BASE_URL}/api/execute/r`;
     try {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ code }),
-      });
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          stdout: null,
-          output: null,
-          error: errorText || 'Failed to execute code',
-        };
+      if (language === 'r') {
+        return apiClient.execute.r({ code });
       }
-      return await response.json();
+      const datasetId = getDatasetIdFromTab(activeTab);
+      return apiClient.execute.python({
+        code,
+        dataset_id: datasetId,
+      });
     } catch (err) {
       return {
         stdout: null,
@@ -560,63 +570,36 @@ names(df) <- make.names(names(df))`;
     }
   }, [activeTab?.id, language]);
 
-  return (
-    <div className="flex flex-col h-full overflow-hidden bg-background">
-      <div className="flex items-center px-1 h-8 border-b border-border bg-background flex-shrink-0">
-        <div className="flex items-center gap-1">
-          <button
-            className="p-1 hover:bg-gray-200 rounded text-xs"
-            onClick={executeAllCells}
-            disabled={isExecuting || !activeTab?.data?.initialData}
-          >
-            Run All
-          </button>
-          <button
-            className="p-1 hover:bg-gray-200 rounded"
-            onClick={() => selectedCell && executeCell(selectedCell)}
-            disabled={isExecuting || !activeTab?.data?.initialData}
-          >
-            <Play className="w-3 h-3" />
-          </button>
-          <Select value={language} onValueChange={value => setLanguage(value as 'python' | 'r')}>
-            <SelectTrigger className="h-6 text-xs w-24">
-              <SelectValue placeholder="Language" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="python" className="text-xs">
-                Python
-              </SelectItem>
-              <SelectItem value="r" className="text-xs">
-                R
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={newCellType}
-            onValueChange={value => setNewCellType(value as 'code' | 'markdown')}
-          >
-            <SelectTrigger className="h-6 text-xs w-20">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="code" className="text-xs">
-                Code
-              </SelectItem>
-              <SelectItem value="markdown" className="text-xs">
-                Markdown
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <button
-            className="p-1 hover:bg-gray-200 rounded"
-            onClick={addCell}
-            title={`Add ${newCellType} cell`}
-          >
-            <Plus className="w-3 h-3" />
-          </button>
-        </div>
-      </div>
+  const canRun = !!activeTab?.data?.initialData;
+  const selectedCellRef = useRef(selectedCell);
+  selectedCellRef.current = selectedCell;
+  const handlersRef = useRef({ executeAllCells, executeCell, addCell });
+  handlersRef.current = { executeAllCells, executeCell, addCell };
 
+  const setControls = useNotebookWorkspaceStore(s => s.setControls);
+  const resetNotebookControls = useNotebookWorkspaceStore(s => s.reset);
+
+  useEffect(() => {
+    setControls({
+      language,
+      newCellType,
+      isExecuting,
+      canRun,
+      runAll: () => handlersRef.current.executeAllCells(),
+      runSelected: () => {
+        const id = selectedCellRef.current;
+        if (id) handlersRef.current.executeCell(id);
+      },
+      addCell: () => handlersRef.current.addCell(),
+      setLanguage,
+      setNewCellType,
+    });
+  }, [language, newCellType, isExecuting, canRun, setControls]);
+
+  useEffect(() => () => resetNotebookControls(), [resetNotebookControls]);
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden bg-background">
       <div className="flex-1 overflow-y-auto">
         <div className="min-h-full">
           {cells.map(cell => (

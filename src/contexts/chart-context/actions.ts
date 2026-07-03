@@ -5,12 +5,12 @@ export const setChartType = (payload: ChartType) => ({
   type: Actions.SET_TYPE,
 });
 
-export const setXAxis = (payload: string) => ({
+export const setXAxis = (payload: string | null) => ({
   payload,
   type: Actions.SET_X_AXIS,
 });
 
-export const setYAxis = (payload: string) => ({
+export const setYAxis = (payload: string | null) => ({
   payload,
   type: Actions.SET_Y_AXIS,
 });
@@ -33,4 +33,14 @@ export const updateSeries = (id: string, updates: Partial<ChartSeries>) => ({
 export const setSuggestion = (payload: string | null) => ({
   payload,
   type: Actions.SET_SUGGESTION,
+});
+
+export const setColorAxis = (payload: string | null) => ({
+  payload,
+  type: Actions.SET_COLOR_AXIS,
+});
+
+export const setSizeAxis = (payload: string | null) => ({
+  payload,
+  type: Actions.SET_SIZE_AXIS,
 });

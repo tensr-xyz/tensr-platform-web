@@ -13,11 +13,11 @@ const TerminalComponent = dynamic(() => import('./terminal-component'), {
       <div className="text-sm text-muted-foreground">Loading terminal...</div>
     </div>
   ),
-}) as React.ComponentType<{ onCommand?: (command: string) => void }>;
+}) as React.ComponentType<{ onCommand?: (command: string) => string | null }>;
 
 interface TerminalProps {
   className?: string;
-  onCommand?: (command: string) => void;
+  onCommand?: (command: string) => string | null;
 }
 
 const Terminal: React.FC<TerminalProps> = ({ className, onCommand }) => {

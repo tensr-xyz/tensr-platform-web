@@ -26,6 +26,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import * as React from 'react';
 import { useState } from 'react';
 import Image from 'next/image';
+import { NotificationsMenu } from '@/components/molecules/notifications-menu';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/atoms/avatar';
 import { Button } from '@/components/atoms/button';
@@ -261,7 +262,7 @@ function ControlCenter() {
                 </DropdownMenuLabel>
 
                 {canManageOrganization() && (
-                  <DropdownMenuItem onClick={() => router.push('/settings/organization')}>
+                  <DropdownMenuItem onClick={() => router.push('/settings/organisation')}>
                     <Settings className="mr-2 h-4 w-4" />
                     Organization Settings
                   </DropdownMenuItem>
@@ -382,7 +383,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar collapsible="icon" {...props}>
       <SidebarHeader>
         {/* <div className="flex items-center justify-center p-4">
-          <Link href="/" className="flex">
+          <Link href="/dashboard" className="flex">
             <Button variant="link" size="sm">
               <Image
                 src="/tensr_logo_light.png"
@@ -404,43 +405,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <SidebarGroupLabel>Actions</SidebarGroupLabel>
           <SidebarMenu>
             <SidebarMenuItem>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
+              <NotificationsMenu
+                align="end"
+                trigger={
                   <SidebarMenuButton className="cursor-pointer">
                     <Bell className="size-4" />
                     <span className="text-sm">Notifications</span>
                   </SidebarMenuButton>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {/* Mock Notifications */}
-                  <DropdownMenuItem className="flex flex-col items-start gap-1">
-                    <p className="text-sm font-medium leading-none">Goal Due Soon</p>
-                    <p className="text-xs leading-snug text-muted-foreground">
-                      Your goal Finish header is due tomorrow.
-                    </p>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex flex-col items-start gap-1">
-                    <p className="text-sm font-medium leading-none">New Comment</p>
-                    <p className="text-xs leading-snug text-muted-foreground">
-                      New comment on ticket #101.
-                    </p>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex flex-col items-start gap-1">
-                    <p className="text-sm font-medium leading-none">Workspace Invitation</p>
-                    <p className="text-xs leading-snug text-muted-foreground">
-                      Oliver Darby invited you to a workspace.
-                    </p>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="flex flex-col items-start gap-1">
-                    <p className="text-sm font-medium leading-none">Report Ready</p>
-                    <p className="text-xs leading-snug text-muted-foreground">
-                      Weekly progress report is ready.
-                    </p>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                }
+              />
             </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild className="cursor-pointer">

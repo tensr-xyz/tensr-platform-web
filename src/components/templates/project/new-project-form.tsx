@@ -204,7 +204,7 @@ export default function NewProjectForm() {
           />
 
           <div className="pt-4 flex justify-between">
-            <Button variant="outline" onClick={() => router.push('/')}>
+            <Button variant="outline" onClick={() => router.push('/dashboard')}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>

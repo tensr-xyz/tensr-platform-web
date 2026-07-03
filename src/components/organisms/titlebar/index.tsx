@@ -1,31 +1,24 @@
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
+import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { ProjectMenu } from '@/components/organisms/project-menu';
 import { ScrollArea, ScrollBar } from '@/components/atoms/scroll-area';
-import { Tabs, TabsList, TabsTrigger } from '@/components/molecules/tabs';
+import { Tabs } from '@/components/molecules/tabs';
 import { useTabsStore, Tab } from '@/stores/tabs-store';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/molecules/dropdown';
 import { Button } from '@/components/atoms/button';
-import { MoreVertical as EllipsisVertical } from 'lucide-react';
-import { Home } from 'lucide-react';
+import { Home, Search, Sparkles, X } from 'lucide-react';
+import { cn } from '@/utils';
+import { AnalysisCommandPalette } from '@/components/organisms/analysis-command-palette';
+import { useAnalysisPaletteShortcut } from '@/hooks/ui/use-analysis-palette-shortcut';
 import { useRouter, usePathname } from 'next/navigation';
-import { ViewType } from '@/contexts/project-context/types';
+import { ViewType } from '@/stores/tabs-store';
 import { Users } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import CollaborationPanel from '@/components/organisms/collaboration-panel';
 import { useProjectStore } from '@/stores/project-store';
 
-// Define the SpreadsheetTab interface here to match the Tab interface from your context
 interface SpreadsheetTab extends Tab {
   type: ViewType.SPREADSHEET;
-  data: {
-    initialData: Record<string, any>[];
-    [key: string]: any;
-  };
+  data: NonNullable<Tab['data']>;
 }
 
 interface TitlebarProps {
@@ -35,27 +28,18 @@ interface TitlebarProps {
   onTabClose?: (id: string) => void;
 }
 
-// Fixed type predicate to correctly identify SpreadsheetTab
 function isSpreadsheetTab(tab: Tab): tab is SpreadsheetTab {
-  return (
-    tab.type === ViewType.SPREADSHEET &&
-    typeof tab.data === 'object' &&
-    tab.data !== null &&
-    Array.isArray(tab.data.initialData)
-  );
+  return tab.type === ViewType.SPREADSHEET && tab.data != null;
 }
 
-// Extract fileId from file path
 function extractFileId(filePath?: string): string | null {
   if (!filePath) return null;
 
-  // Check if it's a project ID (UUID) - if so, return null to avoid calling file API
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (uuidRegex.test(filePath)) {
     return null;
   }
 
-  // If the path contains slashes, it's a full path
   if (filePath.includes('/')) {
     const parts = filePath.split('/');
     if (parts.length >= 3) {
@@ -63,13 +47,10 @@ function extractFileId(filePath?: string): string | null {
     }
   }
 
-  // Otherwise, assume it's a direct fileId
   return filePath;
 }
 
-// Extract project ID from tab
 function extractProjectId(tab: Tab): string | null {
-  // Check if tab.path is a project ID (UUID)
   if (tab.path) {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
     if (uuidRegex.test(tab.path)) {
@@ -77,21 +58,16 @@ function extractProjectId(tab: Tab): string | null {
     }
   }
 
-  // Check tab.data?.filePath for project path
   if (tab.data?.filePath) {
     const filePath = tab.data.filePath;
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-    // If it's a direct UUID, return it
     if (uuidRegex.test(filePath)) {
       return filePath;
     }
 
-    // If the path contains slashes, extract project ID from path structure
-    // Path format: users/{userId}/{projectId}/... or similar
     if (filePath.includes('/')) {
       const parts = filePath.split('/');
-      // Look for UUID in the path parts
       for (const part of parts) {
         if (uuidRegex.test(part)) {
           return part;
@@ -103,13 +79,11 @@ function extractProjectId(tab: Tab): string | null {
   return null;
 }
 
-// Utility Types
 type DebouncedFunction<T extends (...args: any[]) => any> = {
   (...args: Parameters<T>): void;
   cancel: () => void;
 };
 
-// Debounce utility
 function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): DebouncedFunction<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -132,14 +106,37 @@ function debounce<T extends (...args: any[]) => any>(fn: T, delay: number): Debo
   return debounced;
 }
 
-const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: TitlebarProps) => {
-  const { updateTab, setActiveTab, closeAllTabs } = useTabsStore();
+function tabKindLabel(type: string): string {
+  switch (type) {
+    case ViewType.SPREADSHEET:
+      return 'She';
+    case ViewType.ANALYSIS_REPORT:
+      return 'Ana';
+    case ViewType.NOTEBOOK:
+      return 'Ntb';
+    case ViewType.MARKDOWN:
+      return 'Md';
+    default:
+      return type.slice(0, 3).replace(/_/g, '');
+  }
+}
+
+const Titlebar = ({
+  onToggleSidebar: _onToggleSidebar,
+  tabs = [],
+  activeTab,
+  onTabClose,
+}: TitlebarProps) => {
+  const { updateTab, setActiveTab } = useTabsStore();
   const { currentProject } = useProjectStore();
   const router = useRouter();
   const pathname = usePathname();
   const isHomePage = pathname === '/';
+  const analysisPaletteOpen = useAnalysisSetupStore(s => s.commandPaletteOpen);
+  const setAnalysisPaletteOpen = useAnalysisSetupStore(s => s.setCommandPaletteOpen);
 
-  // Extract fileId from activeTab for CollaborationPanel
+  useAnalysisPaletteShortcut();
+
   const currentFileId =
     activeTab && isSpreadsheetTab(activeTab)
       ? extractFileId(activeTab.data?.filePath)
@@ -176,148 +173,177 @@ const Titlebar = ({ onToggleSidebar, tabs = [], activeTab, onTabClose }: Titleba
     );
   }, [tabs, createDebouncedHandler]);
 
-  const handleTabChange = (value: string) => {
-    console.log('handleTabChange called:', { value, isHomePage, tabs: tabs.length });
+  useEffect(() => {
+    return () => {
+      Object.values(debouncedHandlers).forEach(handler => handler.cancel());
+    };
+  }, [debouncedHandlers]);
 
-    // If on home page, navigate to workspace with the selected tab
+  const handleTabChange = (value: string) => {
     if (isHomePage) {
       const selectedTab = tabs.find(tab => tab.id === value);
-      console.log('Selected tab:', selectedTab);
 
       if (selectedTab) {
-        // Set the tab as active first (this ensures context is preserved)
-        // Zustand updates are synchronous, so this will be set immediately
         setActiveTab(value);
 
-        // Extract project ID from the tab
         const projectId = extractProjectId(selectedTab);
-        console.log('Extracted project ID:', projectId);
 
         if (projectId) {
-          // Navigate to workspace with the project ID
-          // The workspace will automatically load the active tab from the store
-          console.log('Navigating to:', `/workspace/project/${projectId}`);
           router.push(`/workspace/project/${projectId}`);
-        } else {
-          // If we can't extract project ID, try to use the tab's path as fallback
-          // This handles edge cases where tab might not have a clear project ID
-          if (selectedTab.path) {
-            // Try using the path directly if it looks like a project ID
-            const uuidRegex =
-              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-            if (uuidRegex.test(selectedTab.path)) {
-              console.log('Using tab.path as project ID:', selectedTab.path);
-              router.push(`/workspace/project/${selectedTab.path}`);
-            } else {
-              console.warn('Could not extract valid project ID from tab:', selectedTab);
-            }
-          } else {
-            console.warn('Tab has no project ID or path:', selectedTab);
+        } else if (selectedTab.path) {
+          const uuidRegex =
+            /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+          if (uuidRegex.test(selectedTab.path)) {
+            router.push(`/workspace/project/${selectedTab.path}`);
           }
         }
-      } else {
-        console.warn('Tab not found:', value);
       }
     } else {
-      // On workspace, just switch the active tab
       setActiveTab(value);
     }
   };
 
-  // Safe tab closing function that checks if onTabClose exists
   const handleTabClose = (id: string) => {
-    if (onTabClose) {
-      onTabClose(id);
-    }
+    onTabClose?.(id);
   };
 
-  const handleCloseAllTabs = useCallback(() => {
-    Object.values(debouncedHandlers).forEach(handler => handler.cancel());
-    closeAllTabs();
-  }, [closeAllTabs, debouncedHandlers]);
-
   return (
-    <div className="h-10 bg-accent border-b border-border flex items-stretch relative">
-      {/* Main titlebar content */}
-      <div className="flex-1 flex justify-between items-center">
-        {/* Left section */}
-        <div className="flex items-center h-full">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => router.push('/')}
-              className="h-10 w-10 bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer"
-              aria-label="Home"
-            >
-              <Home className="h-4 w-4" />
-            </button>
-            <ProjectMenu />
-          </div>
+    <>
+      <AnalysisCommandPalette open={analysisPaletteOpen} onOpenChange={setAnalysisPaletteOpen} />
+      <header className="relative flex h-11 min-h-11 w-full shrink-0 items-stretch border-b border-border bg-card">
+        <button
+          type="button"
+          onClick={() => router.push('/dashboard')}
+          className="flex h-11 w-11 shrink-0 items-center justify-center border-r border-border text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+          aria-label="Home"
+        >
+          <Home className="size-4" aria-hidden />
+        </button>
+
+        <div className="flex h-full shrink-0 items-stretch">
+          <ProjectMenu />
         </div>
 
-        {/* Middle section with tabs */}
-        <div className="flex-1 flex items-center overflow-hidden">
-          {tabs && tabs.length > 0 && (
-            <Tabs value={activeTab?.id} onValueChange={handleTabChange} className="flex-1">
-              <ScrollArea className="w-full h-10">
-                <TabsList className="h-10 inline-flex border-none p-0 rounded-none">
-                  {tabs.map(tab => (
-                    <TabsTrigger
-                      key={tab.id}
-                      value={tab.id}
-                      onClose={() => handleTabClose(tab.id)}
-                      isClosable
-                      onClick={e => {
-                        // On home page, handle clicks even if tab is already active
-                        if (isHomePage && tab.id === activeTab?.id) {
-                          e.preventDefault();
-                          handleTabChange(tab.id);
-                        }
-                      }}
-                      className="shrink-0 h-10 rounded-none data-[state=active]:border-b-2 data-[state=active]:border-primary data-[state=active]:mb-0 text-xs"
-                    >
-                      {tab.name}
-                    </TabsTrigger>
-                  ))}
-                </TabsList>
+        <div className="flex min-h-0 min-w-0 flex-1 items-stretch overflow-hidden border-l border-border">
+          {tabs.length > 0 ? (
+            <Tabs
+              value={activeTab?.id}
+              onValueChange={handleTabChange}
+              className="flex min-h-0 min-w-0 flex-1"
+            >
+              <ScrollArea className="h-11 w-full">
+                <div className="flex h-11" role="tablist">
+                  {tabs.map(tab => {
+                    const isActive = activeTab?.id === tab.id;
+                    const isAnalysis = tab.type === ViewType.ANALYSIS_REPORT;
+                    const kind = tabKindLabel(tab.type);
+
+                    return (
+                      <button
+                        key={tab.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={isActive}
+                        onClick={() => handleTabChange(tab.id)}
+                        className={cn(
+                          'group relative flex h-11 min-w-[8.75rem] max-w-[13.75rem] shrink-0 items-center gap-2 border-r border-border px-3.5 text-[13px] font-medium transition-colors',
+                          isActive
+                            ? 'bg-card text-foreground'
+                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                        )}
+                      >
+                        {isActive ? (
+                          <span
+                            className="pointer-events-none absolute inset-x-0 top-0 h-0.5 bg-primary"
+                            aria-hidden
+                          />
+                        ) : null}
+                        {isAnalysis ? (
+                          <span
+                            className="grid size-4 shrink-0 place-items-center rounded bg-primary text-primary-foreground"
+                            title="Analysis output"
+                          >
+                            <Sparkles className="size-2.5" aria-hidden />
+                          </span>
+                        ) : null}
+                        <span
+                          className={cn(
+                            'shrink-0 rounded border px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide',
+                            isAnalysis
+                              ? 'border-primary/20 bg-primary/10 text-primary'
+                              : 'border-border bg-transparent text-muted-foreground'
+                          )}
+                        >
+                          {kind}
+                        </span>
+                        <span className="min-w-0 flex-1 truncate text-left">{tab.name}</span>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          onClick={e => {
+                            e.stopPropagation();
+                            handleTabClose(tab.id);
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleTabClose(tab.id);
+                            }
+                          }}
+                          className={cn(
+                            'grid size-[18px] shrink-0 place-items-center rounded-sm text-muted-foreground transition-opacity hover:bg-muted',
+                            isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                          )}
+                          aria-label={`Close ${tab.name}`}
+                        >
+                          <X className="size-2.5" aria-hidden />
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
                 <ScrollBar orientation="horizontal" />
               </ScrollArea>
             </Tabs>
-          )}
+          ) : null}
         </div>
 
-        {/* Right section */}
-        <div className="flex items-center h-full gap-1">
-          {activeTab && isSpreadsheetTab(activeTab) && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={() => setAnalysisPaletteOpen(true)}
+          className="h-11 shrink-0 gap-1.5 rounded-none border-l border-border px-3 font-normal text-muted-foreground hover:text-foreground"
+          aria-label="Search analyses"
+        >
+          <Search className="size-3.5 shrink-0" aria-hidden />
+          <span className="hidden whitespace-nowrap sm:inline">Search analyses…</span>
+          <span className="pointer-events-none hidden font-mono text-[10px] text-muted-foreground/80 sm:inline">
+            ⌘K
+          </span>
+        </Button>
+
+        {activeTab && isSpreadsheetTab(activeTab) ? (
+          <div className="flex shrink-0 items-stretch border-l border-border">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-10 w-10">
+                <Button variant="ghost" size="icon" className="size-11 shrink-0 rounded-none">
                   <Users className="h-4 w-4" />
                   <span className="sr-only">Toggle User Collaboration</span>
                 </Button>
               </PopoverTrigger>
-              <PopoverContent align="end">
+              <PopoverContent align="end" onOpenAutoFocus={e => e.preventDefault()}>
                 <CollaborationPanel
                   projectId={currentProject?.id || currentFileId || ''}
                   activeTab={activeTab}
                 />
               </PopoverContent>
             </Popover>
-          )}
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <EllipsisVertical />
-                <span className="sr-only">Toggle Menu</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={handleCloseAllTabs}>Close All Tabs</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </div>
-    </div>
+          </div>
+        ) : null}
+      </header>
+    </>
   );
 };
 

@@ -21,9 +21,9 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import useAuth from '@/hooks/api/use-auth';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 
-// API base URL
-const API_BASE_URL = process.env.NEXT_PUBLIC_FARGATE_API_URL;
+const API_BASE_URL = getTensrApiBaseUrl();
 
 interface DataVisualizationProps {
   children: ReactNode;

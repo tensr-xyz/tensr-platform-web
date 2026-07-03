@@ -1,27 +1,19 @@
-import { getSessionToken, getSessionJwt } from '@/utils/auth';
+import { getSessionToken, getSessionJwt, getTensrApiHeaders } from '@/utils/auth';
 import { getUsageTracker } from '@/utils/usage-tracker';
-
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
-const FARGATE_API_URL =
-  process.env.NODE_ENV === 'development'
-    ? 'http://localhost:8080'
-    : process.env.NEXT_PUBLIC_FARGATE_API_URL;
+import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { ApiRequestError } from '@/lib/api-error';
+import { handleUnauthorizedResponse } from '@/lib/session-expired';
 
 // Generic API client with authentication
 class ApiClient {
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {},
-    useFargate: boolean = false
-  ): Promise<T> {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     const token = getSessionJwt() || getSessionToken();
 
     if (!token) {
       throw new Error('No authentication token found');
     }
 
-    const baseUrl = useFargate ? FARGATE_API_URL : API_BASE_URL;
-    const url = `${baseUrl}${endpoint}`;
+    const url = tensrApiUrl(endpoint);
 
     const startTime = performance.now();
     let requestSize = 0;
@@ -56,7 +48,10 @@ class ApiClient {
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`API Error: ${response.status} - ${errorText}`);
+        if (handleUnauthorizedResponse(response)) {
+          throw new ApiRequestError(401, errorText);
+        }
+        throw new ApiRequestError(response.status, errorText);
       }
 
       const duration = performance.now() - startTime;
@@ -72,7 +67,6 @@ class ApiClient {
           dataProcessed: requestSize + responseSize,
           metadata: {
             statusCode: response.status,
-            useFargate,
           },
         });
       } catch (trackingError) {
@@ -93,7 +87,6 @@ class ApiClient {
           responseSize,
           metadata: {
             error: error instanceof Error ? error.message : 'Unknown error',
-            useFargate,
           },
         });
       } catch (trackingError) {
@@ -157,11 +150,69 @@ class ApiClient {
   // Projects API
   projects = {
     list: async () => {
-      const response = await this.request<{ projects: any[] }>('/projects');
-      return response.projects; // Extract the projects array
+      const token = getSessionJwt() || getSessionToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      const headers: HeadersInit = {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      };
+
+      const res = await fetch(tensrApiUrl('/datasets/?scope=all'), { headers });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`API Error: ${res.status} - ${text}`);
+      }
+      const rows = await res.json();
+      if (!Array.isArray(rows)) {
+        return [];
+      }
+      return rows.map((d: Record<string, unknown>) => ({
+        projectId: String(d.dataset_id ?? ''),
+        projectName: String(d.original_filename || 'Dataset'),
+        id: String(d.dataset_id ?? ''),
+        name: String(d.original_filename || 'Dataset'),
+        updatedAt: String(d.updated_at ?? ''),
+        createdAt: String(d.updated_at ?? ''),
+        sourceType: 'folder' as const,
+        size: 0,
+        status: 'ready' as const,
+      }));
     },
 
-    get: (id: string) => this.request<any>(`/projects/${id}`),
+    get: async (id: string) => {
+      const token = getSessionJwt() || getSessionToken();
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      const headers = getTensrApiHeaders({ 'Content-Type': 'application/json' });
+
+      const dsRes = await fetch(tensrApiUrl(`/datasets/${id}/schema`), { headers });
+      if (dsRes.ok) {
+        const schema = await dsRes.json();
+        const label = (schema.original_filename && String(schema.original_filename)) || 'Dataset';
+        return {
+          projectId: id,
+          projectName: label,
+          id,
+          name: label,
+          path: id,
+          sourceType: 'file',
+        };
+      }
+
+      if (dsRes.status === 403) {
+        const errorText = await dsRes.text();
+        throw new Error(`Dataset not accessible with current organization context: ${errorText}`);
+      }
+      if (dsRes.status !== 404) {
+        const errorText = await dsRes.text();
+        throw new Error(`Failed to load dataset: ${dsRes.status} - ${errorText}`);
+      }
+
+      return this.request<any>(`/projects/${id}`);
+    },
 
     create: (data: any) =>
       this.request<any>('/projects/create', {
@@ -279,51 +330,51 @@ class ApiClient {
 
   // Organizations API
   organizations = {
-    list: () => this.request<any[]>('/organizations'),
+    list: () => this.request<any[]>('/api/organizations'),
 
-    get: (id: string) => this.request<any>(`/organizations/${id}`),
+    get: (id: string) => this.request<any>(`/api/organizations/${id}`),
 
     create: (data: any) =>
-      this.request<any>('/organizations', {
+      this.request<any>('/api/organizations', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
     update: (id: string, data: any) =>
-      this.request<any>(`/organizations/${id}`, {
+      this.request<any>(`/api/organizations/${id}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
 
-    delete: (id: string) => this.request<void>(`/organizations/${id}`, { method: 'DELETE' }),
+    delete: (id: string) => this.request<void>(`/api/organizations/${id}`, { method: 'DELETE' }),
 
-    members: (id: string) => this.request<any[]>(`/organizations/${id}/members`),
+    members: (id: string) => this.request<any[]>(`/api/organizations/${id}/members`),
 
     addMember: (id: string, data: any) =>
-      this.request<any>(`/organizations/${id}/members`, {
+      this.request<any>(`/api/organizations/${id}/members`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
     removeMember: (orgId: string, memberId: string) =>
-      this.request<void>(`/organizations/${orgId}/members/${memberId}`, { method: 'DELETE' }),
+      this.request<void>(`/api/organizations/${orgId}/members/${memberId}`, { method: 'DELETE' }),
 
-    teams: (id: string) => this.request<any[]>(`/organizations/${id}/teams`),
+    teams: (id: string) => this.request<any[]>(`/api/organizations/${id}/teams`),
 
     createTeam: (id: string, data: any) =>
-      this.request<any>(`/organizations/${id}/teams`, {
+      this.request<any>(`/api/organizations/${id}/teams`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
     updateTeam: (orgId: string, teamId: string, data: any) =>
-      this.request<any>(`/organizations/${orgId}/teams/${teamId}`, {
+      this.request<any>(`/api/organizations/${orgId}/teams/${teamId}`, {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
 
     deleteTeam: (orgId: string, teamId: string) =>
-      this.request<void>(`/organizations/${orgId}/teams/${teamId}`, { method: 'DELETE' }),
+      this.request<void>(`/api/organizations/${orgId}/teams/${teamId}`, { method: 'DELETE' }),
   };
 
   // Plugins API
@@ -361,456 +412,295 @@ class ApiClient {
   // Statistics API
   statistics = {
     mean: (data: any) =>
-      this.request<any>(
-        '/api/statistics/calculate-means',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/calculate-means', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     ttest: (data: any) =>
-      this.request<any>(
-        '/api/statistics/calculate-one-sample-ttest',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/calculate-one-sample-ttest', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     anova: (data: any) =>
-      this.request<any>(
-        '/api/statistics/calculate-anova',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/calculate-anova', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // New descriptive statistics endpoints
     comprehensiveDescriptives: (data: any) =>
-      this.request<any>(
-        '/api/statistics/calculate-comprehensive-descriptives',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/calculate-comprehensive-descriptives', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     mode: (data: any) =>
-      this.request<any>(
-        '/api/statistics/calculate-mode',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/calculate-mode', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Correlation and regression
     correlation: (data: any) =>
-      this.request<any>(
-        '/api/statistics/calculate-correlation',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/calculate-correlation', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     linearRegression: (data: any) =>
-      this.request<any>(
-        '/api/statistics/perform-linear-regression',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/perform-linear-regression', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Non-parametric tests
     chiSquare: (data: any) =>
-      this.request<any>(
-        '/api/statistics/perform-chi-square-test',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/perform-chi-square-test', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     mannWhitneyU: (data: any) =>
-      this.request<any>(
-        '/api/statistics/perform-mann-whitney-u-test',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/perform-mann-whitney-u-test', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     wilcoxonSignedRank: (data: any) =>
-      this.request<any>(
-        '/api/statistics/perform-wilcoxon-signed-rank-test',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/perform-wilcoxon-signed-rank-test', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     kruskalWallis: (data: any) =>
-      this.request<any>(
-        '/api/statistics/perform-kruskal-wallis-test',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/statistics/perform-kruskal-wallis-test', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Clustering methods
     kmeans: (data: any) =>
-      this.request<any>(
-        '/api/analysis/clustering/kmeans',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/clustering/kmeans', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     hierarchicalClustering: (data: any) =>
-      this.request<any>(
-        '/api/analysis/clustering/hierarchical',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/clustering/hierarchical', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     dbscan: (data: any) =>
-      this.request<any>(
-        '/api/analysis/clustering/dbscan',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/clustering/dbscan', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Time series methods
     arima: (data: any) =>
-      this.request<any>(
-        '/api/analysis/time-series/arima',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/time-series/arima', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     exponentialSmoothing: (data: any) =>
-      this.request<any>(
-        '/api/analysis/time-series/exponential-smoothing',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/time-series/exponential-smoothing', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     seasonalDecomposition: (data: any) =>
-      this.request<any>(
-        '/api/analysis/time-series/seasonal-decomposition',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/time-series/seasonal-decomposition', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Factor analysis
     factorAnalysis: (data: any) =>
-      this.request<any>(
-        '/api/analysis/factor-analysis',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/factor-analysis', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   };
 
   // Analysis API
   analysis = {
     // Factor analysis
     pca: (data: any) =>
-      this.request<any>(
-        '/api/analysis/perform-pca',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/perform-pca', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     efa: (data: any) =>
-      this.request<any>(
-        '/api/analysis/perform-efa',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/perform-efa', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     factorAnalysis: (data: any) =>
-      this.request<any>(
-        '/api/analysis/factor-analysis',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/factor-analysis', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Clustering
     kmeans: (data: any) =>
-      this.request<any>(
-        '/api/analysis/clustering/kmeans',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/clustering/kmeans', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     hierarchicalClustering: (data: any) =>
-      this.request<any>(
-        '/api/analysis/clustering/hierarchical',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/clustering/hierarchical', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     dbscan: (data: any) =>
-      this.request<any>(
-        '/api/analysis/clustering/dbscan',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/clustering/dbscan', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Time series
     arima: (data: any) =>
-      this.request<any>(
-        '/api/analysis/time-series/arima',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/time-series/arima', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     exponentialSmoothing: (data: any) =>
-      this.request<any>(
-        '/api/analysis/time-series/exponential-smoothing',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/time-series/exponential-smoothing', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     seasonalDecomposition: (data: any) =>
-      this.request<any>(
-        '/api/analysis/time-series/seasonal-decomposition',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/time-series/seasonal-decomposition', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Machine learning
     decisionTree: (data: any) =>
-      this.request<any>(
-        '/api/analysis/ml/decision-tree',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/ml/decision-tree', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     randomForest: (data: any) =>
-      this.request<any>(
-        '/api/analysis/ml/random-forest',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/ml/random-forest', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     neuralNetwork: (data: any) =>
-      this.request<any>(
-        '/api/analysis/ml/neural-network',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/ml/neural-network', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     svm: (data: any) =>
-      this.request<any>(
-        '/api/analysis/ml/svm',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/ml/svm', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Model selection
     automatedModelSelection: (data: any) =>
-      this.request<any>(
-        '/api/analysis/model-selection/automated',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/model-selection/automated', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     hyperparameterTuning: (data: any) =>
-      this.request<any>(
-        '/api/analysis/model-selection/hyperparameter-tuning',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/model-selection/hyperparameter-tuning', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // GLM models
     logisticRegression: (data: any) =>
-      this.request<any>(
-        '/api/analysis/glm/logistic',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/glm/logistic', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     poissonRegression: (data: any) =>
-      this.request<any>(
-        '/api/analysis/glm/poisson',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/glm/poisson', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     mixedModel: (data: any) =>
-      this.request<any>(
-        '/api/analysis/glm/mixed-model',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/glm/mixed-model', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Survival analysis
     kaplanMeier: (data: any) =>
-      this.request<any>(
-        '/api/analysis/survival/kaplan-meier',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/survival/kaplan-meier', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     coxRegression: (data: any) =>
-      this.request<any>(
-        '/api/analysis/survival/cox-regression',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/survival/cox-regression', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     logRankTest: (data: any) =>
-      this.request<any>(
-        '/api/analysis/survival/log-rank-test',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/survival/log-rank-test', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     // Structural Equation Modeling
     sem: (data: any) =>
-      this.request<any>(
-        '/api/analysis/sem',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/analysis/sem', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
-    // Regression
-    regression: (data: any) =>
-      this.request<any>(
-        '/analysis/regression',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+    // Regression / ANOVA / correlations (tensr-api datasets analyze)
+    regression: (data: {
+      datasetId: string;
+      dependent: string;
+      predictors: string[];
+      controls?: string[];
+    }) =>
+      this.datasets.analyze.run(data.datasetId, 'linear_regression', {
+        dependent: data.dependent,
+        independents: [...data.predictors, ...(data.controls ?? [])],
+      }),
 
-    anova: (data: any) =>
-      this.request<any>(
-        '/analysis/anova',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+    anova: (data: {
+      datasetId: string;
+      dependent: string;
+      independent?: string;
+      groups?: string[];
+    }) =>
+      this.datasets.analyze.run(data.datasetId, 'anova_oneway', {
+        group_column: data.independent || data.groups?.[0],
+        value_column: data.dependent,
+        post_hoc: 'none',
+      }),
 
-    correlations: (data: any) =>
-      this.request<any>(
-        '/analysis/correlations',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+    correlations: (data: { datasetId: string; variables: string[] }) =>
+      this.datasets.analyze.run(data.datasetId, 'correlation', {
+        columns: data.variables,
+        method: 'pearson',
+      }),
 
-    list: (datasetId: string) => this.request<any[]>(`/datasets/${datasetId}/analyses`),
+    list: (datasetId: string) => this.datasets.analyze.listRuns(datasetId),
 
-    get: (analysisId: string) => this.request<any>(`/analysis/${analysisId}`),
+    get: (runId: string) => this.request<any>(`/datasets/analysis-runs/${runId}`),
 
     // Clustering (structured)
     clustering: {
@@ -885,49 +775,52 @@ class ApiClient {
   // Transform API
   transform = {
     countValues: (data: any) =>
-      this.request<any>(
-        '/api/transform/count-values',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/transform/count-values', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     shiftValues: (data: any) =>
-      this.request<any>(
-        '/api/transform/shift-values',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/transform/shift-values', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
 
     computeVariable: (data: any) =>
-      this.request<any>(
-        '/api/transform/compute-variable',
-        {
-          method: 'POST',
-          body: JSON.stringify(data),
-        },
-        true
-      ),
+      this.request<any>('/api/transform/compute-variable', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      }),
   };
 
-  // Collaboration API
+  // Collaboration sessions (tensr-api)
   collaboration = {
     sessions: () => this.request<any[]>('/sessions'),
 
-    createSession: (data: any) =>
+    getSession: (id: string) => this.request<any>(`/sessions/${id}`),
+
+    createSession: (data: {
+      datasetId?: string;
+      filePath?: string;
+      fileName: string;
+      userName: string;
+    }) =>
       this.request<any>('/sessions', {
         method: 'POST',
         body: JSON.stringify(data),
       }),
 
-    joinSession: (id: string) => this.request<any>(`/sessions/${id}/join`, { method: 'POST' }),
+    joinSession: (id: string, data?: { userName?: string }) =>
+      this.request<any>(`/sessions/${id}/join`, {
+        method: 'POST',
+        body: JSON.stringify(data ?? {}),
+      }),
 
-    leaveSession: (id: string) => this.request<any>(`/sessions/${id}/leave`, { method: 'POST' }),
+    leaveSession: (id: string) =>
+      this.request<any>(`/sessions/${id}/leave`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
   };
 
   // Feedback API
@@ -939,31 +832,64 @@ class ApiClient {
       }),
   };
 
-  // Agent API
-  agent = {
-    chat: (data: any) =>
-      this.request<any>(`/projects/${data.projectId}/agent/query`, {
+  /** tensr-api `/assistant/*` — dataset-scoped tutor / intent. */
+  assistant = {
+    parseIntent: (data: {
+      datasetId: string;
+      message: string;
+      conversationHistory?: Array<{ role: string; content: string }>;
+    }) =>
+      this.request<{
+        status: string;
+        interpretation: string;
+        analysis_type?: string | null;
+        request_body?: Record<string, unknown> | null;
+        plan_summary?: string | null;
+        clarification_questions?: string[];
+        validation_errors?: string[];
+        reason_if_unsupported?: string | null;
+      }>('/assistant/parse-intent', {
         method: 'POST',
         body: JSON.stringify({
-          query: data.message,
-          cursor: data.cursor,
-          options: data.options,
-          authToken: data.authToken, // Add the auth token
+          dataset_id: data.datasetId,
+          message: data.message,
+          conversation_history: data.conversationHistory ?? null,
         }),
       }),
-
-    approve: (data: any) =>
-      this.request<any>(`/projects/${data.projectId}/agent/approve`, {
+    followup: (data: {
+      datasetId: string;
+      message: string;
+      context?: Record<string, unknown> | null;
+      conversationHistory?: Array<{ role: string; content: string }>;
+    }) =>
+      this.request<{ answer_markdown: string; source: string }>('/assistant/followup', {
         method: 'POST',
         body: JSON.stringify({
-          command: data.command,
-          approved: data.approved,
-          authToken: data.authToken,
+          dataset_id: data.datasetId,
+          message: data.message,
+          context: data.context ?? null,
+          conversation_history: data.conversationHistory ?? null,
+        }),
+      }),
+    suggestAnalyses: (data: {
+      datasetId: string;
+      conversationHistory?: Array<{ role: string; content: string }>;
+    }) =>
+      this.request<{
+        suggestions: Array<{
+          analysis_type: string;
+          rationale: string;
+          request_body: Record<string, unknown>;
+        }>;
+        source: string;
+      }>('/assistant/suggest-analyses', {
+        method: 'POST',
+        body: JSON.stringify({
+          dataset_id: data.datasetId,
+          conversation_history: data.conversationHistory ?? null,
         }),
       }),
   };
-
-  // Datasets API
   datasets = {
     create: (data: any) =>
       this.request<any>('/datasets', {
@@ -972,6 +898,14 @@ class ApiClient {
       }),
 
     get: (id: string) => this.request<any>(`/datasets/${id}`),
+
+    getSchema: (datasetId: string) =>
+      this.request<{
+        dataset_id: string;
+        schema: { name: string; type: string; missing_count: number }[];
+        n_rows: number;
+        n_cols: number;
+      }>(`/datasets/${datasetId}/schema`),
 
     getColumns: (datasetId: string) => this.request<any>(`/datasets/${datasetId}/columns`),
 
@@ -990,6 +924,42 @@ class ApiClient {
       this.request<any>(`/datasets/${datasetId}/columns`, {
         method: 'POST',
         body: JSON.stringify(data),
+      }),
+
+    analyze: {
+      run: (datasetId: string, op: string, body: Record<string, unknown>) =>
+        this.request<import('@/lib/analysis-report-types').AnalyzeResponse>(
+          `/datasets/${datasetId}/analyze/${op}`,
+          {
+            method: 'POST',
+            body: JSON.stringify(body),
+          }
+        ),
+
+      listRuns: (datasetId: string) =>
+        this.request<{ dataset_id: string; runs: unknown[] }>(`/datasets/${datasetId}/runs`),
+
+      get: (runId: string) => this.request<any>(`/datasets/analysis-runs/${runId}`),
+    },
+  };
+
+  execute = {
+    python: (data: { code: string; dataset_id?: string | null }) =>
+      this.request<{ stdout: string | null; output: any; error: string | null }>(
+        '/api/execute/python',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            code: data.code,
+            dataset_id: data.dataset_id ?? null,
+          }),
+        }
+      ),
+
+    r: (data: { code: string }) =>
+      this.request<any>('/api/execute/r', {
+        method: 'POST',
+        body: JSON.stringify({ code: data.code }),
       }),
   };
 

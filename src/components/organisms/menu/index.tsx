@@ -106,20 +106,27 @@ export function CollaborationMenu({ activeTab }: CollaborationMenuProps) {
             <h4 className="text-sm font-medium mb-2">Create New Session</h4>
             <Button
               onClick={async () => {
-                if (activeTab?.data?.filePath) {
-                  try {
-                    // Ensure file path starts with / for API compatibility
-                    const filePath = activeTab.data.filePath.startsWith('/')
-                      ? activeTab.data.filePath
-                      : `/${activeTab.data.filePath}`;
-                    await createSession(filePath, activeTab.name);
-                    setDialogOpen(false);
-                  } catch (error) {
-                    console.error('Failed to create session:', error);
-                  }
+                const datasetId =
+                  activeTab?.data?.datasetId || activeTab?.data?.filePath?.replace(/^\//, '');
+                const filePath = activeTab?.data?.filePath;
+                if (!datasetId && !filePath) {
+                  return;
+                }
+                try {
+                  await createSession({
+                    fileName: activeTab.name,
+                    ...(datasetId
+                      ? { datasetId }
+                      : {
+                          filePath: filePath!.startsWith('/') ? filePath! : `/${filePath}`,
+                        }),
+                  });
+                  setDialogOpen(false);
+                } catch (error) {
+                  console.error('Failed to create session:', error);
                 }
               }}
-              disabled={!activeTab?.data?.filePath}
+              disabled={!activeTab?.data?.filePath && !activeTab?.data?.datasetId}
               className="w-full"
             >
               Start Session
