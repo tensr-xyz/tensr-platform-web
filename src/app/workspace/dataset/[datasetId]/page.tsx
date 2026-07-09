@@ -24,7 +24,8 @@ function DatasetWorkspaceContent() {
 
   return (
     <SubscriptionGate>
-      <Workspace resource={resource} />
+      {/* Remount on dataset change so loader refs / local state cannot leak across datasets */}
+      <Workspace key={datasetId} resource={resource} />
     </SubscriptionGate>
   );
 }

@@ -126,6 +126,21 @@ export default function Workspace({ resource }: WorkspaceProps) {
   const resourceId = resource?.id || '';
   const userId = user?.userId;
 
+  // Clear tabs / project state from a previous dataset when this workspace mounts.
+  // (Workspace is remounted via key={datasetId} on the page; stores are global.)
+  useEffect(() => {
+    if (!resourceId) return;
+    useTabsStore.getState().closeAllTabs();
+    useProjectStore.getState().clearProject();
+    useProjectStore.getState().clearImportData();
+    setCurrentResource(resource);
+    setIsLoading(true);
+    setError(null);
+    hasLoadedRef.current = false;
+    // Only re-run when the dataset id changes; `resource` object identity is unstable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resourceId]);
+
   useCollaboration(resourceId);
 
   // Add a null check for activeTab

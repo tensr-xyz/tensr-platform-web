@@ -16,6 +16,7 @@ import { useDatasetUpload } from '@/hooks/api/use-dataset-upload';
 import { Avatar, AvatarFallback } from '@/components/atoms/avatar';
 import useAuth from '@/hooks/api/use-auth';
 import { cn } from '@/utils';
+import { apiClient } from '@/lib/api-client';
 
 const TEMPLATES = [
   {
@@ -166,6 +167,8 @@ const HomeTemplate: React.FC = () => {
   const { user } = useAuth();
   const [searchQ, setSearchQ] = useState('');
   const [dragOver, setDragOver] = useState(false);
+  const [uploadPickerOpen, setUploadPickerOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: projects, isLoading: projectsLoading, error: projectsError } = useProjects();
 
@@ -197,6 +200,43 @@ const HomeTemplate: React.FC = () => {
     const name = row?.projectName || row?.name || 'Dataset';
     router.push(`/workspace/dataset/${projectId}?name=${encodeURIComponent(name)}`);
   };
+
+  /** Templates start a fresh upload — never reopen the most recent dataset. */
+  const handleStartNewAnalysis = useCallback(() => {
+    setUploadPickerOpen(true);
+  }, []);
+
+  const handleDeleteDataset = useCallback(
+    async (projectId: string) => {
+      const row = projectsArray.find(p => p.projectId === projectId);
+      const name = row?.projectName || row?.name || 'Dataset';
+      if (
+        !window.confirm(
+          `Delete “${name}”? This permanently removes the dataset and its analysis history.`
+        )
+      ) {
+        return;
+      }
+      setDeletingId(projectId);
+      try {
+        await apiClient.datasets.delete(projectId);
+        await queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+        toast({
+          title: 'Dataset deleted',
+          description: `“${name}” has been removed.`,
+        });
+      } catch (err) {
+        toast({
+          title: 'Could not delete dataset',
+          description: err instanceof Error ? err.message : 'Unknown error',
+          variant: 'destructive',
+        });
+      } finally {
+        setDeletingId(null);
+      }
+    },
+    [projectsArray, queryClient, toast]
+  );
 
   const handleFileDrop = async (e: React.DragEvent) => {
     e.preventDefault();
@@ -276,10 +316,7 @@ const HomeTemplate: React.FC = () => {
               <button
                 key={t.id}
                 type="button"
-                onClick={() => {
-                  if (projectsArray[0]) handleProjectSelect(projectsArray[0].projectId);
-                  else router.push('/project/new');
-                }}
+                onClick={handleStartNewAnalysis}
                 className="rounded-xl border border-border bg-background p-3.5 text-left transition-colors hover:border-primary"
               >
                 <div className="mb-3 text-primary">
@@ -295,7 +332,11 @@ const HomeTemplate: React.FC = () => {
           </div>
 
           <div className="relative mt-5 flex flex-wrap items-center gap-2">
-            <DatasetFilePicker onUploaded={handleDatasetUploaded}>
+            <DatasetFilePicker
+              open={uploadPickerOpen}
+              onOpenChange={setUploadPickerOpen}
+              onUploaded={handleDatasetUploaded}
+            >
               <Button className="h-9 gap-2 rounded-full px-4" disabled={uploadBusy}>
                 <Upload className="size-4" aria-hidden />
                 {uploadBusy ? 'Uploading…' : 'Upload dataset'}
@@ -395,6 +436,8 @@ const HomeTemplate: React.FC = () => {
           <ProjectsTable
             data={filteredProjects as unknown as Project[]}
             onRowClick={handleProjectSelect}
+            onDelete={handleDeleteDataset}
+            deletingId={deletingId}
             statusFilterFn={statusFilterMatch}
             projectColor={projectColor}
             displayStatus={displayStatus}

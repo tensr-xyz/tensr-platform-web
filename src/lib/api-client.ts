@@ -897,6 +897,11 @@ class ApiClient {
         body: JSON.stringify(data),
       }),
 
+    delete: (id: string) =>
+      this.request<{ deleted: boolean; dataset_id: string }>(`/datasets/${id}`, {
+        method: 'DELETE',
+      }),
+
     get: (id: string) => this.request<any>(`/datasets/${id}`),
 
     getSchema: (datasetId: string) =>

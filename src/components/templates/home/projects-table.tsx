@@ -50,6 +50,8 @@ const STATUS_STYLES: Record<DisplayStatus, { bg: string; fg: string }> = {
 interface ProjectsTableProps {
   data: Project[];
   onRowClick: (id: string) => void;
+  onDelete?: (id: string) => void;
+  deletingId?: string | null;
   statusFilterFn: (project: Project, filter: string) => boolean;
   projectColor: (id: string) => string;
   displayStatus: (status: ProjectStatus) => DisplayStatus;
@@ -84,6 +86,8 @@ function formatSize(bytes: number): string {
 export const ProjectsTable = ({
   data,
   onRowClick,
+  onDelete,
+  deletingId,
   statusFilterFn,
   projectColor,
   displayStatus,
@@ -272,6 +276,21 @@ export const ProjectsTable = ({
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={e => e.stopPropagation()}>Export data</DropdownMenuItem>
               <DropdownMenuItem onClick={e => e.stopPropagation()}>Share dataset</DropdownMenuItem>
+              {onDelete ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    disabled={deletingId === project.projectId}
+                    onClick={e => {
+                      e.stopPropagation();
+                      onDelete(project.projectId);
+                    }}
+                  >
+                    {deletingId === project.projectId ? 'Deleting…' : 'Delete dataset'}
+                  </DropdownMenuItem>
+                </>
+              ) : null}
             </DropdownMenuContent>
           </DropdownMenu>
         );
