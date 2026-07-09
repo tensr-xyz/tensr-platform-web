@@ -22,26 +22,25 @@ export const FOOTER_SECTIONS: FooterStructure = {
   product: {
     title: 'Product',
     links: [
-      { label: 'Docs', href: '/docs' },
-      { label: 'Demo', href: '/demo' },
-      { label: 'Features', href: '/features' },
-      // { label: 'Security', href: '/security' },
+      { label: 'Docs', href: 'https://tensr-1.gitbook.io/tensr/' },
+      {
+        label: 'Features',
+        href: 'https://www.tensr.xyz/features',
+      },
+      {
+        label: 'Pricing',
+        href: 'https://www.tensr.xyz/pricing',
+      },
     ],
   },
   company: {
     title: 'Company',
-    links: [
-      { label: 'About us', href: '/about' },
-      { label: 'Careers', href: '/careers' },
-      { label: 'Blog', href: '/blog' },
-      { label: 'Customer love', href: '/customers' },
-      { label: 'Brand guidelines', href: '/brand' },
-    ],
+    links: [{ label: 'Contact', href: 'mailto:help@tensr.xyz' }],
   },
   resources: {
     title: 'Resources',
     links: [
-      { label: 'Support', href: '/support' },
+      { label: 'Support', href: 'mailto:help@tensr.xyz' },
       {
         label: 'Privacy policy',
         href: 'https://tensr-1.gitbook.io/tensr/legal-policies/privacy-policy',

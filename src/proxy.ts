@@ -1,16 +1,7 @@
 import { NextResponse, NextRequest } from 'next/server';
 
 /** Public routes that never require authentication. */
-export const PUBLIC_PATHS = new Set([
-  '/',
-  '/login',
-  '/register',
-  '/features',
-  '/pricing',
-  '/enterprise',
-  '/download',
-  '/visualiser',
-]);
+export const PUBLIC_PATHS = new Set(['/login', '/register']);
 
 function isPublicPath(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;
