@@ -189,11 +189,11 @@ const LoginTemplate = () => {
       const result = await verifyAuth(email, verificationCode, methodId);
 
       if (result.success) {
-        const returnTo = searchParams.get('returnTo');
-        router.push(returnTo && returnTo.startsWith('/') ? returnTo : '/dashboard');
-      } else {
-        setError(result.message || 'Verification failed. Please check your code and try again.');
+        // Do not push to /dashboard here — unpaid users must go to /subscription.
+        // The authenticated redirect useEffect above routes once profile/entitlements sync.
+        return;
       }
+      setError(result.message || 'Verification failed. Please check your code and try again.');
     } catch (err) {
       console.error('Failed to verify code:', err);
       setError('Failed to verify code. Please try again.');
