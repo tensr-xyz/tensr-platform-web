@@ -2,28 +2,24 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { ArrowLeft, Check, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Check } from 'lucide-react';
 import {
   DEFAULT_SUBSCRIPTION_PRICING,
   DEFAULT_TEAM_SEATS,
-  formatBillingCadence,
   MAX_TEAM_SEATS,
   MIN_TEAM_SEATS,
   monthlyEquivalentRate,
-  SUBSCRIPTION_TIER_FEATURES,
-  SUBSCRIPTION_TIER_LABELS,
+  SUBSCRIPTION_PLAN_CARDS,
   SUBSCRIPTION_TIERS,
   unitPriceForBilling,
+  type SubscriptionPlanCardMeta,
   type SubscriptionTier,
 } from '@/configs/pricing';
 import { Input } from '@/components/atoms/input';
 import { useAuth } from '@/hooks/api/use-auth';
-import { Button } from '@/components/atoms/button';
-import { Card } from '@/components/atoms/card';
 import Loading from '@/components/molecules/loading';
 import Link from 'next/link';
 import Image from 'next/image';
-import { decodeIdToken, getEligiblePlans, getIdToken } from '@/utils/auth';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import {
   SpssSwitcherSignupOption,
@@ -59,12 +55,6 @@ const PLAN_KEY_MAP: Record<string, SubscriptionTier> = {
   team: 'team',
   teams: 'team',
 };
-
-function subscriptionFeatureKey(tier: SubscriptionTier): keyof typeof SUBSCRIPTION_TIER_FEATURES {
-  if (tier === 'pro_plus') return 'PRO_PLUS';
-  if (tier === 'team') return 'TEAM';
-  return 'PRO';
-}
 
 function monthlyPriceFromPlan(plan: {
   monthly_usd?: number;
@@ -104,12 +94,11 @@ function pricingFromApiPlans(plans: unknown[]): PricingData {
     const monthly = monthlyPriceFromPlan(plan);
     if (monthly == null) continue;
 
+    const fallback = DEFAULT_PRICING[tierKey];
     mapped[tierKey] = {
       monthly,
       annual: monthlyEquivalentRate(monthly),
-      description:
-        plan.description ||
-        `${plan.name || tierKey} tier${plan.operations ? ` with ${plan.operations} operations` : ''}`,
+      description: fallback?.description || plan.description || `${plan.name || tierKey} tier`,
     };
   }
 
@@ -123,50 +112,64 @@ function resolvePlanCode(tier: SubscriptionTier): 'pro' | 'pro_plus' | 'teams' |
   return null;
 }
 
+function annualTotal(monthlyEquivalent: number): number {
+  return Math.round(monthlyEquivalent * 12);
+}
+
+function ctaLabelForPlan(
+  plan: SubscriptionPlanCardMeta,
+  currentPlan: SubscriptionTier | null,
+  hasActivePlan: boolean
+): string {
+  if (currentPlan === plan.tier) return 'Current plan';
+  if (hasActivePlan) return `Switch to ${plan.name === 'Pro Plus' ? 'Pro+' : plan.name}`;
+  return plan.cta;
+}
+
 export default function SubscriptionCheckoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get('returnTo');
   const postSubscriptionPath = returnTo && returnTo.startsWith('/') ? returnTo : '/dashboard';
-  const { session } = useAuth();
+  const { session, entitlements } = useAuth();
 
-  const [tier, setTier] = useState<SubscriptionTier>('pro');
   const [billingType, setBillingType] = useState<'monthly' | 'annual'>('monthly');
   const [teamSeats, setTeamSeats] = useState(DEFAULT_TEAM_SEATS);
-  const [loading, setLoading] = useState(false);
+  const [loadingTier, setLoadingTier] = useState<SubscriptionTier | null>(null);
   const [loadingPlans, setLoadingPlans] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [pricingData, setPricingData] = useState<PricingData>(DEFAULT_PRICING);
-  const [eligibleFrontendPlans, setEligibleFrontendPlans] = useState<string[]>([]);
-  const [currentPlan, setCurrentPlan] = useState<string | null>(null);
-  const [currentPlanStatus, setCurrentPlanStatus] = useState<string | null>(null);
   const [spssSwitcher, setSpssSwitcher] = useState(false);
 
-  const selectedTierPricing = pricingData[tier] ?? DEFAULT_PRICING.pro;
-  const unitPrice = unitPriceForBilling(selectedTierPricing, billingType);
-  const billedSeats = tier === 'team' ? teamSeats : 1;
-  const checkoutTotal = unitPrice * billedSeats;
-  const priceLabel = formatBillingCadence(billingType, tier);
-  const discount = billingType === 'annual' ? 'Save 20%' : '';
+  const currentPlan = entitlements?.plan_code ? PLAN_KEY_MAP[entitlements.plan_code] || null : null;
+  const hasActivePlan =
+    !!currentPlan && SUBSCRIPTION_TIERS.includes(currentPlan as SubscriptionTier);
 
-  const formatPlanAmount = () =>
-    tier === 'team'
-      ? `$${unitPrice} × ${billedSeats} seats = $${checkoutTotal} ${priceLabel}`
-      : `$${unitPrice} ${priceLabel}`;
-
-  const validateSelection = () => {
-    const nextErrors: Record<string, string> = {};
-    if (tier === 'team' && (teamSeats < MIN_TEAM_SEATS || teamSeats > MAX_TEAM_SEATS)) {
-      nextErrors.teamSeats = `Enter between ${MIN_TEAM_SEATS} and ${MAX_TEAM_SEATS} seats`;
+  const validateSeats = (tier: SubscriptionTier) => {
+    if (tier !== 'team') return true;
+    if (teamSeats < MIN_TEAM_SEATS || teamSeats > MAX_TEAM_SEATS) {
+      setErrors({
+        teamSeats: `Enter between ${MIN_TEAM_SEATS} and ${MAX_TEAM_SEATS} seats`,
+      });
+      return false;
     }
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
+    return true;
   };
 
-  const startCheckout = async () => {
-    if (!validateSelection()) return;
+  const persistSpssPrefsIfNeeded = () => {
+    if (!spssSwitcher) return;
+    setSpssSwitcherPrefs({
+      enabled: true,
+      checklist: { upload: false, frequencies: false, ttest: false, readOutput: false },
+      dismissedWalkthrough: false,
+    });
+  };
 
-    setLoading(true);
+  const startCheckout = async (tier: SubscriptionTier) => {
+    if (currentPlan === tier) return;
+    if (!validateSeats(tier)) return;
+
+    setLoadingTier(tier);
     setErrors({});
 
     try {
@@ -193,6 +196,9 @@ export default function SubscriptionCheckoutPage() {
       if (plan_code === 'teams') {
         payload.seats = teamSeats;
       }
+
+      // Persist before Stripe redirect so prefs survive Hosted Checkout.
+      persistSpssPrefsIfNeeded();
 
       const response = await fetch(`${API_BASE_URL}/api/billing/checkout-session`, {
         method: 'POST',
@@ -225,14 +231,6 @@ export default function SubscriptionCheckoutPage() {
         return;
       }
 
-      if (spssSwitcher) {
-        setSpssSwitcherPrefs({
-          enabled: true,
-          checklist: { upload: false, frequencies: false, ttest: false, readOutput: false },
-          dismissedWalkthrough: false,
-        });
-      }
-
       router.push(
         `${postSubscriptionPath}${postSubscriptionPath.includes('?') ? '&' : '?'}checkout=success`
       );
@@ -242,7 +240,7 @@ export default function SubscriptionCheckoutPage() {
           error instanceof Error ? error.message : 'An error occurred while starting checkout',
       });
     } finally {
-      setLoading(false);
+      setLoadingTier(null);
     }
   };
 
@@ -268,229 +266,192 @@ export default function SubscriptionCheckoutPage() {
     fetchPlans();
   }, []);
 
-  useEffect(() => {
-    const idToken = getIdToken();
-    if (!idToken) return;
-
-    const plans = getEligiblePlans(idToken);
-    setEligibleFrontendPlans(plans.map(plan => PLAN_KEY_MAP[plan] || plan));
-
-    const decoded = decodeIdToken(idToken);
-    if (decoded) {
-      setCurrentPlan(
-        PLAN_KEY_MAP[decoded['custom:subscriptionTier']] ||
-          decoded['custom:subscriptionTier'] ||
-          null
-      );
-      setCurrentPlanStatus(decoded['custom:subscriptionStatus'] || null);
-    }
-  }, []);
-
   return (
-    <div className="flex flex-col md:flex-row md:divide-x md:divide-border min-h-screen w-full">
-      <div className="hidden md:flex md:flex-col md:w-2/5 md:px-16 md:py-32">
-        <Link href={postSubscriptionPath}>
-          <ArrowLeft className="mb-4" />
-        </Link>
-        <div className="text-xl">Choose a plan</div>
-        <p className="mt-3 text-base text-gray-600">
-          Pick your plan here, then complete payment on Stripe&apos;s secure checkout. Billing
-          details and payment are handled by Stripe.
-        </p>
-        <div className="mt-8 rounded-md border border-border bg-gray-50 p-4 text-sm text-gray-700">
-          <div className="font-medium">Selected</div>
-          <div className="mt-2">{SUBSCRIPTION_TIER_LABELS[tier]}</div>
-          <div className="mt-1 text-gray-600 capitalize">{billingType} billing</div>
-          <div className="mt-3 font-medium">{formatPlanAmount()}</div>
-        </div>
-      </div>
-
-      <div className="flex flex-col w-full md:w-3/5 px-4 py-6 md:px-16 md:py-32">
-        <Link href={postSubscriptionPath}>
-          <Image
-            className="absolute top-6 left-6"
-            src="/tensr_logo_light.png"
-            alt="Tensr Logo"
-            height={24}
-            width={96}
-            unoptimized
-          />
-        </Link>
-
-        <div className="flex items-center mt-12 md:mt-0 md:hidden mb-6">
-          <Link href={postSubscriptionPath} className="mr-4">
-            <ArrowLeft size={20} />
+    <div className="min-h-screen w-full bg-background text-foreground">
+      <div className="mx-auto w-full max-w-[1200px] px-4 pb-16 pt-8 md:px-8 md:pt-12">
+        <div className="mb-8 flex items-center justify-between gap-4">
+          <Link
+            href={postSubscriptionPath}
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft size={16} />
+            Back
           </Link>
-          <div>
-            <div className="text-lg font-medium">Choose a plan</div>
-            <div className="text-sm text-gray-600">Secure checkout powered by Stripe</div>
-          </div>
+          <Link href={postSubscriptionPath}>
+            <Image src="/tensr_logo_light.png" alt="Tensr" height={24} width={96} unoptimized />
+          </Link>
         </div>
 
-        <div className="w-full max-w-xl mx-auto md:mx-0 space-y-6">
-          <SpssSwitcherSignupOption checked={spssSwitcher} onCheckedChange={setSpssSwitcher} />
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="mb-3 text-xs tracking-wider text-muted-foreground uppercase">Pricing</p>
+          <h1 className="text-3xl tracking-tight md:text-5xl">
+            Pricing that scales with your research.
+          </h1>
+          <p className="mx-auto mt-5 max-w-xl text-[15px] leading-relaxed text-muted-foreground md:text-base">
+            Pro, Pro Plus, and Teams — upgrade when you need more agent capacity and collaboration.
+            No free tier — a serious tool for serious work.
+          </p>
 
-          <div className="space-y-2">
-            <div className="text-base font-medium">Billing cycle</div>
-            <div className="grid grid-cols-2 gap-4">
-              <Button
-                variant={billingType === 'monthly' ? 'default' : 'outline'}
-                className="h-10 md:h-12 justify-center"
+          <div className="mt-8 flex justify-center">
+            <div className="inline-flex items-center gap-1 rounded-full border border-border bg-muted p-1">
+              <button
+                type="button"
                 onClick={() => setBillingType('monthly')}
+                className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
+                  billingType === 'monthly'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
               >
                 Monthly
-              </Button>
-              <Button
-                variant={billingType === 'annual' ? 'default' : 'outline'}
-                className="h-10 md:h-12 justify-center"
+              </button>
+              <button
+                type="button"
                 onClick={() => setBillingType('annual')}
+                className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
+                  billingType === 'annual'
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
               >
-                Annual {discount && <span className="ml-2 text-xs">{discount}</span>}
-              </Button>
+                Annual <span className="ml-1 text-xs text-emerald-600">−20%</span>
+              </button>
             </div>
           </div>
-
-          {tier === 'team' && (
-            <div className="space-y-2">
-              <div className="text-base font-medium">Team seats</div>
-              <Input
-                type="number"
-                min={MIN_TEAM_SEATS}
-                max={MAX_TEAM_SEATS}
-                value={teamSeats}
-                onChange={e => {
-                  const parsed = parseInt(e.target.value, 10);
-                  setTeamSeats(Number.isFinite(parsed) ? parsed : MIN_TEAM_SEATS);
-                }}
-              />
-              {errors.teamSeats ? (
-                <p className="text-sm text-red-600">{errors.teamSeats}</p>
-              ) : (
-                <p className="text-sm text-[rgba(29,42,41,0.65)]">
-                  ${unitPrice} per seat · ${checkoutTotal}{' '}
-                  {formatBillingCadence(billingType, 'team')}. You can adjust seats again on Stripe
-                  checkout.
-                </p>
-              )}
-            </div>
-          )}
-
-          {loadingPlans ? (
-            <div className="flex justify-center py-8">
-              <Loading />
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {SUBSCRIPTION_TIERS.map(planTier => {
-                const tierPricing = pricingData[planTier] ?? DEFAULT_PRICING[planTier];
-                const isEligible =
-                  eligibleFrontendPlans.length === 0 || eligibleFrontendPlans.includes(planTier);
-                const isDisabled = !isEligible;
-                const isCurrent = currentPlan === planTier;
-                const featureKey = subscriptionFeatureKey(planTier);
-
-                return (
-                  <Card
-                    key={planTier}
-                    className={`p-4 border-2 duration-100 ${
-                      tier === planTier ? 'border-primary bg-primary/5' : 'border-gray-200'
-                    } ${isDisabled ? 'opacity-50' : 'hover:border-black cursor-pointer'}`}
-                    onClick={() => !isDisabled && setTier(planTier)}
-                  >
-                    <div className="flex justify-between items-start mb-4">
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <div className="text-lg font-medium">
-                            {SUBSCRIPTION_TIER_LABELS[planTier]}
-                          </div>
-                          {!isEligible && (
-                            <span className="text-xs bg-yellow-100 px-2 py-1 rounded-full">
-                              Not Eligible
-                            </span>
-                          )}
-                          {isCurrent && (
-                            <span className="text-xs bg-blue-100 px-2 py-1 rounded-full">
-                              Current Plan
-                              {currentPlanStatus
-                                ? ` (${currentPlanStatus.charAt(0).toUpperCase()}${currentPlanStatus.slice(1)})`
-                                : ''}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-sm text-[rgba(29,42,41,0.65)] mt-1">
-                          {tierPricing.description}
-                        </div>
-                      </div>
-                      <div className="flex flex-col items-end">
-                        <div className="text-lg font-medium">
-                          ${unitPriceForBilling(tierPricing, billingType)}
-                        </div>
-                        <div className="text-xs text-[rgba(29,42,41,0.65)]">
-                          {formatBillingCadence(billingType, planTier)}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mb-4 space-y-2">
-                      {SUBSCRIPTION_TIER_FEATURES[featureKey].slice(0, 3).map((feature, index) => (
-                        <div key={index} className="flex items-center gap-2">
-                          <Check className="text-primary" size={16} />
-                          <span className="text-sm">{feature.text}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <Button
-                      variant={tier === planTier ? 'default' : 'outline'}
-                      className="w-full"
-                      disabled={isDisabled}
-                      onClick={e => {
-                        e.stopPropagation();
-                        if (!isDisabled) setTier(planTier);
-                      }}
-                    >
-                      {tier === planTier
-                        ? 'Selected'
-                        : isDisabled
-                          ? 'Not Available'
-                          : 'Select Plan'}
-                      {tier === planTier && <Check className="ml-2" size={16} />}
-                    </Button>
-                  </Card>
-                );
-              })}
-
-              <p className="text-sm text-center text-[rgba(29,42,41,0.65)]">
-                Academic or custom enterprise plans?{' '}
-                <a className="text-primary underline" href="mailto:help@tensr.xyz">
-                  Contact help@tensr.xyz
-                </a>
-              </p>
-            </div>
-          )}
-
-          <div className="rounded-md border border-border bg-gray-50 p-4">
-            <div className="text-sm font-medium">Summary</div>
-            <div className="mt-2 text-sm text-gray-700">{formatPlanAmount()}</div>
-            <p className="mt-3 text-sm text-gray-600">
-              You&apos;ll be redirected to Stripe to enter payment details. Taxes, invoices, and
-              subscription management are handled securely by Stripe.
-            </p>
-          </div>
-
-          {errors.submission && (
-            <div className="text-red-500 text-sm bg-red-50 p-4 rounded-md">{errors.submission}</div>
-          )}
-
-          <Button
-            onClick={startCheckout}
-            disabled={loading || loadingPlans}
-            className="w-full h-12 flex items-center justify-center gap-2"
-          >
-            {loading ? 'Redirecting to Stripe…' : 'Continue to Stripe Checkout'}
-            {!loading && <ExternalLink size={16} />}
-          </Button>
         </div>
+
+        <div className="mx-auto mt-10 max-w-xl">
+          <SpssSwitcherSignupOption checked={spssSwitcher} onCheckedChange={setSpssSwitcher} />
+        </div>
+
+        {loadingPlans ? (
+          <div className="flex justify-center py-16">
+            <Loading />
+          </div>
+        ) : (
+          <div className="mt-10 grid gap-4 md:grid-cols-3">
+            {SUBSCRIPTION_PLAN_CARDS.map(plan => {
+              const tierPricing = pricingData[plan.tier] ?? DEFAULT_PRICING[plan.tier];
+              const price = unitPriceForBilling(tierPricing, billingType);
+              const period = plan.perSeat
+                ? billingType === 'annual'
+                  ? '/seat/mo · billed annually'
+                  : '/seat/mo'
+                : billingType === 'annual'
+                  ? '/mo · billed annually'
+                  : '/mo';
+              const isCurrent = currentPlan === plan.tier;
+              const isLoading = loadingTier === plan.tier;
+              const label = ctaLabelForPlan(plan, currentPlan, hasActivePlan);
+              const yearlyTotal = annualTotal(tierPricing.annual);
+
+              return (
+                <div
+                  key={plan.tier}
+                  className={`relative flex flex-col rounded-2xl border bg-background p-6 md:p-7 ${
+                    plan.featured
+                      ? 'border-foreground shadow-[0_0_0_1px_var(--foreground)]'
+                      : 'border-border'
+                  }`}
+                >
+                  {plan.featured && (
+                    <span className="absolute -top-3 left-6 rounded-full bg-foreground px-3 py-0.5 text-xs font-medium text-background">
+                      Most popular
+                    </span>
+                  )}
+                  <h2 className="text-lg font-medium tracking-tight">{plan.name}</h2>
+                  <p className="mt-2 min-h-[44px] text-sm leading-relaxed text-muted-foreground">
+                    {plan.subtitle}
+                  </p>
+                  <div className="mt-6 flex items-baseline gap-1">
+                    <span className="text-lg text-muted-foreground">$</span>
+                    <span className="text-4xl tracking-tight">{price}</span>
+                    <span className="text-sm text-muted-foreground">{period}</span>
+                  </div>
+                  {billingType === 'annual' && (
+                    <p className="mt-1 text-xs text-muted-foreground/80">
+                      ${yearlyTotal}
+                      {plan.perSeat ? ' / seat' : ''} billed yearly
+                    </p>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground/80">{plan.note}</p>
+
+                  {plan.perSeat && (
+                    <div className="mt-4 space-y-2">
+                      <label className="text-xs font-medium text-muted-foreground" htmlFor="seats">
+                        Seats
+                      </label>
+                      <Input
+                        id="seats"
+                        type="number"
+                        min={MIN_TEAM_SEATS}
+                        max={MAX_TEAM_SEATS}
+                        value={teamSeats}
+                        onChange={e => {
+                          const parsed = parseInt(e.target.value, 10);
+                          setTeamSeats(Number.isFinite(parsed) ? parsed : MIN_TEAM_SEATS);
+                          setErrors(prev => {
+                            const next = { ...prev };
+                            delete next.teamSeats;
+                            return next;
+                          });
+                        }}
+                      />
+                      {errors.teamSeats ? (
+                        <p className="text-sm text-red-600">{errors.teamSeats}</p>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">
+                          ${price} × {teamSeats} seats = ${price * teamSeats}{' '}
+                          {billingType === 'annual' ? '/mo billed annually' : '/mo'}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    disabled={isCurrent || !!loadingTier}
+                    onClick={() => startCheckout(plan.tier)}
+                    className={`mt-6 inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${
+                      plan.featured
+                        ? 'bg-foreground text-background'
+                        : 'border border-border bg-muted text-foreground'
+                    }`}
+                  >
+                    {isLoading ? 'Redirecting to Stripe…' : label}
+                  </button>
+
+                  <ul className="mt-8 space-y-3 border-t border-border pt-6">
+                    {plan.features.map((feature, i) => (
+                      <li key={feature} className="flex gap-3 text-sm text-muted-foreground">
+                        <Check className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+                        <span className={i === 0 ? 'font-medium text-foreground' : ''}>
+                          {feature}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {errors.submission && (
+          <div className="mx-auto mt-6 max-w-xl rounded-md bg-red-50 p-4 text-sm text-red-600">
+            {errors.submission}
+          </div>
+        )}
+
+        <p className="mt-8 text-center text-sm text-muted-foreground">
+          Change or cancel your plan at any time · checkout secured by Stripe
+        </p>
+        <p className="mt-3 text-center text-sm text-muted-foreground">
+          Academic or custom enterprise plans?{' '}
+          <a className="underline hover:text-foreground" href="mailto:help@tensr.xyz">
+            Contact help@tensr.xyz
+          </a>
+        </p>
       </div>
     </div>
   );
