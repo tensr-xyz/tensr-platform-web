@@ -1,5 +1,8 @@
 import { resolveChatAction } from './chat-actions';
-import { assistantUpdateFromParseIntent } from './run-agent-analysis-plan';
+import {
+  assistantUpdateFromParseIntent,
+  pendingActionFromParseIntentUpdate,
+} from './run-agent-analysis-plan';
 
 describe('assistantUpdateFromParseIntent unsupported fallback', () => {
   it('falls back to resolveChatAction for known analysis phrases', () => {
@@ -26,6 +29,51 @@ describe('assistantUpdateFromParseIntent unsupported fallback', () => {
       'quantum flux capacitor analysis'
     );
     expect(update.type).toBe('unsupported');
+  });
+});
+
+describe('assistantUpdateFromParseIntent data actions', () => {
+  const menuFallback = {
+    op: 'descriptives' as const,
+    menuName: 'Descriptives',
+    triggerMessage: 'how many rows',
+  };
+
+  it('maps count actions and skips pending card when auto-execute', () => {
+    const update = assistantUpdateFromParseIntent(
+      {
+        status: 'plan',
+        interpretation: 'Count all rows.',
+        intent_kind: 'action',
+        action_type: 'count',
+        action_spec: {},
+        auto_execute: true,
+      },
+      'Data'
+    );
+    expect(update.type).toBe('action');
+    expect(pendingActionFromParseIntentUpdate(update, menuFallback)).toBeUndefined();
+  });
+
+  it('keeps filter_preview as a pending data_action for Apply', () => {
+    const update = assistantUpdateFromParseIntent(
+      {
+        status: 'plan',
+        interpretation: 'Preview filter.',
+        intent_kind: 'action',
+        action_type: 'filter_preview',
+        action_spec: {
+          filters: [{ column: 'Region', operator: 'equals', value: 'London' }],
+        },
+        auto_execute: true,
+      },
+      'Data'
+    );
+    const pending = pendingActionFromParseIntentUpdate(update, menuFallback);
+    expect(pending?.kind).toBe('data_action');
+    if (pending?.kind === 'data_action') {
+      expect(pending.action.actionType).toBe('filter_preview');
+    }
   });
 });
 

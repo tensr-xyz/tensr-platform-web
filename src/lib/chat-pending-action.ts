@@ -9,6 +9,13 @@ export type AgentAnalysisPlan = {
   isChained?: boolean;
 };
 
+export type AgentDataAction = {
+  actionType: string;
+  spec: Record<string, unknown>;
+  rationale?: string;
+  autoExecute?: boolean;
+};
+
 export type ChatPendingActionStatus =
   | 'pending'
   | 'planning'
@@ -42,6 +49,12 @@ export type ChatPendingAction =
       menuName: string;
       /** Original user message — used to plan variables when Accept is clicked. */
       triggerMessage: string;
+      errorMessage?: string;
+    }
+  | {
+      kind: 'data_action';
+      status: ChatPendingActionStatus;
+      action: AgentDataAction;
       errorMessage?: string;
     };
 

@@ -35,8 +35,9 @@ const LEFT_PANEL_DEFAULT_SIZE = 18;
 const LEFT_PANEL_MAX_SIZE = 28;
 
 const RIGHT_PANEL_MIN_SIZE = 22;
-const RIGHT_PANEL_DEFAULT_SIZE = 28;
-const RIGHT_PANEL_MAX_SIZE = 40;
+/** Agent-more-present default (B-soft); spreadsheet stays center. */
+const RIGHT_PANEL_DEFAULT_SIZE = 36;
+const RIGHT_PANEL_MAX_SIZE = 44;
 
 const ProjectLayout = ({
   children,

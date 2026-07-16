@@ -61,6 +61,11 @@ import {
   resetFollowUpSuggestionDedup,
   suggestionToPlan,
 } from '@/lib/run-agent-analysis-plan';
+import {
+  executeDataActionForDataset,
+  pendingFilterApplyFromResult,
+  shouldRouteMessageToDataIntent,
+} from '@/lib/run-agent-data-action';
 import { shouldSuggestExploratoryAnalyses } from '@/lib/agent-exploratory-intent';
 import { revealAssistantText, streamAssistantFollowup } from '@/lib/stream-assistant-followup';
 import {
@@ -68,6 +73,7 @@ import {
   isAnalysisFollowUpQuestion,
 } from '@/lib/agent-conversation-history';
 import { ANALYSIS_PLANNING_MESSAGE } from '@/lib/agent-analysis-progress';
+import type { AgentDataAction } from '@/lib/chat-pending-action';
 
 const ANALYSIS_HISTORY_LIMIT = 20;
 
@@ -730,99 +736,80 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         throw new Error('Authentication required. Please log in again.');
       }
 
-      // Check if this is a filter query - if so, handle it directly
-      const isSEMRequest =
-        /structural equation|measured by|path model|latent variable|\bSEM\b/i.test(currentMessage);
-      const isAnalysisIntentMessage =
-        isSEMRequest ||
-        /(predict|analyze|analys|moderation|moderator|interaction effect|regression|anova|compare|difference|effect|impact|test|wilcoxon|mann|kruskal|chi|crosstab|pca|cluster|factor|reliability|normality|shapiro|sign test|mcnemar|probit|logistic|poisson|ttest|t-test|kappa|cohen|spearman|kendall|canonical|discriminant|manova|ancova|glmm|mixed model|survival|kaplan|cox|arima|loglinear|structural equation)/i.test(
-          currentMessage
-        );
-      const isFilterQuery =
-        !isAnalysisIntentMessage &&
-        /(show|filter|find|where|participants|rows with|where.*>|where.*<|display|list)/i.test(
-          currentMessage
-        );
-
       // Check if this is a data quality scan request
       const isDataQualityQuery =
         /(data quality|quality scan|check data|data issues|scan data|data problems)/i.test(
           currentMessage
         );
 
-      if (isFilterQuery && activeTab?.data?.initialColumns) {
+      const datasetIdForIntent = workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
+
+      // Phase A: count / filter / aggregate / chart / descriptive compare → parse-intent + execute
+      if (datasetIdForIntent && shouldRouteMessageToDataIntent(currentMessage)) {
+        const assistantMessageId = addMessage(projectId, {
+          role: 'assistant',
+          content: 'Working on that…',
+          isStreaming: true,
+          timestamp: new Date(),
+        });
+        setLoading(projectId, false);
         try {
-          const datasetId = workspaceDatasetId;
-          const datasetSchema = {
-            ...(datasetId ? { datasetId } : {}),
-            columns: activeTab.data.initialColumns.map((col: any) => ({
-              id: col.id,
-              name: col.header || col.id,
-              type: col.type || 'numeric',
-            })),
-          };
+          const intent = await parseIntentForDataset(
+            datasetIdForIntent,
+            currentMessage,
+            conversationHistory
+          );
+          const parsed = assistantUpdateFromParseIntent(intent, 'Data action', currentMessage);
 
-          // Call AI filters API
-          const filterResponse = await apiClient.ai.filters({
-            datasetSchema,
-            instruction: currentMessage,
-          });
-
-          if (filterResponse?.filters && Array.isArray(filterResponse.filters)) {
-            // Convert to ColumnFiltersState format
-            const newFilters: ColumnFiltersState = filterResponse.filters.map(
-              (filter: { columnId: string; operator: string; value: any }) => ({
-                id: filter.columnId,
-                value: {
-                  operator: filter.operator,
-                  value: filter.value,
-                },
-              })
-            );
-
-            if (activeTab) {
-              updateTab(activeTab.id, {
-                data: {
-                  ...activeTab.data,
-                  columnFilters: newFilters as any,
-                },
-              });
-            }
-
-            dispatchApplyColumnFilters(
-              newFilters.map(f => ({
-                id: f.id,
-                value: f.value as { operator: string; value: unknown },
-              })),
-              { showFilterBar: true }
-            );
-
-            // Show success message
-            const filterList = filterResponse.filters
-              .map((f: any) => {
-                const columnName =
-                  activeTab.data?.initialColumns?.find((col: any) => col.id === f.columnId)
-                    ?.header || f.columnId;
-                return `• ${columnName} ${f.operator} ${f.value}`;
-              })
-              .join('\n');
-
-            const filterMessage = {
-              role: 'assistant' as const,
-              content: `✅ **Filters applied!**\n\n${filterResponse.description || 'Applied the following filters:'}\n\n${filterList}\n\nThe table has been filtered accordingly.`,
-              timestamp: new Date(),
-            };
-            addMessage(projectId, filterMessage);
-            setLoading(projectId, false);
+          if (parsed.type === 'clarification' || parsed.type === 'unsupported') {
+            updateMessage(projectId, assistantMessageId, {
+              content: parsed.content,
+              isStreaming: false,
+            });
             return;
           }
-        } catch (filterError) {
-          // If filter generation fails, fall through to regular agent chat
-          console.warn('Filter generation failed, using regular chat:', filterError);
+
+          if (parsed.type === 'action') {
+            const result = await executeDataActionForDataset(datasetIdForIntent, parsed.action);
+            const charts: AnalysisReportChart[] = [];
+            if (result.chart) {
+              charts.push(result.chart as AnalysisReportChart);
+            }
+            const pending =
+              result.ok && result.filters?.length
+                ? pendingFilterApplyFromResult(parsed.action, result)
+                : undefined;
+            updateMessage(projectId, assistantMessageId, {
+              content: result.answer_markdown || parsed.content,
+              isStreaming: false,
+              charts: charts.length ? charts : undefined,
+              pendingAction: pending,
+            });
+            return;
+          }
+
+          if (parsed.type === 'plan') {
+            updateMessage(projectId, assistantMessageId, {
+              content: parsed.content,
+              isStreaming: false,
+              pendingAction: {
+                kind: 'analysis_plan',
+                status: 'pending',
+                plan: parsed.plan,
+              },
+            });
+            return;
+          }
+        } catch (dataActionError) {
+          console.warn('data-action intent failed, falling through:', dataActionError);
+          updateMessage(projectId, assistantMessageId, {
+            content:
+              'I could not complete that data request. Try rephrasing, or use the column Filter menu.',
+            isStreaming: false,
+          });
+          return;
         }
       }
-
-      const datasetIdForIntent = workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
 
       if (
         shouldSuggestExploratoryAnalyses(currentMessage) &&
@@ -909,6 +896,38 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             menuName: intent.analysis_type?.replace(/_/g, ' ') ?? 'Analysis',
             triggerMessage: currentMessage,
           };
+          if (parsed.type === 'action') {
+            try {
+              const result = await executeDataActionForDataset(datasetIdForIntent, parsed.action);
+              const charts: AnalysisReportChart[] = [];
+              if (result.chart) {
+                charts.push(result.chart as AnalysisReportChart);
+              }
+              const pending =
+                result.ok && result.filters?.length
+                  ? pendingFilterApplyFromResult(parsed.action, result)
+                  : undefined;
+              updateMessage(projectId, assistantMessageId, {
+                content: result.answer_markdown || parsed.content,
+                isStreaming: false,
+                charts: charts.length ? charts : undefined,
+                pendingAction: pending,
+              });
+            } catch (actionErr) {
+              updateMessage(projectId, assistantMessageId, {
+                content: parsed.content,
+                isStreaming: false,
+                pendingAction: {
+                  kind: 'data_action',
+                  status: 'failed',
+                  action: parsed.action,
+                  errorMessage: formatApiErrorMessage(actionErr),
+                },
+              });
+            }
+            return;
+          }
+
           updateMessage(projectId, assistantMessageId, {
             role: 'assistant',
             content: parsed.content,
@@ -1296,6 +1315,32 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     setBusyMessageId(null);
   };
 
+  const applyDataActionFilters = (
+    filters: Array<{ columnId: string; operator: string; value: unknown }>
+  ) => {
+    if (!activeTab?.data) return;
+    const newFilters: ColumnFiltersState = filters.map(filter => ({
+      id: filter.columnId,
+      value: {
+        operator: filter.operator,
+        value: filter.value,
+      },
+    }));
+    updateTab(activeTab.id, {
+      data: {
+        ...activeTab.data,
+        columnFilters: newFilters as any,
+      },
+    });
+    dispatchApplyColumnFilters(
+      newFilters.map(f => ({
+        id: f.id,
+        value: f.value as { operator: string; value: unknown },
+      })),
+      { showFilterBar: true }
+    );
+  };
+
   const handlePendingAccept = async (messageId: string) => {
     if (busyMessageId) return;
     if (messageId !== activeApprovalMessageId) return;
@@ -1303,6 +1348,61 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     const message = messages.find(m => m.id === messageId);
     const action = message?.pendingAction;
     if (!action || (action.status !== 'pending' && action.status !== 'failed')) return;
+
+    if (action.kind === 'data_action') {
+      setBusyMessageId(messageId);
+      updateMessage(projectId, messageId, {
+        pendingAction: { ...action, status: 'running', errorMessage: undefined },
+      });
+      try {
+        const filters = (
+          action.action.spec.filters as
+            | Array<{ columnId?: string; column?: string; operator: string; value: unknown }>
+            | undefined
+        )
+          ?.map(f => ({
+            columnId: String(f.columnId || f.column || ''),
+            operator: f.operator,
+            value: f.value,
+          }))
+          .filter(f => f.columnId);
+
+        if (filters?.length) {
+          applyDataActionFilters(filters);
+          updateMessage(projectId, messageId, {
+            content:
+              (message?.content ? `${message.content}\n\n` : '') +
+              '✅ **Filter applied** to the spreadsheet.',
+            pendingAction: { ...action, status: 'accepted' },
+          });
+        } else {
+          const datasetId = workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
+          if (!datasetId) throw new Error('Open a dataset before applying this action.');
+          const result = await executeDataActionForDataset(
+            datasetId,
+            action.action as AgentDataAction
+          );
+          if (result.filters?.length) {
+            applyDataActionFilters(result.filters);
+          }
+          updateMessage(projectId, messageId, {
+            content: result.answer_markdown || message?.content || 'Done.',
+            pendingAction: { ...action, status: 'accepted' },
+          });
+        }
+      } catch (err: unknown) {
+        updateMessage(projectId, messageId, {
+          pendingAction: {
+            ...action,
+            status: 'failed',
+            errorMessage: formatApiErrorMessage(err),
+          },
+        });
+      } finally {
+        setBusyMessageId(null);
+      }
+      return;
+    }
 
     setBusyMessageId(messageId);
     updateMessage(projectId, messageId, {
@@ -1354,6 +1454,13 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       setupStore.openSetup(action.op);
       updateMessage(projectId, messageId, {
         pendingAction: patchPendingAction(action, { status: 'skipped' }),
+      });
+      return;
+    }
+
+    if (action.kind !== 'analysis_plan') {
+      updateMessage(projectId, messageId, {
+        pendingAction: { ...action, status: 'skipped' },
       });
       return;
     }

@@ -22,6 +22,10 @@ function actionTitle(action: ChatPendingAction): string {
   if (action.kind === 'analysis_plan') {
     return analysisLabelForPlan(action.plan);
   }
+  if (action.kind === 'data_action') {
+    const t = action.action.actionType.replace(/_/g, ' ');
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
   return action.menuName;
 }
 
@@ -29,6 +33,9 @@ function actionSubtitle(action: ChatPendingAction): string | null {
   if (action.kind === 'analysis_plan') {
     const line = formatPlanVariablesLine(action.plan);
     return line || null;
+  }
+  if (action.kind === 'data_action') {
+    return action.action.rationale?.slice(0, 120) || 'Apply to spreadsheet';
   }
   return ANALYSIS_LABELS[action.op] ?? null;
 }
@@ -119,7 +126,9 @@ export function ChatAnalysisApproval({
       )}
     >
       <div className="border-b border-border/80 px-3 py-2">
-        <p className="text-[11px] font-medium text-foreground">Run analysis</p>
+        <p className="text-[11px] font-medium text-foreground">
+          {action.kind === 'data_action' ? 'Apply to spreadsheet' : 'Run analysis'}
+        </p>
         <p className="mt-0.5 text-[12px] text-foreground">
           <span className="font-medium">{title}</span>
           {subtitle ? <span className="text-muted-foreground"> · {subtitle}</span> : null}
@@ -145,17 +154,19 @@ export function ChatAnalysisApproval({
           <X className="size-3" aria-hidden />
           Skip
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="h-7 gap-1 px-2 text-[11px]"
-          onClick={onManage}
-          disabled={buttonsLocked}
-        >
-          <Settings2 className="size-3" aria-hidden />
-          Manage
-        </Button>
+        {action.kind !== 'data_action' ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-7 gap-1 px-2 text-[11px]"
+            onClick={onManage}
+            disabled={buttonsLocked}
+          >
+            <Settings2 className="size-3" aria-hidden />
+            Manage
+          </Button>
+        ) : null}
         <Button
           type="button"
           size="sm"
@@ -168,7 +179,9 @@ export function ChatAnalysisApproval({
           ) : (
             <Play className="size-3" aria-hidden />
           )}
-          {acceptLabel(action.status)}
+          {action.kind === 'data_action' && action.status === 'pending'
+            ? 'Apply'
+            : acceptLabel(action.status)}
         </Button>
       </div>
     </div>

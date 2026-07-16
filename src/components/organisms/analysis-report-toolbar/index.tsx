@@ -22,6 +22,7 @@ type Props = {
   onExport?: () => void;
   onExportCsv?: () => void;
   onExportMarkdown?: () => void;
+  onExportHtml?: () => void;
   onNewAnalysis?: () => void;
 };
 
@@ -34,6 +35,7 @@ export function AnalysisReportToolbar({
   onExport,
   onExportCsv,
   onExportMarkdown,
+  onExportHtml,
   onNewAnalysis,
 }: Props) {
   const { currentProject } = useProjectStore();
@@ -91,6 +93,9 @@ export function AnalysisReportToolbar({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onExportMarkdown} disabled={!onExportMarkdown}>
                 Markdown
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onExportHtml} disabled={!onExportHtml}>
+                HTML report
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => window.print()}>Print / PDF</DropdownMenuItem>
             </DropdownMenuContent>

@@ -21,10 +21,19 @@ export type ParseIntentResult = {
   clarification_questions?: string[];
   validation_errors?: string[];
   reason_if_unsupported?: string | null;
+  intent_kind?: 'analysis' | 'action' | null;
+  action_type?: string | null;
+  action_spec?: Record<string, unknown> | null;
+  auto_execute?: boolean;
 };
 
 export type ParseIntentAssistantUpdate =
   | { type: 'plan'; content: string; plan: AgentAnalysisPlan }
+  | {
+      type: 'action';
+      content: string;
+      action: import('@/lib/chat-pending-action').AgentDataAction;
+    }
   | { type: 'clarification'; content: string }
   | { type: 'unsupported'; content: string }
   | {
@@ -71,6 +80,21 @@ export function assistantUpdateFromParseIntent(
   menuName: string,
   triggerMessage?: string
 ): ParseIntentAssistantUpdate {
+  if (intent.status === 'plan' && (intent.intent_kind === 'action' || intent.action_type)) {
+    if (intent.action_type) {
+      return {
+        type: 'action',
+        content: intent.interpretation || `I'll run **${intent.action_type.replace(/_/g, ' ')}**.`,
+        action: {
+          actionType: intent.action_type,
+          spec: intent.action_spec ?? {},
+          rationale: intent.interpretation,
+          autoExecute: Boolean(intent.auto_execute),
+        },
+      };
+    }
+  }
+
   if (intent.status === 'plan') {
     const plan = planFromParseIntent(intent);
     if (plan) {
@@ -134,6 +158,13 @@ export function pendingActionFromParseIntentUpdate(
 ): ChatPendingAction | undefined {
   if (update.type === 'plan') {
     return { kind: 'analysis_plan', status: 'pending', plan: update.plan };
+  }
+  if (update.type === 'action') {
+    // Read actions auto-execute in the panel; filter preview becomes confirm-to-apply.
+    if (update.action.autoExecute && update.action.actionType !== 'filter_preview') {
+      return undefined;
+    }
+    return { kind: 'data_action', status: 'pending', action: update.action };
   }
   if (update.type === 'no_plan') {
     const fb = menuFallbackFromParseUpdate(update, menuFallback);

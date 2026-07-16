@@ -4,6 +4,9 @@ export interface SheetStatusSnapshot {
   visibleColumns: number;
   totalColumns: number;
   cellRef: string | null;
+  selectionCount?: number | null;
+  selectionSum?: number | null;
+  selectionAvg?: number | null;
 }
 
 interface WorkspaceSheetStatusState {

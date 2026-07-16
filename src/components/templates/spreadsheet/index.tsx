@@ -2341,8 +2341,47 @@ export function Spreadsheet({
       cellRef = `${label}${focusedCell.rowIndex + 1}`;
     }
 
-    onSheetStatusChange({ visibleColumns, totalColumns, cellRef });
-  }, [focusedCell, columnVisibility, table, getVisibleColumns, onSheetStatusChange]);
+    let selectionCount: number | null = null;
+    let selectionSum: number | null = null;
+    let selectionAvg: number | null = null;
+    if (cellSelection) {
+      const visibleColumnIds = getVisibleColumns().map(c => c.id);
+      const cells = getCellsInRange(cellSelection, visibleColumnIds);
+      const nums: number[] = [];
+      for (const cell of cells) {
+        const row = data[cell.rowIndex];
+        if (!row) continue;
+        const raw = row[cell.columnId];
+        if (raw == null || raw === '') continue;
+        const n = typeof raw === 'number' ? raw : Number(String(raw).replace(/,/g, ''));
+        if (Number.isFinite(n)) nums.push(n);
+      }
+      if (nums.length) {
+        selectionCount = nums.length;
+        selectionSum = nums.reduce((a, b) => a + b, 0);
+        selectionAvg = selectionSum / nums.length;
+      } else if (cells.length) {
+        selectionCount = cells.length;
+      }
+    }
+
+    onSheetStatusChange({
+      visibleColumns,
+      totalColumns,
+      cellRef,
+      selectionCount,
+      selectionSum,
+      selectionAvg,
+    });
+  }, [
+    focusedCell,
+    cellSelection,
+    data,
+    columnVisibility,
+    table,
+    getVisibleColumns,
+    onSheetStatusChange,
+  ]);
 
   const saveSpreadsheetState = useCallback(
     _.debounce(() => {

@@ -848,12 +848,41 @@ class ApiClient {
         clarification_questions?: string[];
         validation_errors?: string[];
         reason_if_unsupported?: string | null;
+        intent_kind?: 'analysis' | 'action' | null;
+        action_type?: string | null;
+        action_spec?: Record<string, unknown> | null;
+        auto_execute?: boolean;
       }>('/assistant/parse-intent', {
         method: 'POST',
         body: JSON.stringify({
           dataset_id: data.datasetId,
           message: data.message,
           conversation_history: data.conversationHistory ?? null,
+        }),
+      }),
+    executeAction: (data: {
+      datasetId: string;
+      actionType: string;
+      actionSpec?: Record<string, unknown> | null;
+    }) =>
+      this.request<{
+        ok: boolean;
+        action_type: string;
+        answer_markdown: string;
+        answer_summary?: string;
+        filters?: Array<{ columnId: string; operator: string; value: unknown }>;
+        matched_rows?: number;
+        total_rows?: number;
+        requires_confirm?: boolean;
+        apply_to_ui?: boolean;
+        chart?: Record<string, unknown>;
+        error?: string;
+      }>('/assistant/execute-action', {
+        method: 'POST',
+        body: JSON.stringify({
+          dataset_id: data.datasetId,
+          action_type: data.actionType,
+          action_spec: data.actionSpec ?? null,
         }),
       }),
     followup: (data: {

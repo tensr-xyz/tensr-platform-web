@@ -17,6 +17,10 @@ export interface SheetStatusSnapshot {
   visibleColumns: number;
   totalColumns: number;
   cellRef: string | null;
+  /** Selection aggregates for Excel-style status bar (D2). */
+  selectionCount?: number | null;
+  selectionSum?: number | null;
+  selectionAvg?: number | null;
 }
 
 export interface SpreadsheetProps {

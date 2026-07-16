@@ -100,6 +100,7 @@ type Props = {
   onExport?: () => void;
   onExportCsv?: () => void;
   onExportMarkdown?: () => void;
+  onExportHtml?: () => void;
   annotations?: ReportAnnotation[];
   annotationTarget?: string;
   annotationComposerOpen?: boolean;
@@ -121,6 +122,7 @@ export function AnalysisReportRail({
   onExport,
   onExportCsv,
   onExportMarkdown,
+  onExportHtml,
   annotations = [],
   annotationTarget,
   annotationComposerOpen = false,
@@ -151,6 +153,7 @@ export function AnalysisReportRail({
     { label: 'Copy summary', icon: FileText, onClick: onExport },
     { label: 'CSV (all tables)', icon: FileText, onClick: onExportCsv },
     { label: 'Markdown', icon: FileText, onClick: onExportMarkdown },
+    { label: 'HTML report', icon: FileText, onClick: onExportHtml },
     { label: 'Print / PDF', icon: Download, onClick: () => window.print() },
   ];
 

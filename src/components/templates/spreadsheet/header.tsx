@@ -247,37 +247,51 @@ const HeaderCell = React.memo<HeaderCellProps>(
               />
             ) : (
               <DropdownMenu modal={false} open={dropdownOpen} onOpenChange={setDropdownOpen}>
-                <DropdownMenuTrigger asChild onClick={handleDropdownTriggerClick}>
-                  <button
-                    type="button"
-                    title={quickSummary || undefined}
-                    className={cn(
-                      'flex h-8 min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-sm px-1.5 text-left hover:bg-muted/60',
-                      dropdownOpen && 'bg-muted/60'
-                    )}
-                    onDoubleClick={e => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      handleRenameClick();
-                    }}
-                  >
-                    {heatmapEnabled ? (
-                      <span
-                        className="size-1.5 shrink-0 rounded-full bg-[hsl(250,100%,63%)]"
-                        title="Heatmap active"
-                        aria-hidden
-                      />
-                    ) : null}
-                    <span
-                      className={cn(
-                        'min-w-0 flex-1 truncate font-normal',
-                        heatmapEnabled && 'text-[hsl(250,100%,63%)]'
-                      )}
-                    >
-                      {column.columnDef.header as string}
-                    </span>
-                  </button>
-                </DropdownMenuTrigger>
+                <TooltipProvider delayDuration={400}>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuTrigger asChild onClick={handleDropdownTriggerClick}>
+                        <button
+                          type="button"
+                          className={cn(
+                            'flex h-8 min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-sm px-1.5 text-left hover:bg-muted/60',
+                            dropdownOpen && 'bg-muted/60'
+                          )}
+                          onDoubleClick={e => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleRenameClick();
+                          }}
+                        >
+                          {heatmapEnabled ? (
+                            <span
+                              className="size-1.5 shrink-0 rounded-full bg-[hsl(250,100%,63%)]"
+                              aria-hidden
+                            />
+                          ) : null}
+                          <span
+                            className={cn(
+                              'min-w-0 flex-1 truncate font-normal',
+                              heatmapEnabled && 'text-[hsl(250,100%,63%)]'
+                            )}
+                          >
+                            {column.columnDef.header as string}
+                          </span>
+                        </button>
+                      </DropdownMenuTrigger>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      <div className="text-xs">
+                        <div className="font-medium">
+                          {String(column.columnDef.header ?? column.id)}
+                        </div>
+                        {quickSummary ? (
+                          <div className="mt-1 text-muted-foreground">{quickSummary}</div>
+                        ) : null}
+                      </div>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
                 <DropdownMenuContent
                   align="start"
                   className="w-72"

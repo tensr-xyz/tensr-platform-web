@@ -112,20 +112,20 @@ function pickHighlightTable(report: AnalysisReport): AnalysisReportTable | undef
   return report.tables.find(t => t.rows.length > 0);
 }
 
-/** Rich markdown for agent chat — metrics, interpretation, and a compact table. */
+/** Rich markdown for agent chat — answer first, then metrics/detail. */
 export function formatAnalysisReportForAgentChat(report: AnalysisReport): string {
   const lines: string[] = [];
+
+  if (report.summary) {
+    lines.push(`**Answer:** ${report.summary}`);
+    lines.push('');
+  }
 
   lines.push(`### ${report.meta.title}`);
   if (report.meta.subtitle) {
     lines.push(`*${report.meta.subtitle}*`);
   }
   lines.push('');
-
-  if (report.summary) {
-    lines.push(report.summary);
-    lines.push('');
-  }
 
   if (report.metrics.length) {
     lines.push('**Key results**');

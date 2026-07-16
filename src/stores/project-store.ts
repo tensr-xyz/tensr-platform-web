@@ -235,7 +235,7 @@ type ProjectStore = ProjectState & ProjectActions;
 const initialState: ProjectState = {
   // UI State
   activeView: ViewType.SPREADSHEET,
-  rightPanelOpen: false,
+  rightPanelOpen: true,
   leftPanelOpen: true,
   leftSidebarOpen: true,
   footerOpen: true,

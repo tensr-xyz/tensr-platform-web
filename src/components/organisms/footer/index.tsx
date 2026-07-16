@@ -48,6 +48,26 @@ const Footer = ({ isLoading, activeTab, rowCount }: FooterProps) => {
               </span>
             </>
           ) : null}
+          {sheetStatus?.selectionCount != null && sheetStatus.selectionCount > 0 ? (
+            <>
+              <span className="text-border/80" aria-hidden>
+                ·
+              </span>
+              <span className="tabular-nums">
+                Count: {sheetStatus.selectionCount.toLocaleString()}
+                {sheetStatus.selectionSum != null
+                  ? ` · Sum: ${sheetStatus.selectionSum.toLocaleString(undefined, {
+                      maximumFractionDigits: 4,
+                    })}`
+                  : ''}
+                {sheetStatus.selectionAvg != null
+                  ? ` · Avg: ${sheetStatus.selectionAvg.toLocaleString(undefined, {
+                      maximumFractionDigits: 4,
+                    })}`
+                  : ''}
+              </span>
+            </>
+          ) : null}
           <span className="flex-1" />
           {sheetStatus?.cellRef ? (
             <span className="tabular-nums text-foreground/80">{sheetStatus.cellRef}</span>
