@@ -12,6 +12,7 @@ import {
   reportToHtml,
   reportToMarkdown,
 } from '@/lib/report-export';
+import { apiClient } from '@/lib/api-client';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import type { AnalysisKey } from '@/lib/analysis-definitions';
 
@@ -37,6 +38,7 @@ export function AnalysisReportLayout({
   const [annotations, setAnnotations] = useState<ReportAnnotation[]>([]);
   const [annotationTarget, setAnnotationTarget] = useState<string | undefined>();
   const [annotationComposerOpen, setAnnotationComposerOpen] = useState(false);
+  const [synthesizing, setSynthesizing] = useState(false);
   const annotationInputRef = useRef<HTMLTextAreaElement>(null);
   const openSetup = useAnalysisSetupStore(s => s.openSetup);
 
@@ -122,6 +124,32 @@ export function AnalysisReportLayout({
     downloadTextFile(html, `${slug}.html`, 'text/html;charset=utf-8');
   }, [report]);
 
+  const handleExportNarrative = useCallback(async () => {
+    if (synthesizing) return;
+    setSynthesizing(true);
+    try {
+      const charts = report.charts?.length ? report.charts : report.chart ? [report.chart] : [];
+      const chartAssets = charts.filter(Boolean).map(c => ({ title: c!.title, kind: c!.kind }));
+      const result = await apiClient.assistant.synthesizeReport({
+        report: report as unknown as Record<string, unknown>,
+        datasetId: sourceDatasetId ?? null,
+        userQuestion: report.meta.subtitle || report.meta.title,
+        prepLog:
+          [report.analysis_log, report.case_exclusion_note].filter(Boolean).join('\n\n') || null,
+        chartAssets,
+        useLlm: true,
+      });
+      const slug = report.meta.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'report';
+      downloadTextFile(result.markdown, `${slug}_narrative.md`, 'text/markdown;charset=utf-8');
+      const html = reportToHtml(report, { narrativeMarkdown: result.markdown });
+      downloadTextFile(html, `${slug}_narrative.html`, 'text/html;charset=utf-8');
+    } catch (err) {
+      console.error('Narrative report synthesis failed', err);
+    } finally {
+      setSynthesizing(false);
+    }
+  }, [report, sourceDatasetId, synthesizing]);
+
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden bg-muted/20">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
@@ -135,6 +163,8 @@ export function AnalysisReportLayout({
           onExportCsv={handleExportCsv}
           onExportMarkdown={handleExportMarkdown}
           onExportHtml={handleExportHtml}
+          onExportNarrative={handleExportNarrative}
+          synthesizing={synthesizing}
           onNewAnalysis={handleNewAnalysis}
         />
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
@@ -160,6 +190,8 @@ export function AnalysisReportLayout({
           onExportCsv={handleExportCsv}
           onExportMarkdown={handleExportMarkdown}
           onExportHtml={handleExportHtml}
+          onExportNarrative={handleExportNarrative}
+          synthesizing={synthesizing}
           annotations={annotations}
           annotationTarget={annotationTarget}
           annotationComposerOpen={annotationComposerOpen}

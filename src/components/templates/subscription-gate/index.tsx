@@ -5,7 +5,11 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Loading from '@/components/molecules/loading';
 import { useAuth } from '@/hooks/api/use-auth';
 import { fetchMeProfile } from '@/lib/business-api';
-import { hasActiveSubscription, subscriptionRedirectPath } from '@/lib/subscription';
+import {
+  entitlementsResolved,
+  hasActiveSubscription,
+  subscriptionRedirectPath,
+} from '@/lib/subscription';
 import { useAuthStore } from '@/stores/auth-store';
 
 export function SubscriptionGate({ children }: { children: React.ReactNode }) {
@@ -23,13 +27,27 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
   const { isAuthReady, isLoading, hasActiveSubscription: isSubscribed } = useAuth();
   const setEntitlements = useAuthStore(state => state.setEntitlements);
   const pollingRef = useRef(false);
+  const verifyingRef = useRef(false);
 
   useEffect(() => {
     if (!isAuthReady || isLoading) return;
     if (isSubscribed) return;
 
+    let cancelled = false;
+
+    const returnToPath = () => {
+      const query = searchParams.toString();
+      return query ? `${pathname}?${query}` : pathname;
+    };
+
+    const redirectUnpaid = () => {
+      router.replace(subscriptionRedirectPath(returnToPath()));
+    };
+
     const checkoutSuccess = searchParams.get('checkout') === 'success';
-    if (checkoutSuccess && !pollingRef.current) {
+
+    const pollAfterCheckout = () => {
+      if (pollingRef.current) return;
       pollingRef.current = true;
       let attempts = 0;
       const maxAttempts = 12;
@@ -38,6 +56,7 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
         attempts += 1;
         try {
           const profile = await fetchMeProfile();
+          if (cancelled) return;
           setEntitlements(profile.entitlements);
           if (hasActiveSubscription(profile.entitlements)) {
             pollingRef.current = false;
@@ -47,6 +66,8 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
           // Webhook may still be processing.
         }
 
+        if (cancelled) return;
+
         if (attempts < maxAttempts) {
           window.setTimeout(() => {
             void poll();
@@ -55,18 +76,53 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
         }
 
         pollingRef.current = false;
-        const query = searchParams.toString();
-        const returnTo = query ? `${pathname}?${query}` : pathname;
-        router.replace(subscriptionRedirectPath(returnTo));
+        redirectUnpaid();
       };
 
       void poll();
-      return;
-    }
+    };
 
-    const query = searchParams.toString();
-    const returnTo = query ? `${pathname}?${query}` : pathname;
-    router.replace(subscriptionRedirectPath(returnTo));
+    /**
+     * Never trust Zustand alone for the unpaid bounce — promo/manual comps and
+     * webhook lag can leave entitlements null/`none` while /api/me already has
+     * an active plan. Always re-check before replace() so Back→dashboard cannot
+     * trap entitled users in a replace loop on /subscription.
+     */
+    const verifyThenMaybeRedirect = async () => {
+      if (verifyingRef.current) return;
+      verifyingRef.current = true;
+      try {
+        const profile = await fetchMeProfile();
+        if (cancelled) return;
+        setEntitlements(profile.entitlements);
+        if (hasActiveSubscription(profile.entitlements)) {
+          return;
+        }
+        if (checkoutSuccess) {
+          pollAfterCheckout();
+          return;
+        }
+        // Only bounce once entitlements are a confirmed unpaid payload.
+        if (entitlementsResolved(profile.entitlements)) {
+          redirectUnpaid();
+        }
+      } catch {
+        if (cancelled) return;
+        // Profile fetch failed: do not replace-loop on stale null entitlements.
+        // Keep showing the loading gate; AuthProvider / retry will recover.
+        if (checkoutSuccess) {
+          pollAfterCheckout();
+        }
+      } finally {
+        verifyingRef.current = false;
+      }
+    };
+
+    void verifyThenMaybeRedirect();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isSubscribed, isAuthReady, isLoading, pathname, router, searchParams, setEntitlements]);
 
   if (!isAuthReady || isLoading || !isSubscribed) {

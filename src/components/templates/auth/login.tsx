@@ -7,7 +7,7 @@ import React, { FormEvent, useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Eye, EyeOff, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/api/use-auth';
 import { redeemStoredInvitation, storePendingInviteToken } from '@/lib/business-api';
-import { subscriptionRedirectPath } from '@/lib/subscription';
+import { entitlementsResolved, subscriptionRedirectPath } from '@/lib/subscription';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
 import { dumpAuthTrace, authTrace } from '@/lib/auth-trace';
 import { storeSession } from '@/utils/auth';
@@ -26,6 +26,7 @@ const LoginTemplate = () => {
     isAuthenticated,
     isAuthReady,
     hasActiveSubscription,
+    entitlements,
     error: authError,
     stytch,
   } = useAuth();
@@ -52,6 +53,10 @@ const LoginTemplate = () => {
   // Redirect if already logged in (AuthProvider owns session/user sync)
   useEffect(() => {
     if (isLoading || !isAuthenticated || !isAuthReady) return;
+    // Wait until /api/me has populated entitlements — null means unresolved, not unpaid.
+    // Redirecting early sends entitled users (promo/manual comp) to /subscription and
+    // SubscriptionGate replace()-loops them when they hit Back.
+    if (!entitlementsResolved(entitlements)) return;
 
     authTrace('login:redirect-after-auth');
 
@@ -60,7 +65,15 @@ const LoginTemplate = () => {
       const target = returnTo && returnTo.startsWith('/') ? returnTo : '/dashboard';
       router.push(hasActiveSubscription ? target : subscriptionRedirectPath(target));
     });
-  }, [isAuthenticated, isLoading, isAuthReady, hasActiveSubscription, router, searchParams]);
+  }, [
+    isAuthenticated,
+    isLoading,
+    isAuthReady,
+    hasActiveSubscription,
+    entitlements,
+    router,
+    searchParams,
+  ]);
 
   // Handle OAuth callback (Google or GitHub)
   useEffect(() => {

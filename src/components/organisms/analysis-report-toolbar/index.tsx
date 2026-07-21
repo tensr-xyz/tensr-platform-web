@@ -23,6 +23,8 @@ type Props = {
   onExportCsv?: () => void;
   onExportMarkdown?: () => void;
   onExportHtml?: () => void;
+  onExportNarrative?: () => void;
+  synthesizing?: boolean;
   onNewAnalysis?: () => void;
 };
 
@@ -36,6 +38,8 @@ export function AnalysisReportToolbar({
   onExportCsv,
   onExportMarkdown,
   onExportHtml,
+  onExportNarrative,
+  synthesizing,
   onNewAnalysis,
 }: Props) {
   const { currentProject } = useProjectStore();
@@ -96,6 +100,12 @@ export function AnalysisReportToolbar({
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onExportHtml} disabled={!onExportHtml}>
                 HTML report
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={onExportNarrative}
+                disabled={!onExportNarrative || synthesizing}
+              >
+                {synthesizing ? 'Writing narrative…' : 'Narrative report (AI)'}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => window.print()}>Print / PDF</DropdownMenuItem>
             </DropdownMenuContent>

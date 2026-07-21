@@ -252,7 +252,7 @@ export function ReportChart({ chart }: Props) {
     );
   }
 
-  if (chart.kind === 'bar_grouped') {
+  if (chart.kind === 'bar_grouped' || chart.kind === 'line') {
     const { categories, series } = chart;
     const maxV = Math.max(1, ...series.flatMap(s => s.values));
     const sy = scaleLinear(0, maxV, PT + plotH, PT);
@@ -262,30 +262,66 @@ export function ReportChart({ chart }: Props) {
     const inner = groupW * 0.88;
     const barW = inner / Math.max(1, ns);
     const gap = groupW * 0.06;
+    const isLine = chart.kind === 'line';
     return (
       <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full max-w-full" aria-hidden>
         <text x={PL} y={12} className="fill-zinc-700 text-[11px] font-medium">
           {chart.title}
         </text>
-        {categories.flatMap((_, gi) =>
-          series.map((ser, si) => {
-            const v = ser.values[gi] ?? 0;
-            const x = PL + gi * groupW + gap + si * barW;
-            const yTop = sy(v);
-            const h = PT + plotH - yTop;
-            return (
-              <rect
-                key={`${gi}-${si}`}
-                x={x}
-                y={yTop}
-                width={Math.max(1, barW - 1)}
-                height={Math.max(0, h)}
-                fill={SERIES_FILL[si % SERIES_FILL.length]}
-                rx={1}
-              />
-            );
-          })
-        )}
+        {isLine
+          ? series.map((ser, si) => {
+              const pts = categories
+                .map((_, gi) => {
+                  const v = ser.values[gi] ?? 0;
+                  const x = PL + gi * groupW + groupW / 2;
+                  const y = sy(v);
+                  return `${x},${y}`;
+                })
+                .join(' ');
+              return (
+                <g key={ser.name}>
+                  <polyline
+                    points={pts}
+                    fill="none"
+                    stroke={SERIES_FILL[si % SERIES_FILL.length]}
+                    strokeWidth={2}
+                  />
+                  {categories.map((_, gi) => {
+                    const v = ser.values[gi] ?? 0;
+                    const x = PL + gi * groupW + groupW / 2;
+                    const y = sy(v);
+                    return (
+                      <circle
+                        key={`${ser.name}-${gi}`}
+                        cx={x}
+                        cy={y}
+                        r={2.5}
+                        fill={SERIES_FILL[si % SERIES_FILL.length]}
+                      />
+                    );
+                  })}
+                </g>
+              );
+            })
+          : categories.flatMap((_, gi) =>
+              series.map((ser, si) => {
+                const v = ser.values[gi] ?? 0;
+                const x = PL + gi * groupW + gap + si * barW;
+                const yTop = sy(v);
+                const h = PT + plotH - yTop;
+                return (
+                  <rect
+                    key={`${gi}-${si}`}
+                    x={x}
+                    y={yTop}
+                    width={Math.max(1, barW - 1)}
+                    height={Math.max(0, h)}
+                    fill={SERIES_FILL[si % SERIES_FILL.length]}
+                    rx={1}
+                  />
+                );
+              })
+            )}
         <line
           x1={PL}
           y1={PT + plotH}

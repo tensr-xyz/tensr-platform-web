@@ -96,7 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let cancelled = false;
 
-    const loadProfile = (source: 'stytch-session' | 'stored-tokens') => {
+    const loadProfile = (source: 'stytch-session' | 'stored-tokens', attempt = 0) => {
       setLoading(true);
 
       void fetchMeProfile()
@@ -107,29 +107,41 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           authTrace('AuthProvider:user-loaded', {
             userId: profile.user.userId,
             source,
+            planCode: profile.entitlements?.plan_code,
           });
           void redeemStoredInvitation().catch(() => undefined);
+          setLoading(false);
+          authTrace('AuthProvider:ready');
         })
         .catch(err => {
           if (cancelled) return;
           authTrace('AuthProvider:user-fetch-failed', {
             source,
+            attempt,
             message: err instanceof Error ? err.message : String(err),
           });
           devLog('Failed to load user profile:', err);
 
           if (!isAuthFetchFailure(err)) {
+            // Transient /me failures must not leave entitlements null forever —
+            // that looks like unpaid and traps users on /subscription.
+            if (attempt < 2) {
+              window.setTimeout(
+                () => {
+                  if (!cancelled) loadProfile(source, attempt + 1);
+                },
+                750 * (attempt + 1)
+              );
+              return;
+            }
+            setLoading(false);
+            authTrace('AuthProvider:ready-without-profile');
             return;
           }
 
           clearLocalAuth(setUser, setEntitlements, setSession);
+          setLoading(false);
           redirectToLogin();
-        })
-        .finally(() => {
-          if (!cancelled) {
-            setLoading(false);
-            authTrace('AuthProvider:ready');
-          }
         });
     };
 

@@ -1,5 +1,5 @@
 import { getSessionJwt, getSessionToken } from '@/utils/auth';
-import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { User } from '@/types/user';
 import { Entitlements } from '@/types/entitlements';
@@ -39,13 +39,10 @@ export type InvitationAcceptResult = {
 };
 
 export async function acceptInvitation(token: string): Promise<InvitationAcceptResult> {
-  const r = await fetch(
-    `${getTensrApiBaseUrl()}/api/invitations/${encodeURIComponent(token)}/accept`,
-    {
-      method: 'POST',
-      headers: authHeaders(),
-    }
-  );
+  const r = await fetch(tensrApiUrl(`/api/invitations/${encodeURIComponent(token)}/accept`), {
+    method: 'POST',
+    headers: authHeaders(),
+  });
   if (handleUnauthorizedResponse(r)) throw new Error('Session expired');
   if (!r.ok) throw new Error(formatApiError(await r.text()));
   return r.json() as Promise<InvitationAcceptResult>;
@@ -72,7 +69,9 @@ export function storePendingInviteToken(token: string): void {
 }
 
 export async function fetchMeProfile(): Promise<MeProfile> {
-  const r = await fetch(`${getTensrApiBaseUrl()}/api/me`, { headers: authHeaders() });
+  // Use tensrApiUrl so browser calls go through the same-origin /api/tensr proxy
+  // (avoids CORS failures that leave entitlements null and trap users on /subscription).
+  const r = await fetch(tensrApiUrl('/api/me'), { headers: authHeaders() });
   if (handleUnauthorizedResponse(r)) throw new Error('Session expired');
   if (!r.ok) throw new Error(formatApiError(await r.text()));
   return (await r.json()) as MeProfile;
@@ -84,7 +83,7 @@ export async function fetchCurrentUser(): Promise<User> {
 }
 
 export async function updateProfile(updates: Partial<User>): Promise<User> {
-  const r = await fetch(`${getTensrApiBaseUrl()}/api/me`, {
+  const r = await fetch(tensrApiUrl('/api/me'), {
     method: 'PATCH',
     headers: authHeaders(),
     body: JSON.stringify({

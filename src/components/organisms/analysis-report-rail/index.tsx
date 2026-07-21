@@ -101,6 +101,8 @@ type Props = {
   onExportCsv?: () => void;
   onExportMarkdown?: () => void;
   onExportHtml?: () => void;
+  onExportNarrative?: () => void;
+  synthesizing?: boolean;
   annotations?: ReportAnnotation[];
   annotationTarget?: string;
   annotationComposerOpen?: boolean;
@@ -123,6 +125,8 @@ export function AnalysisReportRail({
   onExportCsv,
   onExportMarkdown,
   onExportHtml,
+  onExportNarrative,
+  synthesizing,
   annotations = [],
   annotationTarget,
   annotationComposerOpen = false,
@@ -149,11 +153,20 @@ export function AnalysisReportRail({
   }, [sourceDatasetId, currentRunId]);
 
   const variables = pickSpecInputs(report);
+  const chartTitles = (report.charts?.length ? report.charts : report.chart ? [report.chart] : [])
+    .filter(Boolean)
+    .map(c => c!.title);
   const exportItems = [
     { label: 'Copy summary', icon: FileText, onClick: onExport },
     { label: 'CSV (all tables)', icon: FileText, onClick: onExportCsv },
     { label: 'Markdown', icon: FileText, onClick: onExportMarkdown },
     { label: 'HTML report', icon: FileText, onClick: onExportHtml },
+    {
+      label: synthesizing ? 'Writing narrative…' : 'Narrative report (AI)',
+      icon: FileText,
+      onClick: onExportNarrative,
+      disabled: synthesizing || !onExportNarrative,
+    },
     { label: 'Print / PDF', icon: Download, onClick: () => window.print() },
   ];
 
@@ -350,18 +363,48 @@ export function AnalysisReportRail({
         </div>
       </RailSection>
 
+      <RailSection label="Session artifacts">
+        <div className="flex flex-col gap-1.5">
+          <p className="text-[11px] font-medium text-foreground">{report.meta.title}</p>
+          {chartTitles.length ? (
+            <ul className="space-y-0.5 text-[11px] text-muted-foreground">
+              {chartTitles.map(t => (
+                <li key={t}>Chart · {t}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">No charts on this report.</p>
+          )}
+          {otherRuns.length > 0 ? (
+            <div className="mt-1 border-t border-border/60 pt-1.5">
+              <p className="mb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Other runs
+              </p>
+              <ul className="space-y-0.5 text-[11px] text-muted-foreground">
+                {otherRuns.slice(0, 5).map(run => (
+                  <li key={run.id}>{formatRunLabel(run)}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </div>
+      </RailSection>
+
       <RailSection label="Export">
         <div className="flex flex-col gap-0.5">
           {exportItems.map((item, i) => (
             <button
               key={i}
               type="button"
-              disabled={!item.onClick}
+              disabled={!item.onClick || Boolean((item as { disabled?: boolean }).disabled)}
               onClick={item.onClick}
               className={cn(
                 'flex items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors',
-                item.onClick && 'hover:bg-muted/50 hover:text-foreground',
-                !item.onClick && 'cursor-not-allowed opacity-50'
+                item.onClick &&
+                  !(item as { disabled?: boolean }).disabled &&
+                  'hover:bg-muted/50 hover:text-foreground',
+                (!item.onClick || (item as { disabled?: boolean }).disabled) &&
+                  'cursor-not-allowed opacity-50'
               )}
             >
               <item.icon className="size-3 shrink-0 opacity-60" aria-hidden />

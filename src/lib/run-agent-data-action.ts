@@ -16,11 +16,18 @@ export type ExecuteActionResult = {
     id?: string;
     title?: string;
     chart_type?: string;
+    kind?: string;
     x_label?: string;
     y_label?: string;
-    series?: Array<{ name?: string; x?: string[]; y?: number[] }>;
+    series?: Array<{ name?: string; x?: string[]; y?: number[]; values?: number[] }>;
+    categories?: string[];
   };
   error?: string;
+  repair?: {
+    reason?: string;
+    suggested_columns?: string[];
+    suggested_spec?: Record<string, unknown> | null;
+  };
 };
 
 export function isDataActionIntent(intent: ParseIntentResult): boolean {

@@ -47,7 +47,8 @@ const RETRYABLE_ASSISTANT_STATUSES = new Set([502, 503, 504]);
 export async function parseIntentForDataset(
   datasetId: string,
   message: string,
-  conversationHistory?: AgentConversationTurn[]
+  conversationHistory?: AgentConversationTurn[],
+  glossary?: string | null
 ): Promise<ParseIntentResult> {
   const maxAttempts = 3;
   let lastError: unknown;
@@ -58,6 +59,7 @@ export async function parseIntentForDataset(
         datasetId,
         message,
         conversationHistory,
+        glossary: glossary ?? null,
       });
     } catch (error) {
       lastError = error;

@@ -93,6 +93,14 @@ export type AnalysisReportChart =
       series: { name: string; values: number[] }[];
     }
   | {
+      kind: 'line';
+      title: string;
+      x_label: string;
+      y_label: string;
+      categories: string[];
+      series: { name: string; values: number[] }[];
+    }
+  | {
       kind: 'path_diagram';
       title: string;
       nodes: {

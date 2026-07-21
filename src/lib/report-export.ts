@@ -43,9 +43,12 @@ export function reportToMarkdown(report: AnalysisReport): string {
   if (charts.length) {
     lines.push('## Charts', '');
     for (const ch of charts) {
-      if (ch) lines.push(`- ${ch.title || 'Chart'}`);
+      if (!ch) continue;
+      const title = ch.title || 'Chart';
+      lines.push(`![${title}](chart:${encodeURIComponent(title)})`);
+      lines.push(`*Figure: ${title}* (${ch.kind})`);
+      lines.push('');
     }
-    lines.push('');
   }
 
   const tables = [...(report.spss_blocks ?? []), ...report.tables];
@@ -102,11 +105,26 @@ function chartToHtmlSnippet(chart: NonNullable<AnalysisReport['chart']>): string
       <div style="display:flex;align-items:flex-end;gap:4px;height:140px;border-bottom:1px solid #e2e8f0;padding:0 4px">${bars}</div>
       <p style="font-size:12px;color:#64748b;margin-top:0.35rem">${escHtml(chart.x_label)}</p></figure>`;
   }
-  if (chart.kind === 'bar_grouped' && chart.categories?.length) {
+  if (chart.kind === 'bar_grouped' || chart.kind === 'line') {
     const series = chart.series?.[0];
     const values = series?.values ?? [];
     const max = Math.max(...values.map(v => Math.abs(Number(v) || 0)), 1);
-    const bars = chart.categories
+    if (chart.kind === 'line' && chart.categories?.length) {
+      const pts = chart.categories
+        .map((cat, i) => {
+          const v = Number(values[i] ?? 0);
+          const x = ((i + 0.5) / chart.categories!.length) * 100;
+          const y = 100 - Math.max(2, (Math.abs(v) / max) * 90);
+          return `${x},${y}`;
+        })
+        .join(' ');
+      return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600;margin-bottom:0.5rem">${title}</figcaption>
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:140px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+          <polyline fill="none" stroke="#2563eb" stroke-width="1.5" points="${pts}" />
+        </svg>
+        <p style="font-size:12px;color:#64748b;margin-top:0.35rem">${escHtml(chart.x_label)} → ${escHtml(chart.y_label)}</p></figure>`;
+    }
+    const bars = (chart.categories ?? [])
       .map((cat, i) => {
         const v = Number(values[i] ?? 0);
         const h = Math.max(4, Math.round((Math.abs(v) / max) * 120));
@@ -124,11 +142,29 @@ function chartToHtmlSnippet(chart: NonNullable<AnalysisReport['chart']>): string
     <p style="color:#64748b;font-size:13px">Chart available in the Tensr app (export PNG/SVG from the report view).</p></figure>`;
 }
 
-/** Self-contained HTML report with answer-first narrative, tables, and inline chart sketches. */
-export function reportToHtml(report: AnalysisReport): string {
+function simpleMarkdownToHtml(md: string): string {
+  const escaped = escHtml(md);
+  const withHeadings = escaped
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(?:<li>.*<\/li>\n?)+/g, m => `<ul>${m}</ul>`)
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br/>');
+  return `<div class="narrative"><p>${withHeadings}</p></div>`;
+}
+
+/** Self-contained HTML report. Pass narrativeMarkdown from synthesize-report for LAMBDA-style prose. */
+export function reportToHtml(
+  report: AnalysisReport,
+  options?: { narrativeMarkdown?: string | null }
+): string {
   const charts = report.charts?.length ? report.charts : report.chart ? [report.chart] : [];
   const tables = [...(report.spss_blocks ?? []), ...report.tables];
   const generated = new Date(report.meta.generated_at).toLocaleString();
+  const narrative = options?.narrativeMarkdown?.trim();
 
   const metricLis = report.metrics
     .map(
@@ -157,13 +193,39 @@ export function reportToHtml(report: AnalysisReport): string {
       report.meta.spss_procedure ? ` (${escHtml(report.meta.spss_procedure)})` : ''
     }.`
   );
+  if (report.case_exclusion_note) methodBits.push(escHtml(report.case_exclusion_note));
   if (report.exclusion_summary && report.exclusion_summary.rows_excluded > 0) {
     methodBits.push(
       `Used ${report.exclusion_summary.rows_used.toLocaleString()} of ${report.exclusion_summary.rows_total.toLocaleString()} rows (${report.exclusion_summary.rows_excluded.toLocaleString()} excluded for missing data).`
     );
   }
+  if (report.analysis_log) {
+    methodBits.push(
+      `<pre style="white-space:pre-wrap;font-size:12px;margin:0.5rem 0 0">${escHtml(report.analysis_log.slice(0, 2500))}</pre>`
+    );
+  }
   for (const n of report.trust?.notes ?? []) methodBits.push(escHtml(n));
   for (const w of report.trust?.warnings ?? []) methodBits.push(`Warning: ${escHtml(w)}`);
+  for (const a of report.assumption_checks?.interpretations ?? []) {
+    if (a) methodBits.push(escHtml(String(a)));
+  }
+
+  const bodyMain = narrative
+    ? `${simpleMarkdownToHtml(narrative)}
+       ${charts.map(c => (c ? chartToHtmlSnippet(c) : '')).join('\n')}
+       ${tableHtml}`
+    : `${
+        report.summary
+          ? `<div class="answer"><strong>Answer</strong><p style="margin:0.4rem 0 0">${escHtml(report.summary)}</p></div>`
+          : ''
+      }
+      ${metricLis ? `<h2>Key results</h2><ul>${metricLis}</ul>` : ''}
+      ${charts.map(c => (c ? chartToHtmlSnippet(c) : '')).join('\n')}
+      ${tableHtml}
+      <section class="methods">
+        <h2 style="margin-top:0;font-size:1.1rem">Methodology</h2>
+        <ul>${methodBits.map(b => `<li>${b}</li>`).join('')}</ul>
+      </section>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -174,31 +236,24 @@ export function reportToHtml(report: AnalysisReport): string {
 <style>
   body { font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif; color: #0f172a; max-width: 820px; margin: 2rem auto; padding: 0 1.25rem 3rem; line-height: 1.55; }
   h1 { font-size: 1.75rem; margin: 0 0 0.35rem; }
+  h2 { font-size: 1.2rem; margin: 1.5rem 0 0.6rem; }
+  h3 { font-size: 1.05rem; margin: 1.1rem 0 0.45rem; }
   .sub { color: #64748b; margin: 0 0 1.25rem; }
   .answer { background: #f8fafc; border-left: 4px solid #2563eb; padding: 0.9rem 1rem; margin: 1.25rem 0; }
+  .narrative { margin: 1rem 0 1.5rem; }
   table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
   th, td { border: 1px solid #e2e8f0; padding: 0.4rem 0.55rem; text-align: left; }
   th { background: #f1f5f9; }
   .meta { font-size: 0.85rem; color: #64748b; }
   .methods { background: #fffbeb; border: 1px solid #fde68a; padding: 0.9rem 1rem; margin-top: 2rem; }
+  ul { padding-left: 1.2rem; }
 </style>
 </head>
 <body>
   <p class="meta">Generated by Tensr · ${escHtml(generated)}</p>
   <h1>${escHtml(report.meta.title)}</h1>
   ${report.meta.subtitle ? `<p class="sub">${escHtml(report.meta.subtitle)}</p>` : ''}
-  ${
-    report.summary
-      ? `<div class="answer"><strong>Answer</strong><p style="margin:0.4rem 0 0">${escHtml(report.summary)}</p></div>`
-      : ''
-  }
-  ${metricLis ? `<h2>Key results</h2><ul>${metricLis}</ul>` : ''}
-  ${charts.map(c => (c ? chartToHtmlSnippet(c) : '')).join('\n')}
-  ${tableHtml}
-  <section class="methods">
-    <h2 style="margin-top:0;font-size:1.1rem">Methodology</h2>
-    <ul>${methodBits.map(b => `<li>${b}</li>`).join('')}</ul>
-  </section>
+  ${bodyMain}
 </body>
 </html>`;
 }

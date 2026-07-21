@@ -20,6 +20,10 @@ export interface ChatMessage {
   thinkingLines?: string[];
   /** Result markdown appended after thinking lines (typewriter + final render). */
   resultMarkdown?: string;
+  /** Alternate columns suggested after a failed/empty data action (A6). */
+  repairSuggestions?: string[];
+  /** Spec used to retry a data action when a repair chip is clicked. */
+  repairBase?: { actionType: string; spec: Record<string, unknown> };
 }
 
 export interface ChatThread {

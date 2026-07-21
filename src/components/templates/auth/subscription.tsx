@@ -20,13 +20,13 @@ import { useAuth } from '@/hooks/api/use-auth';
 import Loading from '@/components/molecules/loading';
 import Link from 'next/link';
 import Image from 'next/image';
-import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { hasActiveSubscription } from '@/lib/subscription';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   SpssSwitcherSignupOption,
   setSpssSwitcherPrefs,
 } from '@/components/templates/auth/spss-switcher-flow';
-
-const API_BASE_URL = getTensrApiBaseUrl();
 
 interface PricingTier {
   monthly: number;
@@ -131,7 +131,8 @@ export default function SubscriptionCheckoutPage() {
   const searchParams = useSearchParams();
   const returnTo = searchParams.get('returnTo');
   const postSubscriptionPath = returnTo && returnTo.startsWith('/') ? returnTo : '/dashboard';
-  const { session, entitlements } = useAuth();
+  const { session, entitlements, isAuthReady, isLoading } = useAuth();
+  const setEntitlements = useAuthStore(state => state.setEntitlements);
 
   const [billingType, setBillingType] = useState<'monthly' | 'annual'>('monthly');
   const [teamSeats, setTeamSeats] = useState(DEFAULT_TEAM_SEATS);
@@ -144,6 +145,15 @@ export default function SubscriptionCheckoutPage() {
   const currentPlan = entitlements?.plan_code ? PLAN_KEY_MAP[entitlements.plan_code] || null : null;
   const hasActivePlan =
     !!currentPlan && SUBSCRIPTION_TIERS.includes(currentPlan as SubscriptionTier);
+
+  // Entitled users bounced here (login/gate with ?returnTo=) should continue into the app.
+  // Bare /subscription without returnTo stays available for plan changes.
+  useEffect(() => {
+    if (!isAuthReady || isLoading) return;
+    if (!returnTo || !returnTo.startsWith('/')) return;
+    if (!hasActiveSubscription(entitlements)) return;
+    router.replace(postSubscriptionPath);
+  }, [isAuthReady, isLoading, returnTo, entitlements, router, postSubscriptionPath]);
 
   const validateSeats = (tier: SubscriptionTier) => {
     if (tier !== 'team') return true;
@@ -200,7 +210,7 @@ export default function SubscriptionCheckoutPage() {
       // Persist before Stripe redirect so prefs survive Hosted Checkout.
       persistSpssPrefsIfNeeded();
 
-      const response = await fetch(`${API_BASE_URL}/api/billing/checkout-session`, {
+      const response = await fetch(tensrApiUrl('/api/billing/checkout-session'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -231,6 +241,12 @@ export default function SubscriptionCheckoutPage() {
         return;
       }
 
+      // Local/dev checkout activates immediately — apply entitlements before navigating
+      // so SubscriptionGate does not bounce on stale plan_code: none.
+      if (data.entitlements) {
+        setEntitlements(data.entitlements);
+      }
+
       router.push(
         `${postSubscriptionPath}${postSubscriptionPath.includes('?') ? '&' : '?'}checkout=success`
       );
@@ -248,7 +264,7 @@ export default function SubscriptionCheckoutPage() {
     const fetchPlans = async () => {
       try {
         setLoadingPlans(true);
-        const response = await fetch(`${API_BASE_URL}/api/billing/plans`);
+        const response = await fetch(tensrApiUrl('/api/billing/plans'));
         if (!response.ok) {
           throw new Error('Failed to fetch pricing plans');
         }

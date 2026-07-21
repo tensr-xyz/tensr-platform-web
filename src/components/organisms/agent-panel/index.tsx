@@ -112,6 +112,8 @@ function ChatMessageBody({
   resultMarkdown,
   charts,
   isStreaming,
+  repairSuggestions,
+  onRepairPick,
 }: {
   role: 'user' | 'assistant';
   content: string;
@@ -119,12 +121,15 @@ function ChatMessageBody({
   resultMarkdown?: string;
   charts?: AnalysisReportChart[];
   isStreaming?: boolean;
+  repairSuggestions?: string[];
+  onRepairPick?: (column: string) => void;
 }) {
   if (role === 'user') {
     return <div className="whitespace-pre-wrap break-words text-sm">{content}</div>;
   }
 
   const hasThinking = (thinkingLines?.length ?? 0) > 0;
+  const showChecklist = (thinkingLines?.length ?? 0) >= 5;
   const showPlan = Boolean(content?.trim());
   const showResult = Boolean(resultMarkdown?.trim());
   const streamingResult = isStreaming && showResult;
@@ -139,7 +144,33 @@ function ChatMessageBody({
             </div>
           ) : null}
 
-          {hasThinking ? (
+          {showChecklist ? (
+            <ol
+              className={cn(
+                'mt-2 space-y-1 rounded-md border border-border/60 bg-muted/30 p-2 text-xs',
+                showPlan && 'mt-2'
+              )}
+            >
+              {thinkingLines!.map((line, i) => {
+                const isLast = i === thinkingLines!.length - 1;
+                const done = !isLast || !isStreaming;
+                return (
+                  <li
+                    key={`${i}-${line.slice(0, 24)}`}
+                    className="flex gap-2 text-muted-foreground"
+                  >
+                    <span
+                      className={cn(
+                        'mt-0.5 size-1.5 shrink-0 rounded-full',
+                        done ? 'bg-emerald-500' : 'bg-amber-500'
+                      )}
+                    />
+                    <span className={cn(isLast && isStreaming && 'text-foreground')}>{line}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          ) : hasThinking ? (
             <div className={cn('space-y-1.5', showPlan && 'mt-2')}>
               {thinkingLines!.map((line, i) => (
                 <p
@@ -148,6 +179,21 @@ function ChatMessageBody({
                 >
                   {line}
                 </p>
+              ))}
+            </div>
+          ) : null}
+
+          {repairSuggestions?.length && onRepairPick ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {repairSuggestions.map(col => (
+                <button
+                  key={col}
+                  type="button"
+                  className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-muted"
+                  onClick={() => onRepairPick(col)}
+                >
+                  Try {col}
+                </button>
               ))}
             </div>
           ) : null}
@@ -275,6 +321,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const { currentProject } = useProjectStore();
   const fileSystem = useProjectStore(s => s.fileSystem);
   const projectId = currentProject?.id || 'default-project';
+  const projectGlossary = currentProject?.description?.trim() || null;
 
   const workspaceDatasetId = useMemo(
     () =>
@@ -437,7 +484,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                 const intent = await parseIntentForDataset(
                   datasetIdForIntent,
                   currentMessage,
-                  conversationHistory
+                  conversationHistory,
+                  projectGlossary
                 );
                 const parsed = assistantUpdateFromParseIntent(
                   intent,
@@ -757,7 +805,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           const intent = await parseIntentForDataset(
             datasetIdForIntent,
             currentMessage,
-            conversationHistory
+            conversationHistory,
+            projectGlossary
           );
           const parsed = assistantUpdateFromParseIntent(intent, 'Data action', currentMessage);
 
@@ -779,11 +828,22 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               result.ok && result.filters?.length
                 ? pendingFilterApplyFromResult(parsed.action, result)
                 : undefined;
+            const repairCols = result.repair?.suggested_columns?.filter(Boolean) ?? [];
             updateMessage(projectId, assistantMessageId, {
               content: result.answer_markdown || parsed.content,
               isStreaming: false,
               charts: charts.length ? charts : undefined,
               pendingAction: pending,
+              repairSuggestions: repairCols.length ? repairCols.slice(0, 5) : undefined,
+              repairBase: repairCols.length
+                ? {
+                    actionType: parsed.action.actionType,
+                    spec: {
+                      ...parsed.action.spec,
+                      ...(result.repair?.suggested_spec ?? {}),
+                    },
+                  }
+                : undefined,
             });
             return;
           }
@@ -880,7 +940,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           const intent = await parseIntentForDataset(
             datasetIdForIntent,
             currentMessage,
-            conversationHistory
+            conversationHistory,
+            projectGlossary
           );
           const parsed = assistantUpdateFromParseIntent(
             intent,
@@ -1148,7 +1209,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     const intent = await parseIntentForDataset(
       datasetId,
       action.triggerMessage,
-      buildAgentConversationHistory(messages)
+      buildAgentConversationHistory(messages),
+      projectGlossary
     );
     const agentPlan = planFromParseIntent(intent);
     if (!agentPlan) {
@@ -1716,6 +1778,42 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                               resultMarkdown={message.resultMarkdown}
                               charts={message.charts}
                               isStreaming={message.isStreaming}
+                              repairSuggestions={message.repairSuggestions}
+                              onRepairPick={
+                                message.repairBase
+                                  ? (column: string) => {
+                                      const dsId =
+                                        workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
+                                      if (!dsId) return;
+                                      void (async () => {
+                                        const base = message.repairBase!;
+                                        const spec = {
+                                          ...base.spec,
+                                          column,
+                                          value_column: column,
+                                          y_column: column,
+                                          x_column: column,
+                                        };
+                                        const result = await executeDataActionForDataset(dsId, {
+                                          actionType: base.actionType,
+                                          spec,
+                                          rationale: `Retry with ${column}`,
+                                          autoExecute: true,
+                                        });
+                                        const charts: AnalysisReportChart[] = [];
+                                        if (result.chart) {
+                                          charts.push(result.chart as AnalysisReportChart);
+                                        }
+                                        updateMessage(projectId, message.id, {
+                                          content: result.answer_markdown,
+                                          charts: charts.length ? charts : undefined,
+                                          repairSuggestions: undefined,
+                                          repairBase: undefined,
+                                        });
+                                      })();
+                                    }
+                                  : undefined
+                              }
                             />
                           ) : (
                             <pre className="overflow-x-auto text-xs">

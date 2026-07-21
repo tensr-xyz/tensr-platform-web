@@ -838,6 +838,7 @@ class ApiClient {
       datasetId: string;
       message: string;
       conversationHistory?: Array<{ role: string; content: string }>;
+      glossary?: string | null;
     }) =>
       this.request<{
         status: string;
@@ -858,6 +859,7 @@ class ApiClient {
           dataset_id: data.datasetId,
           message: data.message,
           conversation_history: data.conversationHistory ?? null,
+          glossary: data.glossary ?? null,
         }),
       }),
     executeAction: (data: {
@@ -877,12 +879,39 @@ class ApiClient {
         apply_to_ui?: boolean;
         chart?: Record<string, unknown>;
         error?: string;
+        repair?: {
+          reason?: string;
+          suggested_columns?: string[];
+          suggested_spec?: Record<string, unknown> | null;
+        };
       }>('/assistant/execute-action', {
         method: 'POST',
         body: JSON.stringify({
           dataset_id: data.datasetId,
           action_type: data.actionType,
           action_spec: data.actionSpec ?? null,
+        }),
+      }),
+    synthesizeReport: (data: {
+      report: Record<string, unknown>;
+      datasetId?: string | null;
+      userQuestion?: string | null;
+      prepLog?: string | null;
+      chartAssets?: Array<{ title?: string; kind?: string; note?: string }>;
+      useLlm?: boolean;
+    }) =>
+      this.request<{
+        markdown: string;
+        source: 'llm' | 'template';
+      }>('/assistant/synthesize-report', {
+        method: 'POST',
+        body: JSON.stringify({
+          report: data.report,
+          dataset_id: data.datasetId ?? null,
+          user_question: data.userQuestion ?? null,
+          prep_log: data.prepLog ?? null,
+          chart_assets: data.chartAssets ?? null,
+          use_llm: data.useLlm ?? true,
         }),
       }),
     followup: (data: {
