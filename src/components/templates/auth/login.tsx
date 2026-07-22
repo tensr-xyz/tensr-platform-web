@@ -13,6 +13,7 @@ import { dumpAuthTrace, authTrace } from '@/lib/auth-trace';
 import { storeSession } from '@/utils/auth';
 import Link from 'next/link';
 import Image from 'next/image';
+import posthog from 'posthog-js';
 
 const LoginTemplate = () => {
   const router = useRouter();
@@ -96,6 +97,8 @@ const LoginTemplate = () => {
           storeSession(response.session_token, response.session_jwt);
         }
         await redeemStoredInvitation();
+        // Identify happens in AuthProvider when /me succeeds; only record the sign-in here.
+        posthog.capture('user_signed_in', { method: 'oauth' });
         // Session + profile sync handled by AuthProvider; redirect useEffect runs when ready.
       })
       .catch(err => {
@@ -115,6 +118,7 @@ const LoginTemplate = () => {
     try {
       setIsGoogleLoading(true);
       setError('');
+      posthog.capture('oauth_login_started', { provider: 'google' });
       const redirectUrl = new URL('/login', window.location.origin).toString();
       await stytch.oauth.google.start({
         login_redirect_url: redirectUrl,
@@ -133,6 +137,7 @@ const LoginTemplate = () => {
     try {
       setIsGitHubLoading(true);
       setError('');
+      posthog.capture('oauth_login_started', { provider: 'github' });
       const redirectUrl = new URL('/login', window.location.origin).toString();
       await stytch.oauth.github.start({
         login_redirect_url: redirectUrl,
@@ -171,6 +176,7 @@ const LoginTemplate = () => {
         setMethodId(result.methodId);
         setIsVerifying(true);
         setError('');
+        posthog.capture('login_initiated', { method: 'email_otp' });
       } else {
         setError('Failed to initialize authentication. Please try again.');
         console.error('No methodId returned from initiateAuth', result);

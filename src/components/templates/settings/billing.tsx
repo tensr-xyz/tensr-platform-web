@@ -26,6 +26,7 @@ import {
 import { Skeleton } from '@/components/atoms/skeleton';
 import { useBilling } from '@/hooks/api/use-billing'; // Import your existing hook
 import { Subscription, Invoice } from '@/hooks/api/use-billing';
+import posthog from 'posthog-js';
 
 export default function BillingSettings() {
   const router = useRouter();
@@ -54,6 +55,10 @@ export default function BillingSettings() {
     try {
       const success = await cancelSubscription();
       if (success) {
+        posthog.capture('subscription_cancelled', {
+          plan: subscription?.tier,
+          billing_type: subscription?.billingType,
+        });
         setIsCancelDialogOpen(false);
         // Data will be automatically refreshed by the hook
       }

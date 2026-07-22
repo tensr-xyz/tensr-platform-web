@@ -31,6 +31,26 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
 
+  // PostHog reverse proxy — avoids ad-blocker interference with client-side analytics
+  async rewrites() {
+    return [
+      {
+        source: '/ingest/static/:path*',
+        destination: 'https://us-assets.i.posthog.com/static/:path*',
+      },
+      {
+        source: '/ingest/array/:path*',
+        destination: 'https://us-assets.i.posthog.com/array/:path*',
+      },
+      {
+        source: '/ingest/:path*',
+        destination: 'https://us.i.posthog.com/:path*',
+      },
+    ];
+  },
+
+  skipTrailingSlashRedirect: true,
+
   // Headers for caching and security
   async headers() {
     return [

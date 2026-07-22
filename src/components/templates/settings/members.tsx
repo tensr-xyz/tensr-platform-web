@@ -30,6 +30,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { Mail, UserPlus, Trash, Settings } from 'lucide-react';
+import posthog from 'posthog-js';
 
 export default function TeamMembers() {
   const {
@@ -73,6 +74,8 @@ export default function TeamMembers() {
         role: newMemberRole,
       });
 
+      posthog.capture('team_member_invited', { role: newMemberRole });
+
       toast({
         title: 'Invitation sent',
         description: `${newMemberEmail} can join once they sign up with this email.`,
@@ -102,6 +105,8 @@ export default function TeamMembers() {
     try {
       await removeMember(activeOrganization.id, memberToRemove.userId);
 
+      posthog.capture('team_member_removed', { role: memberToRemove.role });
+
       toast({
         title: 'Team member removed',
         description: `${memberToRemove.user?.email || 'Member'} has been removed from the organization`,
@@ -128,6 +133,11 @@ export default function TeamMembers() {
 
     try {
       await updateMemberRole(activeOrganization.id, editingMember.userId, editRole);
+
+      posthog.capture('team_member_role_updated', {
+        previous_role: editingMember.role,
+        new_role: editRole,
+      });
 
       toast({
         title: 'Role updated',

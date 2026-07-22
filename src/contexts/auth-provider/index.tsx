@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useStytch, useStytchSession } from '@stytch/nextjs';
+import posthog from 'posthog-js';
 import { useAuthStore } from '@/stores/auth-store';
 import { fetchMeProfile, redeemStoredInvitation } from '@/lib/business-api';
 import { redirectToLogin } from '@/lib/session-expired';
@@ -104,6 +105,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (cancelled) return;
           setUser(profile.user);
           setEntitlements(profile.entitlements);
+          // Tie anonymous PostHog sessions to this user on OAuth + hard refresh.
+          // Do not capture user_signed_in here — that would fire on every reload.
+          posthog.identify(profile.user.userId, {
+            email: profile.user.email,
+            firstName: profile.user.firstName,
+            lastName: profile.user.lastName,
+            plan: profile.entitlements?.plan_code,
+          });
           authTrace('AuthProvider:user-loaded', {
             userId: profile.user.userId,
             source,

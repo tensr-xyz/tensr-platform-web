@@ -8,6 +8,7 @@ import { fetchMeProfile, redeemStoredInvitation } from '@/lib/business-api';
 import { hasActiveSubscription } from '@/lib/subscription';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
 import { devLog } from '@/lib/dev-log';
+import posthog from 'posthog-js';
 
 export const useAuth = () => {
   const stytch = useStytch();
@@ -119,13 +120,23 @@ export const useAuth = () => {
         setUser(profile.user);
         setEntitlements(profile.entitlements);
         await redeemStoredInvitation();
+
+        // Identify the user in PostHog so all future events are linked to their profile
+        posthog.identify(profile.user.userId, {
+          email: profile.user.email,
+          firstName: profile.user.firstName,
+          lastName: profile.user.lastName,
+          plan: profile.entitlements?.plan_code,
+        });
+        posthog.capture('user_signed_in', { method: 'email_otp' });
       } catch (syncError) {
         console.warn('Failed to sync user from tensr-api:', syncError);
         if (response.user) {
           const stytchUserData = response.user as any;
+          const fallbackEmail = stytchUserData.emails?.[0]?.email || email;
           setUser({
             userId: stytchUserData.user_id,
-            email: stytchUserData.emails?.[0]?.email || email,
+            email: fallbackEmail,
             firstName: stytchUserData.name?.first_name,
             lastName: stytchUserData.name?.last_name,
             username: stytchUserData.name?.first_name,
@@ -133,6 +144,9 @@ export const useAuth = () => {
             createdAt: stytchUserData.created_at || new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           });
+
+          posthog.identify(stytchUserData.user_id, { email: fallbackEmail });
+          posthog.capture('user_signed_in', { method: 'email_otp' });
         }
       }
 
@@ -169,6 +183,9 @@ export const useAuth = () => {
   };
 
   const handleLogout = async () => {
+    posthog.capture('user_signed_out');
+    posthog.reset();
+
     try {
       if (stytch && stytchSession) {
         await stytch.session.revoke();

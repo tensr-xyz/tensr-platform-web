@@ -27,6 +27,7 @@ import {
   SpssSwitcherSignupOption,
   setSpssSwitcherPrefs,
 } from '@/components/templates/auth/spss-switcher-flow';
+import posthog from 'posthog-js';
 
 interface PricingTier {
   monthly: number;
@@ -179,6 +180,12 @@ export default function SubscriptionCheckoutPage() {
     if (currentPlan === tier) return;
     if (!validateSeats(tier)) return;
 
+    posthog.capture('subscription_checkout_started', {
+      plan: tier,
+      billing_interval: billingType,
+      seats: tier === 'team' ? teamSeats : undefined,
+    });
+
     setLoadingTier(tier);
     setErrors({});
 
@@ -312,7 +319,12 @@ export default function SubscriptionCheckoutPage() {
             <div className="inline-flex items-center gap-1 rounded-full border border-border bg-muted p-1">
               <button
                 type="button"
-                onClick={() => setBillingType('monthly')}
+                onClick={() => {
+                  setBillingType('monthly');
+                  if (billingType !== 'monthly') {
+                    posthog.capture('billing_interval_toggled', { interval: 'monthly' });
+                  }
+                }}
                 className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
                   billingType === 'monthly'
                     ? 'bg-background text-foreground shadow-sm'
@@ -323,7 +335,12 @@ export default function SubscriptionCheckoutPage() {
               </button>
               <button
                 type="button"
-                onClick={() => setBillingType('annual')}
+                onClick={() => {
+                  setBillingType('annual');
+                  if (billingType !== 'annual') {
+                    posthog.capture('billing_interval_toggled', { interval: 'annual' });
+                  }
+                }}
                 className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
                   billingType === 'annual'
                     ? 'bg-background text-foreground shadow-sm'

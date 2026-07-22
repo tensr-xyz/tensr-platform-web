@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 import Providers from '@/utils/providers';
 import { AppProvider } from '@/contexts/app-context';
@@ -66,6 +67,7 @@ export default function RootLayout({
                   <ChartProvider>
                     {children}
                     <Toaster />
+                    {process.env.NODE_ENV === 'production' ? <Analytics /> : null}
                   </ChartProvider>
                 </OrganizationProvider>
               </ProjectProvider>

@@ -11,6 +11,7 @@ import { PluginRecord } from '@/types/plugin';
 import usePlugins from '@/hooks/api/use-plugin';
 import { Loader } from '@/components/molecules/loading';
 import { devLog } from '@/lib/dev-log';
+import posthog from 'posthog-js';
 
 export default function PluginPurchase() {
   const params = useParams();
@@ -67,13 +68,31 @@ export default function PluginPurchase() {
         // Handle Stripe payment
         // This would integrate with Stripe Elements in a real implementation
         devLog('Payment intent created:', result);
+        posthog.capture('plugin_purchased', {
+          plugin_id: plugin.pluginId,
+          plugin_name: plugin.name,
+          pricing_model: plugin.pricing?.model,
+          price: plugin.pricing?.price,
+        });
         setPurchaseComplete(true);
       } else if (result.subscriptionId) {
         // Subscription created
         devLog('Subscription created:', result);
+        posthog.capture('plugin_purchased', {
+          plugin_id: plugin.pluginId,
+          plugin_name: plugin.name,
+          pricing_model: plugin.pricing?.model,
+          price: plugin.pricing?.price,
+        });
         setPurchaseComplete(true);
       } else {
         // Free plugin or direct purchase
+        posthog.capture('plugin_purchased', {
+          plugin_id: plugin.pluginId,
+          plugin_name: plugin.name,
+          pricing_model: plugin.pricing?.model,
+          price: plugin.pricing?.price,
+        });
         setPurchaseComplete(true);
       }
     } catch (err) {

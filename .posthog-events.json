@@ -1,0 +1,57 @@
+[
+  {
+    "event_name": "login_initiated",
+    "event_description": "User submits their email address to receive an OTP verification code.",
+    "file": "src/components/templates/auth/login.tsx"
+  },
+  {
+    "event_name": "oauth_login_started",
+    "event_description": "User clicks the Google or GitHub OAuth button to begin OAuth sign-in.",
+    "file": "src/components/templates/auth/login.tsx"
+  },
+  {
+    "event_name": "user_signed_in",
+    "event_description": "User successfully authenticates (OTP verified or OAuth completed) and a session is established.",
+    "file": "src/hooks/api/use-auth/index.tsx"
+  },
+  {
+    "event_name": "subscription_checkout_started",
+    "event_description": "User clicks a plan card on the subscription page and is redirected to Stripe checkout.",
+    "file": "src/components/templates/auth/subscription.tsx"
+  },
+  {
+    "event_name": "billing_interval_toggled",
+    "event_description": "User switches between monthly and annual billing on the subscription page.",
+    "file": "src/components/templates/auth/subscription.tsx"
+  },
+  {
+    "event_name": "subscription_cancelled",
+    "event_description": "User confirms cancellation of their active subscription.",
+    "file": "src/components/templates/settings/billing.tsx"
+  },
+  {
+    "event_name": "plugin_purchased",
+    "event_description": "User successfully completes a plugin purchase.",
+    "file": "src/components/templates/plugin-purchase/index.tsx"
+  },
+  {
+    "event_name": "project_created",
+    "event_description": "User creates a new project, either blank or by uploading a file.",
+    "file": "src/components/templates/project/new-project-form.tsx"
+  },
+  {
+    "event_name": "team_member_invited",
+    "event_description": "Admin sends an invitation for a new team member to join the organisation.",
+    "file": "src/components/templates/settings/members.tsx"
+  },
+  {
+    "event_name": "team_member_role_updated",
+    "event_description": "Admin changes the role of an existing team member.",
+    "file": "src/components/templates/settings/members.tsx"
+  },
+  {
+    "event_name": "team_member_removed",
+    "event_description": "Admin removes a member from the organisation.",
+    "file": "src/components/templates/settings/members.tsx"
+  }
+]

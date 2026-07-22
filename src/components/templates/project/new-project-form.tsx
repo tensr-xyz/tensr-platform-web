@@ -28,6 +28,7 @@ import {
 import { useProject } from '@/hooks/api/use-project';
 import { useProjectFileUpload } from '@/hooks/api/use-project-file-upload';
 import { ProjectStatus } from '@/types/project';
+import posthog from 'posthog-js';
 
 // Simple form schema
 const projectFormSchema = z.object({
@@ -78,6 +79,10 @@ export default function NewProjectForm() {
       if (createWithFile && selectedFile) {
         // Upload file and create project automatically
         await uploadFile(selectedFile);
+        posthog.capture('project_created', {
+          source_type: 'file_upload',
+          file_type: selectedFile.name.split('.').pop(),
+        });
       } else {
         // Create blank project
         const projectData = {
@@ -89,10 +94,14 @@ export default function NewProjectForm() {
         };
 
         const response = await createProject(projectData);
+        posthog.capture('project_created', {
+          source_type: values.sourceType,
+        });
         router.push(`/workspace/project/${response.projectId}`);
       }
     } catch (error) {
       console.error('Error creating project:', error);
+      posthog.captureException(error);
     }
   }
 
