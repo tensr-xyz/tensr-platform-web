@@ -27,8 +27,11 @@ export function validateStytchSession(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Opaque session token is the long-lived credential; JWT is short-lived and refreshed client-side.
-  const sessionToken = request.cookies.get('stytch_session_token')?.value;
+  // Opaque session token is the long-lived credential; JWT is a short-lived fallback.
+  // Either cookie is enough to pass the edge gate — AuthProvider refreshes tokens client-side.
+  const sessionToken =
+    request.cookies.get('stytch_session_token')?.value ||
+    request.cookies.get('stytch_session_jwt')?.value;
 
   if (!sessionToken) {
     const loginUrl = new URL('/login', request.url);

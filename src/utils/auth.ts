@@ -6,18 +6,31 @@ const REFRESH_TOKEN_KEY = 'stytch_refresh_token';
 const ACCESS_TOKEN_KEY = 'stytch_access_token';
 const ID_TOKEN_KEY = 'stytch_id_token';
 
+/**
+ * Session cookies must be SameSite=Lax (not Strict).
+ * Stripe Checkout returns via a cross-site top-level GET; Strict cookies are
+ * omitted on that request, so middleware sees no session and bounce-loops
+ * /dashboard → /login even though the user just paid.
+ * Secure is set on HTTPS so browsers treat the cookie as a modern session cookie.
+ */
+const cookieSecurityAttrs = (): string => {
+  const secure =
+    typeof window !== 'undefined' && window.location.protocol === 'https:' ? ';Secure' : '';
+  return `;path=/;SameSite=Lax${secure}`;
+};
+
 // Cookie helper functions
 const setCookie = (name: string, value: string, days: number = STYTCH_SESSION_COOKIE_DAYS) => {
   if (typeof window === 'undefined') return;
 
   const expires = new Date();
   expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
-  document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;SameSite=Strict`;
+  document.cookie = `${name}=${value};expires=${expires.toUTCString()}${cookieSecurityAttrs()}`;
 };
 
 const removeCookie = (name: string) => {
   if (typeof window === 'undefined') return;
-  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;SameSite=Strict`;
+  document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT${cookieSecurityAttrs()}`;
 };
 
 export const isSessionValid = (sessionToken: string, bufferMinutes = 5) => {
