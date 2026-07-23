@@ -860,8 +860,17 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             });
             return;
           }
+
+          // Never fall through to followup/coach after a data-intent attempt.
+          updateMessage(projectId, assistantMessageId, {
+            content:
+              parsed.content ||
+              'I could not turn that into a data action. Try naming the column and what you want (e.g. “top 10 by PTS”).',
+            isStreaming: false,
+          });
+          return;
         } catch (dataActionError) {
-          console.warn('data-action intent failed, falling through:', dataActionError);
+          console.warn('data-action intent failed:', dataActionError);
           updateMessage(projectId, assistantMessageId, {
             content:
               'I could not complete that data request. Try rephrasing, or use the column Filter menu.',

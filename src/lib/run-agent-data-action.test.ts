@@ -14,6 +14,14 @@ describe('shouldRouteMessageToDataIntent', () => {
     'Difference between London and Wales revenue',
     'Make a monthly line chart',
     'Create a bar chart of sales',
+    'Show me PF for the top 10 scorers',
+    'Top 10 by PTS',
+    'Top ten by points',
+    'Who scored the most',
+    'List players with PTS > 20',
+    'PF for LeBron',
+    'Bottom five by PF',
+    'Highest PF',
   ])('routes “%s” to data intent', message => {
     expect(shouldRouteMessageToDataIntent(message)).toBe(true);
   });

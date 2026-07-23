@@ -77,15 +77,30 @@ export function pendingFilterApplyFromResult(
   };
 }
 
+const WORD_N = 'one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty';
+
 export function shouldRouteMessageToDataIntent(message: string): boolean {
   const text = message.trim();
   if (!text) return false;
   return (
     /\b(how many|count|number of|total rows?|row count)\b/i.test(text) ||
     /\b(filter|show only|where|rows with|participants who)\b/i.test(text) ||
+    /\b(players?|rows?|records?)\s+with\b/i.test(text) ||
+    /\b(more than|less than|greater than|at least|over|under)\s+\d+/i.test(text) ||
+    /[A-Za-z_][A-Za-z0-9_]*\s*(>=|<=|>|<)\s*-?\d+/i.test(text) ||
     /\b(sum|total|average|mean|median)\b/i.test(text) ||
     /\b(difference between|compare .* (revenue|total|sales|amount))\b/i.test(text) ||
     /\b(chart|graph|plot|histogram|bar chart|line chart|line graph)\b/i.test(text) ||
-    /\b(make a|create a|draw a).*(chart|graph|plot)\b/i.test(text)
+    /\b(make a|create a|draw a).*(chart|graph|plot)\b/i.test(text) ||
+    new RegExp(
+      String.raw`\b(top|bottom)\s+(\d+|${WORD_N})\b|\b(highest|lowest|most|least|best|worst|scorers?|leaders?)\b`,
+      'i'
+    ).test(text) ||
+    /\b(show|list|get|give)\s+(me\s+)?.+\s+for\s+(the\s+)?(top|bottom|highest|lowest)\b/i.test(
+      text
+    ) ||
+    // Name / value lookup: "PF for LeBron", "what's LeBron's PTS"
+    /\b[A-Za-z_][A-Za-z0-9_]*\s+for\s+[A-Z][\w.'-]+/i.test(text) ||
+    /\bwhat(?:'s| is)\s+.+'s\s+[A-Za-z0-9_]+/i.test(text)
   );
 }
