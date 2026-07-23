@@ -3,8 +3,7 @@ import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { ChatComposerInput } from '@/components/molecules/chat-composer-input';
 import { Send, Loader2, AlertCircle, Trash2, History, Plus, X, Sparkles } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { AgentMarkdown } from '@/components/molecules/agent-markdown';
 import { useTabsStore, ViewType, type AgentAnalysisHistoryEntry } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ColumnFiltersState } from '@tanstack/react-table';
@@ -138,11 +137,7 @@ function ChatMessageBody({
     <>
       {showPlan || hasThinking || showResult || isStreaming ? (
         <div className="max-w-none break-words text-sm">
-          {showPlan ? (
-            <div className="prose prose-sm dark:prose-invert [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5">
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-            </div>
-          ) : null}
+          {showPlan ? <AgentMarkdown>{content}</AgentMarkdown> : null}
 
           {showChecklist ? (
             <ol
@@ -209,25 +204,17 @@ function ChatMessageBody({
           ) : null}
 
           {showResult ? (
-            <div
-              className={cn(
-                'max-w-none',
-                (showPlan || hasThinking) && 'mt-2',
-                streamingResult
-                  ? 'whitespace-pre-wrap leading-5 text-sm'
-                  : 'prose prose-sm dark:prose-invert [&_p]:my-1.5 [&_ul]:my-1.5 [&_ol]:my-1.5 [&_li]:my-0.5 [&_pre]:my-2 [&_pre]:max-h-48 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:bg-background/80 [&_pre]:p-2 [&_pre]:text-xs'
-              )}
-            >
+            <div className={cn('max-w-none', (showPlan || hasThinking) && 'mt-2')}>
               {streamingResult ? (
-                <>
+                <div className="whitespace-pre-wrap text-sm leading-5">
                   {resultMarkdown}
                   <span
                     className="ml-0.5 inline-block h-[1.1em] w-0.5 animate-pulse bg-primary align-text-bottom"
                     aria-hidden
                   />
-                </>
+                </div>
               ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{resultMarkdown!}</ReactMarkdown>
+                <AgentMarkdown>{resultMarkdown!}</AgentMarkdown>
               )}
             </div>
           ) : null}
