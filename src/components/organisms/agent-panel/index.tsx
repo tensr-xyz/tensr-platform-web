@@ -794,13 +794,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
 
       // Phase A: count / filter / aggregate / chart / descriptive compare → parse-intent + execute
       if (datasetIdForIntent && shouldRouteMessageToDataIntent(currentMessage)) {
-        const assistantMessageId = addMessage(projectId, {
-          role: 'assistant',
-          content: 'Working on that…',
-          isStreaming: true,
-          timestamp: new Date(),
-        });
-        setLoading(projectId, false);
+        // Keep the panel's "Thinking…" spinner — do not insert a fake streaming
+        // bubble ("Working on that…" + caret); that stacks two loading UIs.
         try {
           const intent = await parseIntentForDataset(
             datasetIdForIntent,
@@ -811,10 +806,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           const parsed = assistantUpdateFromParseIntent(intent, 'Data action', currentMessage);
 
           if (parsed.type === 'clarification' || parsed.type === 'unsupported') {
-            updateMessage(projectId, assistantMessageId, {
+            addMessage(projectId, {
+              role: 'assistant',
               content: parsed.content,
-              isStreaming: false,
+              timestamp: new Date(),
             });
+            setLoading(projectId, false);
             return;
           }
 
@@ -829,9 +826,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                 ? pendingFilterApplyFromResult(parsed.action, result)
                 : undefined;
             const repairCols = result.repair?.suggested_columns?.filter(Boolean) ?? [];
-            updateMessage(projectId, assistantMessageId, {
+            addMessage(projectId, {
+              role: 'assistant',
               content: result.answer_markdown || parsed.content,
-              isStreaming: false,
+              timestamp: new Date(),
               charts: charts.length ? charts : undefined,
               pendingAction: pending,
               repairSuggestions: repairCols.length ? repairCols.slice(0, 5) : undefined,
@@ -845,37 +843,44 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                   }
                 : undefined,
             });
+            setLoading(projectId, false);
             return;
           }
 
           if (parsed.type === 'plan') {
-            updateMessage(projectId, assistantMessageId, {
+            addMessage(projectId, {
+              role: 'assistant',
               content: parsed.content,
-              isStreaming: false,
+              timestamp: new Date(),
               pendingAction: {
                 kind: 'analysis_plan',
                 status: 'pending',
                 plan: parsed.plan,
               },
             });
+            setLoading(projectId, false);
             return;
           }
 
           // Never fall through to followup/coach after a data-intent attempt.
-          updateMessage(projectId, assistantMessageId, {
+          addMessage(projectId, {
+            role: 'assistant',
             content:
               parsed.content ||
               'I could not turn that into a data action. Try naming the column and what you want (e.g. “top 10 by PTS”).',
-            isStreaming: false,
+            timestamp: new Date(),
           });
+          setLoading(projectId, false);
           return;
         } catch (dataActionError) {
           console.warn('data-action intent failed:', dataActionError);
-          updateMessage(projectId, assistantMessageId, {
+          addMessage(projectId, {
+            role: 'assistant',
             content:
               'I could not complete that data request. Try rephrasing, or use the column Filter menu.',
-            isStreaming: false,
+            timestamp: new Date(),
           });
+          setLoading(projectId, false);
           return;
         }
       }
