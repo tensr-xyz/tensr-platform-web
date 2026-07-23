@@ -497,6 +497,54 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                   action.menuName,
                   currentMessage
                 );
+                if (parsed.type === 'plan' && parsed.autoExecute) {
+                  updateMessage(projectId, assistantMessageId, {
+                    content: parsed.content,
+                    isStreaming: false,
+                    pendingAction: {
+                      kind: 'analysis_plan',
+                      status: 'running',
+                      plan: parsed.plan,
+                    },
+                  });
+                  await executeAnalysisPlan(assistantMessageId, parsed.plan);
+                  return;
+                }
+                if (parsed.type === 'action' && parsed.action.autoExecute) {
+                  try {
+                    const result = await executeDataActionForDataset(
+                      datasetIdForIntent,
+                      parsed.action
+                    );
+                    const charts: AnalysisReportChart[] = [];
+                    if (result.chart) {
+                      charts.push(result.chart as AnalysisReportChart);
+                    }
+                    const pending =
+                      result.ok && result.filters?.length
+                        ? pendingFilterApplyFromResult(parsed.action, result)
+                        : undefined;
+                    updateMessage(projectId, assistantMessageId, {
+                      content: result.answer_markdown || parsed.content,
+                      isStreaming: false,
+                      charts: charts.length ? charts : undefined,
+                      pendingAction: pending,
+                    });
+                    return;
+                  } catch (actionErr) {
+                    updateMessage(projectId, assistantMessageId, {
+                      content: parsed.content,
+                      isStreaming: false,
+                      pendingAction: {
+                        kind: 'data_action',
+                        status: 'failed',
+                        action: parsed.action,
+                        errorMessage: formatApiErrorMessage(actionErr),
+                      },
+                    });
+                    return;
+                  }
+                }
                 updateMessage(projectId, assistantMessageId, {
                   content: parsed.content,
                   isStreaming: false,
@@ -821,6 +869,20 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           }
 
           if (parsed.type === 'action') {
+            if (!parsed.action.autoExecute) {
+              addMessage(projectId, {
+                role: 'assistant',
+                content: parsed.content,
+                timestamp: new Date(),
+                pendingAction: {
+                  kind: 'data_action',
+                  status: 'pending',
+                  action: parsed.action,
+                },
+              });
+              setLoading(projectId, false);
+              return;
+            }
             const result = await executeDataActionForDataset(datasetIdForIntent, parsed.action);
             const charts: AnalysisReportChart[] = [];
             if (result.chart) {
@@ -853,6 +915,21 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           }
 
           if (parsed.type === 'plan') {
+            if (parsed.autoExecute) {
+              const assistantMessageId = addMessage(projectId, {
+                role: 'assistant',
+                content: parsed.content,
+                timestamp: new Date(),
+                pendingAction: {
+                  kind: 'analysis_plan',
+                  status: 'running',
+                  plan: parsed.plan,
+                },
+              });
+              setLoading(projectId, false);
+              await executeAnalysisPlan(assistantMessageId, parsed.plan);
+              return;
+            }
             addMessage(projectId, {
               role: 'assistant',
               content: parsed.content,
@@ -977,6 +1054,18 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             triggerMessage: currentMessage,
           };
           if (parsed.type === 'action') {
+            if (!parsed.action.autoExecute) {
+              updateMessage(projectId, assistantMessageId, {
+                content: parsed.content,
+                isStreaming: false,
+                pendingAction: {
+                  kind: 'data_action',
+                  status: 'pending',
+                  action: parsed.action,
+                },
+              });
+              return;
+            }
             try {
               const result = await executeDataActionForDataset(datasetIdForIntent, parsed.action);
               const charts: AnalysisReportChart[] = [];
@@ -1005,6 +1094,20 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                 },
               });
             }
+            return;
+          }
+
+          if (parsed.type === 'plan' && parsed.autoExecute) {
+            updateMessage(projectId, assistantMessageId, {
+              content: parsed.content,
+              isStreaming: false,
+              pendingAction: {
+                kind: 'analysis_plan',
+                status: 'running',
+                plan: parsed.plan,
+              },
+            });
+            await executeAnalysisPlan(assistantMessageId, parsed.plan);
             return;
           }
 

@@ -117,7 +117,7 @@ export function formatAnalysisReportForAgentChat(report: AnalysisReport): string
   const lines: string[] = [];
 
   if (report.summary) {
-    lines.push(`**Answer:** ${report.summary}`);
+    lines.push(report.summary);
     lines.push('');
   }
 

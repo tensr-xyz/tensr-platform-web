@@ -89,7 +89,9 @@ export function shouldRouteMessageToDataIntent(message: string): boolean {
     /\b(more than|less than|greater than|at least|over|under)\s+\d+/i.test(text) ||
     /[A-Za-z_][A-Za-z0-9_]*\s*(>=|<=|>|<)\s*-?\d+/i.test(text) ||
     /\b(sum|total|average|mean|median)\b/i.test(text) ||
-    /\b(difference between|compare .* (revenue|total|sales|amount))\b/i.test(text) ||
+    /\b(difference between|differ(?:ence)?\s+between|compare\b.+\b(?:and|vs\.?|versus)\b|compared (?:to|with)|versus|\bvs\.?\b)/i.test(
+      text
+    ) ||
     /\b(chart|graph|plot|histogram|bar chart|line chart|line graph)\b/i.test(text) ||
     /\b(make a|create a|draw a).*(chart|graph|plot)\b/i.test(text) ||
     new RegExp(

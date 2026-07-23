@@ -28,7 +28,7 @@ export type ParseIntentResult = {
 };
 
 export type ParseIntentAssistantUpdate =
-  | { type: 'plan'; content: string; plan: AgentAnalysisPlan }
+  | { type: 'plan'; content: string; plan: AgentAnalysisPlan; autoExecute?: boolean }
   | {
       type: 'action';
       content: string;
@@ -104,6 +104,7 @@ export function assistantUpdateFromParseIntent(
         type: 'plan',
         content: intent.interpretation || `**${menuName}**`,
         plan,
+        autoExecute: Boolean(intent.auto_execute),
       };
     }
   }
@@ -159,6 +160,10 @@ export function pendingActionFromParseIntentUpdate(
   menuFallback: { op: AnalysisKey; menuName: string; triggerMessage: string }
 ): ChatPendingAction | undefined {
   if (update.type === 'plan') {
+    // Explicit unambiguous analyses auto-run; skip the approval card.
+    if (update.autoExecute) {
+      return undefined;
+    }
     return { kind: 'analysis_plan', status: 'pending', plan: update.plan };
   }
   if (update.type === 'action') {

@@ -75,6 +75,50 @@ describe('assistantUpdateFromParseIntent data actions', () => {
       expect(pending.action.actionType).toBe('filter_preview');
     }
   });
+
+  it('auto-executes explicit descriptives plans (no approval card)', () => {
+    const update = assistantUpdateFromParseIntent(
+      {
+        status: 'plan',
+        interpretation: 'Descriptives for PTS.',
+        intent_kind: 'analysis',
+        analysis_type: 'descriptives',
+        request_body: { columns: ['PTS'] },
+        auto_execute: true,
+      },
+      'Descriptives',
+      'Give me descriptives for PTS'
+    );
+    expect(update.type).toBe('plan');
+    if (update.type === 'plan') {
+      expect(update.autoExecute).toBe(true);
+    }
+    expect(pendingActionFromParseIntentUpdate(update, menuFallback)).toBeUndefined();
+  });
+
+  it('keeps approval for ambiguous group comparisons', () => {
+    const update = assistantUpdateFromParseIntent(
+      {
+        status: 'plan',
+        interpretation: 'Compare C vs PG with a t-test.',
+        intent_kind: 'analysis',
+        analysis_type: 'ttest_independent',
+        request_body: {
+          group_column: 'Pos',
+          value_column: 'PTS',
+          group_values: ['C', 'PG'],
+        },
+        auto_execute: false,
+      },
+      'Analysis',
+      "What's the difference in average points between centers and point guards?"
+    );
+    expect(update.type).toBe('plan');
+    if (update.type === 'plan') {
+      expect(update.autoExecute).toBe(false);
+    }
+    expect(pendingActionFromParseIntentUpdate(update, menuFallback)?.kind).toBe('analysis_plan');
+  });
 });
 
 describe('resolveChatAction new synonyms', () => {
