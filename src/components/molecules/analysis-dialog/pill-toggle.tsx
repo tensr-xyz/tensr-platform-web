@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { ToggleGroup, ToggleGroupItem } from '@/components/molecules/toggle-group';
 import { cn } from '@/utils';
 
 export type PillOption<T extends string> = {
@@ -23,31 +24,32 @@ export function PillToggle<T extends string>({
   'aria-label'?: string;
 }) {
   return (
-    <div
-      className="flex w-full gap-1 rounded-md border border-border p-0.5"
-      role="radiogroup"
+    <ToggleGroup
+      type="single"
+      value={value}
+      onValueChange={next => {
+        if (next) onChange(next as T);
+      }}
       aria-label={ariaLabel}
+      spacing={0}
+      className="w-full gap-1 rounded-md border border-border p-0.5"
     >
       {options.map(opt => (
-        <button
+        <ToggleGroupItem
           key={opt.value}
-          type="button"
-          role="radio"
-          aria-checked={value === opt.value}
+          value={opt.value}
           disabled={opt.disabled}
           title={opt.disabled ? opt.disabledReason : undefined}
-          onClick={() => !opt.disabled && onChange(opt.value)}
           className={cn(
-            'flex-1 rounded px-2 py-1.5 text-center text-[11px] font-medium transition-colors',
-            value === opt.value
-              ? 'bg-primary/15 text-primary'
-              : 'border border-transparent text-muted-foreground hover:text-foreground',
+            'h-auto flex-1 rounded px-2 py-1.5 text-center text-[11px] font-medium shadow-none',
+            'data-[state=on]:bg-primary/15 data-[state=on]:text-primary',
+            'data-[state=off]:border-transparent data-[state=off]:text-muted-foreground data-[state=off]:hover:bg-transparent data-[state=off]:hover:text-foreground',
             opt.disabled && 'pointer-events-none opacity-40'
           )}
         >
           {opt.label}
-        </button>
+        </ToggleGroupItem>
       ))}
-    </div>
+    </ToggleGroup>
   );
 }

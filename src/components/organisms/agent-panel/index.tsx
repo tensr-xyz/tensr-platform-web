@@ -1,7 +1,20 @@
 import { Button } from '@/components/atoms/button';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
+import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/atoms/empty';
+import { Kbd } from '@/components/atoms/kbd';
+import { Spinner } from '@/components/atoms/spinner';
 import { ChatComposerInput } from '@/components/molecules/chat-composer-input';
-import { Send, Loader2, AlertCircle, Trash2, History, Plus, X, Sparkles } from 'lucide-react';
+import { Bubble, BubbleContent } from '@/components/molecules/bubble';
+import { Marker, MarkerContent, MarkerIcon } from '@/components/molecules/marker';
+import { Message, MessageContent } from '@/components/molecules/message';
+import {
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerViewport,
+} from '@/components/molecules/message-scroller';
+import { Send, AlertCircle, Trash2, History, Plus, X, Sparkles } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
 import { AgentMarkdown } from '@/components/molecules/agent-markdown';
 import { useTabsStore, ViewType, type AgentAnalysisHistoryEntry } from '@/stores/tabs-store';
@@ -258,9 +271,14 @@ function AnalysisRunsList({
 }) {
   if (entries.length === 0) {
     return (
-      <p className="px-4 py-8 text-center text-[11px] text-muted-foreground">
-        No runs yet — ask the agent to analyze your data.
-      </p>
+      <Empty className="min-h-0 border-0 p-6 md:p-8">
+        <EmptyHeader>
+          <EmptyTitle className="text-sm">No runs yet</EmptyTitle>
+          <EmptyDescription className="text-[11px]">
+            Ask the agent to analyze your data.
+          </EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
@@ -1698,158 +1716,182 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           </div>
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-auto px-3.5 py-4">
-              {messages.length === 0 && !isLoading ? (
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-border/80 bg-gradient-to-b from-primary/10 to-transparent p-4">
-                    <div className="mb-2.5 flex items-center gap-2">
-                      <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
-                      <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
-                        {isNotebook ? 'Code assistant' : 'Reading dataset'}
-                      </p>
-                    </div>
-                    <p className="text-[13.5px] leading-relaxed text-foreground">
-                      {isNotebook ? (
-                        colCount > 0 ? (
+            <MessageScroller className="min-h-0 flex-1">
+              <MessageScrollerViewport className="px-3.5 py-4">
+                {messages.length === 0 && !isLoading ? (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-border/80 bg-gradient-to-b from-primary/10 to-transparent p-4">
+                      <div className="mb-2.5 flex items-center gap-2">
+                        <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden />
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                          {isNotebook ? 'Code assistant' : 'Reading dataset'}
+                        </p>
+                      </div>
+                      <p className="text-[13.5px] leading-relaxed text-foreground">
+                        {isNotebook ? (
+                          colCount > 0 ? (
+                            <>
+                              Write code to analyse your data — I&apos;ll draft cells you can run in
+                              the notebook ({rowCount.toLocaleString()} rows, {colCount} columns).
+                            </>
+                          ) : (
+                            'Open a dataset tab, then ask me to write Python or R for your notebook.'
+                          )
+                        ) : colCount > 0 ? (
                           <>
-                            Write code to analyse your data — I&apos;ll draft cells you can run in
-                            the notebook ({rowCount.toLocaleString()} rows, {colCount} columns).
+                            I see <strong>{rowCount.toLocaleString()}</strong> rows across{' '}
+                            <strong>{colCount} columns</strong>. Ask me anything, or pick a starter:
                           </>
                         ) : (
-                          'Open a dataset tab, then ask me to write Python or R for your notebook.'
-                        )
-                      ) : colCount > 0 ? (
-                        <>
-                          I see <strong>{rowCount.toLocaleString()}</strong> rows across{' '}
-                          <strong>{colCount} columns</strong>. Ask me anything, or pick a starter:
-                        </>
-                      ) : (
-                        'Open a spreadsheet tab with data, then ask me to analyse, filter, or explain results.'
-                      )}
-                    </p>
-                  </div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                    Suggested
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    {suggestedPrompts.map(label => (
-                      <button
-                        key={label}
-                        type="button"
-                        onClick={() => {
-                          setInputMessage(label);
-                        }}
-                        className="rounded-lg border border-border bg-card px-3 py-2.5 text-left text-[12.5px] leading-snug text-foreground transition-colors hover:border-primary hover:bg-primary/5"
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {messages.map(message => {
-                    const pendingAction = message.pendingAction;
-                    const isSupersededSuggestion =
-                      pendingAction?.kind === 'analysis_plan' && pendingAction.status === 'expired';
-                    const showSupersededBanner =
-                      isSupersededSuggestion && message.id === firstSupersededSuggestionId;
-
-                    return (
-                      <div
-                        key={message.id}
-                        className={cn(
-                          'flex w-full flex-col gap-2',
-                          message.role === 'user' ? 'items-end' : 'items-stretch'
+                          'Open a spreadsheet tab with data, then ask me to analyse, filter, or explain results.'
                         )}
-                      >
-                        <div
-                          className={cn(
-                            'max-w-[85%] break-words text-[13px] leading-snug',
-                            message.role === 'user'
-                              ? 'rounded-xl bg-primary px-3 py-2 text-primary-foreground'
-                              : 'text-foreground'
-                          )}
-                        >
-                          {typeof message.content === 'string' ? (
-                            <ChatMessageBody
-                              role={message.role}
-                              content={message.content}
-                              thinkingLines={message.thinkingLines}
-                              resultMarkdown={message.resultMarkdown}
-                              charts={message.charts}
-                              isStreaming={message.isStreaming}
-                              repairSuggestions={message.repairSuggestions}
-                              onRepairPick={
-                                message.repairBase
-                                  ? (column: string) => {
-                                      const dsId =
-                                        workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
-                                      if (!dsId) return;
-                                      void (async () => {
-                                        const base = message.repairBase!;
-                                        const spec = {
-                                          ...base.spec,
-                                          column,
-                                          value_column: column,
-                                          y_column: column,
-                                          x_column: column,
-                                        };
-                                        const result = await executeDataActionForDataset(dsId, {
-                                          actionType: base.actionType,
-                                          spec,
-                                          rationale: `Retry with ${column}`,
-                                          autoExecute: true,
-                                        });
-                                        const charts: AnalysisReportChart[] = [];
-                                        if (result.chart) {
-                                          charts.push(result.chart as AnalysisReportChart);
-                                        }
-                                        updateMessage(projectId, message.id, {
-                                          content: result.answer_markdown,
-                                          charts: charts.length ? charts : undefined,
-                                          repairSuggestions: undefined,
-                                          repairBase: undefined,
-                                        });
-                                      })();
-                                    }
-                                  : undefined
-                              }
-                            />
-                          ) : (
-                            <pre className="overflow-x-auto text-xs">
-                              {JSON.stringify(message.content, null, 2)}
-                            </pre>
-                          )}
-                        </div>
-                        {pendingAction && !isSupersededSuggestion ? (
-                          <ChatAnalysisApproval
-                            className="w-full"
-                            action={pendingAction}
-                            disabled={busyMessageId !== null && busyMessageId !== message.id}
-                            onSkip={() => handlePendingSkip(message.id)}
-                            onAccept={() => void handlePendingAccept(message.id)}
-                            onManage={() => handlePendingManage(message.id)}
-                          />
-                        ) : showSupersededBanner ? (
-                          <p className="text-[11px] text-muted-foreground opacity-70">
-                            Suggestion expired — ask again if needed
-                          </p>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                  {isLoading && !messages.some(m => m.isStreaming) ? (
-                    <div className="flex justify-start">
-                      <div className="flex items-center gap-2 rounded-2xl border border-border bg-card px-3.5 py-2.5 text-sm text-muted-foreground">
-                        <Loader2 className="size-4 animate-spin" aria-hidden />
-                        Thinking…
-                      </div>
+                      </p>
                     </div>
-                  ) : null}
-                </div>
-              )}
-            </div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                      Suggested
+                    </p>
+                    <div className="flex flex-col gap-2">
+                      {suggestedPrompts.map(label => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => {
+                            setInputMessage(label);
+                          }}
+                          className="rounded-lg border border-border bg-card px-3 py-2.5 text-left text-[12.5px] leading-snug text-foreground transition-colors hover:border-primary hover:bg-primary/5"
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <MessageScrollerContent>
+                    {messages.map(message => {
+                      const pendingAction = message.pendingAction;
+                      const isSupersededSuggestion =
+                        pendingAction?.kind === 'analysis_plan' &&
+                        pendingAction.status === 'expired';
+                      const showSupersededBanner =
+                        isSupersededSuggestion && message.id === firstSupersededSuggestionId;
+                      const align = message.role === 'user' ? 'end' : 'start';
+
+                      return (
+                        <MessageScrollerItem key={message.id}>
+                          <Message align={align} className="flex-col gap-2">
+                            <MessageContent
+                              className={cn(
+                                'max-w-[85%] text-[13px] leading-snug',
+                                message.role === 'user' ? '' : 'max-w-full'
+                              )}
+                            >
+                              <Bubble
+                                variant={message.role === 'user' ? 'default' : 'ghost'}
+                                align={align}
+                                className={message.role === 'user' ? '' : 'max-w-full'}
+                              >
+                                <BubbleContent
+                                  className={cn(
+                                    message.role === 'user'
+                                      ? 'text-[13px] leading-snug'
+                                      : 'w-full max-w-none text-[13px] leading-snug text-foreground'
+                                  )}
+                                >
+                                  {typeof message.content === 'string' ? (
+                                    <ChatMessageBody
+                                      role={message.role}
+                                      content={message.content}
+                                      thinkingLines={message.thinkingLines}
+                                      resultMarkdown={message.resultMarkdown}
+                                      charts={message.charts}
+                                      isStreaming={message.isStreaming}
+                                      repairSuggestions={message.repairSuggestions}
+                                      onRepairPick={
+                                        message.repairBase
+                                          ? (column: string) => {
+                                              const dsId =
+                                                workspaceDatasetId ??
+                                                getDatasetIdFromTab(activeTab);
+                                              if (!dsId) return;
+                                              void (async () => {
+                                                const base = message.repairBase!;
+                                                const spec = {
+                                                  ...base.spec,
+                                                  column,
+                                                  value_column: column,
+                                                  y_column: column,
+                                                  x_column: column,
+                                                };
+                                                const result = await executeDataActionForDataset(
+                                                  dsId,
+                                                  {
+                                                    actionType: base.actionType,
+                                                    spec,
+                                                    rationale: `Retry with ${column}`,
+                                                    autoExecute: true,
+                                                  }
+                                                );
+                                                const charts: AnalysisReportChart[] = [];
+                                                if (result.chart) {
+                                                  charts.push(result.chart as AnalysisReportChart);
+                                                }
+                                                updateMessage(projectId, message.id, {
+                                                  content: result.answer_markdown,
+                                                  charts: charts.length ? charts : undefined,
+                                                  repairSuggestions: undefined,
+                                                  repairBase: undefined,
+                                                });
+                                              })();
+                                            }
+                                          : undefined
+                                      }
+                                    />
+                                  ) : (
+                                    <pre className="overflow-x-auto text-xs">
+                                      {JSON.stringify(message.content, null, 2)}
+                                    </pre>
+                                  )}
+                                </BubbleContent>
+                              </Bubble>
+                            </MessageContent>
+                            {pendingAction && !isSupersededSuggestion ? (
+                              <ChatAnalysisApproval
+                                className="w-full"
+                                action={pendingAction}
+                                disabled={busyMessageId !== null && busyMessageId !== message.id}
+                                onSkip={() => handlePendingSkip(message.id)}
+                                onAccept={() => void handlePendingAccept(message.id)}
+                                onManage={() => handlePendingManage(message.id)}
+                              />
+                            ) : showSupersededBanner ? (
+                              <Marker role="status">
+                                <MarkerContent className="text-[11px] opacity-70">
+                                  Suggestion expired — ask again if needed
+                                </MarkerContent>
+                              </Marker>
+                            ) : null}
+                          </Message>
+                        </MessageScrollerItem>
+                      );
+                    })}
+                    {isLoading && !messages.some(m => m.isStreaming) ? (
+                      <MessageScrollerItem>
+                        <Marker
+                          role="status"
+                          className="rounded-2xl border border-border bg-card px-3.5 py-2.5"
+                        >
+                          <MarkerIcon>
+                            <Spinner />
+                          </MarkerIcon>
+                          <MarkerContent>Thinking…</MarkerContent>
+                        </Marker>
+                      </MessageScrollerItem>
+                    ) : null}
+                  </MessageScrollerContent>
+                )}
+              </MessageScrollerViewport>
+              <MessageScrollerButton />
+            </MessageScroller>
 
             <div className="shrink-0 border-t border-border bg-card px-3.5 pt-3 pb-1">
               <div
@@ -1921,14 +1963,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               </div>
               <div className="mt-2 flex items-center justify-between font-mono text-[11px] text-muted-foreground">
                 <span>claude-haiku</span>
-                <span>
-                  <kbd className="rounded border border-border bg-muted px-1 font-mono text-[9px]">
-                    ↵
-                  </kbd>{' '}
-                  send ·{' '}
-                  <kbd className="rounded border border-border bg-muted px-1 font-mono text-[9px]">
-                    ⇧↵
-                  </kbd>{' '}
+                <span className="inline-flex items-center gap-1">
+                  <Kbd className="h-4 min-w-0 px-1 font-mono text-[9px]">↵</Kbd>
+                  send ·<Kbd className="h-4 min-w-0 px-1 font-mono text-[9px]">⇧↵</Kbd>
                   newline
                 </span>
               </div>

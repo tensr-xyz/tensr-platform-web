@@ -1,11 +1,17 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Dialog, DialogContent, DialogTitle } from '@/components/molecules/dialog';
-import { Input } from '@/components/atoms/input';
-import { ScrollArea } from '@/components/atoms/scroll-area';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/molecules/command';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
-import { Loader } from '@/components/molecules/loading';
+import { Spinner } from '@/components/atoms/spinner';
 import PluginUIRenderer from '@/components/molecules/plugin-ui-renderer';
 import { cn } from '@/utils';
 import {
@@ -25,7 +31,6 @@ import {
   COMING_SOON_SECTIONS,
   type AnalysisItem,
 } from '@/configs/analysis-config/utils';
-import { Badge } from '@/components/atoms/badge';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import usePlugins from '@/hooks/api/use-plugin';
 import { apiClient } from '@/lib/api-client';
@@ -121,44 +126,27 @@ function AnalysisSectionsList({
   onPick: (item: AnalysisItem) => void;
 }) {
   return (
-    <div className="space-y-3 px-1 pb-2">
+    <>
       {Object.entries(sections).map(([sectionName, items]) => {
         if (COMING_SOON_SECTIONS.has(sectionName)) {
-          return (
-            <div key={sectionName} className="px-2 py-2">
-              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <span>{sectionName.replace(/\s*\(coming soon\)\s*/i, '')}</span>
-                <Badge variant="secondary" className="text-[10px] font-normal">
-                  Coming soon
-                </Badge>
-              </div>
-            </div>
-          );
+          const label = sectionName.replace(/\s*\(coming soon\)\s*/i, '').trim();
+          return <CommandGroup key={sectionName} heading={`${label} — Coming soon`} />;
         }
         return (
-          <div key={sectionName}>
-            <div className="px-2 py-1 text-xs font-medium text-foreground/90">{sectionName}</div>
-            <ul className="space-y-0.5">
-              {items.map((item, idx) => (
-                <li key={`${item.name}-${idx}`}>
-                  <button
-                    type="button"
-                    onClick={() => onPick(item)}
-                    className={cn(
-                      'flex w-full rounded-md px-2 py-2 text-left text-sm transition-colors',
-                      'hover:bg-accent hover:text-accent-foreground',
-                      'disabled:pointer-events-none disabled:opacity-50'
-                    )}
-                  >
-                    <span className="font-medium">{item.name}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </div>
+          <CommandGroup key={sectionName} heading={sectionName}>
+            {items.map((item, idx) => (
+              <CommandItem
+                key={`${item.name}-${idx}`}
+                value={`${sectionName}-${item.name}-${idx}`}
+                onSelect={() => onPick(item)}
+              >
+                <span className="font-medium">{item.name}</span>
+              </CommandItem>
+            ))}
+          </CommandGroup>
         );
       })}
-    </div>
+    </>
   );
 }
 
@@ -169,7 +157,6 @@ type Props = {
 
 export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
   const [query, setQuery] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
   const [paletteTab, setPaletteTab] = useState<string>(DATA_TAB_VALUE);
   const [runningPluginId, setRunningPluginId] = useState<string | null>(null);
   const [pluginUi, setPluginUi] = useState<{ plugin: PluginRecord; result: unknown } | null>(null);
@@ -184,8 +171,6 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
   useEffect(() => {
     if (!open) return;
     setQuery('');
-    const t = window.setTimeout(() => inputRef.current?.focus(), 0);
-    return () => window.clearTimeout(t);
   }, [open]);
 
   const filtered = useMemo(() => filterAnalysisItems(allItems, query), [allItems, query]);
@@ -312,132 +297,126 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
           onOpenAutoFocus={e => e.preventDefault()}
         >
           <DialogTitle className="sr-only">Search analyses and plugins</DialogTitle>
-          <div className="shrink-0 border-b border-border p-3">
-            <Input
-              ref={inputRef}
+          <Command
+            shouldFilter={false}
+            className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-none bg-transparent"
+          >
+            <CommandInput
+              autoFocus
               placeholder="Search analyses and plugins…"
               value={query}
-              onChange={e => setQuery(e.target.value)}
-              className="border-0 bg-transparent shadow-none focus-visible:ring-0"
+              onValueChange={setQuery}
               onKeyDown={e => {
                 if (e.key === 'Escape') onOpenChange(false);
               }}
             />
-          </div>
-          {!hasBrowseableContent ? (
-            <div className="px-2 py-6 text-center text-sm text-muted-foreground">
-              {emptyListMessage}
-            </div>
-          ) : (
-            <Tabs
-              value={paletteTab}
-              onValueChange={setPaletteTab}
-              className="flex min-h-0 flex-1 flex-col overflow-hidden"
-            >
-              <div className="shrink-0 overflow-x-auto overflow-y-hidden border-b border-border">
-                <TabsList className="inline-flex h-10 w-max min-w-full justify-start gap-0 rounded-none bg-transparent p-0">
-                  {visiblePaletteTabs.map(tab => (
-                    <TabsTrigger
-                      key={tab}
-                      value={tab}
-                      isClosable={false}
-                      className="flex h-10 shrink-0 items-center rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                    >
-                      {paletteTabLabel(tab)}
-                    </TabsTrigger>
-                  ))}
-                  {COMING_SOON_PALETTE_TABS.map(tab => (
-                    <span
-                      key={tab}
-                      role="presentation"
-                      aria-disabled="true"
-                      title="Coming soon"
-                      className="flex h-10 shrink-0 cursor-not-allowed items-center rounded-none border-b-2 border-transparent px-3 text-xs text-muted-foreground/70"
-                    >
-                      {paletteTabLabel(tab)}
-                    </span>
-                  ))}
-                  {showPluginsTab ? (
-                    <TabsTrigger
-                      value={PLUGINS_TAB_VALUE}
-                      isClosable={false}
-                      className="flex h-10 shrink-0 items-center rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-                    >
-                      Plugins
-                    </TabsTrigger>
-                  ) : null}
-                </TabsList>
-              </div>
-
-              <ScrollArea className="min-h-0 flex-1 p-2">
-                {showPluginsTab ? (
-                  <TabsContent
-                    value={PLUGINS_TAB_VALUE}
-                    forceMount
-                    className="m-0 h-full border-0 p-0 outline-none data-[state=inactive]:hidden"
-                  >
-                    {pluginsError ? (
-                      <p className="px-2 pb-2 text-xs text-destructive">{pluginsError.message}</p>
+            {!hasBrowseableContent ? (
+              <CommandList className="max-h-none min-h-0 flex-1">
+                <CommandEmpty>{emptyListMessage}</CommandEmpty>
+              </CommandList>
+            ) : (
+              <Tabs
+                value={paletteTab}
+                onValueChange={setPaletteTab}
+                className="flex min-h-0 flex-1 flex-col overflow-hidden"
+              >
+                <div className="shrink-0 overflow-x-auto overflow-y-hidden border-b border-border">
+                  <TabsList className="inline-flex h-10 w-max min-w-full justify-start gap-0 rounded-none bg-transparent p-0">
+                    {visiblePaletteTabs.map(tab => (
+                      <TabsTrigger
+                        key={tab}
+                        value={tab}
+                        isClosable={false}
+                        className="flex h-10 shrink-0 items-center rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                      >
+                        {paletteTabLabel(tab)}
+                      </TabsTrigger>
+                    ))}
+                    {COMING_SOON_PALETTE_TABS.map(tab => (
+                      <span
+                        key={tab}
+                        role="presentation"
+                        aria-disabled="true"
+                        title="Coming soon"
+                        className="flex h-10 shrink-0 cursor-not-allowed items-center rounded-none border-b-2 border-transparent px-3 text-xs text-muted-foreground/70"
+                      >
+                        {paletteTabLabel(tab)}
+                      </span>
+                    ))}
+                    {showPluginsTab ? (
+                      <TabsTrigger
+                        value={PLUGINS_TAB_VALUE}
+                        isClosable={false}
+                        className="flex h-10 shrink-0 items-center rounded-none border-b-2 border-transparent px-3 text-xs data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                      >
+                        Plugins
+                      </TabsTrigger>
                     ) : null}
-                    {filteredPlugins.length === 0 ? (
-                      <p className="px-2 py-6 text-center text-sm text-muted-foreground">
-                        No plugins match your search.
-                      </p>
-                    ) : (
-                      <ul className="space-y-0.5 px-1">
-                        {filteredPlugins.map(plugin => {
-                          const busy = runningPluginId === plugin.pluginId;
-                          const canRun = !!pluginDataset && !runningPluginId;
-                          return (
-                            <li key={plugin.pluginId}>
-                              <button
-                                type="button"
+                  </TabsList>
+                </div>
+
+                <CommandList className="max-h-none min-h-0 flex-1 p-2">
+                  {showPluginsTab ? (
+                    <TabsContent
+                      value={PLUGINS_TAB_VALUE}
+                      forceMount
+                      className="m-0 h-full border-0 p-0 outline-none data-[state=inactive]:hidden"
+                    >
+                      {pluginsError ? (
+                        <p className="px-2 pb-2 text-xs text-destructive">{pluginsError.message}</p>
+                      ) : null}
+                      {filteredPlugins.length === 0 ? (
+                        <CommandEmpty>No plugins match your search.</CommandEmpty>
+                      ) : (
+                        <CommandGroup>
+                          {filteredPlugins.map(plugin => {
+                            const busy = runningPluginId === plugin.pluginId;
+                            const canRun = !!pluginDataset && !runningPluginId;
+                            return (
+                              <CommandItem
+                                key={plugin.pluginId}
+                                value={plugin.pluginId}
                                 disabled={!canRun || busy}
+                                onSelect={() => void runPlugin(plugin)}
                                 title={
                                   pluginDataset
                                     ? undefined
                                     : 'Open a spreadsheet tab with data to run plugins'
                                 }
-                                onClick={() => void runPlugin(plugin)}
-                                className={cn(
-                                  'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
-                                  'hover:bg-accent hover:text-accent-foreground',
-                                  'disabled:pointer-events-none disabled:opacity-50'
-                                )}
                               >
                                 <span className="min-w-0 flex-1 font-medium">{plugin.name}</span>
                                 {busy ? (
-                                  <Loader size="sm" className="shrink-0" />
+                                  <Spinner className="shrink-0" />
                                 ) : (
-                                  <span className="shrink-0 font-mono text-[10px] text-muted-foreground">
+                                  <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">
                                     v{plugin.version}
                                   </span>
                                 )}
-                              </button>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    )}
-                  </TabsContent>
-                ) : null}
+                              </CommandItem>
+                            );
+                          })}
+                        </CommandGroup>
+                      )}
+                    </TabsContent>
+                  ) : null}
 
-                {visiblePaletteTabs.map(tab => (
-                  <TabsContent
-                    key={tab}
-                    value={tab}
-                    forceMount
-                    className="m-0 h-full border-0 p-0 outline-none data-[state=inactive]:hidden"
-                  >
-                    <AnalysisSectionsList
-                      sections={getPaletteTabContent(grouped, tab)}
-                      onPick={pick}
-                    />
-                  </TabsContent>
-                ))}
-              </ScrollArea>
-            </Tabs>
-          )}
+                  {visiblePaletteTabs.map(tab => (
+                    <TabsContent
+                      key={tab}
+                      value={tab}
+                      forceMount
+                      className="m-0 h-full border-0 p-0 outline-none data-[state=inactive]:hidden"
+                    >
+                      <AnalysisSectionsList
+                        sections={getPaletteTabContent(grouped, tab)}
+                        onPick={pick}
+                      />
+                    </TabsContent>
+                  ))}
+                </CommandList>
+              </Tabs>
+            )}
+          </Command>
         </DialogContent>
       </Dialog>
 
