@@ -21,19 +21,23 @@ class EventEmitter<T> {
   }
 }
 
-interface Session {
+export interface Session {
   id: string;
   datasetId?: string;
   fileName: string;
   filePath: string;
+  ownerId?: string;
   ownerName: string;
   participantCount: number;
-  participants: Array<{ userId: string; userName: string }>;
+  // `role` comes straight from `collaboration_db.format_session_response` (Host/Editor/Viewer).
+  // The Host can change a participant's role via `apiClient.collaboration.updateParticipantRole`
+  // (see `useSession().updateParticipantRole`); everyone else only ever reads it here.
+  participants: Array<{ userId: string; userName: string; role?: string }>;
   created: number;
   clientId?: string;
 }
 
-interface UserPresence {
+export interface UserPresence {
   userId: string;
   userName: string;
   cursor?: {
@@ -54,9 +58,18 @@ class WebSocketService {
   private wsReadyEmitter = new EventEmitter<boolean>();
   private sessionEmitter = new EventEmitter<Session | null>();
   private presenceEmitter = new EventEmitter<Map<string, UserPresence>>();
+  // Sheet (`sheet_live` op-log) messages — `initial_state` (sheet flavor), `op_applied`,
+  // `op_rejected`, `snapshot_saved`, and any `error` — routed here instead of the
+  // session-specific emitters above. See `subscribeToSheet`/`sendSheetOp`/`onSheetMessage`.
+  private sheetEmitter = new EventEmitter<Record<string, any>>();
   private _wsReady: boolean = false;
   private _session: Session | null = null;
   private _presence = new Map<string, UserPresence>();
+  // sessionId to `join` once the (re)connected socket opens.
+  private _pendingSessionId: string | null = null;
+  // Sheet ids subscribed on this single connection — re-sent on reconnect so
+  // live-sheet sync survives dropped connections transparently.
+  private _subscribedSheetIds = new Set<string>();
 
   private handlePresenceUpdate(message: { presence: UserPresence }) {
     const { presence: incomingPresence } = message;
@@ -86,14 +99,20 @@ class WebSocketService {
     return WebSocketService.instance;
   }
 
-  setupWebSocket(sessionId: string) {
+  /**
+   * Single WebSocket connection shared by collaboration-session messages (join/
+   * presence) and sheet live-doc messages (subscribe/op). Both concerns key off the
+   * same `connectionId` server-side (see `app/realtime/hub.py` / `app/realtime_hub.py`),
+   * so one socket carries both instead of opening a second connection per sheet.
+   */
+  private connect() {
     if (this.ws) {
       this.ws.close();
     }
 
     const token = getIdToken();
-    const wsBase =
-      process.env.NEXT_PUBLIC_WEBSOCKET_URL?.replace(/\/$/, '') || getTensrWebSocketUrl('/ws');
+    // Production: RealtimeStack's single WebSocket route (see getTensrWebSocketUrl docs).
+    const wsBase = getTensrWebSocketUrl('/ws');
     const wsUrl = token
       ? `${wsBase}${wsBase.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`
       : wsBase;
@@ -111,14 +130,22 @@ class WebSocketService {
       this._wsReady = true;
       this.wsReadyEmitter.emit(true);
 
-      this.ws?.send(
-        JSON.stringify({
-          type: 'join',
-          sessionId,
-          userId: this.userId,
-          userName: this.userName,
-        })
-      );
+      if (this._pendingSessionId) {
+        this.ws?.send(
+          JSON.stringify({
+            type: 'join',
+            sessionId: this._pendingSessionId,
+            userId: this.userId,
+            userName: this.userName,
+          })
+        );
+      }
+
+      // Re-subscribe any live sheets so a dropped/reopened connection doesn't
+      // silently stop syncing cell edits for tabs still mounted.
+      for (const sheetId of this._subscribedSheetIds) {
+        this.ws?.send(JSON.stringify({ type: 'subscribe', sheetId }));
+      }
     };
 
     this.ws.onmessage = event => {
@@ -127,6 +154,13 @@ class WebSocketService {
 
         switch (message.type) {
           case 'initial_state':
+            // Sheet-flavored `initial_state` carries `sheetId`/`schema` instead of
+            // `session`/`presence` — route it to sheet subscribers, not the session
+            // state below (see `app/realtime/hub.py::_handle_subscribe`).
+            if (message.sheetId !== undefined) {
+              this.sheetEmitter.emit(message);
+              break;
+            }
             this._session = message.session;
             if (message.presence) {
               // Handle initial presence state
@@ -152,7 +186,11 @@ class WebSocketService {
             }
             break;
 
-          case 'cell_update':
+          case 'role_updated':
+            if (message.session) {
+              this._session = message.session;
+              this.sessionEmitter.emit(message.session);
+            }
             break;
 
           case 'participant_left':
@@ -172,6 +210,16 @@ class WebSocketService {
             this.sessionEmitter.emit(null);
             this.presenceEmitter.emit(new Map());
             break;
+
+          // Sheet op-log messages (persisted via `sheet_live_dynamo`). Cell edits
+          // during a live session flow through these instead of the old ephemeral,
+          // non-persisted `cell_update` broadcast.
+          case 'op_applied':
+          case 'op_rejected':
+          case 'snapshot_saved':
+          case 'error':
+            this.sheetEmitter.emit(message);
+            break;
         }
       } catch (error) {
         console.error('Error processing message:', error);
@@ -185,13 +233,53 @@ class WebSocketService {
       this.presenceEmitter.emit(new Map());
 
       setTimeout(() => {
-        if (this._session) {
-          this.setupWebSocket(sessionId);
+        if (this._session || this._subscribedSheetIds.size > 0) {
+          this.connect();
         }
       }, 3000);
     };
 
     this.ws.onerror = error => {};
+  }
+
+  setupWebSocket(sessionId: string) {
+    this._pendingSessionId = sessionId;
+    this.connect();
+  }
+
+  /** Subscribe (or re-subscribe) the shared connection to a `sheet_live` doc. */
+  subscribeToSheet(sheetId: string) {
+    this._subscribedSheetIds.add(sheetId);
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'subscribe', sheetId }));
+    } else if (!this.ws || this.ws.readyState === WebSocket.CLOSED) {
+      this.connect();
+    }
+    // If CONNECTING, `onopen` above will send `subscribe` for every tracked sheetId.
+  }
+
+  unsubscribeFromSheet(sheetId: string) {
+    this._subscribedSheetIds.delete(sheetId);
+  }
+
+  sendSheetOp(sheetId: string, baseVersion: number, op: unknown) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify({ type: 'op', sheetId, baseVersion, op }));
+    }
+  }
+
+  sendSheetMessage(message: Record<string, any>) {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(JSON.stringify(message));
+    }
+  }
+
+  onSheetMessage(callback: (message: Record<string, any>) => void) {
+    return this.sheetEmitter.subscribe(callback);
+  }
+
+  get isSocketOpen(): boolean {
+    return !!this.ws && this.ws.readyState === WebSocket.OPEN;
   }
 
   updatePresence(cursor: UserPresence['cursor']) {
@@ -229,22 +317,6 @@ class WebSocketService {
     this.presenceEmitter.emit(new Map(this._presence));
   }
 
-  sendCellUpdate(tabId: string, rowIndex: number, columnId: string, value: any) {
-    if (this._wsReady && this.ws) {
-      const message = {
-        type: 'cell_update',
-        tabId,
-        rowIndex,
-        columnId,
-        value,
-        timestamp: Date.now(),
-        userId: this.userId,
-      };
-      this.ws.send(JSON.stringify(message));
-    } else {
-    }
-  }
-
   async leaveSession() {
     if (!this._session || !this.ws) {
       return;
@@ -252,23 +324,40 @@ class WebSocketService {
 
     try {
       await apiClient.collaboration.leaveSession(this._session.id);
+      this._pendingSessionId = null;
 
-      // Close WebSocket connection
-      this.ws.close();
+      // If a sheet is still subscribed (live editing continuing solo), keep the
+      // socket open instead of tearing it down — only drop the session itself.
+      const keepSocketOpen = this._subscribedSheetIds.size > 0;
+      if (keepSocketOpen) {
+        this.ws.send(JSON.stringify({ type: 'leave_session', sessionId: this._session.id }));
+      } else {
+        this.ws.close();
+        this._wsReady = false;
+      }
 
       // Clear local state
       this._session = null;
       this._presence.clear();
-      this._wsReady = false;
 
       // Emit updates
       this.sessionEmitter.emit(null);
       this.presenceEmitter.emit(new Map());
-      this.wsReadyEmitter.emit(false);
+      if (!keepSocketOpen) {
+        this.wsReadyEmitter.emit(false);
+      }
     } catch (error) {
       console.error('Error leaving session:', error);
       throw error;
     }
+  }
+
+  /** Optimistic local apply of a session returned by a REST call (e.g. role change),
+   *  ahead of the `role_updated` broadcast that will echo the same data back over the
+   *  socket shortly after. */
+  applySessionUpdate(session: Session) {
+    this._session = session;
+    this.sessionEmitter.emit(session);
   }
 
   onWsReady(callback: (ready: boolean) => void) {
@@ -407,6 +496,22 @@ export function useSession() {
     }
   };
 
+  /** Host-only: promote/demote a participant. See `sessions.py::post_update_participant_role`. */
+  const updateParticipantRole = async (userId: string, role: 'Editor' | 'Viewer') => {
+    const sessionId = wsService.currentSession?.id;
+    if (!sessionId) {
+      throw new Error('No active collaboration session');
+    }
+    try {
+      const session = await apiClient.collaboration.updateParticipantRole(sessionId, userId, role);
+      wsService.applySessionUpdate(session);
+      return session;
+    } catch (error) {
+      console.error('Failed to update participant role:', error);
+      throw error;
+    }
+  };
+
   return {
     wsReady,
     currentSession,
@@ -414,6 +519,7 @@ export function useSession() {
     createSession,
     joinSession,
     leaveSession,
+    updateParticipantRole,
     ws: wsService.socket,
     presence,
     updatePresence: wsService.updatePresence.bind(wsService),

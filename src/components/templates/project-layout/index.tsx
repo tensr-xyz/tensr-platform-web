@@ -66,6 +66,8 @@ const ProjectLayout = ({
   const resourceId = currentProject?.id || '';
   const userId = user?.userId;
 
+  // NOTE: allocates a local Y.Doc only; `connect()` is never called here (see
+  // `hooks/use-collaboration` doc comment — no production Yjs backend exists yet).
   useCollaboration(resourceId);
 
   // Handle project initialization

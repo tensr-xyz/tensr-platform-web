@@ -4,6 +4,18 @@ import * as Y from 'yjs';
 import { getTensrWebSocketUrl } from '@/lib/tensr-api-url';
 import { getIdToken } from '@/utils/auth';
 
+/**
+ * Yjs/CRDT collaboration hook — LOCAL DEV ONLY.
+ *
+ * `y-websocket`'s binary sync protocol only has a server behind local uvicorn
+ * (`app/yjs_ws.py` → `/ws/yjs/{room}`). There is no Fargate/production counterpart
+ * and `RealtimeStack` speaks a plain JSON protocol (see `app/realtime/hub.py` and
+ * `lib/tensr-api-url.ts`), so `connect()` will open a WebSocket in production but
+ * never complete the Yjs handshake. `CollaborationPanel` uses `hooks/ui/use-session`
+ * (JSON hub) instead of this hook for exactly that reason — do not wire this into
+ * any production-facing UI until a Yjs-compatible backend exists.
+ */
+
 export interface UserPresence {
   userId: string;
   userName: string;

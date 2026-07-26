@@ -2,7 +2,6 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { columnNamesFromSchemaResponse } from '@/lib/dataset-schema';
-import { FEATURE_FLAGS } from '@/lib/feature-flags';
 import { getTensrApiHeaders } from '@/utils/auth';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { devLog } from '@/lib/dev-log';
@@ -102,7 +101,6 @@ async function fetchDatasetWorkspacePayload(
 
 export enum ViewType {
   SPREADSHEET = 'spreadsheet',
-  CHARTS = 'charts',
   MODEL_BUILDER = 'model_builder',
   NOTEBOOK = 'notebook',
   PLUGINS = 'plugins',
@@ -276,10 +274,6 @@ export const useProjectStore = create<ProjectStore>()(
 
         // View Actions
         setView: (view: ViewType) => {
-          if (view === ViewType.CHARTS && !FEATURE_FLAGS.CHARTS_TAB_ENABLED) {
-            set({ activeView: ViewType.SPREADSHEET });
-            return;
-          }
           set({ activeView: view });
         },
 

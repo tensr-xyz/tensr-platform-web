@@ -15,7 +15,7 @@ import { Tab } from '@/stores/tabs-store';
 import PluginsLayout from '@/components/templates/plugins-layout';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { buildDefaultImportSettings, type ImportSettings } from '@/lib/import-settings';
-import { FEATURE_FLAGS, MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
+import { MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
 import { SpssWorkspaceWalkthrough } from '@/components/templates/auth/spss-switcher-flow';
 
 export interface WorkspaceResource {
@@ -113,10 +113,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
   const { tabs, activeTabId, addTab, closeTab, setActiveTab } = useTabsStore();
 
   useEffect(() => {
-    if (
-      activeView === ViewType.NOTEBOOK ||
-      (activeView === ViewType.CHARTS && FEATURE_FLAGS.CHARTS_TAB_ENABLED)
-    ) {
+    if (activeView === ViewType.NOTEBOOK) {
       setRightPanelOpen(true);
     }
   }, [activeView]);
@@ -141,6 +138,11 @@ export default function Workspace({ resource }: WorkspaceProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId]);
 
+  // NOTE: this only allocates a local Y.Doc — `connect()` is never called here, so it
+  // has no network effect today. Full CRDT sheet sync (cell-level live edits, not just
+  // presence) would need either a production Yjs relay wired to RealtimeStack, or the
+  // sheet ops already defined in `hooks/ui/use-sheet-state`/`app/realtime/hub.py`
+  // extended to cover the full spreadsheet model. TODO before relying on this.
   useCollaboration(resourceId);
 
   // Add a null check for activeTab

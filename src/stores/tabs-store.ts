@@ -4,7 +4,6 @@ import { devtools } from 'zustand/middleware';
 // Import ViewType from project store to maintain consistency
 export enum ViewType {
   SPREADSHEET = 'spreadsheet',
-  CHARTS = 'charts',
   MODEL_BUILDER = 'model_builder',
   NOTEBOOK = 'notebook',
   PLUGINS = 'plugins',

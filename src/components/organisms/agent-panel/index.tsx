@@ -45,7 +45,11 @@ import {
   shouldRouteToInlineChart,
   stripChartBlocks,
 } from '@/lib/agent-chart-from-dataset';
-import type { AgentAnalysisPlan, ChatPendingAction } from '@/lib/chat-pending-action';
+import type {
+  AgentAnalysisPlan,
+  ChatPendingAction,
+  PrepPlaybookStep,
+} from '@/lib/chat-pending-action';
 import { plannerSpecToSetupBody, plannerTypeToOp } from '@/lib/chat-pending-action';
 import { isAnalysisKey } from '@/lib/analysis-definitions';
 import {
@@ -74,6 +78,16 @@ import {
 } from '@/lib/agent-conversation-history';
 import { ANALYSIS_PLANNING_MESSAGE } from '@/lib/agent-analysis-progress';
 import type { AgentDataAction } from '@/lib/chat-pending-action';
+import { useRouter } from 'next/navigation';
+import {
+  PREP_PLAYBOOK_STEPS,
+  applyPlaybookProposedAction,
+  buildPrepPlaybookReport,
+  describePlaybookApplyResult,
+  fetchPlaybookStep,
+  isPrepPlaybookTrigger,
+  nextPlaybookStep,
+} from '@/lib/prep-playbook';
 
 const ANALYSIS_HISTORY_LIMIT = 20;
 
@@ -316,6 +330,7 @@ type AgentPanelProps = {
 };
 
 export function AgentPanel({ variant = 'default', compactHeader = false }: AgentPanelProps) {
+  const router = useRouter();
   const { tabs, activeTabId, updateTab } = useTabsStore();
   const activeTab = tabs.find(tab => tab.id === activeTabId);
   const { currentProject } = useProjectStore();
@@ -791,6 +806,16 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         );
 
       const datasetIdForIntent = workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
+
+      // Track C step 2: "clean this dataset" / "prepare my data" / "wrangle" → start the
+      // agent-driven data-prep playbook (missing data → duplicates → outliers → type fix),
+      // confirming each step before applying it. Checked before every other fast path so it
+      // can never be shadowed by the data-action or analysis-question heuristics below.
+      if (datasetIdForIntent && isPrepPlaybookTrigger(currentMessage)) {
+        setLoading(projectId, false);
+        await startPrepPlaybook(datasetIdForIntent, currentMessage);
+        return;
+      }
 
       // Phase A: count / filter / aggregate / chart / descriptive compare → parse-intent + execute
       if (datasetIdForIntent && shouldRouteMessageToDataIntent(currentMessage)) {
@@ -1363,6 +1388,134 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     }
   };
 
+  /** Data-prep playbook (Track C step 2): inspects the given step and either auto-advances
+   *  past a clean step, posts a confirm card for an issue, or (on the last clean step)
+   *  finishes the run with a synthesized narrative. Never mutates data itself. */
+  const advancePrepPlaybook = async (
+    datasetId: string,
+    triggerMessage: string,
+    logEntries: string[],
+    fromStep: PrepPlaybookStep = PREP_PLAYBOOK_STEPS[0]
+  ): Promise<void> => {
+    let currentDatasetId = datasetId;
+    let step: PrepPlaybookStep = fromStep;
+    let log = logEntries;
+
+    // Loop rather than recurse so a run of clean steps doesn't pile up call stacks or
+    // re-enter setLoading/addMessage in a way that could race with the user's next message.
+    for (;;) {
+      let result: Awaited<ReturnType<typeof fetchPlaybookStep>>;
+      try {
+        result = await fetchPlaybookStep(currentDatasetId, step);
+      } catch (err) {
+        addMessage(projectId, {
+          role: 'assistant',
+          content: `I couldn't inspect the next data-prep step (${formatApiErrorMessage(err)}).`,
+          timestamp: new Date(),
+        });
+        return;
+      }
+
+      if (result.status === 'clean') {
+        log = [...log, `${result.title}: ${result.summary}`];
+        addMessage(projectId, {
+          role: 'assistant',
+          content: `**${result.title}** — ${result.summary}`,
+          timestamp: new Date(),
+        });
+        if (result.is_last_step) {
+          await finishPrepPlaybook(currentDatasetId, triggerMessage, log);
+          return;
+        }
+        const next = nextPlaybookStep(step);
+        if (!next) return;
+        step = next;
+        continue;
+      }
+
+      const detailsBlock = result.details.length
+        ? `\n\n${result.details.map(d => `- ${d}`).join('\n')}`
+        : '';
+      addMessage(projectId, {
+        role: 'assistant',
+        content: `**Step ${result.step_index + 1}/${result.total_steps} — ${result.title}**\n\n${result.summary}${detailsBlock}`,
+        timestamp: new Date(),
+        pendingAction: {
+          kind: 'prep_playbook',
+          status: 'pending',
+          step: result.step,
+          stepIndex: result.step_index,
+          totalSteps: result.total_steps,
+          title: result.title,
+          summaryText: result.summary,
+          proposedAction: result.proposed_action,
+          datasetId: currentDatasetId,
+          triggerMessage,
+          logEntries: log,
+          isLastStep: result.is_last_step,
+        },
+      });
+      return;
+    }
+  };
+
+  const startPrepPlaybook = async (datasetId: string, triggerMessage: string): Promise<void> => {
+    addMessage(projectId, {
+      role: 'assistant',
+      content:
+        "I'll clean this dataset in four steps — missing data, duplicates, outliers, then " +
+        'column types — checking in with you before applying each one.',
+      timestamp: new Date(),
+    });
+    await advancePrepPlaybook(datasetId, triggerMessage, []);
+  };
+
+  /** Closing step: writes a grounded prep+analysis narrative via the existing
+   *  synthesize-report assistant (Track C step 3), falling back to a plain log on failure. */
+  const finishPrepPlaybook = async (
+    finalDatasetId: string,
+    triggerMessage: string,
+    logEntries: string[]
+  ): Promise<void> => {
+    const messageId = addMessage(projectId, {
+      role: 'assistant',
+      content: 'Data prep complete. Writing a summary of what changed…',
+      isStreaming: true,
+      timestamp: new Date(),
+    });
+    try {
+      // Fold in this session's completed analyses (real result summaries from
+      // `analysisHistory`, e.g. regression/ANOVA runs) so the closing narrative covers
+      // prep AND subsequent analysis, not prep alone. Falls back to prep-only when the
+      // tab has no analysis history yet.
+      const analysisEntries = activeTab?.data?.analysisHistory ?? [];
+      const report = buildPrepPlaybookReport(logEntries, triggerMessage, analysisEntries);
+      const { markdown } = await apiClient.assistant.synthesizeReport({
+        report,
+        datasetId: finalDatasetId,
+        userQuestion: triggerMessage,
+        prepLog: logEntries.join('\n'),
+      });
+      updateMessage(projectId, messageId, {
+        content: markdown,
+        isStreaming: false,
+      });
+    } catch (err) {
+      const bulletLog = logEntries.length
+        ? logEntries.map(l => `- ${l}`).join('\n')
+        : '- No changes were needed.';
+      updateMessage(projectId, messageId, {
+        content:
+          `Data prep complete.\n\n${bulletLog}\n\n` +
+          `_Could not generate the narrative summary: ${formatApiErrorMessage(err)}_`,
+        isStreaming: false,
+      });
+    }
+    if (finalDatasetId !== workspaceDatasetId) {
+      router.push(`/workspace/dataset/${finalDatasetId}`);
+    }
+  };
+
   const handlePendingSkip = (messageId: string) => {
     if (busyMessageId) return;
     if (messageId !== activeApprovalMessageId) return;
@@ -1370,6 +1523,22 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     const message = messages.find(m => m.id === messageId);
     const action = message?.pendingAction;
     if (!action || (action.status !== 'pending' && action.status !== 'failed')) return;
+
+    if (action.kind === 'prep_playbook') {
+      updateMessage(projectId, messageId, {
+        pendingAction: { ...action, status: 'skipped' },
+      });
+      const log = [...action.logEntries, `${action.title}: skipped by user, no changes made.`];
+      if (action.isLastStep) {
+        void finishPrepPlaybook(action.datasetId, action.triggerMessage, log);
+        return;
+      }
+      const next = nextPlaybookStep(action.step);
+      if (next) {
+        void advancePrepPlaybook(action.datasetId, action.triggerMessage, log, next);
+      }
+      return;
+    }
 
     updateMessage(projectId, messageId, {
       pendingAction: patchPendingAction(action, { status: 'skipped' }),
@@ -1410,6 +1579,46 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     const message = messages.find(m => m.id === messageId);
     const action = message?.pendingAction;
     if (!action || (action.status !== 'pending' && action.status !== 'failed')) return;
+
+    if (action.kind === 'prep_playbook') {
+      setBusyMessageId(messageId);
+      updateMessage(projectId, messageId, {
+        pendingAction: { ...action, status: 'running', errorMessage: undefined },
+      });
+      try {
+        let nextDatasetId = action.datasetId;
+        let log = action.logEntries;
+        if (action.proposedAction) {
+          const result = await applyPlaybookProposedAction(action.proposedAction);
+          const derivedId =
+            typeof result.dataset_id === 'string' ? result.dataset_id : action.datasetId;
+          nextDatasetId = derivedId;
+          log = [...log, describePlaybookApplyResult(action, result)];
+        }
+        updateMessage(projectId, messageId, {
+          pendingAction: { ...action, status: 'accepted' },
+        });
+        if (action.isLastStep) {
+          await finishPrepPlaybook(nextDatasetId, action.triggerMessage, log);
+        } else {
+          const next = nextPlaybookStep(action.step);
+          if (next) {
+            await advancePrepPlaybook(nextDatasetId, action.triggerMessage, log, next);
+          }
+        }
+      } catch (err: unknown) {
+        updateMessage(projectId, messageId, {
+          pendingAction: {
+            ...action,
+            status: 'failed',
+            errorMessage: formatApiErrorMessage(err),
+          },
+        });
+      } finally {
+        setBusyMessageId(null);
+      }
+      return;
+    }
 
     if (action.kind === 'data_action') {
       setBusyMessageId(messageId);
@@ -1509,6 +1718,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     const message = messages.find(m => m.id === messageId);
     const action = message?.pendingAction;
     if (!action || action.status === 'planning' || action.status === 'running') return;
+
+    if (action.kind === 'prep_playbook') {
+      updateMessage(projectId, messageId, {
+        pendingAction: { ...action, status: 'skipped' },
+        content: `${message?.content ?? ''}\n\n_Playbook cancelled._`.trim(),
+      });
+      return;
+    }
 
     const setupStore = useAnalysisSetupStore.getState();
 

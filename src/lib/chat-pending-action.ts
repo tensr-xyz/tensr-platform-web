@@ -16,6 +16,16 @@ export type AgentDataAction = {
   autoExecute?: boolean;
 };
 
+/** One of the four agent-driven data-prep playbook steps (Track C step 2), in run order. */
+export type PrepPlaybookStep = 'missing_data' | 'duplicates' | 'outliers' | 'type_fix';
+
+/** A concrete existing data_ops endpoint to POST once the user confirms a playbook step. */
+export type PlaybookProposedAction = {
+  endpoint: string;
+  method?: string;
+  body: Record<string, unknown>;
+};
+
 export type ChatPendingActionStatus =
   | 'pending'
   | 'planning'
@@ -55,6 +65,25 @@ export type ChatPendingAction =
       kind: 'data_action';
       status: ChatPendingActionStatus;
       action: AgentDataAction;
+      errorMessage?: string;
+    }
+  | {
+      kind: 'prep_playbook';
+      status: ChatPendingActionStatus;
+      step: PrepPlaybookStep;
+      stepIndex: number;
+      totalSteps: number;
+      title: string;
+      summaryText: string;
+      /** null when the step found nothing to fix — Accept just advances to the next step. */
+      proposedAction: PlaybookProposedAction | null;
+      /** Dataset this step inspected — becomes the base for the next inspect call. */
+      datasetId: string;
+      /** Original user message that started the playbook (fed into the closing report). */
+      triggerMessage: string;
+      /** Human-readable outcome of every step completed so far in this run. */
+      logEntries: string[];
+      isLastStep: boolean;
       errorMessage?: string;
     };
 

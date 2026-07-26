@@ -159,6 +159,11 @@ export type DataQualityReport = {
     pct_complete: number;
     unique_count: number;
     issues: string[];
+    /** Present when inferred_type is one of "date" | "likert" | "id" — the target_type to
+     *  pass to `fix-data-types` for this column. */
+    suggested_cast?: string | null;
+    /** Human-readable explanation of `suggested_cast`, for display only. */
+    type_suggestion?: string | null;
   }>;
 };
 

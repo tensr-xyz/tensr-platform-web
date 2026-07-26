@@ -146,3 +146,66 @@ export interface PluginPurchaseOptions {
   subscriptionInterval?: 'monthly' | 'yearly';
   trialDays?: number;
 }
+
+/** Response from `POST /plugins/{id}/purchase`. Free plugins and already-owned paid
+ * plugins complete immediately; unpurchased paid plugins return a Stripe Checkout
+ * `checkout_url` to redirect to. */
+export interface PluginPurchaseResponse {
+  status: 'completed' | 'requires_checkout';
+  pluginId: string;
+  message?: string;
+  purchase?: PluginPurchase;
+  downloadUrl?: string;
+  checkout_url?: string;
+  session_id?: string;
+  amount?: number;
+  platformFee?: number;
+  creatorAmount?: number;
+}
+
+export interface PluginAccessResponse {
+  pluginId: string;
+  isPaid: boolean;
+  hasAccess: boolean;
+  purchase: PluginPurchase | null;
+}
+
+/** `GET /creator/stats` (tensr-api app/routers/plugins.py). */
+export interface CreatorStats {
+  totalPlugins: number;
+  totalDownloads: number;
+  totalRevenue: number;
+  totalCustomers: number;
+  monthlyRevenue: number;
+  monthlyGrowth: number;
+  stripeConfigured: boolean;
+  stripeConnected: boolean;
+  stripeConnectStatus: 'not_connected' | 'pending' | 'onboarded' | string;
+}
+
+/** One row from `GET /creator/plugins`. */
+export interface CreatorPluginSummary {
+  pluginId: string;
+  name: string;
+  status: PluginStatus;
+  isPaid: boolean;
+  pricing?: BasePluginMetadata['pricing'];
+  downloads: number;
+  revenue: number;
+  createdAt: string;
+  lastUpdated: string;
+}
+
+export interface ConnectOnboardingResponse {
+  message: string;
+  url: string;
+  accountId: string;
+  status: string;
+}
+
+export interface ConnectStatusResponse {
+  configured: boolean;
+  connected: boolean;
+  status: 'not_configured' | 'not_connected' | 'pending' | 'onboarded' | string;
+  accountId: string | null;
+}

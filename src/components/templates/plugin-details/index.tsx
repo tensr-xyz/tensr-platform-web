@@ -7,19 +7,20 @@ import { Button } from '@/components/atoms/button';
 import { Badge } from '@/components/atoms/badge';
 import { Separator } from '@/components/atoms/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
-import { Download, Star, Eye, Code, FileText, Users, Calendar, Tag } from 'lucide-react';
+import { Download, Star, Eye, Code, FileText, Users, Calendar, Tag, Lock } from 'lucide-react';
 import { PluginRecord } from '@/types/plugin';
 import usePlugins from '@/hooks/api/use-plugin';
 import { Loader } from '@/components/molecules/loading';
+import { apiClient } from '@/lib/api-client';
 
 export default function PluginDetails() {
   const params = useParams();
   const router = useRouter();
-  const { getPlugin, isPluginInstalled, installPlugin } = usePlugins();
+  const { getPlugin } = usePlugins();
 
   const [plugin, setPlugin] = useState<PluginRecord | null>(null);
+  const [hasAccess, setHasAccess] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [purchasing, setPurchasing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -32,6 +33,16 @@ export default function PluginDetails() {
     try {
       const pluginData = await getPlugin(params.pluginId as string);
       setPlugin(pluginData);
+      if (pluginData?.isPaid) {
+        try {
+          const access = await apiClient.plugins.access(pluginData.pluginId);
+          setHasAccess(access.hasAccess);
+        } catch {
+          setHasAccess(false);
+        }
+      } else {
+        setHasAccess(true);
+      }
     } catch (err) {
       setError('Failed to load plugin');
     } finally {
@@ -39,26 +50,17 @@ export default function PluginDetails() {
     }
   };
 
-  const handlePurchase = async () => {
+  // Approved plugins run directly from the Analysis command palette - there is no
+  // persistent "install" step on tensr-api, so this just takes the user to their
+  // workspace where every approved plugin is already available.
+  const handleOpenWorkspace = () => {
+    if (!plugin || (plugin.isPaid && !hasAccess)) return;
+    router.push('/workspace');
+  };
+
+  const handlePurchase = () => {
     if (!plugin) return;
-
-    setPurchasing(true);
-    setError(null);
-
-    try {
-      if (plugin.isPaid) {
-        // Redirect to purchase flow
-        router.push(`/plugins/${plugin.pluginId}/purchase`);
-      } else {
-        // Free plugin - install directly
-        await installPlugin(plugin);
-        router.push('/workspace');
-      }
-    } catch (err) {
-      setError('Failed to process purchase');
-    } finally {
-      setPurchasing(false);
-    }
+    router.push(`/plugins/${plugin.pluginId}/purchase`);
   };
 
   if (loading) {
@@ -83,8 +85,7 @@ export default function PluginDetails() {
     );
   }
 
-  const isInstalled = isPluginInstalled(plugin.pluginId);
-  const canPurchase = !isInstalled && plugin.status === 'APPROVED';
+  const isApproved = plugin.status === 'APPROVED';
 
   return (
     <div className="max-w-6xl mx-auto p-6">
@@ -104,6 +105,11 @@ export default function PluginDetails() {
               {plugin.isPaid && (
                 <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
                   Paid
+                </Badge>
+              )}
+              {plugin.isPaid && hasAccess && (
+                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+                  Owned
                 </Badge>
               )}
             </div>
@@ -146,20 +152,21 @@ export default function PluginDetails() {
               </div>
             )}
 
-            <Button
-              onClick={handlePurchase}
-              disabled={!canPurchase || purchasing}
-              className="w-full"
-              size="lg"
-            >
-              {purchasing
-                ? 'Processing...'
-                : isInstalled
-                  ? 'Installed'
-                  : plugin.isPaid
-                    ? 'Purchase Plugin'
-                    : 'Install Free Plugin'}
-            </Button>
+            {plugin.isPaid && !hasAccess ? (
+              <Button onClick={handlePurchase} disabled={!isApproved} className="w-full" size="lg">
+                <Lock className="mr-2 h-4 w-4" />
+                {isApproved ? 'Purchase' : 'Pending review'}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleOpenWorkspace}
+                disabled={!isApproved}
+                className="w-full"
+                size="lg"
+              >
+                {isApproved ? 'Open in Workspace' : 'Pending review'}
+              </Button>
+            )}
 
             {plugin.revenue && (
               <div className="mt-3 text-xs text-muted-foreground">
@@ -358,17 +365,24 @@ export default function PluginDetails() {
             </Card>
           )}
 
-          {/* Installation */}
+          {/* Availability */}
           <Card>
             <CardHeader>
-              <CardTitle>Installation</CardTitle>
+              <CardTitle>Availability</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <Download className="h-4 w-4 text-green-600" />
-                  <span>Automatic installation after purchase</span>
-                </div>
+                {plugin.isPaid && !hasAccess ? (
+                  <div className="flex items-center gap-2">
+                    <Lock className="h-4 w-4 text-amber-600" />
+                    <span>Purchase required to unlock</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Download className="h-4 w-4 text-green-600" />
+                    <span>No install step - ready to use now</span>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <Eye className="h-4 w-4 text-blue-600" />
                   <span>Access from workspace</span>

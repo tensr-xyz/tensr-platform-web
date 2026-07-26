@@ -3,6 +3,7 @@ import { getUsageTracker } from '@/utils/usage-tracker';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
+import type { PlaybookProposedAction, PrepPlaybookStep } from '@/lib/chat-pending-action';
 
 // Generic API client with authentication
 class ApiClient {
@@ -96,56 +97,6 @@ class ApiClient {
       throw error;
     }
   }
-
-  // Files API
-  files = {
-    list: (params?: { context?: string; organizationId?: string }) => {
-      const searchParams = new URLSearchParams();
-      if (params?.context) searchParams.append('context', params.context);
-      if (params?.organizationId) searchParams.append('organizationId', params.organizationId);
-
-      return this.request<{ files: any[]; context: any; total: number }>(
-        `/files?${searchParams.toString()}`
-      );
-    },
-
-    get: (id: string) => this.request<any>(`/files/${id}`),
-
-    create: (data: FormData) =>
-      this.request<any>('/files', {
-        method: 'POST',
-        body: data,
-        headers: {}, // Let browser set content-type for FormData
-      }),
-
-    update: (id: string, data: any) =>
-      this.request<any>(`/files/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      }),
-
-    delete: (id: string) => this.request<void>(`/files/${id}`, { method: 'DELETE' }),
-
-    uploadUrl: (data: any) =>
-      this.request<any>('/files/upload-url', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    completeUpload: (id: string, data: any) =>
-      this.request<any>(`/files/${id}/complete`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    versions: (id: string) => this.request<any[]>(`/files/${id}/versions`),
-
-    getVersion: (fileId: string, versionId: string) =>
-      this.request<any>(`/files/${fileId}/versions/${versionId}`),
-
-    revert: (fileId: string, versionId: string) =>
-      this.request<any>(`/files/${fileId}/revert/${versionId}`, { method: 'POST' }),
-  };
 
   // Projects API
   projects = {
@@ -383,11 +334,10 @@ class ApiClient {
 
     get: (id: string) => this.request<any>(`/plugins/${id}`),
 
-    install: (id: string) => this.request<any>(`/plugins/${id}/install`, { method: 'POST' }),
-
-    uninstall: (id: string) => this.request<any>(`/plugins/${id}/uninstall`, { method: 'POST' }),
-
     downloadUrl: (id: string) => this.request<any>(`/plugins/${id}/download-url`),
+
+    access: (id: string) =>
+      this.request<import('@/types/plugin').PluginAccessResponse>(`/plugins/${id}/access`),
 
     execute: (id: string, data: any, config?: any) =>
       this.request<any>(`/plugins/${id}/execute`, {
@@ -396,7 +346,7 @@ class ApiClient {
       }),
 
     purchase: (id: string, data: any) =>
-      this.request<any>(`/plugins/${id}/purchase`, {
+      this.request<import('@/types/plugin').PluginPurchaseResponse>(`/plugins/${id}/purchase`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -407,6 +357,26 @@ class ApiClient {
         body: data,
         headers: {}, // Let browser set content-type for FormData
       }),
+  };
+
+  // Creator dashboard API (tensr-api app/routers/plugins.py — creator + Stripe Connect)
+  creator = {
+    stats: () => this.request<import('@/types/plugin').CreatorStats>('/creator/stats'),
+
+    plugins: () =>
+      this.request<import('@/types/plugin').CreatorPluginSummary[]>('/creator/plugins'),
+
+    connectOnboarding: (returnTo?: string) =>
+      this.request<import('@/types/plugin').ConnectOnboardingResponse>(
+        '/creator/connect/onboarding',
+        {
+          method: 'POST',
+          body: JSON.stringify({ returnTo }),
+        }
+      ),
+
+    connectStatus: () =>
+      this.request<import('@/types/plugin').ConnectStatusResponse>('/creator/connect/status'),
   };
 
   // Statistics API
@@ -821,6 +791,12 @@ class ApiClient {
         method: 'POST',
         body: JSON.stringify({}),
       }),
+
+    updateParticipantRole: (sessionId: string, userId: string, role: 'Editor' | 'Viewer') =>
+      this.request<any>(`/sessions/${sessionId}/participants/${userId}/role`, {
+        method: 'POST',
+        body: JSON.stringify({ role }),
+      }),
   };
 
   // Feedback API
@@ -946,6 +922,33 @@ class ApiClient {
           dataset_id: data.datasetId,
           conversation_history: data.conversationHistory ?? null,
         }),
+      }),
+    /** Deterministic, LLM-free inspection of one agent-driven data-prep playbook step. */
+    prepPlaybookStep: (data: { datasetId: string; step?: PrepPlaybookStep | null }) =>
+      this.request<{
+        step: PrepPlaybookStep;
+        step_index: number;
+        total_steps: number;
+        title: string;
+        status: 'issue_found' | 'clean';
+        summary: string;
+        details: string[];
+        proposed_action: PlaybookProposedAction | null;
+        is_last_step: boolean;
+        stats?: Record<string, unknown>;
+      }>('/assistant/prep-playbook/step', {
+        method: 'POST',
+        body: JSON.stringify({
+          dataset_id: data.datasetId,
+          step: data.step ?? null,
+        }),
+      }),
+    /** Generic executor for a playbook step's `proposed_action` — an existing data_ops
+     *  endpoint (impute-missing / remove-duplicates / handle-outliers / fix-data-types). */
+    applyPlaybookAction: (action: PlaybookProposedAction) =>
+      this.request<Record<string, unknown>>(action.endpoint, {
+        method: action.method || 'POST',
+        body: JSON.stringify(action.body),
       }),
   };
   datasets = {

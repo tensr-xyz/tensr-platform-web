@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { PluginRecord } from '@/types/plugin';
 
 import { getSessionJwt, getSessionToken } from '@/utils/auth';
@@ -21,22 +21,21 @@ interface UsePluginsOptions {
 
 interface UsePluginsReturn {
   plugins: PluginRecord[];
-  installedPlugins: PluginRecord[];
   loading: boolean;
   error: Error | null;
   hasMore: boolean;
   loadMore: () => Promise<void>;
   getPlugin: (pluginId: string, version?: string) => Promise<PluginRecord>;
   getPluginVersions: (pluginId: string) => Promise<PluginRecord[]>;
-  installPlugin: (plugin: PluginRecord) => Promise<void>;
-  uninstallPlugin: (pluginId: string) => Promise<void>;
-  isPluginInstalled: (pluginId: string) => boolean;
   refetch: () => void;
 }
 
+// NOTE: There is no persistent "install" concept on tensr-api (see app/routers/plugins.py) -
+// approved plugins are usable directly from the marketplace/command palette without any
+// install step, so we don't fake install state here. See installPlugin/uninstallPlugin
+// removal in Track B Phase 1 (marketplace honesty).
 const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
   const [plugins, setPlugins] = useState<PluginRecord[]>([]);
-  const [installedPlugins, setInstalledPlugins] = useState<PluginRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [nextToken, setNextToken] = useState<string | undefined>();
@@ -97,13 +96,6 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
     }
   };
 
-  // Load installed plugins - just track IDs in memory
-  const loadInstalledPlugins = useCallback(async () => {
-    // For web platform, we just track installed plugin IDs in memory
-    // No local storage needed since we'll always fetch from API
-    setInstalledPlugins([]);
-  }, []);
-
   // Initialize plugin data
   useEffect(() => {
     const initializeFetch = async () => {
@@ -113,7 +105,6 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
         const data = await fetchPlugins({ isInitialFetch: true });
         setPlugins(data.items);
         setNextToken(data.nextToken);
-        await loadInstalledPlugins();
         setError(null);
       } catch (err) {
         setError(err instanceof Error ? err : new Error('Failed to load plugins'));
@@ -123,7 +114,7 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
     };
 
     initializeFetch();
-  }, [refetchTrigger, loadInstalledPlugins]);
+  }, [refetchTrigger]);
 
   const loadMore = async () => {
     if (!nextToken || loading) return;
@@ -195,50 +186,18 @@ const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
     return response.json();
   };
 
-  const installPlugin = async (plugin: PluginRecord) => {
-    try {
-      // For web platform, just track the plugin as installed in memory
-      // We'll fetch from API when needed
-      setInstalledPlugins(prev => {
-        if (prev.some(p => p.pluginId === plugin.pluginId)) {
-          return prev;
-        }
-        return [...prev, plugin];
-      });
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const uninstallPlugin = async (pluginId: string) => {
-    try {
-      // Remove from installed plugins list
-      setInstalledPlugins(prev => prev.filter(p => p.pluginId !== pluginId));
-    } catch (error) {
-      throw error;
-    }
-  };
-
-  const isPluginInstalled = (pluginId: string): boolean => {
-    return installedPlugins.some(plugin => plugin.pluginId === pluginId);
-  };
-
   const refetch = () => {
     setRefetchTrigger(prev => prev + 1);
   };
 
   return {
     plugins,
-    installedPlugins,
     loading,
     error,
     hasMore: !!nextToken,
     loadMore,
     getPlugin,
     getPluginVersions,
-    installPlugin,
-    uninstallPlugin,
-    isPluginInstalled,
     refetch,
   };
 };

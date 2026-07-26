@@ -28,7 +28,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
     return token || '';
   }, []);
 
-  // Get all projects
+  // Get all projects — tensr-api has no /projects list; datasets are the source of truth.
   const getProjects = useCallback(async (): Promise<Project[]> => {
     const token = getToken();
     if (!token) {
@@ -41,11 +41,9 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
     setError(null);
 
     try {
-      const response = await fetch(tensrApiUrl('/projects'), {
+      const response = await fetch(tensrApiUrl('/datasets/?scope=all'), {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: getTensrApiHeaders(),
       });
 
       if (!response.ok) {
@@ -54,36 +52,29 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
         throw new Error(`Failed to fetch projects: ${response.status} ${errorText}`);
       }
 
-      const data = await response.json();
-      devLog('Projects API response:', data);
+      const rows = await response.json();
+      devLog('Projects API response:', rows);
 
-      // Check if the response has a projects property that's an array
-      if (data && data.projects && Array.isArray(data.projects)) {
-        // Map API response properties to match component expectations
-        const mappedProjects = data.projects.map((p: Project) => ({
-          name: p.projectName, // Map projectName to name
-          projectId: p.projectId,
-          id: p.projectId, // Also provide as id for components that use that
-          status: p.status,
-          updatedAt: p.updatedAt,
-          lastModified: p.updatedAt,
-          // Add other fields with reasonable defaults
-          metadata: {
-            analysisTypes: [],
-            dataPoints: 0,
-          },
-        }));
-
-        setProjects(mappedProjects);
-        return mappedProjects;
-      } else if (Array.isArray(data)) {
-        // If the response is already an array, use it directly
-        setProjects(data);
-        return data;
-      } else {
-        console.error('Unexpected API response format:', data);
+      if (!Array.isArray(rows)) {
+        console.error('Unexpected API response format:', rows);
         throw new Error('Unexpected API response format');
       }
+
+      const mappedProjects = rows.map((d: Record<string, unknown>) => ({
+        projectId: String(d.dataset_id ?? ''),
+        projectName: String(d.original_filename || 'Dataset'),
+        id: String(d.dataset_id ?? ''),
+        name: String(d.original_filename || 'Dataset'),
+        updatedAt: String(d.updated_at ?? ''),
+        lastModified: String(d.updated_at ?? ''),
+        metadata: {
+          analysisTypes: [],
+          dataPoints: 0,
+        },
+      })) as unknown as Project[];
+
+      setProjects(mappedProjects);
+      return mappedProjects;
     } catch (err) {
       const errorMessage = err instanceof Error ? err : new Error(String(err));
       setError(errorMessage);

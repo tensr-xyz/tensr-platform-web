@@ -4,13 +4,13 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/atoms/card';
 import { Button } from '@/components/atoms/button';
-import { Badge } from '@/components/atoms/badge';
 import { Separator } from '@/components/atoms/separator';
-import { ArrowLeft, CreditCard, Shield, Download, CheckCircle } from 'lucide-react';
+import { ArrowLeft, CreditCard, Download, CheckCircle, Lock } from 'lucide-react';
 import { PluginRecord } from '@/types/plugin';
 import usePlugins from '@/hooks/api/use-plugin';
 import { Loader } from '@/components/molecules/loading';
-import { devLog } from '@/lib/dev-log';
+import { apiClient } from '@/lib/api-client';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import posthog from 'posthog-js';
 
 export default function PluginPurchase() {
@@ -41,6 +41,8 @@ export default function PluginPurchase() {
     }
   };
 
+  // Paid plugin checkout redirects to Stripe (POST /plugins/{id}/purchase — see
+  // app/routers/plugins.py). Free plugins complete immediately with no redirect.
   const handlePurchase = async () => {
     if (!plugin) return;
 
@@ -48,55 +50,26 @@ export default function PluginPurchase() {
     setError(null);
 
     try {
-      const response = await fetch(`/api/plugins/${plugin.pluginId}/purchase`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          pricingModel: plugin.pricing?.model || 'one-time',
-        }),
+      const result = await apiClient.plugins.purchase(plugin.pluginId, {
+        pricingModel: plugin.pricing?.model || 'free',
+        returnTo: `/plugins/${plugin.pluginId}`,
       });
 
-      if (!response.ok) {
-        throw new Error('Purchase failed');
+      posthog.capture('plugin_purchase_started', {
+        plugin_id: plugin.pluginId,
+        plugin_name: plugin.name,
+        pricing_model: plugin.pricing?.model,
+        price: plugin.pricing?.price,
+      });
+
+      if (result.status === 'requires_checkout' && result.checkout_url) {
+        window.location.href = result.checkout_url;
+        return;
       }
 
-      const result = await response.json();
-
-      if (result.clientSecret) {
-        // Handle Stripe payment
-        // This would integrate with Stripe Elements in a real implementation
-        devLog('Payment intent created:', result);
-        posthog.capture('plugin_purchased', {
-          plugin_id: plugin.pluginId,
-          plugin_name: plugin.name,
-          pricing_model: plugin.pricing?.model,
-          price: plugin.pricing?.price,
-        });
-        setPurchaseComplete(true);
-      } else if (result.subscriptionId) {
-        // Subscription created
-        devLog('Subscription created:', result);
-        posthog.capture('plugin_purchased', {
-          plugin_id: plugin.pluginId,
-          plugin_name: plugin.name,
-          pricing_model: plugin.pricing?.model,
-          price: plugin.pricing?.price,
-        });
-        setPurchaseComplete(true);
-      } else {
-        // Free plugin or direct purchase
-        posthog.capture('plugin_purchased', {
-          plugin_id: plugin.pluginId,
-          plugin_name: plugin.name,
-          pricing_model: plugin.pricing?.model,
-          price: plugin.pricing?.price,
-        });
-        setPurchaseComplete(true);
-      }
+      setPurchaseComplete(true);
     } catch (err) {
-      setError('Failed to process purchase');
+      setError(formatApiErrorMessage(err));
     } finally {
       setPurchasing(false);
     }
@@ -156,8 +129,14 @@ export default function PluginPurchase() {
           Back to Plugin
         </Button>
 
-        <h1 className="text-3xl font-bold mb-2">Purchase {plugin.name}</h1>
-        <p className="text-muted-foreground">Complete your purchase to get access to this plugin</p>
+        <h1 className="text-3xl font-bold mb-2">
+          {plugin.isPaid ? 'Purchase' : 'Get'} {plugin.name}
+        </h1>
+        <p className="text-muted-foreground">
+          {plugin.isPaid
+            ? "You'll be redirected to Stripe to complete your purchase securely."
+            : 'Complete your purchase to get access to this plugin'}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -165,7 +144,7 @@ export default function PluginPurchase() {
         <div className="lg:col-span-2 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Payment Information</CardTitle>
+              <CardTitle>{plugin.isPaid ? 'Checkout' : 'Confirm'}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -177,41 +156,27 @@ export default function PluginPurchase() {
                   <div className="flex items-center justify-between mb-2">
                     <span className="font-medium">Price:</span>
                     <span className="text-lg font-bold">
-                      ${plugin.pricing?.price}
-                      {plugin.pricing?.model === 'subscription' && (
-                        <span className="text-muted-foreground">
-                          /{plugin.pricing.subscriptionInterval}
-                        </span>
+                      {plugin.isPaid ? (
+                        <>
+                          ${plugin.pricing?.price ?? '—'}
+                          {plugin.pricing?.model === 'subscription' &&
+                          plugin.pricing?.subscriptionInterval
+                            ? `/${plugin.pricing.subscriptionInterval}`
+                            : ''}
+                        </>
+                      ) : (
+                        'Free'
                       )}
                     </span>
                   </div>
-                  {plugin.pricing?.trialDays && plugin.pricing.trialDays > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">Trial:</span>
-                      <span className="text-green-600">
-                        {plugin.pricing.trialDays}-day free trial
-                      </span>
-                    </div>
+                  {plugin.isPaid && (
+                    <p className="text-xs text-muted-foreground">
+                      Paid to {plugin.authorId} via Stripe. A 10% platform fee applies.
+                    </p>
                   )}
                 </div>
 
                 <Separator />
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span>Subtotal:</span>
-                    <span>${plugin.pricing?.price}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span>Platform Fee (10%):</span>
-                    <span>${((plugin.pricing?.price || 0) * 0.1).toFixed(2)}</span>
-                  </div>
-                  <Separator />
-                  <div className="flex items-center justify-between font-bold text-lg">
-                    <span>Total:</span>
-                    <span>${((plugin.pricing?.price || 0) * 1.1).toFixed(2)}</span>
-                  </div>
-                </div>
 
                 <div className="pt-4">
                   <Button
@@ -220,8 +185,16 @@ export default function PluginPurchase() {
                     className="w-full"
                     size="lg"
                   >
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    {purchasing ? 'Processing...' : 'Complete Purchase'}
+                    {plugin.isPaid ? (
+                      <Lock className="h-4 w-4 mr-2" />
+                    ) : (
+                      <CreditCard className="h-4 w-4 mr-2" />
+                    )}
+                    {purchasing
+                      ? 'Processing...'
+                      : plugin.isPaid
+                        ? 'Continue to Stripe'
+                        : 'Confirm & Continue'}
                   </Button>
                 </div>
 
@@ -234,37 +207,29 @@ export default function PluginPurchase() {
             </CardContent>
           </Card>
 
-          {/* Security & Trust */}
           <Card>
             <CardHeader>
-              <CardTitle>Security & Trust</CardTitle>
+              <CardTitle>What You Get</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="flex items-start gap-3">
-                  <Shield className="h-5 w-5 text-green-600 mt-0.5" />
-                  <div>
-                    <h4 className="font-medium">Secure Payment</h4>
-                    <p className="text-sm text-muted-foreground">
-                      All payments are processed securely through Stripe with bank-level encryption.
-                    </p>
-                  </div>
-                </div>
                 <div className="flex items-start gap-3">
                   <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
                   <div>
                     <h4 className="font-medium">Instant Access</h4>
                     <p className="text-sm text-muted-foreground">
-                      Get immediate access to your plugin after successful payment.
+                      Run this plugin from the Analysis command palette right away.
                     </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Download className="h-5 w-5 text-purple-600 mt-0.5" />
                   <div>
-                    <h4 className="font-medium">Easy Installation</h4>
+                    <h4 className="font-medium">No install step</h4>
                     <p className="text-sm text-muted-foreground">
-                      Plugin is automatically installed and available in your workspace.
+                      {plugin.isPaid
+                        ? 'Once purchased, the plugin is available in your workspace immediately.'
+                        : 'Free plugins are available in your workspace immediately.'}
                     </p>
                   </div>
                 </div>
@@ -309,41 +274,8 @@ export default function PluginPurchase() {
                   </div>
                   <div className="flex justify-between">
                     <span>Creator:</span>
-                    <span className="font-medium">
-                      {(plugin as any).authorName || (plugin as any).author || 'Unknown'}
-                    </span>
+                    <span className="font-medium">{plugin.authorId}</span>
                   </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* What You Get */}
-          <Card>
-            <CardHeader>
-              <CardTitle>What You Get</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>Full plugin source code</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>Documentation and examples</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>Lifetime access (one-time purchase)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>Automatic updates</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>Technical support</span>
                 </div>
               </div>
             </CardContent>

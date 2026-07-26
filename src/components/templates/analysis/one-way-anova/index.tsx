@@ -1,4 +1,4 @@
-import { useTabsStore } from '@/stores/tabs-store';
+import { useTabsStore, ViewType } from '@/stores/tabs-store';
 import { getIdToken } from '@/utils/auth';
 import { ReactNode, useMemo, useState, useRef } from 'react';
 import {
@@ -23,7 +23,6 @@ import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
 import useAuth from '@/hooks/api/use-auth';
-import { ViewType } from '@/contexts/project-context/types';
 import MarkdownViewer from '@/components/organisms/markdown-viewer';
 import {
   DropdownMenu,

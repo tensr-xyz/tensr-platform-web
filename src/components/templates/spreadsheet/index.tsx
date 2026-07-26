@@ -35,7 +35,7 @@ import {
 } from '@/components/molecules/table';
 import { createColumns, CreateColumnsProps } from '@/components/templates/spreadsheet/columns';
 import { HeaderComponent } from '@/components/templates/spreadsheet/header';
-import { useSession, wsService } from '@/hooks/ui/use-session';
+import { useSession } from '@/hooks/ui/use-session';
 import { cn } from '@/utils';
 import { useTabsStore } from '@/stores/tabs-store';
 import { ColumnSummary } from '@/types/file';
@@ -74,6 +74,7 @@ import { useSheetState } from '@/hooks/ui/use-sheet-state';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { getDatasetIdFromPath } from '@/lib/workspace-dataset';
+import { deriveLiveSheetId } from '@/lib/collaboration-sheet';
 import { useProjectStore } from '@/stores/project-store';
 import Loading from '@/components/molecules/loading';
 import { applyClientColumnFilters } from '@/utils/column-filters';
@@ -569,8 +570,15 @@ export function Spreadsheet({
     idTokenRef.current = session?.sessionJwt || null;
   }, [session?.sessionJwt]);
 
-  // Get sheetId from tabData if available
-  const sheetId = tabData?.sheetId;
+  // Single collaboration-session WebSocket connection (also carries live sheet
+  // op-log traffic — see `deriveLiveSheetId` below and `hooks/ui/use-session`).
+  const { currentSession } = useSession();
+
+  // While a collaboration session is active, all participants derive the same
+  // live-sheet id from the session itself, so cell edits sync + persist via the
+  // `sheet_live` op-log instead of the old ephemeral, non-persisted `cell_update`
+  // broadcast. Outside a session this falls back to any explicit tabData.sheetId.
+  const sheetId = deriveLiveSheetId(currentSession, tabData?.sheetId);
 
   // Use sheet state hook when sheetId is provided (real-time collaboration mode)
   const {
@@ -690,6 +698,35 @@ export function Spreadsheet({
     sheetStateInitializedRef.current = false;
     lastSheetStateVersionRef.current = 0;
   }, [sheetId]);
+
+  // One-time seed: if the collaboration session's live sheet doc is brand new
+  // (version 0, no persisted rows yet) but this tab already has rows loaded
+  // locally (e.g. an existing dataset/file), push them in as the first op so
+  // subsequent `update_cell` ops target valid row indices server-side. Without
+  // this, `sheet_live`'s `apply_op` rejects `update_cell` against an empty sheet.
+  // GAP: DynamoDB items cap at ~400KB, so very large sheets can't be seeded this
+  // way — that needs a chunked/streamed seed path added to `sheet_live_dynamo.py`.
+  // GAP: if two participants both already have the file loaded locally when the
+  // live doc is still empty, both may race to seed it — the loser's `op_rejected`
+  // (version conflict) is surfaced via `error` but its rows are not reconciled.
+  // A real fix would have only the session host seed, or add a server-side
+  // "claim seed" step; out of scope here.
+  const sheetSeededRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sheetId || !sheetState || sheetSeededRef.current === sheetId) return;
+    if (sheetState.version !== 0 || sheetState.data.length !== 0) {
+      sheetSeededRef.current = sheetId;
+      return;
+    }
+    if (data.length === 0) return;
+
+    sheetSeededRef.current = sheetId;
+    const seedOp = {
+      kind: 'append_rows' as const,
+      rows: data.map(row => _.omit(row, 'id')),
+    };
+    void applySheetOperation(seedOp);
+  }, [sheetId, sheetState, data, applySheetOperation]);
 
   // Track previous data length to prevent infinite loops (must be after data state declaration)
   const previousDataLengthRef = useRef(data.length);
@@ -2468,22 +2505,6 @@ export function Spreadsheet({
     setExtraColumnsCount(EXTRA_COLUMNS);
   }, [initialColumns]);
 
-  const { wsReady, currentSession, ws } = useSession();
-
-  useEffect(() => {
-    // When joining a session, send a tab registration message
-    if (wsReady && currentSession && ws) {
-      ws.send(
-        JSON.stringify({
-          type: 'register_tab',
-          sessionId: currentSession.id,
-          tabId,
-          filePath: decodedFilePath,
-        })
-      );
-    }
-  }, [wsReady, currentSession, ws, tabId, decodedFilePath]);
-
   // Only measure virtualization when data length actually changes, not on every render
   // DO NOT trigger fetchMoreRows here - that causes infinite loops
   // Let the scroll handler manage pagination instead
@@ -2500,60 +2521,6 @@ export function Spreadsheet({
       rowVirtualizer.measure();
     }
   }, [data.length, rowVirtualizer]);
-
-  // Update the message handler to be more forgiving with tabIds
-  useEffect(() => {
-    if (!ws) {
-      return;
-    }
-
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const message = JSON.parse(event.data);
-
-        // Handle cell updates for any tab viewing the same file
-        if (message.type === 'cell_update' && currentSession) {
-          // Apply the update if we're not the sender
-          // WebSocket updates are non-urgent - use transition to keep UI responsive
-          if (message.userId !== wsService.userId) {
-            startTransition(() => {
-              setData(prevData => {
-                const newData = [...prevData];
-                if (!newData[message.rowIndex]) {
-                  newData[message.rowIndex] = { id: `row-${message.rowIndex}` };
-                }
-                newData[message.rowIndex] = {
-                  ...newData[message.rowIndex],
-                  [message.columnId]: message.value,
-                };
-                return newData;
-              });
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error processing WebSocket message:', error);
-      }
-    };
-
-    ws.addEventListener('message', handleMessage);
-
-    // Request sync when connecting
-    if (wsReady && currentSession?.id && ws.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: 'sync_request',
-          sessionId: currentSession.id,
-          tabId,
-          userId: wsService.userId,
-        })
-      );
-    }
-
-    return () => {
-      ws.removeEventListener('message', handleMessage);
-    };
-  }, [ws, wsReady, currentSession, tabId]);
 
   // Handle keyboard shortcuts for sorting
   useEffect(() => {
@@ -2696,22 +2663,13 @@ export function Spreadsheet({
         }, 300); // 300ms debounce for tab updates
       }
 
-      // Send update via WebSocket service if connected
-      if (wsReady && currentSession) {
-        wsService.sendCellUpdate(tabId, rowIndex, useColumnId, value);
-      }
+      // No `sheetId` means there is no active collaboration session (and no
+      // legacy explicit sheet id) — nothing to sync, this edit stays local-only.
+      // The old ephemeral `cell_update` broadcast (no persistence, no conflict
+      // resolution) has been removed; the persisted `sheet_live` op-log path
+      // above is now the single mechanism for syncing edits during a session.
     },
-    [
-      tabId,
-      activeTab,
-      updateTab,
-      wsReady,
-      currentSession,
-      sheetId,
-      applySheetOperation,
-      sheetState,
-      data,
-    ]
+    [tabId, activeTab, updateTab, sheetId, applySheetOperation, sheetState, data]
   );
 
   // Clipboard handlers
@@ -3198,9 +3156,9 @@ export function Spreadsheet({
             isDirty: true,
           });
 
-          const liveNote = activeTab.data?.sheetId
-            ? ' (live-collab tab — applied locally, not broadcast)'
-            : '';
+          // `delete_column` has no `SheetOp` kind, so even in a live session this
+          // only ever updates the local tab — it never reaches `sheet_live`.
+          const liveNote = sheetId ? ' (live-collab tab — applied locally, not broadcast)' : '';
           toast({
             title: `Deleted column "${target.header}"`,
             description: `Press ⌘Z to undo.${liveNote}`,

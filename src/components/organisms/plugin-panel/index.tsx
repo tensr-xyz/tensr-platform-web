@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { Lock } from 'lucide-react';
 import {
   Accordion,
   AccordionContent,
@@ -21,8 +23,9 @@ interface PluginPanelProps {
 const PluginItem: React.FC<{
   plugin: PluginRecord;
   data?: any;
+  hasAccess: boolean;
   onExecutionComplete?: (result: any) => void;
-}> = ({ plugin, data, onExecutionComplete }) => {
+}> = ({ plugin, data, hasAccess, onExecutionComplete }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
@@ -85,9 +88,18 @@ const PluginItem: React.FC<{
           </div>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleRun} disabled={isLoading || !data}>
-            {isLoading ? <Loader size="sm" /> : data ? 'Run' : 'Open a file to run'}
-          </Button>
+          {plugin.isPaid && !hasAccess ? (
+            <Button variant="outline" size="sm" asChild>
+              <Link href={`/plugins/${plugin.pluginId}/purchase`}>
+                <Lock className="mr-1 h-3.5 w-3.5" />
+                Purchase
+              </Link>
+            </Button>
+          ) : (
+            <Button variant="outline" size="sm" onClick={handleRun} disabled={isLoading || !data}>
+              {isLoading ? <Loader size="sm" /> : data ? 'Run' : 'Open a file to run'}
+            </Button>
+          )}
         </div>
       </div>
 
@@ -110,6 +122,35 @@ const PluginPanel: React.FC<PluginPanelProps> = ({ activeData }) => {
     plugin: PluginRecord;
     result: any;
   } | null>(null);
+  const [accessMap, setAccessMap] = useState<Record<string, boolean>>({});
+
+  // Show approved plugins - no install step, just use them on files. Paid plugins
+  // also appear; access (purchase status) is checked separately below and gates "Run".
+  const approvedPlugins = plugins.filter(p => p.status === 'APPROVED');
+
+  useEffect(() => {
+    const paidPluginIds = approvedPlugins.filter(p => p.isPaid).map(p => p.pluginId);
+    if (paidPluginIds.length === 0) return;
+
+    let cancelled = false;
+    Promise.all(
+      paidPluginIds.map(async id => {
+        try {
+          const access = await apiClient.plugins.access(id);
+          return [id, access.hasAccess] as const;
+        } catch {
+          return [id, false] as const;
+        }
+      })
+    ).then(results => {
+      if (cancelled) return;
+      setAccessMap(prev => ({ ...prev, ...Object.fromEntries(results) }));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plugins]);
 
   const handleExecutionComplete = (plugin: PluginRecord, result: any) => {
     setExecutionResult({ plugin, result });
@@ -126,9 +167,6 @@ const PluginPanel: React.FC<PluginPanelProps> = ({ activeData }) => {
     );
   }
 
-  // Show all approved plugins - no need to install, just use them on files
-  const approvedPlugins = plugins.filter(p => p.status === 'APPROVED');
-
   return (
     <ScrollArea className="h-full">
       <div className="p-4">
@@ -143,6 +181,7 @@ const PluginPanel: React.FC<PluginPanelProps> = ({ activeData }) => {
                       key={plugin.pluginId}
                       plugin={plugin}
                       data={activeData}
+                      hasAccess={!plugin.isPaid || !!accessMap[plugin.pluginId]}
                       onExecutionComplete={result => handleExecutionComplete(plugin, result)}
                     />
                   ))

@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, Star, Download, Zap, Check, Plus, ArrowRight } from 'lucide-react';
+import { Search, Star, Download, Zap, Plus, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { PluginRecord } from '@/types/plugin';
@@ -139,19 +139,14 @@ function PluginCardThumb({ color, pluginId }: { color: string; pluginId: string 
 
 function PluginCard({
   plugin,
-  onInstall,
   onViewDetails,
-  isInstalled,
-  installing,
 }: {
   plugin: PluginRecord;
-  onInstall: (plugin: PluginRecord) => void;
   onViewDetails: (plugin: PluginRecord) => void;
-  isInstalled: boolean;
-  installing: boolean;
 }) {
   const color = pluginColor(plugin.pluginId);
   const price = formatPrice(plugin);
+  const isApproved = plugin.status === 'APPROVED';
 
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-border bg-card transition-shadow hover:shadow-md">
@@ -195,37 +190,23 @@ function PluginCard({
               </span>
             </span>
           </div>
-          {isInstalled ? (
-            <span className="inline-flex h-8 shrink-0 items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-3 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-              <Check className="size-3" aria-hidden />
-              Installed
-            </span>
-          ) : (
-            <Button
-              type="button"
-              size="sm"
-              disabled={installing || plugin.status !== 'APPROVED'}
-              className="h-8 shrink-0 rounded-full px-3 text-xs"
-              onClick={() => onInstall(plugin)}
-            >
-              {installing ? '…' : price === 'Free' ? 'Install' : 'Get'}
-            </Button>
-          )}
+          <Button
+            type="button"
+            size="sm"
+            variant={isApproved ? 'default' : 'outline'}
+            disabled={!isApproved}
+            className="h-8 shrink-0 rounded-full px-3 text-xs"
+            onClick={() => onViewDetails(plugin)}
+          >
+            {isApproved ? 'View details' : 'Pending review'}
+          </Button>
         </div>
       </div>
     </div>
   );
 }
 
-function FeaturedPlugin({
-  plugin,
-  onInstall,
-  isInstalled,
-}: {
-  plugin: PluginRecord;
-  onInstall: (plugin: PluginRecord) => void;
-  isInstalled: boolean;
-}) {
+function FeaturedPlugin({ plugin }: { plugin: PluginRecord }) {
   const color = pluginColor(plugin.pluginId);
   const router = useRouter();
 
@@ -245,19 +226,8 @@ function FeaturedPlugin({
           </p>
         </div>
         <div className="mt-6 flex flex-wrap items-center gap-2">
-          {isInstalled ? (
-            <span className="inline-flex h-9 items-center gap-1.5 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 text-sm font-medium text-emerald-600">
-              <Check className="size-3.5" aria-hidden />
-              Installed
-            </span>
-          ) : (
-            <Button className="h-9 rounded-full px-4" onClick={() => onInstall(plugin)}>
-              Install plugin
-            </Button>
-          )}
           <Button
-            variant="outline"
-            className="h-9 rounded-full"
+            className="h-9 rounded-full px-4"
             onClick={() => router.push(`/plugins/${plugin.pluginId}`)}
           >
             View details
@@ -286,11 +256,9 @@ function FeaturedPlugin({
           className="absolute bottom-6 left-6 right-6 rounded-xl border border-white/15 bg-black/35 p-3.5 font-mono text-xs leading-relaxed text-white/90 backdrop-blur-sm"
           aria-hidden
         >
-          <div className="text-white/60">
-            $ tensr plugin install {plugin.pluginId.slice(0, 12)}…
-          </div>
-          <div>✓ Fetching manifest…</div>
-          <div>✓ Installed statistical operators</div>
+          <div className="text-white/60">Runs from the Analysis command palette</div>
+          <div>✓ No install step required</div>
+          <div>✓ Works on any spreadsheet in your workspace</div>
         </div>
       </div>
     </div>
@@ -299,10 +267,9 @@ function FeaturedPlugin({
 
 export default function PluginsLayout() {
   const router = useRouter();
-  const { plugins, isPluginInstalled, installPlugin, loading, error } = usePlugins();
+  const { plugins, loading, error } = usePlugins();
   const [search, setSearch] = useState('');
   const [discoverFilter, setDiscoverFilter] = useState<DiscoverFilter>('all');
-  const [installingId, setInstallingId] = useState<string | null>(null);
 
   const filteredPlugins = useMemo(() => {
     return plugins.filter(plugin => {
@@ -334,21 +301,6 @@ export default function PluginsLayout() {
     if (!featuredPlugin) return filteredPlugins;
     return filteredPlugins.filter(p => p.pluginId !== featuredPlugin.pluginId);
   }, [filteredPlugins, featuredPlugin]);
-
-  const handleInstall = async (plugin: PluginRecord) => {
-    try {
-      setInstallingId(plugin.pluginId);
-      if (plugin.isPaid) {
-        router.push(`/plugins/${plugin.pluginId}/purchase`);
-      } else {
-        await installPlugin(plugin);
-      }
-    } catch (err) {
-      console.error('Error installing plugin:', err);
-    } finally {
-      setInstallingId(null);
-    }
-  };
 
   const handleViewDetails = (plugin: PluginRecord) => {
     router.push(`/plugins/${plugin.pluginId}`);
@@ -466,13 +418,7 @@ export default function PluginsLayout() {
         </div>
       ) : (
         <>
-          {featuredPlugin ? (
-            <FeaturedPlugin
-              plugin={featuredPlugin}
-              onInstall={handleInstall}
-              isInstalled={isPluginInstalled(featuredPlugin.pluginId)}
-            />
-          ) : null}
+          {featuredPlugin ? <FeaturedPlugin plugin={featuredPlugin} /> : null}
 
           {gridPlugins.length > 0 ? (
             <>
@@ -498,10 +444,7 @@ export default function PluginsLayout() {
                   <PluginCard
                     key={plugin.pluginId}
                     plugin={plugin}
-                    onInstall={handleInstall}
                     onViewDetails={handleViewDetails}
-                    isInstalled={isPluginInstalled(plugin.pluginId)}
-                    installing={installingId === plugin.pluginId}
                   />
                 ))}
               </div>
@@ -521,10 +464,7 @@ export default function PluginsLayout() {
                       <PluginCard
                         key={plugin.pluginId}
                         plugin={plugin}
-                        onInstall={handleInstall}
                         onViewDetails={handleViewDetails}
-                        isInstalled={isPluginInstalled(plugin.pluginId)}
-                        installing={installingId === plugin.pluginId}
                       />
                     ))}
                   </div>
