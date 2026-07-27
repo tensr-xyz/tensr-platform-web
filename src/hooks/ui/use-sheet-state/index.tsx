@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { SheetState, SheetOp, ServerMessage, ColumnSchema } from '@/types/sheet';
 import { wsService } from '@/hooks/ui/use-session';
 import { devLog } from '@/lib/dev-log';
+import { fetchSnapshotRows } from '@/lib/collab-snapshot';
 
 interface UseSheetStateOptions {
   sheetId: string;
@@ -207,12 +208,51 @@ export function useSheetState({
 
       switch (serverMessage.type) {
         case 'initial_state': {
+          const columns =
+            serverMessage.columns && serverMessage.columns.length > 0
+              ? serverMessage.columns
+              : serverMessage.schema.map((s: ColumnSchema) => s.name);
+
+          // Collaboration-fork sheets: hydrate from the presigned Parquet snapshot and
+          // replay the ops applied since it, instead of relying on inline rows.
+          if (serverMessage.snapshotUrl) {
+            const snapshotUrl = serverMessage.snapshotUrl;
+            const ops = serverMessage.ops || [];
+            setIsLoading(true);
+            void (async () => {
+              try {
+                const rows = await fetchSnapshotRows(snapshotUrl);
+                let hydrated: SheetState = {
+                  sheetId: serverMessage.sheetId,
+                  version: serverMessage.snapshotVersion ?? 0,
+                  schema: serverMessage.schema,
+                  data: rows,
+                  columns,
+                  metadata: serverMessage.metadata,
+                };
+                for (const { op } of ops) {
+                  hydrated = applyOpToState(op, hydrated);
+                }
+                hydrated.version = serverMessage.version;
+                setState(hydrated);
+                setVersion(serverMessage.version);
+                setIsLoading(false);
+                setError(null);
+              } catch (err) {
+                console.error('Failed to hydrate collaboration snapshot:', err);
+                setError(err instanceof Error ? err.message : 'Failed to load collaboration sheet');
+                setIsLoading(false);
+              }
+            })();
+            break;
+          }
+
           const initialState: SheetState = {
             sheetId: serverMessage.sheetId,
             version: serverMessage.version,
             schema: serverMessage.schema,
             data: serverMessage.initialRows || [],
-            columns: serverMessage.schema.map((s: ColumnSchema) => s.name),
+            columns,
             metadata: serverMessage.metadata,
           };
           setState(initialState);

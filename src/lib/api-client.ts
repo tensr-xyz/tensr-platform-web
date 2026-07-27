@@ -769,12 +769,9 @@ class ApiClient {
 
     getSession: (id: string) => this.request<any>(`/sessions/${id}`),
 
-    createSession: (data: {
-      datasetId?: string;
-      filePath?: string;
-      fileName: string;
-      userName: string;
-    }) =>
+    // A session always forks `datasetId` — there is no filePath-only collaboration
+    // (see `app/routers/sessions.py::CreateSessionBody`).
+    createSession: (data: { datasetId: string; fileName: string; userName: string }) =>
       this.request<any>('/sessions', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -796,6 +793,21 @@ class ApiClient {
       this.request<any>(`/sessions/${sessionId}/participants/${userId}/role`, {
         method: 'POST',
         body: JSON.stringify({ role }),
+      }),
+
+    /** Host only: overwrite the source dataset with the fork's current data, then
+     * discard the fork. */
+    saveBack: (id: string) =>
+      this.request<{ success: boolean; message: string; datasetId: string }>(
+        `/sessions/${id}/save-back`,
+        { method: 'POST', body: JSON.stringify({}) }
+      ),
+
+    /** Host only: drop the fork's changes entirely and end the session. */
+    discard: (id: string) =>
+      this.request<{ success: boolean; message: string }>(`/sessions/${id}/discard`, {
+        method: 'POST',
+        body: JSON.stringify({}),
       }),
   };
 

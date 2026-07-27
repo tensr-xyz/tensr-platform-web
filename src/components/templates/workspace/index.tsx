@@ -8,7 +8,6 @@ import TabManager from '@/components/organisms/tab-manager';
 import { FileSelector, ProjectFile } from '@/components/molecules/file-selector';
 import { cleanValue } from '@/utils/project';
 import ProjectLayout from '@/components/templates/project-layout';
-import { useCollaboration } from '@/hooks/use-collaboration';
 import Loading from '@/components/molecules/loading';
 import useAuth from '@/hooks/api/use-auth';
 import { Tab } from '@/stores/tabs-store';
@@ -137,13 +136,6 @@ export default function Workspace({ resource }: WorkspaceProps) {
     // Only re-run when the dataset id changes; `resource` object identity is unstable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId]);
-
-  // NOTE: this only allocates a local Y.Doc — `connect()` is never called here, so it
-  // has no network effect today. Full CRDT sheet sync (cell-level live edits, not just
-  // presence) would need either a production Yjs relay wired to RealtimeStack, or the
-  // sheet ops already defined in `hooks/ui/use-sheet-state`/`app/realtime/hub.py`
-  // extended to cover the full spreadsheet model. TODO before relying on this.
-  useCollaboration(resourceId);
 
   // Add a null check for activeTab
   const activeTab = tabs.find(tab => tab?.id === activeTabId);

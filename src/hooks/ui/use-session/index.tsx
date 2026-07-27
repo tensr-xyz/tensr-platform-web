@@ -442,15 +442,15 @@ export function useSession() {
     };
   }, []);
 
-  const createSession = async (params: {
-    datasetId?: string;
-    filePath?: string;
-    fileName: string;
-  }) => {
+  // A session always forks `datasetId` — no filePath-only collaboration.
+  const createSession = async (params: { datasetId: string; fileName: string }) => {
     try {
       const idToken = getIdToken();
       if (!idToken) {
         throw new Error('Authentication required');
+      }
+      if (!params.datasetId?.trim()) {
+        throw new Error('datasetId is required to start a collaboration session');
       }
 
       const session = await apiClient.collaboration.createSession({
@@ -512,6 +512,36 @@ export function useSession() {
     }
   };
 
+  /** Host-only: overwrite the source dataset with the fork's current data, then discard
+   * the fork. See `sessions.py::post_save_back_session`. */
+  const saveBackSession = async () => {
+    const sessionId = wsService.currentSession?.id;
+    if (!sessionId) {
+      throw new Error('No active collaboration session');
+    }
+    try {
+      return await apiClient.collaboration.saveBack(sessionId);
+    } catch (error) {
+      console.error('Failed to save back collaboration session:', error);
+      throw error;
+    }
+  };
+
+  /** Host-only: drop the fork's changes entirely and end the session. See
+   * `sessions.py::post_discard_session`. */
+  const discardSession = async () => {
+    const sessionId = wsService.currentSession?.id;
+    if (!sessionId) {
+      throw new Error('No active collaboration session');
+    }
+    try {
+      return await apiClient.collaboration.discard(sessionId);
+    } catch (error) {
+      console.error('Failed to discard collaboration session:', error);
+      throw error;
+    }
+  };
+
   return {
     wsReady,
     currentSession,
@@ -520,6 +550,8 @@ export function useSession() {
     joinSession,
     leaveSession,
     updateParticipantRole,
+    saveBackSession,
+    discardSession,
     ws: wsService.socket,
     presence,
     updatePresence: wsService.updatePresence.bind(wsService),

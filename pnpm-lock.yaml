@@ -130,6 +130,9 @@ importers:
       html2canvas:
         specifier: ^1.4.1
         version: 1.4.1
+      hyparquet:
+        specifier: ^1.26.2
+        version: 1.26.2
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
@@ -4823,6 +4826,12 @@ packages:
       }
     engines: { node: '>=18' }
     hasBin: true
+
+  hyparquet@1.26.2:
+    resolution:
+      {
+        integrity: sha512-6qjyK7R2tZ4vnYP1J8NpcCeDPK1UIYk3xh5XgtQUnUM1iwkYbvI6Mz3xtmpMd6AfCCeoUoJVbEq29k5GReZRWA==,
+      }
 
   iconv-lite@0.6.3:
     resolution:
@@ -11459,6 +11468,8 @@ snapshots:
   human-signals@2.1.0: {}
 
   husky@9.1.7: {}
+
+  hyparquet@1.26.2: {}
 
   iconv-lite@0.6.3:
     dependencies:

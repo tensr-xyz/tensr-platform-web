@@ -116,8 +116,18 @@ export type ServerMessage =
       type: 'initial_state';
       sheetId: string;
       version: number;
+      /** Version the Parquet snapshot covers; ops with opVersion > this must be replayed
+       * on top of it (see `app/realtime/sheet_live_dynamo.py::get_initial_state_payload`). */
+      snapshotVersion?: number;
       schema: ColumnSchema[];
+      columns?: string[];
       metadata: SheetMetadata;
+      /** Preferred for collaboration-fork sheets: presigned GET for the S3 Parquet
+       * snapshot, hydrated via `lib/collab-snapshot.ts`, with `ops` replayed on top. */
+      snapshotUrl?: string;
+      ops?: Array<{ opVersion: number; op: SheetOp }>;
+      /** Fallback when there is no S3 bucket (local dev) or no snapshot yet: full rows
+       * capped at 100, no further ops to replay. */
       initialRows?: Record<string, any>[];
     }
   | {

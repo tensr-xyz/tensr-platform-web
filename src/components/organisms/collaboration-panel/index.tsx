@@ -138,7 +138,14 @@ interface CollaborationPanelProps {
 const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationPanelProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { currentSession, createSession, leaveSession, updateParticipantRole } = useSession();
+  const {
+    currentSession,
+    createSession,
+    leaveSession,
+    updateParticipantRole,
+    saveBackSession,
+    discardSession,
+  } = useSession();
   const { user, isAuthenticated } = useAuth();
   const { selectedPath, fileSystem } = useProjectStore();
 
@@ -156,43 +163,66 @@ const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationP
     }
   };
 
+  // A session always forks a dataset — there is no filePath-only collaboration (see
+  // `app/routers/sessions.py::CreateSessionBody`). `activeTab.data.datasetId` (or the
+  // selected file's `fileId`, which is a dataset id for dataset-backed files) is the
+  // only accepted target.
+  const resolveDatasetId = (): { datasetId: string; fileName: string } | null => {
+    if (activeTab?.data?.datasetId) {
+      return { datasetId: activeTab.data.datasetId, fileName: activeTab.name };
+    }
+    const currentFile = fileSystem.find(file => file.path === selectedPath);
+    if (currentFile?.fileId) {
+      return { datasetId: currentFile.fileId, fileName: currentFile.name };
+    }
+    return null;
+  };
+
+  const canStartSession = resolveDatasetId() !== null;
+
   const handleStartSession = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      let fileName: string;
-      let datasetId: string | undefined;
-      let filePath: string | undefined;
-
-      if (activeTab && activeTab.data && (activeTab.data.datasetId || activeTab.data.filePath)) {
-        datasetId =
-          activeTab.data.datasetId || activeTab.data.filePath?.replace(/^\//, '') || undefined;
-        fileName = activeTab.name;
-        if (!datasetId && activeTab.data.filePath) {
-          filePath = activeTab.data.filePath.startsWith('/')
-            ? activeTab.data.filePath
-            : `/${activeTab.data.filePath}`;
-        }
-      } else {
-        const currentFile = fileSystem.find(file => file.path === selectedPath);
-        if (!currentFile) {
-          throw new Error('No file is currently selected. Please select a file to collaborate on.');
-        }
-        filePath = currentFile.path.startsWith('/') ? currentFile.path : `/${currentFile.path}`;
-        fileName = currentFile.name;
+      const target = resolveDatasetId();
+      if (!target) {
+        throw new Error('Select a dataset-backed file to start a collaboration session.');
       }
 
       // `createSession` both creates the session over REST and opens the RealtimeStack
       // WebSocket, sending the hub `join` message so presence/participants populate
       // immediately (see `app/realtime/hub.py::_handle_join`).
-      await createSession({
-        ...(datasetId ? { datasetId } : { filePath: filePath! }),
-        fileName,
-      });
+      await createSession(target);
     } catch (err) {
       console.error('Error starting session:', err);
       setError(err instanceof Error ? err.message : 'Failed to start session');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSaveBack = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      await saveBackSession();
+    } catch (err) {
+      console.error('Error saving back session:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save back to source dataset');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDiscardSession = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      await discardSession();
+    } catch (err) {
+      console.error('Error discarding session:', err);
+      setError(err instanceof Error ? err.message : 'Failed to discard collaboration session');
     } finally {
       setIsLoading(false);
     }
@@ -242,19 +272,14 @@ const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationP
               size="sm"
               className="w-full"
               onClick={handleStartSession}
-              disabled={
-                isLoading ||
-                (!activeTab?.data?.filePath &&
-                  (!selectedPath || !fileSystem.find(file => file.path === selectedPath)))
-              }
+              disabled={isLoading || !canStartSession}
             >
               {isLoading ? 'Starting...' : 'Start Session'}
             </Button>
 
             <p className="text-xs text-muted-foreground">
-              {!activeTab?.data?.filePath &&
-              (!selectedPath || !fileSystem.find(file => file.path === selectedPath))
-                ? 'Select a file to start a collaboration session'
+              {!canStartSession
+                ? 'Select a dataset-backed file to start a collaboration session'
                 : 'Start a collaboration session, share link and work together on this file with your teammates.'}
             </p>
           </div>
@@ -273,15 +298,34 @@ const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationP
               Copy Link
             </Button>
 
+            {isHost && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full"
+                onClick={handleSaveBack}
+                disabled={isLoading}
+              >
+                {isLoading ? 'Saving...' : 'Save Back to Dataset'}
+              </Button>
+            )}
+
             <Button
               size="sm"
               variant="outline"
               className="w-full text-destructive hover:text-destructive"
-              onClick={handleEndSession}
+              onClick={isHost ? handleDiscardSession : handleEndSession}
               disabled={isLoading}
             >
-              {isLoading ? 'Ending...' : 'End Session'}
+              {isLoading ? 'Ending...' : isHost ? 'Discard Session' : 'Leave Session'}
             </Button>
+
+            {isHost && (
+              <p className="text-xs text-muted-foreground">
+                Save Back overwrites the source dataset with this session&apos;s changes. Discard
+                ends the session for everyone without saving.
+              </p>
+            )}
 
             {collaborators.length > 0 && (
               <div className="mt-2">

@@ -572,7 +572,7 @@ export function Spreadsheet({
 
   // Single collaboration-session WebSocket connection (also carries live sheet
   // op-log traffic — see `deriveLiveSheetId` below and `hooks/ui/use-session`).
-  const { currentSession } = useSession();
+  const { currentSession, clientId } = useSession();
 
   // While a collaboration session is active, all participants derive the same
   // live-sheet id from the session itself, so cell edits sync + persist via the
@@ -699,34 +699,9 @@ export function Spreadsheet({
     lastSheetStateVersionRef.current = 0;
   }, [sheetId]);
 
-  // One-time seed: if the collaboration session's live sheet doc is brand new
-  // (version 0, no persisted rows yet) but this tab already has rows loaded
-  // locally (e.g. an existing dataset/file), push them in as the first op so
-  // subsequent `update_cell` ops target valid row indices server-side. Without
-  // this, `sheet_live`'s `apply_op` rejects `update_cell` against an empty sheet.
-  // GAP: DynamoDB items cap at ~400KB, so very large sheets can't be seeded this
-  // way — that needs a chunked/streamed seed path added to `sheet_live_dynamo.py`.
-  // GAP: if two participants both already have the file loaded locally when the
-  // live doc is still empty, both may race to seed it — the loser's `op_rejected`
-  // (version conflict) is surfaced via `error` but its rows are not reconciled.
-  // A real fix would have only the session host seed, or add a server-side
-  // "claim seed" step; out of scope here.
-  const sheetSeededRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!sheetId || !sheetState || sheetSeededRef.current === sheetId) return;
-    if (sheetState.version !== 0 || sheetState.data.length !== 0) {
-      sheetSeededRef.current = sheetId;
-      return;
-    }
-    if (data.length === 0) return;
-
-    sheetSeededRef.current = sheetId;
-    const seedOp = {
-      kind: 'append_rows' as const,
-      rows: data.map(row => _.omit(row, 'id')),
-    };
-    void applySheetOperation(seedOp);
-  }, [sheetId, sheetState, data, applySheetOperation]);
+  // No client-side seeding: the server forks the live sheet directly from the source
+  // dataset's Parquet on Host subscribe (`app/collab_sheet_seed.py::fork_session_from_dataset`),
+  // so `sheetState` already carries real data before any client would append_rows.
 
   // Track previous data length to prevent infinite loops (must be after data state declaration)
   const previousDataLengthRef = useRef(data.length);

@@ -97,9 +97,9 @@ export function tensrApiUrl(path: string, baseUrl: string = getTensrApiBaseUrl()
  * connections. The old ephemeral `cell_update` broadcast (no persistence) is
  * deprecated in favor of the persisted `op` / `sheet_live` path.
  *
- * Local dev only: falls back to the uvicorn base URL with `path` appended, since
- * `app/routers/realtime.py` exposes real path-based routes (`/ws`, `/realtime`) and
- * `app/yjs_ws.py` exposes `/ws/yjs/{room}` for local Yjs experiments.
+ * Local uvicorn only: falls back to the HTTP API base with `path` appended
+ * (`/ws`, `/realtime`). `/ws/yjs/*` exists on local uvicorn for experiments but
+ * production clients must never use it — `useCollaboration.connect()` is disabled.
  */
 export function getTensrWebSocketUrl(path: string = '/ws'): string {
   const configured = process.env.NEXT_PUBLIC_WEBSOCKET_URL?.replace(/\/$/, '');
