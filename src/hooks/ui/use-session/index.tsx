@@ -70,6 +70,9 @@ class WebSocketService {
   // Sheet ids subscribed on this single connection — re-sent on reconnect so
   // live-sheet sync survives dropped connections transparently.
   private _subscribedSheetIds = new Set<string>();
+  private _reconnectAttempts = 0;
+  private _reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private static readonly MAX_RECONNECT_ATTEMPTS = 8;
 
   private handlePresenceUpdate(message: { presence: UserPresence }) {
     const { presence: incomingPresence } = message;
@@ -153,6 +156,7 @@ class WebSocketService {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
+      this._reconnectAttempts = 0;
       this._wsReady = true;
       this.wsReadyEmitter.emit(true);
 
@@ -262,11 +266,28 @@ class WebSocketService {
       this.wsReadyEmitter.emit(false);
       this.presenceEmitter.emit(new Map());
 
-      setTimeout(() => {
-        if (this._session || this._subscribedSheetIds.size > 0) {
-          this.connect();
+      const shouldRetry =
+        Boolean(this._session || this._subscribedSheetIds.size > 0 || this._pendingSessionId) &&
+        this._reconnectAttempts < WebSocketService.MAX_RECONNECT_ATTEMPTS;
+
+      if (!shouldRetry) {
+        if (this._reconnectAttempts >= WebSocketService.MAX_RECONNECT_ATTEMPTS) {
+          console.error(
+            '[wsService] Giving up WebSocket reconnect after repeated handshake failures. Check NEXT_PUBLIC_WEBSOCKET_URL and realtime auth.'
+          );
         }
-      }, 3000);
+        return;
+      }
+
+      const delay = Math.min(30_000, 2_000 * 1.6 ** this._reconnectAttempts);
+      this._reconnectAttempts += 1;
+      if (this._reconnectTimer) {
+        clearTimeout(this._reconnectTimer);
+      }
+      this._reconnectTimer = setTimeout(() => {
+        this._reconnectTimer = null;
+        this.connect();
+      }, delay);
     };
 
     this.ws.onerror = () => {

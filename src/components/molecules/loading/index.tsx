@@ -6,15 +6,11 @@ interface LoaderProps {
   className?: string;
   size?: 'sm' | 'md' | 'lg';
   fullScreen?: boolean;
+  /** Optional status text shown under the spinner (fullScreen only). */
+  message?: string;
 }
 
-const Loader: React.FC<LoaderProps> = ({ className, size = 'md', fullScreen = false }) => {
-  const _sizeClasses = {
-    sm: 'h-8 w-8',
-    md: 'h-18 w-18',
-    lg: 'h-24 w-24',
-  };
-
+const Loader: React.FC<LoaderProps> = ({ className, size = 'md', fullScreen = false, message }) => {
   const spinner = (
     <LoaderCircle
       size={size === 'sm' ? 32 : size === 'md' ? 72 : 96}
@@ -25,8 +21,9 @@ const Loader: React.FC<LoaderProps> = ({ className, size = 'md', fullScreen = fa
 
   if (fullScreen) {
     return (
-      <div className="h-screen w-full flex items-center justify-center bg-background">
+      <div className="fixed inset-0 z-50 flex min-h-dvh w-full flex-col items-center justify-center gap-3 bg-background">
         {spinner}
+        {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       </div>
     );
   }

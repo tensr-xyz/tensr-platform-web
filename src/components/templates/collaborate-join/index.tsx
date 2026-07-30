@@ -11,6 +11,9 @@ import { resolveCollaborationDatasetId } from '@/lib/collaboration-url';
 
 type JoinPhase = 'idle' | 'joining' | 'connecting' | 'redirecting' | 'error';
 
+/** How long to wait for the realtime socket before opening the workspace anyway. */
+const WS_CONNECT_GRACE_MS = 2500;
+
 export function CollaborateJoin() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -24,6 +27,7 @@ export function CollaborateJoin() {
   const [phase, setPhase] = useState<JoinPhase>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const joinAttempted = useRef(false);
+  const redirected = useRef(false);
   const pendingSessionRef = useRef<{
     filePath?: string;
     fileName?: string;
@@ -37,6 +41,10 @@ export function CollaborateJoin() {
 
   const redirectToWorkspace = useCallback(
     (session: { filePath?: string; fileName?: string; datasetId?: string }) => {
+      if (redirected.current) {
+        return;
+      }
+
       const datasetId = resolveCollaborationDatasetId(datasetIdParam, session);
       if (!datasetId) {
         setPhase('error');
@@ -48,6 +56,7 @@ export function CollaborateJoin() {
 
       const name = datasetNameParam?.trim() || session.fileName?.trim() || 'Dataset';
 
+      redirected.current = true;
       setPhase('redirecting');
       router.replace(
         `/workspace/dataset/${encodeURIComponent(datasetId)}?${new URLSearchParams({
@@ -71,6 +80,7 @@ export function CollaborateJoin() {
 
     setPhase('joining');
     setErrorMessage(null);
+    redirected.current = false;
 
     if (displayName) {
       wsService.userName = displayName;
@@ -127,48 +137,50 @@ export function CollaborateJoin() {
     void runJoin();
   }, [isAuthReady, isAuthenticated, sessionId, router, runJoin]);
 
+  // After REST join succeeds, enter the workspace once the socket is ready — or after a
+  // short grace period if the handshake fails (e.g. API Gateway 502). Presence can reconnect
+  // in the workspace; blocking forever left users stuck on "Connecting to session…".
   useEffect(() => {
-    if (phase !== 'connecting' || !wsReady) {
+    if (phase !== 'connecting') {
       return;
     }
     const session = currentSession?.id === sessionId ? currentSession : pendingSessionRef.current;
     if (!session) {
       return;
     }
-    redirectToWorkspace(session);
+    if (wsReady) {
+      redirectToWorkspace(session);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      redirectToWorkspace(session);
+    }, WS_CONNECT_GRACE_MS);
+    return () => window.clearTimeout(timer);
   }, [phase, wsReady, currentSession, sessionId, redirectToWorkspace]);
 
   if (!isAuthReady || !isAuthenticated || phase === 'idle' || phase === 'joining') {
-    return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3">
-        <Loading />
-        <p className="text-sm text-muted-foreground">
-          {phase === 'joining' ? 'Joining session…' : 'Preparing…'}
-        </p>
-      </div>
-    );
+    return <Loading fullScreen message={phase === 'joining' ? 'Joining session…' : 'Preparing…'} />;
   }
 
   if (phase === 'connecting' || phase === 'redirecting') {
     return (
-      <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3">
-        <Loading />
-        <p className="text-sm text-muted-foreground">
-          {phase === 'redirecting' ? 'Opening workspace…' : 'Connecting to session…'}
-        </p>
-      </div>
+      <Loading
+        fullScreen
+        message={phase === 'redirecting' ? 'Opening workspace…' : 'Connecting to session…'}
+      />
     );
   }
 
   if (phase === 'error') {
     return (
-      <div className="flex min-h-[50vh] max-w-md flex-col items-center justify-center gap-4 px-4 text-center mx-auto">
+      <div className="fixed inset-0 z-50 flex min-h-dvh w-full flex-col items-center justify-center gap-4 bg-background px-4 text-center">
         <h1 className="text-lg font-medium">Could not join session</h1>
-        <p className="text-sm text-muted-foreground">{errorMessage}</p>
+        <p className="max-w-md text-sm text-muted-foreground">{errorMessage}</p>
         <div className="flex flex-wrap items-center justify-center gap-2">
           <Button
             onClick={() => {
               joinAttempted.current = false;
+              redirected.current = false;
               void runJoin();
             }}
           >
