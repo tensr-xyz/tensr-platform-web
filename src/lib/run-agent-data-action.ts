@@ -83,9 +83,13 @@ export function shouldRouteMessageToDataIntent(message: string): boolean {
   return (
     /\b(how many|count|number of|total rows?|row count)\b/i.test(text) ||
     /\b(filter|show only|where|rows with|participants who)\b/i.test(text) ||
-    /\b(sum|total|average|mean|median)\b/i.test(text) ||
+    /\b(sum|total|average|mean|median|mode|variance|std(?:dev)?|iqr|percentile|quantile|proportion|distinct|unique|z[\s-]?scores?)\b/i.test(
+      text
+    ) ||
     /\b(difference between|compare .* (revenue|total|sales|amount))\b/i.test(text) ||
-    /\b(chart|graph|plot|histogram|bar chart|line chart|line graph)\b/i.test(text) ||
+    /\b(chart|graph|plot|histogram|boxplot|box\s*plot|bar chart|line chart|line graph)\b/i.test(
+      text
+    ) ||
     /\b(make a|create a|draw a).*(chart|graph|plot)\b/i.test(text)
   );
 }

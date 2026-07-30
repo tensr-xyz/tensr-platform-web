@@ -533,9 +533,13 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
 
         if (action.kind === 'dialog') {
           setupStore.openDialog(action.menuName);
+          const dialogCopy =
+            action.menuName === 'Standardize Variables'
+              ? `Opening **Standardize Variables**. This creates a derived dataset with \`{column}_z\` columns — it does not print z-score values in chat. If you wanted a z-score summary here instead, ask e.g. "z-scores for utilisation_rate".`
+              : `Opening **${action.menuName}**.`;
           addMessage(projectId, {
             role: 'assistant',
-            content: `Opening **${action.menuName}**.`,
+            content: dialogCopy,
             timestamp: new Date(),
           });
           setLoading(projectId, false);

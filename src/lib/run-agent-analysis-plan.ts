@@ -11,6 +11,7 @@ import { isAnalysisKey } from '@/lib/analysis-definitions';
 import { interpretProgressMessage } from '@/lib/agent-analysis-progress';
 import { streamAgentAnalysisRun } from '@/lib/stream-agent-analysis';
 import { resolveChatAction } from '@/lib/chat-actions';
+import { formatUnsupportedWithClosest } from '@/lib/agent-capabilities';
 
 export type ParseIntentResult = {
   status: string;
@@ -119,22 +120,23 @@ export function assistantUpdateFromParseIntent(
   }
 
   if (intent.status === 'unsupported') {
+    // Honest message first. Optionally mention a closest menu item, but never
+    // silently open a menu as if it answered the question.
+    let closestName: string | null = null;
     if (triggerMessage?.trim()) {
       const fallbackAction = resolveChatAction(triggerMessage);
       if (fallbackAction.kind === 'analysis') {
-        return {
-          type: 'no_plan',
-          content: `I'll set up **${fallbackAction.menuName}** for your request.`,
-          menuOverride: { op: fallbackAction.op, menuName: fallbackAction.menuName },
-        };
+        closestName = fallbackAction.menuName;
+      } else if (fallbackAction.kind === 'dialog') {
+        closestName = fallbackAction.menuName;
       }
     }
     return {
       type: 'unsupported',
-      content:
-        intent.interpretation ||
-        intent.reason_if_unsupported ||
-        'That analysis is not supported yet. Try the Analyze menu or rephrase.',
+      content: formatUnsupportedWithClosest(
+        intent.interpretation || intent.reason_if_unsupported || '',
+        closestName
+      ),
     };
   }
 

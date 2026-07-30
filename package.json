@@ -13,6 +13,8 @@
     "format:check": "prettier --check .",
     "test": "playwright test && playwright test -c playwright.auth.config.ts",
     "test:jest": "jest --forceExit",
+    "check:capabilities": "python3 ../tensr-api/scripts/generate_agent_capabilities_ts.py --check",
+    "generate:capabilities": "python3 ../tensr-api/scripts/generate_agent_capabilities_ts.py",
     "test:launch": "jest --forceExit && playwright test -c playwright.launch.config.ts",
     "test:ui": "playwright test --ui",
     "test:headed": "playwright test --headed",
