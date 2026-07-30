@@ -1,5 +1,5 @@
 import { useAuthStore } from '@/stores/auth-store';
-import { clearAuthData, getSessionJwt, getSessionToken } from '@/utils/auth';
+import { clearAuthData, getStytchBearerForTensrApi } from '@/utils/auth';
 import { authTrace } from '@/lib/auth-trace';
 
 export class SessionExpiredError extends Error {
@@ -12,7 +12,7 @@ export class SessionExpiredError extends Error {
 let handlingUnauthorized = false;
 
 function hasSessionTokens(): boolean {
-  return !!(getSessionJwt() || getSessionToken());
+  return !!getStytchBearerForTensrApi();
 }
 
 function canForceLogout(): boolean {
@@ -52,12 +52,7 @@ export function handleUnauthorized(source = 'unknown'): void {
     return;
   }
 
-  // A 401 while tokens still exist is usually a race (API fired before Stytch sync) — do not logout.
-  if (hasSessionTokens()) {
-    authTrace('handleUnauthorized:skipped', { source, reason: 'tokens-still-present' });
-    return;
-  }
-
+  // After auth is ready, a 401 means the API rejected the session.
   if (window.location.pathname.startsWith('/login')) return;
 
   handlingUnauthorized = true;

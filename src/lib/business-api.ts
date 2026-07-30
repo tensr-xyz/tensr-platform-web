@@ -1,4 +1,4 @@
-import { getSessionJwt, getSessionToken } from '@/utils/auth';
+import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { User } from '@/types/user';
@@ -11,7 +11,7 @@ export type MeProfile = {
 };
 
 function authHeaders(extra?: HeadersInit): HeadersInit {
-  const token = getSessionJwt() || getSessionToken();
+  const token = getStytchBearerForTensrApi();
   return {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -71,7 +71,11 @@ export function storePendingInviteToken(token: string): void {
 export async function fetchMeProfile(): Promise<MeProfile> {
   // Use tensrApiUrl so browser calls go through the same-origin /api/tensr proxy
   // (avoids CORS failures that leave entitlements null and trap users on /subscription).
-  const r = await fetch(tensrApiUrl('/api/me'), { headers: authHeaders() });
+  // cache: 'no-store' — never reuse a cached /me after session refresh/expiry.
+  const r = await fetch(tensrApiUrl('/api/me'), {
+    headers: authHeaders(),
+    cache: 'no-store',
+  });
   if (handleUnauthorizedResponse(r)) throw new Error('Session expired');
   if (!r.ok) throw new Error(formatApiError(await r.text()));
   return (await r.json()) as MeProfile;

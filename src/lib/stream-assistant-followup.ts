@@ -1,4 +1,4 @@
-import { getSessionJwt, getSessionToken, getTensrApiHeaders } from '@/utils/auth';
+import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
@@ -25,7 +25,7 @@ export async function streamAssistantFollowup(
   },
   handlers: StreamHandlers
 ): Promise<AssistantFollowupStreamResult> {
-  const token = getSessionJwt() || getSessionToken();
+  const token = getStytchBearerForTensrApi();
   if (!token) {
     throw new Error('No authentication token found');
   }

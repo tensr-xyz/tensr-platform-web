@@ -20,7 +20,7 @@ import {
 import { Button } from '@/components/atoms/button';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
-import { getSessionJwt, getSessionToken } from '@/utils/auth';
+import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -89,7 +89,7 @@ export const ExportDialog = ({ children }: ExportDialogProps) => {
       const filename = `${baseName}.${format.extension}`;
 
       if (datasetId) {
-        const token = getSessionJwt() || getSessionToken();
+        const token = getStytchBearerForTensrApi();
         if (!token) throw new Error('Sign in to export this dataset');
 
         const schemaRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/schema`), {

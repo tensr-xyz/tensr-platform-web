@@ -22,7 +22,7 @@ import { Textarea } from '@/components/atoms/text-area';
 import { CreateFeedbackInput, FeedbackTopic } from '@/types/feedback';
 import useAuth from '@/hooks/api/use-auth';
 import { toast } from '@/hooks/ui/use-toast';
-import { getSessionJwt, getSessionToken } from '@/utils/auth';
+import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 
 async function submitFeedbackRequest(feedbackData: CreateFeedbackInput) {
@@ -30,7 +30,7 @@ async function submitFeedbackRequest(feedbackData: CreateFeedbackInput) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${getSessionJwt() || getSessionToken()}`,
+      Authorization: `Bearer ${getStytchBearerForTensrApi()}`,
     },
     body: JSON.stringify(feedbackData),
   });

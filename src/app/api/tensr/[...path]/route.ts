@@ -70,12 +70,15 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
     const upstreamType = res.headers.get('Content-Type') ?? '';
     const isEventStream = streamPath || upstreamType.includes('text/event-stream');
 
+    // Auth-scoped proxy: never let browsers/CDNs reuse a previous user's session
+    // or an expired /me payload (see next.config /api Cache-Control).
+    const noStore = 'private, no-store, no-cache, must-revalidate';
+
     // SSE must pass through without buffering or the client sees one blob at the end.
     if (isEventStream && res.body) {
       const outHeaders = forwardResponseHeaders(res.headers);
-      if (!outHeaders.has('Cache-Control')) {
-        outHeaders.set('Cache-Control', 'no-cache, no-transform');
-      }
+      outHeaders.set('Cache-Control', `${noStore}, no-transform`);
+      outHeaders.set('Pragma', 'no-cache');
       outHeaders.set('X-Accel-Buffering', 'no');
       return new NextResponse(res.body, {
         status: res.status,
@@ -89,6 +92,8 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
       status: res.status,
       headers: {
         'Content-Type': upstreamType || 'application/json',
+        'Cache-Control': noStore,
+        Pragma: 'no-cache',
       },
     });
   } catch (error) {
@@ -97,7 +102,13 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
       {
         detail: `Could not reach tensr-api at ${targetUrl}: ${message}`,
       },
-      { status: 502 }
+      {
+        status: 502,
+        headers: {
+          'Cache-Control': 'private, no-store, no-cache, must-revalidate',
+          Pragma: 'no-cache',
+        },
+      }
     );
   }
 }

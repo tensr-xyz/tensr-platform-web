@@ -70,13 +70,16 @@ export const storeSession = (sessionToken: string, sessionJwt?: string) => {
 
   try {
     localStorage.setItem(SESSION_TOKEN_KEY, sessionToken);
+    setCookie('stytch_session_token', sessionToken, STYTCH_SESSION_COOKIE_DAYS);
+
+    // Always replace JWT — leaving a stale JWT when getTokens() omits session_jwt
+    // made API calls prefer an expired Bearer while the opaque token was fine.
     if (sessionJwt) {
       localStorage.setItem(SESSION_JWT_KEY, sessionJwt);
-    }
-
-    setCookie('stytch_session_token', sessionToken, STYTCH_SESSION_COOKIE_DAYS);
-    if (sessionJwt) {
       setCookie('stytch_session_jwt', sessionJwt, STYTCH_SESSION_COOKIE_DAYS);
+    } else {
+      localStorage.removeItem(SESSION_JWT_KEY);
+      removeCookie('stytch_session_jwt');
     }
 
     devLog('Session stored successfully');
@@ -152,11 +155,21 @@ export const getSessionJwt = () => {
   }
 };
 
-/** Stytch credential for tensr-api `Authorization: Bearer …` (JWT preferred; opaque session token fallback). */
+/** Stytch credential for tensr-api `Authorization: Bearer …`.
+
+Prefer a still-valid session JWT; otherwise the opaque session_token.
+Expired JWTs must not be preferred — Stytch rejects them with 401.
+*/
 export function getStytchBearerForTensrApi(): string | null {
   const jwt = getSessionJwt();
-  if (jwt) return jwt;
-  return getSessionToken();
+  if (jwt && isSessionValid(jwt, 1)) {
+    return jwt;
+  }
+  const sessionToken = getSessionToken();
+  if (sessionToken) {
+    return sessionToken;
+  }
+  return jwt;
 }
 
 export const getStoredSession = () => {
@@ -205,8 +218,9 @@ export const decodeSessionJwt = (sessionJwt: string) => {
   }
 };
 
-// Legacy aliases for backward compatibility
-export const getIdToken = getSessionJwt;
+// Legacy aliases: getIdToken historically meant the Stytch session JWT, but API
+// callers must fall back to the opaque session_token when the JWT is expired.
+export const getIdToken = getStytchBearerForTensrApi;
 export const getAccessToken = getSessionToken;
 
 const PERSONAL_ACCOUNT_KEY = 'PERSONAL_ACCOUNT';

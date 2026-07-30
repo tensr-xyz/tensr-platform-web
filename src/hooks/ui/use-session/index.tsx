@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api-client';
 import { ApiRequestError } from '@/lib/api-error';
 import { getTensrWebSocketUrl } from '@/lib/tensr-api-url';
-import { getIdToken } from '@/utils/auth';
+import { getAccessToken, getIdToken } from '@/utils/auth';
 
 type Listener<T> = (value: T) => void;
 
@@ -106,12 +106,33 @@ class WebSocketService {
    * so one socket carries both instead of opening a second connection per sheet.
    */
   private connect() {
+    // Avoid tearing down an in-flight handshake (Strict Mode / double setupWebSocket
+    // was closing CONNECTING sockets → "WebSocket is closed before the connection
+    // is established").
+    if (
+      this.ws &&
+      (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)
+    ) {
+      if (this.ws.readyState === WebSocket.OPEN && this._pendingSessionId) {
+        this.ws.send(
+          JSON.stringify({
+            type: 'join',
+            sessionId: this._pendingSessionId,
+            userId: this.userId,
+            userName: this.userName,
+          })
+        );
+      }
+      return;
+    }
     if (this.ws) {
       this.ws.close();
+      this.ws = null;
     }
 
-    const token = getIdToken();
-    // Production: RealtimeStack's single WebSocket route (see getTensrWebSocketUrl docs).
+    // Prefer the opaque Stytch session_token over session_jwt. API Gateway WebSocket
+    // URLs are capped at 4096 chars; a JWT in ?access_token= routinely blows that limit.
+    const token = getAccessToken() || getIdToken();
     const wsBase = getTensrWebSocketUrl('/ws');
     const wsUrl = token
       ? `${wsBase}${wsBase.includes('?') ? '&' : '?'}access_token=${encodeURIComponent(token)}`
@@ -119,6 +140,11 @@ class WebSocketService {
     if (!token) {
       console.warn('Authentication required for collaboration WebSocket');
       return;
+    }
+    if (wsUrl.length > 4000) {
+      console.error(
+        `[wsService] WebSocket URL is ${wsUrl.length} chars (API Gateway limit 4096). Use session_token, not JWT.`
+      );
     }
 
     // Clear presence when setting up new connection
@@ -217,7 +243,11 @@ class WebSocketService {
           case 'op_applied':
           case 'op_rejected':
           case 'snapshot_saved':
+            this.sheetEmitter.emit(message);
+            break;
+
           case 'error':
+            console.error('[wsService] server error:', message.message || message);
             this.sheetEmitter.emit(message);
             break;
         }
@@ -239,7 +269,11 @@ class WebSocketService {
       }, 3000);
     };
 
-    this.ws.onerror = error => {};
+    this.ws.onerror = () => {
+      console.error(
+        '[wsService] WebSocket error — session was created over REST but realtime join may have failed. Check NEXT_PUBLIC_WEBSOCKET_URL and the access_token query param.'
+      );
+    };
   }
 
   setupWebSocket(sessionId: string) {
@@ -458,6 +492,15 @@ export function useSession() {
         userName: wsService.userName,
       });
 
+      // REST create is authoritative for "am I in a session?" — apply it immediately so the
+      // collaboration panel flips to the active view. Waiting only on the WebSocket
+      // `initial_state` left the UI stuck on "Start Session" whenever the socket was slow
+      // or failed to join (empty onerror). Presence/sheet sync still comes from setupWebSocket.
+      wsService.applySessionUpdate(session);
+      setSessions(prev => {
+        if (prev.some(s => s.id === session.id)) return prev;
+        return [session, ...prev];
+      });
       wsService.setupWebSocket(session.id);
       return session;
     } catch (error) {
@@ -479,6 +522,11 @@ export function useSession() {
       }
 
       const session = await apiClient.collaboration.joinSession(sessionId, { userName });
+      wsService.applySessionUpdate(session);
+      setSessions(prev => {
+        if (prev.some(s => s.id === session.id)) return prev;
+        return [session, ...prev];
+      });
       wsService.setupWebSocket(session.id);
       return session;
     } catch (error) {

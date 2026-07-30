@@ -2,7 +2,14 @@
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
-import { getIdToken, decodeSessionJwt, getSessionJwt, getSessionToken } from '@/utils/auth';
+import {
+  getIdToken,
+  decodeSessionJwt,
+  getSessionJwt,
+  getSessionToken,
+  getStytchBearerForTensrApi,
+  isSessionValid,
+} from '@/utils/auth';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse, SessionExpiredError } from '@/lib/session-expired';
 import { Organization, OrganizationMember } from '@/hooks/api/use-organisation';
@@ -92,16 +99,17 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     setMounted(true);
   }, []);
 
-  // Helper to get auth token (Stytch session JWT)
-  // Check both Zustand store and localStorage for reliability
+  // Helper to get auth token (prefer valid JWT, else opaque session_token)
   const getAuthToken = () => {
-    // First try Zustand store (most up-to-date)
-    const storeToken = session?.sessionJwt || session?.sessionToken;
+    const storeJwt = session?.sessionJwt;
+    const storeToken = session?.sessionToken;
+    if (storeJwt && isSessionValid(storeJwt, 1)) {
+      return storeJwt;
+    }
     if (storeToken) {
       return storeToken;
     }
-    // Fallback to localStorage (for cases where store hasn't hydrated yet)
-    return getSessionJwt() || getSessionToken() || '';
+    return getStytchBearerForTensrApi() || '';
   };
 
   // Helper to get user ID from multiple possible sources

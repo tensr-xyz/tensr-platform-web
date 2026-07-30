@@ -1,6 +1,6 @@
-import { getSessionToken, getSessionJwt, getTensrApiHeaders } from '@/utils/auth';
+import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { getUsageTracker } from '@/utils/usage-tracker';
-import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import type { PlaybookProposedAction, PrepPlaybookStep } from '@/lib/chat-pending-action';
@@ -8,7 +8,7 @@ import type { PlaybookProposedAction, PrepPlaybookStep } from '@/lib/chat-pendin
 // Generic API client with authentication
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = getSessionJwt() || getSessionToken();
+    const token = getStytchBearerForTensrApi();
 
     if (!token) {
       throw new Error('No authentication token found');
@@ -35,6 +35,7 @@ class ApiClient {
     try {
       const response = await fetch(url, {
         ...options,
+        cache: 'no-store',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -60,7 +61,7 @@ class ApiClient {
 
       // Track API usage
       try {
-        const usageTracker = getUsageTracker(() => getSessionJwt() || getSessionToken());
+        const usageTracker = getUsageTracker(() => getStytchBearerForTensrApi());
         usageTracker.trackAPICall(endpoint, options.method || 'GET', {
           duration,
           requestSize,
@@ -81,7 +82,7 @@ class ApiClient {
 
       // Track failed API call
       try {
-        const usageTracker = getUsageTracker(() => getSessionJwt() || getSessionToken());
+        const usageTracker = getUsageTracker(() => getStytchBearerForTensrApi());
         usageTracker.trackAPICall(endpoint, options.method || 'GET', {
           duration,
           requestSize,
@@ -101,18 +102,21 @@ class ApiClient {
   // Projects API
   projects = {
     list: async () => {
-      const token = getSessionJwt() || getSessionToken();
+      const token = getStytchBearerForTensrApi();
       if (!token) {
         throw new Error('No authentication token found');
       }
-      const headers: HeadersInit = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      };
+      const headers = getTensrApiHeaders({ 'Content-Type': 'application/json' });
 
-      const res = await fetch(tensrApiUrl('/datasets/?scope=all'), { headers });
+      const res = await fetch(tensrApiUrl('/datasets/?scope=all'), {
+        headers,
+        cache: 'no-store',
+      });
       if (!res.ok) {
         const text = await res.text();
+        if (handleUnauthorizedResponse(res, 'projects.list')) {
+          throw new Error(`API Error: 401 - ${text}`);
+        }
         throw new Error(`API Error: ${res.status} - ${text}`);
       }
       const rows = await res.json();
@@ -133,13 +137,16 @@ class ApiClient {
     },
 
     get: async (id: string) => {
-      const token = getSessionJwt() || getSessionToken();
+      const token = getStytchBearerForTensrApi();
       if (!token) {
         throw new Error('No authentication token found');
       }
       const headers = getTensrApiHeaders({ 'Content-Type': 'application/json' });
 
-      const dsRes = await fetch(tensrApiUrl(`/datasets/${id}/schema`), { headers });
+      const dsRes = await fetch(tensrApiUrl(`/datasets/${id}/schema`), {
+        headers,
+        cache: 'no-store',
+      });
       if (dsRes.ok) {
         const schema = await dsRes.json();
         const label = (schema.original_filename && String(schema.original_filename)) || 'Dataset';
@@ -156,6 +163,9 @@ class ApiClient {
       if (dsRes.status === 403) {
         const errorText = await dsRes.text();
         throw new Error(`Dataset not accessible with current organization context: ${errorText}`);
+      }
+      if (dsRes.status === 401) {
+        handleUnauthorizedResponse(dsRes, 'projects.get');
       }
       if (dsRes.status !== 404) {
         const errorText = await dsRes.text();

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { PluginRecord } from '@/types/plugin';
 
-import { getSessionJwt, getSessionToken } from '@/utils/auth';
+import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 
 function pluginHeaders(): HeadersInit {
-  const token = getSessionJwt() || getSessionToken();
+  const token = getStytchBearerForTensrApi();
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
