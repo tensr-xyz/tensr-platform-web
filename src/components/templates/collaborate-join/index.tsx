@@ -58,13 +58,13 @@ export function CollaborateJoin() {
 
       redirected.current = true;
       setPhase('redirecting');
-      router.replace(
-        `/workspace/dataset/${encodeURIComponent(datasetId)}?${new URLSearchParams({
-          name,
-        }).toString()}`
-      );
+      const qs = new URLSearchParams({ name });
+      if (sessionId) {
+        qs.set('session', sessionId);
+      }
+      router.replace(`/workspace/dataset/${encodeURIComponent(datasetId)}?${qs.toString()}`);
     },
-    [datasetIdParam, datasetNameParam, router]
+    [datasetIdParam, datasetNameParam, router, sessionId]
   );
 
   const runJoin = useCallback(async () => {

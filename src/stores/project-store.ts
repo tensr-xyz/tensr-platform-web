@@ -54,6 +54,13 @@ interface ImportData {
 
 const SMALL_DATASET_EAGER_LOAD = 2500;
 
+const DATASET_UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isDatasetUuid(id: string): boolean {
+  return DATASET_UUID_REGEX.test(id.trim());
+}
+
 /** Dataset-backed workspace: tensr-api exposes /datasets/* (no /projects/:id). */
 async function fetchDatasetWorkspacePayload(
   baseUrl: string,
@@ -74,6 +81,19 @@ async function fetchDatasetWorkspacePayload(
     return null;
   }
   if (!schemaRes.ok) {
+    // UUID ids are always datasets on tensr-api — never fall through to legacy /projects.
+    if (isDatasetUuid(datasetId)) {
+      if (schemaRes.status === 403) {
+        throw new Error(
+          'This dataset is not available in your current organization (or you are not a collaboration participant). Switch account/org, or re-join the session, then try again.'
+        );
+      }
+      if (schemaRes.status === 404) {
+        throw new Error('Dataset not found.');
+      }
+      const detail = await schemaRes.text().catch(() => '');
+      throw new Error(detail || `Could not load dataset schema (${schemaRes.status})`);
+    }
     return null;
   }
   const schemaJson = (await schemaRes.json()) as {
@@ -377,6 +397,10 @@ export const useProjectStore = create<ProjectStore>()(
               };
             }
 
+            if (isDatasetUuid(projectId)) {
+              throw new Error('Dataset not found or not accessible.');
+            }
+
             // Legacy multi-file project API (Rust / gateway)
             const projectUrl = `${base}/projects/${projectId}`;
             const response = await fetch(projectUrl, {
@@ -466,6 +490,19 @@ export const useProjectStore = create<ProjectStore>()(
                 ],
                 totalFiles: 1,
               };
+            }
+
+            if (isDatasetUuid(projectId)) {
+              if (dsSchema.status === 403) {
+                throw new Error(
+                  'This dataset is not available in your current organization (or you are not a collaboration participant).'
+                );
+              }
+              throw new Error(
+                dsSchema.status === 404
+                  ? 'Dataset not found.'
+                  : `Could not load dataset (${dsSchema.status})`
+              );
             }
 
             const projectUrl = `${base}/projects/${projectId}`;
