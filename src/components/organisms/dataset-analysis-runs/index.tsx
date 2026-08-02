@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LoaderCircle, BarChart3 } from 'lucide-react';
 import {
   formatRunLabel,
@@ -10,6 +10,7 @@ import {
   openStoredAnalysisRun,
   type StoredAnalysisRun,
 } from '@/lib/analysis-runs';
+import { useSession, wsService } from '@/hooks/ui/use-session';
 import { cn } from '@/utils';
 
 type Props = {
@@ -25,31 +26,67 @@ type Props = {
 };
 
 export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
+  const { currentSession } = useSession();
   const [runs, setRuns] = useState<StoredAnalysisRun[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
+  const knownRunIdsRef = useRef<Set<string>>(new Set());
+  const localEntriesRef = useRef(localEntries);
+  localEntriesRef.current = localEntries;
+  const liveSession =
+    !!currentSession &&
+    !!datasetId &&
+    (currentSession.datasetId === datasetId || !currentSession.datasetId);
 
-  const load = useCallback(async () => {
-    if (!datasetId) {
-      setRuns([]);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      setRuns(await listDatasetAnalysisRuns(datasetId));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not load saved analyses');
-      setRuns([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [datasetId]);
+  const load = useCallback(
+    async (opts?: { silent?: boolean; autoOpenRemote?: boolean }) => {
+      if (!datasetId) {
+        setRuns([]);
+        return;
+      }
+      if (!opts?.silent) {
+        setLoading(true);
+      }
+      setError(null);
+      try {
+        const next = await listDatasetAnalysisRuns(datasetId);
+        if (opts?.autoOpenRemote && knownRunIdsRef.current.size > 0) {
+          const newest = next[0];
+          if (
+            newest &&
+            !knownRunIdsRef.current.has(newest.id) &&
+            !localEntriesRef.current.some(e => e.runId === newest.id)
+          ) {
+            void openStoredAnalysisRun(newest);
+          }
+        }
+        knownRunIdsRef.current = new Set(next.map(r => r.id));
+        setRuns(next);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : 'Could not load saved analyses');
+        setRuns([]);
+      } finally {
+        if (!opts?.silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [datasetId]
+  );
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
+
+  // Live collab: peers push `analysis_run_created` over WS — no REST polling.
+  useEffect(() => {
+    if (!liveSession || !datasetId) return;
+    return wsService.onAnalysisRunCreated(event => {
+      if (event.datasetId !== datasetId) return;
+      void load({ silent: true, autoOpenRemote: true });
+    });
+  }, [liveSession, datasetId, load]);
 
   const openRun = async (runId: string, cached?: StoredAnalysisRun) => {
     setOpeningId(runId);
@@ -79,7 +116,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
         {datasetId ? (
           <button
             type="button"
-            onClick={load}
+            onClick={() => void load()}
             className="text-[10px] text-muted-foreground hover:text-foreground"
           >
             Refresh

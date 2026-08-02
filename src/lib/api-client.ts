@@ -5,6 +5,15 @@ import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import type { PlaybookProposedAction, PrepPlaybookStep } from '@/lib/chat-pending-action';
 
+/** High-frequency collab/health endpoints — tracking these floods POST /usage/track. */
+function shouldSkipUsageTracking(endpoint: string): boolean {
+  const path = endpoint.split('?')[0] || '';
+  if (path === '/sessions' || path.startsWith('/sessions/')) return true;
+  if (path.includes('/runs')) return true;
+  if (path.startsWith('/usage/')) return true;
+  return false;
+}
+
 // Generic API client with authentication
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -59,40 +68,43 @@ class ApiClient {
       const duration = performance.now() - startTime;
       const data = JSON.parse(responseText);
 
-      // Track API usage
-      try {
-        const usageTracker = getUsageTracker(() => getStytchBearerForTensrApi());
-        usageTracker.trackAPICall(endpoint, options.method || 'GET', {
-          duration,
-          requestSize,
-          responseSize,
-          dataProcessed: requestSize + responseSize,
-          metadata: {
-            statusCode: response.status,
-          },
-        });
-      } catch (trackingError) {
-        // Don't fail the request if tracking fails
-        console.warn('Failed to track API usage:', trackingError);
+      // Skip noisy collab/health polls — they were flooding POST /usage/track.
+      if (!shouldSkipUsageTracking(endpoint)) {
+        try {
+          const usageTracker = getUsageTracker(() => getStytchBearerForTensrApi());
+          usageTracker.trackAPICall(endpoint, options.method || 'GET', {
+            duration,
+            requestSize,
+            responseSize,
+            dataProcessed: requestSize + responseSize,
+            metadata: {
+              statusCode: response.status,
+            },
+          });
+        } catch (trackingError) {
+          // Don't fail the request if tracking fails
+          console.warn('Failed to track API usage:', trackingError);
+        }
       }
 
       return data;
     } catch (error) {
       const duration = performance.now() - startTime;
 
-      // Track failed API call
-      try {
-        const usageTracker = getUsageTracker(() => getStytchBearerForTensrApi());
-        usageTracker.trackAPICall(endpoint, options.method || 'GET', {
-          duration,
-          requestSize,
-          responseSize,
-          metadata: {
-            error: error instanceof Error ? error.message : 'Unknown error',
-          },
-        });
-      } catch (trackingError) {
-        // Ignore tracking errors
+      if (!shouldSkipUsageTracking(endpoint)) {
+        try {
+          const usageTracker = getUsageTracker(() => getStytchBearerForTensrApi());
+          usageTracker.trackAPICall(endpoint, options.method || 'GET', {
+            duration,
+            requestSize,
+            responseSize,
+            metadata: {
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+          });
+        } catch {
+          // Ignore tracking errors
+        }
       }
 
       throw error;

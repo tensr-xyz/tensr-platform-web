@@ -1,7 +1,7 @@
 import { Avatar, AvatarFallback } from '@/components/atoms/avatar';
 import { Button } from '@/components/atoms/button';
 import React, { useState } from 'react';
-import { Link, Shield, Settings, MoreVertical, type LucideIcon } from 'lucide-react';
+import { Check, Link, Shield, Settings, MoreVertical, type LucideIcon } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -138,8 +138,11 @@ interface CollaborationPanelProps {
 const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationPanelProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
   const {
     currentSession,
+    wsReady,
+    sessionLive,
     createSession,
     leaveSession,
     updateParticipantRole,
@@ -193,7 +196,13 @@ const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationP
       // `createSession` both creates the session over REST and opens the RealtimeStack
       // WebSocket, sending the hub `join` message so presence/participants populate
       // immediately (see `app/realtime/hub.py::_handle_join`).
-      await createSession(target);
+      const session = await createSession(target);
+      // Persist session id in the URL so refresh / share of this tab can restore it.
+      if (typeof window !== 'undefined' && session?.id) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('session', session.id);
+        window.history.replaceState({}, '', url.toString());
+      }
     } catch (err) {
       console.error('Error starting session:', err);
       setError(err instanceof Error ? err.message : 'Failed to start session');
@@ -244,9 +253,16 @@ const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationP
   const handleCopyLink = async () => {
     if (!currentSession) return;
 
-    const collaborationLink = `${window.location.origin}${buildCollaborateUrl({ sessionId: currentSession.id })}`;
+    const target = resolveDatasetId();
+    const collaborationLink = `${window.location.origin}${buildCollaborateUrl({
+      sessionId: currentSession.id,
+      datasetId: target?.datasetId || currentSession.datasetId,
+      datasetName: target?.fileName || currentSession.fileName,
+    })}`;
     try {
       await navigator.clipboard.writeText(collaborationLink);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2000);
     } catch {
       setError('Could not copy link to clipboard');
     }
@@ -291,11 +307,11 @@ const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationP
             <Button
               size="sm"
               variant="outline"
-              className="w-full flex items-center gap-2"
+              className="flex w-full cursor-pointer items-center gap-2"
               onClick={handleCopyLink}
             >
-              <Link size={14} />
-              Copy Link
+              {linkCopied ? <Check size={14} /> : <Link size={14} />}
+              {linkCopied ? 'Copied' : 'Copy Link'}
             </Button>
 
             {isHost && (
@@ -346,9 +362,21 @@ const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationP
               </div>
             )}
 
-            <div className="text-xs text-green-500 flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-green-500"></span>
-              Connected to session
+            <div
+              className={`flex items-center gap-1 text-xs ${
+                sessionLive ? 'text-emerald-600' : 'text-amber-600'
+              }`}
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  sessionLive ? 'bg-emerald-500' : 'animate-pulse bg-amber-500'
+                }`}
+              />
+              {sessionLive
+                ? 'Live · cursors syncing'
+                : wsReady
+                  ? 'Socket open · waiting for session join…'
+                  : 'Session joined · reconnecting realtime…'}
             </div>
           </div>
         )}

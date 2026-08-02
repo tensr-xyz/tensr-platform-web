@@ -74,6 +74,7 @@ import { shouldSuggestExploratoryAnalyses } from '@/lib/agent-exploratory-intent
 import { revealAssistantText, streamAssistantFollowup } from '@/lib/stream-assistant-followup';
 import {
   buildAgentConversationHistory,
+  isAnalysisColumnClarificationReply,
   isAnalysisFollowUpQuestion,
 } from '@/lib/agent-conversation-history';
 import { ANALYSIS_PLANNING_MESSAGE } from '@/lib/agent-analysis-progress';
@@ -937,7 +938,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         }
       }
 
-      const analysisFollowUp = isAnalysisFollowUpQuestion(currentMessage, messages);
+      const schemaColumnNames =
+        activeTab?.data?.initialColumns?.map(c => String(c.header ?? c.id ?? '')).filter(Boolean) ??
+        [];
+      const analysisFollowUp =
+        isAnalysisFollowUpQuestion(currentMessage, messages) ||
+        isAnalysisColumnClarificationReply(currentMessage, messages, schemaColumnNames);
 
       // Analysis questions: parse-intent (tensr-api) when dataset is open
       const isAnalysisQuestion =

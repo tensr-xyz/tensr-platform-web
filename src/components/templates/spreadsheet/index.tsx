@@ -77,6 +77,7 @@ import { getDatasetIdFromPath } from '@/lib/workspace-dataset';
 import { deriveLiveSheetId } from '@/lib/collaboration-sheet';
 import { useProjectStore } from '@/stores/project-store';
 import Loading from '@/components/molecules/loading';
+import UserCursors from '@/components/molecules/cursor';
 import { applyClientColumnFilters } from '@/utils/column-filters';
 import { toast } from '@/hooks/ui/use-toast';
 import {
@@ -572,7 +573,7 @@ export function Spreadsheet({
 
   // Single collaboration-session WebSocket connection (also carries live sheet
   // op-log traffic — see `deriveLiveSheetId` below and `hooks/ui/use-session`).
-  const { currentSession, clientId } = useSession();
+  const { currentSession, updatePresence, sessionLive } = useSession();
 
   // While a collaboration session is active, all participants derive the same
   // live-sheet id from the session itself, so cell edits sync + persist via the
@@ -658,39 +659,27 @@ export function Spreadsheet({
   const sheetStateInitializedRef = useRef(false);
   const lastSheetStateVersionRef = useRef<number>(0);
 
-  // Sync sheet state to local data when sheet state is first available (real-time mode)
-  // Only sync on initial load or when version increases significantly (server updates)
-  // Don't sync on every change to avoid overwriting local edits
+  // Sync live-sheet state into the grid whenever the server version advances.
+  // Previously required versionDiff > 1, which dropped every single remote cell op.
   useEffect(() => {
     if (
-      sheetState &&
-      sheetState.data &&
-      Array.isArray(sheetState.data) &&
-      sheetState.version > lastSheetStateVersionRef.current
+      !sheetState ||
+      !Array.isArray(sheetState.data) ||
+      sheetState.version <= lastSheetStateVersionRef.current
     ) {
-      // Only sync if:
-      // 1. We haven't initialized yet (first load), OR
-      // 2. Version jumped significantly (likely a server-side update, not our own edit)
-      const versionDiff = sheetState.version - lastSheetStateVersionRef.current;
-      const shouldSync =
-        !sheetStateInitializedRef.current || (versionDiff > 1 && sheetState.data.length > 0);
-
-      if (shouldSync && sheetState.data.length > 0) {
-        // Convert sheet state data array to RowType format
-        const sheetRows: RowType[] = sheetState.data.map(
-          (row: Record<string, any>, index: number) => ({
-            id: `row-${index}`,
-            ...row,
-          })
-        );
-        setData(sheetRows);
-        sheetStateInitializedRef.current = true;
-        lastSheetStateVersionRef.current = sheetState.version;
-      } else {
-        // Just update the version ref to track it
-        lastSheetStateVersionRef.current = sheetState.version;
-      }
+      return;
     }
+    if (sheetState.data.length === 0 && sheetStateInitializedRef.current) {
+      lastSheetStateVersionRef.current = sheetState.version;
+      return;
+    }
+    const sheetRows: RowType[] = sheetState.data.map((row: Record<string, any>, index: number) => ({
+      id: `row-${index}`,
+      ...row,
+    }));
+    setData(sheetRows);
+    sheetStateInitializedRef.current = true;
+    lastSheetStateVersionRef.current = sheetState.version;
   }, [sheetState]);
 
   // Reset initialization flag when sheetId changes
@@ -705,9 +694,60 @@ export function Spreadsheet({
 
   // Track previous data length to prevent infinite loops (must be after data state declaration)
   const previousDataLengthRef = useRef(data.length);
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
   const { tabs, activeTabId, updateTab } = useTabsStore();
   const activeTab = tabs.find(tab => tab.id === activeTabId);
+
+  // Broadcast pointer + focused-cell presence while a collaboration session is live.
+  // Use window listeners — attaching only to tableContainerRef often no-ops because the
+  // ref is still null when the session effect first runs.
+  const sessionId = currentSession?.id;
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const focusedCellRef = useRef(focusedCell);
+  focusedCellRef.current = focusedCell;
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+
+    const onMove = (event: MouseEvent) => {
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+      const cell = focusedCellRef.current;
+      updatePresence({
+        x: event.clientX,
+        y: event.clientY,
+        tabId: activeTabIdRef.current,
+        element: 'spreadsheet',
+        selection: cell ? { rowIndex: cell.rowIndex, columnId: cell.columnId } : null,
+      });
+    };
+
+    window.addEventListener('mousemove', onMove, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      updatePresence(null);
+    };
+  }, [sessionId, updatePresence]);
+
+  // Publish on cell focus, and again once the socket is session-bound (earlier sends
+  // are ignored until `initial_state`).
+  useEffect(() => {
+    if (!sessionId || !sessionLive || !focusedCell) {
+      return;
+    }
+    updatePresence({
+      x: lastPointerRef.current?.x ?? 0,
+      y: lastPointerRef.current?.y ?? 0,
+      tabId: activeTabId,
+      element: 'spreadsheet',
+      selection: { rowIndex: focusedCell.rowIndex, columnId: focusedCell.columnId },
+    });
+  }, [sessionId, sessionLive, focusedCell, activeTabId, updatePresence]);
   const projectFileSystem = useProjectStore(s => s.fileSystem);
   const currentProjectId = useProjectStore(s => s.currentProject?.id);
 
@@ -2563,24 +2603,22 @@ export function Spreadsheet({
                 clearTimeout(tabUpdateTimeoutRef.current);
               }
               tabUpdateTimeoutRef.current = setTimeout(() => {
-                setData(currentData => {
-                  const rowToUpdate = currentData[rowIndex];
-                  if (rowToUpdate && activeTab?.data) {
-                    const updatedRow = { ...rowToUpdate, [useColumnId]: value };
-                    updateTab(tabId, {
-                      data: {
-                        ...activeTab.data,
-                        initialData: activeTab.data.initialData
-                          ? activeTab.data.initialData.map((row, idx) =>
-                              idx === rowIndex ? updatedRow : row
-                            )
-                          : [updatedRow],
-                      },
-                      isDirty: true,
-                    });
-                  }
-                  return currentData;
-                });
+                const currentData = dataRef.current;
+                const rowToUpdate = currentData[rowIndex];
+                if (rowToUpdate && activeTab?.data) {
+                  const updatedRow = { ...rowToUpdate, [useColumnId]: value };
+                  updateTab(tabId, {
+                    data: {
+                      ...activeTab.data,
+                      initialData: activeTab.data.initialData
+                        ? activeTab.data.initialData.map((row, idx) =>
+                            idx === rowIndex ? updatedRow : row
+                          )
+                        : [updatedRow],
+                    },
+                    isDirty: true,
+                  });
+                }
               }, 300);
             }
             return;
@@ -2612,29 +2650,25 @@ export function Spreadsheet({
           clearTimeout(tabUpdateTimeoutRef.current);
         }
 
-        // Debounce tab updates to batch multiple cell edits
+        // Debounce tab updates to batch multiple cell edits (never call updateTab
+        // inside a setData updater — that updates Workspace while Spreadsheet renders).
         tabUpdateTimeoutRef.current = setTimeout(() => {
-          // Get current data from state at the time of update
-          setData(currentData => {
-            const rowToUpdate = currentData[rowIndex];
-            if (rowToUpdate && activeTab?.data) {
-              const updatedRow = { ...rowToUpdate, [useColumnId]: value };
-
-              // Update tab with minimal data change - only update the specific row
-              updateTab(tabId, {
-                data: {
-                  ...activeTab.data,
-                  initialData: activeTab.data.initialData
-                    ? activeTab.data.initialData.map((row, idx) =>
-                        idx === rowIndex ? updatedRow : row
-                      )
-                    : [updatedRow],
-                },
-                isDirty: true,
-              });
-            }
-            return currentData; // Return unchanged to avoid re-render
-          });
+          const currentData = dataRef.current;
+          const rowToUpdate = currentData[rowIndex];
+          if (rowToUpdate && activeTab?.data) {
+            const updatedRow = { ...rowToUpdate, [useColumnId]: value };
+            updateTab(tabId, {
+              data: {
+                ...activeTab.data,
+                initialData: activeTab.data.initialData
+                  ? activeTab.data.initialData.map((row, idx) =>
+                      idx === rowIndex ? updatedRow : row
+                    )
+                  : [updatedRow],
+              },
+              isDirty: true,
+            });
+          }
         }, 300); // 300ms debounce for tab updates
       }
 
@@ -2802,18 +2836,15 @@ export function Spreadsheet({
       }
 
       tabUpdateTimeoutRef.current = setTimeout(() => {
-        setData(currentData => {
-          if (activeTab?.data) {
-            updateTab(tabId, {
-              data: {
-                ...activeTab.data,
-                initialData: currentData,
-              },
-              isDirty: true,
-            });
-          }
-          return currentData;
-        });
+        if (activeTab?.data) {
+          updateTab(tabId, {
+            data: {
+              ...activeTab.data,
+              initialData: dataRef.current,
+            },
+            isDirty: true,
+          });
+        }
       }, 300);
     }
 
@@ -2909,18 +2940,15 @@ export function Spreadsheet({
           clearTimeout(tabUpdateTimeoutRef.current);
         }
         tabUpdateTimeoutRef.current = setTimeout(() => {
-          setData(currentData => {
-            if (activeTab?.data) {
-              updateTab(tabId, {
-                data: {
-                  ...activeTab.data,
-                  initialData: currentData,
-                },
-                isDirty: true,
-              });
-            }
-            return currentData;
-          });
+          if (activeTab?.data) {
+            updateTab(tabId, {
+              data: {
+                ...activeTab.data,
+                initialData: dataRef.current,
+              },
+              isDirty: true,
+            });
+          }
         }, 300);
       }
     },
@@ -3421,6 +3449,7 @@ export function Spreadsheet({
         height: '100%',
       }}
     >
+      {currentSession ? <UserCursors /> : null}
       {showFilters && (
         <div className="border-b border-border bg-background">
           <Filters
@@ -3827,18 +3856,15 @@ export function Spreadsheet({
             }
 
             tabUpdateTimeoutRef.current = setTimeout(() => {
-              setData(currentData => {
-                if (activeTab?.data && currentRowIndexForFix !== null) {
-                  updateTab(tabId, {
-                    data: {
-                      ...activeTab.data,
-                      initialData: currentData,
-                    },
-                    isDirty: true,
-                  });
-                }
-                return currentData;
-              });
+              if (activeTab?.data && currentRowIndexForFix !== null) {
+                updateTab(tabId, {
+                  data: {
+                    ...activeTab.data,
+                    initialData: dataRef.current,
+                  },
+                  isDirty: true,
+                });
+              }
             }, 300);
           }
 
@@ -4034,18 +4060,15 @@ export function Spreadsheet({
             }
 
             tabUpdateTimeoutRef.current = setTimeout(() => {
-              setData(currentData => {
-                if (activeTab?.data) {
-                  updateTab(tabId, {
-                    data: {
-                      ...activeTab.data,
-                      initialData: currentData,
-                    },
-                    isDirty: true,
-                  });
-                }
-                return currentData;
-              });
+              if (activeTab?.data) {
+                updateTab(tabId, {
+                  data: {
+                    ...activeTab.data,
+                    initialData: dataRef.current,
+                  },
+                  isDirty: true,
+                });
+              }
             }, 300);
           }
 

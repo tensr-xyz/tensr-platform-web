@@ -203,7 +203,14 @@ export const clearAuthData = () => {
 
 export const decodeSessionJwt = (sessionJwt: string) => {
   try {
+    // Opaque Stytch session_token is not a JWT — callers often pass the API bearer.
+    if (!sessionJwt || sessionJwt.split('.').length !== 3) {
+      return null;
+    }
     const base64Url = sessionJwt.split('.')[1];
+    if (!base64Url) {
+      return null;
+    }
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
       atob(base64)
