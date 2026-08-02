@@ -379,6 +379,24 @@ class ApiClient {
         body: data,
         headers: {}, // Let browser set content-type for FormData
       }),
+
+    reviewQueue: () =>
+      this.request<{ items: import('@/types/plugin').PluginRecord[] }>(
+        '/plugins/admin/review-queue'
+      ),
+
+    review: (
+      id: string,
+      body: {
+        status: 'APPROVED' | 'REJECTED' | 'PENDING';
+        notes?: string;
+        version?: string;
+      }
+    ) =>
+      this.request<{ message: string; plugin: import('@/types/plugin').PluginRecord }>(
+        `/plugins/admin/${id}/review`,
+        { method: 'POST', body: JSON.stringify(body) }
+      ),
   };
 
   // Creator dashboard API (tensr-api app/routers/plugins.py — creator + Stripe Connect)

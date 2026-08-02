@@ -32,19 +32,25 @@ import { Switch } from '@/components/atoms/switch';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getIdToken } from '@/utils/auth';
 
-// Form schema for plugin upload. Monetization fields (isPaid/pricing) are validated
-// server-side by PluginPricingBody in app/routers/plugins.py.
+// Form schema aligned with tensr-sdk TensrPluginManifest capabilities.
+// Server authority is still manifest.json inside the zip (parsed on upload).
 const pluginUploadSchema = z
   .object({
     name: z.string().min(3, { message: 'Plugin name must be at least 3 characters' }),
     description: z.string().min(10, { message: 'Description must be at least 10 characters' }),
-    version: z.string().min(1, { message: 'Version is required' }),
+    version: z.string().regex(/^\d+\.\d+\.\d+/, { message: 'Version must be semver (e.g. 1.0.0)' }),
     language: z.enum(['typescript', 'python', 'r']),
     entryPoint: z.string().min(1, { message: 'Entry point is required' }),
+    ui: z.string().min(1, { message: 'UI file path is required' }),
     tags: z.string().optional(),
     thumbnailUrl: z.string().url().optional().or(z.literal('')),
-    inputTypes: z.string().optional(),
-    outputTypes: z.string().optional(),
+    inputTypes: z.string().min(1, { message: 'At least one input type is required' }),
+    outputTypes: z.string().min(1, { message: 'At least one output type is required' }),
+    network: z.literal(false),
+    filesystem: z.enum(['none', 'scratch']),
+    maxMemoryMb: z.coerce.number().min(16).max(1024),
+    maxExecutionSeconds: z.coerce.number().min(1).max(120),
+    dataAccess: z.string().min(1, { message: 'dataAccess is required (e.g. schema,columns,rows)' }),
     isPaid: z.boolean(),
     pricingModel: z.enum(['one-time', 'subscription']).optional(),
     price: z.string().optional(),
@@ -54,7 +60,19 @@ const pluginUploadSchema = z
   .refine(data => !data.isPaid || (data.price && Number(data.price) > 0), {
     message: 'Price must be greater than 0 for paid plugins',
     path: ['price'],
-  });
+  })
+  .refine(
+    data =>
+      data.dataAccess
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .every(t => ['schema', 'columns', 'rows', 'metadata'].includes(t)),
+    {
+      message: 'dataAccess tokens must be schema, columns, rows, and/or metadata',
+      path: ['dataAccess'],
+    }
+  );
 
 type PluginUploadFormValues = z.infer<typeof pluginUploadSchema>;
 
@@ -72,10 +90,16 @@ export default function PluginUploadForm() {
       version: '1.0.0',
       language: 'typescript',
       entryPoint: 'dist/index.js',
+      ui: 'ui.html',
       tags: '',
       thumbnailUrl: '',
-      inputTypes: 'text,csv,json',
+      inputTypes: 'csv,json',
       outputTypes: 'json,chart,table',
+      network: false as const,
+      filesystem: 'none',
+      maxMemoryMb: 256,
+      maxExecutionSeconds: 30,
+      dataAccess: 'schema,columns,rows',
       isPaid: false,
       pricingModel: 'one-time',
       price: '',
@@ -276,7 +300,8 @@ export default function PluginUploadForm() {
                     className="mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Upload a ZIP file containing your plugin code
+                    ZIP must include <code>manifest.json</code> (source of truth). Uploads land in
+                    PENDING review; network:true requires admin allowlisting.
                   </p>
                 </div>
 
@@ -418,7 +443,7 @@ export default function PluginUploadForm() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Capabilities</CardTitle>
+              <CardTitle>Capabilities (must match manifest.json)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -429,7 +454,7 @@ export default function PluginUploadForm() {
                     <FormItem>
                       <FormLabel>Input Types (comma-separated)</FormLabel>
                       <FormControl>
-                        <Input placeholder="csv, json, text" {...field} />
+                        <Input placeholder="csv, json" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -449,7 +474,89 @@ export default function PluginUploadForm() {
                     </FormItem>
                   )}
                 />
+
+                <FormField
+                  control={form.control}
+                  name="filesystem"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Filesystem</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">none</SelectItem>
+                          <SelectItem value="scratch">scratch (ephemeral)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="dataAccess"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data access (comma-separated)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="schema,columns,rows" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="maxMemoryMb"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Max memory (MB)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={16} max={1024} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="maxExecutionSeconds"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Max execution (seconds)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} max={120} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="ui"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>UI file</FormLabel>
+                      <FormControl>
+                        <Input placeholder="ui.html" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
+              <p className="text-xs text-muted-foreground">
+                Network egress is not supported — manifests with{' '}
+                <code>capabilities.network: true</code> are rejected at upload.
+              </p>
             </CardContent>
           </Card>
 

@@ -13,6 +13,13 @@ interface PluginUIRendererProps {
   onClose?: () => void;
 }
 
+/**
+ * Renders plugin ui.html in a sandboxed iframe.
+ *
+ * Uses srcDoc + sandbox="allow-scripts" only — no allow-same-origin.
+ * That keeps the iframe origin opaque (null), so plugin UI cannot reach
+ * parent DOM/storage while still receiving results via postMessage.
+ */
 export default function PluginUIRenderer({ plugin, result, onClose }: PluginUIRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [uiHtml, setUiHtml] = useState<string | null>(null);
@@ -25,25 +32,18 @@ export default function PluginUIRenderer({ plugin, result, onClose }: PluginUIRe
         setLoading(true);
         setError(null);
 
-        // Get download URL from API
         const { downloadUrl } = await apiClient.plugins.downloadUrl(plugin.pluginId);
-
-        // Download plugin zip
         const pluginResponse = await fetch(downloadUrl);
         if (!pluginResponse.ok) {
           throw new Error(`Failed to download plugin: ${pluginResponse.status}`);
         }
 
         const pluginZip = await pluginResponse.arrayBuffer();
-
-        // Extract UI HTML from zip
         const JSZip = (await import('jszip')).default;
         const zip = await JSZip.loadAsync(pluginZip);
 
-        // Try to find UI file (ui.html, dist/ui.html, etc.)
         const uiFiles = ['ui.html', 'dist/ui.html', 'src/ui.html'];
         let html: string | null = null;
-
         for (const uiFile of uiFiles) {
           const file = zip.file(uiFile);
           if (file) {
@@ -70,51 +70,21 @@ export default function PluginUIRenderer({ plugin, result, onClose }: PluginUIRe
   }, [plugin.pluginId]);
 
   useEffect(() => {
-    if (uiHtml && iframeRef.current && iframeRef.current.contentWindow) {
-      // Write HTML to iframe
-      const iframe = iframeRef.current;
-      const iframeDoc = iframe.contentDocument || iframe.contentWindow?.document;
-
-      if (iframeDoc) {
-        iframeDoc.open();
-        iframeDoc.write(uiHtml);
-        iframeDoc.close();
-
-        // Wait for iframe to load, then send result data
-        iframe.onload = () => {
-          if (iframe.contentWindow) {
-            // Send execution result to plugin UI
-            iframe.contentWindow.postMessage(
-              {
-                type: 'plugin-result',
-                result: result,
-              },
-              '*'
-            );
-          }
-        };
-      }
-    }
+    if (!uiHtml || !iframeRef.current?.contentWindow) return;
+    // srcDoc load is async — post after a tick and on plugin-ready.
+    const id = window.setTimeout(() => {
+      iframeRef.current?.contentWindow?.postMessage({ type: 'plugin-result', result }, '*');
+    }, 50);
+    return () => window.clearTimeout(id);
   }, [uiHtml, result]);
 
-  // Listen for messages from plugin UI
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
-      // Handle messages from plugin UI if needed
-      if (event.data.type === 'plugin-ready') {
-        // Plugin UI is ready, send result
-        if (iframeRef.current?.contentWindow) {
-          iframeRef.current.contentWindow.postMessage(
-            {
-              type: 'plugin-result',
-              result: result,
-            },
-            '*'
-          );
-        }
+      if (event.source !== iframeRef.current?.contentWindow) return;
+      if (event.data?.type === 'plugin-ready') {
+        iframeRef.current?.contentWindow?.postMessage({ type: 'plugin-result', result }, '*');
       }
     };
-
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
   }, [result]);
@@ -154,7 +124,8 @@ export default function PluginUIRenderer({ plugin, result, onClose }: PluginUIRe
         <iframe
           ref={iframeRef}
           className="w-full h-full border-0"
-          sandbox="allow-scripts allow-same-origin"
+          sandbox="allow-scripts"
+          srcDoc={uiHtml || ''}
           title={`${plugin.name} UI`}
         />
       </div>

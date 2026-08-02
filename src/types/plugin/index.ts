@@ -27,18 +27,31 @@ export interface BasePluginMetadata {
   tags: string[];
   thumbnailUrl: string;
 
-  // Plugin configuration
+  // Plugin configuration (deprecated — prefer capabilities limits)
   config?: {
     timeout?: number;
     maxMemory?: number;
     concurrency?: number;
   };
 
-  // Plugin capabilities
+  // Plugin capabilities (aligned with tensr-sdk TensrPluginManifest)
   capabilities?: {
     inputTypes: string[];
     outputTypes: string[];
+    network: boolean;
+    filesystem: 'none' | 'scratch';
+    maxMemoryMb: number;
+    maxExecutionSeconds: number;
+    dataAccess: Array<'schema' | 'columns' | 'rows' | 'metadata'>;
   };
+
+  /** Admin-only: network egress gate for plugins that declare network:true */
+  networkAllowlisted?: boolean;
+  /** Admin-approved destination hostnames (and optional *.suffix wildcards) */
+  networkAllowedDomains?: string[];
+  reviewNotes?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
 }
 
 // API-specific metadata that includes AWS-related fields
@@ -65,6 +78,8 @@ export interface PluginRecord extends PluginMetadata {
     findings?: string[];
     scannedAt?: string;
     scanType?: string;
+    severity?: string;
+    autoReject?: boolean;
   };
 }
 

@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/utils';
+import { useOrganizationContext } from '@/contexts/organisation-context';
 
 export const settingsNavItems = [
   { title: 'General', href: '/settings/general' },
   { title: 'Billing', href: '/settings/billing' },
   { title: 'Usage', href: '/settings/usage' },
-  { title: 'Organisation', href: '/settings/organisation' },
-  { title: 'Members', href: '/settings/members' },
+  { title: 'Organisation', href: '/settings/organisation', requiresOrg: true },
+  { title: 'Members', href: '/settings/members', requiresOrg: true },
 ] as const;
 
 interface SettingsNavProps {
@@ -20,11 +21,20 @@ interface SettingsNavProps {
 
 export function SettingsNav({ className, orientation = 'horizontal' }: SettingsNavProps) {
   const pathname = usePathname();
+  const { isPersonalAccount, activeOrganization } = useOrganizationContext();
+  const showOrgTabs = !isPersonalAccount && Boolean(activeOrganization);
+
+  const visibleItems = settingsNavItems.filter(link => {
+    if ('requiresOrg' in link && link.requiresOrg) {
+      return showOrgTabs;
+    }
+    return true;
+  });
 
   if (orientation === 'vertical') {
     return (
       <nav aria-label="Settings" className={cn('flex flex-col gap-1 p-2', className)}>
-        {settingsNavItems.map(link => {
+        {visibleItems.map(link => {
           const isActive = pathname === link.href;
           return (
             <Link
@@ -50,7 +60,7 @@ export function SettingsNav({ className, orientation = 'horizontal' }: SettingsN
       aria-label="Settings sections"
       className={cn('mt-6 flex flex-wrap justify-center gap-2', className)}
     >
-      {settingsNavItems.map(link => {
+      {visibleItems.map(link => {
         const isActive = pathname === link.href;
         return (
           <Link

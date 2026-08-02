@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   CreditCard,
   Shield,
@@ -11,9 +10,7 @@ import {
   AlertTriangle,
   Calendar,
   Clock,
-  ArrowUpRight,
 } from 'lucide-react';
-import Link from 'next/link';
 import { Button } from '@/components/atoms/button';
 import {
   Dialog,
@@ -24,16 +21,25 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { Skeleton } from '@/components/atoms/skeleton';
-import { useBilling } from '@/hooks/api/use-billing'; // Import your existing hook
-import { Subscription, Invoice } from '@/hooks/api/use-billing';
+import { useBilling } from '@/hooks/api/use-billing';
+import { Invoice } from '@/hooks/api/use-billing';
 import posthog from 'posthog-js';
 
+function PageHeader() {
+  return (
+    <div className="text-center">
+      <h2 className="text-lg font-medium tracking-tight">Billing</h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Manage your subscription plan and payment methods
+      </p>
+    </div>
+  );
+}
+
 export default function BillingSettings() {
-  const router = useRouter();
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [cancelInProgress, setCancelInProgress] = useState(false);
 
-  // Use your actual billing hook
   const {
     subscription,
     invoices,
@@ -60,7 +66,6 @@ export default function BillingSettings() {
           billing_type: subscription?.billingType,
         });
         setIsCancelDialogOpen(false);
-        // Data will be automatically refreshed by the hook
       }
     } catch (err: unknown) {
       console.error('Error cancelling subscription:', err);
@@ -83,11 +88,11 @@ export default function BillingSettings() {
         return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
       case 'CANCELED':
       case 'CANCELLED':
-        return 'bg-gray-50 text-gray-700 border border-gray-200';
+        return 'bg-muted text-muted-foreground border border-border';
       case 'TRIAL':
         return 'bg-blue-50 text-blue-700 border border-blue-200';
       default:
-        return 'bg-gray-50 text-gray-700 border border-gray-200';
+        return 'bg-muted text-muted-foreground border border-border';
     }
   };
 
@@ -137,306 +142,293 @@ export default function BillingSettings() {
     return tierFeatures[tier] || tierFeatures.FREE;
   };
 
-  // Show loading state OR if we don't have subscription data yet
   if (isLoading || !subscription) {
     return (
-      <div>
-        <div className="mb-6">
-          <h1 className="text-xl font-medium">Billing & Subscription</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Manage your subscription plan and payment methods
-          </p>
-        </div>
+      <div className="space-y-6">
+        <PageHeader />
 
-        <div className="space-y-6">
-          <div className="border border-gray-200 rounded-md p-6 bg-white">
-            <h2 className="text-lg font-medium mb-4">Current Plan</h2>
-            <div className="space-y-4">
-              <Skeleton className="h-16 w-full" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
-              </div>
-              <Skeleton className="h-40 w-full" />
-            </div>
+        <section className="overflow-hidden rounded-lg border border-border bg-background">
+          <div className="border-b border-border px-6 py-4">
+            <h3 className="text-base font-medium">Current Plan</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Your active subscription details</p>
           </div>
-
-          <div className="border border-gray-200 rounded-md p-6 bg-white">
-            <h2 className="text-lg font-medium mb-4">Billing History</h2>
+          <div className="space-y-4 p-6">
+            <Skeleton className="h-16 w-full" />
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <Skeleton className="h-24 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
             <Skeleton className="h-40 w-full" />
           </div>
-        </div>
+        </section>
+
+        <section className="overflow-hidden rounded-lg border border-border bg-background">
+          <div className="border-b border-border px-6 py-4">
+            <h3 className="text-base font-medium">Billing History</h3>
+            <p className="mt-1 text-sm text-muted-foreground">Past invoices and receipts</p>
+          </div>
+          <div className="p-6">
+            <Skeleton className="h-40 w-full" />
+          </div>
+        </section>
       </div>
     );
   }
 
-  // Show error state
   if (error) {
     return (
-      <div>
-        <div className="mb-6">
-          <h1 className="text-xl font-medium">Billing & Subscription</h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Manage your subscription plan and payment methods
-          </p>
-        </div>
+      <div className="space-y-6">
+        <PageHeader />
 
-        <div className="border border-red-200 rounded-md p-6 bg-red-50">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-6 w-6 text-red-500" />
-            <div>
-              <h3 className="font-medium text-red-800">Error Loading Subscription Details</h3>
-              <p className="text-red-700">{error}</p>
+        <section className="overflow-hidden rounded-lg border border-red-200 bg-red-50">
+          <div className="p-6">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="h-6 w-6 text-red-500" />
+              <div>
+                <h3 className="font-medium text-red-800">Error Loading Subscription Details</h3>
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
             </div>
+            <Button onClick={handleRetry} className="mt-4" variant="outline">
+              <RefreshCw className="mr-2 h-4 w-4" />
+              Try Again
+            </Button>
           </div>
-          <Button onClick={handleRetry} className="mt-4" variant="outline">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Try Again
-          </Button>
-        </div>
+        </section>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-xl font-medium">Billing & Subscription</h1>
-        <p className="text-gray-500 text-sm mt-1">
-          Manage your subscription plan and payment methods
-        </p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader />
 
-      {/* Current Plan */}
-      <div className="mb-6">
-        <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-          <div className="p-6">
-            <h2 className="text-base font-medium mb-4">Current Plan</h2>
-            <div className="border border-border rounded-md p-4 mb-6">
-              <div className="flex items-center">
-                <Shield className="h-5 w-5 mr-2" />
-                <h3 className="text-md font-medium">
-                  {subscription?.tier?.toUpperCase() || 'Free'} Plan
-                </h3>
-                <div className="ml-auto">
-                  <span
-                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadgeClass(subscription?.status)}`}
-                  >
-                    {subscription?.status?.toUpperCase() || 'FREE'}
-                  </span>
-                </div>
+      <section className="overflow-hidden rounded-lg border border-border bg-background">
+        <div className="border-b border-border px-6 py-4">
+          <h3 className="text-base font-medium">Current Plan</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Your active subscription details</p>
+        </div>
+
+        <div className="p-6">
+          <div className="mb-6 rounded-md border border-border p-4">
+            <div className="flex items-center">
+              <Shield className="mr-2 h-5 w-5" />
+              <h4 className="text-sm font-medium">
+                {subscription?.tier?.toUpperCase() || 'Free'} Plan
+              </h4>
+              <div className="ml-auto">
+                <span
+                  className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusBadgeClass(subscription?.status)}`}
+                >
+                  {subscription?.status?.toUpperCase() || 'FREE'}
+                </span>
               </div>
-              {subscription?.status === 'active' && subscription?.renewalDate && (
-                <p className="mt-2 text-sm">
-                  Your subscription will renew on {formatDate(subscription.renewalDate)}
-                </p>
-              )}
-              {(subscription?.status === 'canceled' || subscription?.status === 'cancelled') &&
-                subscription?.renewalDate && (
-                  <p className="mt-2 text-sm">
-                    Your subscription will end on {formatDate(subscription.renewalDate)}
-                  </p>
-                )}
-              {subscription?.status === 'trial' && subscription?.renewalDate && (
-                <p className="mt-2 text-sm">
-                  Your trial will end on {formatDate(subscription.renewalDate)}
-                </p>
-              )}
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-              {subscription?.stripeSubscriptionId && (
-                <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
-                  <p className="text-xs text-gray-500 font-medium">Subscription ID</p>
-                  <div className="flex items-center mt-1">
-                    <p className="font-mono text-sm text-xs">{subscription.stripeSubscriptionId}</p>
-                    <button
-                      className="ml-2 text-xs"
-                      onClick={() => {
-                        navigator.clipboard.writeText(subscription.stripeSubscriptionId);
-                      }}
-                    >
-                      Copy
-                    </button>
-                  </div>
-                </div>
-              )}
-              <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
-                <p className="text-xs text-gray-500 font-medium">Subscription Type</p>
-                <p className="font-medium mt-1 text-sm">
-                  {subscription?.billingType === 'monthly'
-                    ? 'Monthly'
-                    : subscription?.billingType === 'annual'
-                      ? 'Annual'
-                      : 'Unknown'}
-                  {subscription?.status === 'trial' ? ' Trial' : ''}
+            {subscription?.status === 'active' && subscription?.renewalDate && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your subscription will renew on {formatDate(subscription.renewalDate)}
+              </p>
+            )}
+            {(subscription?.status === 'canceled' || subscription?.status === 'cancelled') &&
+              subscription?.renewalDate && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Your subscription will end on {formatDate(subscription.renewalDate)}
                 </p>
-              </div>
-              {subscription?.startDate && (
-                <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
-                  <p className="text-xs text-gray-500 font-medium">Start Date</p>
-                  <p className="font-medium mt-1 text-sm">{formatDate(subscription.startDate)}</p>
-                </div>
               )}
-              {subscription?.renewalDate && (
-                <div className="bg-gray-50 p-4 rounded-md border border-gray-100">
-                  <p className="text-xs text-gray-500 font-medium">
-                    {subscription?.status === 'canceled' || subscription?.status === 'cancelled'
-                      ? 'End'
-                      : 'Renewal'}{' '}
-                    Date
-                  </p>
-                  <p className="font-medium mt-1 text-sm">{formatDate(subscription.renewalDate)}</p>
-                </div>
-              )}
-            </div>
+            {subscription?.status === 'trial' && subscription?.renewalDate && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your trial will end on {formatDate(subscription.renewalDate)}
+              </p>
+            )}
+          </div>
 
-            {/* Usage overview when available */}
-            {usageStats && (
-              <div className="bg-gray-50 p-4 rounded-md border border-gray-100 mb-6">
-                <div className="flex justify-between mb-2">
-                  <p className="text-sm font-medium">Usage This Month</p>
-                  <p className="text-sm text-gray-500">
-                    {usageStats.currentUsage || 0} /{' '}
-                    {usageStats.limit === -1 ? 'Unlimited' : usageStats.limit}
-                  </p>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full"
-                    style={{
-                      width:
-                        usageStats.limit === -1
-                          ? '5%'
-                          : `${Math.min(100, usageStats.utilizationPercentage || 0)}%`,
+          <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+            {subscription?.stripeSubscriptionId && (
+              <div className="rounded-md border border-border bg-muted/30 p-4">
+                <p className="text-xs font-medium text-muted-foreground">Subscription ID</p>
+                <div className="mt-1 flex items-center">
+                  <p className="font-mono text-xs">{subscription.stripeSubscriptionId}</p>
+                  <button
+                    className="ml-2 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      navigator.clipboard.writeText(subscription.stripeSubscriptionId);
                     }}
-                  ></div>
+                  >
+                    Copy
+                  </button>
                 </div>
               </div>
             )}
-
-            <div className="border border-gray-200 rounded-md overflow-hidden">
-              <div className="bg-gray-50 px-4 py-2 border-b border-gray-200">
-                <h4 className="font-medium text-sm">Plan Features</h4>
+            <div className="rounded-md border border-border bg-muted/30 p-4">
+              <p className="text-xs font-medium text-muted-foreground">Subscription Type</p>
+              <p className="mt-1 text-sm font-medium">
+                {subscription?.billingType === 'monthly'
+                  ? 'Monthly'
+                  : subscription?.billingType === 'annual'
+                    ? 'Annual'
+                    : 'Unknown'}
+                {subscription?.status === 'trial' ? ' Trial' : ''}
+              </p>
+            </div>
+            {subscription?.startDate && (
+              <div className="rounded-md border border-border bg-muted/30 p-4">
+                <p className="text-xs font-medium text-muted-foreground">Start Date</p>
+                <p className="mt-1 text-sm font-medium">{formatDate(subscription.startDate)}</p>
               </div>
-              <div className="p-4">
-                <ul className="space-y-2">
-                  {getCurrentTierFeatures().map((feature: string, index: number) => (
-                    <li key={index} className="flex items-center text-sm">
-                      <Check className="h-4 w-4 text-green-500 mr-2 flex-shrink-0" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
+            )}
+            {subscription?.renewalDate && (
+              <div className="rounded-md border border-border bg-muted/30 p-4">
+                <p className="text-xs font-medium text-muted-foreground">
+                  {subscription?.status === 'canceled' || subscription?.status === 'cancelled'
+                    ? 'End'
+                    : 'Renewal'}{' '}
+                  Date
+                </p>
+                <p className="mt-1 text-sm font-medium">{formatDate(subscription.renewalDate)}</p>
+              </div>
+            )}
+          </div>
+
+          {usageStats && (
+            <div className="mb-6 rounded-md border border-border bg-muted/30 p-4">
+              <div className="mb-2 flex justify-between">
+                <p className="text-sm font-medium">AI requests this month</p>
+                <p className="text-sm text-muted-foreground">
+                  {usageStats.currentUsage || 0} /{' '}
+                  {usageStats.limit === -1 || !usageStats.limit
+                    ? '—'
+                    : usageStats.limit.toLocaleString()}
+                </p>
+              </div>
+              <div className="h-2 w-full rounded-full bg-muted">
+                <div
+                  className="h-2 rounded-full bg-blue-600"
+                  style={{
+                    width:
+                      !usageStats.limit || usageStats.limit === -1
+                        ? '5%'
+                        : `${Math.min(100, usageStats.utilizationPercentage || 0)}%`,
+                  }}
+                ></div>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 flex flex-wrap gap-3">
+          <div className="overflow-hidden rounded-md border border-border">
+            <div className="border-b border-border bg-muted/30 px-4 py-2">
+              <h4 className="text-sm font-medium">Plan Features</h4>
+            </div>
+            <div className="p-4">
+              <ul className="space-y-2">
+                {getCurrentTierFeatures().map((feature: string, index: number) => (
+                  <li key={index} className="flex items-center text-sm">
+                    <Check className="mr-2 h-4 w-4 flex-shrink-0 text-green-500" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-3 border-t border-border bg-muted/30 px-6 py-4">
+          <Button onClick={openCustomerPortal}>
+            <CreditCard className="mr-2 h-4 w-4" />
+            {subscription?.stripeCustomerId
+              ? 'Manage Billing'
+              : subscription?.status === 'active'
+                ? 'Change Plan'
+                : 'Upgrade Plan'}
+          </Button>
+
+          {subscription?.status === 'active' && !subscription?.stripeCustomerId && (
             <Button
-              onClick={openCustomerPortal}
-              className="inline-flex items-center px-4 py-2 border border-black bg-black text-sm text-white rounded-md hover:bg-gray-800"
+              variant="outline"
+              className="border-red-600 text-red-600 hover:bg-red-50"
+              onClick={() => setIsCancelDialogOpen(true)}
             >
-              <CreditCard className="h-4 w-4 mr-2" />
-              {subscription?.stripeCustomerId
-                ? 'Manage Billing'
-                : subscription?.status === 'active'
-                  ? 'Change Plan'
-                  : 'Upgrade Plan'}
+              Cancel Subscription
             </Button>
-
-            {subscription?.status === 'active' && !subscription?.stripeCustomerId && (
-              <Button
-                variant="outline"
-                className="border-red-600 text-red-600 hover:bg-red-50 text-sm"
-                onClick={() => setIsCancelDialogOpen(true)}
-              >
-                Cancel Subscription
-              </Button>
-            )}
-          </div>
+          )}
         </div>
-      </div>
+      </section>
 
-      {/* Billing History */}
-      <div>
-        <div className="border border-gray-200 rounded-md overflow-hidden bg-white">
-          <div className="p-6">
-            <h2 className="text-base font-medium mb-4">Billing History</h2>
+      <section className="overflow-hidden rounded-lg border border-border bg-background">
+        <div className="border-b border-border px-6 py-4">
+          <h3 className="text-base font-medium">Billing History</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Past invoices and receipts</p>
+        </div>
 
-            {!invoices || invoices.length === 0 ? (
-              <div className="text-center py-8 border border-gray-200 rounded-md">
-                <Calendar className="h-10 w-10 text-gray-400 mx-auto mb-2" />
-                <p className="text-gray-500 text-sm">No billing history available yet</p>
-              </div>
-            ) : (
-              <div className="border border-gray-200 rounded-md overflow-hidden">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Date
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Description
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Amount
-                      </th>
-                      <th
-                        scope="col"
-                        className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider"
-                      >
-                        Receipt
-                      </th>
+        <div className="p-6">
+          {!invoices || invoices.length === 0 ? (
+            <div className="rounded-md border border-border py-8 text-center">
+              <Calendar className="mx-auto mb-2 h-10 w-10 text-muted-foreground" />
+              <p className="text-sm text-muted-foreground">No billing history available yet</p>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-md border border-border">
+              <table className="min-w-full divide-y divide-border">
+                <thead className="bg-muted/30">
+                  <tr>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                    >
+                      Date
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                    >
+                      Description
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                    >
+                      Amount
+                    </th>
+                    <th
+                      scope="col"
+                      className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-muted-foreground"
+                    >
+                      Receipt
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border bg-background">
+                  {invoices.map((invoice: Invoice) => (
+                    <tr key={invoice.invoiceId}>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm text-muted-foreground">
+                        {formatDate(invoice.createdAt)}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm">
+                        {invoice.description ||
+                          `${invoice.tier} Plan - ${invoice.billingType === 'monthly' ? 'Monthly' : 'Annual'} Subscription`}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-sm">
+                        {formatCurrency(invoice.amount, invoice.currency)}
+                      </td>
+                      <td className="whitespace-nowrap px-6 py-4 text-right text-sm font-medium">
+                        <a
+                          href={invoice.pdfUrl || `/api/billing/invoices/${invoice.invoiceId}/pdf`}
+                          className="inline-flex items-center text-primary"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <Download className="mr-1 h-4 w-4" />
+                          Download
+                        </a>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {invoices.map((invoice: Invoice) => (
-                      <tr key={invoice.invoiceId}>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {formatDate(invoice.createdAt)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {invoice.description ||
-                            `${invoice.tier} Plan - ${invoice.billingType === 'monthly' ? 'Monthly' : 'Annual'} Subscription`}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {formatCurrency(invoice.amount, invoice.currency)}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <a
-                            href={
-                              invoice.pdfUrl || `/api/billing/invoices/${invoice.invoiceId}/pdf`
-                            }
-                            className="text-primary inline-flex items-center"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            <Download className="h-4 w-4 mr-1" />
-                            Download
-                          </a>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
-      </div>
+      </section>
 
-      {/* Cancel Subscription Dialog */}
       <Dialog open={isCancelDialogOpen} onOpenChange={setIsCancelDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -446,9 +438,9 @@ export default function BillingSettings() {
               features at the end of your current billing period.
             </DialogDescription>
           </DialogHeader>
-          <div className="bg-yellow-50 border border-yellow-100 p-4 rounded-md">
+          <div className="rounded-md border border-yellow-100 bg-yellow-50 p-4">
             <div className="flex gap-3">
-              <Clock className="h-5 w-5 text-yellow-500 flex-shrink-0" />
+              <Clock className="h-5 w-5 flex-shrink-0 text-yellow-500" />
               <p className="text-sm text-yellow-700">
                 {subscription?.renewalDate ? (
                   <>
@@ -469,7 +461,6 @@ export default function BillingSettings() {
               variant="outline"
               onClick={() => setIsCancelDialogOpen(false)}
               disabled={cancelInProgress}
-              className="border-gray-200 text-gray-700 hover:bg-gray-50"
             >
               Keep Subscription
             </Button>
@@ -477,7 +468,6 @@ export default function BillingSettings() {
               variant="destructive"
               onClick={handleCancelSubscription}
               disabled={cancelInProgress}
-              className="bg-red-600 hover:bg-red-700 text-white"
             >
               {cancelInProgress ? 'Cancelling...' : 'Yes, Cancel Subscription'}
             </Button>
