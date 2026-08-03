@@ -49,29 +49,37 @@ export type AnalysisReportTable = {
 
 export type SpssReportBlock = AnalysisReportTable;
 
+/** Optional axis typing hints from the API (auto-detected when omitted). */
+export type ChartAxisScale = 'linear' | 'datetime' | 'category';
+
+type ChartAxisHints = {
+  x_scale?: ChartAxisScale;
+  y_scale?: ChartAxisScale;
+};
+
 export type AnalysisReportChart =
-  | {
+  | ({
       kind: 'histogram';
       title: string;
       x_label: string;
       bins: { start: number; end: number; count: number }[];
-    }
-  | {
+    } & ChartAxisHints)
+  | ({
       kind: 'scatter';
       title: string;
       x_label: string;
       y_label: string;
-      points: { x: number; y: number }[];
-    }
-  | {
+      points: { x: number; y: number; row_index?: number }[];
+    } & ChartAxisHints)
+  | ({
       kind: 'scatter_line';
       title: string;
       x_label: string;
       y_label: string;
-      points: { x: number; y: number }[];
+      points: { x: number; y: number; row_index?: number }[];
       line: { x0: number; y0: number; x1: number; y1: number };
-    }
-  | {
+    } & ChartAxisHints)
+  | ({
       kind: 'boxplot';
       title: string;
       y_label: string;
@@ -83,23 +91,23 @@ export type AnalysisReportChart =
         q3: number;
         max: number;
       }[];
-    }
-  | {
+    } & ChartAxisHints)
+  | ({
       kind: 'bar_grouped';
       title: string;
       x_label: string;
       y_label: string;
       categories: string[];
       series: { name: string; values: number[] }[];
-    }
-  | {
+    } & ChartAxisHints)
+  | ({
       kind: 'line';
       title: string;
       x_label: string;
       y_label: string;
       categories: string[];
       series: { name: string; values: number[] }[];
-    }
+    } & ChartAxisHints)
   | {
       kind: 'path_diagram';
       title: string;

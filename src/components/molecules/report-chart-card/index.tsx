@@ -23,16 +23,22 @@ type Props = {
 export function ReportChartCard({ chart, onAnnotate, onExportError }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fullscreenRef = useRef<HTMLDivElement>(null);
+  const exportRef = useRef<HTMLDivElement>(null);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const title = chart.title || 'chart';
 
-  const getSvg = (scope: 'inline' | 'fullscreen') => {
-    const root = scope === 'fullscreen' ? fullscreenRef.current : containerRef.current;
+  const getSvg = (scope: 'inline' | 'fullscreen' | 'export') => {
+    const root =
+      scope === 'fullscreen'
+        ? fullscreenRef.current
+        : scope === 'export'
+          ? exportRef.current
+          : containerRef.current;
     return root?.querySelector('svg') ?? null;
   };
 
   const handleExport = async (format: 'svg' | 'png', scope: 'inline' | 'fullscreen' = 'inline') => {
-    const svg = getSvg(scope);
+    const svg = getSvg(scope === 'fullscreen' ? 'fullscreen' : 'export') ?? getSvg(scope);
     if (!svg) {
       onExportError?.('Chart not ready to export');
       return;
@@ -93,7 +99,7 @@ export function ReportChartCard({ chart, onAnnotate, onExportError }: Props) {
           </div>
         </div>
         <div ref={containerRef} className="p-4 pb-2">
-          <ReportChart chart={chart} />
+          <ReportChart chart={chart} density="inline" />
         </div>
       </div>
 
@@ -103,7 +109,7 @@ export function ReportChartCard({ chart, onAnnotate, onExportError }: Props) {
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
           <div ref={fullscreenRef} className="min-h-[420px] p-2">
-            <ReportChart chart={chart} />
+            <ReportChart chart={chart} density="comfortable" />
           </div>
           <div className="flex justify-end gap-1 pt-2">
             <Button
@@ -127,6 +133,14 @@ export function ReportChartCard({ chart, onAnnotate, onExportError }: Props) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <div
+        ref={exportRef}
+        className="pointer-events-none fixed -left-[10000px] top-0 w-[880px]"
+        aria-hidden
+      >
+        <ReportChart chart={chart} density="comfortable" />
+      </div>
     </>
   );
 }
