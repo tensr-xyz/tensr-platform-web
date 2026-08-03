@@ -23,6 +23,7 @@ export const ChatComposerInput = React.forwardRef<HTMLTextAreaElement, Props>(
   ) {
     const innerRef = React.useRef<HTMLTextAreaElement>(null);
     const expandedRef = React.useRef(false);
+    const [expanded, setExpanded] = React.useState(false);
 
     const setRefs = React.useCallback(
       (node: HTMLTextAreaElement | null) => {
@@ -33,6 +34,12 @@ export const ChatComposerInput = React.forwardRef<HTMLTextAreaElement, Props>(
       [forwardedRef]
     );
 
+    const measureExpanded = React.useCallback(
+      (scrollHeight: number) =>
+        scrollHeight > SINGLE_LINE_PX + 2 || String(value ?? '').includes('\n'),
+      [value]
+    );
+
     const syncHeight = React.useCallback(() => {
       const el = innerRef.current;
       if (!el) return;
@@ -41,17 +48,21 @@ export const ChatComposerInput = React.forwardRef<HTMLTextAreaElement, Props>(
       const next = Math.min(Math.max(scroll, SINGLE_LINE_PX), maxHeight);
       el.style.height = `${next}px`;
       el.style.overflowY = scroll > maxHeight ? 'auto' : 'hidden';
-
-      const nextExpanded = scroll > SINGLE_LINE_PX + 2 || String(value ?? '').includes('\n');
-      if (nextExpanded !== expandedRef.current) {
-        expandedRef.current = nextExpanded;
-        onExpandedChange?.(nextExpanded);
-      }
-    }, [maxHeight, onExpandedChange, value]);
+      return measureExpanded(scroll);
+    }, [maxHeight, measureExpanded]);
 
     React.useLayoutEffect(() => {
-      syncHeight();
+      const nextExpanded = syncHeight();
+      if (typeof nextExpanded !== 'boolean') return;
+      if (nextExpanded === expandedRef.current) return;
+      expandedRef.current = nextExpanded;
+      setExpanded(nextExpanded);
     }, [value, syncHeight]);
+
+    // Notify parent after commit — never from render / layout of this field.
+    React.useEffect(() => {
+      onExpandedChange?.(expanded);
+    }, [expanded, onExpandedChange]);
 
     return (
       <textarea
@@ -60,6 +71,8 @@ export const ChatComposerInput = React.forwardRef<HTMLTextAreaElement, Props>(
         value={value}
         onChange={e => {
           onChange?.(e);
+          // Immediate resize before the controlled value re-renders; expanded
+          // state is reconciled in the layout effect above.
           syncHeight();
         }}
         className={cn(
