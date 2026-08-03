@@ -3,7 +3,7 @@ import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { ChatComposerInput } from '@/components/molecules/chat-composer-input';
 import { Send, Loader2, AlertCircle, Trash2, History, Plus, X, Sparkles } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import {
   Command,
   CommandEmpty,
@@ -396,10 +396,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const [inputMessage, setInputMessage] = useState('');
   const [busyMessageId, setBusyMessageId] = useState<string | null>(null);
   const [showRuns, setShowRuns] = useState(false);
-  const [mentionOpen, setMentionOpen] = useState(false);
+  const [slashColumnsOpen, setSlashColumnsOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
-  const setCommandPaletteOpen = useAnalysisSetupStore(s => s.setCommandPaletteOpen);
   const composerColumns = useMemo(() => {
     const cols = activeTab?.data?.initialColumns ?? [];
     return cols.map(c => String(c.header || c.id || '').trim()).filter(Boolean);
@@ -1511,150 +1510,114 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                     : 'border-border'
                 )}
               >
-                <ChatComposerInput
-                  ref={composerRef}
-                  value={inputMessage}
-                  onChange={e => {
-                    const next = e.target.value;
-                    setInputMessage(next);
-                    if (next.endsWith('@')) setMentionOpen(true);
-                    if (next.endsWith('/')) setCommandPaletteOpen(true);
-                  }}
-                  placeholder={
-                    isNotebook ? 'Write code to analyse your data…' : 'Ask about your data…'
-                  }
-                  onKeyDown={e => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                  }}
-                />
+                <Popover open={slashColumnsOpen} onOpenChange={setSlashColumnsOpen}>
+                  <PopoverAnchor asChild>
+                    <div>
+                      <ChatComposerInput
+                        ref={composerRef}
+                        value={inputMessage}
+                        onChange={e => {
+                          const next = e.target.value;
+                          setInputMessage(next);
+                          // Cursor-style: type / to insert a column (⌘K opens analyses).
+                          if (next.endsWith('/')) setSlashColumnsOpen(true);
+                        }}
+                        placeholder={
+                          isNotebook
+                            ? 'Write code to analyse your data…'
+                            : 'Ask about your data… (/ for columns)'
+                        }
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' && !e.shiftKey && !slashColumnsOpen) {
+                            e.preventDefault();
+                            handleSendMessage();
+                          }
+                        }}
+                      />
+                    </div>
+                  </PopoverAnchor>
+                  <PopoverContent align="start" className="w-64 p-0" side="top">
+                    <Command>
+                      <CommandInput placeholder="Search columns…" />
+                      <CommandList>
+                        <CommandEmpty>
+                          {composerColumns.length
+                            ? 'No matching columns'
+                            : 'Open a spreadsheet to pick columns'}
+                        </CommandEmpty>
+                        <CommandGroup heading="Columns">
+                          {composerColumns.map(name => (
+                            <CommandItem
+                              key={name}
+                              value={name}
+                              onSelect={() => {
+                                setInputMessage(prev => {
+                                  const base = prev.endsWith('/') ? prev.slice(0, -1) : prev;
+                                  const needsSpace = Boolean(base) && !/\s$/.test(base);
+                                  return `${base}${needsSpace ? ' ' : ''}${name}`;
+                                });
+                                setSlashColumnsOpen(false);
+                                requestAnimationFrame(() => composerRef.current?.focus());
+                              }}
+                            >
+                              {name}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
                 <div className="mt-1.5 flex items-center justify-between">
-                  <div className="flex items-center gap-0.5">
-                    <Popover open={mentionOpen} onOpenChange={setMentionOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 font-mono text-[11px] text-muted-foreground"
-                          title="Reference a column"
-                          aria-label="Reference a column"
-                        >
-                          @
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="start" className="w-64 p-0" side="top">
-                        <Command>
-                          <CommandInput placeholder="Search columns…" />
-                          <CommandList>
-                            <CommandEmpty>
-                              {composerColumns.length
-                                ? 'No matching columns'
-                                : 'Open a spreadsheet to mention columns'}
-                            </CommandEmpty>
-                            <CommandGroup heading="Columns">
-                              {composerColumns.map(name => (
-                                <CommandItem
-                                  key={name}
-                                  value={name}
-                                  onSelect={() => {
-                                    // Replace a trailing bare @ if the user typed it.
-                                    setInputMessage(prev => {
-                                      const base = prev.endsWith('@') ? prev.slice(0, -1) : prev;
-                                      const needsSpace = Boolean(base) && !/\s$/.test(base);
-                                      return `${base}${needsSpace ? ' ' : ''}@${name}`;
-                                    });
-                                    setMentionOpen(false);
-                                    requestAnimationFrame(() => composerRef.current?.focus());
-                                  }}
-                                >
-                                  {name}
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-7 font-mono text-[11px] text-muted-foreground"
-                      title="Analysis commands"
-                      aria-label="Open analysis command menu"
-                      onClick={() => setCommandPaletteOpen(true)}
-                    >
-                      /
-                    </Button>
-                    <Popover open={plusMenuOpen} onOpenChange={setPlusMenuOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="size-7 text-muted-foreground"
-                          title="Mode and actions"
-                          aria-label="Open mode and actions menu"
-                        >
-                          <Plus className="size-3" aria-hidden />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="start" className="w-72 p-0" side="top">
-                        <Command>
-                          <CommandInput placeholder="Mode or action…" />
-                          <CommandList>
-                            <CommandEmpty>No matches</CommandEmpty>
-                            <CommandGroup heading="Mode">
-                              {AGENT_MODE_OPTIONS.map(opt => (
-                                <CommandItem
-                                  key={opt.value}
-                                  value={`${opt.label} ${opt.hint}`}
-                                  onSelect={() => {
-                                    setAgentMode(projectId, opt.value);
-                                    setPlusMenuOpen(false);
-                                    requestAnimationFrame(() => composerRef.current?.focus());
-                                  }}
-                                >
-                                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                    <div className="flex items-center justify-between gap-2">
-                                      <span className="font-medium">{opt.label}</span>
-                                      {agentMode === opt.value ? (
-                                        <span className="font-mono text-[10px] text-primary">
-                                          active
-                                        </span>
-                                      ) : null}
-                                    </div>
-                                    <span className="text-[11px] leading-snug text-muted-foreground">
-                                      {opt.hint}
-                                    </span>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                            <CommandGroup heading="Actions">
+                  <Popover open={plusMenuOpen} onOpenChange={setPlusMenuOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="size-7 text-muted-foreground"
+                        title="Choose mode"
+                        aria-label="Choose Ask, Plan, or Agent mode"
+                      >
+                        <Plus className="size-3" aria-hidden />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-72 p-0" side="top">
+                      <Command>
+                        <CommandInput placeholder="Switch mode…" />
+                        <CommandList>
+                          <CommandEmpty>No matches</CommandEmpty>
+                          <CommandGroup heading="Mode">
+                            {AGENT_MODE_OPTIONS.map(opt => (
                               <CommandItem
-                                value="Browse analyses"
+                                key={opt.value}
+                                value={`${opt.label} ${opt.hint}`}
                                 onSelect={() => {
+                                  setAgentMode(projectId, opt.value);
                                   setPlusMenuOpen(false);
-                                  setCommandPaletteOpen(true);
+                                  requestAnimationFrame(() => composerRef.current?.focus());
                                 }}
                               >
                                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                  <span className="font-medium">Browse analyses…</span>
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="font-medium">{opt.label}</span>
+                                    {agentMode === opt.value ? (
+                                      <span className="font-mono text-[10px] text-primary">
+                                        active
+                                      </span>
+                                    ) : null}
+                                  </div>
                                   <span className="text-[11px] leading-snug text-muted-foreground">
-                                    Open the analysis command palette
+                                    {opt.hint}
                                   </span>
                                 </div>
                               </CommandItem>
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                   <Button
                     type="button"
                     onClick={handleSendMessage}
