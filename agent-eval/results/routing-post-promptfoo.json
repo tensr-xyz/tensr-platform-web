@@ -1,0 +1,1976 @@
+{
+  "evalId": "eval-Dx3-2026-08-03T16:52:56",
+  "results": {
+    "version": 3,
+    "timestamp": "2026-08-03T16:52:56.630Z",
+    "prompts": [
+      {
+        "id": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "raw": "{{prompt}}",
+        "label": "{{prompt}}",
+        "provider": "file://promptfoo-provider-agent-loop-policy.cjs",
+        "metrics": {
+          "score": 17,
+          "testPassCount": 17,
+          "testFailCount": 0,
+          "testErrorCount": 0,
+          "assertPassCount": 17,
+          "assertFailCount": 0,
+          "totalLatencyMs": 45,
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 17,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          },
+          "namedScores": {},
+          "namedScoresCount": {},
+          "namedScoreWeights": {},
+          "cost": 0
+        }
+      }
+    ],
+    "results": [
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "direct_text"
+              }
+            }
+          ]
+        },
+        "id": "2bf93b40-8ab7-49ae-8265-6bb7cd79b4bb",
+        "latencyMs": 3,
+        "namedScores": {},
+        "prompt": {
+          "raw": "What does Age mean?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "direct_text"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "What does Age mean?",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "direct_text"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 0,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "What does Age mean?",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "direct_text"
+              }
+            }
+          ]
+        },
+        "id": "530ff469-afd1-4011-a372-87cb76bd9a59",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "How do I interpret a p-value?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "direct_text"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "How do I interpret a p-value?",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "direct_text"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 1,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "How do I interpret a p-value?",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "ask_clarifying_question"
+              }
+            }
+          ]
+        },
+        "id": "58ecfe2b-3d65-4d5d-8954-637f128c1706",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Hello",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "ask_clarifying_question"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Hello",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "ask_clarifying_question"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 2,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Hello",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "ask_clarifying_question"
+              }
+            }
+          ]
+        },
+        "id": "348538ff-489c-4eb6-b636-11348b7b8857",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "run one for me",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "ask_clarifying_question"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "run one for me",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "ask_clarifying_question"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 3,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "run one for me",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "ask_clarifying_question"
+              }
+            }
+          ]
+        },
+        "id": "52672999-5e67-47e8-9861-ffbcdb81121b",
+        "latencyMs": 5,
+        "namedScores": {},
+        "prompt": {
+          "raw": "why is that significant?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "ask_clarifying_question"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "why is that significant?",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "ask_clarifying_question"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 4,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "why is that significant?",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "ask_clarifying_question"
+              }
+            }
+          ]
+        },
+        "id": "80ed02e5-3b26-4e78-83cd-b1b5c72ceb23",
+        "latencyMs": 3,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Can you help me understand the groups?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "ask_clarifying_question"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Can you help me understand the groups?",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "ask_clarifying_question"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 5,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Can you help me understand the groups?",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "ask_clarifying_question"
+              }
+            }
+          ]
+        },
+        "id": "549f576c-9017-4550-b4b4-515847abff9c",
+        "latencyMs": 3,
+        "namedScores": {},
+        "prompt": {
+          "raw": "sorry it should be age and Tm",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "ask_clarifying_question"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "sorry it should be age and Tm",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "ask_clarifying_question"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 6,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "sorry it should be age and Tm",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "run_analysis"
+              }
+            }
+          ]
+        },
+        "id": "c476dd83-a24a-4765-96b8-3a17e715c75d",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "t test for me on my dataset",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "run_analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "t test for me on my dataset",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "run_analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 7,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "t test for me on my dataset",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "run_analysis"
+              }
+            }
+          ]
+        },
+        "id": "8c14ed18-0a25-43bd-9528-42db1e6b9552",
+        "latencyMs": 3,
+        "namedScores": {},
+        "prompt": {
+          "raw": "correlation between Age and PTS",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "run_analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "correlation between Age and PTS",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "run_analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 8,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "correlation between Age and PTS",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "run_analysis"
+              }
+            }
+          ]
+        },
+        "id": "2647ff33-b697-4da8-9d96-1f4ad72535b9",
+        "latencyMs": 3,
+        "namedScores": {},
+        "prompt": {
+          "raw": "one-way ANOVA",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "run_analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "one-way ANOVA",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "run_analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 9,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "one-way ANOVA",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "run_analysis"
+              }
+            }
+          ]
+        },
+        "id": "b1c648d1-a9de-46fb-9270-c9cdbc1d99db",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Could you provide a boxplot for utilisation_rate",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "run_analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Could you provide a boxplot for utilisation_rate",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "run_analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 10,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Could you provide a boxplot for utilisation_rate",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "run_data_quality_scan"
+              }
+            }
+          ]
+        },
+        "id": "4ff9740f-26eb-421c-9cab-115d1bc24926",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Run a data quality scan",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "run_data_quality_scan"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Run a data quality scan",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "run_data_quality_scan"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 11,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Run a data quality scan",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "tool_or_clarify"
+              }
+            }
+          ]
+        },
+        "id": "f4cf8d26-5630-4f01-9a67-e04894a079b5",
+        "latencyMs": 4,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Where do I start?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "tool_or_clarify"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Where do I start?",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "tool_or_clarify"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 12,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Where do I start?",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "start_prep_playbook"
+              }
+            }
+          ]
+        },
+        "id": "45b4f9bf-3933-4f3a-9b45-1980b6a658f3",
+        "latencyMs": 5,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Clean this dataset",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "start_prep_playbook"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Clean this dataset",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "start_prep_playbook"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 13,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Clean this dataset",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "ask-no-write"
+              }
+            }
+          ]
+        },
+        "id": "32fde320-86c4-498d-aa0a-0fd3b43308e6",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "t test for me on my dataset",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "ask-no-write"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "t test for me on my dataset",
+            "mode": "ask"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "ask-no-write"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 14,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "t test for me on my dataset",
+          "mode": "ask"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "plan-awaiting-approval"
+              }
+            }
+          ]
+        },
+        "id": "f59165da-e480-4138-ab90-74f06b47f689",
+        "latencyMs": 1,
+        "namedScores": {},
+        "prompt": {
+          "raw": "t test for me on my dataset",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "plan-awaiting-approval"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "t test for me on my dataset",
+            "mode": "plan"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "plan-awaiting-approval"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 15,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "t test for me on my dataset",
+          "mode": "plan"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "refuse-or-clarify"
+              }
+            }
+          ]
+        },
+        "id": "1e00ef59-a155-4d07-98da-a4cc226efc95",
+        "latencyMs": 1,
+        "namedScores": {},
+        "prompt": {
+          "raw": "geometric mean of Revenue",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "refuse-or-clarify"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "geometric mean of Revenue",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "refuse-or-clarify"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 16,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "geometric mean of Revenue",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      }
+    ],
+    "stats": {
+      "successes": 17,
+      "failures": 0,
+      "errors": 0,
+      "tokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "total": 0,
+        "numRequests": 17,
+        "completionDetails": {
+          "reasoning": 0,
+          "acceptedPrediction": 0,
+          "rejectedPrediction": 0,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0
+        },
+        "assertions": {
+          "total": 0,
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "numRequests": 0,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          }
+        }
+      },
+      "durationMs": 86,
+      "evaluationDurationMs": 86
+    }
+  },
+  "config": {
+    "tags": {},
+    "description": "Tensr agent loop post-rewrite full baseline contract",
+    "prompts": ["{{prompt}}"],
+    "providers": ["file://promptfoo-provider-agent-loop-policy.cjs"],
+    "tests": [
+      {
+        "vars": {
+          "prompt": "What does Age mean?",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "direct_text"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "How do I interpret a p-value?",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "direct_text"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Hello",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "ask_clarifying_question"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "run one for me",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "ask_clarifying_question"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "why is that significant?",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "ask_clarifying_question"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Can you help me understand the groups?",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "ask_clarifying_question"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "sorry it should be age and Tm",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "ask_clarifying_question"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "t test for me on my dataset",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "run_analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "correlation between Age and PTS",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "run_analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "one-way ANOVA",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "run_analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Could you provide a boxplot for utilisation_rate",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "run_analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Run a data quality scan",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "run_data_quality_scan"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Where do I start?",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "tool_or_clarify"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Clean this dataset",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "start_prep_playbook"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "t test for me on my dataset",
+          "mode": "ask"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "ask-no-write"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "t test for me on my dataset",
+          "mode": "plan"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "plan-awaiting-approval"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "geometric mean of Revenue",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "refuse-or-clarify"
+          }
+        ]
+      }
+    ],
+    "env": {},
+    "outputPath": ["agent-eval/results/routing-post-promptfoo.json"],
+    "extensions": [],
+    "metadata": {},
+    "evaluateOptions": {}
+  },
+  "shareableUrl": null,
+  "metadata": {
+    "promptfooVersion": "0.121.20",
+    "nodeVersion": "v22.22.3",
+    "platform": "darwin",
+    "arch": "arm64",
+    "exportedAt": "2026-08-03T16:52:56.758Z",
+    "evaluationCreatedAt": "2026-08-03T16:52:56.630Z"
+  },
+  "vars": ["prompt", "mode"],
+  "runtimeOptions": {
+    "eventSource": "cli",
+    "showProgressBar": true,
+    "repeat": 1,
+    "maxConcurrency": 4,
+    "cache": true
+  }
+}

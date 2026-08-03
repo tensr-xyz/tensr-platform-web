@@ -1,7 +1,10 @@
 /**
  * Labels aligned with FULL_BASELINE_CONTRACT / agent_clarity hard branches.
  * Live tool_trace proof is in tensr-api test_agent_loop_categories.py.
+ *
+ * Must export a constructor class (promptfoo does `new Provider(...)`).
  */
+
 function classify(prompt, mode) {
   const text = String(prompt || '').trim();
   const m = String(mode || 'agent').toLowerCase();
@@ -49,10 +52,18 @@ function classify(prompt, mode) {
   return 'ask_clarifying_question';
 }
 
-module.exports = {
-  id: 'tensr-agent-loop-policy',
+module.exports = class TensrAgentLoopPolicyProvider {
+  constructor(options) {
+    this.providerId = options?.id || 'tensr-agent-loop-policy';
+    this.config = options?.config;
+  }
+
+  id() {
+    return this.providerId;
+  }
+
   async callApi(prompt, context) {
     const mode = context?.vars?.mode || 'agent';
     return { output: classify(prompt, mode) };
-  },
+  }
 };

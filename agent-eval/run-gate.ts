@@ -39,3 +39,5 @@ function resolveGateInOrder(message: string): string {
 
 const prompt = process.argv.slice(2).join(' ');
 process.stdout.write(resolveGateInOrder(prompt));
+// chat-actions / related imports can leave handles open — force exit for CLI use.
+process.exit(0);

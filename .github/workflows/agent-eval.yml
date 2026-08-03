@@ -55,5 +55,14 @@ jobs:
       - name: Install
         run: pnpm install
 
-      - name: Routing baseline + post-rewrite policy + loop client
+      - name: Routing baseline + post-rewrite policy + loop client (Jest)
         run: pnpm run test:agent-loop
+
+      - name: Mode-policy contract (Jest)
+        run: pnpm run test:agent-post
+
+      - name: Promptfoo routing baseline
+        run: pnpm run test:agent-baseline:promptfoo
+
+      - name: Promptfoo post-rewrite + mode policy
+        run: pnpm run test:agent-post:promptfoo

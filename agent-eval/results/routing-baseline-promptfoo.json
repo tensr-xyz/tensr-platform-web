@@ -1,0 +1,2255 @@
+{
+  "evalId": "eval-js1-2026-08-03T16:52:37",
+  "results": {
+    "version": 3,
+    "timestamp": "2026-08-03T16:52:37.241Z",
+    "prompts": [
+      {
+        "id": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "raw": "{{prompt}}",
+        "label": "{{prompt}}",
+        "provider": "file://promptfoo-provider-routing-baseline.cjs",
+        "metrics": {
+          "score": 20,
+          "testPassCount": 20,
+          "testFailCount": 0,
+          "testErrorCount": 0,
+          "assertPassCount": 20,
+          "assertFailCount": 0,
+          "totalLatencyMs": 27865,
+          "tokenUsage": {
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "total": 0,
+            "numRequests": 20,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            },
+            "assertions": {
+              "total": 0,
+              "prompt": 0,
+              "completion": 0,
+              "cached": 0,
+              "numRequests": 0,
+              "completionDetails": {
+                "reasoning": 0,
+                "acceptedPrediction": 0,
+                "rejectedPrediction": 0,
+                "cacheReadInputTokens": 0,
+                "cacheCreationInputTokens": 0
+              }
+            }
+          },
+          "namedScores": {},
+          "namedScoresCount": {},
+          "namedScoreWeights": {},
+          "cost": 0
+        }
+      }
+    ],
+    "results": [
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "tutor"
+              }
+            }
+          ]
+        },
+        "id": "3dec6666-fd9e-4697-984d-d619b2532369",
+        "latencyMs": 1986,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Hello",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "tutor"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Hello"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "tutor"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 0,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Hello"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "data-intent"
+              }
+            }
+          ]
+        },
+        "id": "399577e3-5448-4c9f-83c1-9485692a3823",
+        "latencyMs": 1985,
+        "namedScores": {},
+        "prompt": {
+          "raw": "What does Age mean?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "data-intent"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "What does Age mean?"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "data-intent"
+            }
+          ],
+          "description": "False-positive — \\bmean\\b in aggregate bucket",
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 1,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "What does Age mean?"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "tutor"
+              }
+            }
+          ]
+        },
+        "id": "0f970228-9da5-4d42-bdf8-073768ddb64a",
+        "latencyMs": 1985,
+        "namedScores": {},
+        "prompt": {
+          "raw": "How do I interpret a p-value?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "tutor"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "How do I interpret a p-value?"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "tutor"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 2,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "How do I interpret a p-value?"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "tutor"
+              }
+            }
+          ]
+        },
+        "id": "3fe72680-5c57-46c4-8e5e-b8968715ea33",
+        "latencyMs": 1985,
+        "namedScores": {},
+        "prompt": {
+          "raw": "run one for me",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "tutor"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "run one for me"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "tutor"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 3,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "run one for me"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "tutor"
+              }
+            }
+          ]
+        },
+        "id": "afbbed14-098d-4042-98b5-2924bd533c1e",
+        "latencyMs": 996,
+        "namedScores": {},
+        "prompt": {
+          "raw": "why is that significant?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "tutor"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "why is that significant?"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "tutor"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 4,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "why is that significant?"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "tutor"
+              }
+            }
+          ]
+        },
+        "id": "895e19e6-a6bc-4890-b818-830aafc93f64",
+        "latencyMs": 1492,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Can you help me understand the groups?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "tutor"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Can you help me understand the groups?"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "tutor"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 5,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Can you help me understand the groups?"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "menu-analysis"
+              }
+            }
+          ]
+        },
+        "id": "4b7a91e0-0fe1-4ad1-b073-b9d81837c9f1",
+        "latencyMs": 1492,
+        "namedScores": {},
+        "prompt": {
+          "raw": "t test for me on my dataset",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "menu-analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "t test for me on my dataset"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "menu-analysis"
+            }
+          ],
+          "description": "Menu synonym steals before Gate 4",
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 6,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "t test for me on my dataset"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "data-intent"
+              }
+            }
+          ]
+        },
+        "id": "cde2e2df-24ff-4987-b3af-c3d01572b613",
+        "latencyMs": 991,
+        "namedScores": {},
+        "prompt": {
+          "raw": "How many members joined after 2024?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "data-intent"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "How many members joined after 2024?"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "data-intent"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 7,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "How many members joined after 2024?"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "data-intent"
+              }
+            }
+          ]
+        },
+        "id": "22fa32d6-09b9-48c8-89f6-3d5f055b7983",
+        "latencyMs": 1008,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Sum of Revenue by Region",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "data-intent"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Sum of Revenue by Region"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "data-intent"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 8,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Sum of Revenue by Region"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "data-intent"
+              }
+            }
+          ]
+        },
+        "id": "e648bb4c-b6a7-42c8-abdd-79599b7bf031",
+        "latencyMs": 1497,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Make a monthly line chart",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "data-intent"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Make a monthly line chart"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "data-intent"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 9,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Make a monthly line chart"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "exploratory"
+              }
+            }
+          ]
+        },
+        "id": "be0b6508-50ec-4e01-a155-8a8a4e9e9a51",
+        "latencyMs": 1497,
+        "namedScores": {},
+        "prompt": {
+          "raw": "What's interesting?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "exploratory"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "What's interesting?"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "exploratory"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 10,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "What's interesting?"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "data-intent"
+              }
+            }
+          ]
+        },
+        "id": "a4056c0f-7760-44b4-8709-ff9a66045d74",
+        "latencyMs": 995,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Where do I start?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "data-intent"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Where do I start?"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "data-intent"
+            }
+          ],
+          "description": "False-positive — \\bwhere\\b in filter bucket beats exploratory",
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 11,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Where do I start?"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "prep-playbook"
+              }
+            }
+          ]
+        },
+        "id": "ea222c2f-18ca-4a51-88cc-14c41c31c088",
+        "latencyMs": 994,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Clean this dataset",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "prep-playbook"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Clean this dataset"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "prep-playbook"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 12,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Clean this dataset"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "menu-dialog"
+              }
+            }
+          ]
+        },
+        "id": "4072791f-474d-45a2-b983-cace06e18a64",
+        "latencyMs": 1486,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Run a data quality scan",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "menu-dialog"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Run a data quality scan"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "menu-dialog"
+            }
+          ],
+          "description": "Menu synonym steals before Gate 5",
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 13,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Run a data quality scan"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "menu-analysis"
+              }
+            }
+          ]
+        },
+        "id": "06fbe890-69ca-4727-9609-a45c3cc4f06a",
+        "latencyMs": 1486,
+        "namedScores": {},
+        "prompt": {
+          "raw": "correlation between Age and PTS",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "menu-analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "correlation between Age and PTS"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "menu-analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 14,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "correlation between Age and PTS"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "data-intent"
+              }
+            }
+          ]
+        },
+        "id": "e654ea5e-e84e-4300-8fb9-53896c1f6e9e",
+        "latencyMs": 991,
+        "namedScores": {},
+        "prompt": {
+          "raw": "I want percentile values for utilisation_rate",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "data-intent"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "I want percentile values for utilisation_rate"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "data-intent"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 15,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "I want percentile values for utilisation_rate"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "data-intent"
+              }
+            }
+          ]
+        },
+        "id": "b1c2cf29-8c58-4882-bee2-d359c5db91df",
+        "latencyMs": 989,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Can we get Percentile Values for these KPIs",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "data-intent"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Can we get Percentile Values for these KPIs"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "data-intent"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 16,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Can we get Percentile Values for these KPIs"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "tutor"
+              }
+            }
+          ]
+        },
+        "id": "81ca01d9-6da6-4aca-b832-8d9a7aca5c7e",
+        "latencyMs": 1499,
+        "namedScores": {},
+        "prompt": {
+          "raw": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "tutor"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "tutor"
+            }
+          ],
+          "description": "No Gate-2 keyword (quartile/top N%); falls to tutor today",
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 17,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "menu-dialog"
+              }
+            }
+          ]
+        },
+        "id": "5f17f879-5103-4756-b3ea-05307f8dd34b",
+        "latencyMs": 1499,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Could you provide a boxplot for utilisation_rate",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "menu-dialog"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Could you provide a boxplot for utilisation_rate"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "menu-dialog"
+            }
+          ],
+          "description": "Menu label Boxplot steals before Gate 2",
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 18,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Could you provide a boxplot for utilisation_rate"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "menu-analysis"
+              }
+            }
+          ]
+        },
+        "id": "d8552feb-ac32-4cc9-ae3e-cb205fc3d985",
+        "latencyMs": 1012,
+        "namedScores": {},
+        "prompt": {
+          "raw": "one-way ANOVA",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "menu-analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "one-way ANOVA"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "menu-analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 19,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "one-way ANOVA"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      }
+    ],
+    "stats": {
+      "successes": 20,
+      "failures": 0,
+      "errors": 0,
+      "tokenUsage": {
+        "prompt": 0,
+        "completion": 0,
+        "cached": 0,
+        "total": 0,
+        "numRequests": 20,
+        "completionDetails": {
+          "reasoning": 0,
+          "acceptedPrediction": 0,
+          "rejectedPrediction": 0,
+          "cacheReadInputTokens": 0,
+          "cacheCreationInputTokens": 0
+        },
+        "assertions": {
+          "total": 0,
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "numRequests": 0,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          }
+        }
+      },
+      "durationMs": 10038,
+      "evaluationDurationMs": 10038
+    }
+  },
+  "config": {
+    "tags": {},
+    "description": "Tensr agent routing baseline (before tool-calling loop rewrite)",
+    "prompts": ["{{prompt}}"],
+    "providers": ["file://promptfoo-provider-routing-baseline.cjs"],
+    "tests": [
+      {
+        "vars": {
+          "prompt": "Hello"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "tutor"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "What does Age mean?"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "data-intent"
+          }
+        ],
+        "description": "False-positive — \\bmean\\b in aggregate bucket"
+      },
+      {
+        "vars": {
+          "prompt": "How do I interpret a p-value?"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "tutor"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "run one for me"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "tutor"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "why is that significant?"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "tutor"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Can you help me understand the groups?"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "tutor"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "t test for me on my dataset"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "menu-analysis"
+          }
+        ],
+        "description": "Menu synonym steals before Gate 4"
+      },
+      {
+        "vars": {
+          "prompt": "How many members joined after 2024?"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "data-intent"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Sum of Revenue by Region"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "data-intent"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Make a monthly line chart"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "data-intent"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "What's interesting?"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "exploratory"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Where do I start?"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "data-intent"
+          }
+        ],
+        "description": "False-positive — \\bwhere\\b in filter bucket beats exploratory"
+      },
+      {
+        "vars": {
+          "prompt": "Clean this dataset"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "prep-playbook"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Run a data quality scan"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "menu-dialog"
+          }
+        ],
+        "description": "Menu synonym steals before Gate 5"
+      },
+      {
+        "vars": {
+          "prompt": "correlation between Age and PTS"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "menu-analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "I want percentile values for utilisation_rate"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "data-intent"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Can we get Percentile Values for these KPIs"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "data-intent"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "tutor"
+          }
+        ],
+        "description": "No Gate-2 keyword (quartile/top N%); falls to tutor today"
+      },
+      {
+        "vars": {
+          "prompt": "Could you provide a boxplot for utilisation_rate"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "menu-dialog"
+          }
+        ],
+        "description": "Menu label Boxplot steals before Gate 2"
+      },
+      {
+        "vars": {
+          "prompt": "one-way ANOVA"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "menu-analysis"
+          }
+        ]
+      }
+    ],
+    "env": {},
+    "outputPath": ["agent-eval/results/routing-baseline-promptfoo.json"],
+    "extensions": [],
+    "metadata": {},
+    "evaluateOptions": {}
+  },
+  "shareableUrl": null,
+  "metadata": {
+    "promptfooVersion": "0.121.20",
+    "nodeVersion": "v22.22.3",
+    "platform": "darwin",
+    "arch": "arm64",
+    "exportedAt": "2026-08-03T16:52:47.325Z",
+    "evaluationCreatedAt": "2026-08-03T16:52:37.241Z"
+  },
+  "vars": ["prompt"],
+  "runtimeOptions": {
+    "eventSource": "cli",
+    "showProgressBar": true,
+    "repeat": 1,
+    "maxConcurrency": 4,
+    "cache": true
+  }
+}
