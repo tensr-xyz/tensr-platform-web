@@ -398,6 +398,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const [showRuns, setShowRuns] = useState(false);
   const [slashColumnsOpen, setSlashColumnsOpen] = useState(false);
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [composerExpanded, setComposerExpanded] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const composerColumns = useMemo(() => {
     const cols = activeTab?.data?.initialColumns ?? [];
@@ -1483,78 +1484,26 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             <div className="shrink-0 border-t border-border bg-card px-3.5 pt-3 pb-1">
               <div
                 className={cn(
-                  'rounded-xl border bg-card p-2.5 transition-shadow',
+                  'grid items-end gap-x-1.5 gap-y-2 rounded-xl border bg-card p-2 transition-shadow',
+                  'grid-cols-[auto_minmax(0,1fr)_auto]',
                   inputMessage.trim()
                     ? 'border-border shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]'
                     : 'border-border'
                 )}
+                style={{
+                  gridTemplateAreas: composerExpanded
+                    ? `"text text text" "plus . send"`
+                    : `"plus text send"`,
+                }}
               >
-                <Popover open={slashColumnsOpen} onOpenChange={setSlashColumnsOpen}>
-                  <PopoverAnchor asChild>
-                    <div>
-                      <ChatComposerInput
-                        ref={composerRef}
-                        value={inputMessage}
-                        onChange={e => {
-                          const next = e.target.value;
-                          setInputMessage(next);
-                          // Cursor-style: type / to insert a column (⌘K opens analyses).
-                          if (next.endsWith('/')) setSlashColumnsOpen(true);
-                        }}
-                        placeholder={
-                          isNotebook
-                            ? 'Write code to analyse your data…'
-                            : 'Ask about your data… (/ for columns)'
-                        }
-                        onKeyDown={e => {
-                          if (e.key === 'Enter' && !e.shiftKey && !slashColumnsOpen) {
-                            e.preventDefault();
-                            handleSendMessage();
-                          }
-                        }}
-                      />
-                    </div>
-                  </PopoverAnchor>
-                  <PopoverContent align="start" className="w-64 p-0" side="top">
-                    <Command>
-                      <CommandInput placeholder="Search columns…" />
-                      <CommandList>
-                        <CommandEmpty>
-                          {composerColumns.length
-                            ? 'No matching columns'
-                            : 'Open a spreadsheet to pick columns'}
-                        </CommandEmpty>
-                        <CommandGroup heading="Columns">
-                          {composerColumns.map(name => (
-                            <CommandItem
-                              key={name}
-                              value={name}
-                              onSelect={() => {
-                                setInputMessage(prev => {
-                                  const base = prev.endsWith('/') ? prev.slice(0, -1) : prev;
-                                  const needsSpace = Boolean(base) && !/\s$/.test(base);
-                                  return `${base}${needsSpace ? ' ' : ''}${name}`;
-                                });
-                                setSlashColumnsOpen(false);
-                                requestAnimationFrame(() => composerRef.current?.focus());
-                              }}
-                            >
-                              {name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-                <div className="mt-1.5 flex items-center justify-between">
+                <div style={{ gridArea: 'plus' }}>
                   <Popover open={plusMenuOpen} onOpenChange={setPlusMenuOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="size-7 text-muted-foreground"
+                        className="size-7 shrink-0 text-muted-foreground"
                         title="Choose mode"
                         aria-label="Choose Ask, Plan, or Agent mode"
                       >
@@ -1597,13 +1546,77 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                       </Command>
                     </PopoverContent>
                   </Popover>
+                </div>
+
+                <div style={{ gridArea: 'text' }} className={cn(!composerExpanded && 'py-1')}>
+                  <Popover open={slashColumnsOpen} onOpenChange={setSlashColumnsOpen}>
+                    <PopoverAnchor asChild>
+                      <div className="min-w-0">
+                        <ChatComposerInput
+                          ref={composerRef}
+                          value={inputMessage}
+                          onExpandedChange={setComposerExpanded}
+                          onChange={e => {
+                            const next = e.target.value;
+                            setInputMessage(next);
+                            if (!next.trim()) setComposerExpanded(false);
+                            // Cursor-style: type / to insert a column (⌘K opens analyses).
+                            if (next.endsWith('/')) setSlashColumnsOpen(true);
+                          }}
+                          placeholder={
+                            isNotebook ? 'Write code to analyse your data…' : 'Ask about your data…'
+                          }
+                          onKeyDown={e => {
+                            if (e.key === 'Enter' && !e.shiftKey && !slashColumnsOpen) {
+                              e.preventDefault();
+                              handleSendMessage();
+                            }
+                          }}
+                        />
+                      </div>
+                    </PopoverAnchor>
+                    <PopoverContent align="start" className="w-64 p-0" side="top">
+                      <Command>
+                        <CommandInput placeholder="Search columns…" />
+                        <CommandList>
+                          <CommandEmpty>
+                            {composerColumns.length
+                              ? 'No matching columns'
+                              : 'Open a spreadsheet to pick columns'}
+                          </CommandEmpty>
+                          <CommandGroup heading="Columns">
+                            {composerColumns.map(name => (
+                              <CommandItem
+                                key={name}
+                                value={name}
+                                onSelect={() => {
+                                  setInputMessage(prev => {
+                                    const base = prev.endsWith('/') ? prev.slice(0, -1) : prev;
+                                    const needsSpace = Boolean(base) && !/\s$/.test(base);
+                                    return `${base}${needsSpace ? ' ' : ''}${name}`;
+                                  });
+                                  setSlashColumnsOpen(false);
+                                  requestAnimationFrame(() => composerRef.current?.focus());
+                                }}
+                              >
+                                {name}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                <div style={{ gridArea: 'send' }}>
                   <Button
                     type="button"
                     onClick={handleSendMessage}
                     disabled={isLoading || !inputMessage.trim()}
                     size="icon"
                     className={cn(
-                      'size-7 rounded-md',
+                      'size-7 shrink-0 rounded-md',
                       inputMessage.trim()
                         ? 'bg-primary text-primary-foreground'
                         : 'bg-muted text-muted-foreground'

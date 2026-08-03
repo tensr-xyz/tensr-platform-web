@@ -5,7 +5,11 @@ import { cn } from '@/utils';
 
 type Props = Omit<React.ComponentProps<'textarea'>, 'rows'> & {
   maxHeight?: number;
+  /** True once the field needs more than a single line (wrap or Shift+Enter). */
+  onExpandedChange?: (expanded: boolean) => void;
 };
+
+const SINGLE_LINE_PX = 20; // text-[13px] leading-5
 
 /**
  * Chat composer field — plain textarea without form Textarea defaults (flex,
@@ -13,10 +17,11 @@ type Props = Omit<React.ComponentProps<'textarea'>, 'rows'> & {
  */
 export const ChatComposerInput = React.forwardRef<HTMLTextAreaElement, Props>(
   function ChatComposerInput(
-    { className, value, onChange, maxHeight = 120, ...props },
+    { className, value, onChange, maxHeight = 160, onExpandedChange, ...props },
     forwardedRef
   ) {
     const innerRef = React.useRef<HTMLTextAreaElement>(null);
+    const expandedRef = React.useRef(false);
 
     const setRefs = React.useCallback(
       (node: HTMLTextAreaElement | null) => {
@@ -31,10 +36,17 @@ export const ChatComposerInput = React.forwardRef<HTMLTextAreaElement, Props>(
       const el = innerRef.current;
       if (!el) return;
       el.style.height = '0px';
-      const next = Math.min(el.scrollHeight, maxHeight);
+      const scroll = el.scrollHeight;
+      const next = Math.min(scroll, maxHeight);
       el.style.height = `${next}px`;
-      el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
-    }, [maxHeight]);
+      el.style.overflowY = scroll > maxHeight ? 'auto' : 'hidden';
+
+      const expanded = scroll > SINGLE_LINE_PX + 2 || String(value ?? '').includes('\n');
+      if (expanded !== expandedRef.current) {
+        expandedRef.current = expanded;
+        onExpandedChange?.(expanded);
+      }
+    }, [maxHeight, onExpandedChange, value]);
 
     React.useLayoutEffect(() => {
       syncHeight();
