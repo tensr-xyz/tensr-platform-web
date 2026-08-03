@@ -8,71 +8,68 @@ providers:
   - file://promptfoo-provider-routing-baseline.cjs
 
 tests:
-  - vars: { prompt: 'What does Age mean?' }
-    assert: [{ type: equals, value: 'data-intent' }]
+  - vars: { prompt: "What does Age mean?" }
+    assert: [{ type: equals, value: "data-intent" }]
     description: "False-positive — \\bmean\\b in aggregate bucket"
 
-  - vars: { prompt: 'How do I interpret a p-value?' }
-    assert: [{ type: equals, value: 'tutor' }]
+  - vars: { prompt: "How do I interpret a p-value?" }
+    assert: [{ type: equals, value: "tutor" }]
 
-  - vars: { prompt: 'Hello' }
-    assert: [{ type: equals, value: 'tutor' }]
+  - vars: { prompt: "Hello" }
+    assert: [{ type: equals, value: "tutor" }]
 
-  - vars: { prompt: 'run one for me' }
-    assert: [{ type: equals, value: 'tutor' }]
+  - vars: { prompt: "run one for me" }
+    assert: [{ type: equals, value: "tutor" }]
 
-  - vars: { prompt: 'why is that significant?' }
-    assert: [{ type: equals, value: 'tutor' }]
+  - vars: { prompt: "why is that significant?" }
+    assert: [{ type: equals, value: "tutor" }]
 
-  - vars: { prompt: 'Can you help me understand the groups?' }
-    assert: [{ type: equals, value: 'tutor' }]
+  - vars: { prompt: "Can you help me understand the groups?" }
+    assert: [{ type: equals, value: "tutor" }]
 
-  - vars: { prompt: 't test for me on my dataset' }
-    assert: [{ type: equals, value: 'menu-analysis' }]
-    description: 'Menu synonym steals before Gate 4'
+  - vars: { prompt: "t test for me on my dataset" }
+    assert: [{ type: equals, value: "menu-analysis" }]
+    description: "Menu synonym steals before Gate 4"
 
-  - vars: { prompt: 'correlation between Age and PTS' }
-    assert: [{ type: equals, value: 'menu-analysis' }]
+  - vars: { prompt: "correlation between Age and PTS" }
+    assert: [{ type: equals, value: "menu-analysis" }]
 
-  - vars: { prompt: 'one-way ANOVA' }
-    assert: [{ type: equals, value: 'menu-analysis' }]
+  - vars: { prompt: "one-way ANOVA" }
+    assert: [{ type: equals, value: "menu-analysis" }]
 
-  - vars: { prompt: 'Could you provide a boxplot for utilisation_rate' }
-    assert: [{ type: equals, value: 'menu-dialog' }]
-    description: 'Menu label Boxplot steals before Gate 2'
+  - vars: { prompt: "Could you provide a boxplot for utilisation_rate" }
+    assert: [{ type: equals, value: "menu-dialog" }]
+    description: "Menu label Boxplot steals before Gate 2"
 
-  - vars: { prompt: 'Run a data quality scan' }
-    assert: [{ type: equals, value: 'menu-dialog' }]
-    description: 'Menu synonym steals before Gate 5'
+  - vars: { prompt: "Run a data quality scan" }
+    assert: [{ type: equals, value: "menu-dialog" }]
+    description: "Menu synonym steals before Gate 5"
 
-  - vars: { prompt: 'How many members joined after 2024?' }
-    assert: [{ type: equals, value: 'data-intent' }]
+  - vars: { prompt: "How many members joined after 2024?" }
+    assert: [{ type: equals, value: "data-intent" }]
 
-  - vars: { prompt: 'Sum of Revenue by Region' }
-    assert: [{ type: equals, value: 'data-intent' }]
+  - vars: { prompt: "Sum of Revenue by Region" }
+    assert: [{ type: equals, value: "data-intent" }]
 
-  - vars: { prompt: 'Make a monthly line chart' }
-    assert: [{ type: equals, value: 'data-intent' }]
+  - vars: { prompt: "Make a monthly line chart" }
+    assert: [{ type: equals, value: "data-intent" }]
 
   - vars: { prompt: "What's interesting?" }
-    assert: [{ type: equals, value: 'exploratory' }]
+    assert: [{ type: equals, value: "exploratory" }]
 
-  - vars: { prompt: 'Where do I start?' }
-    assert: [{ type: equals, value: 'data-intent' }]
+  - vars: { prompt: "Where do I start?" }
+    assert: [{ type: equals, value: "data-intent" }]
     description: "False-positive — \\bwhere\\b in filter bucket beats exploratory"
 
-  - vars: { prompt: 'Clean this dataset' }
-    assert: [{ type: equals, value: 'prep-playbook' }]
+  - vars: { prompt: "Clean this dataset" }
+    assert: [{ type: equals, value: "prep-playbook" }]
 
-  - vars: { prompt: 'I want percentile values for utilisation_rate' }
-    assert: [{ type: equals, value: 'data-intent' }]
+  - vars: { prompt: "I want percentile values for utilisation_rate" }
+    assert: [{ type: equals, value: "data-intent" }]
 
-  - vars: { prompt: 'Can we get Percentile Values for these KPIs' }
-    assert: [{ type: equals, value: 'data-intent' }]
+  - vars: { prompt: "Can we get Percentile Values for these KPIs" }
+    assert: [{ type: equals, value: "data-intent" }]
 
-  - vars:
-      {
-        prompt: 'What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate',
-      }
-    assert: [{ type: equals, value: 'tutor' }]
-    description: 'No Gate-2 keyword (quartile/top N%); falls to tutor today'
+  - vars: { prompt: "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate" }
+    assert: [{ type: equals, value: "tutor" }]
+    description: "No Gate-2 keyword (quartile/top N%); falls to tutor today"

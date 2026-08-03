@@ -7,3 +7,7 @@ package-lock.json
 yarn.lock
 # Exact byte match required by tensr-api codegen --check
 src/lib/agent-capabilities.generated.ts
+# Exact byte match required by agent-eval Promptfoo corpus --check
+agent-eval/promptfooconfig.routing-baseline.yaml
+agent-eval/promptfooconfig.routing-post.yaml
+agent-eval/baseline-contract.generated.json
