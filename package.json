@@ -17,7 +17,7 @@
     "test:agent-baseline:promptfoo": "npx --yes promptfoo@0.121.20 eval -c agent-eval/promptfooconfig.routing-baseline.yaml --output agent-eval/results/routing-baseline-promptfoo.json",
     "test:agent-post": "jest --forceExit --watchman=false src/lib/agent-loop-policy.test.ts",
     "test:agent-post:promptfoo": "npx --yes promptfoo@0.121.20 eval -c agent-eval/promptfooconfig.routing-post.yaml --output agent-eval/results/routing-post-promptfoo.json",
-    "test:agent-loop": "jest --forceExit --watchman=false src/lib/resolve-agent-gate.test.ts src/lib/agent-loop-client.test.ts src/lib/agent-loop-policy.test.ts",
+    "test:agent-loop": "jest --forceExit --watchman=false src/lib/resolve-agent-gate.test.ts src/lib/agent-loop-client.test.ts src/lib/agent-loop-contract.test.ts",
     "check:capabilities": "python3 ../tensr-api/scripts/generate_agent_capabilities_ts.py --check",
     "generate:capabilities": "python3 ../tensr-api/scripts/generate_agent_capabilities_ts.py",
     "test:launch": "jest --forceExit && playwright test -c playwright.launch.config.ts",

@@ -171,6 +171,12 @@ export function ChatAnalysisApproval({
             {action.rationale}
           </p>
         ) : null}
+        {action.kind === 'agent_tool_approval' && action.whyThisTest ? (
+          <p className="mt-1 line-clamp-3 text-[11px] leading-snug text-muted-foreground">
+            <span className="font-medium text-foreground">Why this test: </span>
+            {action.whyThisTest}
+          </p>
+        ) : null}
         {isFailed && action.errorMessage ? (
           <p className="mt-2 text-[11px] leading-snug text-destructive">{action.errorMessage}</p>
         ) : null}

@@ -38,7 +38,7 @@ export function isAnalysisFollowUpQuestion(
 
 /**
  * After a missing-column clarification, a short reply like "Tm" / "use Tm" should
- * re-enter parse-intent (with history) instead of the followup tutor.
+ * re-enter the agent loop (with history) instead of a free-text guess.
  */
 export function isAnalysisColumnClarificationReply(
   message: string,

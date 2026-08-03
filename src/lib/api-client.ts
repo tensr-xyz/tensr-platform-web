@@ -942,21 +942,6 @@ class ApiClient {
           use_llm: data.useLlm ?? true,
         }),
       }),
-    followup: (data: {
-      datasetId: string;
-      message: string;
-      context?: Record<string, unknown> | null;
-      conversationHistory?: Array<{ role: string; content: string }>;
-    }) =>
-      this.request<{ answer_markdown: string; source: string }>('/assistant/followup', {
-        method: 'POST',
-        body: JSON.stringify({
-          dataset_id: data.datasetId,
-          message: data.message,
-          context: data.context ?? null,
-          conversation_history: data.conversationHistory ?? null,
-        }),
-      }),
     suggestAnalyses: (data: {
       datasetId: string;
       conversationHistory?: Array<{ role: string; content: string }>;

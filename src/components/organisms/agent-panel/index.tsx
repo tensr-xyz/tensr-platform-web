@@ -45,7 +45,7 @@ import {
   suggestFollowUpPlan,
 } from '@/lib/run-agent-analysis-plan';
 import { executeDataActionForDataset } from '@/lib/run-agent-data-action';
-import { revealAssistantText } from '@/lib/stream-assistant-followup';
+import { revealAssistantText } from '@/lib/reveal-assistant-text';
 import { buildAgentConversationHistory } from '@/lib/agent-conversation-history';
 import type { AgentDataAction } from '@/lib/chat-pending-action';
 import { useRouter } from 'next/navigation';

@@ -25,10 +25,7 @@ function buildTargetUrl(pathSegments: string[], search: string): string {
 
 function isStreamingProxyPath(pathSegments: string[]): boolean {
   const joined = pathSegments.join('/').toLowerCase();
-  return (
-    joined.includes('followup/stream') ||
-    (joined.includes('/analyze/') && joined.endsWith('/stream'))
-  );
+  return joined.includes('/analyze/') && joined.endsWith('/stream');
 }
 
 function forwardResponseHeaders(from: Headers): Headers {
