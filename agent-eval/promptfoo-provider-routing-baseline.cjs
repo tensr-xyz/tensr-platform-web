@@ -10,17 +10,23 @@ const path = require('path');
 
 const webRoot = path.resolve(__dirname, '..');
 const runner = path.join(__dirname, 'run-gate.ts');
+// Resolve from package.json so CI (pnpm install) does not depend on a global tsx.
+const tsxLoader = require.resolve('tsx', { paths: [webRoot] });
 
 function resolveGate(prompt) {
-  const out = execFileSync(process.execPath, ['--import', 'tsx', runner, String(prompt ?? '')], {
-    cwd: webRoot,
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      TS_NODE_PROJECT: path.join(webRoot, 'tsconfig.json'),
-    },
-    timeout: 60_000,
-  });
+  const out = execFileSync(
+    process.execPath,
+    ['--import', tsxLoader, runner, String(prompt ?? '')],
+    {
+      cwd: webRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        TS_NODE_PROJECT: path.join(webRoot, 'tsconfig.json'),
+      },
+      timeout: 60_000,
+    }
+  );
   return out.trim().split('\n').filter(Boolean).pop() || '';
 }
 
