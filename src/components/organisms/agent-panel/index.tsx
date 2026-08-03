@@ -1,7 +1,6 @@
 import { Button } from '@/components/atoms/button';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { ChatComposerInput } from '@/components/molecules/chat-composer-input';
-import { PillToggle } from '@/components/molecules/analysis-dialog';
 import { Send, Loader2, AlertCircle, Trash2, History, Plus, X, Sparkles } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
@@ -1504,14 +1503,6 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             </div>
 
             <div className="shrink-0 border-t border-border bg-card px-3.5 pt-3 pb-1">
-              <div className="mb-2 max-w-[11rem]">
-                <PillToggle
-                  value={agentMode}
-                  onChange={mode => setAgentMode(projectId, mode)}
-                  options={AGENT_MODE_OPTIONS}
-                  aria-label="Agent mode"
-                />
-              </div>
               <div
                 className={cn(
                   'rounded-xl border bg-card p-2.5 transition-shadow',
@@ -1681,7 +1672,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between font-mono text-[11px] text-muted-foreground">
-                <span>claude-haiku</span>
+                <span>
+                  {AGENT_MODE_OPTIONS.find(o => o.value === agentMode)?.label ?? 'Agent'} ·
+                  claude-haiku
+                </span>
                 <span>
                   <kbd className="rounded border border-border bg-muted px-1 font-mono text-[9px]">
                     ↵
