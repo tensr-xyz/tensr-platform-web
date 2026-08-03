@@ -11,6 +11,7 @@ function shouldSkipUsageTracking(endpoint: string): boolean {
   if (path === '/sessions' || path.startsWith('/sessions/')) return true;
   if (path.includes('/runs')) return true;
   if (path.startsWith('/usage/')) return true;
+  if (path === '/assistant/capabilities' || path === '/health') return true;
   return false;
 }
 

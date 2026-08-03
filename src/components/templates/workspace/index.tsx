@@ -15,6 +15,7 @@ import PluginsLayout from '@/components/templates/plugins-layout';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { buildDefaultImportSettings, type ImportSettings } from '@/lib/import-settings';
 import { MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
+import { warmAssistantBackend } from '@/lib/warm-assistant';
 import { SpssWorkspaceWalkthrough } from '@/components/templates/auth/spss-switcher-flow';
 
 export interface WorkspaceResource {
@@ -169,6 +170,13 @@ export default function Workspace({ resource }: WorkspaceProps) {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [resourceId, cacheProject]);
+
+  // Wake the Docker-backed assistant Lambda while the sheet loads so the first
+  // chat turn is less likely to cold-start 503.
+  useEffect(() => {
+    if (!isAuthReady) return;
+    warmAssistantBackend();
+  }, [isAuthReady, resourceId]);
 
   // Load workspace data only after Stytch + AuthProvider have finished bootstrapping.
   useEffect(() => {
