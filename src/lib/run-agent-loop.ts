@@ -38,6 +38,11 @@ export type AgentLoopResponse = {
   answer_markdown?: string;
   clarification_questions?: string[];
   pending_approvals?: AgentLoopApprovedToolCall[];
+  pipeline?: boolean;
+  approval_batch?: boolean;
+  pipeline_halted?: boolean;
+  failed_step_index?: number;
+  reapprove_pipeline?: boolean;
   tool_trace?: Array<Record<string, unknown>>;
   tool_results?: AgentLoopToolResult[];
   tools_available?: string[];
@@ -55,6 +60,8 @@ export type RunAgentLoopParams = {
   conversationHistory?: Array<{ role: string; content: string }>;
   glossary?: string | null;
   approvedToolCall?: AgentLoopApprovedToolCall | null;
+  /** Full Plan-mode pipeline from a single approval. */
+  approvedToolCalls?: AgentLoopApprovedToolCall[] | null;
 };
 
 export function collectOpenDatasetsFromTabs(tabs: Tab[]): AgentLoopOpenDataset[] {
@@ -84,6 +91,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     conversationHistory: params.conversationHistory ?? [],
     glossary: params.glossary ?? null,
     approvedToolCall: params.approvedToolCall ?? null,
+    approvedToolCalls: params.approvedToolCalls ?? null,
   });
 }
 
@@ -193,7 +201,8 @@ export function deriveMessageUpdateFromLoopResponse(
   }
 
   if (response.status === 'awaiting_approval') {
-    const primary = response.pending_approvals?.[0];
+    const approvals = response.pending_approvals ?? [];
+    const primary = approvals[0];
     if (primary) {
       return {
         content: answer,
@@ -207,6 +216,7 @@ export function deriveMessageUpdateFromLoopResponse(
           rationale: primary.rationale,
           whyThisTest: primary.why_this_test,
           triggerMessage: context.triggerMessage,
+          pipelineSteps: approvals.length > 1 ? approvals : undefined,
         },
       };
     }

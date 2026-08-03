@@ -93,6 +93,51 @@ describe('run-agent-loop client helpers', () => {
     if (patch.pendingAction?.kind === 'agent_tool_approval') {
       expect(patch.pendingAction.toolCallId).toBe('call_1');
       expect(patch.pendingAction.whyThisTest).toBe('Independent groups t-test');
+      expect(patch.pendingAction.pipelineSteps).toBeUndefined();
+    }
+  });
+
+  it('maps multi-step pipeline approval onto pipelineSteps', () => {
+    const response: AgentLoopResponse = {
+      status: 'awaiting_approval',
+      mode: 'plan',
+      answer_markdown: 'Plan (3 steps — one approval)',
+      pipeline: true,
+      approval_batch: true,
+      pending_approvals: [
+        {
+          tool_call_id: 's1',
+          name: 'data_edit',
+          args: { spec: { op: 'filter' } },
+          rationale: 'Exclude actives',
+          why_this_test: 'Apply churn definition',
+        },
+        {
+          tool_call_id: 's2',
+          name: 'run_analysis',
+          args: { analysis_type: 'descriptives' },
+          rationale: 'Normality screen',
+          why_this_test: 'Check distributions',
+        },
+        {
+          tool_call_id: 's3',
+          name: 'run_analysis',
+          args: { analysis_type: 'logistic_regression' },
+          rationale: 'Drivers model',
+          why_this_test: 'Logistic regression',
+        },
+      ],
+    };
+
+    const patch = deriveMessageUpdateFromLoopResponse(response, {
+      triggerMessage: "find what's driving churn",
+      datasetId: '11111111-1111-4111-8111-111111111111',
+    });
+
+    expect(patch.pendingAction?.kind).toBe('agent_tool_approval');
+    if (patch.pendingAction?.kind === 'agent_tool_approval') {
+      expect(patch.pendingAction.pipelineSteps).toHaveLength(3);
+      expect(patch.pendingAction.pipelineSteps?.[2].name).toBe('run_analysis');
     }
   });
 

@@ -428,6 +428,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       message: string;
       assistantMessageId?: string;
       approvedToolCall?: AgentLoopApprovedToolCall;
+      approvedToolCalls?: AgentLoopApprovedToolCall[];
       triggerMessage?: string;
       conversationHistory?: ReturnType<typeof buildAgentConversationHistory>;
     }) => {
@@ -457,6 +458,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           conversationHistory,
           glossary: projectGlossary,
           approvedToolCall: opts.approvedToolCall ?? null,
+          approvedToolCalls: opts.approvedToolCalls ?? null,
         });
 
         const triggerMessage = opts.triggerMessage ?? opts.message;
@@ -970,16 +972,20 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         isStreaming: true,
       });
       try {
+        const pipeline = action.pipelineSteps;
         await invokeAgentLoop({
           message: action.triggerMessage,
           assistantMessageId: messageId,
-          approvedToolCall: {
-            tool_call_id: action.toolCallId,
-            name: action.name,
-            args: action.args,
-            rationale: action.rationale,
-            why_this_test: action.whyThisTest,
-          },
+          approvedToolCall: pipeline?.length
+            ? undefined
+            : {
+                tool_call_id: action.toolCallId,
+                name: action.name,
+                args: action.args,
+                rationale: action.rationale,
+                why_this_test: action.whyThisTest,
+              },
+          approvedToolCalls: pipeline?.length ? pipeline : undefined,
           triggerMessage: action.triggerMessage,
         });
         const latest = getMessagePendingAction(messageId);

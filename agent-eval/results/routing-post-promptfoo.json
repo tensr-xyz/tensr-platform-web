@@ -1,8 +1,8 @@
 {
-  "evalId": "eval-Dx3-2026-08-03T16:52:56",
+  "evalId": "eval-NbS-2026-08-03T18:28:32",
   "results": {
     "version": 3,
-    "timestamp": "2026-08-03T16:52:56.630Z",
+    "timestamp": "2026-08-03T18:28:32.816Z",
     "prompts": [
       {
         "id": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
@@ -10,19 +10,19 @@
         "label": "{{prompt}}",
         "provider": "file://promptfoo-provider-agent-loop-policy.cjs",
         "metrics": {
-          "score": 17,
-          "testPassCount": 17,
+          "score": 25,
+          "testPassCount": 25,
           "testFailCount": 0,
           "testErrorCount": 0,
-          "assertPassCount": 17,
+          "assertPassCount": 25,
           "assertFailCount": 0,
-          "totalLatencyMs": 45,
+          "totalLatencyMs": 68,
           "tokenUsage": {
             "prompt": 0,
             "completion": 0,
             "cached": 0,
             "total": 0,
-            "numRequests": 17,
+            "numRequests": 25,
             "completionDetails": {
               "reasoning": 0,
               "acceptedPrediction": 0,
@@ -79,7 +79,7 @@
             }
           ]
         },
-        "id": "2bf93b40-8ab7-49ae-8265-6bb7cd79b4bb",
+        "id": "80ec1cdc-3823-44c2-8326-ecd1898798cf",
         "latencyMs": 3,
         "namedScores": {},
         "prompt": {
@@ -176,7 +176,7 @@
             }
           ]
         },
-        "id": "530ff469-afd1-4011-a372-87cb76bd9a59",
+        "id": "a48dabab-13da-4652-a72d-aa8b27649723",
         "latencyMs": 2,
         "namedScores": {},
         "prompt": {
@@ -273,7 +273,7 @@
             }
           ]
         },
-        "id": "58ecfe2b-3d65-4d5d-8954-637f128c1706",
+        "id": "361b3801-96fc-492b-96a4-f558236e298f",
         "latencyMs": 2,
         "namedScores": {},
         "prompt": {
@@ -370,7 +370,7 @@
             }
           ]
         },
-        "id": "348538ff-489c-4eb6-b636-11348b7b8857",
+        "id": "eed33236-cf99-4875-b416-f49cc40e8985",
         "latencyMs": 2,
         "namedScores": {},
         "prompt": {
@@ -467,7 +467,7 @@
             }
           ]
         },
-        "id": "52672999-5e67-47e8-9861-ffbcdb81121b",
+        "id": "d2afbc4b-cf48-4397-9205-02087dd88116",
         "latencyMs": 5,
         "namedScores": {},
         "prompt": {
@@ -564,8 +564,8 @@
             }
           ]
         },
-        "id": "80ed02e5-3b26-4e78-83cd-b1b5c72ceb23",
-        "latencyMs": 3,
+        "id": "e9485e10-3ec6-4271-b0d5-d2591d1bd18a",
+        "latencyMs": 4,
         "namedScores": {},
         "prompt": {
           "raw": "Can you help me understand the groups?",
@@ -661,8 +661,8 @@
             }
           ]
         },
-        "id": "549f576c-9017-4550-b4b4-515847abff9c",
-        "latencyMs": 3,
+        "id": "babc9a7c-a359-474d-8ae4-5c363110afee",
+        "latencyMs": 2,
         "namedScores": {},
         "prompt": {
           "raw": "sorry it should be age and Tm",
@@ -758,8 +758,8 @@
             }
           ]
         },
-        "id": "c476dd83-a24a-4765-96b8-3a17e715c75d",
-        "latencyMs": 2,
+        "id": "da832d13-5bdc-4061-a748-08b97e0dc38a",
+        "latencyMs": 1,
         "namedScores": {},
         "prompt": {
           "raw": "t test for me on my dataset",
@@ -855,8 +855,8 @@
             }
           ]
         },
-        "id": "8c14ed18-0a25-43bd-9528-42db1e6b9552",
-        "latencyMs": 3,
+        "id": "0ba40d82-61e2-43b1-a80e-35d28c744801",
+        "latencyMs": 4,
         "namedScores": {},
         "prompt": {
           "raw": "correlation between Age and PTS",
@@ -952,7 +952,7 @@
             }
           ]
         },
-        "id": "2647ff33-b697-4da8-9d96-1f4ad72535b9",
+        "id": "0025aa9a-7c7b-463e-8f2d-bce21380321d",
         "latencyMs": 3,
         "namedScores": {},
         "prompt": {
@@ -1049,8 +1049,8 @@
             }
           ]
         },
-        "id": "b1c648d1-a9de-46fb-9270-c9cdbc1d99db",
-        "latencyMs": 2,
+        "id": "e79d26c5-5cb5-483c-99a1-7316372ab6ed",
+        "latencyMs": 3,
         "namedScores": {},
         "prompt": {
           "raw": "Could you provide a boxplot for utilisation_rate",
@@ -1146,8 +1146,8 @@
             }
           ]
         },
-        "id": "4ff9740f-26eb-421c-9cab-115d1bc24926",
-        "latencyMs": 2,
+        "id": "2024e1a0-2b10-48c6-8849-6d70dd320876",
+        "latencyMs": 3,
         "namedScores": {},
         "prompt": {
           "raw": "Run a data quality scan",
@@ -1238,13 +1238,401 @@
               "reason": "Assertion passed",
               "assertion": {
                 "type": "equals",
+                "value": "run_analysis"
+              }
+            }
+          ]
+        },
+        "id": "a97a35f6-67be-457d-b016-6563c634cbd0",
+        "latencyMs": 3,
+        "namedScores": {},
+        "prompt": {
+          "raw": "How many members joined after 2024?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "run_analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "How many members joined after 2024?",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "run_analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 12,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "How many members joined after 2024?",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "run_analysis"
+              }
+            }
+          ]
+        },
+        "id": "f1b1dc93-4f96-44ee-8206-f44bd7936a32",
+        "latencyMs": 3,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Sum of Revenue by Region",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "run_analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Sum of Revenue by Region",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "run_analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 13,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Sum of Revenue by Region",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "run_analysis"
+              }
+            }
+          ]
+        },
+        "id": "0024fe04-37ae-459d-98c9-52aa5f2c904a",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Make a monthly line chart",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "run_analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Make a monthly line chart",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "run_analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 14,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Make a monthly line chart",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
                 "value": "tool_or_clarify"
               }
             }
           ]
         },
-        "id": "f4cf8d26-5630-4f01-9a67-e04894a079b5",
-        "latencyMs": 4,
+        "id": "f6a710b7-b0af-4163-9874-f94f422ab6f4",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "What's interesting?",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "tool_or_clarify"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "What's interesting?",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "tool_or_clarify"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 15,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "What's interesting?",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "tool_or_clarify"
+              }
+            }
+          ]
+        },
+        "id": "d06eeb38-5f96-4131-94f7-fdbd0c037c99",
+        "latencyMs": 3,
         "namedScores": {},
         "prompt": {
           "raw": "Where do I start?",
@@ -1276,7 +1664,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 12,
+        "testIdx": 16,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1340,8 +1728,8 @@
             }
           ]
         },
-        "id": "45b4f9bf-3933-4f3a-9b45-1980b6a658f3",
-        "latencyMs": 5,
+        "id": "f63fdd40-d08f-4e39-81ff-1e65d488a1f4",
+        "latencyMs": 3,
         "namedScores": {},
         "prompt": {
           "raw": "Clean this dataset",
@@ -1373,7 +1761,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 13,
+        "testIdx": 17,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1432,13 +1820,304 @@
               "reason": "Assertion passed",
               "assertion": {
                 "type": "equals",
+                "value": "run_analysis"
+              }
+            }
+          ]
+        },
+        "id": "e58f833e-ba2b-4bf8-a42c-bedc945c4c56",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "I want percentile values for utilisation_rate",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "run_analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "I want percentile values for utilisation_rate",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "run_analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 18,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "I want percentile values for utilisation_rate",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "run_analysis"
+              }
+            }
+          ]
+        },
+        "id": "dcc65c86-e301-4883-9906-914e503e23de",
+        "latencyMs": 2,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Can we get Percentile Values for these KPIs",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "run_analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Can we get Percentile Values for these KPIs",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "run_analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 19,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Can we get Percentile Values for these KPIs",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "ask_clarifying_question"
+              }
+            }
+          ]
+        },
+        "id": "8b86645e-2aaf-40e9-a2a6-f1a427af3808",
+        "latencyMs": 3,
+        "namedScores": {},
+        "prompt": {
+          "raw": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "ask_clarifying_question"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate",
+            "mode": "agent"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "ask_clarifying_question"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 20,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate",
+          "mode": "agent"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
                 "value": "ask-no-write"
               }
             }
           ]
         },
-        "id": "32fde320-86c4-498d-aa0a-0fd3b43308e6",
-        "latencyMs": 2,
+        "id": "eb35c637-c101-40e0-b627-17ca746932ac",
+        "latencyMs": 4,
         "namedScores": {},
         "prompt": {
           "raw": "t test for me on my dataset",
@@ -1470,7 +2149,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 14,
+        "testIdx": 21,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1529,13 +2208,110 @@
               "reason": "Assertion passed",
               "assertion": {
                 "type": "equals",
+                "value": "ask-no-write"
+              }
+            }
+          ]
+        },
+        "id": "df333eab-b887-430d-8bd7-c66604935ccc",
+        "latencyMs": 3,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Clean this dataset",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-agent-loop-policy.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "ask-no-write"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Clean this dataset",
+            "mode": "ask"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "ask-no-write"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 22,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Clean this dataset",
+          "mode": "ask"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
                 "value": "plan-awaiting-approval"
               }
             }
           ]
         },
-        "id": "f59165da-e480-4138-ab90-74f06b47f689",
-        "latencyMs": 1,
+        "id": "b9d5d0b3-f525-4f2c-ad65-d3c0a7247b80",
+        "latencyMs": 2,
         "namedScores": {},
         "prompt": {
           "raw": "t test for me on my dataset",
@@ -1567,7 +2343,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 15,
+        "testIdx": 23,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1631,8 +2407,8 @@
             }
           ]
         },
-        "id": "1e00ef59-a155-4d07-98da-a4cc226efc95",
-        "latencyMs": 1,
+        "id": "97031e1d-1224-4c4d-b018-75307e394c04",
+        "latencyMs": 2,
         "namedScores": {},
         "prompt": {
           "raw": "geometric mean of Revenue",
@@ -1664,7 +2440,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 16,
+        "testIdx": 24,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1704,7 +2480,7 @@
       }
     ],
     "stats": {
-      "successes": 17,
+      "successes": 25,
       "failures": 0,
       "errors": 0,
       "tokenUsage": {
@@ -1712,7 +2488,7 @@
         "completion": 0,
         "cached": 0,
         "total": 0,
-        "numRequests": 17,
+        "numRequests": 25,
         "completionDetails": {
           "reasoning": 0,
           "acceptedPrediction": 0,
@@ -1735,8 +2511,8 @@
           }
         }
       },
-      "durationMs": 86,
-      "evaluationDurationMs": 86
+      "durationMs": 111,
+      "evaluationDurationMs": 111
     }
   },
   "config": {
@@ -1891,6 +2667,54 @@
       },
       {
         "vars": {
+          "prompt": "How many members joined after 2024?",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "run_analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Sum of Revenue by Region",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "run_analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Make a monthly line chart",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "run_analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "What's interesting?",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "tool_or_clarify"
+          }
+        ]
+      },
+      {
+        "vars": {
           "prompt": "Where do I start?",
           "mode": "agent"
         },
@@ -1915,7 +2739,55 @@
       },
       {
         "vars": {
+          "prompt": "I want percentile values for utilisation_rate",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "run_analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Can we get Percentile Values for these KPIs",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "run_analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate",
+          "mode": "agent"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "ask_clarifying_question"
+          }
+        ]
+      },
+      {
+        "vars": {
           "prompt": "t test for me on my dataset",
+          "mode": "ask"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "ask-no-write"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Clean this dataset",
           "mode": "ask"
         },
         "assert": [
@@ -1962,8 +2834,8 @@
     "nodeVersion": "v22.22.3",
     "platform": "darwin",
     "arch": "arm64",
-    "exportedAt": "2026-08-03T16:52:56.758Z",
-    "evaluationCreatedAt": "2026-08-03T16:52:56.630Z"
+    "exportedAt": "2026-08-03T18:28:32.972Z",
+    "evaluationCreatedAt": "2026-08-03T18:28:32.816Z"
   },
   "vars": ["prompt", "mode"],
   "runtimeOptions": {

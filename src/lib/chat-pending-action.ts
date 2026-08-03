@@ -96,6 +96,15 @@ export type ChatPendingAction =
       whyThisTest?: string;
       triggerMessage: string;
       errorMessage?: string;
+      /** When set, one Approve runs the full Plan-mode pipeline. */
+      pipelineSteps?: Array<{
+        tool_call_id: string;
+        name: string;
+        args: Record<string, unknown>;
+        rationale?: string;
+        why_this_test?: string;
+        confidence?: number;
+      }>;
     }
   | {
       kind: 'proposed_action';
