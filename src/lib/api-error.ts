@@ -52,7 +52,7 @@ export function formatApiErrorMessage(error: unknown): string {
     return 'The AI service is temporarily unavailable. Check that LLM_API_KEY is configured on the API, then try again.';
   }
   if (raw.startsWith('API Error: 503')) {
-    return 'The AI service is warming up — wait a few seconds and try again.';
+    return 'Service timed out or is still starting — wait a few seconds and try again.';
   }
   if (raw.startsWith('API Error: 504')) {
     return 'The AI service timed out. Try again, or use Manage to run the analysis manually.';

@@ -11,7 +11,6 @@ import {
   Settings,
   Users,
   LogOut,
-  Bell,
   BookOpen,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -33,7 +32,6 @@ import { useIsMobile } from '@/hooks/ui/use-mobile';
 import { User as UserType } from '@/types/user';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from '@/hooks/ui/use-toast';
-import { NotificationsMenu } from '@/components/molecules/notifications-menu';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { PermissionWrapper } from '@/wrappers/permission';
 
@@ -512,14 +510,6 @@ export default function Header() {
           </div>
 
           <div className="flex items-center space-x-2">
-            <NotificationsMenu
-              align="end"
-              trigger={
-                <Button variant="outline" size="icon" className="rounded-full h-8 w-8">
-                  <Bell className="h-5 w-5" />
-                </Button>
-              }
-            />
             <Link href="https://tensr-1.gitbook.io/tensr/">
               <Button variant="outline" size="icon" className="rounded-full h-8 w-8">
                 <BookOpen className="h-5 w-5" />

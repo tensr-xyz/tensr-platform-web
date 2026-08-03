@@ -8,14 +8,14 @@ import TabManager from '@/components/organisms/tab-manager';
 import { FileSelector, ProjectFile } from '@/components/molecules/file-selector';
 import { cleanValue } from '@/utils/project';
 import ProjectLayout from '@/components/templates/project-layout';
-import { useCollaboration } from '@/hooks/use-collaboration';
 import Loading from '@/components/molecules/loading';
 import useAuth from '@/hooks/api/use-auth';
 import { Tab } from '@/stores/tabs-store';
 import PluginsLayout from '@/components/templates/plugins-layout';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { buildDefaultImportSettings, type ImportSettings } from '@/lib/import-settings';
-import { FEATURE_FLAGS, MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
+import { MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
+import { warmAssistantBackend } from '@/lib/warm-assistant';
 import { SpssWorkspaceWalkthrough } from '@/components/templates/auth/spss-switcher-flow';
 
 export interface WorkspaceResource {
@@ -113,10 +113,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
   const { tabs, activeTabId, addTab, closeTab, setActiveTab } = useTabsStore();
 
   useEffect(() => {
-    if (
-      activeView === ViewType.NOTEBOOK ||
-      (activeView === ViewType.CHARTS && FEATURE_FLAGS.CHARTS_TAB_ENABLED)
-    ) {
+    if (activeView === ViewType.NOTEBOOK) {
       setRightPanelOpen(true);
     }
   }, [activeView]);
@@ -140,8 +137,6 @@ export default function Workspace({ resource }: WorkspaceProps) {
     // Only re-run when the dataset id changes; `resource` object identity is unstable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resourceId]);
-
-  useCollaboration(resourceId);
 
   // Add a null check for activeTab
   const activeTab = tabs.find(tab => tab?.id === activeTabId);
@@ -175,6 +170,13 @@ export default function Workspace({ resource }: WorkspaceProps) {
       window.removeEventListener('beforeunload', handleBeforeUnload);
     };
   }, [resourceId, cacheProject]);
+
+  // Wake the Docker-backed assistant Lambda while the sheet loads so the first
+  // chat turn is less likely to cold-start 503.
+  useEffect(() => {
+    if (!isAuthReady) return;
+    warmAssistantBackend();
+  }, [isAuthReady, resourceId]);
 
   // Load workspace data only after Stytch + AuthProvider have finished bootstrapping.
   useEffect(() => {

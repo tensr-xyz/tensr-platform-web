@@ -92,4 +92,16 @@ describe('resolveChatAction', () => {
       menuName: "Kendall's W",
     });
   });
+
+  it('does not open Standardize Variables for z-score value questions', () => {
+    expect(resolveChatAction('what are the z-scores for Age')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('z-score of utilisation_rate')).toEqual({ kind: 'chat' });
+  });
+
+  it('still opens Standardize Variables for explicit standardize asks', () => {
+    expect(resolveChatAction('standardize variables')).toEqual({
+      kind: 'dialog',
+      menuName: 'Standardize Variables',
+    });
+  });
 });

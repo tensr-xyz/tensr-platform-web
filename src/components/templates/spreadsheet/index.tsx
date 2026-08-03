@@ -35,7 +35,7 @@ import {
 } from '@/components/molecules/table';
 import { createColumns, CreateColumnsProps } from '@/components/templates/spreadsheet/columns';
 import { HeaderComponent } from '@/components/templates/spreadsheet/header';
-import { useSession, wsService } from '@/hooks/ui/use-session';
+import { useSession } from '@/hooks/ui/use-session';
 import { cn } from '@/utils';
 import { useTabsStore } from '@/stores/tabs-store';
 import { ColumnSummary } from '@/types/file';
@@ -74,8 +74,10 @@ import { useSheetState } from '@/hooks/ui/use-sheet-state';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { getDatasetIdFromPath } from '@/lib/workspace-dataset';
+import { deriveLiveSheetId } from '@/lib/collaboration-sheet';
 import { useProjectStore } from '@/stores/project-store';
 import Loading from '@/components/molecules/loading';
+import UserCursors from '@/components/molecules/cursor';
 import { applyClientColumnFilters } from '@/utils/column-filters';
 import { toast } from '@/hooks/ui/use-toast';
 import {
@@ -569,8 +571,15 @@ export function Spreadsheet({
     idTokenRef.current = session?.sessionJwt || null;
   }, [session?.sessionJwt]);
 
-  // Get sheetId from tabData if available
-  const sheetId = tabData?.sheetId;
+  // Single collaboration-session WebSocket connection (also carries live sheet
+  // op-log traffic — see `deriveLiveSheetId` below and `hooks/ui/use-session`).
+  const { currentSession, updatePresence, sessionLive } = useSession();
+
+  // While a collaboration session is active, all participants derive the same
+  // live-sheet id from the session itself, so cell edits sync + persist via the
+  // `sheet_live` op-log instead of the old ephemeral, non-persisted `cell_update`
+  // broadcast. Outside a session this falls back to any explicit tabData.sheetId.
+  const sheetId = deriveLiveSheetId(currentSession, tabData?.sheetId);
 
   // Use sheet state hook when sheetId is provided (real-time collaboration mode)
   const {
@@ -650,39 +659,27 @@ export function Spreadsheet({
   const sheetStateInitializedRef = useRef(false);
   const lastSheetStateVersionRef = useRef<number>(0);
 
-  // Sync sheet state to local data when sheet state is first available (real-time mode)
-  // Only sync on initial load or when version increases significantly (server updates)
-  // Don't sync on every change to avoid overwriting local edits
+  // Sync live-sheet state into the grid whenever the server version advances.
+  // Previously required versionDiff > 1, which dropped every single remote cell op.
   useEffect(() => {
     if (
-      sheetState &&
-      sheetState.data &&
-      Array.isArray(sheetState.data) &&
-      sheetState.version > lastSheetStateVersionRef.current
+      !sheetState ||
+      !Array.isArray(sheetState.data) ||
+      sheetState.version <= lastSheetStateVersionRef.current
     ) {
-      // Only sync if:
-      // 1. We haven't initialized yet (first load), OR
-      // 2. Version jumped significantly (likely a server-side update, not our own edit)
-      const versionDiff = sheetState.version - lastSheetStateVersionRef.current;
-      const shouldSync =
-        !sheetStateInitializedRef.current || (versionDiff > 1 && sheetState.data.length > 0);
-
-      if (shouldSync && sheetState.data.length > 0) {
-        // Convert sheet state data array to RowType format
-        const sheetRows: RowType[] = sheetState.data.map(
-          (row: Record<string, any>, index: number) => ({
-            id: `row-${index}`,
-            ...row,
-          })
-        );
-        setData(sheetRows);
-        sheetStateInitializedRef.current = true;
-        lastSheetStateVersionRef.current = sheetState.version;
-      } else {
-        // Just update the version ref to track it
-        lastSheetStateVersionRef.current = sheetState.version;
-      }
+      return;
     }
+    if (sheetState.data.length === 0 && sheetStateInitializedRef.current) {
+      lastSheetStateVersionRef.current = sheetState.version;
+      return;
+    }
+    const sheetRows: RowType[] = sheetState.data.map((row: Record<string, any>, index: number) => ({
+      id: `row-${index}`,
+      ...row,
+    }));
+    setData(sheetRows);
+    sheetStateInitializedRef.current = true;
+    lastSheetStateVersionRef.current = sheetState.version;
   }, [sheetState]);
 
   // Reset initialization flag when sheetId changes
@@ -691,11 +688,66 @@ export function Spreadsheet({
     lastSheetStateVersionRef.current = 0;
   }, [sheetId]);
 
+  // No client-side seeding: the server forks the live sheet directly from the source
+  // dataset's Parquet on Host subscribe (`app/collab_sheet_seed.py::fork_session_from_dataset`),
+  // so `sheetState` already carries real data before any client would append_rows.
+
   // Track previous data length to prevent infinite loops (must be after data state declaration)
   const previousDataLengthRef = useRef(data.length);
+  const dataRef = useRef(data);
+  dataRef.current = data;
 
   const { tabs, activeTabId, updateTab } = useTabsStore();
   const activeTab = tabs.find(tab => tab.id === activeTabId);
+
+  // Broadcast pointer + focused-cell presence while a collaboration session is live.
+  // Use window listeners — attaching only to tableContainerRef often no-ops because the
+  // ref is still null when the session effect first runs.
+  const sessionId = currentSession?.id;
+  const lastPointerRef = useRef<{ x: number; y: number } | null>(null);
+  const focusedCellRef = useRef(focusedCell);
+  focusedCellRef.current = focusedCell;
+  const activeTabIdRef = useRef(activeTabId);
+  activeTabIdRef.current = activeTabId;
+
+  useEffect(() => {
+    if (!sessionId) {
+      return;
+    }
+
+    const onMove = (event: MouseEvent) => {
+      lastPointerRef.current = { x: event.clientX, y: event.clientY };
+      const cell = focusedCellRef.current;
+      updatePresence({
+        x: event.clientX,
+        y: event.clientY,
+        tabId: activeTabIdRef.current,
+        element: 'spreadsheet',
+        selection: cell ? { rowIndex: cell.rowIndex, columnId: cell.columnId } : null,
+      });
+    };
+
+    window.addEventListener('mousemove', onMove, { passive: true });
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      updatePresence(null);
+    };
+  }, [sessionId, updatePresence]);
+
+  // Publish on cell focus, and again once the socket is session-bound (earlier sends
+  // are ignored until `initial_state`).
+  useEffect(() => {
+    if (!sessionId || !sessionLive || !focusedCell) {
+      return;
+    }
+    updatePresence({
+      x: lastPointerRef.current?.x ?? 0,
+      y: lastPointerRef.current?.y ?? 0,
+      tabId: activeTabId,
+      element: 'spreadsheet',
+      selection: { rowIndex: focusedCell.rowIndex, columnId: focusedCell.columnId },
+    });
+  }, [sessionId, sessionLive, focusedCell, activeTabId, updatePresence]);
   const projectFileSystem = useProjectStore(s => s.fileSystem);
   const currentProjectId = useProjectStore(s => s.currentProject?.id);
 
@@ -2468,22 +2520,6 @@ export function Spreadsheet({
     setExtraColumnsCount(EXTRA_COLUMNS);
   }, [initialColumns]);
 
-  const { wsReady, currentSession, ws } = useSession();
-
-  useEffect(() => {
-    // When joining a session, send a tab registration message
-    if (wsReady && currentSession && ws) {
-      ws.send(
-        JSON.stringify({
-          type: 'register_tab',
-          sessionId: currentSession.id,
-          tabId,
-          filePath: decodedFilePath,
-        })
-      );
-    }
-  }, [wsReady, currentSession, ws, tabId, decodedFilePath]);
-
   // Only measure virtualization when data length actually changes, not on every render
   // DO NOT trigger fetchMoreRows here - that causes infinite loops
   // Let the scroll handler manage pagination instead
@@ -2500,60 +2536,6 @@ export function Spreadsheet({
       rowVirtualizer.measure();
     }
   }, [data.length, rowVirtualizer]);
-
-  // Update the message handler to be more forgiving with tabIds
-  useEffect(() => {
-    if (!ws) {
-      return;
-    }
-
-    const handleMessage = (event: MessageEvent) => {
-      try {
-        const message = JSON.parse(event.data);
-
-        // Handle cell updates for any tab viewing the same file
-        if (message.type === 'cell_update' && currentSession) {
-          // Apply the update if we're not the sender
-          // WebSocket updates are non-urgent - use transition to keep UI responsive
-          if (message.userId !== wsService.userId) {
-            startTransition(() => {
-              setData(prevData => {
-                const newData = [...prevData];
-                if (!newData[message.rowIndex]) {
-                  newData[message.rowIndex] = { id: `row-${message.rowIndex}` };
-                }
-                newData[message.rowIndex] = {
-                  ...newData[message.rowIndex],
-                  [message.columnId]: message.value,
-                };
-                return newData;
-              });
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Error processing WebSocket message:', error);
-      }
-    };
-
-    ws.addEventListener('message', handleMessage);
-
-    // Request sync when connecting
-    if (wsReady && currentSession?.id && ws.readyState === WebSocket.OPEN) {
-      ws.send(
-        JSON.stringify({
-          type: 'sync_request',
-          sessionId: currentSession.id,
-          tabId,
-          userId: wsService.userId,
-        })
-      );
-    }
-
-    return () => {
-      ws.removeEventListener('message', handleMessage);
-    };
-  }, [ws, wsReady, currentSession, tabId]);
 
   // Handle keyboard shortcuts for sorting
   useEffect(() => {
@@ -2621,24 +2603,22 @@ export function Spreadsheet({
                 clearTimeout(tabUpdateTimeoutRef.current);
               }
               tabUpdateTimeoutRef.current = setTimeout(() => {
-                setData(currentData => {
-                  const rowToUpdate = currentData[rowIndex];
-                  if (rowToUpdate && activeTab?.data) {
-                    const updatedRow = { ...rowToUpdate, [useColumnId]: value };
-                    updateTab(tabId, {
-                      data: {
-                        ...activeTab.data,
-                        initialData: activeTab.data.initialData
-                          ? activeTab.data.initialData.map((row, idx) =>
-                              idx === rowIndex ? updatedRow : row
-                            )
-                          : [updatedRow],
-                      },
-                      isDirty: true,
-                    });
-                  }
-                  return currentData;
-                });
+                const currentData = dataRef.current;
+                const rowToUpdate = currentData[rowIndex];
+                if (rowToUpdate && activeTab?.data) {
+                  const updatedRow = { ...rowToUpdate, [useColumnId]: value };
+                  updateTab(tabId, {
+                    data: {
+                      ...activeTab.data,
+                      initialData: activeTab.data.initialData
+                        ? activeTab.data.initialData.map((row, idx) =>
+                            idx === rowIndex ? updatedRow : row
+                          )
+                        : [updatedRow],
+                    },
+                    isDirty: true,
+                  });
+                }
               }, 300);
             }
             return;
@@ -2670,48 +2650,35 @@ export function Spreadsheet({
           clearTimeout(tabUpdateTimeoutRef.current);
         }
 
-        // Debounce tab updates to batch multiple cell edits
+        // Debounce tab updates to batch multiple cell edits (never call updateTab
+        // inside a setData updater — that updates Workspace while Spreadsheet renders).
         tabUpdateTimeoutRef.current = setTimeout(() => {
-          // Get current data from state at the time of update
-          setData(currentData => {
-            const rowToUpdate = currentData[rowIndex];
-            if (rowToUpdate && activeTab?.data) {
-              const updatedRow = { ...rowToUpdate, [useColumnId]: value };
-
-              // Update tab with minimal data change - only update the specific row
-              updateTab(tabId, {
-                data: {
-                  ...activeTab.data,
-                  initialData: activeTab.data.initialData
-                    ? activeTab.data.initialData.map((row, idx) =>
-                        idx === rowIndex ? updatedRow : row
-                      )
-                    : [updatedRow],
-                },
-                isDirty: true,
-              });
-            }
-            return currentData; // Return unchanged to avoid re-render
-          });
+          const currentData = dataRef.current;
+          const rowToUpdate = currentData[rowIndex];
+          if (rowToUpdate && activeTab?.data) {
+            const updatedRow = { ...rowToUpdate, [useColumnId]: value };
+            updateTab(tabId, {
+              data: {
+                ...activeTab.data,
+                initialData: activeTab.data.initialData
+                  ? activeTab.data.initialData.map((row, idx) =>
+                      idx === rowIndex ? updatedRow : row
+                    )
+                  : [updatedRow],
+              },
+              isDirty: true,
+            });
+          }
         }, 300); // 300ms debounce for tab updates
       }
 
-      // Send update via WebSocket service if connected
-      if (wsReady && currentSession) {
-        wsService.sendCellUpdate(tabId, rowIndex, useColumnId, value);
-      }
+      // No `sheetId` means there is no active collaboration session (and no
+      // legacy explicit sheet id) — nothing to sync, this edit stays local-only.
+      // The old ephemeral `cell_update` broadcast (no persistence, no conflict
+      // resolution) has been removed; the persisted `sheet_live` op-log path
+      // above is now the single mechanism for syncing edits during a session.
     },
-    [
-      tabId,
-      activeTab,
-      updateTab,
-      wsReady,
-      currentSession,
-      sheetId,
-      applySheetOperation,
-      sheetState,
-      data,
-    ]
+    [tabId, activeTab, updateTab, sheetId, applySheetOperation, sheetState, data]
   );
 
   // Clipboard handlers
@@ -2869,18 +2836,15 @@ export function Spreadsheet({
       }
 
       tabUpdateTimeoutRef.current = setTimeout(() => {
-        setData(currentData => {
-          if (activeTab?.data) {
-            updateTab(tabId, {
-              data: {
-                ...activeTab.data,
-                initialData: currentData,
-              },
-              isDirty: true,
-            });
-          }
-          return currentData;
-        });
+        if (activeTab?.data) {
+          updateTab(tabId, {
+            data: {
+              ...activeTab.data,
+              initialData: dataRef.current,
+            },
+            isDirty: true,
+          });
+        }
       }, 300);
     }
 
@@ -2976,18 +2940,15 @@ export function Spreadsheet({
           clearTimeout(tabUpdateTimeoutRef.current);
         }
         tabUpdateTimeoutRef.current = setTimeout(() => {
-          setData(currentData => {
-            if (activeTab?.data) {
-              updateTab(tabId, {
-                data: {
-                  ...activeTab.data,
-                  initialData: currentData,
-                },
-                isDirty: true,
-              });
-            }
-            return currentData;
-          });
+          if (activeTab?.data) {
+            updateTab(tabId, {
+              data: {
+                ...activeTab.data,
+                initialData: dataRef.current,
+              },
+              isDirty: true,
+            });
+          }
         }, 300);
       }
     },
@@ -3198,9 +3159,9 @@ export function Spreadsheet({
             isDirty: true,
           });
 
-          const liveNote = activeTab.data?.sheetId
-            ? ' (live-collab tab — applied locally, not broadcast)'
-            : '';
+          // `delete_column` has no `SheetOp` kind, so even in a live session this
+          // only ever updates the local tab — it never reaches `sheet_live`.
+          const liveNote = sheetId ? ' (live-collab tab — applied locally, not broadcast)' : '';
           toast({
             title: `Deleted column "${target.header}"`,
             description: `Press ⌘Z to undo.${liveNote}`,
@@ -3488,6 +3449,7 @@ export function Spreadsheet({
         height: '100%',
       }}
     >
+      {currentSession ? <UserCursors /> : null}
       {showFilters && (
         <div className="border-b border-border bg-background">
           <Filters
@@ -3894,18 +3856,15 @@ export function Spreadsheet({
             }
 
             tabUpdateTimeoutRef.current = setTimeout(() => {
-              setData(currentData => {
-                if (activeTab?.data && currentRowIndexForFix !== null) {
-                  updateTab(tabId, {
-                    data: {
-                      ...activeTab.data,
-                      initialData: currentData,
-                    },
-                    isDirty: true,
-                  });
-                }
-                return currentData;
-              });
+              if (activeTab?.data && currentRowIndexForFix !== null) {
+                updateTab(tabId, {
+                  data: {
+                    ...activeTab.data,
+                    initialData: dataRef.current,
+                  },
+                  isDirty: true,
+                });
+              }
             }, 300);
           }
 
@@ -4101,18 +4060,15 @@ export function Spreadsheet({
             }
 
             tabUpdateTimeoutRef.current = setTimeout(() => {
-              setData(currentData => {
-                if (activeTab?.data) {
-                  updateTab(tabId, {
-                    data: {
-                      ...activeTab.data,
-                      initialData: currentData,
-                    },
-                    isDirty: true,
-                  });
-                }
-                return currentData;
-              });
+              if (activeTab?.data) {
+                updateTab(tabId, {
+                  data: {
+                    ...activeTab.data,
+                    initialData: dataRef.current,
+                  },
+                  isDirty: true,
+                });
+              }
             }, 300);
           }
 

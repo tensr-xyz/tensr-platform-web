@@ -1,0 +1,58 @@
+{
+  "generatedAt": "2026-08-03T15:30:00.000Z",
+  "suite": "routing-baseline",
+  "description": "Full live cascade including menu dispatch (option 1). Source of truth: jest src/lib/resolve-agent-gate.test.ts (22/22 passed).",
+  "runner": "jest --watchman=false src/lib/resolve-agent-gate.test.ts",
+  "promptfooConfig": "agent-eval/promptfooconfig.routing-baseline.yaml",
+  "results": [
+    { "prompt": "Hello", "gate": "tutor", "pass": true },
+    {
+      "prompt": "What does Age mean?",
+      "gate": "data-intent",
+      "pass": true,
+      "note": "false-positive \\bmean\\b"
+    },
+    { "prompt": "How do I interpret a p-value?", "gate": "tutor", "pass": true },
+    { "prompt": "run one for me", "gate": "tutor", "pass": true },
+    { "prompt": "why is that significant?", "gate": "tutor", "pass": true },
+    { "prompt": "Can you help me understand the groups?", "gate": "tutor", "pass": true },
+    { "prompt": "t test for me on my dataset", "gate": "menu-analysis", "pass": true },
+    { "prompt": "How many members joined after 2024?", "gate": "data-intent", "pass": true },
+    { "prompt": "Sum of Revenue by Region", "gate": "data-intent", "pass": true },
+    { "prompt": "Make a monthly line chart", "gate": "data-intent", "pass": true },
+    { "prompt": "What's interesting?", "gate": "exploratory", "pass": true },
+    {
+      "prompt": "Where do I start?",
+      "gate": "data-intent",
+      "pass": true,
+      "note": "false-positive \\bwhere\\b"
+    },
+    { "prompt": "Clean this dataset", "gate": "prep-playbook", "pass": true },
+    { "prompt": "Run a data quality scan", "gate": "menu-dialog", "pass": true },
+    { "prompt": "correlation between Age and PTS", "gate": "menu-analysis", "pass": true },
+    {
+      "prompt": "I want percentile values for utilisation_rate",
+      "gate": "data-intent",
+      "pass": true
+    },
+    {
+      "prompt": "Can we get Percentile Values for these KPIs",
+      "gate": "data-intent",
+      "pass": true
+    },
+    {
+      "prompt": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate",
+      "gate": "tutor",
+      "pass": true,
+      "note": "no Gate-2 keyword"
+    },
+    {
+      "prompt": "Could you provide a boxplot for utilisation_rate",
+      "gate": "menu-dialog",
+      "pass": true,
+      "note": "menu steal (includes 'plot' substring match)"
+    },
+    { "prompt": "one-way ANOVA", "gate": "menu-analysis", "pass": true }
+  ],
+  "summary": { "total": 20, "passed": 20, "failed": 0 }
+}

@@ -9,12 +9,15 @@ import { Home, Search, Sparkles, X } from 'lucide-react';
 import { cn } from '@/utils';
 import { AnalysisCommandPalette } from '@/components/organisms/analysis-command-palette';
 import { useAnalysisPaletteShortcut } from '@/hooks/ui/use-analysis-palette-shortcut';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ViewType } from '@/stores/tabs-store';
 import { Users } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import CollaborationPanel from '@/components/organisms/collaboration-panel';
+import { SessionAvatarGroup } from '@/components/molecules/session-avatar-group';
 import { useProjectStore } from '@/stores/project-store';
+import { useSession } from '@/hooks/ui/use-session';
+import { useAuth } from '@/hooks/api/use-auth';
 
 interface SpreadsheetTab extends Tab {
   type: ViewType.SPREADSHEET;
@@ -129,11 +132,18 @@ const Titlebar = ({
 }: TitlebarProps) => {
   const { updateTab, setActiveTab } = useTabsStore();
   const { currentProject } = useProjectStore();
+  const { currentSession, sessionLive } = useSession();
+  const { user } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const isHomePage = pathname === '/';
   const analysisPaletteOpen = useAnalysisSetupStore(s => s.commandPaletteOpen);
   const setAnalysisPaletteOpen = useAnalysisSetupStore(s => s.setCommandPaletteOpen);
+  const sessionParticipants = currentSession?.participants ?? [];
+  // Show live chrome when we have a session object, or when the URL says we should
+  // (guest may still be restoring after join redirect).
+  const inLiveSession = !!currentSession || !!searchParams.get('session')?.trim();
 
   useAnalysisPaletteShortcut();
 
@@ -328,9 +338,55 @@ const Titlebar = ({
           <div className="flex shrink-0 items-stretch border-l border-border">
             <Popover>
               <PopoverTrigger asChild>
-                <Button variant="ghost" size="icon" className="size-11 shrink-0 rounded-none">
-                  <Users className="h-4 w-4" />
-                  <span className="sr-only">Toggle User Collaboration</span>
+                <Button
+                  variant="ghost"
+                  className={cn(
+                    'h-11 shrink-0 gap-2 rounded-none px-3 font-normal',
+                    inLiveSession ? 'min-w-0 text-foreground hover:bg-muted/80' : 'size-11 px-0'
+                  )}
+                  aria-label={
+                    inLiveSession
+                      ? `Collaboration session · ${sessionParticipants.length} people`
+                      : 'Start collaboration'
+                  }
+                >
+                  {inLiveSession ? (
+                    <>
+                      {sessionParticipants.length > 0 ? (
+                        <SessionAvatarGroup
+                          participants={sessionParticipants}
+                          currentUserId={user?.userId}
+                          max={3}
+                        />
+                      ) : (
+                        <Users className="h-4 w-4 text-emerald-600" />
+                      )}
+                      <span className="hidden items-center gap-1.5 text-xs text-muted-foreground sm:inline-flex">
+                        <span
+                          className={cn(
+                            'size-1.5 rounded-full',
+                            sessionLive
+                              ? 'bg-emerald-500'
+                              : currentSession
+                                ? 'animate-pulse bg-amber-500'
+                                : 'bg-muted-foreground'
+                          )}
+                          aria-hidden
+                        />
+                        {sessionLive ? 'Live' : currentSession ? 'Connecting' : 'Joining'}
+                        {sessionParticipants.length > 0 ? (
+                          <span className="tabular-nums text-foreground/80">
+                            {sessionParticipants.length}
+                          </span>
+                        ) : null}
+                      </span>
+                    </>
+                  ) : (
+                    <Users className="h-4 w-4" />
+                  )}
+                  <span className="sr-only">
+                    {inLiveSession ? 'Open collaboration session' : 'Toggle User Collaboration'}
+                  </span>
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" onOpenAutoFocus={e => e.preventDefault()}>

@@ -24,14 +24,14 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ## Environment variables
 
-| Variable                             | Required          | Description                                                        |
-| ------------------------------------ | ----------------- | ------------------------------------------------------------------ |
-| `NEXT_PUBLIC_STYTCH_PUBLIC_TOKEN`    | **Yes**           | Stytch public token for auth                                       |
-| `NEXT_PUBLIC_TENSR_API_URL`          | **Yes** (prod)    | FastAPI base URL (default `http://127.0.0.1:8000`)                 |
-| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | For billing       | Stripe publishable key                                             |
-| `NEXT_PUBLIC_WEBSOCKET_URL`          | For collaboration | WebSocket base (e.g. `wss://api.example.com/ws/yjs`)               |
-| `NEXT_PUBLIC_DISABLE_USAGE_TRACKING` | No                | Set `true` to disable client telemetry                             |
-| `E2E_AUTH_BYPASS`                    | E2E only          | Set `true` in local Playwright runs only — **never in production** |
+| Variable                             | Required          | Description                                                                                      |
+| ------------------------------------ | ----------------- | ------------------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_STYTCH_PUBLIC_TOKEN`    | **Yes**           | Stytch public token for auth                                                                     |
+| `NEXT_PUBLIC_TENSR_API_URL`          | **Yes** (prod)    | FastAPI base URL (default `http://127.0.0.1:8000`)                                               |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | For billing       | Stripe publishable key                                                                           |
+| `NEXT_PUBLIC_WEBSOCKET_URL`          | For collaboration | `RealtimeStack` WebSocket URL (e.g. `wss://{api-id}.execute-api.{region}.amazonaws.com/{stage}`) |
+| `NEXT_PUBLIC_DISABLE_USAGE_TRACKING` | No                | Set `true` to disable client telemetry                                                           |
+| `E2E_AUTH_BYPASS`                    | E2E only          | Set `true` in local Playwright runs only — **never in production**                               |
 
 AI assistant chat requires **`OPENAI_API_KEY`** on **tensr-api** (not this app).
 
@@ -99,7 +99,14 @@ Before launch, validate on **Stripe test mode**:
 
 ## Collaboration
 
-When enabled, set `NEXT_PUBLIC_WEBSOCKET_URL`. The client passes the Stytch JWT as a `token` query param on the y-websocket connection; the WS server must validate it.
+Set `NEXT_PUBLIC_WEBSOCKET_URL` to the `RealtimeStack` output (`wss://{api-id}.execute-api.{region}.amazonaws.com/{stage}`).
+This is a single-route API Gateway WebSocket API backed by `app/realtime/hub.py` (a JSON message
+hub, not Yjs/CRDT) — see `src/lib/tensr-api-url.ts` for the full protocol notes. The client passes
+the Stytch JWT as an `access_token` query param; the WS Lambda authorizer must validate it.
+
+There is no Yjs/CRDT relay and no Fargate service in production. `y-websocket` /
+`hooks/use-collaboration` and `app/yjs_ws.py` (`/ws/yjs/{room}`) only work against the local
+uvicorn dev server and are not part of the production collaboration path.
 
 ## Launch checklist
 

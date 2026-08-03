@@ -35,3 +35,39 @@ export function isAnalysisFollowUpQuestion(
     .toLowerCase();
   return /t-test|ttest|t test|anova|compare|group|outcome|independent-samples/.test(blob);
 }
+
+/**
+ * After a missing-column clarification, a short reply like "Tm" / "use Tm" should
+ * re-enter the agent loop (with history) instead of a free-text guess.
+ */
+export function isAnalysisColumnClarificationReply(
+  message: string,
+  priorMessages: Array<{ role: string; content: string }>,
+  schemaColumnNames: string[] = []
+): boolean {
+  const trimmed = message.trim();
+  if (!trimmed || trimmed.length > 64) return false;
+
+  const lastAssistant = [...priorMessages].reverse().find(m => m.role === 'assistant');
+  if (
+    !lastAssistant ||
+    !/couldn't find columns|available (numeric |group\/category )?columns|did you mean/i.test(
+      lastAssistant.content
+    )
+  ) {
+    return false;
+  }
+
+  const candidate = trimmed
+    .replace(/^(use|try|its|it's|column|the column)\s+/i, '')
+    .replace(/[.!?]+$/g, '')
+    .trim();
+  if (!candidate || candidate.split(/\s+/).length > 3) return false;
+
+  if (schemaColumnNames.length > 0) {
+    const lower = candidate.toLowerCase();
+    return schemaColumnNames.some(name => name.toLowerCase() === lower);
+  }
+
+  return /^[\w%.]+$/i.test(candidate);
+}

@@ -1,0 +1,208 @@
+{
+  "generatedAt": "2026-08-03T15:53:52.498Z",
+  "suite": "routing-post",
+  "description": "Full baseline contract incl. menu-* + category-1/2 (live proof in tensr-api test_agent_loop_categories.py)",
+  "scoring": "against FULL_BASELINE_CONTRACT, not self-consistent oracle buckets",
+  "results": [
+    {
+      "prompt": "What does Age mean?",
+      "mode": "agent",
+      "expected": "direct_text",
+      "baselineGate": "data-intent",
+      "actual": "direct_text",
+      "pass": true
+    },
+    {
+      "prompt": "How do I interpret a p-value?",
+      "mode": "agent",
+      "expected": "direct_text",
+      "baselineGate": "tutor",
+      "actual": "direct_text",
+      "pass": true
+    },
+    {
+      "prompt": "Hello",
+      "mode": "agent",
+      "expected": "ask_clarifying_question",
+      "baselineGate": "tutor",
+      "actual": "ask_clarifying_question",
+      "pass": true
+    },
+    {
+      "prompt": "run one for me",
+      "mode": "agent",
+      "expected": "ask_clarifying_question",
+      "baselineGate": "tutor",
+      "actual": "ask_clarifying_question",
+      "pass": true
+    },
+    {
+      "prompt": "why is that significant?",
+      "mode": "agent",
+      "expected": "ask_clarifying_question",
+      "baselineGate": "tutor",
+      "actual": "ask_clarifying_question",
+      "pass": true
+    },
+    {
+      "prompt": "Can you help me understand the groups?",
+      "mode": "agent",
+      "expected": "ask_clarifying_question",
+      "baselineGate": "tutor",
+      "actual": "ask_clarifying_question",
+      "pass": true
+    },
+    {
+      "prompt": "sorry it should be age and Tm",
+      "mode": "agent",
+      "expected": "ask_clarifying_question",
+      "baselineGate": null,
+      "actual": "ask_clarifying_question",
+      "pass": true
+    },
+    {
+      "prompt": "t test for me on my dataset",
+      "mode": "agent",
+      "expected": "run_analysis",
+      "baselineGate": "menu-analysis",
+      "actual": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "correlation between Age and PTS",
+      "mode": "agent",
+      "expected": "run_analysis",
+      "baselineGate": "menu-analysis",
+      "actual": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "one-way ANOVA",
+      "mode": "agent",
+      "expected": "run_analysis",
+      "baselineGate": "menu-analysis",
+      "actual": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "Could you provide a boxplot for utilisation_rate",
+      "mode": "agent",
+      "expected": "run_analysis",
+      "baselineGate": "menu-dialog",
+      "actual": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "Run a data quality scan",
+      "mode": "agent",
+      "expected": "run_data_quality_scan",
+      "baselineGate": "menu-dialog",
+      "actual": "run_data_quality_scan",
+      "pass": true
+    },
+    {
+      "prompt": "How many members joined after 2024?",
+      "mode": "agent",
+      "expected": "run_analysis",
+      "baselineGate": "data-intent",
+      "actual": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "Sum of Revenue by Region",
+      "mode": "agent",
+      "expected": "run_analysis",
+      "baselineGate": "data-intent",
+      "actual": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "Make a monthly line chart",
+      "mode": "agent",
+      "expected": "run_analysis",
+      "baselineGate": "data-intent",
+      "actual": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "What's interesting?",
+      "mode": "agent",
+      "expected": "tool_or_clarify",
+      "baselineGate": "exploratory",
+      "actual": "tool_or_clarify",
+      "pass": true
+    },
+    {
+      "prompt": "Where do I start?",
+      "mode": "agent",
+      "expected": "tool_or_clarify",
+      "baselineGate": "data-intent",
+      "actual": "tool_or_clarify",
+      "pass": true
+    },
+    {
+      "prompt": "Clean this dataset",
+      "mode": "agent",
+      "expected": "start_prep_playbook",
+      "baselineGate": "prep-playbook",
+      "actual": "start_prep_playbook",
+      "pass": true
+    },
+    {
+      "prompt": "I want percentile values for utilisation_rate",
+      "mode": "agent",
+      "expected": "run_analysis",
+      "baselineGate": "data-intent",
+      "actual": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "t test for me on my dataset",
+      "mode": "ask",
+      "expected": "ask-no-write",
+      "baselineGate": null,
+      "actual": "ask-no-write",
+      "pass": true
+    },
+    {
+      "prompt": "Clean this dataset",
+      "mode": "ask",
+      "expected": "ask-no-write",
+      "baselineGate": null,
+      "actual": "ask-no-write",
+      "pass": true
+    },
+    {
+      "prompt": "t test for me on my dataset",
+      "mode": "plan",
+      "expected": "plan-awaiting-approval",
+      "baselineGate": null,
+      "actual": "plan-awaiting-approval",
+      "pass": true
+    },
+    {
+      "prompt": "geometric mean of Revenue",
+      "mode": "agent",
+      "expected": "refuse-or-clarify",
+      "baselineGate": null,
+      "actual": "refuse-or-clarify",
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 23,
+    "passed": 23,
+    "failed": 0,
+    "vsBaselineMenuCases": {
+      "one-way ANOVA": "run_analysis",
+      "boxplot": "run_analysis",
+      "data quality scan": "run_data_quality_scan",
+      "t test": "run_analysis",
+      "correlation": "run_analysis"
+    },
+    "falsePositivesFixed": {
+      "What does Age mean?": "direct_text (was data-intent)",
+      "Where do I start?": "tool_or_clarify (was data-intent)"
+    }
+  }
+}

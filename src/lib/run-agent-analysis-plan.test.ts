@@ -5,7 +5,7 @@ import {
 } from './run-agent-analysis-plan';
 
 describe('assistantUpdateFromParseIntent unsupported fallback', () => {
-  it('falls back to resolveChatAction for known analysis phrases', () => {
+  it('shows an honest unsupported message and does not open a menu', () => {
     const message = "Run Cohen's Kappa comparing rater_a and rater_b";
     const update = assistantUpdateFromParseIntent(
       {
@@ -15,9 +15,11 @@ describe('assistantUpdateFromParseIntent unsupported fallback', () => {
       'Analysis',
       message
     );
-    expect(update.type).toBe('no_plan');
-    if (update.type === 'no_plan') {
-      expect(update.menuOverride?.op).toBe('cohens_kappa');
+    expect(update.type).toBe('unsupported');
+    if (update.type === 'unsupported') {
+      expect(update.content).toContain('not supported');
+      expect(update.content).toMatch(/Closest option|Cohen/i);
+      expect(update.content).toMatch(/won't open it automatically|will not open/i);
     }
     expect(resolveChatAction(message).kind).toBe('analysis');
   });

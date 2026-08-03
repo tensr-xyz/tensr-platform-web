@@ -1,11 +1,5 @@
 import * as React from 'react';
-import {
-  FileSpreadsheet as Sheet,
-  CodeSquare as SquareCode,
-  BarChart3,
-  Search,
-  Settings,
-} from 'lucide-react';
+import { FileSpreadsheet as Sheet, CodeSquare as SquareCode, Search, Settings } from 'lucide-react';
 import {
   Sidebar,
   SidebarContent,
@@ -23,7 +17,6 @@ import { useTabsStore, Tab } from '@/stores/tabs-store';
 import { ProjectActions } from '@/contexts/project-context/types';
 import { type LucideIcon } from 'lucide-react';
 import { cn } from '@/utils';
-import { FEATURE_FLAGS } from '@/lib/feature-flags';
 import {
   CommandDialog,
   CommandEmpty,
@@ -97,16 +90,6 @@ export default function ProjectSidebar() {
         icon: SquareCode,
         action: () => setView(ViewType.NOTEBOOK),
       },
-      ...(FEATURE_FLAGS.CHARTS_TAB_ENABLED
-        ? [
-            {
-              title: 'Charts',
-              url: '#',
-              icon: BarChart3,
-              action: () => setView(ViewType.CHARTS),
-            },
-          ]
-        : []),
     ] as NavItem[],
     navFooter: [
       {
@@ -170,9 +153,6 @@ export default function ProjectSidebar() {
     }
     if (item.title === 'Notebook') {
       return activeView === ViewType.NOTEBOOK;
-    }
-    if (item.title === 'Charts') {
-      return activeView === ViewType.CHARTS;
     }
 
     if (item.isNavigationItem) {

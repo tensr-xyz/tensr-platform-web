@@ -1,0 +1,73 @@
+name: CI — agent eval
+
+on:
+  push:
+    branches: [main, development]
+    paths:
+      - 'src/components/organisms/agent-panel/**'
+      - 'src/lib/resolve-agent-gate.*'
+      - 'src/lib/run-agent-loop.*'
+      - 'src/lib/agent-loop-client.test.ts'
+      - 'src/lib/chat-actions.ts'
+      - 'src/lib/run-agent-data-action.ts'
+      - 'src/lib/prep-playbook.ts'
+      - 'src/lib/agent-exploratory-intent.ts'
+      - 'src/lib/agent-loop-contract.*'
+      - 'src/stores/agent-mode-store.ts'
+      - 'agent-eval/**'
+      - 'package.json'
+      - '.github/workflows/agent-eval.yml'
+  pull_request:
+    paths:
+      - 'src/components/organisms/agent-panel/**'
+      - 'src/lib/resolve-agent-gate.*'
+      - 'src/lib/run-agent-loop.*'
+      - 'src/lib/agent-loop-client.test.ts'
+      - 'src/lib/chat-actions.ts'
+      - 'src/lib/run-agent-data-action.ts'
+      - 'src/lib/prep-playbook.ts'
+      - 'src/lib/agent-exploratory-intent.ts'
+      - 'src/lib/agent-loop-contract.*'
+      - 'src/stores/agent-mode-store.ts'
+      - 'agent-eval/**'
+      - 'package.json'
+      - '.github/workflows/agent-eval.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  agent-baseline-and-loop-client:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install
+        run: pnpm install
+
+      - name: Promptfoo corpora sync (FULL_BASELINE_CONTRACT)
+        run: pnpm run check:agent-eval-promptfoo
+
+      - name: Routing baseline + post-rewrite policy + loop client (Jest)
+        run: pnpm run test:agent-loop
+
+      - name: Mode-policy contract (Jest)
+        run: pnpm run test:agent-post
+
+      - name: Promptfoo routing baseline
+        run: pnpm run test:agent-baseline:promptfoo
+
+      - name: Promptfoo post-rewrite + mode policy
+        run: pnpm run test:agent-post:promptfoo

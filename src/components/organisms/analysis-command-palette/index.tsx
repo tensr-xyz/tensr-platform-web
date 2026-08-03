@@ -88,20 +88,14 @@ function buildSpreadsheetDatasetForPlugins(
   };
 }
 
-function mergeUsablePlugins(
-  marketplace: PluginRecord[],
-  installed: PluginRecord[]
-): PluginRecord[] {
-  const byId = new Map<string, PluginRecord>();
-  for (const p of marketplace) {
-    if (p.status === 'APPROVED') {
-      byId.set(p.pluginId, p);
-    }
-  }
-  for (const p of installed) {
-    byId.set(p.pluginId, p);
-  }
-  return Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
+function usablePluginsFromMarketplace(marketplace: PluginRecord[]): PluginRecord[] {
+  // Approved, free plugins are runnable directly from the marketplace - there is no
+  // separate "install" step/state on tensr-api, so every approved free plugin is usable
+  // here. Paid plugins are excluded until checkout exists (see /plugins/{id}/purchase
+  // 501 on tensr-api) so we don't hand out paid execution for free.
+  return marketplace
+    .filter(p => p.status === 'APPROVED' && !p.isPaid)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function pluginMatchesQuery(plugin: PluginRecord, raw: string): boolean {
@@ -164,7 +158,7 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
   const activeTab = tabs.find(t => t.id === activeTabId);
   const pluginDataset = useMemo(() => buildSpreadsheetDatasetForPlugins(activeTab), [activeTab]);
 
-  const { plugins, installedPlugins, loading: pluginsLoading, error: pluginsError } = usePlugins();
+  const { plugins, loading: pluginsLoading, error: pluginsError } = usePlugins();
 
   const allItems = useMemo(() => getAllAnalysisItems(), []);
 
@@ -176,10 +170,7 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
   const filtered = useMemo(() => filterAnalysisItems(allItems, query), [allItems, query]);
   const grouped = useMemo(() => groupAnalysisItems(filtered), [filtered]);
 
-  const usablePlugins = useMemo(
-    () => mergeUsablePlugins(plugins, installedPlugins),
-    [plugins, installedPlugins]
-  );
+  const usablePlugins = useMemo(() => usablePluginsFromMarketplace(plugins), [plugins]);
 
   const filteredPlugins = useMemo(
     () => usablePlugins.filter(p => pluginMatchesQuery(p, query)),

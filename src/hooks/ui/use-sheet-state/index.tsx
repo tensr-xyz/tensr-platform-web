@@ -1,9 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { SheetState, SheetOp, ServerMessage, ClientMessage, ColumnSchema } from '@/types/sheet';
-import { useWebSocket } from '../use-websocket';
-import { getIdToken } from '@/utils/auth';
-import { getTensrWebSocketUrl } from '@/lib/tensr-api-url';
+import { SheetState, SheetOp, ServerMessage, ColumnSchema } from '@/types/sheet';
+import { wsService } from '@/hooks/ui/use-session';
 import { devLog } from '@/lib/dev-log';
+import { fetchSnapshotRows } from '@/lib/collab-snapshot';
 
 interface UseSheetStateOptions {
   sheetId: string;
@@ -22,6 +21,17 @@ interface UseSheetStateReturn {
   unsubscribe: () => void;
 }
 
+/**
+ * Live sheet op-log (persisted via `sheet_live_dynamo` / `app/sheet_live.py`).
+ *
+ * This shares the single WebSocket connection managed by `wsService` (see
+ * `hooks/ui/use-session`) instead of opening its own socket. That connection
+ * already carries collaboration-session `join`/presence traffic when a session
+ * is active, so subscribing a sheet on it ties sheet sync to that session and
+ * lets the server's existing viewer-role check (`_reject_viewer_op`) apply to
+ * sheet `op` messages too — a Viewer on the same connection is rejected the
+ * same way for `op` as they are for session messages.
+ */
 export function useSheetState({
   sheetId,
   enabled = true,
@@ -30,9 +40,7 @@ export function useSheetState({
   const [version, setVersion] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const pendingOpsRef = useRef<Map<number, SheetOp>>(new Map());
-  const opSequenceRef = useRef<number>(0);
+  const [isConnected, setIsConnected] = useState(wsService.isSocketOpen);
   // Mirror `state` into a ref so the WS message effect doesn't need to re-subscribe
   // on every server-applied op (which would cause subscribe/unsubscribe churn and
   // CPU spikes under live-collab load).
@@ -41,27 +49,31 @@ export function useSheetState({
     stateRef.current = state;
   }, [state]);
 
-  // Get WebSocket URL from environment or config
-  const getWebSocketUrl = useCallback(() => {
-    const wsBaseUrl =
-      process.env.NEXT_PUBLIC_WEBSOCKET_URL?.replace(/\/$/, '') ||
-      getTensrWebSocketUrl('/realtime');
-    const separator = wsBaseUrl.includes('?') ? '&' : '?';
-    return `${wsBaseUrl}${separator}sheetId=${encodeURIComponent(sheetId)}`;
+  useEffect(() => {
+    if (!enabled) return;
+    return wsService.onWsReady(ready => setIsConnected(ready));
+  }, [enabled]);
+
+  // Reset local state whenever the sheet identity changes (e.g. session ends).
+  useEffect(() => {
+    setState(null);
+    setVersion(0);
+    setIsLoading(true);
+    setError(null);
   }, [sheetId]);
 
-  const {
-    isConnected: wsConnected,
-    sendMessage,
-    subscribe: wsSubscribe,
-  } = useWebSocket({
-    url: enabled ? getWebSocketUrl() : '',
-    enabled,
-  });
+  // Subscribe to sheet
+  const subscribe = useCallback(() => {
+    if (!enabled || !sheetId) return;
+    wsService.subscribeToSheet(sheetId);
+  }, [enabled, sheetId]);
 
-  useEffect(() => {
-    setIsConnected(wsConnected);
-  }, [wsConnected]);
+  // Unsubscribe (best-effort local bookkeeping; the shared socket may still be
+  // needed by the collaboration session, so it is never closed here).
+  const unsubscribe = useCallback(() => {
+    if (!sheetId) return;
+    wsService.unsubscribeFromSheet(sheetId);
+  }, [sheetId]);
 
   // Apply operation to local state
   const applyOpToState = useCallback((op: SheetOp, currentState: SheetState): SheetState => {
@@ -139,28 +151,12 @@ export function useSheetState({
     };
   }, []);
 
-  // Subscribe to sheet
-  const subscribe = useCallback(() => {
-    if (!enabled || !wsConnected) return;
-
-    const message: ClientMessage = {
-      type: 'subscribe',
-      sheetId,
-    };
-    sendMessage(message);
-  }, [enabled, wsConnected, sheetId, sendMessage]);
-
-  // Unsubscribe (cleanup on unmount)
-  const unsubscribe = useCallback(() => {
-    // WebSocket cleanup handled by useWebSocket hook
-  }, []);
-
   // Apply operation. Read state via ref so this callback stays stable across
   // state updates — Spreadsheet uses it in effect deps.
   const applyOperation = useCallback(
     async (op: Omit<SheetOp, 'actor' | 'timestamp'>): Promise<boolean> => {
       const current = stateRef.current;
-      if (!current || !wsConnected) {
+      if (!current || !wsService.isSocketOpen) {
         return false;
       }
 
@@ -173,52 +169,90 @@ export function useSheetState({
       const optimisticState = applyOpToState(fullOp, current);
       setState(optimisticState);
 
-      const message: ClientMessage = {
-        type: 'op',
-        sheetId,
-        baseVersion: current.version,
-        op: fullOp,
-      };
-
-      sendMessage(message);
+      wsService.sendSheetOp(sheetId, current.version, fullOp);
       return true;
     },
-    [wsConnected, sheetId, sendMessage, applyOpToState]
+    [sheetId, applyOpToState]
   );
 
-  // Request AI analysis
+  // Request AI analysis.
+  // TODO(full live sheet sync): production `app/realtime/hub.py` does not handle
+  // `request_ai` today (only the local in-memory `app/realtime_hub.py` stubs it with
+  // an `ai_error` reply) — this message currently goes unanswered against RealtimeStack.
   const requestAI = useCallback(
     (prompt: string, channelId: string) => {
       const current = stateRef.current;
-      if (!current || !wsConnected) return;
+      if (!current || !wsService.isSocketOpen) return;
 
-      const message: ClientMessage = {
+      wsService.sendSheetMessage({
         type: 'request_ai',
         sheetId,
         version: current.version,
         channelId,
         prompt,
-      };
-
-      sendMessage(message);
+      });
     },
-    [wsConnected, sheetId, sendMessage]
+    [sheetId]
   );
 
-  // Handle WebSocket messages
+  // Handle sheet messages arriving on the shared connection
   useEffect(() => {
     if (!enabled) return;
 
-    const unsubscribe = wsSubscribe(message => {
-      const serverMessage = message as ServerMessage;
+    return wsService.onSheetMessage(rawMessage => {
+      const serverMessage = rawMessage as ServerMessage & { sheetId?: string };
+      // The shared connection may carry messages for other tabs' sheets too.
+      if (serverMessage.sheetId !== undefined && serverMessage.sheetId !== sheetId) {
+        return;
+      }
+
       switch (serverMessage.type) {
         case 'initial_state': {
+          const columns =
+            serverMessage.columns && serverMessage.columns.length > 0
+              ? serverMessage.columns
+              : serverMessage.schema.map((s: ColumnSchema) => s.name);
+
+          // Collaboration-fork sheets: hydrate from the presigned Parquet snapshot and
+          // replay the ops applied since it, instead of relying on inline rows.
+          if (serverMessage.snapshotUrl) {
+            const snapshotUrl = serverMessage.snapshotUrl;
+            const ops = serverMessage.ops || [];
+            setIsLoading(true);
+            void (async () => {
+              try {
+                const rows = await fetchSnapshotRows(snapshotUrl);
+                let hydrated: SheetState = {
+                  sheetId: serverMessage.sheetId,
+                  version: serverMessage.snapshotVersion ?? 0,
+                  schema: serverMessage.schema,
+                  data: rows,
+                  columns,
+                  metadata: serverMessage.metadata,
+                };
+                for (const { op } of ops) {
+                  hydrated = applyOpToState(op, hydrated);
+                }
+                hydrated.version = serverMessage.version;
+                setState(hydrated);
+                setVersion(serverMessage.version);
+                setIsLoading(false);
+                setError(null);
+              } catch (err) {
+                console.error('Failed to hydrate collaboration snapshot:', err);
+                setError(err instanceof Error ? err.message : 'Failed to load collaboration sheet');
+                setIsLoading(false);
+              }
+            })();
+            break;
+          }
+
           const initialState: SheetState = {
             sheetId: serverMessage.sheetId,
             version: serverMessage.version,
             schema: serverMessage.schema,
             data: serverMessage.initialRows || [],
-            columns: serverMessage.schema.map(s => s.name),
+            columns,
             metadata: serverMessage.metadata,
           };
           setState(initialState);
@@ -229,7 +263,7 @@ export function useSheetState({
         }
 
         case 'op_applied': {
-          if (serverMessage.sheetId === sheetId && stateRef.current) {
+          if (stateRef.current) {
             const newState = applyOpToState(serverMessage.op, stateRef.current);
             newState.version = serverMessage.version;
             setState(newState);
@@ -239,41 +273,35 @@ export function useSheetState({
         }
 
         case 'op_rejected': {
-          if (serverMessage.sheetId === sheetId) {
-            setError(serverMessage.reason);
-            // Revert to server version if needed
-            // For now, just log the error
-            console.warn('Operation rejected:', serverMessage.reason);
-          }
+          setError(serverMessage.reason);
+          console.warn('Operation rejected:', serverMessage.reason);
           break;
         }
 
         case 'snapshot_saved': {
-          if (serverMessage.sheetId === sheetId) {
-            // Optionally show a "Saved" indicator
-            devLog('Snapshot saved at version', serverMessage.version);
-          }
+          devLog('Snapshot saved at version', serverMessage.version);
           break;
         }
 
         case 'error': {
-          setError(serverMessage.message);
+          if ('message' in serverMessage) {
+            setError(serverMessage.message);
+          }
           break;
         }
       }
     });
+  }, [enabled, sheetId, applyOpToState]);
 
-    return unsubscribe;
-  }, [enabled, sheetId, wsSubscribe, applyOpToState]);
-
-  // Auto-subscribe when connected
+  // Auto-subscribe when the shared socket is connected
   useEffect(() => {
-    if (enabled && wsConnected && !state) {
+    if (enabled && isConnected && !state) {
       subscribe();
     }
-  }, [enabled, wsConnected, state, subscribe]);
+  }, [enabled, isConnected, state, subscribe]);
 
-  // Cleanup on unmount
+  // Unsubscribe local bookkeeping on unmount/sheetId change — does not close the
+  // shared socket, which may still be serving the collaboration session or other tabs.
   useEffect(() => {
     return () => {
       unsubscribe();

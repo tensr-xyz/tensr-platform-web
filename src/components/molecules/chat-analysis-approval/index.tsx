@@ -26,6 +26,15 @@ function actionTitle(action: ChatPendingAction): string {
     const t = action.action.actionType.replace(/_/g, ' ');
     return t.charAt(0).toUpperCase() + t.slice(1);
   }
+  if (action.kind === 'prep_playbook') {
+    return `Step ${action.stepIndex + 1}/${action.totalSteps}: ${action.title}`;
+  }
+  if (action.kind === 'agent_tool_approval') {
+    return action.name.replace(/_/g, ' ');
+  }
+  if (action.kind === 'proposed_action') {
+    return action.title;
+  }
   return action.menuName;
 }
 
@@ -37,13 +46,24 @@ function actionSubtitle(action: ChatPendingAction): string | null {
   if (action.kind === 'data_action') {
     return action.action.rationale?.slice(0, 120) || 'Apply to spreadsheet';
   }
+  if (action.kind === 'prep_playbook') {
+    return action.proposedAction ? 'Apply to continue cleaning' : null;
+  }
+  if (action.kind === 'agent_tool_approval') {
+    return action.whyThisTest?.slice(0, 120) || action.rationale?.slice(0, 120) || null;
+  }
+  if (action.kind === 'proposed_action') {
+    return action.summaryText?.slice(0, 120) || 'Confirm before applying';
+  }
   return ANALYSIS_LABELS[action.op] ?? null;
 }
 
-function acceptLabel(status: ChatPendingAction['status']): string {
+function acceptLabel(status: ChatPendingAction['status'], kind: ChatPendingAction['kind']): string {
   if (status === 'planning') return 'Planning…';
   if (status === 'running') return 'Running…';
   if (status === 'failed') return 'Retry';
+  if (kind === 'agent_tool_approval') return 'Approve';
+  if (kind === 'proposed_action') return 'Apply';
   return 'Accept';
 }
 
@@ -127,7 +147,15 @@ export function ChatAnalysisApproval({
     >
       <div className="border-b border-border/80 px-3 py-2">
         <p className="text-[11px] font-medium text-foreground">
-          {action.kind === 'data_action' ? 'Apply to spreadsheet' : 'Run analysis'}
+          {action.kind === 'data_action'
+            ? 'Apply to spreadsheet'
+            : action.kind === 'prep_playbook'
+              ? 'Data prep playbook'
+              : action.kind === 'agent_tool_approval'
+                ? 'Awaiting approval'
+                : action.kind === 'proposed_action'
+                  ? 'Confirm change'
+                  : 'Run analysis'}
         </p>
         <p className="mt-0.5 text-[12px] text-foreground">
           <span className="font-medium">{title}</span>
@@ -136,6 +164,17 @@ export function ChatAnalysisApproval({
         {action.kind === 'analysis_plan' && action.plan.rationale ? (
           <p className="mt-1.5 line-clamp-4 text-[11px] leading-snug text-muted-foreground">
             {action.plan.rationale}
+          </p>
+        ) : null}
+        {action.kind === 'agent_tool_approval' && action.rationale ? (
+          <p className="mt-1.5 line-clamp-4 text-[11px] leading-snug text-muted-foreground">
+            {action.rationale}
+          </p>
+        ) : null}
+        {action.kind === 'agent_tool_approval' && action.whyThisTest ? (
+          <p className="mt-1 line-clamp-3 text-[11px] leading-snug text-muted-foreground">
+            <span className="font-medium text-foreground">Why this test: </span>
+            {action.whyThisTest}
           </p>
         ) : null}
         {isFailed && action.errorMessage ? (
@@ -152,9 +191,15 @@ export function ChatAnalysisApproval({
           disabled={buttonsLocked}
         >
           <X className="size-3" aria-hidden />
-          Skip
+          {action.kind === 'prep_playbook'
+            ? 'Skip step'
+            : action.kind === 'agent_tool_approval'
+              ? 'Reject'
+              : 'Skip'}
         </Button>
-        {action.kind !== 'data_action' ? (
+        {action.kind !== 'data_action' &&
+        action.kind !== 'agent_tool_approval' &&
+        action.kind !== 'proposed_action' ? (
           <Button
             type="button"
             variant="outline"
@@ -163,8 +208,12 @@ export function ChatAnalysisApproval({
             onClick={onManage}
             disabled={buttonsLocked}
           >
-            <Settings2 className="size-3" aria-hidden />
-            Manage
+            {action.kind === 'prep_playbook' ? (
+              <X className="size-3" aria-hidden />
+            ) : (
+              <Settings2 className="size-3" aria-hidden />
+            )}
+            {action.kind === 'prep_playbook' ? 'Cancel playbook' : 'Manage'}
           </Button>
         ) : null}
         <Button
@@ -179,9 +228,10 @@ export function ChatAnalysisApproval({
           ) : (
             <Play className="size-3" aria-hidden />
           )}
-          {action.kind === 'data_action' && action.status === 'pending'
+          {(action.kind === 'data_action' || action.kind === 'prep_playbook') &&
+          action.status === 'pending'
             ? 'Apply'
-            : acceptLabel(action.status)}
+            : acceptLabel(action.status, action.kind)}
         </Button>
       </div>
     </div>

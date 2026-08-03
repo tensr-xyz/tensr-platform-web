@@ -5,6 +5,7 @@ import { Suspense, useMemo } from 'react';
 import Workspace, { WorkspaceResource } from '@/components/templates/workspace';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import Loading from '@/components/molecules/loading';
+import { SessionRestore } from '@/components/molecules/session-restore';
 
 function DatasetWorkspaceContent() {
   const params = useParams();
@@ -24,6 +25,7 @@ function DatasetWorkspaceContent() {
 
   return (
     <SubscriptionGate>
+      <SessionRestore />
       {/* Remount on dataset change so loader refs / local state cannot leak across datasets */}
       <Workspace key={datasetId} resource={resource} />
     </SubscriptionGate>

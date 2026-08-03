@@ -12,7 +12,6 @@ import { useProjectStore } from '@/stores/project-store';
 import { useTabsStore } from '@/stores/tabs-store';
 import { ViewType } from '@/stores/project-store';
 import { FileEntry } from '@/types/project';
-import { useCollaboration } from '@/hooks/use-collaboration';
 import Loading from '@/components/molecules/loading';
 import useAuth from '@/hooks/api/use-auth';
 import { LeftPanel } from '@/components/organisms/left-panel';
@@ -65,8 +64,6 @@ const ProjectLayout = ({
   // Make sure we have a valid resource.id before using it
   const resourceId = currentProject?.id || '';
   const userId = user?.userId;
-
-  useCollaboration(resourceId);
 
   // Handle project initialization
   useEffect(() => {

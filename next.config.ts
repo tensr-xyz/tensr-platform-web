@@ -51,24 +51,21 @@ const nextConfig: NextConfig = {
 
   skipTrailingSlashRedirect: true,
 
-  // Headers for caching and security
+  // Headers for caching and security.
+  // Never cache /api/* — those routes are auth-scoped (sessions, /me, datasets)
+  // and public max-age was serving stale/expired session state until hard reload.
   async headers() {
     return [
       {
-        source: '/api/(.*)',
+        source: '/api/:path*',
         headers: [
           {
             key: 'Cache-Control',
-            value: 'public, max-age=300, stale-while-revalidate=600',
+            value: 'private, no-store, no-cache, must-revalidate',
           },
-        ],
-      },
-      {
-        source: '/_next/static/(.*)',
-        headers: [
           {
-            key: 'Cache-Control',
-            value: 'public, max-age=31536000, immutable',
+            key: 'Pragma',
+            value: 'no-cache',
           },
         ],
       },

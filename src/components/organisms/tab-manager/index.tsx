@@ -20,7 +20,6 @@ import {
   Plus,
   CircleStop,
 } from 'lucide-react';
-import { FEATURE_FLAGS } from '@/lib/feature-flags';
 import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
 import { AnalysisResultPlaceholder } from '@/components/organisms/analysis-result-placeholder';
 import { cn } from '@/utils';
@@ -40,7 +39,6 @@ import { ViewType } from '@/stores/project-store';
 import { Notebook } from '@/components/templates/notebook';
 import MarkdownViewer from '@/components/organisms/markdown-viewer';
 import { AnalysisReportLayout } from '@/components/organisms/analysis-report-layout';
-import AnalyticsLayout from '@/components/templates/analytics-layout';
 import { Separator } from '@/components/atoms/separator';
 // Removed context actions import - using store actions instead
 import { LeftPanel } from '@/components/organisms/left-panel';
@@ -172,9 +170,6 @@ const TabManager: React.FC<TabManagerProps> = ({
 
   useEffect(() => {
     if (activeView === ViewType.SEM) {
-      setView(ViewType.SPREADSHEET);
-    }
-    if (!FEATURE_FLAGS.CHARTS_TAB_ENABLED && activeView === ViewType.CHARTS) {
       setView(ViewType.SPREADSHEET);
     }
   }, [activeView, setView]);
@@ -614,12 +609,6 @@ const TabManager: React.FC<TabManagerProps> = ({
         case ViewType.SPREADSHEET:
           return spreadsheetContent;
 
-        case ViewType.CHARTS:
-          if (!FEATURE_FLAGS.CHARTS_TAB_ENABLED) {
-            return spreadsheetContent;
-          }
-          return <AnalyticsLayout filePath={tab.data.filePath} columns={tab.data.initialColumns} />;
-
         case ViewType.NOTEBOOK:
           return (
             <div className="h-full">
@@ -677,9 +666,6 @@ const TabManager: React.FC<TabManagerProps> = ({
   const workspaceFixedViews = useMemo(
     () => [
       { key: ViewType.SPREADSHEET, label: 'Sheet' },
-      ...(FEATURE_FLAGS.CHARTS_TAB_ENABLED
-        ? [{ key: ViewType.CHARTS, label: 'Charts' as const }]
-        : []),
       { key: ViewType.NOTEBOOK, label: 'Notebook' },
     ],
     []
@@ -687,11 +673,7 @@ const TabManager: React.FC<TabManagerProps> = ({
 
   const activateWorkspaceView = useCallback(
     (view: ViewType) => {
-      if (
-        activeTab?.type === TabViewType.ANALYSIS_RESULT &&
-        sourceSpreadsheetTab &&
-        view !== ViewType.CHARTS
-      ) {
+      if (activeTab?.type === TabViewType.ANALYSIS_RESULT && sourceSpreadsheetTab) {
         setActiveTab(sourceSpreadsheetTab.id);
       }
       setView(view);
@@ -803,8 +785,7 @@ const TabManager: React.FC<TabManagerProps> = ({
                     </Button>
                   </div>
                 </>
-              ) : activeView === ViewType.SPREADSHEET ||
-                (FEATURE_FLAGS.CHARTS_TAB_ENABLED && activeView === ViewType.CHARTS) ? (
+              ) : activeView === ViewType.SPREADSHEET ? (
                 <>
                   <Separator orientation="vertical" className="h-5 shrink-0" />
                   <div className="flex items-center gap-0.5 shrink-0">

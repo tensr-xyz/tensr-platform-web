@@ -1,8 +1,17 @@
-import { useEffect, useRef, useState } from 'react';
-import { WebsocketProvider } from 'y-websocket';
+import { useEffect, useState } from 'react';
 import * as Y from 'yjs';
-import { getTensrWebSocketUrl } from '@/lib/tensr-api-url';
-import { getIdToken } from '@/utils/auth';
+
+/**
+ * Stub collaboration hook — does NOT open WebSockets.
+ *
+ * Production collab: `hooks/ui/use-session` + `hooks/ui/use-sheet-state` on
+ * RealtimeStack (API Gateway WebSocket + DynamoDB). Fargate / prod `/ws/yjs`
+ * are rejected. Local uvicorn Yjs (`app/yjs_ws.py`) is local-dev only and must
+ * not be reachable via this hook when `NEXT_PUBLIC_WEBSOCKET_URL` is set.
+ *
+ * Call sites that only need a local Y.Doc may keep using this; `connect()` is
+ * always a no-op so production cannot fall back to a Yjs path by mistake.
+ */
 
 export interface UserPresence {
   userId: string;
@@ -21,19 +30,24 @@ export interface UserPresence {
 interface CollaborationState {
   users: Map<string, UserPresence>;
   doc: Y.Doc;
-  provider: WebsocketProvider | null;
-  awareness: any;
-  connect: (sessionId: string, userId: string, userName: string) => any;
+  provider: null;
+  awareness: {
+    getStates: () => Map<unknown, unknown>;
+    getLocalState: () => null;
+    setLocalState: () => void;
+    on: () => void;
+    off: () => void;
+    clientID: number;
+  };
+  connect: (sessionId: string, userId: string, userName: string) => null;
   disconnect: () => void;
 }
 
-export const useCollaboration = (projectId: string) => {
+export const useCollaboration = (_projectId: string) => {
   const [collaborationState, setCollaborationState] = useState<CollaborationState | null>(null);
-  const providerRef = useRef<WebsocketProvider | null>(null);
 
   useEffect(() => {
     const ydoc = new Y.Doc();
-
     const dummyAwareness = {
       getStates: () => new Map(),
       getLocalState: () => null,
@@ -43,74 +57,11 @@ export const useCollaboration = (projectId: string) => {
       clientID: 0,
     };
 
-    const disconnect = () => {
-      const p = providerRef.current;
-      if (p) {
-        try {
-          p.disconnect();
-        } catch {
-          /* ignore */
-        }
-        try {
-          p.destroy();
-        } catch {
-          /* ignore */
-        }
-        providerRef.current = null;
-      }
-      setCollaborationState(prev =>
-        prev
-          ? {
-              ...prev,
-              provider: null,
-              awareness: dummyAwareness,
-            }
-          : prev
+    const connect = (_sessionId: string, _userId: string, _userName: string) => {
+      console.warn(
+        '[useCollaboration] connect() is disabled. Use useSession / useSheetState (RealtimeStack).'
       );
-    };
-
-    const connect = (sessionId: string, userId: string, userName: string) => {
-      const authToken = getIdToken() || '';
-      if (!authToken) {
-        console.error('Authentication required for collaboration WebSocket');
-        return null;
-      }
-
-      disconnect();
-
-      const wsBase =
-        process.env.NEXT_PUBLIC_WEBSOCKET_URL?.replace(/\/$/, '') ||
-        getTensrWebSocketUrl('/ws/yjs');
-
-      const newProvider = new WebsocketProvider(wsBase, projectId, ydoc, {
-        params: {
-          sessionId,
-          userId,
-          token: authToken,
-        },
-      });
-
-      providerRef.current = newProvider;
-
-      const awareness = newProvider.awareness;
-      awareness.setLocalState({
-        userId,
-        userName,
-        cursor: null,
-        lastActive: Date.now(),
-      });
-
-      setCollaborationState(prev =>
-        prev
-          ? {
-              ...prev,
-              provider: newProvider,
-              awareness,
-            }
-          : prev
-      );
-
-      return awareness;
+      return null;
     };
 
     setCollaborationState({
@@ -119,18 +70,9 @@ export const useCollaboration = (projectId: string) => {
       provider: null,
       awareness: dummyAwareness,
       connect,
-      disconnect,
+      disconnect: () => {},
     });
-
-    return () => {
-      disconnect();
-      try {
-        ydoc.destroy();
-      } catch {
-        /* ignore */
-      }
-    };
-  }, [projectId]);
+  }, [_projectId]);
 
   return collaborationState;
 };

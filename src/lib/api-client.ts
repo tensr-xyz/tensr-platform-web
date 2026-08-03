@@ -1,13 +1,24 @@
-import { getSessionToken, getSessionJwt, getTensrApiHeaders } from '@/utils/auth';
+import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { getUsageTracker } from '@/utils/usage-tracker';
-import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
+import type { PlaybookProposedAction, PrepPlaybookStep } from '@/lib/chat-pending-action';
+
+/** High-frequency collab/health endpoints — tracking these floods POST /usage/track. */
+function shouldSkipUsageTracking(endpoint: string): boolean {
+  const path = endpoint.split('?')[0] || '';
+  if (path === '/sessions' || path.startsWith('/sessions/')) return true;
+  if (path.includes('/runs')) return true;
+  if (path.startsWith('/usage/')) return true;
+  if (path === '/assistant/capabilities' || path === '/health') return true;
+  return false;
+}
 
 // Generic API client with authentication
 class ApiClient {
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = getSessionJwt() || getSessionToken();
+    const token = getStytchBearerForTensrApi();
 
     if (!token) {
       throw new Error('No authentication token found');
@@ -34,6 +45,7 @@ class ApiClient {
     try {
       const response = await fetch(url, {
         ...options,
+        cache: 'no-store',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
@@ -57,111 +69,67 @@ class ApiClient {
       const duration = performance.now() - startTime;
       const data = JSON.parse(responseText);
 
-      // Track API usage
-      try {
-        const usageTracker = getUsageTracker(() => getSessionJwt() || getSessionToken());
-        usageTracker.trackAPICall(endpoint, options.method || 'GET', {
-          duration,
-          requestSize,
-          responseSize,
-          dataProcessed: requestSize + responseSize,
-          metadata: {
-            statusCode: response.status,
-          },
-        });
-      } catch (trackingError) {
-        // Don't fail the request if tracking fails
-        console.warn('Failed to track API usage:', trackingError);
+      // Skip noisy collab/health polls — they were flooding POST /usage/track.
+      if (!shouldSkipUsageTracking(endpoint)) {
+        try {
+          const usageTracker = getUsageTracker(() => getStytchBearerForTensrApi());
+          usageTracker.trackAPICall(endpoint, options.method || 'GET', {
+            duration,
+            requestSize,
+            responseSize,
+            dataProcessed: requestSize + responseSize,
+            metadata: {
+              statusCode: response.status,
+            },
+          });
+        } catch (trackingError) {
+          // Don't fail the request if tracking fails
+          console.warn('Failed to track API usage:', trackingError);
+        }
       }
 
       return data;
     } catch (error) {
       const duration = performance.now() - startTime;
 
-      // Track failed API call
-      try {
-        const usageTracker = getUsageTracker(() => getSessionJwt() || getSessionToken());
-        usageTracker.trackAPICall(endpoint, options.method || 'GET', {
-          duration,
-          requestSize,
-          responseSize,
-          metadata: {
-            error: error instanceof Error ? error.message : 'Unknown error',
-          },
-        });
-      } catch (trackingError) {
-        // Ignore tracking errors
+      if (!shouldSkipUsageTracking(endpoint)) {
+        try {
+          const usageTracker = getUsageTracker(() => getStytchBearerForTensrApi());
+          usageTracker.trackAPICall(endpoint, options.method || 'GET', {
+            duration,
+            requestSize,
+            responseSize,
+            metadata: {
+              error: error instanceof Error ? error.message : 'Unknown error',
+            },
+          });
+        } catch {
+          // Ignore tracking errors
+        }
       }
 
       throw error;
     }
   }
 
-  // Files API
-  files = {
-    list: (params?: { context?: string; organizationId?: string }) => {
-      const searchParams = new URLSearchParams();
-      if (params?.context) searchParams.append('context', params.context);
-      if (params?.organizationId) searchParams.append('organizationId', params.organizationId);
-
-      return this.request<{ files: any[]; context: any; total: number }>(
-        `/files?${searchParams.toString()}`
-      );
-    },
-
-    get: (id: string) => this.request<any>(`/files/${id}`),
-
-    create: (data: FormData) =>
-      this.request<any>('/files', {
-        method: 'POST',
-        body: data,
-        headers: {}, // Let browser set content-type for FormData
-      }),
-
-    update: (id: string, data: any) =>
-      this.request<any>(`/files/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      }),
-
-    delete: (id: string) => this.request<void>(`/files/${id}`, { method: 'DELETE' }),
-
-    uploadUrl: (data: any) =>
-      this.request<any>('/files/upload-url', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    completeUpload: (id: string, data: any) =>
-      this.request<any>(`/files/${id}/complete`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    versions: (id: string) => this.request<any[]>(`/files/${id}/versions`),
-
-    getVersion: (fileId: string, versionId: string) =>
-      this.request<any>(`/files/${fileId}/versions/${versionId}`),
-
-    revert: (fileId: string, versionId: string) =>
-      this.request<any>(`/files/${fileId}/revert/${versionId}`, { method: 'POST' }),
-  };
-
   // Projects API
   projects = {
     list: async () => {
-      const token = getSessionJwt() || getSessionToken();
+      const token = getStytchBearerForTensrApi();
       if (!token) {
         throw new Error('No authentication token found');
       }
-      const headers: HeadersInit = {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      };
+      const headers = getTensrApiHeaders({ 'Content-Type': 'application/json' });
 
-      const res = await fetch(tensrApiUrl('/datasets/?scope=all'), { headers });
+      const res = await fetch(tensrApiUrl('/datasets/?scope=all'), {
+        headers,
+        cache: 'no-store',
+      });
       if (!res.ok) {
         const text = await res.text();
+        if (handleUnauthorizedResponse(res, 'projects.list')) {
+          throw new Error(`API Error: 401 - ${text}`);
+        }
         throw new Error(`API Error: ${res.status} - ${text}`);
       }
       const rows = await res.json();
@@ -182,13 +150,16 @@ class ApiClient {
     },
 
     get: async (id: string) => {
-      const token = getSessionJwt() || getSessionToken();
+      const token = getStytchBearerForTensrApi();
       if (!token) {
         throw new Error('No authentication token found');
       }
       const headers = getTensrApiHeaders({ 'Content-Type': 'application/json' });
 
-      const dsRes = await fetch(tensrApiUrl(`/datasets/${id}/schema`), { headers });
+      const dsRes = await fetch(tensrApiUrl(`/datasets/${id}/schema`), {
+        headers,
+        cache: 'no-store',
+      });
       if (dsRes.ok) {
         const schema = await dsRes.json();
         const label = (schema.original_filename && String(schema.original_filename)) || 'Dataset';
@@ -205,6 +176,9 @@ class ApiClient {
       if (dsRes.status === 403) {
         const errorText = await dsRes.text();
         throw new Error(`Dataset not accessible with current organization context: ${errorText}`);
+      }
+      if (dsRes.status === 401) {
+        handleUnauthorizedResponse(dsRes, 'projects.get');
       }
       if (dsRes.status !== 404) {
         const errorText = await dsRes.text();
@@ -383,11 +357,10 @@ class ApiClient {
 
     get: (id: string) => this.request<any>(`/plugins/${id}`),
 
-    install: (id: string) => this.request<any>(`/plugins/${id}/install`, { method: 'POST' }),
-
-    uninstall: (id: string) => this.request<any>(`/plugins/${id}/uninstall`, { method: 'POST' }),
-
     downloadUrl: (id: string) => this.request<any>(`/plugins/${id}/download-url`),
+
+    access: (id: string) =>
+      this.request<import('@/types/plugin').PluginAccessResponse>(`/plugins/${id}/access`),
 
     execute: (id: string, data: any, config?: any) =>
       this.request<any>(`/plugins/${id}/execute`, {
@@ -396,7 +369,7 @@ class ApiClient {
       }),
 
     purchase: (id: string, data: any) =>
-      this.request<any>(`/plugins/${id}/purchase`, {
+      this.request<import('@/types/plugin').PluginPurchaseResponse>(`/plugins/${id}/purchase`, {
         method: 'POST',
         body: JSON.stringify(data),
       }),
@@ -407,6 +380,44 @@ class ApiClient {
         body: data,
         headers: {}, // Let browser set content-type for FormData
       }),
+
+    reviewQueue: () =>
+      this.request<{ items: import('@/types/plugin').PluginRecord[] }>(
+        '/plugins/admin/review-queue'
+      ),
+
+    review: (
+      id: string,
+      body: {
+        status: 'APPROVED' | 'REJECTED' | 'PENDING';
+        notes?: string;
+        version?: string;
+      }
+    ) =>
+      this.request<{ message: string; plugin: import('@/types/plugin').PluginRecord }>(
+        `/plugins/admin/${id}/review`,
+        { method: 'POST', body: JSON.stringify(body) }
+      ),
+  };
+
+  // Creator dashboard API (tensr-api app/routers/plugins.py — creator + Stripe Connect)
+  creator = {
+    stats: () => this.request<import('@/types/plugin').CreatorStats>('/creator/stats'),
+
+    plugins: () =>
+      this.request<import('@/types/plugin').CreatorPluginSummary[]>('/creator/plugins'),
+
+    connectOnboarding: (returnTo?: string) =>
+      this.request<import('@/types/plugin').ConnectOnboardingResponse>(
+        '/creator/connect/onboarding',
+        {
+          method: 'POST',
+          body: JSON.stringify({ returnTo }),
+        }
+      ),
+
+    connectStatus: () =>
+      this.request<import('@/types/plugin').ConnectStatusResponse>('/creator/connect/status'),
   };
 
   // Statistics API
@@ -799,12 +810,9 @@ class ApiClient {
 
     getSession: (id: string) => this.request<any>(`/sessions/${id}`),
 
-    createSession: (data: {
-      datasetId?: string;
-      filePath?: string;
-      fileName: string;
-      userName: string;
-    }) =>
+    // A session always forks `datasetId` — there is no filePath-only collaboration
+    // (see `app/routers/sessions.py::CreateSessionBody`).
+    createSession: (data: { datasetId: string; fileName: string; userName: string }) =>
       this.request<any>('/sessions', {
         method: 'POST',
         body: JSON.stringify(data),
@@ -818,6 +826,27 @@ class ApiClient {
 
     leaveSession: (id: string) =>
       this.request<any>(`/sessions/${id}/leave`, {
+        method: 'POST',
+        body: JSON.stringify({}),
+      }),
+
+    updateParticipantRole: (sessionId: string, userId: string, role: 'Editor' | 'Viewer') =>
+      this.request<any>(`/sessions/${sessionId}/participants/${userId}/role`, {
+        method: 'POST',
+        body: JSON.stringify({ role }),
+      }),
+
+    /** Host only: overwrite the source dataset with the fork's current data, then
+     * discard the fork. */
+    saveBack: (id: string) =>
+      this.request<{ success: boolean; message: string; datasetId: string }>(
+        `/sessions/${id}/save-back`,
+        { method: 'POST', body: JSON.stringify({}) }
+      ),
+
+    /** Host only: drop the fork's changes entirely and end the session. */
+    discard: (id: string) =>
+      this.request<{ success: boolean; message: string }>(`/sessions/${id}/discard`, {
         method: 'POST',
         body: JSON.stringify({}),
       }),
@@ -914,21 +943,6 @@ class ApiClient {
           use_llm: data.useLlm ?? true,
         }),
       }),
-    followup: (data: {
-      datasetId: string;
-      message: string;
-      context?: Record<string, unknown> | null;
-      conversationHistory?: Array<{ role: string; content: string }>;
-    }) =>
-      this.request<{ answer_markdown: string; source: string }>('/assistant/followup', {
-        method: 'POST',
-        body: JSON.stringify({
-          dataset_id: data.datasetId,
-          message: data.message,
-          context: data.context ?? null,
-          conversation_history: data.conversationHistory ?? null,
-        }),
-      }),
     suggestAnalyses: (data: {
       datasetId: string;
       conversationHistory?: Array<{ role: string; content: string }>;
@@ -946,6 +960,74 @@ class ApiClient {
           dataset_id: data.datasetId,
           conversation_history: data.conversationHistory ?? null,
         }),
+      }),
+    agentLoop: (data: {
+      message: string;
+      mode: 'ask' | 'plan' | 'agent';
+      datasetId?: string | null;
+      openDatasets?: Array<{
+        dataset_id: string;
+        label?: string | null;
+        filename?: string | null;
+      }>;
+      conversationHistory?: Array<{ role: string; content: string }>;
+      glossary?: string | null;
+      approvedToolCall?: {
+        tool_call_id: string;
+        name: string;
+        args: Record<string, unknown>;
+        rationale?: string;
+        why_this_test?: string;
+        confidence?: number;
+      } | null;
+      approvedToolCalls?: Array<{
+        tool_call_id: string;
+        name: string;
+        args: Record<string, unknown>;
+        rationale?: string;
+        why_this_test?: string;
+        confidence?: number;
+      }> | null;
+    }) =>
+      this.request<import('@/lib/run-agent-loop').AgentLoopResponse>('/assistant/agent-loop', {
+        method: 'POST',
+        body: JSON.stringify({
+          message: data.message,
+          mode: data.mode,
+          dataset_id: data.datasetId ?? null,
+          open_datasets: data.openDatasets ?? [],
+          conversation_history: data.conversationHistory ?? null,
+          glossary: data.glossary ?? null,
+          approved_tool_call: data.approvedToolCall ?? null,
+          approved_tool_calls: data.approvedToolCalls ?? null,
+        }),
+      }),
+    /** Deterministic, LLM-free inspection of one agent-driven data-prep playbook step. */
+    prepPlaybookStep: (data: { datasetId: string; step?: PrepPlaybookStep | null }) =>
+      this.request<{
+        step: PrepPlaybookStep;
+        step_index: number;
+        total_steps: number;
+        title: string;
+        status: 'issue_found' | 'clean';
+        summary: string;
+        details: string[];
+        proposed_action: PlaybookProposedAction | null;
+        is_last_step: boolean;
+        stats?: Record<string, unknown>;
+      }>('/assistant/prep-playbook/step', {
+        method: 'POST',
+        body: JSON.stringify({
+          dataset_id: data.datasetId,
+          step: data.step ?? null,
+        }),
+      }),
+    /** Generic executor for a playbook step's `proposed_action` — an existing data_ops
+     *  endpoint (impute-missing / remove-duplicates / handle-outliers / fix-data-types). */
+    applyPlaybookAction: (action: PlaybookProposedAction) =>
+      this.request<Record<string, unknown>>(action.endpoint, {
+        method: action.method || 'POST',
+        body: JSON.stringify(action.body),
       }),
   };
   datasets = {

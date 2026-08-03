@@ -52,6 +52,8 @@ export const config = {
     '/workspace/:path*',
     '/settings/:path*',
     '/plugins/:path*',
+    '/admin/plugins/:path*',
+    '/admin/plugins',
     '/creator/:path*',
     '/project/:path*',
     '/subscription',

@@ -53,21 +53,57 @@ export interface Invoice {
   createdAt: string;
 }
 
-// Usage stats interface
+// Usage stats interface — matches GET /api/billing/usage
 export interface UsageStats {
-  userId: string;
+  scope_type?: string;
+  scope_id?: string;
+  scopes_included?: { scope_type: string; scope_id: string }[];
+  rows?: Array<{
+    scope_type: string;
+    scope_id: string;
+    event_type: string;
+    day: string;
+    total_quantity: number;
+    updated_at?: string;
+  }>;
+  summary?: {
+    period: { start: string; end: string };
+    by_event_type: Record<string, number>;
+    daily_trend: { date: string; count: number }[];
+    analyses: number;
+    reports: number;
+    ai_requests: number;
+    total_operations: number;
+  };
+  period?: { start: string; end: string };
+  limits?: {
+    assistant_requests: number;
+    reports: number;
+  };
+  usage?: {
+    totalOperations: number;
+    analyses: number;
+    reports: number;
+    aiRequests: number;
+    operationTypes: Record<string, number>;
+    dailyTrend: { date: string; count: number }[];
+  };
+  usagePercentages?: {
+    assistant_requests: number;
+    reports: number;
+    operations?: number;
+  };
+  /** Assistant requests this month (billing meter) */
   currentUsage: number;
+  /** Assistant request cap; -1 when unlimited / unset */
   limit: number;
   utilizationPercentage: number;
-  operationBreakdown?: {
-    [operationType: string]: number;
+  assistant_current_period?: {
+    requests: number;
+    request_cap: number;
+    plan_code?: string;
+    can_use_ai_assistant?: boolean;
   };
-  dailyTrend?: {
-    date: string;
-    count: number;
-  }[];
-  periodStart?: string;
-  periodEnd?: string;
 }
 
 // Payment method interface
@@ -210,7 +246,7 @@ export const useBilling = () => {
       }
 
       const data = await response.json();
-      const userInvoices = data.items || [];
+      const userInvoices = data.invoices || data.items || [];
       setInvoices(userInvoices);
       return userInvoices;
     } catch (err: any) {

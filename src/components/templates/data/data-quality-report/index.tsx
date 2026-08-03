@@ -78,6 +78,9 @@ export function DataQualityReportDialog({ children }: { children: ReactNode }) {
                 ) : (
                   <p className="text-xs text-emerald-700">No issues flagged</p>
                 )}
+                {col.type_suggestion ? (
+                  <p className="mt-1 text-xs text-sky-700">{col.type_suggestion}</p>
+                ) : null}
               </div>
             ))}
           </div>

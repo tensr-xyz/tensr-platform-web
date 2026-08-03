@@ -1,304 +1,301 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Plus, TrendingUp, Download, DollarSign, Users, BarChart3 } from 'lucide-react';
+import React, { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import {
+  Plus,
+  DollarSign,
+  Download,
+  Users,
+  TrendingUp,
+  CheckCircle2,
+  Clock,
+  AlertTriangle,
+  ExternalLink,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/atoms/card';
 import { Button } from '@/components/atoms/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { Badge } from '@/components/atoms/badge';
+import { Loader } from '@/components/molecules/loading';
+import { apiClient } from '@/lib/api-client';
+import { formatApiErrorMessage } from '@/lib/api-error';
+import type { CreatorPluginSummary, CreatorStats } from '@/types/plugin';
 
-interface CreatorStats {
-  totalPlugins: number;
-  totalDownloads: number;
-  totalRevenue: number;
-  totalCustomers: number;
-  monthlyRevenue: number;
-  monthlyGrowth: number;
+function formatUsd(amount: number): string {
+  return amount.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
-interface PluginData {
-  pluginId: string;
-  name: string;
-  status: string;
-  downloads: number;
-  revenue: number;
-  createdAt: string;
-  lastUpdated: string;
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ComponentType<{ className?: string }>;
+}) {
+  return (
+    <Card>
+      <CardContent className="flex items-center justify-between p-5">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
+        </div>
+        <Icon className="h-8 w-8 text-muted-foreground/40" />
+      </CardContent>
+    </Card>
+  );
+}
+
+function StripeConnectCard({
+  stats,
+  onConnect,
+  connecting,
+}: {
+  stats: CreatorStats;
+  onConnect: () => void;
+  connecting: boolean;
+}) {
+  if (!stats.stripeConfigured) {
+    return (
+      <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            Payouts not configured
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">
+            This Tensr deployment hasn&apos;t configured Stripe yet, so paid plugin checkout and
+            creator payouts aren&apos;t available. Free plugins work normally. Ask your
+            administrator to set <code className="text-xs">STRIPE_SECRET_KEY</code> on tensr-api to
+            enable payouts.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (stats.stripeConnected) {
+    return (
+      <Card className="border-emerald-200 bg-emerald-50/50 dark:border-emerald-900 dark:bg-emerald-950/20">
+        <CardContent className="flex items-center gap-3 p-5">
+          <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600" />
+          <div>
+            <p className="text-sm font-medium">Payouts connected</p>
+            <p className="text-xs text-muted-foreground">
+              Stripe Connect is set up. Paid plugin sales are transferred to your account
+              automatically, minus a 10% platform fee.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <DollarSign className="h-4 w-4" />
+          Get paid for your plugins
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="mb-4 text-sm text-muted-foreground">
+          {stats.stripeConnectStatus === 'pending'
+            ? "You've started Stripe onboarding but haven't finished it yet. Continue to enable paid plugin checkout."
+            : 'Connect a Stripe account to sell paid plugins. Tensr takes a 10% platform fee; the rest is transferred to you automatically.'}
+        </p>
+        <Button onClick={onConnect} disabled={connecting}>
+          {connecting ? (
+            <Loader size="sm" className="mr-2" />
+          ) : (
+            <ExternalLink className="mr-2 h-4 w-4" />
+          )}
+          {stats.stripeConnectStatus === 'pending' ? 'Continue Stripe setup' : 'Connect Stripe'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PluginRow({ plugin }: { plugin: CreatorPluginSummary }) {
+  return (
+    <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3 last:border-b-0">
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/plugins/${plugin.pluginId}`}
+            className="truncate text-sm font-medium hover:underline"
+          >
+            {plugin.name}
+          </Link>
+          <Badge
+            variant={plugin.status === 'APPROVED' ? 'default' : 'secondary'}
+            className="text-[10px]"
+          >
+            {plugin.status}
+          </Badge>
+          {plugin.isPaid ? (
+            <Badge variant="outline" className="text-[10px]">
+              {plugin.pricing?.price != null ? `$${plugin.pricing.price}` : 'Paid'}
+            </Badge>
+          ) : (
+            <Badge variant="outline" className="text-[10px] text-emerald-600">
+              Free
+            </Badge>
+          )}
+        </div>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          Updated {new Date(plugin.lastUpdated).toLocaleDateString()}
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-6 text-sm">
+        <div className="text-right">
+          <div className="font-mono tabular-nums">{plugin.downloads}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Sales</div>
+        </div>
+        <div className="text-right">
+          <div className="font-mono tabular-nums">{formatUsd(plugin.revenue)}</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Revenue</div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function CreatorDashboard() {
   const router = useRouter();
-  const [stats, setStats] = useState<CreatorStats>({
-    totalPlugins: 0,
-    totalDownloads: 0,
-    totalRevenue: 0,
-    totalCustomers: 0,
-    monthlyRevenue: 0,
-    monthlyGrowth: 0,
-  });
-  const [plugins, setPlugins] = useState<PluginData[]>([]);
+  const searchParams = useSearchParams();
+  const [stats, setStats] = useState<CreatorStats | null>(null);
+  const [plugins, setPlugins] = useState<CreatorPluginSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchCreatorData();
-  }, []);
-
-  const fetchCreatorData = async () => {
+  const fetchData = useCallback(async () => {
+    setError(null);
     try {
-      // Fetch creator stats and plugins
-      const [statsResponse, pluginsResponse] = await Promise.all([
-        fetch('/api/creator/stats'),
-        fetch('/api/creator/plugins'),
+      const [statsData, pluginsData] = await Promise.all([
+        apiClient.creator.stats(),
+        apiClient.creator.plugins(),
       ]);
-
-      if (statsResponse.ok) {
-        const statsData = await statsResponse.json();
-        setStats(statsData);
-      }
-
-      if (pluginsResponse.ok) {
-        const pluginsData = await pluginsResponse.json();
-        setPlugins(pluginsData);
-      }
-    } catch (error) {
-      console.error('Error fetching creator data:', error);
+      setStats(statsData);
+      setPlugins(pluginsData);
+    } catch (err) {
+      setError(formatApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const handleUploadPlugin = () => {
-    router.push('/plugins/upload');
-  };
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
-  const handleConnectStripe = async () => {
+  // Returning from Stripe Connect onboarding — re-check status so the CTA updates.
+  useEffect(() => {
+    if (searchParams.get('connect')) {
+      fetchData();
+      router.replace('/creator');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    setConnectError(null);
     try {
-      const response = await fetch('/api/creator/connect/onboarding', {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        const { url } = await response.json();
-        window.location.href = url;
-      }
-    } catch (error) {
-      console.error('Error starting Stripe Connect onboarding:', error);
+      const res = await apiClient.creator.connectOnboarding('/creator');
+      window.location.href = res.url;
+    } catch (err) {
+      setConnectError(formatApiErrorMessage(err));
+      setConnecting(false);
     }
   };
 
   if (loading) {
+    return <Loader fullScreen />;
+  }
+
+  if (error || !stats) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-4 text-lg">Loading creator dashboard...</p>
-        </div>
+      <div className="mx-auto max-w-lg px-6 py-24 text-center">
+        <AlertTriangle className="mx-auto mb-4 h-8 w-8 text-amber-600" />
+        <h1 className="text-lg font-medium">Couldn&apos;t load your creator dashboard</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{error}</p>
+        <Button className="mt-6" variant="outline" onClick={fetchData}>
+          Try again
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-8">
+    <div className="mx-auto max-w-5xl px-6 py-8">
+      <div className="mb-8 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Creator Dashboard</h1>
-          <p className="text-muted-foreground mt-2">Manage your plugins and track your success</p>
+          <h1 className="text-2xl font-semibold tracking-tight">Creator dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Manage your plugins, track sales, and set up payouts.
+          </p>
         </div>
-        <div className="flex gap-3">
-          <Button variant="outline" onClick={handleConnectStripe}>
-            <DollarSign className="h-4 w-4 mr-2" />
-            Connect Stripe
-          </Button>
-          <Button onClick={handleUploadPlugin}>
-            <Plus className="h-4 w-4 mr-2" />
-            Upload Plugin
-          </Button>
-        </div>
+        <Button asChild>
+          <Link href="/plugins/upload">
+            <Plus className="mr-2 h-4 w-4" />
+            Upload plugin
+          </Link>
+        </Button>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Plugins</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalPlugins}</div>
-            <p className="text-xs text-muted-foreground">Active plugins</p>
-          </CardContent>
-        </Card>
+      {connectError ? (
+        <div className="mb-6 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400">
+          {connectError}
+        </div>
+      ) : null}
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Downloads</CardTitle>
-            <Download className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalDownloads.toLocaleString()}</div>
-            <p className="text-xs text-muted-foreground">All time</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
-            <p className="text-xs text-muted-foreground">After platform fees</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Monthly Revenue</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${stats.monthlyRevenue.toFixed(2)}</div>
-            <p
-              className={`text-xs ${stats.monthlyGrowth >= 0 ? 'text-green-600' : 'text-red-600'}`}
-            >
-              {stats.monthlyGrowth >= 0 ? '+' : ''}
-              {stats.monthlyGrowth}% from last month
-            </p>
-          </CardContent>
-        </Card>
+      <div className="mb-6">
+        <StripeConnectCard stats={stats} onConnect={handleConnect} connecting={connecting} />
       </div>
 
-      {/* Main Content Tabs */}
-      <Tabs defaultValue="plugins" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="plugins">My Plugins</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="payouts">Payouts</TabsTrigger>
-        </TabsList>
+      <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
+        <StatCard label="Plugins" value={String(stats.totalPlugins)} icon={TrendingUp} />
+        <StatCard label="Sales" value={String(stats.totalDownloads)} icon={Download} />
+        <StatCard label="Total revenue" value={formatUsd(stats.totalRevenue)} icon={DollarSign} />
+        <StatCard label="Last 30 days" value={formatUsd(stats.monthlyRevenue)} icon={Users} />
+      </div>
 
-        <TabsContent value="plugins" className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold">Plugin Management</h2>
-            <Button onClick={handleUploadPlugin} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              New Plugin
-            </Button>
-          </div>
-
-          <div className="grid gap-4">
-            {plugins.map(plugin => (
-              <Card key={plugin.pluginId}>
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <CardTitle className="text-lg">{plugin.name}</CardTitle>
-                      <p className="text-sm text-muted-foreground">
-                        Created {new Date(plugin.createdAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                    <Badge variant={plugin.status === 'APPROVED' ? 'default' : 'secondary'}>
-                      {plugin.status}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 gap-4 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Downloads</p>
-                      <p className="font-semibold">{plugin.downloads.toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Revenue</p>
-                      <p className="font-semibold">${plugin.revenue.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Last Updated</p>
-                      <p className="font-semibold">
-                        {new Date(plugin.lastUpdated).toLocaleDateString()}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-4">
-                    <Button variant="outline" size="sm">
-                      Edit
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      View Analytics
-                    </Button>
-                    <Button variant="outline" size="sm">
-                      Manage Versions
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-
-            {plugins.length === 0 && (
-              <Card>
-                <CardContent className="text-center py-12">
-                  <BarChart3 className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No plugins yet</h3>
-                  <p className="text-muted-foreground mb-4">
-                    Start building your plugin empire by uploading your first plugin
-                  </p>
-                  <Button onClick={handleUploadPlugin}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Upload Your First Plugin
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="analytics" className="space-y-4">
-          <h2 className="text-xl font-semibold">Revenue Analytics</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Revenue Trends</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64 flex items-center justify-center text-muted-foreground">
-                  Chart placeholder - Revenue over time
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Performing Plugins</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64 flex items-center justify-center text-muted-foreground">
-                  Chart placeholder - Plugin performance
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="payouts" className="space-y-4">
-          <h2 className="text-xl font-semibold">Payout Information</h2>
-          <Card>
-            <CardContent className="py-6">
-              <div className="text-center">
-                <DollarSign className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">Stripe Connect Required</h3>
-                <p className="text-muted-foreground mb-4">
-                  Connect your Stripe account to start receiving payouts for your plugins
-                </p>
-                <Button onClick={handleConnectStripe}>
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Connect Stripe Account
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">My plugins</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {plugins.length === 0 ? (
+            <div className="p-8 text-center">
+              <Clock className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+              <p className="text-sm text-muted-foreground">
+                You haven&apos;t published any plugins yet.
+              </p>
+              <Button className="mt-4" variant="outline" asChild>
+                <Link href="/plugins/upload">Upload your first plugin</Link>
+              </Button>
+            </div>
+          ) : (
+            plugins.map(plugin => <PluginRow key={plugin.pluginId} plugin={plugin} />)
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

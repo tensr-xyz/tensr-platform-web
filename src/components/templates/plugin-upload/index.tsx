@@ -27,29 +27,52 @@ import {
   FormMessage,
 } from '@/components/atoms/form';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/atoms/card';
-import { Switch } from '@/components/atoms/switch';
 import { Label } from '@/components/atoms/label';
+import { Switch } from '@/components/atoms/switch';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getIdToken } from '@/utils/auth';
 
-// Form schema for plugin upload
-const pluginUploadSchema = z.object({
-  name: z.string().min(3, { message: 'Plugin name must be at least 3 characters' }),
-  description: z.string().min(10, { message: 'Description must be at least 10 characters' }),
-  version: z.string().min(1, { message: 'Version is required' }),
-  language: z.enum(['typescript', 'python', 'r']),
-  entryPoint: z.string().min(1, { message: 'Entry point is required' }),
-  tags: z.string().optional(),
-  thumbnailUrl: z.string().url().optional().or(z.literal('')),
-  isPaid: z.boolean(),
-  pricingModel: z.enum(['free', 'one-time', 'subscription']).optional(),
-  price: z.number().min(0).optional(),
-  currency: z.string().optional(),
-  subscriptionInterval: z.enum(['monthly', 'yearly']).optional(),
-  trialDays: z.number().min(0).optional(),
-  inputTypes: z.string().optional(),
-  outputTypes: z.string().optional(),
-});
+// Form schema aligned with tensr-sdk TensrPluginManifest capabilities.
+// Server authority is still manifest.json inside the zip (parsed on upload).
+const pluginUploadSchema = z
+  .object({
+    name: z.string().min(3, { message: 'Plugin name must be at least 3 characters' }),
+    description: z.string().min(10, { message: 'Description must be at least 10 characters' }),
+    version: z.string().regex(/^\d+\.\d+\.\d+/, { message: 'Version must be semver (e.g. 1.0.0)' }),
+    language: z.enum(['typescript', 'python', 'r']),
+    entryPoint: z.string().min(1, { message: 'Entry point is required' }),
+    ui: z.string().min(1, { message: 'UI file path is required' }),
+    tags: z.string().optional(),
+    thumbnailUrl: z.string().url().optional().or(z.literal('')),
+    inputTypes: z.string().min(1, { message: 'At least one input type is required' }),
+    outputTypes: z.string().min(1, { message: 'At least one output type is required' }),
+    network: z.literal(false),
+    filesystem: z.enum(['none', 'scratch']),
+    maxMemoryMb: z.coerce.number().min(16).max(1024),
+    maxExecutionSeconds: z.coerce.number().min(1).max(120),
+    dataAccess: z.string().min(1, { message: 'dataAccess is required (e.g. schema,columns,rows)' }),
+    isPaid: z.boolean(),
+    pricingModel: z.enum(['one-time', 'subscription']).optional(),
+    price: z.string().optional(),
+    subscriptionInterval: z.enum(['monthly', 'yearly']).optional(),
+    trialDays: z.string().optional(),
+  })
+  .refine(data => !data.isPaid || (data.price && Number(data.price) > 0), {
+    message: 'Price must be greater than 0 for paid plugins',
+    path: ['price'],
+  })
+  .refine(
+    data =>
+      data.dataAccess
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean)
+        .every(t => ['schema', 'columns', 'rows', 'metadata'].includes(t)),
+    {
+      message: 'dataAccess tokens must be schema, columns, rows, and/or metadata',
+      path: ['dataAccess'],
+    }
+  );
 
 type PluginUploadFormValues = z.infer<typeof pluginUploadSchema>;
 
@@ -67,16 +90,21 @@ export default function PluginUploadForm() {
       version: '1.0.0',
       language: 'typescript',
       entryPoint: 'dist/index.js',
+      ui: 'ui.html',
       tags: '',
       thumbnailUrl: '',
-      isPaid: false,
-      pricingModel: 'free',
-      price: 0,
-      currency: 'USD',
-      subscriptionInterval: 'monthly',
-      trialDays: 0,
-      inputTypes: 'text,csv,json',
+      inputTypes: 'csv,json',
       outputTypes: 'json,chart,table',
+      network: false as const,
+      filesystem: 'none',
+      maxMemoryMb: 256,
+      maxExecutionSeconds: 30,
+      dataAccess: 'schema,columns,rows',
+      isPaid: false,
+      pricingModel: 'one-time',
+      price: '',
+      subscriptionInterval: 'monthly',
+      trialDays: '',
     },
   });
 
@@ -101,6 +129,20 @@ export default function PluginUploadForm() {
     setIsUploading(true);
     setUploadProgress(0);
 
+    const pricing = values.isPaid
+      ? {
+          model: values.pricingModel || 'one-time',
+          price: Number(values.price),
+          currency: 'usd',
+          subscriptionInterval:
+            values.pricingModel === 'subscription' ? values.subscriptionInterval : undefined,
+          trialDays:
+            values.pricingModel === 'subscription' && values.trialDays
+              ? Number(values.trialDays)
+              : undefined,
+        }
+      : undefined;
+
     try {
       const token = getIdToken();
       if (!token) {
@@ -119,6 +161,8 @@ export default function PluginUploadForm() {
           entryPoint: values.entryPoint,
           language: values.language,
           content_type: 'application/zip',
+          isPaid: values.isPaid,
+          pricing,
         }),
       });
       if (!uploadUrlRes.ok) {
@@ -170,6 +214,8 @@ export default function PluginUploadForm() {
               description: values.description,
               entryPoint: values.entryPoint,
               language: values.language,
+              isPaid: values.isPaid,
+              pricing,
             }),
           }
         );
@@ -184,6 +230,18 @@ export default function PluginUploadForm() {
         formData.append('description', values.description);
         formData.append('entryPoint', values.entryPoint);
         formData.append('language', values.language);
+        formData.append('isPaid', String(values.isPaid));
+        if (pricing) {
+          formData.append('pricingModel', pricing.model);
+          formData.append('price', String(pricing.price));
+          formData.append('currency', pricing.currency);
+          if (pricing.subscriptionInterval) {
+            formData.append('subscriptionInterval', pricing.subscriptionInterval);
+          }
+          if (pricing.trialDays != null) {
+            formData.append('trialDays', String(pricing.trialDays));
+          }
+        }
         const response = await fetch(tensrApiUrl('/plugins/upload'), {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
@@ -195,7 +253,7 @@ export default function PluginUploadForm() {
       }
 
       setUploadProgress(100);
-      router.push('/creator');
+      router.push('/plugins');
     } catch (error) {
       console.error('Upload error:', error);
       alert('Upload failed. Please try again.');
@@ -215,6 +273,15 @@ export default function PluginUploadForm() {
         <h1 className="text-2xl font-bold">Upload New Plugin</h1>
       </div>
 
+      <p className="mb-6 text-sm text-muted-foreground">
+        Publish for free, or set a price to earn from your plugin. Tensr takes a 10% platform fee on
+        paid sales; the rest goes to you via Stripe Connect (set up payouts from your{' '}
+        <a href="/creator" className="underline">
+          creator dashboard
+        </a>
+        ).
+      </p>
+
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
           <Card>
@@ -233,7 +300,8 @@ export default function PluginUploadForm() {
                     className="mt-2"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Upload a ZIP file containing your plugin code
+                    ZIP must include <code>manifest.json</code> (source of truth). Uploads land in
+                    PENDING review; network:true requires admin allowlisting.
                   </p>
                 </div>
 
@@ -375,27 +443,155 @@ export default function PluginUploadForm() {
 
           <Card>
             <CardHeader>
+              <CardTitle>Capabilities (must match manifest.json)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FormField
+                  control={form.control}
+                  name="inputTypes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Input Types (comma-separated)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="csv, json" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="outputTypes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Output Types (comma-separated)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="chart, table, json" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="filesystem"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Filesystem</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="none">none</SelectItem>
+                          <SelectItem value="scratch">scratch (ephemeral)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="dataAccess"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Data access (comma-separated)</FormLabel>
+                      <FormControl>
+                        <Input placeholder="schema,columns,rows" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="maxMemoryMb"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Max memory (MB)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={16} max={1024} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="maxExecutionSeconds"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Max execution (seconds)</FormLabel>
+                      <FormControl>
+                        <Input type="number" min={1} max={120} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="ui"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>UI file</FormLabel>
+                      <FormControl>
+                        <Input placeholder="ui.html" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Network egress is not supported — manifests with{' '}
+                <code>capabilities.network: true</code> are rejected at upload.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle>Monetization</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Switch
-                  id="is-paid"
-                  checked={isPaid}
-                  onCheckedChange={checked => form.setValue('isPaid', checked)}
-                />
-                <Label htmlFor="is-paid">This is a paid plugin</Label>
-              </div>
+              <FormField
+                control={form.control}
+                name="isPaid"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-md border p-3">
+                    <div className="space-y-0.5">
+                      <FormLabel>Paid plugin</FormLabel>
+                      <p className="text-sm text-muted-foreground">
+                        Charge users to access this plugin via Stripe Checkout.
+                      </p>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
 
               {isPaid && (
-                <div className="space-y-4 pl-6 border-l-2 border-muted">
+                <div className="space-y-4 rounded-md border p-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField
                       control={form.control}
                       name="pricingModel"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Pricing Model</FormLabel>
+                          <FormLabel>Pricing model</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
                               <SelectTrigger>
@@ -417,15 +613,16 @@ export default function PluginUploadForm() {
                       name="price"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Price</FormLabel>
+                          <FormLabel>
+                            Price (USD){pricingModel === 'subscription' ? ' per interval' : ''}
+                          </FormLabel>
                           <FormControl>
                             <Input
                               type="number"
-                              step="0.01"
                               min="0"
+                              step="0.01"
                               placeholder="9.99"
                               {...field}
-                              onChange={e => field.onChange(parseFloat(e.target.value) || 0)}
                             />
                           </FormControl>
                           <FormMessage />
@@ -434,37 +631,14 @@ export default function PluginUploadForm() {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField
-                      control={form.control}
-                      name="currency"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Currency</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select currency" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="USD">USD ($)</SelectItem>
-                              <SelectItem value="EUR">EUR (€)</SelectItem>
-                              <SelectItem value="GBP">GBP (£)</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-
-                    {pricingModel === 'subscription' && (
+                  {pricingModel === 'subscription' && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <FormField
                         control={form.control}
                         name="subscriptionInterval"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Billing Interval</FormLabel>
+                            <FormLabel>Billing interval</FormLabel>
                             <Select onValueChange={field.onChange} defaultValue={field.value}>
                               <FormControl>
                                 <SelectTrigger>
@@ -480,67 +654,29 @@ export default function PluginUploadForm() {
                           </FormItem>
                         )}
                       />
-                    )}
-                  </div>
 
-                  <FormField
-                    control={form.control}
-                    name="trialDays"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Trial Period (days)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            min="0"
-                            placeholder="7"
-                            {...field}
-                            onChange={e => field.onChange(parseInt(e.target.value) || 0)}
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                      <FormField
+                        control={form.control}
+                        name="trialDays"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Free trial (days, optional)</FormLabel>
+                            <FormControl>
+                              <Input type="number" min="0" max="365" placeholder="0" {...field} />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Tensr takes a 10% platform fee. Payouts require a connected Stripe account - set
+                    this up from your creator dashboard after publishing.
+                  </p>
                 </div>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Capabilities</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField
-                  control={form.control}
-                  name="inputTypes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Input Types (comma-separated)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="csv, json, text" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={form.control}
-                  name="outputTypes"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Output Types (comma-separated)</FormLabel>
-                      <FormControl>
-                        <Input placeholder="chart, table, json" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
             </CardContent>
           </Card>
 

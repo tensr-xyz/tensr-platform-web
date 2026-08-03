@@ -71,8 +71,41 @@ export function tensrApiUrl(path: string, baseUrl: string = getTensrApiBaseUrl()
   return `${base}${p}`;
 }
 
-/** WebSocket base for tensr-api realtime (JSON hub or Yjs path suffix). */
+/**
+ * WebSocket base URL for tensr-api realtime.
+ *
+ * PRODUCTION PATH: `RealtimeStack` (`tensr-api/infra/stacks/realtime_stack.py`) is an
+ * API Gateway **WebSocket** API with exactly one default integration route, backed by
+ * `app.lambda_handlers.realtime_message.handler` → `app/realtime/hub.py` (the JSON hub).
+ * Presence, session join/leave, and sheet ops (`subscribe` / `op`) all flow over
+ * that single connection. Connection/session/sheet state live in the
+ * `REALTIME_CONNECTIONS_TABLE` / `REALTIME_SHEET_LIVE_STATE_TABLE` DynamoDB tables.
+ * `NEXT_PUBLIC_WEBSOCKET_URL` should be set to the stack's `RealtimeWebSocketUrl`
+ * output (`wss://{api-id}.execute-api.{region}.amazonaws.com/{stage}`).
+ *
+ * API Gateway WebSocket APIs do not support extra path segments beyond the stage —
+ * there is no server-side routing on `/ws`, `/realtime`, or `/ws/yjs/*` in production,
+ * so any `path` argument is ignored once `NEXT_PUBLIC_WEBSOCKET_URL` is configured.
+ * There is no Yjs/CRDT relay in production (`app/yjs_ws.py` only runs under local
+ * uvicorn) and no Fargate service backs it — clients must speak the JSON hub protocol.
+ *
+ * Since a `path` argument is meaningless once deployed, `hooks/ui/use-session`'s
+ * `wsService` opens exactly one physical socket per client and both collaboration
+ * session traffic *and* `hooks/ui/use-sheet-state` live-sheet traffic share it —
+ * they used to open two independent connections to this same endpoint, which is
+ * why cell edits and collaboration-session presence used to live on unreconciled
+ * connections. The old ephemeral `cell_update` broadcast (no persistence) is
+ * deprecated in favor of the persisted `op` / `sheet_live` path.
+ *
+ * Local uvicorn only: falls back to the HTTP API base with `path` appended
+ * (`/ws`, `/realtime`). `/ws/yjs/*` exists on local uvicorn for experiments but
+ * production clients must never use it — `useCollaboration.connect()` is disabled.
+ */
 export function getTensrWebSocketUrl(path: string = '/ws'): string {
+  const configured = process.env.NEXT_PUBLIC_WEBSOCKET_URL?.replace(/\/$/, '');
+  if (configured) {
+    return configured;
+  }
   const httpBase = getTensrApiBaseUrl().replace(/\/$/, '');
   const wsBase = httpBase.replace(/^http/, 'ws');
   const suffix = path.startsWith('/') ? path : `/${path}`;

@@ -18,7 +18,6 @@ import {
   Plus,
   Settings,
   Users,
-  Bell,
   BookOpen,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -26,7 +25,6 @@ import { useRouter, usePathname } from 'next/navigation';
 import * as React from 'react';
 import { useState } from 'react';
 import Image from 'next/image';
-import { NotificationsMenu } from '@/components/molecules/notifications-menu';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/atoms/avatar';
 import { Button } from '@/components/atoms/button';
@@ -404,17 +402,6 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarGroup>
           <SidebarGroupLabel>Actions</SidebarGroupLabel>
           <SidebarMenu>
-            <SidebarMenuItem>
-              <NotificationsMenu
-                align="end"
-                trigger={
-                  <SidebarMenuButton className="cursor-pointer">
-                    <Bell className="size-4" />
-                    <span className="text-sm">Notifications</span>
-                  </SidebarMenuButton>
-                }
-              />
-            </SidebarMenuItem>
             <SidebarMenuItem>
               <SidebarMenuButton asChild className="cursor-pointer">
                 <Link href="https://tensr-1.gitbook.io/tensr/">

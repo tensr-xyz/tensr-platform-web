@@ -106,27 +106,19 @@ export function CollaborationMenu({ activeTab }: CollaborationMenuProps) {
             <h4 className="text-sm font-medium mb-2">Create New Session</h4>
             <Button
               onClick={async () => {
-                const datasetId =
-                  activeTab?.data?.datasetId || activeTab?.data?.filePath?.replace(/^\//, '');
-                const filePath = activeTab?.data?.filePath;
-                if (!datasetId && !filePath) {
+                // A session always forks a dataset — no filePath-only collaboration.
+                const datasetId: string | undefined = activeTab?.data?.datasetId;
+                if (!datasetId) {
                   return;
                 }
                 try {
-                  await createSession({
-                    fileName: activeTab.name,
-                    ...(datasetId
-                      ? { datasetId }
-                      : {
-                          filePath: filePath!.startsWith('/') ? filePath! : `/${filePath}`,
-                        }),
-                  });
+                  await createSession({ datasetId, fileName: activeTab.name });
                   setDialogOpen(false);
                 } catch (error) {
                   console.error('Failed to create session:', error);
                 }
               }}
-              disabled={!activeTab?.data?.filePath && !activeTab?.data?.datasetId}
+              disabled={!activeTab?.data?.datasetId}
               className="w-full"
             >
               Start Session

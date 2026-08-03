@@ -88,11 +88,15 @@ export function shouldRouteMessageToDataIntent(message: string): boolean {
     /\b(players?|rows?|records?)\s+with\b/i.test(text) ||
     /\b(more than|less than|greater than|at least|over|under)\s+\d+/i.test(text) ||
     /[A-Za-z_][A-Za-z0-9_]*\s*(>=|<=|>|<)\s*-?\d+/i.test(text) ||
-    /\b(sum|total|average|mean|median)\b/i.test(text) ||
+    /\b(sum|total|average|mean|median|mode|variance|std(?:dev)?|iqr|percentile|quantile|proportion|distinct|unique|z[\s-]?scores?)\b/i.test(
+      text
+    ) ||
     /\b(difference between|differ(?:ence)?\s+between|compare\b.+\b(?:and|vs\.?|versus)\b|compared (?:to|with)|versus|\bvs\.?\b)/i.test(
       text
     ) ||
-    /\b(chart|graph|plot|histogram|bar chart|line chart|line graph)\b/i.test(text) ||
+    /\b(chart|graph|plot|histogram|boxplot|box\s*plot|bar chart|line chart|line graph)\b/i.test(
+      text
+    ) ||
     /\b(make a|create a|draw a).*(chart|graph|plot)\b/i.test(text) ||
     new RegExp(
       String.raw`\b(top|bottom)\s+(\d+|${WORD_N})\b|\b(highest|lowest|most|least|best|worst|scorers?|leaders?)\b`,

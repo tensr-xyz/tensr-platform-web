@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { useOrganization, Organization } from '@/hooks/api/use-organisation';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
-import { Label } from '@/components/atoms/label';
 import { toast } from '@/hooks/ui/use-toast';
 import { useRouter } from 'next/navigation';
 import {
@@ -18,7 +17,7 @@ import {
 
 export default function OrganizationSettings() {
   const router = useRouter();
-  const { activeOrganization, updateOrganization, deleteOrganization, isLoading, error } =
+  const { activeOrganization, updateOrganization, deleteOrganization, isLoading } =
     useOrganization();
 
   const [editedOrg, setEditedOrg] = useState<Organization | null>(null);
@@ -26,7 +25,6 @@ export default function OrganizationSettings() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // Initialize form when active org changes
   useEffect(() => {
     if (activeOrganization) {
       setEditedOrg(activeOrganization);
@@ -41,7 +39,6 @@ export default function OrganizationSettings() {
 
   const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!editedOrg) return;
-    // Normalize slug - lowercase, no spaces, only alphanumeric and dashes
     const normalizedSlug = e.target.value
       .toLowerCase()
       .replace(/\s+/g, '-')
@@ -56,9 +53,8 @@ export default function OrganizationSettings() {
     if (!editedOrg || !isEdited) return;
 
     try {
-      const updatedOrg = await updateOrganization(editedOrg.id, {
+      await updateOrganization(editedOrg.id, {
         name: editedOrg.name,
-        // Only include slug if you added it to your backend
         ...(editedOrg.slug && { settings: { ...editedOrg.settings, slug: editedOrg.slug } }),
       });
 
@@ -88,7 +84,6 @@ export default function OrganizationSettings() {
         description: 'Your organization has been deleted successfully.',
       });
 
-      // Redirect to dashboard or another page
       router.push('/dashboard');
     } catch (err: any) {
       toast({
@@ -104,97 +99,115 @@ export default function OrganizationSettings() {
 
   if (!editedOrg) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-gray-500">No organization selected</p>
+      <div className="flex items-center justify-center p-8">
+        <p className="text-sm text-muted-foreground">No organization selected</p>
       </div>
     );
   }
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Organization Settings</h1>
-        <p className="text-gray-500">Manage your organization details and members</p>
+    <div className="space-y-6">
+      <div className="text-center">
+        <h2 className="text-lg font-medium tracking-tight">Organisation</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Manage your organization details and preferences
+        </p>
       </div>
 
-      {/* Organization Details */}
-      <div className="bg-white rounded-lg shadow-sm mb-6">
+      <section className="overflow-hidden rounded-lg border border-border bg-background">
+        <div className="border-b border-border px-6 py-4">
+          <h3 className="text-base font-medium">Organization details</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Update your organization information</p>
+        </div>
+
         <form onSubmit={handleSubmit}>
           <div className="p-6">
-            <h2 className="text-lg font-semibold mb-4">General</h2>
+            <div className="mb-6 flex items-center">
+              {editedOrg.logoUrl ? (
+                <img
+                  src={editedOrg.logoUrl}
+                  alt={editedOrg.name}
+                  className="mr-4 h-16 w-16 rounded-md"
+                />
+              ) : (
+                <div className="mr-4 flex h-16 w-16 items-center justify-center rounded-md bg-muted">
+                  <span className="text-2xl">{editedOrg.name.charAt(0).toUpperCase()}</span>
+                </div>
+              )}
+              <Button variant="outline" type="button" disabled>
+                Change Logo
+              </Button>
+            </div>
 
             <div className="mb-6">
-              <div className="flex items-center mb-4">
-                {editedOrg.logoUrl ? (
-                  <img
-                    src={editedOrg.logoUrl}
-                    alt={editedOrg.name}
-                    className="w-16 h-16 rounded-md mr-4"
-                  />
-                ) : (
-                  <div className="w-16 h-16 bg-gray-200 rounded-md flex items-center justify-center mr-4">
-                    <span className="text-2xl">{editedOrg.name.charAt(0).toUpperCase()}</span>
-                  </div>
-                )}
-                <Button variant="outline" type="button" disabled>
-                  Change Logo
-                </Button>
-              </div>
+              <label
+                htmlFor="orgName"
+                className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                Organization Name
+              </label>
+              <Input
+                id="orgName"
+                value={editedOrg.name}
+                onChange={handleNameChange}
+                className="border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800"
+                disabled={isLoading}
+              />
+            </div>
 
-              <div className="mb-4">
-                <Label htmlFor="orgName">Organization Name</Label>
+            <div className="mb-6">
+              <label
+                htmlFor="orgSlug"
+                className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+              >
+                URL Slug
+              </label>
+              <div className="flex">
+                <span className="inline-flex items-center rounded-l-md border border-r-0 border-gray-200 bg-muted/30 px-3 py-2 text-sm text-muted-foreground dark:border-gray-600">
+                  yourapp.com/
+                </span>
                 <Input
-                  id="orgName"
-                  value={editedOrg.name}
-                  onChange={handleNameChange}
-                  className="mt-1"
+                  id="orgSlug"
+                  value={editedOrg.slug || ''}
+                  onChange={handleSlugChange}
+                  className="rounded-l-none border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800"
+                  disabled={isLoading}
                 />
-              </div>
-
-              <div>
-                <Label htmlFor="orgSlug">URL Slug</Label>
-                <div className="flex mt-1">
-                  <span className="inline-flex items-center px-3 py-2 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                    yourapp.com/
-                  </span>
-                  <Input
-                    id="orgSlug"
-                    value={editedOrg.slug || ''}
-                    onChange={handleSlugChange}
-                    className="rounded-l-none"
-                  />
-                </div>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-gray-200 px-6 py-4 bg-gray-50 rounded-b-lg flex justify-end">
+          <div className="flex items-center justify-between border-t border-border bg-muted/30 px-6 py-4">
+            <p className="text-sm text-muted-foreground">
+              {isEdited ? 'You have unsaved changes' : null}
+            </p>
             <Button type="submit" disabled={!isEdited || isLoading}>
-              {isLoading ? 'Saving...' : 'Save Changes'}
+              {isLoading ? 'Saving...' : 'Save changes'}
             </Button>
           </div>
         </form>
-      </div>
+      </section>
 
-      {/* Danger Zone */}
-      <div className="bg-white rounded-lg shadow-sm mb-6">
+      <section className="overflow-hidden rounded-lg border border-border bg-background">
+        <div className="border-b border-border px-6 py-4">
+          <h3 className="text-base font-medium text-red-600">Danger zone</h3>
+          <p className="mt-1 text-sm text-muted-foreground">Irreversible and destructive actions</p>
+        </div>
         <div className="p-6">
-          <h2 className="text-lg font-semibold mb-4 text-red-600">Danger Zone</h2>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="mb-4 text-sm text-muted-foreground">
             Once you delete an organization, there is no going back. Please be certain.
           </p>
           <Button
             variant="outline"
-            className="text-red-600 border-red-600 hover:bg-red-50"
+            className="border-red-600 text-red-600 hover:bg-red-50"
             onClick={() => setShowDeleteDialog(true)}
             disabled={isDeleting}
           >
             {isDeleting ? 'Deleting...' : 'Delete Organization'}
           </Button>
         </div>
-      </div>
+      </section>
 
-      {/* Delete Confirmation Dialog */}
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <DialogContent>
           <DialogHeader>
@@ -214,7 +227,7 @@ export default function OrganizationSettings() {
             </Button>
             <Button
               onClick={handleDelete}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 text-white hover:bg-red-700"
               disabled={isDeleting}
             >
               {isDeleting ? 'Deleting...' : 'Delete'}
