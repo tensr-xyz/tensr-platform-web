@@ -1,7 +1,7 @@
 import { Button } from '@/components/atoms/button';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { ChatComposerInput } from '@/components/molecules/chat-composer-input';
-import { Send, Loader2, AlertCircle, Trash2, History, Plus, X, Sparkles } from 'lucide-react';
+import { Send, Loader2, AlertCircle, Trash2, History, Plus, X } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import {
@@ -1207,31 +1207,96 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   return (
     <TooltipProvider delayDuration={300}>
       <div className="relative flex h-full w-full flex-col bg-muted/30">
-        <header className="shrink-0 border-b border-border bg-card">
-          <div
-            className={cn(
-              'flex items-center justify-between gap-2 px-3.5',
-              compactHeader ? 'py-2' : 'py-3'
-            )}
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <span className="grid size-6 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
-                <Sparkles className="size-3" aria-hidden />
-              </span>
-              <div className="min-w-0 leading-tight">
-                <p className="text-[13px] font-medium text-foreground">Tensr Agent</p>
-                <p className="font-mono text-[10px] text-muted-foreground">
-                  {isNotebook
-                    ? colCount > 0
-                      ? 'Code generation · notebook'
-                      : 'Notebook · needs dataset'
-                    : colCount > 0
-                      ? `Connected · ${analysisRuns.length} ops`
-                      : 'Open a dataset tab'}
-                </p>
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-0.5">
+        <header
+          className={cn(
+            'flex shrink-0 items-center gap-1 border-b border-border bg-card px-2',
+            compactHeader ? 'py-1' : 'py-1.5'
+          )}
+        >
+          <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-x-auto">
+            {chatThreads.map(thread => {
+              const isActive = thread.id === activeThreadId && !showRuns;
+              return (
+                <div
+                  key={thread.id}
+                  className={cn(
+                    'group flex h-7 max-w-[7.5rem] shrink-0 items-center rounded-md text-[11px]',
+                    isActive
+                      ? 'bg-muted text-foreground'
+                      : 'text-muted-foreground hover:bg-muted/60'
+                  )}
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveThread(projectId, thread.id);
+                      setShowRuns(false);
+                    }}
+                    className="min-w-0 flex-1 truncate px-2 py-1 text-left"
+                    title={thread.title}
+                  >
+                    {thread.title}
+                  </button>
+                  {chatThreads.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={e => {
+                        e.stopPropagation();
+                        closeThread(projectId, thread.id);
+                      }}
+                      className="mr-0.5 rounded p-0.5 opacity-0 group-hover:opacity-100"
+                      aria-label={`Close ${thread.title}`}
+                    >
+                      <X className="size-3" />
+                    </button>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+          <div className="flex shrink-0 items-center gap-0.5">
+            {showRunsToggle ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className={cn('relative size-7', showRuns && 'bg-muted')}
+                    onClick={() => setShowRuns(v => !v)}
+                    aria-label="Analysis runs"
+                    aria-pressed={showRuns}
+                  >
+                    <History className="size-3.5" />
+                    {analysisRuns.length > 0 ? (
+                      <span className="absolute right-0 top-0 flex size-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary text-[8px] font-medium text-primary-foreground">
+                        {analysisRuns.length > 9 ? '9+' : analysisRuns.length}
+                      </span>
+                    ) : null}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Analysis runs</TooltipContent>
+              </Tooltip>
+            ) : null}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => {
+                    createThread(projectId);
+                    setShowRuns(false);
+                  }}
+                  aria-label="New chat"
+                >
+                  <Plus className="size-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">New chat</TooltipContent>
+            </Tooltip>
+            {!showRuns && messages.length > 0 ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -1239,102 +1304,16 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                     variant="ghost"
                     size="icon"
                     className="size-7"
-                    onClick={() => {
-                      createThread(projectId);
-                      setShowRuns(false);
-                    }}
-                    aria-label="New chat"
+                    onClick={() => clearMessages(projectId)}
+                    aria-label="Clear chat"
                   >
-                    <Plus className="size-3.5" />
+                    <Trash2 className="size-3.5" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">New chat</TooltipContent>
+                <TooltipContent side="bottom">Clear chat</TooltipContent>
               </Tooltip>
-              {showRunsToggle ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className={cn('relative size-7', showRuns && 'bg-muted')}
-                      onClick={() => setShowRuns(v => !v)}
-                      aria-label="Analysis runs"
-                      aria-pressed={showRuns}
-                    >
-                      <History className="size-3.5" />
-                      {analysisRuns.length > 0 ? (
-                        <span className="absolute right-0 top-0 flex size-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary text-[8px] font-medium text-primary-foreground">
-                          {analysisRuns.length > 9 ? '9+' : analysisRuns.length}
-                        </span>
-                      ) : null}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Analysis runs</TooltipContent>
-                </Tooltip>
-              ) : null}
-              {!showRuns && messages.length > 0 ? (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-7"
-                      onClick={() => clearMessages(projectId)}
-                      aria-label="Clear chat"
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Clear chat</TooltipContent>
-                </Tooltip>
-              ) : null}
-            </div>
+            ) : null}
           </div>
-          {!showRuns && chatThreads.length > 0 ? (
-            <div className="flex gap-0.5 overflow-x-auto border-t border-border/80 px-1 py-1">
-              {chatThreads.map(thread => {
-                const isActive = thread.id === activeThreadId;
-                return (
-                  <div
-                    key={thread.id}
-                    className={cn(
-                      'group flex h-7 max-w-[7rem] shrink-0 items-center rounded-md text-[11px]',
-                      isActive
-                        ? 'bg-muted text-foreground'
-                        : 'text-muted-foreground hover:bg-muted/60'
-                    )}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setActiveThread(projectId, thread.id);
-                        setShowRuns(false);
-                      }}
-                      className="min-w-0 flex-1 truncate px-2 py-1 text-left"
-                      title={thread.title}
-                    >
-                      {thread.title}
-                    </button>
-                    {chatThreads.length > 1 ? (
-                      <button
-                        type="button"
-                        onClick={e => {
-                          e.stopPropagation();
-                          closeThread(projectId, thread.id);
-                        }}
-                        className="mr-0.5 rounded p-0.5 opacity-0 group-hover:opacity-100"
-                        aria-label={`Close ${thread.title}`}
-                      >
-                        <X className="size-3" />
-                      </button>
-                    ) : null}
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
         </header>
 
         {showRuns ? (
@@ -1635,10 +1614,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                 </div>
               </div>
               <div className="mt-2 flex items-center justify-between font-mono text-[11px] text-muted-foreground">
-                <span>
-                  {AGENT_MODE_OPTIONS.find(o => o.value === agentMode)?.label ?? 'Agent'} ·
-                  claude-haiku
-                </span>
+                <span>{AGENT_MODE_OPTIONS.find(o => o.value === agentMode)?.label ?? 'Agent'}</span>
                 <span>
                   <kbd className="rounded border border-border bg-muted px-1 font-mono text-[9px]">
                     ↵
