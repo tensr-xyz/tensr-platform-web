@@ -191,8 +191,14 @@ export function deriveMessageUpdateFromLoopResponse(
 
   if (response.status === 'clarification') {
     const questions = response.clarification_questions?.filter(Boolean) ?? [];
+    // Avoid duplicating the same sentence when answer_markdown already is the question.
+    const answerNorm = answer.replace(/\s+/g, ' ').trim().toLowerCase();
+    const uniqueQuestions = questions.filter(q => {
+      const qn = q.replace(/\s+/g, ' ').trim().toLowerCase();
+      return qn && qn !== answerNorm && !answerNorm.includes(qn);
+    });
     const questionBlock =
-      questions.length > 0 ? `\n\n${questions.map(q => `- ${q}`).join('\n')}` : '';
+      uniqueQuestions.length > 0 ? `\n\n${uniqueQuestions.map(q => `- ${q}`).join('\n')}` : '';
     return {
       content: `${answer}${questionBlock}`.trim(),
       charts: charts.length ? charts : undefined,

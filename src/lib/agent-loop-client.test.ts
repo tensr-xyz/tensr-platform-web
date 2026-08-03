@@ -50,6 +50,24 @@ describe('run-agent-loop client helpers', () => {
     ]);
   });
 
+  it('does not duplicate identical clarification answer and questions', () => {
+    const response: AgentLoopResponse = {
+      status: 'clarification',
+      mode: 'plan',
+      answer_markdown: 'Could you specify the analysis (or columns) you want me to use?',
+      clarification_questions: ['Could you specify the analysis (or columns) you want me to use?'],
+    };
+
+    const patch = deriveMessageUpdateFromLoopResponse(response, {
+      triggerMessage: 'find what predicts points',
+      datasetId: null,
+    });
+
+    const content = patch.content ?? '';
+    expect(content).toBe('Could you specify the analysis (or columns) you want me to use?');
+    expect(content.match(/Could you specify/g)?.length).toBe(1);
+  });
+
   it('deriveMessageUpdateFromLoopResponse maps clarification status', () => {
     const response: AgentLoopResponse = {
       status: 'clarification',
