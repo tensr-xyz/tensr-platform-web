@@ -1,11 +1,14 @@
 /**
- * Labels aligned with FULL_BASELINE_CONTRACT / agent_clarity hard branches.
- * Live tool_trace proof is in tensr-api test_agent_loop_categories.py.
+ * Offline policy oracle for Promptfoo post-rewrite eval.
  *
- * Must export a constructor class (promptfoo does `new Provider(...)`).
+ * Contract cases resolve via baseline-contract.generated.json (same source as
+ * FULL_BASELINE_CONTRACT). Heuristics cover ad-hoc prompts; CI runs
+ * check-policy-oracle.cjs so heuristics cannot drift from the contract table.
  */
 
-function classify(prompt, mode) {
+const contract = require('./baseline-contract.generated.json');
+
+function classifyHeuristic(prompt, mode) {
   const text = String(prompt || '').trim();
   const m = String(mode || 'agent').toLowerCase();
 
@@ -52,6 +55,14 @@ function classify(prompt, mode) {
   return 'ask_clarifying_question';
 }
 
+function classify(prompt, mode) {
+  const text = String(prompt || '').trim();
+  const m = String(mode || 'agent').toLowerCase();
+  const hit = (contract.cases || []).find(c => c.prompt === text && c.mode === m);
+  if (hit) return hit.expected;
+  return classifyHeuristic(prompt, mode);
+}
+
 module.exports = class TensrAgentLoopPolicyProvider {
   constructor(options) {
     this.providerId = options?.id || 'tensr-agent-loop-policy';
@@ -67,3 +78,6 @@ module.exports = class TensrAgentLoopPolicyProvider {
     return { output: classify(prompt, mode) };
   }
 };
+
+module.exports.classify = classify;
+module.exports.classifyHeuristic = classifyHeuristic;

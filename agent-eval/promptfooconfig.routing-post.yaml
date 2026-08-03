@@ -1,6 +1,8 @@
-# Post-rewrite — FULL baseline contract (incl. menu-*) + category-1/2.
+# AUTO-GENERATED from src/lib/agent-loop-contract.ts (FULL_BASELINE_CONTRACT).
+# DO NOT EDIT — run: pnpm run generate:agent-eval-promptfoo
+# Drift check: pnpm run check:agent-eval-promptfoo
+
 # Live category-1/2 proof: tensr-api/tests/test_agent_loop_categories.py
-# (asserts tool_trace contents against POST /assistant/agent-loop).
 description: Tensr agent loop post-rewrite full baseline contract
 
 providers:
@@ -31,11 +33,31 @@ tests:
     assert: [{ type: equals, value: 'run_analysis' }]
   - vars: { prompt: 'Run a data quality scan', mode: agent }
     assert: [{ type: equals, value: 'run_data_quality_scan' }]
+  - vars: { prompt: 'How many members joined after 2024?', mode: agent }
+    assert: [{ type: equals, value: 'run_analysis' }]
+  - vars: { prompt: 'Sum of Revenue by Region', mode: agent }
+    assert: [{ type: equals, value: 'run_analysis' }]
+  - vars: { prompt: 'Make a monthly line chart', mode: agent }
+    assert: [{ type: equals, value: 'run_analysis' }]
+  - vars: { prompt: "What's interesting?", mode: agent }
+    assert: [{ type: equals, value: 'tool_or_clarify' }]
   - vars: { prompt: 'Where do I start?', mode: agent }
     assert: [{ type: equals, value: 'tool_or_clarify' }]
   - vars: { prompt: 'Clean this dataset', mode: agent }
     assert: [{ type: equals, value: 'start_prep_playbook' }]
+  - vars: { prompt: 'I want percentile values for utilisation_rate', mode: agent }
+    assert: [{ type: equals, value: 'run_analysis' }]
+  - vars: { prompt: 'Can we get Percentile Values for these KPIs', mode: agent }
+    assert: [{ type: equals, value: 'run_analysis' }]
+  - vars:
+      {
+        prompt: 'What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate',
+        mode: agent,
+      }
+    assert: [{ type: equals, value: 'ask_clarifying_question' }]
   - vars: { prompt: 't test for me on my dataset', mode: ask }
+    assert: [{ type: equals, value: 'ask-no-write' }]
+  - vars: { prompt: 'Clean this dataset', mode: ask }
     assert: [{ type: equals, value: 'ask-no-write' }]
   - vars: { prompt: 't test for me on my dataset', mode: plan }
     assert: [{ type: equals, value: 'plan-awaiting-approval' }]

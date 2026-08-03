@@ -59,4 +59,11 @@ Pointers on `run_analysis` / chart / aggregate outputs include `dataset_id`, col
 | Promptfoo post          | `pnpm test:agent-post:promptfoo`                          | Post + mode policy via Promptfoo          |
 | Live category-1/2       | `tensr-api` `test_agent_loop_categories.py`               | Hits real `/assistant/agent-loop`         |
 
-CI (`.github/workflows/agent-eval.yml`) runs Jest agent-loop + `test:agent-post` **and** both Promptfoo scripts. Providers export constructor classes required by Promptfoo `file://` loading.
+**Corpus source of truth:** `FULL_BASELINE_CONTRACT` in `src/lib/agent-loop-contract.ts`. Both Promptfoo YAMLs (+ `agent-eval/baseline-contract.generated.json`) are generated — do not edit by hand.
+
+```bash
+pnpm run generate:agent-eval-promptfoo   # rewrite YAML/JSON from the contract
+pnpm run check:agent-eval-promptfoo      # CI drift gate (+ heuristic oracle sync)
+```
+
+CI (`.github/workflows/agent-eval.yml`) runs the sync check, Jest agent-loop + `test:agent-post`, **and** both Promptfoo scripts. Providers export constructor classes required by Promptfoo `file://` loading.

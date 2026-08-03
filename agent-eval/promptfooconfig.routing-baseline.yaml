@@ -1,20 +1,21 @@
-# Baseline (§4.1) — FULL live cascade including menu dispatch.
-# Expected values = probed actual outcomes (option 1), not the original
-# build-spec guesses that omitted resolveChatAction.
+# AUTO-GENERATED from src/lib/agent-loop-contract.ts (FULL_BASELINE_CONTRACT).
+# DO NOT EDIT — run: pnpm run generate:agent-eval-promptfoo
+# Drift check: pnpm run check:agent-eval-promptfoo
+
 description: Tensr agent routing baseline (before tool-calling loop rewrite)
 
 providers:
   - file://promptfoo-provider-routing-baseline.cjs
 
 tests:
-  - vars: { prompt: 'Hello' }
-    assert: [{ type: equals, value: 'tutor' }]
-
   - vars: { prompt: 'What does Age mean?' }
     assert: [{ type: equals, value: 'data-intent' }]
     description: "False-positive — \\bmean\\b in aggregate bucket"
 
   - vars: { prompt: 'How do I interpret a p-value?' }
+    assert: [{ type: equals, value: 'tutor' }]
+
+  - vars: { prompt: 'Hello' }
     assert: [{ type: equals, value: 'tutor' }]
 
   - vars: { prompt: 'run one for me' }
@@ -29,6 +30,20 @@ tests:
   - vars: { prompt: 't test for me on my dataset' }
     assert: [{ type: equals, value: 'menu-analysis' }]
     description: 'Menu synonym steals before Gate 4'
+
+  - vars: { prompt: 'correlation between Age and PTS' }
+    assert: [{ type: equals, value: 'menu-analysis' }]
+
+  - vars: { prompt: 'one-way ANOVA' }
+    assert: [{ type: equals, value: 'menu-analysis' }]
+
+  - vars: { prompt: 'Could you provide a boxplot for utilisation_rate' }
+    assert: [{ type: equals, value: 'menu-dialog' }]
+    description: 'Menu label Boxplot steals before Gate 2'
+
+  - vars: { prompt: 'Run a data quality scan' }
+    assert: [{ type: equals, value: 'menu-dialog' }]
+    description: 'Menu synonym steals before Gate 5'
 
   - vars: { prompt: 'How many members joined after 2024?' }
     assert: [{ type: equals, value: 'data-intent' }]
@@ -49,14 +64,6 @@ tests:
   - vars: { prompt: 'Clean this dataset' }
     assert: [{ type: equals, value: 'prep-playbook' }]
 
-  - vars: { prompt: 'Run a data quality scan' }
-    assert: [{ type: equals, value: 'menu-dialog' }]
-    description: 'Menu synonym steals before Gate 5'
-
-  - vars: { prompt: 'correlation between Age and PTS' }
-    assert: [{ type: equals, value: 'menu-analysis' }]
-
-  # From verify_screenshot_prompts.py / test_agent_fidelity.py (routing layer)
   - vars: { prompt: 'I want percentile values for utilisation_rate' }
     assert: [{ type: equals, value: 'data-intent' }]
 
@@ -69,10 +76,3 @@ tests:
       }
     assert: [{ type: equals, value: 'tutor' }]
     description: 'No Gate-2 keyword (quartile/top N%); falls to tutor today'
-
-  - vars: { prompt: 'Could you provide a boxplot for utilisation_rate' }
-    assert: [{ type: equals, value: 'menu-dialog' }]
-    description: 'Menu label Boxplot steals before Gate 2'
-
-  - vars: { prompt: 'one-way ANOVA' }
-    assert: [{ type: equals, value: 'menu-analysis' }]

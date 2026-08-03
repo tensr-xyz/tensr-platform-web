@@ -12,6 +12,7 @@ on:
       - 'src/lib/run-agent-data-action.ts'
       - 'src/lib/prep-playbook.ts'
       - 'src/lib/agent-exploratory-intent.ts'
+      - 'src/lib/agent-loop-contract.*'
       - 'src/stores/agent-mode-store.ts'
       - 'agent-eval/**'
       - 'package.json'
@@ -26,6 +27,7 @@ on:
       - 'src/lib/run-agent-data-action.ts'
       - 'src/lib/prep-playbook.ts'
       - 'src/lib/agent-exploratory-intent.ts'
+      - 'src/lib/agent-loop-contract.*'
       - 'src/stores/agent-mode-store.ts'
       - 'agent-eval/**'
       - 'package.json'
@@ -54,6 +56,9 @@ jobs:
 
       - name: Install
         run: pnpm install
+
+      - name: Promptfoo corpora sync (FULL_BASELINE_CONTRACT)
+        run: pnpm run check:agent-eval-promptfoo
 
       - name: Routing baseline + post-rewrite policy + loop client (Jest)
         run: pnpm run test:agent-loop
