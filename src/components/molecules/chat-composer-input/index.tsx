@@ -9,7 +9,7 @@ type Props = Omit<React.ComponentProps<'textarea'>, 'rows'> & {
   onExpandedChange?: (expanded: boolean) => void;
 };
 
-const SINGLE_LINE_PX = 20; // text-[13px] leading-5
+const SINGLE_LINE_PX = 28; // min-h-7 / leading-7 — matches size-7 buttons
 
 /**
  * Chat composer field — plain textarea without form Textarea defaults (flex,
@@ -21,7 +21,7 @@ export const ChatComposerInput = React.forwardRef<HTMLTextAreaElement, Props>(
     forwardedRef
   ) {
     const innerRef = React.useRef<HTMLTextAreaElement>(null);
-    const expandedRef = React.useRef(false);
+    const [expanded, setExpanded] = React.useState(false);
 
     const setRefs = React.useCallback(
       (node: HTMLTextAreaElement | null) => {
@@ -37,15 +37,16 @@ export const ChatComposerInput = React.forwardRef<HTMLTextAreaElement, Props>(
       if (!el) return;
       el.style.height = '0px';
       const scroll = el.scrollHeight;
-      const next = Math.min(scroll, maxHeight);
+      // Never shrink below one control-height line so text stays vertically centered with buttons.
+      const next = Math.min(Math.max(scroll, SINGLE_LINE_PX), maxHeight);
       el.style.height = `${next}px`;
       el.style.overflowY = scroll > maxHeight ? 'auto' : 'hidden';
 
-      const expanded = scroll > SINGLE_LINE_PX + 2 || String(value ?? '').includes('\n');
-      if (expanded !== expandedRef.current) {
-        expandedRef.current = expanded;
-        onExpandedChange?.(expanded);
-      }
+      const nextExpanded = scroll > SINGLE_LINE_PX + 2 || String(value ?? '').includes('\n');
+      setExpanded(prev => {
+        if (prev !== nextExpanded) onExpandedChange?.(nextExpanded);
+        return nextExpanded;
+      });
     }, [maxHeight, onExpandedChange, value]);
 
     React.useLayoutEffect(() => {
@@ -63,7 +64,9 @@ export const ChatComposerInput = React.forwardRef<HTMLTextAreaElement, Props>(
         }}
         className={cn(
           'block w-full resize-none border-0 bg-transparent p-0',
-          'text-[13px] leading-5 text-foreground',
+          'text-[13px] text-foreground',
+          // Single line: leading matches size-7 buttons. Multi-line: tighter leading.
+          expanded ? 'leading-5' : 'min-h-7 leading-7',
           'placeholder:text-muted-foreground',
           'outline-none focus-visible:ring-0',
           'disabled:cursor-not-allowed disabled:opacity-50',

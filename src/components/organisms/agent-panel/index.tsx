@@ -1481,11 +1481,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               )}
             </div>
 
-            <div className="shrink-0 border-t border-border bg-card px-3.5 pt-3 pb-1">
+            <div className="shrink-0 bg-card px-3.5 pt-2 pb-1">
               <div
                 className={cn(
-                  'grid items-end gap-x-1.5 gap-y-2 rounded-xl border bg-card p-2 transition-shadow',
+                  'grid gap-x-1.5 gap-y-2 rounded-xl border bg-card px-2 py-1.5 transition-shadow',
                   'grid-cols-[auto_minmax(0,1fr)_auto]',
+                  composerExpanded ? 'items-end' : 'items-center',
                   inputMessage.trim()
                     ? 'border-border shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]'
                     : 'border-border'
@@ -1548,10 +1549,13 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                   </Popover>
                 </div>
 
-                <div style={{ gridArea: 'text' }} className={cn(!composerExpanded && 'py-1')}>
+                <div
+                  style={{ gridArea: 'text' }}
+                  className={cn('min-w-0', !composerExpanded && 'flex items-center')}
+                >
                   <Popover open={slashColumnsOpen} onOpenChange={setSlashColumnsOpen}>
                     <PopoverAnchor asChild>
-                      <div className="min-w-0">
+                      <div className="min-w-0 w-full">
                         <ChatComposerInput
                           ref={composerRef}
                           value={inputMessage}
