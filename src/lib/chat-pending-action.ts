@@ -85,6 +85,25 @@ export type ChatPendingAction =
       logEntries: string[];
       isLastStep: boolean;
       errorMessage?: string;
+    }
+  | {
+      kind: 'agent_tool_approval';
+      status: ChatPendingActionStatus;
+      toolCallId: string;
+      name: string;
+      args: Record<string, unknown>;
+      rationale?: string;
+      whyThisTest?: string;
+      triggerMessage: string;
+      errorMessage?: string;
+    }
+  | {
+      kind: 'proposed_action';
+      status: ChatPendingActionStatus;
+      title: string;
+      summaryText?: string;
+      proposedAction: PlaybookProposedAction;
+      errorMessage?: string;
     };
 
 const PLANNER_TYPE_TO_OP: Record<string, AnalysisKey> = {

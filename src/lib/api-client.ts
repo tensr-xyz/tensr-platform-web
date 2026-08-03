@@ -975,6 +975,38 @@ class ApiClient {
           conversation_history: data.conversationHistory ?? null,
         }),
       }),
+    agentLoop: (data: {
+      message: string;
+      mode: 'ask' | 'plan' | 'agent';
+      datasetId?: string | null;
+      openDatasets?: Array<{
+        dataset_id: string;
+        label?: string | null;
+        filename?: string | null;
+      }>;
+      conversationHistory?: Array<{ role: string; content: string }>;
+      glossary?: string | null;
+      approvedToolCall?: {
+        tool_call_id: string;
+        name: string;
+        args: Record<string, unknown>;
+        rationale?: string;
+        why_this_test?: string;
+        confidence?: number;
+      } | null;
+    }) =>
+      this.request<import('@/lib/run-agent-loop').AgentLoopResponse>('/assistant/agent-loop', {
+        method: 'POST',
+        body: JSON.stringify({
+          message: data.message,
+          mode: data.mode,
+          dataset_id: data.datasetId ?? null,
+          open_datasets: data.openDatasets ?? [],
+          conversation_history: data.conversationHistory ?? null,
+          glossary: data.glossary ?? null,
+          approved_tool_call: data.approvedToolCall ?? null,
+        }),
+      }),
     /** Deterministic, LLM-free inspection of one agent-driven data-prep playbook step. */
     prepPlaybookStep: (data: { datasetId: string; step?: PrepPlaybookStep | null }) =>
       this.request<{

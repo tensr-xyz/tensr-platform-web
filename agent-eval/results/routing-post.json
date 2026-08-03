@@ -1,0 +1,131 @@
+{
+  "generatedAt": "2026-08-03T15:46:32.437Z",
+  "suite": "routing-post",
+  "results": [
+    {
+      "prompt": "Hello",
+      "mode": "agent",
+      "outcome": "text-or-clarify",
+      "pass": true
+    },
+    {
+      "prompt": "What does Age mean?",
+      "mode": "agent",
+      "outcome": "tool-or-clarify",
+      "pass": true
+    },
+    {
+      "prompt": "How do I interpret a p-value?",
+      "mode": "agent",
+      "outcome": "text-or-clarify",
+      "pass": true
+    },
+    {
+      "prompt": "run one for me",
+      "mode": "agent",
+      "outcome": "clarify",
+      "pass": true
+    },
+    {
+      "prompt": "why is that significant?",
+      "mode": "agent",
+      "outcome": "text-or-clarify",
+      "pass": true
+    },
+    {
+      "prompt": "Can you help me understand the groups?",
+      "mode": "agent",
+      "outcome": "text-or-clarify",
+      "pass": true
+    },
+    {
+      "prompt": "t test for me on my dataset",
+      "mode": "agent",
+      "outcome": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "correlation between Age and PTS",
+      "mode": "agent",
+      "outcome": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "How many members joined after 2024?",
+      "mode": "agent",
+      "outcome": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "Sum of Revenue by Region",
+      "mode": "agent",
+      "outcome": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "Make a monthly line chart",
+      "mode": "agent",
+      "outcome": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "What's interesting?",
+      "mode": "agent",
+      "outcome": "tool-or-clarify",
+      "pass": true
+    },
+    {
+      "prompt": "Where do I start?",
+      "mode": "agent",
+      "outcome": "tool-or-clarify",
+      "pass": true
+    },
+    {
+      "prompt": "Clean this dataset",
+      "mode": "agent",
+      "outcome": "start_prep_playbook",
+      "pass": true
+    },
+    {
+      "prompt": "Run a data quality scan",
+      "mode": "agent",
+      "outcome": "run_data_quality_scan",
+      "pass": true
+    },
+    {
+      "prompt": "I want percentile values for utilisation_rate",
+      "mode": "agent",
+      "outcome": "run_analysis",
+      "pass": true
+    },
+    {
+      "prompt": "t test for me on my dataset",
+      "mode": "ask",
+      "outcome": "ask-no-write",
+      "pass": true
+    },
+    {
+      "prompt": "Clean this dataset",
+      "mode": "ask",
+      "outcome": "ask-no-write",
+      "pass": true
+    },
+    {
+      "prompt": "t test for me on my dataset",
+      "mode": "plan",
+      "outcome": "plan-awaiting-approval",
+      "pass": true
+    },
+    {
+      "prompt": "geometric mean of Revenue",
+      "mode": "agent",
+      "outcome": "refuse-or-clarify",
+      "pass": true
+    }
+  ],
+  "summary": {
+    "total": 20,
+    "passed": 20,
+    "failed": 0
+  }
+}

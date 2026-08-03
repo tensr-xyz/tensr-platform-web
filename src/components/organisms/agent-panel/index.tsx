@@ -1,8 +1,9 @@
 import { Button } from '@/components/atoms/button';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { ChatComposerInput } from '@/components/molecules/chat-composer-input';
+import { PillToggle } from '@/components/molecules/analysis-dialog';
 import { Send, Loader2, AlertCircle, Trash2, History, Plus, X, Sparkles } from 'lucide-react';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTabsStore, ViewType, type AgentAnalysisHistoryEntry } from '@/stores/tabs-store';
@@ -12,6 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { apiClient } from '@/lib/api-client';
 import { getIdToken } from '@/utils/auth';
 import { useChatStore } from '@/stores/chat-store';
+import { useAgentModeStore, type AgentMode } from '@/stores/agent-mode-store';
 import { ChatAnalysisApproval } from '@/components/molecules/chat-analysis-approval';
 import {
   Tooltip,
@@ -21,30 +23,12 @@ import {
 } from '@/components/atoms/tooltip';
 import { cn } from '@/utils';
 import { getDatasetIdFromTab, resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
-import { formatApiErrorMessage, ApiRequestError } from '@/lib/api-error';
-import { CHAT_ACTION_HINTS, resolveChatAction } from '@/lib/chat-actions';
-import { findColumnByLabel } from '@/lib/column-utils';
-import {
-  dispatchApplyColumnFilters,
-  dispatchClearColumnFilters,
-  dispatchClearSort,
-  dispatchFilterColumnFocus,
-  dispatchHideColumn,
-  dispatchShowHiddenColumns,
-  dispatchSortColumn,
-} from '@/lib/spreadsheet-commands';
+import { formatApiErrorMessage } from '@/lib/api-error';
+import { dispatchApplyColumnFilters } from '@/lib/spreadsheet-commands';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
-import { recordTabSnapshot } from '@/lib/tab-history';
 import { AgentInlineChart } from '@/components/organisms/agent-inline-chart';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
-import {
-  buildChartFromDataset,
-  chartFromAnalysisEnvelope,
-  fetchDatasetPreviewRows,
-  isChartIntent,
-  shouldRouteToInlineChart,
-  stripChartBlocks,
-} from '@/lib/agent-chart-from-dataset';
+import { chartFromAnalysisEnvelope } from '@/lib/agent-chart-from-dataset';
 import type {
   AgentAnalysisPlan,
   ChatPendingAction,
@@ -54,30 +38,15 @@ import { plannerSpecToSetupBody, plannerTypeToOp } from '@/lib/chat-pending-acti
 import { isAnalysisKey } from '@/lib/analysis-definitions';
 import {
   analysisResultMarkdown,
-  assistantUpdateFromParseIntent,
-  fetchExploratorySuggestions,
   openResultTabForPlan,
   parseIntentForDataset,
-  pendingActionFromParseIntentUpdate,
   planFromParseIntent,
   runAgentAnalysisPlan,
   suggestFollowUpPlan,
-  resetFollowUpSuggestionDedup,
-  suggestionToPlan,
 } from '@/lib/run-agent-analysis-plan';
-import {
-  executeDataActionForDataset,
-  pendingFilterApplyFromResult,
-  shouldRouteMessageToDataIntent,
-} from '@/lib/run-agent-data-action';
-import { shouldSuggestExploratoryAnalyses } from '@/lib/agent-exploratory-intent';
-import { revealAssistantText, streamAssistantFollowup } from '@/lib/stream-assistant-followup';
-import {
-  buildAgentConversationHistory,
-  isAnalysisColumnClarificationReply,
-  isAnalysisFollowUpQuestion,
-} from '@/lib/agent-conversation-history';
-import { ANALYSIS_PLANNING_MESSAGE } from '@/lib/agent-analysis-progress';
+import { executeDataActionForDataset } from '@/lib/run-agent-data-action';
+import { revealAssistantText } from '@/lib/stream-assistant-followup';
+import { buildAgentConversationHistory } from '@/lib/agent-conversation-history';
 import type { AgentDataAction } from '@/lib/chat-pending-action';
 import { useRouter } from 'next/navigation';
 import {
@@ -86,9 +55,14 @@ import {
   buildPrepPlaybookReport,
   describePlaybookApplyResult,
   fetchPlaybookStep,
-  isPrepPlaybookTrigger,
   nextPlaybookStep,
 } from '@/lib/prep-playbook';
+import {
+  collectOpenDatasetsFromTabs,
+  deriveMessageUpdateFromLoopResponse,
+  runAgentLoop,
+  type AgentLoopApprovedToolCall,
+} from '@/lib/run-agent-loop';
 
 const ANALYSIS_HISTORY_LIMIT = 20;
 
@@ -338,6 +312,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const fileSystem = useProjectStore(s => s.fileSystem);
   const projectId = currentProject?.id || 'default-project';
   const projectGlossary = currentProject?.description?.trim() || null;
+  const agentMode = useAgentModeStore(s => s.getMode(projectId));
+  const setAgentMode = useAgentModeStore(s => s.setMode);
+
+  const AGENT_MODE_OPTIONS: { value: AgentMode; label: string }[] = [
+    { value: 'ask', label: 'Ask' },
+    { value: 'plan', label: 'Plan' },
+    { value: 'agent', label: 'Agent' },
+  ];
 
   const workspaceDatasetId = useMemo(
     () =>
@@ -440,7 +422,84 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     if (!showRunsToggle) setShowRuns(false);
   }, [showRunsToggle]);
 
-  // Message handling using chat store
+  // Message handling — single agent-loop API (replaces legacy gate cascade).
+  const invokeAgentLoop = useCallback(
+    async (opts: {
+      message: string;
+      assistantMessageId?: string;
+      approvedToolCall?: AgentLoopApprovedToolCall;
+      triggerMessage?: string;
+      conversationHistory?: ReturnType<typeof buildAgentConversationHistory>;
+    }) => {
+      const datasetId = workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
+      const openDatasets = collectOpenDatasetsFromTabs(tabs);
+      const conversationHistory =
+        opts.conversationHistory ?? buildAgentConversationHistory(messages);
+      const mode = useAgentModeStore.getState().getMode(projectId);
+
+      const assistantMessageId =
+        opts.assistantMessageId ??
+        addMessage(projectId, {
+          role: 'assistant',
+          content: '',
+          isStreaming: true,
+          timestamp: new Date(),
+        });
+
+      setLoading(projectId, false);
+
+      try {
+        const response = await runAgentLoop({
+          message: opts.message,
+          mode,
+          datasetId,
+          openDatasets,
+          conversationHistory,
+          glossary: projectGlossary,
+          approvedToolCall: opts.approvedToolCall ?? null,
+        });
+
+        const triggerMessage = opts.triggerMessage ?? opts.message;
+        const patch = deriveMessageUpdateFromLoopResponse(response, {
+          triggerMessage,
+          datasetId,
+        });
+        updateMessage(projectId, assistantMessageId, patch);
+
+        for (const entry of response.tool_results ?? []) {
+          if (entry.name !== 'run_analysis' || !entry.result?.result) continue;
+          const analysisType = String(entry.result.analysis_type ?? '');
+          const requestBody = entry.result.request_body as Record<string, unknown> | undefined;
+          if (!analysisType || !requestBody || !datasetId) continue;
+          openResultTabForPlan(
+            { analysisType, spec: requestBody },
+            entry.result.result as Record<string, unknown>,
+            datasetId,
+            activeTab?.name,
+            requestBody
+          );
+        }
+      } catch (err: unknown) {
+        updateMessage(projectId, assistantMessageId, {
+          content: formatApiErrorMessage(err),
+          isStreaming: false,
+        });
+        throw err;
+      }
+    },
+    [
+      activeTab,
+      addMessage,
+      messages,
+      projectGlossary,
+      projectId,
+      setLoading,
+      tabs,
+      updateMessage,
+      workspaceDatasetId,
+    ]
+  );
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
@@ -450,10 +509,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       timestamp: new Date(),
     };
 
-    // Add user message to store
     addMessage(projectId, userMessage);
-
-    resetFollowUpSuggestionDedup();
     expirePendingSuggestionCards(projectId);
 
     const currentMessage = inputMessage;
@@ -461,728 +517,16 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     setLoading(projectId, true);
     setError(projectId, null);
 
-    const conversationHistory = buildAgentConversationHistory([...messages, userMessage]);
-
     try {
-      // 1) Try to dispatch to the same registry the ⌘K palette uses so chat
-      // can run every menu item (analyses, transform/data dialogs, direct
-      // column edits) with no LLM round-trip.
-      // Chart/plot requests should render inline charts, not open analysis setup.
-      if (shouldRouteToInlineChart(currentMessage)) {
-        // fall through to LLM + buildChartFromDataset below
-      } else {
-        const action = resolveChatAction(currentMessage);
-        const setupStore = useAnalysisSetupStore.getState();
-
-        if (action.kind === 'analysis') {
-          const datasetIdForIntent = workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
-          const menuFallback = {
-            op: action.op,
-            menuName: action.menuName,
-            triggerMessage: currentMessage,
-          };
-          const assistantMessageId = addMessage(projectId, {
-            role: 'assistant',
-            content: ANALYSIS_PLANNING_MESSAGE,
-            isStreaming: true,
-            timestamp: new Date(),
-            pendingAction: {
-              kind: 'analysis_menu',
-              status: datasetIdForIntent ? 'planning' : 'pending',
-              ...menuFallback,
-            },
-          });
-          setLoading(projectId, false);
-
-          if (datasetIdForIntent) {
-            void (async () => {
-              try {
-                const intent = await parseIntentForDataset(
-                  datasetIdForIntent,
-                  currentMessage,
-                  conversationHistory,
-                  projectGlossary
-                );
-                const parsed = assistantUpdateFromParseIntent(
-                  intent,
-                  action.menuName,
-                  currentMessage
-                );
-                updateMessage(projectId, assistantMessageId, {
-                  content: parsed.content,
-                  isStreaming: false,
-                  pendingAction: pendingActionFromParseIntentUpdate(parsed, {
-                    ...menuFallback,
-                    triggerMessage: currentMessage,
-                  }),
-                });
-              } catch (planError) {
-                updateMessage(projectId, assistantMessageId, {
-                  isStreaming: false,
-                  pendingAction: {
-                    kind: 'analysis_menu',
-                    status: 'failed',
-                    ...menuFallback,
-                    errorMessage: formatApiErrorMessage(planError),
-                  },
-                });
-              }
-            })();
-          }
-          return;
-        }
-
-        if (action.kind === 'dialog') {
-          setupStore.openDialog(action.menuName);
-          const dialogCopy =
-            action.menuName === 'Standardize Variables'
-              ? `Opening **Standardize Variables**. This creates a derived dataset with \`{column}_z\` columns — it does not print z-score values in chat. If you wanted a z-score summary here instead, ask e.g. "z-scores for utilisation_rate".`
-              : `Opening **${action.menuName}**.`;
-          addMessage(projectId, {
-            role: 'assistant',
-            content: dialogCopy,
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-
-        if (action.kind === 'unavailable') {
-          setupStore.openUnavailable(action.menuName);
-          addMessage(projectId, {
-            role: 'assistant',
-            content: `**${action.menuName}** isn't wired to tensr-api yet. I can run any of:\n${CHAT_ACTION_HINTS.map(h => `• ${h}`).join('\n')}`,
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-
-        if (action.kind === 'rename_column') {
-          if (!activeTab?.data?.initialColumns?.length) {
-            throw new Error('Open a spreadsheet tab to rename a column.');
-          }
-          const cols = activeTab.data.initialColumns;
-          const match = findColumnByLabel(cols, action.from);
-          if (!match) {
-            addMessage(projectId, {
-              role: 'assistant',
-              content: `I couldn't find a column called "${action.from}". Available columns: ${cols.map(c => c.header).join(', ')}.`,
-              timestamp: new Date(),
-            });
-            setLoading(projectId, false);
-            return;
-          }
-          recordTabSnapshot(activeTab.id, `Rename ${match.header} → ${action.to}`);
-          const nextCols = cols.map(c =>
-            c.id === match.id ? { ...c, header: action.to, accessor: action.to } : c
-          );
-          updateTab(activeTab.id, {
-            data: { ...activeTab.data, initialColumns: nextCols },
-            isDirty: true,
-          });
-          const liveNote = activeTab.data?.sheetId
-            ? '\n\n_Note: this tab is in live-collab mode; the rename is applied locally only. Use the column header menu in the grid to broadcast renames to collaborators._'
-            : '';
-          addMessage(projectId, {
-            role: 'assistant',
-            content: `Renamed column **${match.header}** → **${action.to}**. (⌘Z to undo)${liveNote}`,
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-
-        if (action.kind === 'delete_column') {
-          if (!activeTab?.data?.initialColumns?.length) {
-            throw new Error('Open a spreadsheet tab to delete a column.');
-          }
-          const cols = activeTab.data.initialColumns;
-          const match = findColumnByLabel(cols, action.column);
-          if (!match) {
-            addMessage(projectId, {
-              role: 'assistant',
-              content: `I couldn't find a column called "${action.column}".`,
-              timestamp: new Date(),
-            });
-            setLoading(projectId, false);
-            return;
-          }
-          recordTabSnapshot(activeTab.id, `Delete column ${match.header}`);
-          const nextCols = cols.filter(c => c.id !== match.id);
-          const nextRows = (activeTab.data.initialData ?? []).map(row => {
-            const { [match.id]: _drop, ...rest } = row;
-            return rest;
-          });
-          updateTab(activeTab.id, {
-            data: {
-              ...activeTab.data,
-              initialColumns: nextCols,
-              initialData: nextRows,
-              totalColumns: nextCols.length,
-            },
-            isDirty: true,
-          });
-          const liveNoteDel = activeTab.data?.sheetId
-            ? '\n\n_Note: this tab is in live-collab mode; the delete is applied locally only and not broadcast._'
-            : '';
-          addMessage(projectId, {
-            role: 'assistant',
-            content: `Deleted column **${match.header}**. (⌘Z to undo)${liveNoteDel}`,
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-
-        if (action.kind === 'sort_column') {
-          if (!activeTab?.data?.initialColumns?.length) {
-            throw new Error('Open a spreadsheet tab to sort a column.');
-          }
-          const cols = activeTab.data.initialColumns;
-          const match = findColumnByLabel(cols, action.column);
-          if (!match) {
-            addMessage(projectId, {
-              role: 'assistant',
-              content: `I couldn't find a column called "${action.column}". Available columns: ${cols.map(c => c.header).join(', ')}.`,
-              timestamp: new Date(),
-            });
-            setLoading(projectId, false);
-            return;
-          }
-          dispatchSortColumn(match.id, action.direction);
-          addMessage(projectId, {
-            role: 'assistant',
-            content: `Sorted **${match.header}** ${action.direction === 'desc' ? 'descending' : 'ascending'}.`,
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-
-        if (action.kind === 'clear_sort') {
-          dispatchClearSort();
-          addMessage(projectId, {
-            role: 'assistant',
-            content: 'Cleared sorting.',
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-
-        if (action.kind === 'filter_column') {
-          if (!activeTab?.data?.initialColumns?.length) {
-            throw new Error('Open a spreadsheet tab to filter a column.');
-          }
-          const cols = activeTab.data.initialColumns;
-          const match = findColumnByLabel(cols, action.column);
-          if (!match) {
-            addMessage(projectId, {
-              role: 'assistant',
-              content: `I couldn't find a column called "${action.column}". Available columns: ${cols.map(c => c.header).join(', ')}.`,
-              timestamp: new Date(),
-            });
-            setLoading(projectId, false);
-            return;
-          }
-
-          const isNumericOp = action.operator === 'greaterThan' || action.operator === 'lessThan';
-          const coerced =
-            isNumericOp && !Number.isNaN(Number(action.value))
-              ? Number(action.value)
-              : action.value;
-
-          const prevFilters = (activeTab.data.columnFilters ?? []) as Array<{
-            id: string;
-            value: { operator: string; value: unknown };
-          }>;
-          const nextFilters = [
-            ...prevFilters.filter(f => f.id !== match.id),
-            { id: match.id, value: { operator: action.operator, value: coerced } },
-          ];
-
-          updateTab(activeTab.id, {
-            data: {
-              ...activeTab.data,
-              columnFilters: nextFilters as any,
-            },
-          });
-
-          dispatchApplyColumnFilters(nextFilters, { showFilterBar: true });
-          dispatchFilterColumnFocus(match.id, {
-            operator: action.operator,
-            value: coerced,
-            showFilterBar: true,
-          });
-
-          const opLabel: Record<string, string> = {
-            equals: '=',
-            contains: 'contains',
-            greaterThan: '>',
-            lessThan: '<',
-          };
-          addMessage(projectId, {
-            role: 'assistant',
-            content: `Filtered **${match.header}** ${opLabel[action.operator]} \`${action.value}\`.`,
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-
-        if (action.kind === 'clear_filters') {
-          if (activeTab?.data) {
-            updateTab(activeTab.id, {
-              data: { ...activeTab.data, columnFilters: [] as any },
-            });
-          }
-          dispatchClearColumnFilters();
-          addMessage(projectId, {
-            role: 'assistant',
-            content: 'Cleared all filters.',
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-
-        if (action.kind === 'hide_column') {
-          if (!activeTab?.data?.initialColumns?.length) {
-            throw new Error('Open a spreadsheet tab to hide a column.');
-          }
-          const cols = activeTab.data.initialColumns;
-          const match = findColumnByLabel(cols, action.column);
-          if (!match) {
-            addMessage(projectId, {
-              role: 'assistant',
-              content: `I couldn't find a column called "${action.column}".`,
-              timestamp: new Date(),
-            });
-            setLoading(projectId, false);
-            return;
-          }
-          dispatchHideColumn(match.id);
-          addMessage(projectId, {
-            role: 'assistant',
-            content: `Hid column **${match.header}**. Say "show hidden columns" to bring it back.`,
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-
-        if (action.kind === 'show_hidden_columns') {
-          dispatchShowHiddenColumns();
-          addMessage(projectId, {
-            role: 'assistant',
-            content: 'Restored all hidden columns.',
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-
-        if (action.kind === 'group_by' || action.kind === 'aggregate_by') {
-          setupStore.openDialog('Aggregate Data');
-          const cols = activeTab?.data?.initialColumns ?? [];
-          const match = findColumnByLabel(cols, action.column);
-          addMessage(projectId, {
-            role: 'assistant',
-            content: match
-              ? `Opening **Aggregate Data** for column **${match.header}**.`
-              : 'Opening **Aggregate Data**.',
-            timestamp: new Date(),
-          });
-          setLoading(projectId, false);
-          return;
-        }
-      } // end menu routing (skipped for chart/plot intents)
-
-      // 2) Fall back to the existing LLM flows for everything else.
-      if (!getIdToken()) {
-        throw new Error('Authentication required. Please log in again.');
-      }
-
-      // Check if this is a data quality scan request
-      const isDataQualityQuery =
-        /(data quality|quality scan|check data|data issues|scan data|data problems)/i.test(
-          currentMessage
-        );
-
-      const datasetIdForIntent = workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
-
-      // Track C step 2: "clean this dataset" / "prepare my data" / "wrangle" → start the
-      // agent-driven data-prep playbook (missing data → duplicates → outliers → type fix),
-      // confirming each step before applying it. Checked before every other fast path so it
-      // can never be shadowed by the data-action or analysis-question heuristics below.
-      if (datasetIdForIntent && isPrepPlaybookTrigger(currentMessage)) {
-        setLoading(projectId, false);
-        await startPrepPlaybook(datasetIdForIntent, currentMessage);
-        return;
-      }
-
-      // Phase A: count / filter / aggregate / chart / descriptive compare → parse-intent + execute
-      if (datasetIdForIntent && shouldRouteMessageToDataIntent(currentMessage)) {
-        const assistantMessageId = addMessage(projectId, {
-          role: 'assistant',
-          content: 'Working on that…',
-          isStreaming: true,
-          timestamp: new Date(),
-        });
-        setLoading(projectId, false);
-        try {
-          const intent = await parseIntentForDataset(
-            datasetIdForIntent,
-            currentMessage,
-            conversationHistory,
-            projectGlossary
-          );
-          const parsed = assistantUpdateFromParseIntent(intent, 'Data action', currentMessage);
-
-          if (parsed.type === 'clarification' || parsed.type === 'unsupported') {
-            updateMessage(projectId, assistantMessageId, {
-              content: parsed.content,
-              isStreaming: false,
-            });
-            return;
-          }
-
-          if (parsed.type === 'action') {
-            const result = await executeDataActionForDataset(datasetIdForIntent, parsed.action);
-            const charts: AnalysisReportChart[] = [];
-            if (result.chart) {
-              charts.push(result.chart as AnalysisReportChart);
-            }
-            const pending =
-              result.ok && result.filters?.length
-                ? pendingFilterApplyFromResult(parsed.action, result)
-                : undefined;
-            const repairCols = result.repair?.suggested_columns?.filter(Boolean) ?? [];
-            updateMessage(projectId, assistantMessageId, {
-              content: result.answer_markdown || parsed.content,
-              isStreaming: false,
-              charts: charts.length ? charts : undefined,
-              pendingAction: pending,
-              repairSuggestions: repairCols.length ? repairCols.slice(0, 5) : undefined,
-              repairBase: repairCols.length
-                ? {
-                    actionType: parsed.action.actionType,
-                    spec: {
-                      ...parsed.action.spec,
-                      ...(result.repair?.suggested_spec ?? {}),
-                    },
-                  }
-                : undefined,
-            });
-            return;
-          }
-
-          if (parsed.type === 'plan') {
-            updateMessage(projectId, assistantMessageId, {
-              content: parsed.content,
-              isStreaming: false,
-              pendingAction: {
-                kind: 'analysis_plan',
-                status: 'pending',
-                plan: parsed.plan,
-              },
-            });
-            return;
-          }
-        } catch (dataActionError) {
-          console.warn('data-action intent failed, falling through:', dataActionError);
-          updateMessage(projectId, assistantMessageId, {
-            content:
-              'I could not complete that data request. Try rephrasing, or use the column Filter menu.',
-            isStreaming: false,
-          });
-          return;
-        }
-      }
-
-      if (
-        shouldSuggestExploratoryAnalyses(currentMessage) &&
-        !shouldRouteToInlineChart(currentMessage) &&
-        datasetIdForIntent
-      ) {
-        setLoading(projectId, false);
-        try {
-          expirePendingSuggestionCards(projectId);
-          const suggestions = await fetchExploratorySuggestions(
-            datasetIdForIntent,
-            conversationHistory
-          );
-          if (suggestions.length > 0) {
-            addMessage(projectId, {
-              role: 'assistant',
-              content: 'Here are a few analyses worth running on this dataset:',
-              timestamp: new Date(),
-            });
-            for (const item of suggestions) {
-              addMessage(projectId, {
-                role: 'assistant',
-                content: item.rationale,
-                timestamp: new Date(),
-                pendingAction: {
-                  kind: 'analysis_plan',
-                  status: 'pending',
-                  plan: suggestionToPlan(item),
-                },
-              });
-            }
-            return;
-          }
-        } catch (exploreError) {
-          console.warn('suggest-analyses failed, falling through:', exploreError);
-        }
-      }
-
-      const schemaColumnNames =
-        activeTab?.data?.initialColumns?.map(c => String(c.header ?? c.id ?? '')).filter(Boolean) ??
-        [];
-      const analysisFollowUp =
-        isAnalysisFollowUpQuestion(currentMessage, messages) ||
-        isAnalysisColumnClarificationReply(currentMessage, messages, schemaColumnNames);
-
-      // Analysis questions: parse-intent (tensr-api) when dataset is open
-      const isAnalysisQuestion =
-        analysisFollowUp ||
-        /(predict|analyze|analys|relationship|correlation|regression|anova|compare|difference|effect|impact|test|wilcoxon|mann|kruskal|chi|crosstab|pca|cluster|factor|reliability|normality|shapiro|sign test|mcnemar|probit|logistic|poisson|ttest|t-test|kappa|cohen|spearman|kendall|canonical|discriminant|manova|ancova|glmm|mixed model|survival|kaplan|cox|arima)/i.test(
-          currentMessage
-        );
-
-      if (isAnalysisQuestion && !shouldRouteToInlineChart(currentMessage) && datasetIdForIntent) {
-        const menuFallback = {
-          op: 'ttest_independent' as const,
-          menuName: 'Analysis',
-          triggerMessage: currentMessage,
-        };
-        const assistantMessageId = addMessage(projectId, {
-          role: 'assistant',
-          content: ANALYSIS_PLANNING_MESSAGE,
-          isStreaming: true,
-          timestamp: new Date(),
-          pendingAction: {
-            kind: 'analysis_menu',
-            status: 'planning',
-            ...menuFallback,
-          },
-        });
-        setLoading(projectId, false);
-
-        try {
-          const intent = await parseIntentForDataset(
-            datasetIdForIntent,
-            currentMessage,
-            conversationHistory,
-            projectGlossary
-          );
-          const parsed = assistantUpdateFromParseIntent(
-            intent,
-            intent.analysis_type?.replace(/_/g, ' ') ?? 'Analysis',
-            currentMessage
-          );
-          const planOp =
-            intent.analysis_type && isAnalysisKey(intent.analysis_type)
-              ? intent.analysis_type
-              : 'ttest_independent';
-          const menuFallbackForIntent = {
-            op: planOp,
-            menuName: intent.analysis_type?.replace(/_/g, ' ') ?? 'Analysis',
-            triggerMessage: currentMessage,
-          };
-          if (parsed.type === 'action') {
-            try {
-              const result = await executeDataActionForDataset(datasetIdForIntent, parsed.action);
-              const charts: AnalysisReportChart[] = [];
-              if (result.chart) {
-                charts.push(result.chart as AnalysisReportChart);
-              }
-              const pending =
-                result.ok && result.filters?.length
-                  ? pendingFilterApplyFromResult(parsed.action, result)
-                  : undefined;
-              updateMessage(projectId, assistantMessageId, {
-                content: result.answer_markdown || parsed.content,
-                isStreaming: false,
-                charts: charts.length ? charts : undefined,
-                pendingAction: pending,
-              });
-            } catch (actionErr) {
-              updateMessage(projectId, assistantMessageId, {
-                content: parsed.content,
-                isStreaming: false,
-                pendingAction: {
-                  kind: 'data_action',
-                  status: 'failed',
-                  action: parsed.action,
-                  errorMessage: formatApiErrorMessage(actionErr),
-                },
-              });
-            }
-            return;
-          }
-
-          updateMessage(projectId, assistantMessageId, {
-            role: 'assistant',
-            content: parsed.content,
-            isStreaming: false,
-            timestamp: new Date(),
-            ...(parsed.type === 'plan' || parsed.type === 'no_plan'
-              ? {
-                  pendingAction: pendingActionFromParseIntentUpdate(parsed, menuFallbackForIntent),
-                }
-              : {
-                  pendingAction: undefined,
-                }),
-          });
-          return;
-        } catch (planError) {
-          console.warn('parse-intent failed, falling through:', planError);
-          updateMessage(projectId, assistantMessageId, {
-            isStreaming: false,
-            pendingAction: {
-              kind: 'analysis_menu',
-              status: 'failed',
-              ...menuFallback,
-              errorMessage: formatApiErrorMessage(planError),
-            },
-          });
-        }
-      }
-
-      // Handle data quality scan
-      if (isDataQualityQuery && activeTab?.data) {
-        try {
-          const datasetId = workspaceDatasetId;
-          if (!datasetId) {
-            throw new Error('Open a dataset-backed tab before running a quality scan.');
-          }
-          const datasetSchema = {
-            datasetId,
-            columns:
-              activeTab.data.initialColumns?.map((col: any) => ({
-                id: col.id,
-                name: col.header || col.id,
-                type: col.type || 'numeric',
-              })) || [],
-          };
-
-          const qualityReport = await apiClient.ai.dataQualityScan({
-            datasetId,
-            datasetSchema,
-            columnStats: activeTab.data.columnStats,
-          });
-
-          const reportMessage = {
-            role: 'assistant' as const,
-            content: `## Data Quality Report\n\n**Overall Score: ${qualityReport.overallScore}/100**\n\n${qualityReport.summary || ''}\n\n### Issues by Column:\n${(qualityReport.columns || []).map((col: any) => `\n**${col.id}** (Score: ${col.score}/100)\n${col.issues?.map((issue: string) => `- ${issue}`).join('\n') || 'No issues'}\n${col.suggestions?.map((sugg: string) => `💡 ${sugg}`).join('\n') || ''}`).join('\n')}`,
-            timestamp: new Date(),
-          };
-          addMessage(projectId, reportMessage);
-          setLoading(projectId, false);
-          return;
-        } catch (error: any) {
-          console.error('Failed to run data quality scan', error);
-          setError(projectId, formatApiErrorMessage(error));
-          setLoading(projectId, false);
-          return;
-        }
-      }
-
-      // General chat: tensr-api assistant follow-up (dataset-scoped; no legacy /projects/.../agent route).
-      const datasetId = workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
-      if (!datasetId) {
-        addMessage(projectId, {
-          role: 'assistant',
-          content:
-            'Open a **dataset-backed** tab in this workspace (import from Home or open an existing dataset) so I can read the column list and answer questions.',
-          timestamp: new Date(),
-        });
-        setLoading(projectId, false);
-        return;
-      }
-
-      const followupContext =
-        activeTab?.type === ViewType.ANALYSIS_RESULT
-          ? {
-              analysis_key: activeTab.data?.analysisOp,
-              results: activeTab.data?.analysisResult ?? null,
-            }
-          : null;
-
-      const streamMessageId = addMessage(projectId, {
-        role: 'assistant',
-        content: '',
-        isStreaming: true,
-        timestamp: new Date(),
+      // Single POST /assistant/agent-loop replaces gates 1–5, menu steal, prep trigger,
+      // data-intent, exploratory, analysis, quality scan, and tutor fallback.
+      // (Removing the cascade also eliminates the old Gate 4 catch fall-through bug.)
+      await invokeAgentLoop({
+        message: currentMessage,
+        triggerMessage: currentMessage,
+        conversationHistory: buildAgentConversationHistory([...messages, userMessage]),
       });
-      setLoading(projectId, false);
-
-      let followup: { answer_markdown: string; source: string };
-      try {
-        followup = await streamAssistantFollowup(
-          {
-            datasetId,
-            message: currentMessage,
-            context: followupContext,
-            conversationHistory,
-          },
-          {
-            onDelta: (_delta, fullText) => {
-              updateMessage(projectId, streamMessageId, {
-                content: fullText,
-                isStreaming: true,
-              });
-            },
-          }
-        );
-      } catch (streamErr) {
-        const status = streamErr instanceof ApiRequestError ? streamErr.status : 0;
-        if (status !== 404 && status !== 405) {
-          throw streamErr;
-        }
-        const buffered = await apiClient.assistant.followup({
-          datasetId,
-          message: currentMessage,
-          context: followupContext,
-          conversationHistory,
-        });
-        followup = {
-          answer_markdown: buffered.answer_markdown?.trim() || '_No answer returned._',
-          source: buffered.source,
-        };
-        await revealAssistantText(followup.answer_markdown, partial => {
-          updateMessage(projectId, streamMessageId, { content: partial, isStreaming: true });
-        });
-      }
-
-      let answerText = followup.answer_markdown?.trim() || '_No answer returned._';
-      const stripped = stripChartBlocks(answerText);
-      answerText = stripped.text || answerText;
-      const inlineCharts = [...stripped.charts];
-      if (isChartIntent(currentMessage) && activeTab?.data?.initialColumns) {
-        const columns = activeTab.data.initialColumns.map(c => ({
-          id: c.id,
-          header: c.header,
-        }));
-        let rows = activeTab.data.initialData ?? [];
-        if (!rows.length && datasetId) {
-          rows = await fetchDatasetPreviewRows(datasetId);
-        }
-        if (rows.length) {
-          const built = buildChartFromDataset(currentMessage, columns, rows);
-          if (built) inlineCharts.push(built);
-        }
-      }
-      updateMessage(projectId, streamMessageId, {
-        content: answerText,
-        charts: inlineCharts.length ? inlineCharts : undefined,
-        isStreaming: false,
-      });
-      return;
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(projectId, formatApiErrorMessage(err));
     } finally {
       setLoading(projectId, false);
@@ -1469,17 +813,6 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     }
   };
 
-  const startPrepPlaybook = async (datasetId: string, triggerMessage: string): Promise<void> => {
-    addMessage(projectId, {
-      role: 'assistant',
-      content:
-        "I'll clean this dataset in four steps — missing data, duplicates, outliers, then " +
-        'column types — checking in with you before applying each one.',
-      timestamp: new Date(),
-    });
-    await advancePrepPlaybook(datasetId, triggerMessage, []);
-  };
-
   /** Closing step: writes a grounded prep+analysis narrative via the existing
    *  synthesize-report assistant (Track C step 3), falling back to a plain log on failure. */
   const finishPrepPlaybook = async (
@@ -1615,6 +948,76 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           if (next) {
             await advancePrepPlaybook(nextDatasetId, action.triggerMessage, log, next);
           }
+        }
+      } catch (err: unknown) {
+        updateMessage(projectId, messageId, {
+          pendingAction: {
+            ...action,
+            status: 'failed',
+            errorMessage: formatApiErrorMessage(err),
+          },
+        });
+      } finally {
+        setBusyMessageId(null);
+      }
+      return;
+    }
+
+    if (action.kind === 'agent_tool_approval') {
+      setBusyMessageId(messageId);
+      updateMessage(projectId, messageId, {
+        pendingAction: { ...action, status: 'running', errorMessage: undefined },
+        isStreaming: true,
+      });
+      try {
+        await invokeAgentLoop({
+          message: action.triggerMessage,
+          assistantMessageId: messageId,
+          approvedToolCall: {
+            tool_call_id: action.toolCallId,
+            name: action.name,
+            args: action.args,
+            rationale: action.rationale,
+            why_this_test: action.whyThisTest,
+          },
+          triggerMessage: action.triggerMessage,
+        });
+        const latest = getMessagePendingAction(messageId);
+        if (latest?.kind === 'agent_tool_approval') {
+          updateMessage(projectId, messageId, {
+            pendingAction: { ...action, status: 'accepted' },
+            isStreaming: false,
+          });
+        }
+      } catch (err: unknown) {
+        updateMessage(projectId, messageId, {
+          pendingAction: {
+            ...action,
+            status: 'failed',
+            errorMessage: formatApiErrorMessage(err),
+          },
+          isStreaming: false,
+        });
+      } finally {
+        setBusyMessageId(null);
+      }
+      return;
+    }
+
+    if (action.kind === 'proposed_action') {
+      setBusyMessageId(messageId);
+      updateMessage(projectId, messageId, {
+        pendingAction: { ...action, status: 'running', errorMessage: undefined },
+      });
+      try {
+        const result = await applyPlaybookProposedAction(action.proposedAction);
+        const derivedId = typeof result.dataset_id === 'string' ? result.dataset_id : null;
+        updateMessage(projectId, messageId, {
+          content: `${message?.content ?? ''}\n\n✅ **Change applied.**`.trim(),
+          pendingAction: { ...action, status: 'accepted' },
+        });
+        if (derivedId && derivedId !== workspaceDatasetId) {
+          router.push(`/workspace/dataset/${derivedId}`);
         }
       } catch (err: unknown) {
         updateMessage(projectId, messageId, {
@@ -2078,6 +1481,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             </div>
 
             <div className="shrink-0 border-t border-border bg-card px-3.5 pt-3 pb-1">
+              <div className="mb-2 max-w-[11rem]">
+                <PillToggle
+                  value={agentMode}
+                  onChange={mode => setAgentMode(projectId, mode)}
+                  options={AGENT_MODE_OPTIONS}
+                  aria-label="Agent mode"
+                />
+              </div>
               <div
                 className={cn(
                   'rounded-xl border bg-card p-2.5 transition-shadow',

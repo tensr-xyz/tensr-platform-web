@@ -23,7 +23,14 @@ export function exportSvgElementAsSvg(svg: SVGSVGElement, filename: string): voi
   downloadBlob(blob, `${slugify(filename)}.svg`);
 }
 
-export async function exportSvgElementAsPng(svg: SVGSVGElement, filename: string): Promise<void> {
+/** Default 3× scale — suitable for report / print export. */
+export const CHART_EXPORT_PNG_SCALE = 3;
+
+export async function exportSvgElementAsPng(
+  svg: SVGSVGElement,
+  filename: string,
+  scale = CHART_EXPORT_PNG_SCALE
+): Promise<void> {
   const clone = svg.cloneNode(true) as SVGSVGElement;
   if (!clone.getAttribute('xmlns')) {
     clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
@@ -47,14 +54,14 @@ export async function exportSvgElementAsPng(svg: SVGSVGElement, filename: string
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = width * 2;
-        canvas.height = height * 2;
+        canvas.width = width * scale;
+        canvas.height = height * scale;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
           reject(new Error('Canvas not supported'));
           return;
         }
-        ctx.scale(2, 2);
+        ctx.scale(scale, scale);
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
