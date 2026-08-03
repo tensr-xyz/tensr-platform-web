@@ -324,10 +324,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const agentMode = useAgentModeStore(s => s.getMode(projectId));
   const setAgentMode = useAgentModeStore(s => s.setMode);
 
-  const AGENT_MODE_OPTIONS: { value: AgentMode; label: string }[] = [
-    { value: 'ask', label: 'Ask' },
-    { value: 'plan', label: 'Plan' },
-    { value: 'agent', label: 'Agent' },
+  const AGENT_MODE_OPTIONS: { value: AgentMode; label: string; hint: string }[] = [
+    { value: 'ask', label: 'Ask', hint: 'Read-only answers — no edits or analyses run' },
+    { value: 'plan', label: 'Plan', hint: 'Propose a pipeline; approve before anything runs' },
+    { value: 'agent', label: 'Agent', hint: 'Execute when confident; ask when ambiguous' },
   ];
 
   const workspaceDatasetId = useMemo(
@@ -398,6 +398,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const [busyMessageId, setBusyMessageId] = useState<string | null>(null);
   const [showRuns, setShowRuns] = useState(false);
   const [mentionOpen, setMentionOpen] = useState(false);
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const setCommandPaletteOpen = useAnalysisSetupStore(s => s.setCommandPaletteOpen);
   const composerColumns = useMemo(() => {
@@ -1597,17 +1598,71 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                     >
                       /
                     </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="size-7 text-muted-foreground"
-                      title="Open analysis menu"
-                      aria-label="Open analysis menu"
-                      onClick={() => setCommandPaletteOpen(true)}
-                    >
-                      <Plus className="size-3" aria-hidden />
-                    </Button>
+                    <Popover open={plusMenuOpen} onOpenChange={setPlusMenuOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-muted-foreground"
+                          title="Mode and actions"
+                          aria-label="Open mode and actions menu"
+                        >
+                          <Plus className="size-3" aria-hidden />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent align="start" className="w-72 p-0" side="top">
+                        <Command>
+                          <CommandInput placeholder="Mode or action…" />
+                          <CommandList>
+                            <CommandEmpty>No matches</CommandEmpty>
+                            <CommandGroup heading="Mode">
+                              {AGENT_MODE_OPTIONS.map(opt => (
+                                <CommandItem
+                                  key={opt.value}
+                                  value={`${opt.label} ${opt.hint}`}
+                                  onSelect={() => {
+                                    setAgentMode(projectId, opt.value);
+                                    setPlusMenuOpen(false);
+                                    requestAnimationFrame(() => composerRef.current?.focus());
+                                  }}
+                                >
+                                  <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-medium">{opt.label}</span>
+                                      {agentMode === opt.value ? (
+                                        <span className="font-mono text-[10px] text-primary">
+                                          active
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <span className="text-[11px] leading-snug text-muted-foreground">
+                                      {opt.hint}
+                                    </span>
+                                  </div>
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                            <CommandGroup heading="Actions">
+                              <CommandItem
+                                value="Browse analyses"
+                                onSelect={() => {
+                                  setPlusMenuOpen(false);
+                                  setCommandPaletteOpen(true);
+                                }}
+                              >
+                                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                  <span className="font-medium">Browse analyses…</span>
+                                  <span className="text-[11px] leading-snug text-muted-foreground">
+                                    Open the analysis command palette
+                                  </span>
+                                </div>
+                              </CommandItem>
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
                   </div>
                   <Button
                     type="button"
