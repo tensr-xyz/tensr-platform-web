@@ -43,7 +43,7 @@ import { Separator } from '@/components/atoms/separator';
 // Removed context actions import - using store actions instead
 import { LeftPanel } from '@/components/organisms/left-panel';
 import { useFileHandler } from '@/hooks/api/use-file';
-import { redoTab, undoTab } from '@/lib/tab-history';
+import { recordTabSnapshot, redoTab, undoTab } from '@/lib/tab-history';
 import { useTabHistoryStore } from '@/stores/tab-history-store';
 import { toast } from '@/hooks/ui/use-toast';
 import {
@@ -453,6 +453,12 @@ const TabManager: React.FC<TabManagerProps> = ({
           | { initialData?: Record<string, any>[]; initialColumns?: { id: string }[] }
           | undefined;
         if (!data?.initialData || !data.initialColumns) return;
+        recordTabSnapshot(
+          activeTab.id,
+          placement === 'above'
+            ? `Insert row above ${rowIndex + 1}`
+            : `Insert row below ${rowIndex + 1}`
+        );
         const currentData = [...data.initialData];
         const emptyRow: Record<string, any> = {};
         data.initialColumns.forEach(col => {
@@ -481,12 +487,18 @@ const TabManager: React.FC<TabManagerProps> = ({
       if (!activeTab || !isSpreadsheetTab(activeTab)) return;
       if (indices.length === 0) return;
       try {
+        const unique = [...new Set(indices)].filter(
+          index => index >= 0 && index < (activeTab.data.initialData?.length ?? 0)
+        );
+        if (unique.length === 0) return;
+        recordTabSnapshot(
+          activeTab.id,
+          unique.length === 1 ? `Delete row ${unique[0] + 1}` : `Delete ${unique.length} rows`
+        );
         const currentData = [...(activeTab.data.initialData ?? [])];
-        const sorted = [...new Set(indices)].sort((a, b) => b - a);
+        const sorted = [...unique].sort((a, b) => b - a);
         sorted.forEach(index => {
-          if (index >= 0 && index < currentData.length) {
-            currentData.splice(index, 1);
-          }
+          currentData.splice(index, 1);
         });
         updateTab(activeTab.id, {
           data: {
