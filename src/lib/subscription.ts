@@ -1,4 +1,5 @@
 import type { Entitlements } from '@/types/entitlements';
+import { safeReturnTo } from './safe-return-to';
 
 /** True when entitlements have been loaded from /api/me (including unpaid `plan_code: none`). */
 export function entitlementsResolved(entitlements: Entitlements | null | undefined): boolean {
@@ -12,8 +13,8 @@ export function hasActiveSubscription(entitlements: Entitlements | null | undefi
 }
 
 export function subscriptionRedirectPath(returnTo?: string): string {
-  if (!returnTo || !returnTo.startsWith('/')) {
+  if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) {
     return '/subscription';
   }
-  return `/subscription?returnTo=${encodeURIComponent(returnTo)}`;
+  return `/subscription?returnTo=${encodeURIComponent(safeReturnTo(returnTo))}`;
 }

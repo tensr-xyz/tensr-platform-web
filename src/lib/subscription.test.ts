@@ -43,5 +43,6 @@ describe('subscription helpers', () => {
   it('builds subscription redirect with returnTo', () => {
     expect(subscriptionRedirectPath('/dashboard')).toBe('/subscription?returnTo=%2Fdashboard');
     expect(subscriptionRedirectPath('https://evil.example')).toBe('/subscription');
+    expect(subscriptionRedirectPath('/sign-up')).toBe('/subscription?returnTo=%2Fdashboard');
   });
 });

@@ -31,6 +31,14 @@ const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
 
+  // Stytch loginOrCreate covers signup — keep old auth URLs from 404ing.
+  async redirects() {
+    return [
+      { source: '/sign-up', destination: '/login', permanent: false },
+      { source: '/register', destination: '/login', permanent: false },
+    ];
+  },
+
   // PostHog reverse proxy — avoids ad-blocker interference with client-side analytics
   async rewrites() {
     return [

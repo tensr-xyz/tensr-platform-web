@@ -1,6 +1,7 @@
 import { useAuthStore } from '@/stores/auth-store';
 import { clearAuthData, getStytchBearerForTensrApi } from '@/utils/auth';
 import { authTrace } from '@/lib/auth-trace';
+import { safeReturnTo } from '@/lib/safe-return-to';
 
 export class SessionExpiredError extends Error {
   constructor() {
@@ -32,7 +33,7 @@ export function redirectToLogin(): void {
 
   window.dispatchEvent(new CustomEvent('tensr:session-expired'));
 
-  const returnTo = window.location.pathname + window.location.search;
+  const returnTo = safeReturnTo(window.location.pathname + window.location.search);
   window.location.replace(`/login?returnTo=${encodeURIComponent(returnTo)}`);
 }
 

@@ -8,6 +8,7 @@ import { ArrowLeft, Eye, EyeOff, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/api/use-auth';
 import { redeemStoredInvitation, storePendingInviteToken } from '@/lib/business-api';
 import { entitlementsResolved, subscriptionRedirectPath } from '@/lib/subscription';
+import { safeReturnTo } from '@/lib/safe-return-to';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
 import { dumpAuthTrace, authTrace } from '@/lib/auth-trace';
 import { storeSession } from '@/utils/auth';
@@ -62,8 +63,7 @@ const LoginTemplate = () => {
     authTrace('login:redirect-after-auth');
 
     void redeemStoredInvitation().finally(() => {
-      const returnTo = searchParams.get('returnTo');
-      const target = returnTo && returnTo.startsWith('/') ? returnTo : '/dashboard';
+      const target = safeReturnTo(searchParams.get('returnTo'));
       router.push(hasActiveSubscription ? target : subscriptionRedirectPath(target));
     });
   }, [
@@ -478,16 +478,6 @@ const LoginTemplate = () => {
             {/* Error Message */}
             {(error || authError) && (
               <div className="mt-4 text-sm text-destructive">{error || authError}</div>
-            )}
-
-            {/* Sign up link */}
-            {!isVerifying && (
-              <p className="text-sm text-center text-muted-foreground mt-5">
-                Don&apos;t have an account?{' '}
-                <Link href="/sign-up" className="text-primary hover:underline">
-                  Sign up
-                </Link>
-              </p>
             )}
           </Card>
         </div>

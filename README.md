@@ -40,7 +40,7 @@ AI assistant chat requires **`OPENAI_API_KEY`** on **tensr-api** (not this app).
 - Stytch email OTP + Google OAuth (`/login`)
 - Server-side protection via `src/proxy.ts` (Next.js 16 proxy / Stytch session cookies)
 - Protected routes: `/dashboard`, `/workspace`, `/settings`, `/plugins`, `/creator`, `/project`, `/subscription`
-- Public routes: `/login` (and `/register` if enabled)
+- Public routes: `/login` (`/sign-up` and `/register` redirect here; Stytch `loginOrCreate` covers signup)
 - `/` redirects to `/dashboard`
 - Marketing site: [`tensr-landing-ui`](../tensr-landing-ui) on `www.tensr.xyz`
 - Visualiser: [`tensr-visualiser-ui`](../tensr-visualiser-ui) on `visualizer.tensr.xyz`

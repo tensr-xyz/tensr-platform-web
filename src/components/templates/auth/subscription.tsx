@@ -22,6 +22,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { hasActiveSubscription } from '@/lib/subscription';
+import { safeReturnTo } from '@/lib/safe-return-to';
 import { useAuthStore } from '@/stores/auth-store';
 import {
   SpssSwitcherSignupOption,
@@ -131,7 +132,7 @@ export default function SubscriptionCheckoutPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = searchParams.get('returnTo');
-  const postSubscriptionPath = returnTo && returnTo.startsWith('/') ? returnTo : '/dashboard';
+  const postSubscriptionPath = safeReturnTo(returnTo);
   const { session, entitlements, isAuthReady, isLoading } = useAuth();
   const setEntitlements = useAuthStore(state => state.setEntitlements);
 
@@ -151,7 +152,8 @@ export default function SubscriptionCheckoutPage() {
   // Bare /subscription without returnTo stays available for plan changes.
   useEffect(() => {
     if (!isAuthReady || isLoading) return;
-    if (!returnTo || !returnTo.startsWith('/')) return;
+    // Only auto-continue when a returnTo was requested (bare /subscription is for plan changes).
+    if (!returnTo) return;
     if (!hasActiveSubscription(entitlements)) return;
     router.replace(postSubscriptionPath);
   }, [isAuthReady, isLoading, returnTo, entitlements, router, postSubscriptionPath]);
