@@ -490,17 +490,30 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         updateMessage(projectId, assistantMessageId, patch);
 
         for (const entry of response.tool_results ?? []) {
-          if (entry.name !== 'run_analysis' || !entry.result?.result) continue;
+          // Need the full tool envelope ({ result, report, run_id }), not nested
+          // stats-only `result` — otherwise the tab opens without analysisReport
+          // and stays on the permanent "Results loading" placeholder.
+          if (entry.name !== 'run_analysis' || !entry.result?.ok || !entry.result?.result) {
+            continue;
+          }
           const analysisType = String(entry.result.analysis_type ?? '');
           const requestBody = entry.result.request_body as Record<string, unknown> | undefined;
           if (!analysisType || !requestBody || !datasetId) continue;
+          const envelope = entry.result as Record<string, unknown>;
           openResultTabForPlan(
             { analysisType, spec: requestBody },
-            entry.result.result as Record<string, unknown>,
+            envelope,
             datasetId,
             activeTab?.name,
             requestBody
           );
+          // Prefer report markdown over why_this_test (tool answer_markdown).
+          const { markdown } = analysisResultMarkdown(envelope);
+          updateMessage(projectId, assistantMessageId, {
+            content: markdown,
+            resultMarkdown: markdown,
+            isStreaming: false,
+          });
         }
       } catch (err: unknown) {
         updateMessage(projectId, assistantMessageId, {
