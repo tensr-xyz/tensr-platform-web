@@ -50,7 +50,8 @@ function actionSubtitle(action: ChatPendingAction): string | null {
     return action.proposedAction ? 'Apply to continue cleaning' : null;
   }
   if (action.kind === 'agent_tool_approval') {
-    return action.whyThisTest?.slice(0, 120) || action.rationale?.slice(0, 120) || null;
+    // Match chat markdown: Plan (rationale) is the concrete request; Why is separate.
+    return action.rationale?.slice(0, 160) || null;
   }
   if (action.kind === 'proposed_action') {
     return action.summaryText?.slice(0, 120) || 'Confirm before applying';
@@ -167,12 +168,13 @@ export function ChatAnalysisApproval({
           </p>
         ) : null}
         {action.kind === 'agent_tool_approval' && action.rationale ? (
-          <p className="mt-1.5 line-clamp-4 text-[11px] leading-snug text-muted-foreground">
+          <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
+            <span className="font-medium text-foreground">Plan: </span>
             {action.rationale}
           </p>
         ) : null}
         {action.kind === 'agent_tool_approval' && action.whyThisTest ? (
-          <p className="mt-1 line-clamp-3 text-[11px] leading-snug text-muted-foreground">
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
             <span className="font-medium text-foreground">Why this test: </span>
             {action.whyThisTest}
           </p>
