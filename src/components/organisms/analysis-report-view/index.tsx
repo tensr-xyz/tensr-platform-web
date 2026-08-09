@@ -448,6 +448,31 @@ export function AnalysisReportView({ report, rawResult, onAnnotateChart }: Props
           <span className="flex-1" />
         </div>
 
+        {report.approach?.plan || report.approach?.why_this_test ? (
+          <ReportSection sectionId="approach" label="Approach" hint="Why this analysis was chosen">
+            <div className="space-y-3 text-[13px] leading-relaxed text-foreground">
+              {report.approach.plan ? (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Plan
+                  </p>
+                  <p className="whitespace-pre-wrap">{report.approach.plan}</p>
+                </div>
+              ) : null}
+              {report.approach.why_this_test ? (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Why this test
+                  </p>
+                  <p className="whitespace-pre-wrap text-muted-foreground">
+                    {report.approach.why_this_test}
+                  </p>
+                </div>
+              ) : null}
+            </div>
+          </ReportSection>
+        ) : null}
+
         {report.assumption_checks?.interpretations?.length ? (
           <ReportSection sectionId="assumptions" label="Tests of assumptions">
             <ul className="space-y-2 text-[13px] leading-relaxed text-foreground">

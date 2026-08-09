@@ -64,6 +64,12 @@ import {
   runAgentAnalysisPlan,
   suggestFollowUpPlan,
 } from '@/lib/run-agent-analysis-plan';
+import {
+  attachApproachToReport,
+  chatFieldsAfterRunAnalysis,
+  logAgentChatRenderPayload,
+} from '@/lib/agent-analysis-chat-fields';
+import type { AnalysisReport } from '@/lib/analysis-report-types';
 import { executeDataActionForDataset } from '@/lib/run-agent-data-action';
 import { revealAssistantText } from '@/lib/reveal-assistant-text';
 import { buildAgentConversationHistory } from '@/lib/agent-conversation-history';
@@ -483,6 +489,18 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         });
 
         const triggerMessage = opts.triggerMessage ?? opts.message;
+        // Capture Plan/Why BEFORE the response patch overwrites chat content with
+        // answer_markdown (often why_this_test alone) and clears pendingAction.
+        const priorMessage = useChatStore
+          .getState()
+          .getMessages(projectId)
+          .find(m => m.id === assistantMessageId);
+        const priorContent = priorMessage?.content ?? '';
+        const priorPending =
+          priorMessage?.pendingAction?.kind === 'agent_tool_approval'
+            ? priorMessage.pendingAction
+            : null;
+
         const patch = deriveMessageUpdateFromLoopResponse(response, {
           triggerMessage,
           datasetId,
@@ -499,7 +517,31 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           const analysisType = String(entry.result.analysis_type ?? '');
           const requestBody = entry.result.request_body as Record<string, unknown> | undefined;
           if (!analysisType || !requestBody || !datasetId) continue;
-          const envelope = entry.result as Record<string, unknown>;
+
+          const planSummary =
+            String(
+              (entry.args as { rationale?: string } | undefined)?.rationale ||
+                entry.result.rationale ||
+                priorPending?.rationale ||
+                ''
+            ).trim() || null;
+          const whyThisTest =
+            String(
+              entry.result.why_this_test ||
+                (entry.args as { why_this_test?: string } | undefined)?.why_this_test ||
+                priorPending?.whyThisTest ||
+                ''
+            ).trim() || null;
+
+          const reportWithApproach = attachApproachToReport(
+            entry.result.report as AnalysisReport | undefined,
+            { plan: planSummary, whyThisTest }
+          );
+          const envelope = {
+            ...(entry.result as Record<string, unknown>),
+            ...(reportWithApproach ? { report: reportWithApproach } : {}),
+          };
+
           openResultTabForPlan(
             { analysisType, spec: requestBody },
             envelope,
@@ -507,11 +549,20 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             activeTab?.name,
             requestBody
           );
-          // Prefer report markdown over why_this_test (tool answer_markdown).
+
+          // ChatMessageBody renders content AND resultMarkdown. Setting both to the
+          // same report markdown is the live double-render bug — keep Plan in
+          // content, report once in resultMarkdown.
           const { markdown } = analysisResultMarkdown(envelope);
+          const chatFields = chatFieldsAfterRunAnalysis({
+            priorContent,
+            planSummary,
+            whyThisTest,
+            reportMarkdown: markdown,
+          });
+          logAgentChatRenderPayload(chatFields);
           updateMessage(projectId, assistantMessageId, {
-            content: markdown,
-            resultMarkdown: markdown,
+            ...chatFields,
             isStreaming: false,
           });
         }
@@ -686,8 +737,23 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         );
       }
 
-      const { markdown: markdownContent } = analysisResultMarkdown(analysisResult);
-      const reportChart = chartFromAnalysisEnvelope(analysisResult);
+      const planSummary = String(plan.rationale || planText || '').trim() || null;
+      const reportWithApproach = attachApproachToReport(
+        analysisResult.report as AnalysisReport | undefined,
+        { plan: planSummary, whyThisTest: null }
+      );
+      const analysisEnvelope = {
+        ...analysisResult,
+        ...(reportWithApproach ? { report: reportWithApproach } : {}),
+      };
+      const { markdown: markdownContent } = analysisResultMarkdown(analysisEnvelope);
+      const reportChart = chartFromAnalysisEnvelope(analysisEnvelope);
+      const chatFields = chatFieldsAfterRunAnalysis({
+        priorContent: planText,
+        planSummary,
+        reportMarkdown: markdownContent,
+      });
+      logAgentChatRenderPayload(chatFields);
 
       await revealAssistantText(markdownContent, partial => {
         updateMessage(projectId, messageId, {
@@ -697,9 +763,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       });
 
       updateMessage(projectId, messageId, {
-        content: planText,
+        ...chatFields,
         thinkingLines: [...progressLines],
-        resultMarkdown: markdownContent,
         isStreaming: false,
         charts: reportChart ? [reportChart] : undefined,
         pendingAction: current
@@ -707,7 +772,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           : undefined,
       });
 
-      openResultTabForPlan(plan, analysisResult, datasetId, activeTab?.name, plan.spec);
+      openResultTabForPlan(plan, analysisEnvelope, datasetId, activeTab?.name, plan.spec);
 
       if (activeTab?.type === ViewType.SPREADSHEET && activeTab.data) {
         const prev = activeTab.data.analysisHistory ?? [];

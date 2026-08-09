@@ -19,6 +19,10 @@ export function buildReportOutline(report: AnalysisReport): ReportOutlineItem[] 
     });
   }
 
+  if (report.approach?.plan || report.approach?.why_this_test) {
+    items.push({ id: 'approach', label: 'Approach' });
+  }
+
   if (report.summary) {
     items.push({ id: 'interpretation', label: 'Interpretation' });
   }

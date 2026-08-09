@@ -127,6 +127,12 @@ export type AnalysisReportBlock =
   | { type: 'table'; table: AnalysisReportTable }
   | { type: 'chart'; chart: AnalysisReportChart };
 
+/** Agent Plan / Why preserved on the report after Approve (not only ephemeral chat). */
+export type AnalysisReportApproach = {
+  plan?: string;
+  why_this_test?: string;
+};
+
 export type AnalysisReport = {
   meta: {
     analysis_key: string;
@@ -139,6 +145,8 @@ export type AnalysisReport = {
   summary: string;
   /** Combined narrative text (summary + follow-up paragraphs). */
   interpretation?: string;
+  /** Pre-approval plan + method rationale kept with saved/run output. */
+  approach?: AnalysisReportApproach;
   metrics: AnalysisReportMetric[];
   /** @deprecated use blocks or charts */
   chart?: AnalysisReportChart | null;
