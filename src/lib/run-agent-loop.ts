@@ -53,6 +53,8 @@ export type AgentLoopResponse = {
   step_limit_reached?: boolean;
   approved_execution?: boolean;
   provenance?: Record<string, unknown>;
+  /** LAMBDA-style multi-step summary built from tool_trace. */
+  execution_summary?: string;
 };
 
 export type RunAgentLoopParams = {

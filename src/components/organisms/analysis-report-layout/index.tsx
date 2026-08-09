@@ -137,6 +137,7 @@ export function AnalysisReportLayout({
         prepLog:
           [report.analysis_log, report.case_exclusion_note].filter(Boolean).join('\n\n') || null,
         chartAssets,
+        executionSummary: report.session_trace || report.approach?.exploration || null,
         useLlm: true,
       });
       const slug = report.meta.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'report';

@@ -927,6 +927,7 @@ class ApiClient {
       userQuestion?: string | null;
       prepLog?: string | null;
       chartAssets?: Array<{ title?: string; kind?: string; note?: string }>;
+      executionSummary?: string | null;
       useLlm?: boolean;
     }) =>
       this.request<{
@@ -940,6 +941,7 @@ class ApiClient {
           user_question: data.userQuestion ?? null,
           prep_log: data.prepLog ?? null,
           chart_assets: data.chartAssets ?? null,
+          execution_summary: data.executionSummary ?? null,
           use_llm: data.useLlm ?? true,
         }),
       }),

@@ -507,11 +507,17 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         });
         updateMessage(projectId, assistantMessageId, patch);
 
+        const execSummary = String(response.execution_summary || '').trim();
         for (const entry of response.tool_results ?? []) {
           // Need the full tool envelope ({ result, report, run_id }), not nested
           // stats-only `result` — otherwise the tab opens without analysisReport
           // and stays on the permanent "Results loading" placeholder.
           if (entry.name !== 'run_analysis' || !entry.result?.ok || !entry.result?.result) {
+            continue;
+          }
+          // Enrichment follow-ups feed session_trace / synthesize; don't open a
+          // second results tab that steals focus from the primary fit.
+          if ((entry.args as { enrichment_step?: boolean } | undefined)?.enrichment_step) {
             continue;
           }
           const analysisType = String(entry.result.analysis_type ?? '');
@@ -537,9 +543,21 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             entry.result.report as AnalysisReport | undefined,
             { plan: planSummary, whyThisTest }
           );
+          let report = reportWithApproach as AnalysisReport | undefined;
+          if (report && execSummary) {
+            report = {
+              ...report,
+              session_trace: report.session_trace || execSummary,
+              approach: {
+                ...(report.approach || {}),
+                exploration: report.approach?.exploration || execSummary,
+              },
+            };
+          }
           const envelope = {
             ...(entry.result as Record<string, unknown>),
-            ...(reportWithApproach ? { report: reportWithApproach } : {}),
+            ...(report ? { report } : {}),
+            ...(execSummary ? { execution_summary: execSummary } : {}),
           };
 
           openResultTabForPlan(
@@ -939,6 +957,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         datasetId: finalDatasetId,
         userQuestion: triggerMessage,
         prepLog: logEntries.join('\n'),
+        executionSummary:
+          (report as { session_trace?: string }).session_trace ||
+          (report as { approach?: { exploration?: string } }).approach?.exploration ||
+          null,
       });
       updateMessage(projectId, messageId, {
         content: markdown,

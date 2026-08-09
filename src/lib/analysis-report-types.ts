@@ -129,6 +129,8 @@ export type AnalysisReportBlock =
 
 /** Agent Plan / Why preserved on the report after Approve (not only ephemeral chat). */
 export type AnalysisReportApproach = {
+  exploration?: string;
+  rejected_alternative?: string;
   plan?: string;
   why_this_test?: string;
 };
@@ -147,6 +149,8 @@ export type AnalysisReport = {
   interpretation?: string;
   /** Pre-approval plan + method rationale kept with saved/run output. */
   approach?: AnalysisReportApproach;
+  /** Multi-step tool exploration summary for this turn (Plan/Agent enrichment). */
+  session_trace?: string;
   metrics: AnalysisReportMetric[];
   /** @deprecated use blocks or charts */
   chart?: AnalysisReportChart | null;
