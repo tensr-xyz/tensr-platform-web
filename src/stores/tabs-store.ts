@@ -62,6 +62,14 @@ export interface TabData {
   /** Dedupe key for workspace results tabs (op + sorted parameters). */
   analysisFingerprint?: string;
   analysisParameters?: Record<string, unknown>;
+  /** Sibling results tabs from a chained Plan/Agent enrichment pipeline. */
+  analysisRelated?: Array<{
+    tabId: string;
+    label: string;
+    relation: 'chained_diagnostic' | 'chained_from_primary';
+    analysisFingerprint?: string;
+    runId?: string;
+  }>;
   /** Per-column heatmap toggles (numeric columns). */
   heatmapColumns?: Record<string, boolean>;
   /** Left-pinned through this column id (inclusive). */

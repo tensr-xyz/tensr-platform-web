@@ -2,6 +2,7 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
+import type { AnalysisRelatedLink } from '@/lib/analysis-chain-links';
 import { AnalysisReportView } from '@/components/organisms/analysis-report-view';
 import { AnalysisReportRail } from '@/components/organisms/analysis-report-rail';
 import { AnalysisReportToolbar } from '@/components/organisms/analysis-report-toolbar';
@@ -24,6 +25,7 @@ type Props = {
   sourceDatasetId?: string;
   analysisOp?: string;
   analysisRunId?: string;
+  relatedAnalyses?: AnalysisRelatedLink[] | null;
 };
 
 export function AnalysisReportLayout({
@@ -32,6 +34,7 @@ export function AnalysisReportLayout({
   sourceDatasetId,
   analysisOp,
   analysisRunId,
+  relatedAnalyses,
 }: Props) {
   const [railOpen, setRailOpen] = useState(true);
   const [activeSection, setActiveSection] = useState<string | undefined>();
@@ -174,6 +177,7 @@ export function AnalysisReportLayout({
               report={report}
               rawResult={rawResult}
               onAnnotateChart={handleAnnotateChart}
+              relatedAnalyses={relatedAnalyses}
             />
           </div>
         </div>

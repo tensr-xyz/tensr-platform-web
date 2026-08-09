@@ -31,6 +31,10 @@ export function formatAnalysisRunTabLabel(op: string, parameters: Record<string,
   if (Array.isArray(vars) && vars.length) {
     return `${base} — ${vars.slice(0, 3).join(', ')}`;
   }
+  const cols = parameters.columns;
+  if (Array.isArray(cols) && cols.length) {
+    return `${base} — ${cols.slice(0, 3).join(', ')}${cols.length > 3 ? '…' : ''}`;
+  }
   return base;
 }
 
@@ -80,6 +84,13 @@ export function openAnalysisResultTab(params: {
     },
   });
 
+  const created = useTabsStore
+    .getState()
+    .tabs.find(
+      t => t.type === ViewType.ANALYSIS_RESULT && t.data?.analysisFingerprint === fingerprint
+    );
+  const createdId = created?.id ?? useTabsStore.getState().activeTabId;
+
   if (!activate && previousActive) {
     setActiveTab(previousActive);
   }
@@ -93,5 +104,5 @@ export function openAnalysisResultTab(params: {
     });
   }
 
-  return useTabsStore.getState().activeTabId;
+  return createdId;
 }

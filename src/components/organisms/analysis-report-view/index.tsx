@@ -7,6 +7,12 @@ import type {
   AnalysisReportTable,
   AnalysisReportBlock,
 } from '@/lib/analysis-report-types';
+import {
+  activateRelatedAnalysisTab,
+  relatedLinkDisplayLabel,
+  relatedLinksFromReportAndTab,
+  type AnalysisRelatedLink,
+} from '@/lib/analysis-chain-links';
 import { resolveReportBlocks } from '@/lib/report-blocks';
 import { copyTableRich } from '@/utils/apa-clipboard';
 import { ReportChartCard } from '@/components/molecules/report-chart-card';
@@ -366,14 +372,20 @@ type Props = {
   report: AnalysisReport;
   rawResult?: Record<string, unknown> | null;
   onAnnotateChart?: (sectionId: string, chartTitle: string) => void;
+  /** Sibling chained reports from the same Plan/Agent pipeline turn. */
+  relatedAnalyses?: AnalysisRelatedLink[] | null;
 };
 
-export function AnalysisReportView({ report, rawResult, onAnnotateChart }: Props) {
+export function AnalysisReportView({ report, rawResult, onAnnotateChart, relatedAnalyses }: Props) {
   const [copyState, setCopyState] = React.useState<string | null>(null);
   const [rawOpen, setRawOpen] = React.useState(false);
   const primaryTable = report.tables[0];
   const blocks = resolveReportBlocks(report);
   const useBlockLayout = blocks.length > 0;
+  const related = relatedLinksFromReportAndTab({
+    tabRelated: relatedAnalyses,
+    report,
+  });
   const analysisKind =
     report.meta.analysis_key?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) ??
     'Analysis';
@@ -452,7 +464,8 @@ export function AnalysisReportView({ report, rawResult, onAnnotateChart }: Props
         report.approach?.why_this_test ||
         report.approach?.rejected_alternative ||
         report.approach?.exploration ||
-        report.session_trace ? (
+        report.session_trace ||
+        related.length > 0 ? (
           <ReportSection sectionId="approach" label="Approach" hint="Why this analysis was chosen">
             <div className="space-y-3 text-[13px] leading-relaxed text-foreground">
               {report.approach?.plan ? (
@@ -491,6 +504,26 @@ export function AnalysisReportView({ report, rawResult, onAnnotateChart }: Props
                   <pre className="whitespace-pre-wrap font-sans text-muted-foreground">
                     {report.approach?.exploration || report.session_trace}
                   </pre>
+                </div>
+              ) : null}
+              {related.length > 0 ? (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    See also
+                  </p>
+                  <ul className="space-y-1">
+                    {related.map(link => (
+                      <li key={`${link.relation}-${link.tabId || link.label}`}>
+                        <button
+                          type="button"
+                          className="text-left text-[13px] text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+                          onClick={() => activateRelatedAnalysisTab(link)}
+                        >
+                          {relatedLinkDisplayLabel(link)}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               ) : null}
             </div>

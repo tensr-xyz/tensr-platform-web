@@ -151,6 +151,14 @@ export type AnalysisReport = {
   approach?: AnalysisReportApproach;
   /** Multi-step tool exploration summary for this turn (Plan/Agent enrichment). */
   session_trace?: string;
+  /** Cross-links to chained primary / enrichment reports opened in the same turn. */
+  related_analyses?: Array<{
+    label: string;
+    relation: 'chained_diagnostic' | 'chained_from_primary';
+    tab_id?: string;
+    analysis_fingerprint?: string;
+    run_id?: string;
+  }>;
   metrics: AnalysisReportMetric[];
   /** @deprecated use blocks or charts */
   chart?: AnalysisReportChart | null;

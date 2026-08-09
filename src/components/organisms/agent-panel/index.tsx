@@ -70,6 +70,13 @@ import {
   logAgentChatRenderPayload,
   preferRicherPlan,
 } from '@/lib/agent-analysis-chat-fields';
+import {
+  analysisTabLabel,
+  enrichmentCompletionNote,
+  wireAnalysisChainLinks,
+  type OpenedAnalysisTab,
+} from '@/lib/analysis-chain-links';
+import { analysisRunFingerprint } from '@/lib/open-analysis-result-tab';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
 import { executeDataActionForDataset } from '@/lib/run-agent-data-action';
 import { revealAssistantText } from '@/lib/reveal-assistant-text';
@@ -509,6 +516,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         updateMessage(projectId, assistantMessageId, patch);
 
         const execSummary = String(response.execution_summary || '').trim();
+        const openedTabs: OpenedAnalysisTab[] = [];
+        const enrichmentNotes: string[] = [];
+        let primaryChatFields: { content: string; resultMarkdown: string } | null = null;
+
         for (const entry of response.tool_results ?? []) {
           // Need the full tool envelope ({ result, report, run_id }), not nested
           // stats-only `result` — otherwise the tab opens without analysisReport
@@ -576,7 +587,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           };
 
           // Enrichment opens in the background so the primary fit keeps focus.
-          openResultTabForPlan(
+          const tabId = openResultTabForPlan(
             { analysisType, spec: requestBody },
             envelope,
             datasetId,
@@ -584,22 +595,52 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             requestBody,
             { activate: !isEnrichment }
           );
+          if (tabId) {
+            openedTabs.push({
+              tabId,
+              isEnrichment,
+              label: analysisTabLabel(analysisType, requestBody),
+              fingerprint: analysisRunFingerprint(analysisType, requestBody),
+              runId: typeof entry.result.run_id === 'string' ? entry.result.run_id : undefined,
+            });
+          }
 
-          if (isEnrichment) continue;
+          if (isEnrichment) {
+            enrichmentNotes.push(enrichmentCompletionNote(analysisType, requestBody));
+            continue;
+          }
 
           // ChatMessageBody renders content AND resultMarkdown. Setting both to the
           // same report markdown is the live double-render bug — keep Plan in
           // content, report once in resultMarkdown.
           const { markdown } = analysisResultMarkdown(envelope);
-          const chatFields = chatFieldsAfterRunAnalysis({
+          primaryChatFields = chatFieldsAfterRunAnalysis({
             priorContent,
             planSummary,
             whyThisTest,
             reportMarkdown: markdown,
           });
+        }
+
+        wireAnalysisChainLinks(openedTabs);
+
+        if (primaryChatFields) {
+          const contentWithEnrichment = enrichmentNotes.length
+            ? `${primaryChatFields.content}\n\n${enrichmentNotes.join('\n')}`.trim()
+            : primaryChatFields.content;
+          const chatFields = {
+            content: contentWithEnrichment,
+            resultMarkdown: primaryChatFields.resultMarkdown,
+          };
           logAgentChatRenderPayload(chatFields);
           updateMessage(projectId, assistantMessageId, {
             ...chatFields,
+            isStreaming: false,
+          });
+        } else if (enrichmentNotes.length) {
+          // Enrichment-only edge case — still acknowledge in chat.
+          updateMessage(projectId, assistantMessageId, {
+            content: enrichmentNotes.join('\n'),
             isStreaming: false,
           });
         }

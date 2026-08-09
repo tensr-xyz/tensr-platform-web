@@ -291,18 +291,20 @@ export function openResultTabForPlan(
   sourceTabName: string | undefined,
   spec: Record<string, unknown>,
   opts?: { activate?: boolean }
-) {
+): string | null {
   const op = isAnalysisKey(plan.analysisType)
     ? plan.analysisType
     : (AGENT_OP_MAP[plan.analysisType] ?? plan.analysisType);
-  openAnalysisResultTab({
-    op,
-    envelope: analysisResult as AnalyzeResponse,
-    parameters: spec,
-    sourceDatasetId: datasetId,
-    sourceTabName,
-    activate: opts?.activate,
-  });
+  return (
+    openAnalysisResultTab({
+      op,
+      envelope: analysisResult as AnalyzeResponse,
+      parameters: spec,
+      sourceDatasetId: datasetId,
+      sourceTabName,
+      activate: opts?.activate,
+    }) ?? null
+  );
 }
 
 export function planFromParseIntent(res: ParseIntentResult): AgentAnalysisPlan | null {
