@@ -71,5 +71,5 @@ tests:
     assert: [{ type: equals, value: "data-intent" }]
 
   - vars: { prompt: "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate" }
-    assert: [{ type: equals, value: "tutor" }]
-    description: "No Gate-2 keyword (quartile/top N%); falls to tutor today"
+    assert: [{ type: equals, value: "data-intent" }]
+    description: "Gate 2 top/best bucket steals via \\bbest\\b (also matches top 5%)"

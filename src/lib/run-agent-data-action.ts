@@ -105,8 +105,10 @@ export function shouldRouteMessageToDataIntent(message: string): boolean {
     /\b(show|list|get|give)\s+(me\s+)?.+\s+for\s+(the\s+)?(top|bottom|highest|lowest)\b/i.test(
       text
     ) ||
-    // Name / value lookup: "PF for LeBron", "what's LeBron's PTS"
-    /\b[A-Za-z_][A-Za-z0-9_]*\s+for\s+[A-Z][\w.'-]+/i.test(text) ||
+    // Name / value lookup: "PF for LeBron", "what's LeBron's PTS".
+    // Keep the proper-name capital check case-sensitive — `/i` would let
+    // `[A-Z]` match "me" and steal phrases like "run one for me".
+    /\b[A-Za-z_][A-Za-z0-9_]*\s+for\s+[A-Z][\w.'-]+/.test(text) ||
     /\bwhat(?:'s| is)\s+.+'s\s+[A-Za-z0-9_]+/i.test(text)
   );
 }

@@ -29,11 +29,11 @@ describe('resolveGateInOrder — baseline cascade (before agent-loop rewrite)', 
     // Screenshot / fidelity regression phrases (routing layer only)
     { prompt: 'I want percentile values for utilisation_rate', gate: 'data-intent' },
     { prompt: 'Can we get Percentile Values for these KPIs', gate: 'data-intent' },
-    // No data-intent keyword (quartile/top N% not in Gate 2 buckets) → tutor today
+    // Gate 2 top/best bucket: \bbest\b (also leftmost before "top 5%")
     {
       prompt:
         'What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate',
-      gate: 'tutor',
+      gate: 'data-intent',
     },
     // Menu label "Boxplot" steals before Gate 2 chart bucket
     { prompt: 'Could you provide a boxplot for utilisation_rate', gate: 'menu-dialog' },

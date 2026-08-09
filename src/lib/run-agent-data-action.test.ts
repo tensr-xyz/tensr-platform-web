@@ -29,6 +29,18 @@ describe('shouldRouteMessageToDataIntent', () => {
   it('does not route pure greetings', () => {
     expect(shouldRouteMessageToDataIntent('Hello there')).toBe(false);
   });
+
+  it('does not treat “run one for me” as a name lookup', () => {
+    expect(shouldRouteMessageToDataIntent('run one for me')).toBe(false);
+  });
+
+  it('routes “best levels / top N%” asks via the top/best bucket', () => {
+    expect(
+      shouldRouteMessageToDataIntent(
+        'What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate'
+      )
+    ).toBe(true);
+  });
 });
 
 describe('parse-intent → data action adapter', () => {

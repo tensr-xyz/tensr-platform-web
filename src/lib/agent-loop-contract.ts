@@ -169,8 +169,8 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
       'What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate',
     mode: 'agent',
     expected: 'ask_clarifying_question',
-    baselineGate: 'tutor',
-    description: 'No Gate-2 keyword (quartile/top N%); falls to tutor today',
+    baselineGate: 'data-intent',
+    description: 'Gate 2 top/best bucket steals via \\bbest\\b (also matches top 5%)',
   },
   // Modes
   { prompt: 't test for me on my dataset', mode: 'ask', expected: 'ask-no-write' },
