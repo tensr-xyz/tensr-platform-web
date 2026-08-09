@@ -1,6 +1,7 @@
 import {
   attachApproachToReport,
   chatFieldsAfterRunAnalysis,
+  preferRicherPlan,
 } from '@/lib/agent-analysis-chat-fields';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
 
@@ -72,21 +73,40 @@ describe('chatFieldsAfterRunAnalysis', () => {
   });
 });
 
+describe('preferRicherPlan', () => {
+  it('keeps Exploration / Rejected prose over a short rebuild', () => {
+    const rich =
+      'Predict PTS. Rejected correlation-only. Exploration step 1: Follow-up correlation.';
+    expect(preferRicherPlan(rich, 'Predict PTS from Age')).toBe(rich);
+    expect(preferRicherPlan('Predict PTS from Age', rich)).toBe(rich);
+  });
+});
+
 describe('attachApproachToReport', () => {
-  it('adds approach from plan/why without clobbering an existing approach', () => {
+  it('adds approach from plan/why and merges exploration fields', () => {
     const withApproach = attachApproachToReport(minimalReport(), {
       plan: 'Predict PTS',
       whyThisTest: 'Continuous outcome',
+      exploration: 'Step 1 primary\nStep 2 enrichment',
+      rejectedAlternative: 'Rejected correlation-only',
     });
     expect(withApproach?.approach).toEqual({
       plan: 'Predict PTS',
       why_this_test: 'Continuous outcome',
+      exploration: 'Step 1 primary\nStep 2 enrichment',
+      rejected_alternative: 'Rejected correlation-only',
     });
 
-    const kept = attachApproachToReport(
-      minimalReport({ approach: { plan: 'Existing', why_this_test: 'Kept' } }),
-      { plan: 'New', whyThisTest: 'New why' }
+    const merged = attachApproachToReport(
+      minimalReport({ approach: { plan: 'Short rebuild', why_this_test: 'Kept' } }),
+      {
+        plan: 'Short rebuild. Rejected X. Exploration step 1: correlation.',
+        whyThisTest: 'New why',
+        exploration: 'trace',
+      }
     );
-    expect(kept?.approach).toEqual({ plan: 'Existing', why_this_test: 'Kept' });
+    expect(merged?.approach?.plan).toContain('Exploration step');
+    expect(merged?.approach?.why_this_test).toBe('New why');
+    expect(merged?.approach?.exploration).toBe('trace');
   });
 });

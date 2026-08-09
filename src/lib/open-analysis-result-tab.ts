@@ -43,7 +43,10 @@ export function openAnalysisResultTab(params: {
   parameters?: Record<string, unknown>;
   sourceDatasetId: string;
   sourceTabName?: string;
+  /** When false, create/update the tab without stealing focus (enrichment). */
+  activate?: boolean;
 }) {
+  const activate = params.activate !== false;
   const { tabs, addTab, setActiveTab } = useTabsStore.getState();
   const parameters = params.parameters ?? {};
   const fingerprint = analysisRunFingerprint(params.op, parameters);
@@ -51,12 +54,13 @@ export function openAnalysisResultTab(params: {
     t => t.type === ViewType.ANALYSIS_RESULT && t.data?.analysisFingerprint === fingerprint
   );
   if (existing) {
-    setActiveTab(existing.id);
+    if (activate) setActiveTab(existing.id);
     return existing.id;
   }
 
   const report = params.envelope?.report as AnalysisReport | undefined;
   const label = formatAnalysisRunTabLabel(params.op, parameters);
+  const previousActive = useTabsStore.getState().activeTabId;
 
   addTab({
     name: label,
@@ -75,6 +79,10 @@ export function openAnalysisResultTab(params: {
       filePath: params.sourceDatasetId,
     },
   });
+
+  if (!activate && previousActive) {
+    setActiveTab(previousActive);
+  }
 
   if (report) {
     appendAnalysisRunToDatasetTab({

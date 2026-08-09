@@ -448,10 +448,14 @@ export function AnalysisReportView({ report, rawResult, onAnnotateChart }: Props
           <span className="flex-1" />
         </div>
 
-        {report.approach?.plan || report.approach?.why_this_test ? (
+        {report.approach?.plan ||
+        report.approach?.why_this_test ||
+        report.approach?.rejected_alternative ||
+        report.approach?.exploration ||
+        report.session_trace ? (
           <ReportSection sectionId="approach" label="Approach" hint="Why this analysis was chosen">
             <div className="space-y-3 text-[13px] leading-relaxed text-foreground">
-              {report.approach.plan ? (
+              {report.approach?.plan ? (
                 <div>
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Plan
@@ -459,7 +463,7 @@ export function AnalysisReportView({ report, rawResult, onAnnotateChart }: Props
                   <p className="whitespace-pre-wrap">{report.approach.plan}</p>
                 </div>
               ) : null}
-              {report.approach.why_this_test ? (
+              {report.approach?.why_this_test ? (
                 <div>
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Why this test
@@ -467,6 +471,26 @@ export function AnalysisReportView({ report, rawResult, onAnnotateChart }: Props
                   <p className="whitespace-pre-wrap text-muted-foreground">
                     {report.approach.why_this_test}
                   </p>
+                </div>
+              ) : null}
+              {report.approach?.rejected_alternative ? (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Considered alternative
+                  </p>
+                  <p className="whitespace-pre-wrap text-muted-foreground">
+                    {report.approach.rejected_alternative}
+                  </p>
+                </div>
+              ) : null}
+              {report.approach?.exploration || report.session_trace ? (
+                <div>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                    Exploration
+                  </p>
+                  <pre className="whitespace-pre-wrap font-sans text-muted-foreground">
+                    {report.approach?.exploration || report.session_trace}
+                  </pre>
                 </div>
               ) : null}
             </div>

@@ -68,6 +68,7 @@ import {
   attachApproachToReport,
   chatFieldsAfterRunAnalysis,
   logAgentChatRenderPayload,
+  preferRicherPlan,
 } from '@/lib/agent-analysis-chat-fields';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
 import { executeDataActionForDataset } from '@/lib/run-agent-data-action';
@@ -515,22 +516,24 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           if (entry.name !== 'run_analysis' || !entry.result?.ok || !entry.result?.result) {
             continue;
           }
-          // Enrichment follow-ups feed session_trace / synthesize; don't open a
-          // second results tab that steals focus from the primary fit.
-          if ((entry.args as { enrichment_step?: boolean } | undefined)?.enrichment_step) {
-            continue;
-          }
+          const isEnrichment = Boolean(
+            (entry.args as { enrichment_step?: boolean } | undefined)?.enrichment_step
+          );
           const analysisType = String(entry.result.analysis_type ?? '');
           const requestBody = entry.result.request_body as Record<string, unknown> | undefined;
           if (!analysisType || !requestBody || !datasetId) continue;
 
+          // Prefer the pre-Approve Plan (includes Exploration step / Rejected…)
+          // over a rematerialized args.rationale that may have dropped it.
           const planSummary =
-            String(
-              (entry.args as { rationale?: string } | undefined)?.rationale ||
-                entry.result.rationale ||
-                priorPending?.rationale ||
-                ''
-            ).trim() || null;
+            preferRicherPlan(
+              priorPending?.rationale,
+              String(
+                (entry.args as { rationale?: string } | undefined)?.rationale ||
+                  entry.result.rationale ||
+                  ''
+              )
+            ) || null;
           const whyThisTest =
             String(
               entry.result.why_this_test ||
@@ -538,10 +541,22 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                 priorPending?.whyThisTest ||
                 ''
             ).trim() || null;
+          const rejectedAlternative =
+            String(
+              (entry.args as { rejected_alternative?: string } | undefined)?.rejected_alternative ||
+                (entry.result.report as AnalysisReport | undefined)?.approach
+                  ?.rejected_alternative ||
+                ''
+            ).trim() || null;
 
           const reportWithApproach = attachApproachToReport(
             entry.result.report as AnalysisReport | undefined,
-            { plan: planSummary, whyThisTest }
+            {
+              plan: isEnrichment ? null : planSummary,
+              whyThisTest,
+              exploration: execSummary || null,
+              rejectedAlternative: isEnrichment ? null : rejectedAlternative,
+            }
           );
           let report = reportWithApproach as AnalysisReport | undefined;
           if (report && execSummary) {
@@ -560,13 +575,17 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             ...(execSummary ? { execution_summary: execSummary } : {}),
           };
 
+          // Enrichment opens in the background so the primary fit keeps focus.
           openResultTabForPlan(
             { analysisType, spec: requestBody },
             envelope,
             datasetId,
             activeTab?.name,
-            requestBody
+            requestBody,
+            { activate: !isEnrichment }
           );
+
+          if (isEnrichment) continue;
 
           // ChatMessageBody renders content AND resultMarkdown. Setting both to the
           // same report markdown is the live double-render bug — keep Plan in

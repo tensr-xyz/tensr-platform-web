@@ -38,22 +38,41 @@ export function chatFieldsAfterRunAnalysis(opts: {
   };
 }
 
+/** Prefer Plan text that still carries exploration / rejected-alternative prose. */
+export function preferRicherPlan(a?: string | null, b?: string | null): string {
+  const x = (a || '').trim();
+  const y = (b || '').trim();
+  if (!x) return y;
+  if (!y) return x;
+  const score = (s: string) =>
+    (/Exploration step/i.test(s) ? 4 : 0) + (/Rejected/i.test(s) ? 2 : 0) + s.length / 1000;
+  return score(x) >= score(y) ? x : y;
+}
+
 export function attachApproachToReport(
   report: AnalysisReport | null | undefined,
-  opts: { plan?: string | null; whyThisTest?: string | null }
+  opts: {
+    plan?: string | null;
+    whyThisTest?: string | null;
+    exploration?: string | null;
+    rejectedAlternative?: string | null;
+  }
 ): AnalysisReport | null | undefined {
   if (!report) return report;
-  const plan = (opts.plan || '').trim();
-  const why = (opts.whyThisTest || '').trim();
-  if (!plan && !why) return report;
-  if (report.approach?.plan || report.approach?.why_this_test) {
-    return report;
-  }
+  const existing = report.approach || {};
+  const plan = preferRicherPlan(opts.plan, existing.plan);
+  const why = (opts.whyThisTest || existing.why_this_test || '').trim();
+  const exploration = (opts.exploration || existing.exploration || '').trim();
+  const rejected = (opts.rejectedAlternative || existing.rejected_alternative || '').trim();
+  if (!plan && !why && !exploration && !rejected) return report;
   return {
     ...report,
     approach: {
+      ...existing,
       ...(plan ? { plan } : {}),
       ...(why ? { why_this_test: why } : {}),
+      ...(exploration ? { exploration } : {}),
+      ...(rejected ? { rejected_alternative: rejected } : {}),
     },
   };
 }

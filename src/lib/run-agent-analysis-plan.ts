@@ -289,7 +289,8 @@ export function openResultTabForPlan(
   analysisResult: Record<string, unknown>,
   datasetId: string,
   sourceTabName: string | undefined,
-  spec: Record<string, unknown>
+  spec: Record<string, unknown>,
+  opts?: { activate?: boolean }
 ) {
   const op = isAnalysisKey(plan.analysisType)
     ? plan.analysisType
@@ -300,6 +301,7 @@ export function openResultTabForPlan(
     parameters: spec,
     sourceDatasetId: datasetId,
     sourceTabName,
+    activate: opts?.activate,
   });
 }
 
