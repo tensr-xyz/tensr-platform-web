@@ -4,7 +4,7 @@ import Organisation from '@/components/templates/settings/organisation';
 
 export default function OrganisationPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<Loading centered />}>
       <Organisation />
     </Suspense>
   );

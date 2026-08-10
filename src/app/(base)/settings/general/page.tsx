@@ -4,7 +4,7 @@ import GeneralTemplate from '@/components/templates/settings/general';
 
 export default function GeneralPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<Loading centered />}>
       <GeneralTemplate />
     </Suspense>
   );

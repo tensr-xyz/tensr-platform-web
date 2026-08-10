@@ -64,7 +64,7 @@ const NotificationMenu: React.FC = () => (
         <Button
           variant="ghost"
           size="icon"
-          className="relative inline-flex h-[38px] w-[38px] items-center justify-center rounded-full transition-all border border-border hover:bg-gray-200 dark:hover:bg-gray-900/50"
+          className="relative inline-flex h-[38px] w-[38px] items-center justify-center rounded-full transition-all border border-border hover:bg-accent data-[state=open]:bg-accent"
         >
           <Bell className="h-[15px] w-[15px]" />
         </Button>
@@ -126,7 +126,7 @@ const UserMenu: React.FC = () => {
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="group flex h-10 w-auto cursor-pointer select-none items-center gap-1 rounded-full border border-border pr-3 pl-1.5 transition-all duration-200 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-black/20 sm:w-[164px] sm:pr-3 sm:pl-1.5 dark:hover:bg-gray-900/50 dark:focus:ring-white/20"
+            className="group flex h-10 w-auto cursor-pointer select-none items-center gap-1 rounded-full border border-border pr-3 pl-1.5 transition-all duration-200 hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring/40 data-[state=open]:bg-accent sm:w-[164px] sm:pr-3 sm:pl-1.5"
           >
             <div className="relative h-7 w-7 flex-shrink-0 overflow-hidden rounded-full bg-gradient-to-b from-white/60 via-white/30 to-white/10 p-[0.5px]">
               <div className="h-full w-full overflow-hidden rounded-full bg-background">

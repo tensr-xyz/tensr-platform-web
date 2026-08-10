@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 
 export default function BillingPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<Loading centered />}>
       <Billing />
     </Suspense>
   );

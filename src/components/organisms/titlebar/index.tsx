@@ -220,7 +220,7 @@ const Titlebar = ({
   return (
     <>
       <AnalysisCommandPalette open={analysisPaletteOpen} onOpenChange={setAnalysisPaletteOpen} />
-      <header className="relative flex h-11 min-h-11 w-full shrink-0 items-stretch border-b border-border bg-card">
+      <header className="relative flex h-11 min-h-11 w-full shrink-0 items-stretch border-b border-border bg-background">
         <button
           type="button"
           onClick={() => router.push('/dashboard')}
@@ -258,8 +258,8 @@ const Titlebar = ({
                         className={cn(
                           'group relative flex h-11 min-w-[8.75rem] max-w-[13.75rem] shrink-0 items-center gap-2 border-r border-border px-3.5 text-[13px] font-medium transition-colors',
                           isActive
-                            ? 'bg-card text-foreground'
-                            : 'bg-muted/50 text-muted-foreground hover:text-foreground'
+                            ? 'bg-muted/40 text-foreground'
+                            : 'bg-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground'
                         )}
                       >
                         {isActive ? (

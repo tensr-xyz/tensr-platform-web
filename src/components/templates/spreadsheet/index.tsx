@@ -2417,9 +2417,14 @@ export function Spreadsheet({
       }
     }
 
+    const visibleRows = rows.length;
+    const totalRows = totalRowCount || rows.length;
+
     onSheetStatusChange({
       visibleColumns,
       totalColumns,
+      visibleRows,
+      totalRows,
       cellRef,
       selectionCount,
       selectionSum,
@@ -2429,6 +2434,9 @@ export function Spreadsheet({
     focusedCell,
     cellSelection,
     data,
+    rows.length,
+    totalRowCount,
+    columnFilters,
     columnVisibility,
     table,
     getVisibleColumns,

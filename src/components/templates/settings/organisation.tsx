@@ -142,7 +142,7 @@ export default function OrganizationSettings() {
             <div className="mb-6">
               <label
                 htmlFor="orgName"
-                className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="mb-1 block text-sm font-medium text-muted-foreground"
               >
                 Organization Name
               </label>
@@ -150,7 +150,6 @@ export default function OrganizationSettings() {
                 id="orgName"
                 value={editedOrg.name}
                 onChange={handleNameChange}
-                className="border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800"
                 disabled={isLoading}
               />
             </div>
@@ -158,19 +157,19 @@ export default function OrganizationSettings() {
             <div className="mb-6">
               <label
                 htmlFor="orgSlug"
-                className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                className="mb-1 block text-sm font-medium text-muted-foreground"
               >
                 URL Slug
               </label>
               <div className="flex">
-                <span className="inline-flex items-center rounded-l-md border border-r-0 border-gray-200 bg-muted/30 px-3 py-2 text-sm text-muted-foreground dark:border-gray-600">
+                <span className="inline-flex items-center rounded-l-md border border-r-0 border-input bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                   yourapp.com/
                 </span>
                 <Input
                   id="orgSlug"
                   value={editedOrg.slug || ''}
                   onChange={handleSlugChange}
-                  className="rounded-l-none border-gray-200 bg-white dark:border-gray-600 dark:bg-gray-800"
+                  className="rounded-l-none"
                   disabled={isLoading}
                 />
               </div>

@@ -17,7 +17,7 @@ const Footer = ({ isLoading, activeTab, rowCount }: FooterProps) => {
 
   return (
     <footer
-      className="flex h-7 min-h-7 shrink-0 items-center gap-3 border-t border-border bg-muted/40 px-3.5 font-mono text-[11px] text-muted-foreground"
+      className="flex h-7 min-h-7 shrink-0 items-center gap-3 border-t border-border bg-background px-3.5 font-mono text-[11px] text-muted-foreground"
       aria-label="Sheet status"
     >
       {isLoading ? (
@@ -37,7 +37,13 @@ const Footer = ({ isLoading, activeTab, rowCount }: FooterProps) => {
           <span className="text-border/80" aria-hidden>
             ·
           </span>
-          <span className="tabular-nums">Total rows: {rowCount.toLocaleString()}</span>
+          <span className="tabular-nums">
+            {sheetStatus?.visibleRows != null && sheetStatus?.totalRows != null
+              ? sheetStatus.visibleRows === sheetStatus.totalRows
+                ? `Total rows: ${sheetStatus.totalRows.toLocaleString()}`
+                : `${sheetStatus.visibleRows.toLocaleString()} / ${sheetStatus.totalRows.toLocaleString()} rows`
+              : `Total rows: ${rowCount.toLocaleString()}`}
+          </span>
           {sheetStatus ? (
             <>
               <span className="text-border/80" aria-hidden>
@@ -79,14 +85,14 @@ const Footer = ({ isLoading, activeTab, rowCount }: FooterProps) => {
             type="button"
             onClick={() => toggleTerminal(!terminalOpen)}
             className={cn(
-              'inline-flex items-center gap-1 transition-colors hover:text-foreground',
-              terminalOpen && 'text-foreground'
+              'inline-flex items-center gap-1 rounded px-1 transition-colors hover:text-foreground',
+              terminalOpen ? 'bg-muted text-foreground' : 'text-muted-foreground'
             )}
             title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
           >
             <Terminal className="size-2.5" aria-hidden />
             <span>Terminal</span>
-            <span className="font-mono text-[9px] text-muted-foreground/80">⌘`</span>
+            <span className="font-mono text-[9px] opacity-70">⌘`</span>
           </button>
         </>
       ) : activeTab ? (
@@ -97,13 +103,14 @@ const Footer = ({ isLoading, activeTab, rowCount }: FooterProps) => {
             type="button"
             onClick={() => toggleTerminal(!terminalOpen)}
             className={cn(
-              'inline-flex items-center gap-1 transition-colors hover:text-foreground',
-              terminalOpen && 'text-foreground'
+              'inline-flex items-center gap-1 rounded px-1 transition-colors hover:text-foreground',
+              terminalOpen ? 'bg-muted text-foreground' : 'text-muted-foreground'
             )}
+            title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
           >
             <Terminal className="size-2.5" aria-hidden />
             <span>Terminal</span>
-            <span className="font-mono text-[9px] text-muted-foreground/80">⌘`</span>
+            <span className="font-mono text-[9px] opacity-70">⌘`</span>
           </button>
         </>
       ) : (

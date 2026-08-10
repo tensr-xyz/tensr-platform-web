@@ -10,7 +10,6 @@ import type { ColumnSummary } from '@/types/file';
 import type { Column } from '@/stores/tabs-store';
 import { DatasetAnalysisRuns } from '@/components/organisms/dataset-analysis-runs';
 import { getDatasetIdFromTab, resolveSpreadsheetContextTab } from '@/lib/workspace-dataset';
-import { cn } from '@/utils';
 
 export const LeftPanel: React.FC = () => {
   const { tabs, activeTabId, updateTab } = useTabsStore();
@@ -92,7 +91,7 @@ export const LeftPanel: React.FC = () => {
   ]);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-muted/30">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden bg-background">
       {showExploreTools && spreadsheetSidePanel ? (
         <>
           <div className="shrink-0 border-b border-border px-2.5 pb-2 pt-3">
@@ -113,23 +112,21 @@ export const LeftPanel: React.FC = () => {
             ) : null}
           </div>
 
-          <div className="relative min-h-0 flex-1 overflow-hidden">
-            <div className={cn('absolute inset-0 flex flex-col overflow-hidden')}>
-              <ScrollArea className="min-h-0 flex-1">
-                <FilterPanel
-                  filePath={spreadsheetSidePanel.filePath}
-                  columnNames={columnList}
-                  columnStats={columnStats}
-                  initialColumns={spreadsheetSidePanel.initialColumns}
-                  columnSampleValues={columnSampleValues}
-                  onFilterChange={handleFilterChange}
-                />
-                <DatasetAnalysisRuns datasetId={datasetId} localEntries={localAnalysisEntries} />
-              </ScrollArea>
-            </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <ScrollArea className="h-full">
+              <FilterPanel
+                filePath={spreadsheetSidePanel.filePath}
+                columnNames={columnList}
+                columnStats={columnStats}
+                initialColumns={spreadsheetSidePanel.initialColumns}
+                columnSampleValues={columnSampleValues}
+                onFilterChange={handleFilterChange}
+              />
+              <DatasetAnalysisRuns datasetId={datasetId} localEntries={localAnalysisEntries} />
+            </ScrollArea>
           </div>
 
-          <footer className="flex h-7 min-h-7 shrink-0 items-center justify-between border-t border-border bg-muted/40 px-3.5 font-mono text-[11px] text-muted-foreground">
+          <footer className="flex h-7 min-h-7 shrink-0 items-center justify-between border-t border-border bg-background px-3.5 font-mono text-[11px] text-muted-foreground">
             <span>Visible</span>
             <span className="tabular-nums text-foreground/80">
               {visibleCount}/{totalCount} cols

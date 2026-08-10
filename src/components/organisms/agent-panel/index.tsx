@@ -1372,10 +1372,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
 
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="relative flex h-full w-full flex-col bg-muted/30">
+      <div className="relative flex h-full w-full flex-col bg-background">
         <header
           className={cn(
-            'flex shrink-0 items-center gap-1 border-b border-border bg-card px-2',
+            'flex shrink-0 items-center gap-1 border-b border-border bg-background px-2',
             compactHeader ? 'py-1' : 'py-1.5'
           )}
         >
@@ -1670,10 +1670,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               <MessageScrollerButton />
             </MessageScroller>
 
-            <div className="shrink-0 bg-card px-3.5 pt-2 pb-1">
+            <div className="shrink-0 bg-background px-3.5 pt-2 pb-1">
               <div
                 className={cn(
-                  'grid gap-x-1.5 gap-y-2 rounded-xl border bg-card px-2 py-1.5 transition-shadow',
+                  'grid gap-x-1.5 gap-y-2 rounded-xl border border-border bg-muted/40 px-2 py-1.5 transition-shadow',
                   'grid-cols-[auto_minmax(0,1fr)_auto]',
                   composerExpanded ? 'items-end' : 'items-center',
                   inputMessage.trim()

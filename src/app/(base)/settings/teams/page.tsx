@@ -4,7 +4,7 @@ import Teams from '@/components/templates/settings/teams';
 
 export default function OrganisationPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<Loading centered />}>
       <Teams />
     </Suspense>
   );

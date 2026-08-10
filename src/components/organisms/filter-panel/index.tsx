@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, memo, useEffect } from 'react';
+import { useState, useCallback, useMemo, memo, useEffect, useRef, useLayoutEffect } from 'react';
 import {
   Accordion,
   AccordionContent,
@@ -10,15 +10,18 @@ import { ScrollArea } from '@/components/atoms/scroll-area';
 import { Eye, EyeOff } from 'lucide-react';
 import { LoaderCircle } from 'lucide-react';
 import Loader from '@/components/molecules/loading';
-import { BarChart, Bar, XAxis, ResponsiveContainer, ReferenceArea, YAxis, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, ReferenceArea, YAxis, Cell } from 'recharts';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useRef } from 'react';
 import { useTabsStore } from '@/stores/tabs-store';
-import _ from 'lodash';
 import useDebounce from '@/hooks/ui/use-debounce';
 import { getIdToken } from '@/utils/auth';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { cn } from '@/utils';
+import {
+  buildNumericChartBuckets,
+  formatRangeNumber,
+  parseFrequencyNumber,
+} from '@/utils/column-frequency-chart';
 import { AlertCircle } from 'lucide-react';
 import {
   ColumnTypeBadge,
@@ -27,6 +30,52 @@ import {
 } from '@/components/molecules/column-type-badge';
 import type { ColumnSummary } from '@/types/file';
 import type { Column } from '@/stores/tabs-store';
+
+/**
+ * Measure a host's clientWidth. The host must use overflow-hidden + min-w-0 so a
+ * fixed-size Recharts SVG cannot expand it (otherwise RO never sees shrinks).
+ */
+function useHostWidth(fixedHeight: number) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [width, setWidth] = useState(0);
+
+  useLayoutEffect(() => {
+    const host = hostRef.current;
+    if (!host) return;
+
+    const measure = () => {
+      const next = Math.max(0, Math.floor(host.clientWidth));
+      setWidth(prev => (prev === next ? prev : next));
+    };
+
+    measure();
+
+    const observer =
+      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => measure()) : null;
+    observer?.observe(host);
+
+    // Also watch the nearest panel / scrollport — panel drags update those first
+    let ancestor: HTMLElement | null = host.parentElement;
+    for (let i = 0; i < 6 && ancestor; i++) {
+      observer?.observe(ancestor);
+      if (
+        ancestor.hasAttribute('data-panel') ||
+        ancestor.hasAttribute('data-radix-scroll-area-viewport')
+      ) {
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
+  return { hostRef, width, height: fixedHeight };
+}
 
 interface VirtualizedListProps {
   itemCount: number;
@@ -86,6 +135,9 @@ interface ValueFrequency {
 interface ColumnFrequencyResponse {
   frequencies: ValueFrequency[];
   column_type: string;
+  /** Null/NA cells — returned separately by the API, not as value="". */
+  missing_count?: number;
+  total_count?: number;
 }
 
 const DATASET_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -255,16 +307,17 @@ ErrorDisplay.displayName = 'ErrorDisplay';
 
 // Add displayName to LoadingContent
 const LoadingContent = memo(() => (
-  <div className="flex items-center justify-center h-64">
+  <div className="flex h-40 flex-col items-center justify-center gap-2">
     <Loader size="sm" />
+    <p className="text-xs text-muted-foreground">Loading column…</p>
   </div>
 ));
 LoadingContent.displayName = 'LoadingContent';
 
 // Add displayName to EmptyContent
 const EmptyContent = memo(() => (
-  <div className="flex flex-col items-center justify-center h-64 space-y-4">
-    <p className="text-sm text-muted-foreground">No data available</p>
+  <div className="flex h-40 flex-col items-center justify-center">
+    <p className="text-xs text-muted-foreground">No values in this column</p>
   </div>
 ));
 EmptyContent.displayName = 'EmptyContent';
@@ -278,6 +331,7 @@ export const NumericFrequencyContent = memo(
     onRangeChange,
     distinctCount,
     totalCount,
+    missingCount = 0,
   }: {
     data: ColumnFrequencyResponse;
     columnName: string;
@@ -285,60 +339,50 @@ export const NumericFrequencyContent = memo(
     onRangeChange: (columnName: string, start: number, end: number) => void;
     distinctCount: number;
     totalCount: number;
+    missingCount?: number;
   }) => {
     const [isSelecting, setIsSelecting] = useState(false);
     const [selectionStart, setSelectionStart] = useState<number | null>(null);
+    const CHART_HEIGHT = 192;
+    const { hostRef, width: chartWidth, height: chartHeight } = useHostWidth(CHART_HEIGHT);
 
-    // Safely check if data is valid before processing
-    const isDataValid = useMemo(() => {
-      return (
-        data &&
-        Array.isArray(data.frequencies) &&
-        data.frequencies.length > 0 &&
-        data.frequencies.every(f => !isNaN(parseFloat(f.value)))
-      );
+    const numericFrequencies = useMemo(() => {
+      if (!data?.frequencies?.length) return [];
+      return data.frequencies
+        .map(freq => ({
+          value: parseFrequencyNumber(freq.value),
+          count: freq.count,
+          original: freq.value,
+        }))
+        .filter(freq => Number.isFinite(freq.value));
     }, [data]);
 
-    const chartData = useMemo(() => {
-      if (!isDataValid) return [];
+    const dataExtent = useMemo(() => {
+      if (!numericFrequencies.length) return null;
+      const values = numericFrequencies.map(f => f.value);
+      return { min: Math.min(...values), max: Math.max(...values) };
+    }, [numericFrequencies]);
 
-      const values = data.frequencies.map(f => parseFloat(f.value));
-      const minValue = Math.min(...values);
-      const maxValue = Math.max(...values);
-      const dataRange = maxValue - minValue;
+    const [minDraft, setMinDraft] = useState(() =>
+      formatRangeNumber(Math.min(range.start, range.end))
+    );
+    const [maxDraft, setMaxDraft] = useState(() =>
+      formatRangeNumber(Math.max(range.start, range.end))
+    );
 
-      let bucketSize: number;
-      if (distinctCount <= 30) {
-        bucketSize = 1;
-      } else {
-        const numberOfBins = Math.ceil(2 * Math.pow(distinctCount, 1 / 3));
-        bucketSize = dataRange / numberOfBins;
-        const magnitude = Math.pow(10, Math.floor(Math.log10(bucketSize)));
-        const normalizedSize = bucketSize / magnitude;
-        const niceSize = [1, 2, 5, 10].find(n => n >= normalizedSize) || 10;
-        bucketSize = niceSize * magnitude;
-      }
+    useEffect(() => {
+      setMinDraft(formatRangeNumber(Math.min(range.start, range.end)));
+      setMaxDraft(formatRangeNumber(Math.max(range.start, range.end)));
+    }, [range.start, range.end]);
 
-      const buckets = _.groupBy(data.frequencies, freq => {
-        const value = parseFloat(freq.value);
-        return Math.floor(value / bucketSize) * bucketSize;
-      });
-
-      return Object.entries(buckets)
-        .map(([bucketValue, items]) => ({
-          value: parseFloat(bucketValue),
-          count: items.reduce((sum, item) => sum + item.count, 0),
-          originalValues: items.map(item => ({
-            value: item.value,
-            count: item.count,
-          })),
-        }))
-        .sort((a, b) => a.value - b.value);
-    }, [data, distinctCount, isDataValid]);
+    const chartData = useMemo(
+      () => buildNumericChartBuckets(numericFrequencies, distinctCount),
+      [numericFrequencies, distinctCount]
+    );
 
     // Safely calculate domain and formatting
     const { domain, tickFormatter, color } = useMemo(() => {
-      if (!chartData || chartData.length === 0) {
+      if (!chartData || chartData.length === 0 || !dataExtent) {
         return {
           domain: [0, 10] as [number, number],
           tickFormatter: (value: number) => value.toString(),
@@ -349,17 +393,30 @@ export const NumericFrequencyContent = memo(
       const values = chartData.map(d => d.value);
       const min = Math.min(...values);
       const max = Math.max(...values);
-      const dataRange = max - min;
+      const dataRange = Math.max(max - min, Number.EPSILON);
       const shouldUseKFormat = max > 1000;
+      const allInteger = values.every(v => Math.abs(v - Math.round(v)) < 1e-9);
+      const fracDigits = allInteger ? 0 : dataExtent.max - dataExtent.min < 2 ? 2 : 1;
 
       return {
         domain: [min - dataRange * 0.05, max + dataRange * 0.05] as [number, number],
         tickFormatter: shouldUseKFormat
           ? (value: number) => `${(value / 1000).toFixed(1)}K`
-          : (value: number) => value.toFixed(distinctCount <= 30 ? 0 : 1),
+          : (value: number) => value.toFixed(fracDigits),
         color: columnChartFill(columnName),
       };
-    }, [chartData, distinctCount, columnName]);
+    }, [chartData, dataExtent, columnName]);
+
+    const commitDraftRange = useCallback(() => {
+      const min = parseFrequencyNumber(minDraft);
+      const max = parseFrequencyNumber(maxDraft);
+      if (!Number.isFinite(min) || !Number.isFinite(max)) {
+        setMinDraft(formatRangeNumber(Math.min(range.start, range.end)));
+        setMaxDraft(formatRangeNumber(Math.max(range.start, range.end)));
+        return;
+      }
+      onRangeChange(columnName, Math.min(min, max), Math.max(min, max));
+    }, [minDraft, maxDraft, range.start, range.end, columnName, onRangeChange]);
 
     const handleMouseDown = useCallback(
       (e: any) => {
@@ -399,44 +456,42 @@ export const NumericFrequencyContent = memo(
 
     /** Full-span ReferenceArea looks like a chart "background" tint; only show when the user narrowed from full extent. */
     const showRangeHighlight = useMemo(() => {
-      if (range.start === range.end) return false;
-      if (!data?.frequencies?.length) return false;
-      const vals = data.frequencies.map(f => parseFloat(f.value)).filter(Number.isFinite);
-      if (vals.length === 0) return false;
-      const dMin = Math.min(...vals);
-      const dMax = Math.max(...vals);
-      if (!(dMax > dMin)) return false;
-      const span = dMax - dMin;
+      if (!dataExtent) return false;
+      if (!(dataExtent.max > dataExtent.min)) return false;
+      const span = dataExtent.max - dataExtent.min;
       const tol = Math.max(span * 1e-4, 1e-6);
       const r0 = Math.min(range.start, range.end);
       const r1 = Math.max(range.start, range.end);
-      const coversFullExtent = r0 <= dMin + tol && r1 >= dMax - tol;
+      const coversFullExtent = r0 <= dataExtent.min + tol && r1 >= dataExtent.max - tol;
       return !coversFullExtent;
-    }, [data, range.start, range.end]);
+    }, [dataExtent, range.start, range.end]);
 
-    // If data is not valid, show a message
-    if (!isDataValid) {
-      return <EmptyContent />;
-    }
-
-    // If chart data is empty, show a message
     if (chartData.length === 0) {
       return <EmptyContent />;
     }
 
     return (
-      <div className="space-y-2">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{distinctCount.toLocaleString()} distinct values</span>
+      <div className="w-full min-w-0 max-w-full space-y-2">
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            {numericFrequencies.length.toLocaleString()} distinct
+            {missingCount > 0 ? ` · ${missingCount.toLocaleString()} missing` : ''}
+          </span>
           <span>{totalCount.toLocaleString()} total</span>
         </div>
-        <div className="h-64 text-muted-foreground [&_.recharts-surface]:bg-transparent [&_.recharts-surface]:outline-none [&_svg]:bg-transparent">
-          <ResponsiveContainer width="100%" height="100%">
+        <div
+          ref={hostRef}
+          className="h-48 w-full min-w-0 max-w-full overflow-hidden text-muted-foreground [&_.recharts-surface]:bg-transparent [&_.recharts-surface]:outline-none [&_svg]:max-w-full [&_svg]:bg-transparent"
+        >
+          {chartWidth > 0 ? (
             <BarChart
+              key={chartWidth}
+              width={chartWidth}
+              height={chartHeight}
               data={chartData}
-              margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
+              margin={{ top: 4, right: 8, left: 0, bottom: 0 }}
               barCategoryGap={1}
-              style={{ backgroundColor: 'transparent' }}
+              style={{ backgroundColor: 'transparent', maxWidth: '100%' }}
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
@@ -453,7 +508,7 @@ export const NumericFrequencyContent = memo(
                 height={22}
               />
               <YAxis hide domain={[0, 'dataMax']} />
-              <Bar dataKey="count" radius={[2, 2, 0, 0]} maxBarSize={distinctCount <= 30 ? 20 : 40}>
+              <Bar dataKey="count" radius={[2, 2, 0, 0]} maxBarSize={20}>
                 {chartData.map((entry, index) => (
                   <Cell
                     key={`cell-${index}`}
@@ -472,11 +527,41 @@ export const NumericFrequencyContent = memo(
                 />
               )}
             </BarChart>
-          </ResponsiveContainer>
+          ) : null}
         </div>
-        <div className="text-xs text-muted-foreground">
-          Range: {Math.min(range.start, range.end).toFixed(1)} —{' '}
-          {Math.max(range.start, range.end).toFixed(1)}
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="shrink-0">Range</span>
+          <Input
+            type="text"
+            inputMode="decimal"
+            inputSize="sm"
+            value={minDraft}
+            onChange={e => setMinDraft(e.target.value)}
+            onBlur={commitDraftRange}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              }
+            }}
+            className="h-7 w-[4.5rem] px-2 font-mono tabular-nums"
+            aria-label="Range minimum"
+          />
+          <span className="shrink-0">—</span>
+          <Input
+            type="text"
+            inputMode="decimal"
+            inputSize="sm"
+            value={maxDraft}
+            onChange={e => setMaxDraft(e.target.value)}
+            onBlur={commitDraftRange}
+            onKeyDown={e => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              }
+            }}
+            className="h-7 w-[4.5rem] px-2 font-mono tabular-nums"
+            aria-label="Range maximum"
+          />
         </div>
       </div>
     );
@@ -494,6 +579,7 @@ const TextFrequencyContent = memo(
     onToggleValue,
     distinctCount,
     totalCount,
+    missingCount = 0,
     columnName,
   }: {
     data: ColumnFrequencyResponse;
@@ -503,6 +589,7 @@ const TextFrequencyContent = memo(
     onToggleValue: (value: string) => void;
     distinctCount: number;
     totalCount: number;
+    missingCount?: number;
     columnName: string;
   }) => {
     const accentFill = useMemo(() => columnChartFill(columnName), [columnName]);
@@ -555,13 +642,16 @@ const TextFrequencyContent = memo(
     );
 
     return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{distinctCount.toLocaleString()} distinct values</span>
+      <div className="min-w-0 space-y-4">
+        <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+          <span>
+            {distinctCount.toLocaleString()} distinct
+            {missingCount > 0 ? ` · ${missingCount.toLocaleString()} missing` : ''}
+          </span>
           <span>{totalCount.toLocaleString()} total</span>
         </div>
 
-        <div>
+        <div className="min-w-0">
           <Input
             placeholder="Filter values..."
             value={valueFilter}
@@ -571,7 +661,7 @@ const TextFrequencyContent = memo(
         </div>
 
         {filteredFrequencies.length > 0 ? (
-          <div className="h-[300px]">
+          <div className="h-[300px] min-w-0">
             <VirtualizedList
               itemCount={filteredFrequencies.length}
               itemSize={LIST_ROW_STRIDE_PX}
@@ -596,7 +686,7 @@ const ColumnContent = memo(
     isLoading,
   }: {
     columnName: string;
-    data: ColumnFrequencyResponse | null;
+    data: ColumnFrequencyResponse | null | undefined;
     onFilterChange: (columnName: string, values: Set<string>) => void;
     isLoading: boolean;
   }) => {
@@ -614,15 +704,15 @@ const ColumnContent = memo(
         Array.isArray(data.frequencies) &&
         data.frequencies.length > 0
       ) {
-        try {
-          const values = data.frequencies.map(f => parseFloat(f.value));
+        const values = data.frequencies
+          .map(f => parseFrequencyNumber(f.value))
+          .filter(Number.isFinite);
+        if (values.length > 0) {
           return {
             start: Math.min(...values),
             end: Math.max(...values),
             isDragging: false,
           };
-        } catch (err) {
-          console.error('Error initializing range state:', err);
         }
       }
       return { start: 0, end: 0, isDragging: false };
@@ -636,27 +726,30 @@ const ColumnContent = memo(
         Array.isArray(data.frequencies) &&
         data.frequencies.length > 0
       ) {
-        try {
-          const values = data.frequencies.map(f => parseFloat(f.value));
+        const values = data.frequencies
+          .map(f => parseFrequencyNumber(f.value))
+          .filter(Number.isFinite);
+        if (values.length > 0) {
           setRange({
             start: Math.min(...values),
             end: Math.max(...values),
             isDragging: false,
           });
-        } catch (err) {
-          console.error('Error updating range state:', err);
         }
       }
     }, [data, isNumericColumn]);
 
     // Memoize these calculations with null checks
-    const { distinctCount, totalCount } = useMemo(() => {
+    const { distinctCount, totalCount, missingCount } = useMemo(() => {
       if (!data || !Array.isArray(data.frequencies)) {
-        return { distinctCount: 0, totalCount: 0 };
+        return { distinctCount: 0, totalCount: 0, missingCount: 0 };
       }
+      const freqTotal = data.frequencies.reduce((sum, freq) => sum + freq.count, 0);
+      const missing = data.missing_count ?? 0;
       return {
         distinctCount: data.frequencies.length,
-        totalCount: data.frequencies.reduce((sum, freq) => sum + freq.count, 0),
+        totalCount: data.total_count ?? freqTotal + missing,
+        missingCount: missing,
       };
     }, [data]);
 
@@ -687,10 +780,12 @@ const ColumnContent = memo(
 
         // Create filtered values set based on range
         if (data && Array.isArray(data.frequencies)) {
+          const lo = Math.min(start, end);
+          const hi = Math.max(start, end);
           const valuesInRange = new Set(
             data.frequencies
-              .map(freq => ({ value: parseFloat(freq.value), original: freq.value }))
-              .filter(({ value }) => value >= Math.min(start, end) && value <= Math.max(start, end))
+              .map(freq => ({ value: parseFrequencyNumber(freq.value), original: freq.value }))
+              .filter(({ value }) => Number.isFinite(value) && value >= lo && value <= hi)
               .map(({ original }) => original)
           );
           onFilterChange(columnName, valuesInRange);
@@ -699,13 +794,27 @@ const ColumnContent = memo(
       [columnName, data, onFilterChange]
     );
 
-    // Show loading state if loading
-    if (isLoading) {
+    // Pending or in-flight: show loader (avoid flashing empty/"Not found" before fetch settles)
+    if (isLoading || data === undefined) {
       return <LoadingContent />;
     }
 
-    // Show empty state if no data
-    if (!data || !Array.isArray(data.frequencies) || data.frequencies.length === 0) {
+    // Loaded successfully but no observed values
+    if (!data || !Array.isArray(data.frequencies)) {
+      return <EmptyContent />;
+    }
+
+    if (data.frequencies.length === 0) {
+      if ((data.missing_count ?? 0) > 0) {
+        return (
+          <div className="flex h-40 flex-col items-center justify-center gap-1 px-3 text-center">
+            <p className="text-xs text-muted-foreground">No observed values in this column</p>
+            <p className="text-[11px] text-muted-foreground/80">
+              {(data.missing_count ?? 0).toLocaleString()} missing
+            </p>
+          </div>
+        );
+      }
       return <EmptyContent />;
     }
 
@@ -719,6 +828,7 @@ const ColumnContent = memo(
           onRangeChange={handleRangeChange}
           distinctCount={distinctCount}
           totalCount={totalCount}
+          missingCount={missingCount}
         />
       );
     }
@@ -733,6 +843,7 @@ const ColumnContent = memo(
         onToggleValue={handleToggleValue}
         distinctCount={distinctCount}
         totalCount={totalCount}
+        missingCount={missingCount}
         columnName={columnName}
       />
     );
@@ -813,23 +924,21 @@ const FilterPanel = ({
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string | null>>({});
   const [expandedColumns, setExpandedColumns] = useState<string[]>([]);
-
-  // Track which columns are expanded
-  const handleAccordionChange = (value: string[]) => {
-    setExpandedColumns(value);
-
-    // Load data for newly expanded columns
-    value.forEach(columnName => {
-      if (!columnData[columnName] && !loading[columnName]) {
-        loadColumnFrequencies(columnName);
-      }
-    });
-  };
+  const columnDataRef = useRef(columnData);
+  const inFlightRef = useRef<Record<string, boolean>>({});
+  columnDataRef.current = columnData;
 
   // Improved data loading function with better error handling
   const loadColumnFrequencies = useCallback(
     async (columnName: string) => {
-      if (!filePath || columnData[columnName] || loading[columnName]) return;
+      if (!filePath) return;
+      // Already have successful data
+      if (columnDataRef.current[columnName]) return;
+      if (inFlightRef.current[columnName]) return;
+
+      inFlightRef.current[columnName] = true;
+      setLoading(prev => ({ ...prev, [columnName]: true }));
+      setErrors(prev => ({ ...prev, [columnName]: null }));
 
       const base = getTensrApiBaseUrl();
       const datasetId = resolveDatasetIdForAnalysis(filePath);
@@ -843,22 +952,44 @@ const FilterPanel = ({
             column_name: columnName,
           };
 
+      const maxAttempts = 4;
+      const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
       try {
-        // Set loading state
-        setLoading(prev => ({ ...prev, [columnName]: true }));
-        setErrors(prev => ({ ...prev, [columnName]: null }));
+        for (let attempt = 0; attempt < maxAttempts; attempt++) {
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${getIdToken()}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(body),
+          });
 
-        // Use fetch for the HTTP request
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${getIdToken()}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(body),
-        });
+          if (response.ok) {
+            const data = await response.json();
+            if (!data || !Array.isArray(data.frequencies)) {
+              throw new Error(`Invalid data format received for column: ${columnName}`);
+            }
+            setColumnData(prev => ({
+              ...prev,
+              [columnName]: data,
+            }));
+            setErrors(prev => ({ ...prev, [columnName]: null }));
+            return;
+          }
 
-        if (!response.ok) {
+          // Explore can 404 briefly while the dataset service warms up — keep spinner + retry
+          const retryable =
+            response.status === 404 ||
+            response.status === 409 ||
+            response.status === 425 ||
+            response.status >= 500;
+          if (retryable && attempt < maxAttempts - 1) {
+            await sleep(400 * (attempt + 1));
+            continue;
+          }
+
           let message = `Failed to load data for column: ${columnName} (${response.status})`;
           try {
             const errBody = (await response.json()) as { detail?: unknown; error?: string };
@@ -872,39 +1003,41 @@ const FilterPanel = ({
           } catch {
             /* non-JSON error body */
           }
+
+          if (/not found/i.test(message) || response.status === 404) {
+            message = 'Column data is still preparing. Try again in a moment.';
+          }
           throw new Error(message);
         }
-
-        const data = await response.json();
-
-        // Validate the response data
-        if (!data || !Array.isArray(data.frequencies)) {
-          throw new Error(`Invalid data format received for column: ${columnName}`);
-        }
-
-        // Store the data
-        setColumnData(prev => ({
-          ...prev,
-          [columnName]: data,
-        }));
       } catch (err) {
         console.error(`Error loading column frequencies for ${columnName}:`, err);
         setErrors(prev => ({
           ...prev,
           [columnName]: err instanceof Error ? err.message : 'Failed to load frequencies',
         }));
-
-        // Set empty data to prevent repeated failures
         setColumnData(prev => ({
           ...prev,
           [columnName]: null,
         }));
       } finally {
+        inFlightRef.current[columnName] = false;
         setLoading(prev => ({ ...prev, [columnName]: false }));
       }
     },
-    [filePath, columnData, loading]
+    [filePath]
   );
+
+  // Track which columns are expanded
+  const handleAccordionChange = (value: string[]) => {
+    setExpandedColumns(value);
+
+    // Load data for newly expanded columns
+    value.forEach(columnName => {
+      if (!columnDataRef.current[columnName] && !inFlightRef.current[columnName]) {
+        void loadColumnFrequencies(columnName);
+      }
+    });
+  };
 
   const handleToggleVisibility = useCallback(
     (columnId: string) => {
@@ -926,16 +1059,21 @@ const FilterPanel = ({
   const handleRetry = useCallback(
     (columnName: string) => {
       setErrors(prev => ({ ...prev, [columnName]: null }));
-      loadColumnFrequencies(columnName);
+      setColumnData(prev => {
+        const next = { ...prev };
+        delete next[columnName];
+        return next;
+      });
+      void loadColumnFrequencies(columnName);
     },
     [loadColumnFrequencies]
   );
 
   return (
-    <div className="flex flex-col px-1.5 pb-1">
+    <div className="flex min-w-0 flex-col px-1.5 pb-1">
       <Accordion
         type="multiple"
-        className="w-full"
+        className="w-full min-w-0"
         value={expandedColumns}
         onValueChange={handleAccordionChange}
       >
@@ -951,8 +1089,8 @@ const FilterPanel = ({
           );
 
           return (
-            <AccordionItem key={columnName} value={columnName} className="border-none">
-              <AccordionTrigger className="h-[30px] w-full flex-none p-0 hover:no-underline [&>svg]:hidden">
+            <AccordionItem key={columnName} value={columnName} className="min-w-0 border-none">
+              <AccordionTrigger className="h-[30px] w-full min-w-0 flex-none p-0 hover:no-underline [&>svg]:hidden">
                 <AccordionHeader
                   columnName={columnName}
                   isNumeric={isNumeric}
@@ -961,8 +1099,8 @@ const FilterPanel = ({
                   isLoading={loading[columnName]}
                 />
               </AccordionTrigger>
-              <AccordionContent className="cursor-default bg-transparent hover:bg-transparent">
-                {errors[columnName] ? (
+              <AccordionContent className="min-w-0 cursor-default bg-transparent hover:bg-transparent">
+                {errors[columnName] && !loading[columnName] ? (
                   <div className="p-2">
                     <ErrorDisplay message={errors[columnName] || 'An error occurred'} />
                     <button
@@ -977,7 +1115,7 @@ const FilterPanel = ({
                     columnName={columnName}
                     data={columnData[columnName]}
                     onFilterChange={onFilterChange}
-                    isLoading={loading[columnName]}
+                    isLoading={!!loading[columnName] || columnData[columnName] === undefined}
                   />
                 )}
               </AccordionContent>

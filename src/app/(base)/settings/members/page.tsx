@@ -4,7 +4,7 @@ import Members from '@/components/templates/settings/members';
 
 export default function OrganisationPage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<Loading centered />}>
       <Members />
     </Suspense>
   );

@@ -184,7 +184,7 @@ const ProjectLayout = ({
             maxSize={LEFT_PANEL_MAX_SIZE}
             className="min-w-0"
           >
-            <div className="h-full min-w-[16rem] bg-background overflow-auto">
+            <div className="h-full min-w-[16rem] overflow-hidden bg-background">
               {leftPanelContent}
             </div>
           </ResizablePrimitive.Panel>

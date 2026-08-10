@@ -3,6 +3,10 @@ import { create } from 'zustand';
 export interface SheetStatusSnapshot {
   visibleColumns: number;
   totalColumns: number;
+  /** Rows currently shown (after filters). */
+  visibleRows?: number;
+  /** Full dataset row count (before filters). */
+  totalRows?: number;
   cellRef: string | null;
   selectionCount?: number | null;
   selectionSum?: number | null;

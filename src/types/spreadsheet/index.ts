@@ -16,6 +16,10 @@ export type SelectionMode = 'single' | 'range' | 'extending';
 export interface SheetStatusSnapshot {
   visibleColumns: number;
   totalColumns: number;
+  /** Rows currently shown (after filters). */
+  visibleRows?: number;
+  /** Full dataset row count (before filters). */
+  totalRows?: number;
   cellRef: string | null;
   /** Selection aggregates for Excel-style status bar (D2). */
   selectionCount?: number | null;

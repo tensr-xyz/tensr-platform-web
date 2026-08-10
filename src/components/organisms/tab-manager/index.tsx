@@ -698,7 +698,7 @@ const TabManager: React.FC<TabManagerProps> = ({
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
       {!hideWorkspaceToolbar ? (
-        <div className="flex h-[40px] min-h-[40px] items-center gap-1 border-b border-border bg-sidebar z-10 px-1">
+        <div className="flex h-[40px] min-h-[40px] items-center gap-1 border-b border-border bg-background z-10 px-1">
           <Button
             variant="ghost"
             size="icon"

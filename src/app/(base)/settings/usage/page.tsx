@@ -4,7 +4,7 @@ import { Suspense } from 'react';
 
 export default function UsagePage() {
   return (
-    <Suspense fallback={<Loading />}>
+    <Suspense fallback={<Loading centered />}>
       <UsageDashboard />
     </Suspense>
   );

@@ -7,10 +7,8 @@ import { User } from '@/types/user';
 import { updateProfile } from '@/lib/business-api';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
-import { Label } from '@/components/atoms/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/atoms/card';
-import { Separator } from '@/components/atoms/separator';
-import { Save, User as UserIcon, Mail, AtSign, Sun, Monitor, Moon } from 'lucide-react';
+import Loading from '@/components/molecules/loading';
+import { Sun, Monitor, Moon } from 'lucide-react';
 import { devLog } from '@/lib/dev-log';
 
 export default function GeneralSettings() {
@@ -120,11 +118,7 @@ export default function GeneralSettings() {
 
   // Show loading state while auth is loading or not mounted
   if (authLoading || !mounted) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <p className="text-sm text-muted-foreground">Loading settings...</p>
-      </div>
-    );
+    return <Loading centered size="sm" message="Loading settings..." />;
   }
 
   // Show error if no user is available from context
@@ -168,7 +162,7 @@ export default function GeneralSettings() {
               <div>
                 <label
                   htmlFor="firstName"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  className="mb-1 block text-sm font-medium text-muted-foreground"
                 >
                   First Name
                 </label>
@@ -177,14 +171,13 @@ export default function GeneralSettings() {
                   id="firstName"
                   value={user?.firstName || ''}
                   onChange={e => handleInputChange('firstName', e.target.value)}
-                  className="border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-600"
                   disabled={saveStatus === 'saving'}
                 />
               </div>
               <div>
                 <label
                   htmlFor="lastName"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                  className="mb-1 block text-sm font-medium text-muted-foreground"
                 >
                   Last Name
                 </label>
@@ -193,7 +186,6 @@ export default function GeneralSettings() {
                   id="lastName"
                   value={user?.lastName || ''}
                   onChange={e => handleInputChange('lastName', e.target.value)}
-                  className="border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-600"
                   disabled={saveStatus === 'saving'}
                 />
               </div>
@@ -202,7 +194,7 @@ export default function GeneralSettings() {
             <div className="mb-6">
               <label
                 htmlFor="email"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                className="mb-1 block text-sm font-medium text-muted-foreground"
               >
                 Email Address
               </label>
@@ -211,9 +203,9 @@ export default function GeneralSettings() {
                 id="email"
                 value={user?.email || ''}
                 readOnly
-                className="bg-gray-50 border-gray-200 dark:bg-gray-700 dark:border-gray-600"
+                className="bg-muted"
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-1 text-xs text-muted-foreground">
                 To change your email, please contact support.
               </p>
             </div>
@@ -221,7 +213,7 @@ export default function GeneralSettings() {
             <div className="mb-6">
               <label
                 htmlFor="username"
-                className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                className="mb-1 block text-sm font-medium text-muted-foreground"
               >
                 Username
               </label>
@@ -230,7 +222,6 @@ export default function GeneralSettings() {
                 id="username"
                 value={user?.username || ''}
                 onChange={e => handleInputChange('username', e.target.value)}
-                className="border-gray-200 bg-white dark:bg-gray-800 dark:border-gray-600"
                 disabled={saveStatus === 'saving'}
               />
             </div>
