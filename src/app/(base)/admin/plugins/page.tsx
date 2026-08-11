@@ -1,5 +1,6 @@
-import PluginReviewQueue from '@/components/templates/plugin-review-queue';
+import { redirect } from 'next/navigation';
 
+/** Prefer the plugins-area review page. */
 export default function AdminPluginsPage() {
-  return <PluginReviewQueue />;
+  redirect('/plugins/review');
 }

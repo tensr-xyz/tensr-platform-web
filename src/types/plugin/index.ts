@@ -1,4 +1,4 @@
-export type SupportedLanguages = 'typescript' | 'python' | 'r';
+export type SupportedLanguages = 'typescript' | 'javascript';
 
 // Base metadata interface that will be shared between SDK and API
 export interface BasePluginMetadata {
@@ -178,11 +178,32 @@ export interface PluginPurchaseResponse {
   creatorAmount?: number;
 }
 
+export interface PluginInstall {
+  installId: string;
+  pluginId: string;
+  userId: string;
+  version?: string | null;
+  status: 'installed' | string;
+  installedAt?: string;
+}
+
+export interface PluginInstallResponse {
+  message: string;
+  install: PluginInstall;
+  plugin: PluginRecord;
+}
+
+export interface PluginInstalledListResponse {
+  items: Array<PluginInstall & { plugin: PluginRecord }>;
+}
+
 export interface PluginAccessResponse {
   pluginId: string;
   isPaid: boolean;
   hasAccess: boolean;
+  isInstalled: boolean;
   purchase: PluginPurchase | null;
+  install: PluginInstall | null;
 }
 
 /** `GET /creator/stats` (tensr-api app/routers/plugins.py). */

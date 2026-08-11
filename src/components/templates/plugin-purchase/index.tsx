@@ -100,12 +100,13 @@ export default function PluginPurchase() {
           <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
           <h1 className="text-2xl font-bold mb-4">Purchase Complete!</h1>
           <p className="text-muted-foreground mb-6">
-            Thank you for your purchase. {plugin.name} is now available in your workspace.
+            Thank you for your purchase. Install {plugin.name} from its listing to add it to your
+            workspace.
           </p>
           <div className="space-y-3">
-            <Button onClick={() => router.push('/workspace')} className="w-full">
+            <Button onClick={() => router.push(`/plugins/${plugin.pluginId}`)} className="w-full">
               <Download className="h-4 w-4 mr-2" />
-              Go to Workspace
+              Install plugin
             </Button>
             <Button variant="outline" onClick={() => router.push('/plugins')} className="w-full">
               Browse More Plugins
@@ -216,20 +217,19 @@ export default function PluginPurchase() {
                 <div className="flex items-start gap-3">
                   <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
                   <div>
-                    <h4 className="font-medium">Instant Access</h4>
+                    <h4 className="font-medium">Purchase unlocks install</h4>
                     <p className="text-sm text-muted-foreground">
-                      Run this plugin from the Analysis command palette right away.
+                      After checkout you can install the plugin and run it from Analysis.
                     </p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3">
                   <Download className="h-5 w-5 text-purple-600 mt-0.5" />
                   <div>
-                    <h4 className="font-medium">No install step</h4>
+                    <h4 className="font-medium">Opt-in install</h4>
                     <p className="text-sm text-muted-foreground">
-                      {plugin.isPaid
-                        ? 'Once purchased, the plugin is available in your workspace immediately.'
-                        : 'Free plugins are available in your workspace immediately.'}
+                      Owning a plugin does not force it into your workspace — install only what you
+                      want active.
                     </p>
                   </div>
                 </div>

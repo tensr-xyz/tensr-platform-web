@@ -12,6 +12,7 @@ import {
 } from '@/components/molecules/command';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { Spinner } from '@/components/atoms/spinner';
+import { Loader } from '@/components/molecules/loading';
 import PluginUIRenderer from '@/components/molecules/plugin-ui-renderer';
 import { cn } from '@/utils';
 import {
@@ -32,7 +33,6 @@ import {
   type AnalysisItem,
 } from '@/configs/analysis-config/utils';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
-import usePlugins from '@/hooks/api/use-plugin';
 import { apiClient } from '@/lib/api-client';
 import { useTabsStore, ViewType, type Tab } from '@/stores/tabs-store';
 import { ColumnType } from '@tensr/sdk';
@@ -88,14 +88,8 @@ function buildSpreadsheetDatasetForPlugins(
   };
 }
 
-function usablePluginsFromMarketplace(marketplace: PluginRecord[]): PluginRecord[] {
-  // Approved, free plugins are runnable directly from the marketplace - there is no
-  // separate "install" step/state on tensr-api, so every approved free plugin is usable
-  // here. Paid plugins are excluded until checkout exists (see /plugins/{id}/purchase
-  // 501 on tensr-api) so we don't hand out paid execution for free.
-  return marketplace
-    .filter(p => p.status === 'APPROVED' && !p.isPaid)
-    .sort((a, b) => a.name.localeCompare(b.name));
+function sortPluginsByName(plugins: PluginRecord[]): PluginRecord[] {
+  return [...plugins].sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function pluginMatchesQuery(plugin: PluginRecord, raw: string): boolean {
@@ -158,7 +152,9 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
   const activeTab = tabs.find(t => t.id === activeTabId);
   const pluginDataset = useMemo(() => buildSpreadsheetDatasetForPlugins(activeTab), [activeTab]);
 
-  const { plugins, loading: pluginsLoading, error: pluginsError } = usePlugins();
+  const [installedPlugins, setInstalledPlugins] = useState<PluginRecord[]>([]);
+  const [pluginsLoading, setPluginsLoading] = useState(false);
+  const [pluginsError, setPluginsError] = useState<string | null>(null);
 
   const allItems = useMemo(() => getAllAnalysisItems(), []);
 
@@ -167,17 +163,43 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
     setQuery('');
   }, [open]);
 
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setPluginsLoading(true);
+    setPluginsError(null);
+    apiClient.plugins
+      .installed()
+      .then(res => {
+        if (cancelled) return;
+        const items = (res.items || [])
+          .map(row => row.plugin)
+          .filter((p): p is PluginRecord => Boolean(p && p.status === 'APPROVED'));
+        setInstalledPlugins(sortPluginsByName(items));
+      })
+      .catch(err => {
+        if (cancelled) return;
+        setPluginsError(err instanceof Error ? err.message : 'Failed to load installed plugins');
+        setInstalledPlugins([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPluginsLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   const filtered = useMemo(() => filterAnalysisItems(allItems, query), [allItems, query]);
   const grouped = useMemo(() => groupAnalysisItems(filtered), [filtered]);
 
-  const usablePlugins = useMemo(() => usablePluginsFromMarketplace(plugins), [plugins]);
-
   const filteredPlugins = useMemo(
-    () => usablePlugins.filter(p => pluginMatchesQuery(p, query)),
-    [usablePlugins, query]
+    () => installedPlugins.filter(p => pluginMatchesQuery(p, query)),
+    [installedPlugins, query]
   );
 
-  const showPluginsTab = filteredPlugins.length > 0;
+  // Always offer the Plugins tab so users can see empty/install guidance.
+  const showPluginsTab = true;
 
   const visiblePaletteTabs = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -205,7 +227,7 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
 
   const emptyListMessage = (() => {
     if (hasBrowseableContent) return '';
-    if (pluginsLoading && usablePlugins.length === 0) return 'Loading…';
+    if (pluginsLoading && installedPlugins.length === 0) return 'Loading…';
     return 'Nothing matches your search.';
   })();
 
@@ -354,10 +376,21 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
                       className="m-0 h-full border-0 p-0 outline-none data-[state=inactive]:hidden"
                     >
                       {pluginsError ? (
-                        <p className="px-2 pb-2 text-xs text-destructive">{pluginsError.message}</p>
+                        <p className="px-2 pb-2 text-xs text-destructive">{pluginsError}</p>
                       ) : null}
-                      {filteredPlugins.length === 0 ? (
-                        <CommandEmpty>No plugins match your search.</CommandEmpty>
+                      {pluginsLoading ? (
+                        <div className="flex flex-col items-center justify-center gap-3 py-10">
+                          <Loader size="sm" />
+                          <p className="text-sm text-muted-foreground">
+                            Loading installed plugins…
+                          </p>
+                        </div>
+                      ) : filteredPlugins.length === 0 ? (
+                        <CommandEmpty>
+                          {installedPlugins.length === 0
+                            ? 'No plugins installed. Install free or purchased plugins from the marketplace.'
+                            : 'No plugins match your search.'}
+                        </CommandEmpty>
                       ) : (
                         <CommandGroup>
                           {filteredPlugins.map(plugin => {

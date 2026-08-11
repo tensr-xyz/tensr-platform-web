@@ -1,4 +1,4 @@
-import { useAppStore, DialogType } from '@/stores/app-store';
+import { useRouter } from 'next/navigation';
 import { useProjectStore } from '@/stores/project-store';
 import {
   DropdownMenu,
@@ -13,11 +13,12 @@ import { FolderComponent } from '@/components/organisms/file-tree';
 import { ChevronDown, File, Folder, Plus } from 'lucide-react';
 
 export const ProjectMenu = () => {
+  const router = useRouter();
   const { currentProject } = useProjectStore();
-  const { showDialog } = useAppStore();
 
   const handleNewProject = () => {
-    showDialog(DialogType.NEW_PROJECT);
+    // Real create flow lives at /project/new (store dialog flag had no UI host).
+    router.push('/project/new');
   };
 
   return (

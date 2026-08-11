@@ -256,8 +256,8 @@ function FeaturedPlugin({ plugin }: { plugin: PluginRecord }) {
           className="absolute bottom-6 left-6 right-6 rounded-xl border border-white/15 bg-black/35 p-3.5 font-mono text-xs leading-relaxed text-white/90 backdrop-blur-sm"
           aria-hidden
         >
-          <div className="text-white/60">Runs from the Analysis command palette</div>
-          <div>✓ No install step required</div>
+          <div className="text-white/60">Install · then run from Analysis</div>
+          <div>✓ Opt-in install (like editor extensions)</div>
           <div>✓ Works on any spreadsheet in your workspace</div>
         </div>
       </div>
@@ -376,6 +376,9 @@ export default function PluginsLayout() {
                 className="h-9 rounded-full border-border bg-background pl-9 text-[13px] shadow-none"
               />
             </div>
+            <Button variant="outline" className="h-9 shrink-0 gap-2 rounded-full" asChild>
+              <Link href="/plugins/mine">My plugins</Link>
+            </Button>
             <Button variant="outline" className="h-9 shrink-0 gap-2 rounded-full" asChild>
               <Link href="/plugins/upload">
                 <Plus className="size-4" aria-hidden />

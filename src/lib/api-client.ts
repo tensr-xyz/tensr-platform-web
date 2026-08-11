@@ -362,6 +362,19 @@ class ApiClient {
     access: (id: string) =>
       this.request<import('@/types/plugin').PluginAccessResponse>(`/plugins/${id}/access`),
 
+    installed: () =>
+      this.request<import('@/types/plugin').PluginInstalledListResponse>('/plugins/installed'),
+
+    install: (id: string) =>
+      this.request<import('@/types/plugin').PluginInstallResponse>(`/plugins/${id}/install`, {
+        method: 'POST',
+      }),
+
+    uninstall: (id: string) =>
+      this.request<{ message: string; pluginId: string }>(`/plugins/${id}/install`, {
+        method: 'DELETE',
+      }),
+
     execute: (id: string, data: any, config?: any) =>
       this.request<any>(`/plugins/${id}/execute`, {
         method: 'POST',

@@ -10,7 +10,6 @@ import {
 import { ScrollArea } from '@/components/atoms/scroll-area';
 import { Button } from '@/components/atoms/button';
 import { Loader } from '@/components/molecules/loading';
-import usePlugins from '@/hooks/api/use-plugin';
 import { PluginRecord } from '@/types/plugin';
 import { apiClient } from '@/lib/api-client';
 import PluginUIRenderer from '@/components/molecules/plugin-ui-renderer';
@@ -117,40 +116,36 @@ const PluginItem: React.FC<{
 
 // Main plugin panel component
 const PluginPanel: React.FC<PluginPanelProps> = ({ activeData }) => {
-  const { plugins } = usePlugins();
+  const [installedPlugins, setInstalledPlugins] = useState<PluginRecord[]>([]);
+  const [loading, setLoading] = useState(true);
   const [executionResult, setExecutionResult] = useState<{
     plugin: PluginRecord;
     result: any;
   } | null>(null);
-  const [accessMap, setAccessMap] = useState<Record<string, boolean>>({});
-
-  // Show approved plugins - no install step, just use them on files. Paid plugins
-  // also appear; access (purchase status) is checked separately below and gates "Run".
-  const approvedPlugins = plugins.filter(p => p.status === 'APPROVED');
 
   useEffect(() => {
-    const paidPluginIds = approvedPlugins.filter(p => p.isPaid).map(p => p.pluginId);
-    if (paidPluginIds.length === 0) return;
-
     let cancelled = false;
-    Promise.all(
-      paidPluginIds.map(async id => {
-        try {
-          const access = await apiClient.plugins.access(id);
-          return [id, access.hasAccess] as const;
-        } catch {
-          return [id, false] as const;
-        }
+    setLoading(true);
+    apiClient.plugins
+      .installed()
+      .then(res => {
+        if (cancelled) return;
+        setInstalledPlugins(
+          (res.items || [])
+            .map(row => row.plugin)
+            .filter((p): p is PluginRecord => Boolean(p && p.status === 'APPROVED'))
+        );
       })
-    ).then(results => {
-      if (cancelled) return;
-      setAccessMap(prev => ({ ...prev, ...Object.fromEntries(results) }));
-    });
+      .catch(() => {
+        if (!cancelled) setInstalledPlugins([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plugins]);
+  }, []);
 
   const handleExecutionComplete = (plugin: PluginRecord, result: any) => {
     setExecutionResult({ plugin, result });
@@ -172,22 +167,30 @@ const PluginPanel: React.FC<PluginPanelProps> = ({ activeData }) => {
       <div className="p-4">
         <Accordion type="single" collapsible className="mb-4">
           <AccordionItem value="plugins">
-            <AccordionTrigger>Plugins ({approvedPlugins.length})</AccordionTrigger>
+            <AccordionTrigger>Installed plugins ({installedPlugins.length})</AccordionTrigger>
             <AccordionContent>
               <div className="space-y-2">
-                {approvedPlugins.length > 0 ? (
-                  approvedPlugins.map(plugin => (
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center gap-2 rounded-sm bg-muted px-4 py-8">
+                    <Loader size="sm" />
+                    <p className="text-sm text-muted-foreground">Loading installed plugins…</p>
+                  </div>
+                ) : installedPlugins.length > 0 ? (
+                  installedPlugins.map(plugin => (
                     <PluginItem
                       key={plugin.pluginId}
                       plugin={plugin}
                       data={activeData}
-                      hasAccess={!plugin.isPaid || !!accessMap[plugin.pluginId]}
+                      hasAccess
                       onExecutionComplete={result => handleExecutionComplete(plugin, result)}
                     />
                   ))
                 ) : (
-                  <div className="px-4 py-2 text-muted-foreground text-center bg-muted rounded-sm">
-                    No plugins available
+                  <div className="space-y-2 px-4 py-2 text-center text-muted-foreground bg-muted rounded-sm">
+                    <p className="text-sm">No plugins installed</p>
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href="/plugins">Browse marketplace</Link>
+                    </Button>
                   </div>
                 )}
               </div>

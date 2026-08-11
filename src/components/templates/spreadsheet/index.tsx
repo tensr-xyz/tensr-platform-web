@@ -307,6 +307,9 @@ const MemoizedTableCell = React.memo<{
   cellKey: string;
   isCellFocused: boolean;
   isCellSelected: boolean;
+  /** Pass size from the parent — do not read getSize() in the memo compare (it is already updated). */
+  columnSize: number;
+  pinnedLeft?: number | null;
   cellRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
   handleCellEdit: (rowIndex: number, columnId: string, value: any) => void | Promise<void>;
   setFocusedCell: (position: { rowIndex: number; columnId: string }) => void;
@@ -329,6 +332,8 @@ const MemoizedTableCell = React.memo<{
     cellKey,
     isCellFocused,
     isCellSelected,
+    columnSize,
+    pinnedLeft = null,
     cellRefs,
     handleCellEdit,
     setFocusedCell,
@@ -358,8 +363,6 @@ const MemoizedTableCell = React.memo<{
 
     // Extract values once to avoid repeated calls during render
     const cellValue = cell.getValue();
-    const columnSize = cell.column.getSize() || 150;
-    const pinned = cell.column.getIsPinned();
     const hasHeatmap = !!heatmapBackgroundColor;
     const showCellHover = columnId !== 'select' && !isCellFocused;
 
@@ -413,10 +416,10 @@ const MemoizedTableCell = React.memo<{
           height: 36,
           boxSizing: 'border-box',
           backgroundColor: heatmapBackgroundColor,
-          ...(pinned
+          ...(pinnedLeft != null
             ? {
                 position: 'sticky',
-                left: cell.column.getStart(pinned as 'left'),
+                left: pinnedLeft,
                 zIndex: 1,
               }
             : {}),
@@ -451,7 +454,10 @@ const MemoizedTableCell = React.memo<{
     const cellValueChanged = prevProps.cell.getValue() !== nextProps.cell.getValue();
     const focusChanged = prevProps.isCellFocused !== nextProps.isCellFocused;
     const selectionChanged = prevProps.isCellSelected !== nextProps.isCellSelected;
-    const sizeChanged = prevProps.cell.column.getSize() !== nextProps.cell.column.getSize();
+    // Compare the size prop from the parent — getSize() on both sides is already live/new
+    const sizeChanged =
+      prevProps.columnSize !== nextProps.columnSize ||
+      prevProps.pinnedLeft !== nextProps.pinnedLeft;
     const clipboardChanged = prevProps.clipboardHasData !== nextProps.clipboardHasData;
     const numericChanged = prevProps.isNumericColumn !== nextProps.isNumericColumn;
     const heatmapChanged = prevProps.heatmapBackgroundColor !== nextProps.heatmapBackgroundColor;
@@ -3645,6 +3651,7 @@ export function Spreadsheet({
                           }
                         }
 
+                        const pinned = cell.column.getIsPinned();
                         return (
                           <MemoizedTableCell
                             key={cell.id}
@@ -3654,6 +3661,8 @@ export function Spreadsheet({
                             cellKey={cellKey}
                             isCellFocused={isCellFocused}
                             isCellSelected={cellIsSelected}
+                            columnSize={cell.column.getSize() || DEFAULT_COLUMN_WIDTH}
+                            pinnedLeft={pinned ? cell.column.getStart(pinned as 'left') : null}
                             isNumericColumn={isNumericColumn}
                             heatmapBackgroundColor={heatmapBackgroundColor}
                             cellRefs={cellRefs}

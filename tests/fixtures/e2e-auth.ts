@@ -7,6 +7,8 @@ export const E2E_SESSION_JWT =
 export const E2E_DATASET_ID = 'e2e00000-0000-4000-8000-000000000001';
 
 export async function seedE2eSession(page: Page): Promise<void> {
+  // Use `url` (not `domain: localhost`) — Chromium rejects Domain=localhost cookies,
+  // which made every workspace E2E bounce to /login for 60s.
   const baseUrl = process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000';
   await page.context().addCookies([
     {

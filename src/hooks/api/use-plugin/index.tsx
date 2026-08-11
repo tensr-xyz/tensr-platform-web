@@ -30,10 +30,8 @@ interface UsePluginsReturn {
   refetch: () => void;
 }
 
-// NOTE: There is no persistent "install" concept on tensr-api (see app/routers/plugins.py) -
-// approved plugins are usable directly from the marketplace/command palette without any
-// install step, so we don't fake install state here. See installPlugin/uninstallPlugin
-// removal in Track B Phase 1 (marketplace honesty).
+// Marketplace catalog hook. Per-user installs use apiClient.plugins.installed/install/uninstall
+// and power the command palette + plugin panel (not this list).
 const usePlugins = (options: UsePluginsOptions = {}): UsePluginsReturn => {
   const [plugins, setPlugins] = useState<PluginRecord[]>([]);
   const [loading, setLoading] = useState(true);

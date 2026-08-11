@@ -13,6 +13,14 @@ Included (`playwright.launch.config.ts`):
 - `analyze-menu.spec.ts` — production Analyze/Data palette
 - `agent-chat.spec.ts` — workspace route smoke
 
+## Workspace stress (separate)
+
+`pnpm test:workspace` runs `playwright.workspace.config.ts`:
+
+- `workspace-stress.spec.ts` — sheet chrome, New Project nav, column menus (sort/hide/filter/heatmap), cell edit/delete/copy-paste, row context menu, column resize alignment, left filters, toolbar toggles
+
+Use this as the expanding regression suite for table interactions. Launch gate stays lean.
+
 ## Manual QA (prod)
 
 - [MANUAL_TEST_PLAN.md](./MANUAL_TEST_PLAN.md) — full prod run sheet (Phases 0–9)
