@@ -4,7 +4,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
 import { PluginRecord } from '@/types/plugin';
-import { apiClient } from '@/lib/api-client';
+import { getStytchBearerForTensrApi } from '@/utils/auth';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { Loader } from '@/components/molecules/loading';
 
 interface PluginUIRendererProps {
@@ -13,32 +14,95 @@ interface PluginUIRendererProps {
   onClose?: () => void;
 }
 
+function isTableResult(result: unknown): result is {
+  type: 'table';
+  data: { title?: string; columns: string[]; rows: unknown[][] };
+} {
+  if (!result || typeof result !== 'object') return false;
+  const r = result as Record<string, unknown>;
+  const data = r.data as Record<string, unknown> | undefined;
+  return r.type === 'table' && !!data && Array.isArray(data.columns) && Array.isArray(data.rows);
+}
+
+function NativeTableResult({ result }: { result: any }) {
+  if (!isTableResult(result)) {
+    return (
+      <pre className="max-h-full overflow-auto p-4 text-xs">{JSON.stringify(result, null, 2)}</pre>
+    );
+  }
+  const { title, columns, rows } = result.data;
+  return (
+    <div className="flex h-full flex-col overflow-hidden p-4">
+      {title ? <h2 className="mb-3 text-base font-semibold">{title}</h2> : null}
+      <div className="min-h-0 flex-1 overflow-auto rounded-md border border-border">
+        <table className="w-full border-collapse text-left text-sm">
+          <thead className="sticky top-0 bg-muted">
+            <tr>
+              {columns.map(col => (
+                <th key={col} className="border-b border-border px-3 py-2 font-medium">
+                  {col}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, i) => (
+              <tr key={i} className="odd:bg-background even:bg-muted/40">
+                {columns.map((_, j) => (
+                  <td key={j} className="border-b border-border/60 px-3 py-1.5 tabular-nums">
+                    {row[j] == null ? '' : String(row[j])}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 /**
- * Renders plugin ui.html in a sandboxed iframe.
- *
- * Uses srcDoc + sandbox="allow-scripts" only — no allow-same-origin.
- * That keeps the iframe origin opaque (null), so plugin UI cannot reach
- * parent DOM/storage while still receiving results via postMessage.
+ * Renders plugin ui.html in a sandboxed iframe when the zip is available.
+ * Falls back to a native table/JSON view so a broken download never hides
+ * a successful execute result.
  */
 export default function PluginUIRenderer({ plugin, result, onClose }: PluginUIRendererProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [uiHtml, setUiHtml] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [uiError, setUiError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     const loadPluginUI = async () => {
       try {
         setLoading(true);
-        setError(null);
+        setUiError(null);
 
-        const { downloadUrl } = await apiClient.plugins.downloadUrl(plugin.pluginId);
-        const pluginResponse = await fetch(downloadUrl);
+        const token = getStytchBearerForTensrApi();
+        if (!token) {
+          throw new Error('No authentication token found');
+        }
+
+        // Authenticated download — do not raw-fetch a relative /plugins/... URL
+        // (that hits the Next origin and returns HTML, which JSZip rejects).
+        const pluginResponse = await fetch(tensrApiUrl(`/plugins/${plugin.pluginId}/download`), {
+          cache: 'no-store',
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (!pluginResponse.ok) {
           throw new Error(`Failed to download plugin: ${pluginResponse.status}`);
         }
 
         const pluginZip = await pluginResponse.arrayBuffer();
+        const header = new Uint8Array(pluginZip.slice(0, 4));
+        const isZip = header.length >= 2 && header[0] === 0x50 && header[1] === 0x4b; /* PK */
+        if (!isZip) {
+          throw new Error('Plugin download was not a zip archive');
+        }
+
         const JSZip = (await import('jszip')).default;
         const zip = await JSZip.loadAsync(pluginZip);
 
@@ -52,8 +116,10 @@ export default function PluginUIRenderer({ plugin, result, onClose }: PluginUIRe
           }
         }
 
+        if (cancelled) return;
         if (!html) {
-          setError('Plugin UI not found. The plugin may not have a UI file.');
+          setUiError('Plugin UI not found');
+          setUiHtml(null);
           setLoading(false);
           return;
         }
@@ -61,17 +127,21 @@ export default function PluginUIRenderer({ plugin, result, onClose }: PluginUIRe
         setUiHtml(html);
         setLoading(false);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load plugin UI');
+        if (cancelled) return;
+        setUiError(err instanceof Error ? err.message : 'Failed to load plugin UI');
+        setUiHtml(null);
         setLoading(false);
       }
     };
 
-    loadPluginUI();
+    void loadPluginUI();
+    return () => {
+      cancelled = true;
+    };
   }, [plugin.pluginId]);
 
   useEffect(() => {
     if (!uiHtml || !iframeRef.current?.contentWindow) return;
-    // srcDoc load is async — post after a tick and on plugin-ready.
     const id = window.setTimeout(() => {
       iframeRef.current?.contentWindow?.postMessage({ type: 'plugin-result', result }, '*');
     }, 50);
@@ -91,28 +161,39 @@ export default function PluginUIRenderer({ plugin, result, onClose }: PluginUIRe
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex h-full items-center justify-center">
         <Loader size="md" />
       </div>
     );
   }
 
-  if (error) {
+  // Prefer native result view when zip/UI cannot load — execute already succeeded.
+  if (!uiHtml) {
     return (
-      <div className="flex flex-col items-center justify-center h-full p-4">
-        <div className="text-red-500 mb-4">{error}</div>
-        {onClose && (
-          <Button variant="outline" onClick={onClose}>
-            Close
-          </Button>
-        )}
+      <div className="flex h-full w-full flex-col">
+        <div className="flex items-center justify-between border-b border-border p-2">
+          <div className="font-medium">{plugin.name} - Results</div>
+          {onClose && (
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+        {uiError ? (
+          <div className="px-4 pt-2 text-xs text-muted-foreground">
+            Plugin UI unavailable ({uiError}). Showing execute result.
+          </div>
+        ) : null}
+        <div className="min-h-0 flex-1">
+          <NativeTableResult result={result} />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full w-full">
-      <div className="flex items-center justify-between p-2 border-b border-border">
+    <div className="flex h-full w-full flex-col">
+      <div className="flex items-center justify-between border-b border-border p-2">
         <div className="font-medium">{plugin.name} - Results</div>
         {onClose && (
           <Button variant="ghost" size="icon" onClick={onClose}>
@@ -120,10 +201,10 @@ export default function PluginUIRenderer({ plugin, result, onClose }: PluginUIRe
           </Button>
         )}
       </div>
-      <div className="flex-1 relative">
+      <div className="relative flex-1">
         <iframe
           ref={iframeRef}
-          className="w-full h-full border-0"
+          className="h-full w-full border-0"
           sandbox="allow-scripts"
           srcDoc={uiHtml || ''}
           title={`${plugin.name} UI`}
