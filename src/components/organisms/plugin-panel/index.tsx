@@ -12,22 +12,22 @@ import { Button } from '@/components/atoms/button';
 import { Loader } from '@/components/molecules/loading';
 import { PluginRecord } from '@/types/plugin';
 import { apiClient } from '@/lib/api-client';
-import PluginUIRenderer from '@/components/molecules/plugin-ui-renderer';
+import { openPluginResultTab } from '@/lib/open-plugin-result-tab';
+import { useTabsStore } from '@/stores/tabs-store';
 
 interface PluginPanelProps {
   activeData?: any;
 }
 
-// Individual plugin item component
 const PluginItem: React.FC<{
   plugin: PluginRecord;
   data?: any;
   hasAccess: boolean;
-  onExecutionComplete?: (result: any) => void;
-}> = ({ plugin, data, hasAccess, onExecutionComplete }) => {
+}> = ({ plugin, data, hasAccess }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<any>(null);
+  const { tabs, activeTabId } = useTabsStore();
+  const activeTab = tabs.find(t => t.id === activeTabId);
 
   const handleRun = async (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -39,11 +39,8 @@ const PluginItem: React.FC<{
 
     setIsLoading(true);
     setError(null);
-    setResult(null);
 
     try {
-      // Transform the data to match plugin's expected format (DataSet)
-      // All data is parquet format, so no fileType needed
       const transformedData = {
         rows: data.data || data.rows || [],
         columns: (data.metadata?.columns || data.columns || []).map((col: any) => ({
@@ -56,14 +53,20 @@ const PluginItem: React.FC<{
         totalColumns: (data.metadata?.columns || data.columns || []).length,
       };
 
-      // Execute the plugin via API
       const executionResult = await apiClient.plugins.execute(plugin.pluginId, transformedData);
 
       if (executionResult.success) {
-        setResult(executionResult.result);
-        if (onExecutionComplete) {
-          onExecutionComplete(executionResult.result);
-        }
+        const sourceDatasetId =
+          (activeTab?.data?.datasetId as string | undefined) ||
+          (typeof activeTab?.path === 'string' ? activeTab.path : undefined) ||
+          data.datasetId ||
+          plugin.pluginId;
+        openPluginResultTab({
+          plugin,
+          result: executionResult.result,
+          sourceDatasetId,
+          sourceTabName: activeTab?.name,
+        });
       } else {
         setError(executionResult.error || 'Plugin execution failed');
       }
@@ -77,12 +80,12 @@ const PluginItem: React.FC<{
   };
 
   return (
-    <div className="px-4 py-2 hover:bg-accent rounded-md">
+    <div className="rounded-md px-4 py-2 hover:bg-accent">
       <div className="flex items-center justify-between">
         <div className="grow">
           <h3 className="font-medium">{plugin.name}</h3>
           <p className="text-sm text-muted-foreground">{plugin.description}</p>
-          <div className="text-xs text-muted-foreground mt-1">
+          <div className="mt-1 text-xs text-muted-foreground">
             <div>Version: {plugin.version}</div>
           </div>
         </div>
@@ -102,26 +105,14 @@ const PluginItem: React.FC<{
         </div>
       </div>
 
-      {error && <div className="text-red-500 text-sm mt-2 p-2 bg-red-50 rounded-sm">{error}</div>}
-
-      {result && !onExecutionComplete && (
-        <div className="mt-2 p-2 bg-muted rounded-sm">
-          <div className="font-medium text-sm">Result:</div>
-          <pre className="text-xs overflow-auto max-h-40">{JSON.stringify(result, null, 2)}</pre>
-        </div>
-      )}
+      {error && <div className="mt-2 rounded-sm bg-red-50 p-2 text-sm text-red-500">{error}</div>}
     </div>
   );
 };
 
-// Main plugin panel component
 const PluginPanel: React.FC<PluginPanelProps> = ({ activeData }) => {
   const [installedPlugins, setInstalledPlugins] = useState<PluginRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [executionResult, setExecutionResult] = useState<{
-    plugin: PluginRecord;
-    result: any;
-  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -130,11 +121,10 @@ const PluginPanel: React.FC<PluginPanelProps> = ({ activeData }) => {
       .installed()
       .then(res => {
         if (cancelled) return;
-        setInstalledPlugins(
-          (res.items || [])
-            .map(row => row.plugin)
-            .filter((p): p is PluginRecord => Boolean(p && p.status === 'APPROVED'))
-        );
+        const items = (res.items || [])
+          .map(row => row.plugin)
+          .filter((p): p is PluginRecord => Boolean(p && p.status === 'APPROVED'));
+        setInstalledPlugins(items);
       })
       .catch(() => {
         if (!cancelled) setInstalledPlugins([]);
@@ -146,21 +136,6 @@ const PluginPanel: React.FC<PluginPanelProps> = ({ activeData }) => {
       cancelled = true;
     };
   }, []);
-
-  const handleExecutionComplete = (plugin: PluginRecord, result: any) => {
-    setExecutionResult({ plugin, result });
-  };
-
-  // Show UI renderer if execution completed
-  if (executionResult) {
-    return (
-      <PluginUIRenderer
-        plugin={executionResult.plugin}
-        result={executionResult.result}
-        onClose={() => setExecutionResult(null)}
-      />
-    );
-  }
 
   return (
     <ScrollArea className="h-full">
@@ -177,17 +152,11 @@ const PluginPanel: React.FC<PluginPanelProps> = ({ activeData }) => {
                   </div>
                 ) : installedPlugins.length > 0 ? (
                   installedPlugins.map(plugin => (
-                    <PluginItem
-                      key={plugin.pluginId}
-                      plugin={plugin}
-                      data={activeData}
-                      hasAccess
-                      onExecutionComplete={result => handleExecutionComplete(plugin, result)}
-                    />
+                    <PluginItem key={plugin.pluginId} plugin={plugin} data={activeData} hasAccess />
                   ))
                 ) : (
-                  <div className="space-y-2 px-4 py-2 text-center text-muted-foreground bg-muted rounded-sm">
-                    <p className="text-sm">No plugins installed</p>
+                  <div className="space-y-2 rounded-sm bg-muted px-4 py-2 text-center text-muted-foreground">
+                    <p className="text-sm">No installed plugins yet.</p>
                     <Button variant="outline" size="sm" asChild>
                       <Link href="/plugins">Browse marketplace</Link>
                     </Button>

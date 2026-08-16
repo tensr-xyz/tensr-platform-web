@@ -83,6 +83,26 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
       });
     }
 
+    // Binary responses (plugin zips, etc.) must not go through res.text() —
+    // UTF-8 decoding corrupts the archive (JSZip: "missing N bytes").
+    const joined = pathSegments.join('/').toLowerCase();
+    const looksBinary =
+      /application\/(zip|octet-stream|x-zip)/i.test(upstreamType) ||
+      /\/download$/i.test(joined) ||
+      /\.(zip|parquet|bin)$/i.test(joined);
+    if (looksBinary && res.body) {
+      const outHeaders = forwardResponseHeaders(res.headers);
+      outHeaders.set('Cache-Control', noStore);
+      outHeaders.set('Pragma', 'no-cache');
+      if (!outHeaders.has('Content-Type')) {
+        outHeaders.set('Content-Type', upstreamType || 'application/octet-stream');
+      }
+      return new NextResponse(res.body, {
+        status: res.status,
+        headers: outHeaders,
+      });
+    }
+
     const body = await res.text();
 
     return new NextResponse(body, {

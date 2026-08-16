@@ -13,7 +13,6 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { Spinner } from '@/components/atoms/spinner';
 import { Loader } from '@/components/molecules/loading';
-import PluginUIRenderer from '@/components/molecules/plugin-ui-renderer';
 import { cn } from '@/utils';
 import {
   getAnalysisOpForMenuName,
@@ -34,6 +33,7 @@ import {
 } from '@/configs/analysis-config/utils';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { apiClient } from '@/lib/api-client';
+import { openPluginResultTab } from '@/lib/open-plugin-result-tab';
 import { useTabsStore, ViewType, type Tab } from '@/stores/tabs-store';
 import { ColumnType } from '@tensr/sdk';
 import type { PluginRecord } from '@/types/plugin';
@@ -147,10 +147,14 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
   const [query, setQuery] = useState('');
   const [paletteTab, setPaletteTab] = useState<string>(DATA_TAB_VALUE);
   const [runningPluginId, setRunningPluginId] = useState<string | null>(null);
-  const [pluginUi, setPluginUi] = useState<{ plugin: PluginRecord; result: unknown } | null>(null);
   const { tabs, activeTabId } = useTabsStore();
   const activeTab = tabs.find(t => t.id === activeTabId);
   const pluginDataset = useMemo(() => buildSpreadsheetDatasetForPlugins(activeTab), [activeTab]);
+  const sourceDatasetId =
+    (activeTab?.data?.datasetId as string | undefined) ||
+    (typeof activeTab?.path === 'string' ? activeTab.path : undefined) ||
+    activeTab?.id ||
+    '';
 
   const [installedPlugins, setInstalledPlugins] = useState<PluginRecord[]>([]);
   const [pluginsLoading, setPluginsLoading] = useState(false);
@@ -287,7 +291,12 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
       const executionResult = await apiClient.plugins.execute(plugin.pluginId, transformedData);
       if (executionResult.success) {
         onOpenChange(false);
-        setPluginUi({ plugin, result: executionResult.result });
+        openPluginResultTab({
+          plugin,
+          result: executionResult.result,
+          sourceDatasetId: sourceDatasetId || plugin.pluginId,
+          sourceTabName: activeTab?.name,
+        });
       } else {
         window.alert(executionResult.error || 'Plugin execution failed');
       }
@@ -443,16 +452,6 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
           </Command>
         </DialogContent>
       </Dialog>
-
-      {pluginUi ? (
-        <div className="fixed inset-0 z-[100] flex flex-col bg-background">
-          <PluginUIRenderer
-            plugin={pluginUi.plugin}
-            result={pluginUi.result}
-            onClose={() => setPluginUi(null)}
-          />
-        </div>
-      ) : null}
     </>
   );
 }
