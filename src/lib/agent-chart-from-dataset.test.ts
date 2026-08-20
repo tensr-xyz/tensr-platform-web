@@ -29,6 +29,22 @@ describe('agent chart from dataset', () => {
     );
   });
 
+  it('builds a boxplot instead of a scatter when asked for a boxplot', () => {
+    const chart = buildChartFromDataset(
+      'Make a boxplot of Age by group',
+      [
+        { id: 'Age', header: 'Age' },
+        { id: 'group', header: 'group' },
+      ],
+      [
+        ...Array.from({ length: 8 }, (_, i) => ({ Age: 20 + i, group: 'A' })),
+        ...Array.from({ length: 8 }, (_, i) => ({ Age: 30 + i, group: 'B' })),
+      ]
+    );
+    expect(chart?.kind).toBe('boxplot');
+    expect(chart && 'groups' in chart ? chart.groups.length : 0).toBe(2);
+  });
+
   it('builds scatter chart from minutes/points aliases', () => {
     const chart = buildChartFromDataset(
       'Plot the correlation between minutes and points',

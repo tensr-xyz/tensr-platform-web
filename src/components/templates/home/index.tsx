@@ -1,10 +1,9 @@
 'use client';
 
 import React, { useCallback, useMemo, useState } from 'react';
-import { Upload, Plus, Search } from 'lucide-react';
+import { Upload, Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/atoms/button';
-import { Input } from '@/components/atoms/input';
 import { DatasetFilePicker } from '@/components/molecules/dataset-file-picker';
 import { ProjectsTable } from '@/components/templates/home/projects-table';
 import Loading from '@/components/molecules/loading';
@@ -17,6 +16,8 @@ import { Avatar, AvatarFallback } from '@/components/atoms/avatar';
 import useAuth from '@/hooks/api/use-auth';
 import { cn } from '@/utils';
 import { apiClient } from '@/lib/api-client';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { getStytchBearerForTensrApi } from '@/utils/auth';
 
 const TEMPLATES = [
   {
@@ -238,6 +239,84 @@ const HomeTemplate: React.FC = () => {
     [projectsArray, queryClient, toast]
   );
 
+  const handleExportDataset = useCallback(
+    async (projectId: string) => {
+      const row = projectsArray.find(p => p.projectId === projectId);
+      const name = row?.projectName || row?.name || 'dataset';
+      try {
+        const token = getStytchBearerForTensrApi();
+        if (!token) throw new Error('Sign in to export this dataset');
+        const res = await fetch(tensrApiUrl(`/datasets/${projectId}/export?format=csv`), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(text || `Export failed (${res.status})`);
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const anchor = document.createElement('a');
+        anchor.href = url;
+        anchor.download = `${name.replace(/\.[^.]+$/, '')}.csv`;
+        anchor.click();
+        URL.revokeObjectURL(url);
+        toast({ title: 'Export started', description: `Downloading “${name}” as CSV.` });
+      } catch (err) {
+        toast({
+          title: 'Could not export dataset',
+          description: err instanceof Error ? err.message : 'Unknown error',
+          variant: 'destructive',
+        });
+      }
+    },
+    [projectsArray, toast]
+  );
+
+  const handleShareDataset = useCallback(
+    async (projectId: string) => {
+      const row = projectsArray.find(p => p.projectId === projectId);
+      const name = row?.projectName || row?.name || 'Dataset';
+      const url = `${window.location.origin}/workspace/dataset/${projectId}?name=${encodeURIComponent(name)}`;
+      try {
+        await navigator.clipboard.writeText(url);
+        toast({
+          title: 'Link copied',
+          description: 'Anyone on your team can open this dataset from the copied link.',
+        });
+      } catch {
+        toast({
+          title: 'Could not copy share link',
+          description: url,
+          variant: 'destructive',
+        });
+      }
+    },
+    [projectsArray, toast]
+  );
+
+  const handleRenameDataset = useCallback(
+    async (projectId: string) => {
+      const row = projectsArray.find(p => p.projectId === projectId);
+      const current = row?.projectName || row?.name || 'Dataset';
+      const next = window.prompt('Rename dataset', current);
+      if (next == null) return;
+      const trimmed = next.trim();
+      if (!trimmed || trimmed === current) return;
+      try {
+        await apiClient.datasets.rename(projectId, trimmed);
+        await queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+        toast({ title: 'Dataset renamed', description: `Now named “${trimmed}”.` });
+      } catch (err) {
+        toast({
+          title: 'Could not rename dataset',
+          description: err instanceof Error ? err.message : 'Unknown error',
+          variant: 'destructive',
+        });
+      }
+    },
+    [projectsArray, queryClient, toast]
+  );
+
   const handleFileDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setDragOver(false);
@@ -270,15 +349,6 @@ const HomeTemplate: React.FC = () => {
           <h1 className="text-2xl font-medium tracking-tight text-foreground md:text-3xl">
             Datasets
           </h1>
-          <div className="relative w-full sm:w-72">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={searchQ}
-              onChange={e => setSearchQ(e.target.value)}
-              placeholder="Search projects, datasets, analyses…"
-              className="h-9 rounded-full border-border bg-background pl-9 text-[13px] shadow-none"
-            />
-          </div>
         </div>
       </header>
 
@@ -437,7 +507,12 @@ const HomeTemplate: React.FC = () => {
             data={filteredProjects as unknown as Project[]}
             onRowClick={handleProjectSelect}
             onDelete={handleDeleteDataset}
+            onExport={handleExportDataset}
+            onShare={handleShareDataset}
+            onRename={handleRenameDataset}
             deletingId={deletingId}
+            searchQuery={searchQ}
+            onSearchChange={setSearchQ}
             statusFilterFn={statusFilterMatch}
             projectColor={projectColor}
             displayStatus={displayStatus}

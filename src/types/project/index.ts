@@ -69,7 +69,7 @@ export interface Project {
   projectName: string;
   description: string;
   originalName: string;
-  sourceType: 'zip' | 'git' | 'folder';
+  sourceType: 'zip' | 'git' | 'folder' | 'file';
   zipPath?: string;
   extractedPath?: string;
   size: number;

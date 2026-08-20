@@ -80,6 +80,15 @@ export type AnalysisReportChart =
       line: { x0: number; y0: number; x1: number; y1: number };
     } & ChartAxisHints)
   | ({
+      kind: 'step_line';
+      title: string;
+      x_label: string;
+      y_label: string;
+      points: { x: number; y: number; row_index?: number }[];
+      interpolation?: 'step_after';
+      censored?: { x: number; y: number }[];
+    } & ChartAxisHints)
+  | ({
       kind: 'boxplot';
       title: string;
       y_label: string;

@@ -31,10 +31,19 @@ import {
   useReactTable,
   VisibilityState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, ChevronDown, FileText, Filter, Folder, MoreHorizontal } from 'lucide-react';
+import {
+  ArrowUpDown,
+  ChevronDown,
+  FileText,
+  Filter,
+  Folder,
+  MoreHorizontal,
+  Search,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Project, ProjectStatus } from '@/types/project';
 import { cn } from '@/utils';
+import { Input } from '@/components/atoms/input';
 
 type DisplayStatus = 'Active' | 'Completed' | 'Archived';
 
@@ -51,7 +60,12 @@ interface ProjectsTableProps {
   data: Project[];
   onRowClick: (id: string) => void;
   onDelete?: (id: string) => void;
+  onExport?: (id: string) => void;
+  onShare?: (id: string) => void;
+  onRename?: (id: string) => void;
   deletingId?: string | null;
+  searchQuery?: string;
+  onSearchChange?: (value: string) => void;
   statusFilterFn: (project: Project, filter: string) => boolean;
   projectColor: (id: string) => string;
   displayStatus: (status: ProjectStatus) => DisplayStatus;
@@ -87,7 +101,12 @@ export const ProjectsTable = ({
   data,
   onRowClick,
   onDelete,
+  onExport,
+  onShare,
+  onRename,
   deletingId,
+  searchQuery,
+  onSearchChange,
   statusFilterFn,
   projectColor,
   displayStatus,
@@ -274,8 +293,32 @@ export const ProjectsTable = ({
                 Open dataset
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={e => e.stopPropagation()}>Export data</DropdownMenuItem>
-              <DropdownMenuItem onClick={e => e.stopPropagation()}>Share dataset</DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={e => {
+                  e.stopPropagation();
+                  onExport?.(project.projectId);
+                }}
+              >
+                Export data
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={e => {
+                  e.stopPropagation();
+                  onShare?.(project.projectId);
+                }}
+              >
+                Share dataset
+              </DropdownMenuItem>
+              {onRename ? (
+                <DropdownMenuItem
+                  onClick={e => {
+                    e.stopPropagation();
+                    onRename(project.projectId);
+                  }}
+                >
+                  Rename
+                </DropdownMenuItem>
+              ) : null}
               {onDelete ? (
                 <>
                   <DropdownMenuSeparator />
@@ -316,9 +359,22 @@ export const ProjectsTable = ({
     <div className="w-full text-left">
       <div className="overflow-hidden rounded-xl border border-border bg-card">
         <div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-foreground">All datasets</span>
-            <span className="font-mono text-xs text-muted-foreground">{filteredData.length}</span>
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-foreground">All datasets</span>
+              <span className="font-mono text-xs text-muted-foreground">{filteredData.length}</span>
+            </div>
+            {onSearchChange ? (
+              <div className="relative min-w-0 flex-1 sm:max-w-xs">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQuery ?? ''}
+                  onChange={e => onSearchChange(e.target.value)}
+                  placeholder="Search datasets…"
+                  className="h-8 rounded-full border-border bg-background pl-9 text-[13px] shadow-none"
+                />
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap items-center gap-0.5 rounded-full border border-border bg-muted/40 p-0.5">

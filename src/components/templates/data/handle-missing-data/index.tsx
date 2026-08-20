@@ -1,4 +1,4 @@
-import { ReactNode, useState, useEffect, useMemo } from 'react';
+import { ReactNode, useState, useMemo } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -19,10 +19,12 @@ import {
 } from '@/components/atoms/select';
 import { Checkbox } from '@/components/atoms/checkbox';
 import { useRouter } from 'next/navigation';
-import { getAccessToken } from '@/utils/auth';
+import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { imputeDatasetMissing } from '@/lib/dataset-data-ops';
-import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
+import { formatApiErrorMessage } from '@/lib/api-error';
+import { resolveWorkspaceDatasetId, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
+import { useProjectStore } from '@/stores/project-store';
 import { Loader2 as Loader } from 'lucide-react';
 
 type MissingDataMethod =
@@ -48,16 +50,22 @@ interface HandleMissingDataProps {
 
 export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) => {
   const router = useRouter();
-  const token = getAccessToken();
+  const token = getStytchBearerForTensrApi();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [method, setMethod] = useState<MissingDataMethod>('series_mean');
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [customValue, setCustomValue] = useState<string>('');
   const { tabs, activeTabId } = useTabsStore();
+  const fileSystem = useProjectStore(s => s.fileSystem);
+  const currentProject = useProjectStore(s => s.currentProject);
 
   const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
-  const datasetId = getDatasetIdFromTab(activeTab);
+  const datasetId = resolveWorkspaceDatasetId({
+    tab: activeTab,
+    projectId: currentProject?.id,
+    fileSystem,
+  });
 
   const criticalError = useMemo(() => {
     if (!activeTab) return 'Please open a dataset first';
@@ -117,7 +125,12 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
         `/workspace/dataset/${response.dataset_id}?name=${encodeURIComponent(response.original_filename)}`
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to process missing data');
+      const raw = err instanceof Error ? err.message : 'Failed to process missing data';
+      if (/not found/i.test(raw) || /"detail"\s*:\s*"Not Found"/i.test(raw)) {
+        setError('This dataset could not be found. Re-open it from Home and try again.');
+      } else {
+        setError(formatApiErrorMessage(err));
+      }
     } finally {
       setIsLoading(false);
     }

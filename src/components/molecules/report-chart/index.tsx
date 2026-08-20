@@ -36,6 +36,21 @@ function resolveNumericScale(
   return valuesLookLikeDatetime(values) ? 'datetime' : 'linear';
 }
 
+function stepAfterPath(
+  pts: { x: number; y: number }[],
+  sx: (v: number) => number,
+  sy: (v: number) => number
+): string {
+  if (!pts.length) return '';
+  const first = pts[0]!;
+  const parts = [`M ${sx(first.x)} ${sy(first.y)}`];
+  for (let i = 1; i < pts.length; i++) {
+    const p = pts[i]!;
+    parts.push(`H ${sx(p.x)}`, `V ${sy(p.y)}`);
+  }
+  return parts.join(' ');
+}
+
 function formatAxisValue(
   value: number,
   scale: 'linear' | 'datetime',
@@ -272,6 +287,70 @@ function ChartBody({
           yFormatter={v => formatNumberTick(v, ySamples)}
           xAxisLabel={chart.x_label}
           yAxisLabel="Count"
+        />
+      </svg>
+    );
+  }
+
+  if (chart.kind === 'step_line') {
+    const pts = chart.points;
+    const xs = pts.map(p => p.x);
+    const ys = pts.map(p => p.y);
+    let x0 = Math.min(...xs, 0);
+    let x1 = Math.max(...xs);
+    let y0 = Math.min(...ys, 0);
+    let y1 = Math.max(...ys, 1);
+    const padX = (x1 - x0) * 0.04 || 0.5;
+    const padY = (y1 - y0) * 0.08 || 0.05;
+    x0 -= padX;
+    x1 += padX;
+    y0 = Math.min(y0 - padY, 0);
+    y1 += padY;
+    const xScale = resolveNumericScale(chart.x_scale, xs);
+    const yScale = resolveNumericScale(chart.y_scale, ys);
+    const xDates = xs.map(parseAxisDate).filter((d): d is Date => d != null);
+    const layout = baseLayout;
+    const { padL, padT, plotW, plotH } = layout;
+    const sx = scaleLinear(x0, x1, padL, padL + plotW);
+    const sy = scaleLinear(y0, y1, padT + plotH, padT);
+    const xTicks = niceTicks(x0, x1, layout.maxTicksX).map(v => ({ value: v, x: sx(v) }));
+    const yTicks = niceTicks(y0, y1, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
+    const tickH = layout.density === 'comfortable' ? 8 : 6;
+    const censored = chart.censored ?? [];
+
+    return (
+      <svg
+        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        className="h-auto w-full max-w-full"
+        aria-hidden
+      >
+        <ChartTitle layout={layout} title={chart.title} />
+        <path
+          d={stepAfterPath(pts, sx, sy)}
+          className="stroke-violet-600"
+          fill="none"
+          strokeWidth={2}
+          strokeLinejoin="miter"
+        />
+        {censored.map((p, i) => (
+          <line
+            key={`censor-${i}`}
+            x1={sx(p.x)}
+            y1={sy(p.y) - tickH}
+            x2={sx(p.x)}
+            y2={sy(p.y) + tickH}
+            className="stroke-zinc-500"
+            strokeWidth={1.5}
+          />
+        ))}
+        <AxisFrame
+          layout={layout}
+          xTicks={xTicks}
+          yTicks={yTicks}
+          xFormatter={v => formatAxisValue(v, xScale, xs, xDates)}
+          yFormatter={v => formatNumberTick(v, ys)}
+          xAxisLabel={chart.x_label}
+          yAxisLabel={chart.y_label}
         />
       </svg>
     );

@@ -103,6 +103,72 @@ export function buildChartFromDataset(
   const nums = numericColumns(columns, rows);
   const cats = categoricalColumns(columns, rows);
 
+  if (/\bbox\s*plots?\b/i.test(message)) {
+    const num = resolved.find(c => nums.some(x => x.id === c.id)) ?? nums[0];
+    const cat =
+      resolved.find(c => cats.some(x => x.id === c.id) && c.id !== num?.id) ??
+      cats.find(c => c.id !== num?.id);
+    if (num) {
+      const groups: {
+        label: string;
+        min: number;
+        q1: number;
+        median: number;
+        q3: number;
+        max: number;
+      }[] = [];
+      const collect = (label: string, values: number[]) => {
+        if (values.length < 2) return;
+        const s = [...values].sort((a, b) => a - b);
+        const q = (p: number) => {
+          const idx = (s.length - 1) * p;
+          const lo = Math.floor(idx);
+          const hi = Math.ceil(idx);
+          if (lo === hi) return s[lo]!;
+          return s[lo]! + (s[hi]! - s[lo]!) * (idx - lo);
+        };
+        groups.push({
+          label,
+          min: s[0]!,
+          q1: q(0.25),
+          median: q(0.5),
+          q3: q(0.75),
+          max: s[s.length - 1]!,
+        });
+      };
+      if (cat) {
+        const byGroup = new Map<string, number[]>();
+        for (const row of rows) {
+          const label = String(row[cat.id] ?? '').trim();
+          const n = parseNumericCellValue(row[num.id]);
+          if (!label || n === null) continue;
+          const list = byGroup.get(label) ?? [];
+          list.push(n);
+          byGroup.set(label, list);
+        }
+        for (const [label, values] of byGroup) {
+          collect(label, values);
+          if (groups.length >= 12) break;
+        }
+      } else {
+        const values: number[] = [];
+        for (const row of rows) {
+          const n = parseNumericCellValue(row[num.id]);
+          if (n !== null) values.push(n);
+        }
+        collect(num.header, values);
+      }
+      if (groups.length) {
+        return {
+          kind: 'boxplot',
+          title: cat ? `${num.header} by ${cat.header}` : `Boxplot of ${num.header}`,
+          y_label: num.header,
+          groups,
+        };
+      }
+    }
+  }
+
   if (/\bdistribution\b/i.test(message) && resolved.length >= 1) {
     const cat = resolved.find(c => cats.some(x => x.id === c.id)) ?? cats[0];
     const num =

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { devtools } from 'zustand/middleware';
+import { devtools, persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
@@ -101,282 +101,311 @@ function getActiveThread(project: ProjectChats): ChatThread {
   return project.threads[project.activeThreadId] ?? Object.values(project.threads)[0];
 }
 
+function reviveProjects(projects: ChatState['projects'] | undefined): ChatState['projects'] {
+  const out: ChatState['projects'] = {};
+  for (const [projectId, project] of Object.entries(projects ?? {})) {
+    const threads: Record<string, ChatThread> = {};
+    for (const [threadId, thread] of Object.entries(project.threads ?? {})) {
+      threads[threadId] = {
+        ...thread,
+        isLoading: false,
+        error: null,
+        messages: (thread.messages ?? []).map(message => ({
+          ...message,
+          timestamp:
+            message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp),
+        })),
+      };
+    }
+    out[projectId] = { ...project, threads };
+  }
+  return out;
+}
+
 const initialState: ChatState = {
   projects: {},
 };
 
 export const useChatStore = create<ChatStore>()(
-  devtools(
-    (set, get) => ({
-      ...initialState,
+  persist(
+    devtools(
+      (set, get) => ({
+        ...initialState,
 
-      initializeSession: (projectId: string) => {
-        set(state => {
-          if (state.projects[projectId]) return state;
-          const project = ensureProject(state, projectId);
-          return {
-            projects: {
-              ...state.projects,
-              [projectId]: project,
-            },
-          };
-        });
-      },
-
-      createThread: (projectId: string) => {
-        const thread = createEmptyThread();
-        set(state => {
-          const project = ensureProject(state, projectId);
-          return {
-            projects: {
-              ...state.projects,
-              [projectId]: {
-                activeThreadId: thread.id,
-                threads: {
-                  ...project.threads,
-                  [thread.id]: thread,
-                },
+        initializeSession: (projectId: string) => {
+          set(state => {
+            if (state.projects[projectId]) return state;
+            const project = ensureProject(state, projectId);
+            return {
+              projects: {
+                ...state.projects,
+                [projectId]: project,
               },
-            },
-          };
-        });
-        return thread.id;
-      },
-
-      setActiveThread: (projectId: string, threadId: string) => {
-        set(state => {
-          const project = state.projects[projectId];
-          if (!project?.threads[threadId]) return state;
-          return {
-            projects: {
-              ...state.projects,
-              [projectId]: {
-                ...project,
-                activeThreadId: threadId,
-              },
-            },
-          };
-        });
-      },
-
-      closeThread: (projectId: string, threadId: string) => {
-        set(state => {
-          const project = state.projects[projectId];
-          if (!project) return state;
-
-          const ids = Object.keys(project.threads);
-          if (ids.length <= 1) return state;
-
-          const { [threadId]: _removed, ...remaining } = project.threads;
-          const nextIds = Object.keys(remaining);
-          const activeThreadId =
-            project.activeThreadId === threadId ? nextIds[0] : project.activeThreadId;
-
-          return {
-            projects: {
-              ...state.projects,
-              [projectId]: {
-                activeThreadId,
-                threads: remaining,
-              },
-            },
-          };
-        });
-      },
-
-      getThreads: (projectId: string) => {
-        const project = get().projects[projectId];
-        if (!project) return [];
-        return Object.values(project.threads);
-      },
-
-      getActiveThreadId: (projectId: string) => {
-        return get().projects[projectId]?.activeThreadId ?? null;
-      },
-
-      addMessage: (projectId: string, message: Omit<ChatMessage, 'id'>) => {
-        const chatMessage: ChatMessage = {
-          ...message,
-          id: uuidv4(),
-        };
-
-        set(state => {
-          const project = ensureProject(state, projectId);
-          const active = getActiveThread(project);
-          const shouldTitle =
-            message.role === 'user' &&
-            active.title === DEFAULT_THREAD_TITLE &&
-            typeof message.content === 'string';
-
-          const updatedThread: ChatThread = {
-            ...active,
-            messages: [...active.messages, chatMessage],
-            error: null,
-            title: shouldTitle ? threadTitleFromMessage(message.content) : active.title,
-          };
-
-          return {
-            projects: {
-              ...state.projects,
-              [projectId]: {
-                ...project,
-                threads: {
-                  ...project.threads,
-                  [active.id]: updatedThread,
-                },
-              },
-            },
-          };
-        });
-
-        return chatMessage.id;
-      },
-
-      updateMessage: (projectId, messageId, patch) => {
-        set(state => {
-          const project = state.projects[projectId];
-          if (!project) return state;
-          const active = getActiveThread(project);
-          const idx = active.messages.findIndex(m => m.id === messageId);
-          if (idx < 0) return state;
-
-          const nextMessages = [...active.messages];
-          nextMessages[idx] = { ...nextMessages[idx], ...patch };
-
-          return {
-            projects: {
-              ...state.projects,
-              [projectId]: {
-                ...project,
-                threads: {
-                  ...project.threads,
-                  [active.id]: { ...active, messages: nextMessages },
-                },
-              },
-            },
-          };
-        });
-      },
-
-      expirePendingSuggestionCards: (projectId, excludeMessageId) => {
-        set(state => {
-          const project = state.projects[projectId];
-          if (!project) return state;
-          const active = getActiveThread(project);
-          let changed = false;
-          const nextMessages = active.messages.map(m => {
-            if (m.id === excludeMessageId) return m;
-            const pa = m.pendingAction;
-            if (pa?.kind === 'analysis_plan' && pa.status === 'pending') {
-              changed = true;
-              return {
-                ...m,
-                pendingAction: { ...pa, status: 'expired' as const },
-              };
-            }
-            return m;
+            };
           });
-          if (!changed) return state;
-          return {
-            projects: {
-              ...state.projects,
-              [projectId]: {
-                ...project,
-                threads: {
-                  ...project.threads,
-                  [active.id]: { ...active, messages: nextMessages },
-                },
-              },
-            },
-          };
-        });
-      },
+        },
 
-      setLoading: (projectId: string, loading: boolean) => {
-        set(state => {
-          const project = state.projects[projectId];
-          if (!project) return state;
-          const active = getActiveThread(project);
-          return {
-            projects: {
-              ...state.projects,
-              [projectId]: {
-                ...project,
-                threads: {
-                  ...project.threads,
-                  [active.id]: { ...active, isLoading: loading },
-                },
-              },
-            },
-          };
-        });
-      },
-
-      setError: (projectId: string, error: string | null) => {
-        set(state => {
-          const project = state.projects[projectId];
-          if (!project) return state;
-          const active = getActiveThread(project);
-          return {
-            projects: {
-              ...state.projects,
-              [projectId]: {
-                ...project,
-                threads: {
-                  ...project.threads,
-                  [active.id]: { ...active, error, isLoading: false },
-                },
-              },
-            },
-          };
-        });
-      },
-
-      clearMessages: (projectId: string) => {
-        set(state => {
-          const project = state.projects[projectId];
-          if (!project) return state;
-          const active = getActiveThread(project);
-          return {
-            projects: {
-              ...state.projects,
-              [projectId]: {
-                ...project,
-                threads: {
-                  ...project.threads,
-                  [active.id]: {
-                    ...active,
-                    messages: [],
-                    error: null,
-                    title: DEFAULT_THREAD_TITLE,
+        createThread: (projectId: string) => {
+          const thread = createEmptyThread();
+          set(state => {
+            const project = ensureProject(state, projectId);
+            return {
+              projects: {
+                ...state.projects,
+                [projectId]: {
+                  activeThreadId: thread.id,
+                  threads: {
+                    ...project.threads,
+                    [thread.id]: thread,
                   },
                 },
               },
-            },
+            };
+          });
+          return thread.id;
+        },
+
+        setActiveThread: (projectId: string, threadId: string) => {
+          set(state => {
+            const project = state.projects[projectId];
+            if (!project?.threads[threadId]) return state;
+            return {
+              projects: {
+                ...state.projects,
+                [projectId]: {
+                  ...project,
+                  activeThreadId: threadId,
+                },
+              },
+            };
+          });
+        },
+
+        closeThread: (projectId: string, threadId: string) => {
+          set(state => {
+            const project = state.projects[projectId];
+            if (!project) return state;
+
+            const ids = Object.keys(project.threads);
+            if (ids.length <= 1) return state;
+
+            const { [threadId]: _removed, ...remaining } = project.threads;
+            const nextIds = Object.keys(remaining);
+            const activeThreadId =
+              project.activeThreadId === threadId ? nextIds[0] : project.activeThreadId;
+
+            return {
+              projects: {
+                ...state.projects,
+                [projectId]: {
+                  activeThreadId,
+                  threads: remaining,
+                },
+              },
+            };
+          });
+        },
+
+        getThreads: (projectId: string) => {
+          const project = get().projects[projectId];
+          if (!project) return [];
+          return Object.values(project.threads);
+        },
+
+        getActiveThreadId: (projectId: string) => {
+          return get().projects[projectId]?.activeThreadId ?? null;
+        },
+
+        addMessage: (projectId: string, message: Omit<ChatMessage, 'id'>) => {
+          const chatMessage: ChatMessage = {
+            ...message,
+            id: uuidv4(),
           };
-        });
-      },
 
-      getMessages: (projectId: string) => {
-        const project = get().projects[projectId];
-        if (!project) return [];
-        return getActiveThread(project).messages;
-      },
+          set(state => {
+            const project = ensureProject(state, projectId);
+            const active = getActiveThread(project);
+            const shouldTitle =
+              message.role === 'user' &&
+              active.title === DEFAULT_THREAD_TITLE &&
+              typeof message.content === 'string';
 
-      getLoading: (projectId: string) => {
-        const project = get().projects[projectId];
-        if (!project) return false;
-        return getActiveThread(project).isLoading;
-      },
+            const updatedThread: ChatThread = {
+              ...active,
+              messages: [...active.messages, chatMessage],
+              error: null,
+              title: shouldTitle ? threadTitleFromMessage(message.content) : active.title,
+            };
 
-      getError: (projectId: string) => {
-        const project = get().projects[projectId];
-        if (!project) return null;
-        return getActiveThread(project).error;
-      },
-    }),
+            return {
+              projects: {
+                ...state.projects,
+                [projectId]: {
+                  ...project,
+                  threads: {
+                    ...project.threads,
+                    [active.id]: updatedThread,
+                  },
+                },
+              },
+            };
+          });
+
+          return chatMessage.id;
+        },
+
+        updateMessage: (projectId, messageId, patch) => {
+          set(state => {
+            const project = state.projects[projectId];
+            if (!project) return state;
+            const active = getActiveThread(project);
+            const idx = active.messages.findIndex(m => m.id === messageId);
+            if (idx < 0) return state;
+
+            const nextMessages = [...active.messages];
+            nextMessages[idx] = { ...nextMessages[idx], ...patch };
+
+            return {
+              projects: {
+                ...state.projects,
+                [projectId]: {
+                  ...project,
+                  threads: {
+                    ...project.threads,
+                    [active.id]: { ...active, messages: nextMessages },
+                  },
+                },
+              },
+            };
+          });
+        },
+
+        expirePendingSuggestionCards: (projectId, excludeMessageId) => {
+          set(state => {
+            const project = state.projects[projectId];
+            if (!project) return state;
+            const active = getActiveThread(project);
+            let changed = false;
+            const nextMessages = active.messages.map(m => {
+              if (m.id === excludeMessageId) return m;
+              const pa = m.pendingAction;
+              if (pa?.kind === 'analysis_plan' && pa.status === 'pending') {
+                changed = true;
+                return {
+                  ...m,
+                  pendingAction: { ...pa, status: 'expired' as const },
+                };
+              }
+              return m;
+            });
+            if (!changed) return state;
+            return {
+              projects: {
+                ...state.projects,
+                [projectId]: {
+                  ...project,
+                  threads: {
+                    ...project.threads,
+                    [active.id]: { ...active, messages: nextMessages },
+                  },
+                },
+              },
+            };
+          });
+        },
+
+        setLoading: (projectId: string, loading: boolean) => {
+          set(state => {
+            const project = state.projects[projectId];
+            if (!project) return state;
+            const active = getActiveThread(project);
+            return {
+              projects: {
+                ...state.projects,
+                [projectId]: {
+                  ...project,
+                  threads: {
+                    ...project.threads,
+                    [active.id]: { ...active, isLoading: loading },
+                  },
+                },
+              },
+            };
+          });
+        },
+
+        setError: (projectId: string, error: string | null) => {
+          set(state => {
+            const project = state.projects[projectId];
+            if (!project) return state;
+            const active = getActiveThread(project);
+            return {
+              projects: {
+                ...state.projects,
+                [projectId]: {
+                  ...project,
+                  threads: {
+                    ...project.threads,
+                    [active.id]: { ...active, error, isLoading: false },
+                  },
+                },
+              },
+            };
+          });
+        },
+
+        clearMessages: (projectId: string) => {
+          set(state => {
+            const project = state.projects[projectId];
+            if (!project) return state;
+            const active = getActiveThread(project);
+            return {
+              projects: {
+                ...state.projects,
+                [projectId]: {
+                  ...project,
+                  threads: {
+                    ...project.threads,
+                    [active.id]: {
+                      ...active,
+                      messages: [],
+                      error: null,
+                      title: DEFAULT_THREAD_TITLE,
+                    },
+                  },
+                },
+              },
+            };
+          });
+        },
+
+        getMessages: (projectId: string) => {
+          const project = get().projects[projectId];
+          if (!project) return [];
+          return getActiveThread(project).messages;
+        },
+
+        getLoading: (projectId: string) => {
+          const project = get().projects[projectId];
+          if (!project) return false;
+          return getActiveThread(project).isLoading;
+        },
+
+        getError: (projectId: string) => {
+          const project = get().projects[projectId];
+          if (!project) return null;
+          return getActiveThread(project).error;
+        },
+      }),
+      { name: 'chat-store' }
+    ),
     {
-      name: 'chat-store',
+      name: 'tensr-chat-history',
+      partialize: (state: ChatStore) => ({ projects: state.projects }),
+      merge: (persisted, current) => ({
+        ...current,
+        projects: reviveProjects((persisted as ChatState | undefined)?.projects),
+      }),
     }
   )
 );

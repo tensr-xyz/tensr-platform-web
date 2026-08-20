@@ -5,6 +5,27 @@ import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import type { PlaybookProposedAction, PrepPlaybookStep } from '@/lib/chat-pending-action';
 
+function mapDatasetListRow(d: Record<string, unknown>) {
+  const filename = String(d.original_filename || 'Dataset');
+  const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : 'csv';
+  const nRows = Number(d.n_rows) || 0;
+  const nCols = Number(d.n_cols) || 0;
+  const size = Number(d.byte_size) > 0 ? Number(d.byte_size) : Math.max(nRows * nCols * 12, 1);
+  const id = String(d.dataset_id ?? '');
+  return {
+    projectId: id,
+    projectName: filename,
+    id,
+    name: filename,
+    updatedAt: String(d.updated_at ?? ''),
+    createdAt: String(d.updated_at ?? ''),
+    sourceType: 'file' as const,
+    size,
+    status: 'ready' as const,
+    files: [{ path: filename, type: ext, size }],
+  };
+}
+
 /** High-frequency collab/health endpoints — tracking these floods POST /usage/track. */
 function shouldSkipUsageTracking(endpoint: string): boolean {
   const path = endpoint.split('?')[0] || '';
@@ -136,17 +157,7 @@ class ApiClient {
       if (!Array.isArray(rows)) {
         return [];
       }
-      return rows.map((d: Record<string, unknown>) => ({
-        projectId: String(d.dataset_id ?? ''),
-        projectName: String(d.original_filename || 'Dataset'),
-        id: String(d.dataset_id ?? ''),
-        name: String(d.original_filename || 'Dataset'),
-        updatedAt: String(d.updated_at ?? ''),
-        createdAt: String(d.updated_at ?? ''),
-        sourceType: 'folder' as const,
-        size: 0,
-        status: 'ready' as const,
-      }));
+      return rows.map((d: Record<string, unknown>) => mapDatasetListRow(d));
     },
 
     get: async (id: string) => {
@@ -1056,6 +1067,15 @@ class ApiClient {
       this.request<{ deleted: boolean; dataset_id: string }>(`/datasets/${id}`, {
         method: 'DELETE',
       }),
+
+    rename: (id: string, original_filename: string) =>
+      this.request<{ dataset_id: string; original_filename: string }>(`/datasets/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ original_filename }),
+      }),
+
+    exportUrl: (id: string, format: 'csv' | 'json' | 'sav' = 'csv') =>
+      tensrApiUrl(`/datasets/${id}/export?format=${format}`),
 
     get: (id: string) => this.request<any>(`/datasets/${id}`),
 

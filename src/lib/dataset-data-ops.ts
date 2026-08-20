@@ -1,4 +1,5 @@
 import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { formatApiErrorMessage } from '@/lib/api-error';
 
 async function authedJson<T>(
   path: string,
@@ -15,7 +16,7 @@ async function authedJson<T>(
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(text || `Request failed (${res.status})`);
+    throw new Error(formatApiErrorMessage(new Error(text || `Request failed (${res.status})`)));
   }
   return res.json() as Promise<T>;
 }

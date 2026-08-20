@@ -213,7 +213,7 @@ export function AnalysisSetupModal({
                 <SelectTrigger id="decimal-places" className="h-8 w-24">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[250]">
                   {[0, 1, 2, 3, 4, 5].map(n => (
                     <SelectItem key={n} value={String(n)}>
                       {n}
