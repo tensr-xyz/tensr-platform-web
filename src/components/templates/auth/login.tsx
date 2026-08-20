@@ -38,10 +38,15 @@ const LoginTemplate = () => {
   const [verificationCode, setVerificationCode] = useState('');
   const [error, setError] = useState('');
   const [methodId, setMethodId] = useState('');
+  const [isSendingCode, setIsSendingCode] = useState(false);
+  const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGitHubLoading, setIsGitHubLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const hasHandledOAuthRef = useRef(false);
+  // Session bootstrap (`/me`, Stytch init) shares `isLoading` — never use that for
+  // submit labels, or the form looks like it is sending before the user acts.
+  const formBusy = isSendingCode || isVerifyingCode || isGoogleLoading || isGitHubLoading;
 
   // Persist invite token from email links (?invite=...) for accept after sign-in.
   useEffect(() => {
@@ -163,13 +168,13 @@ const LoginTemplate = () => {
       return;
     }
 
-    // Prevent multiple submissions
-    if (isLoading) {
+    if (isSendingCode) {
       return;
     }
 
     try {
       setError('');
+      setIsSendingCode(true);
       const result = await initiateAuth(trimmedEmail.toLowerCase());
 
       if (result && result.methodId) {
@@ -187,6 +192,8 @@ const LoginTemplate = () => {
         err instanceof Error ? err.message : 'Failed to send verification email. Please try again.';
       setError(errorMessage);
       setIsVerifying(false);
+    } finally {
+      setIsSendingCode(false);
     }
   };
 
@@ -205,17 +212,21 @@ const LoginTemplate = () => {
     }
 
     try {
+      setIsVerifyingCode(true);
       const result = await verifyAuth(email, verificationCode, methodId);
 
       if (result.success) {
         // Do not push to /dashboard here — unpaid users must go to /subscription.
         // The authenticated redirect useEffect above routes once profile/entitlements sync.
+        // Leave the button in a verifying state until that redirect runs.
         return;
       }
       setError(result.message || 'Verification failed. Please check your code and try again.');
+      setIsVerifyingCode(false);
     } catch (err) {
       console.error('Failed to verify code:', err);
       setError('Failed to verify code. Please try again.');
+      setIsVerifyingCode(false);
     }
   };
 
@@ -235,6 +246,7 @@ const LoginTemplate = () => {
     }
 
     try {
+      setIsSendingCode(true);
       const result = await resendVerificationCode(email);
       if (result && result.methodId) {
         setMethodId(result.methodId);
@@ -242,6 +254,8 @@ const LoginTemplate = () => {
     } catch (err) {
       console.error('Failed to resend code:', err);
       setError('Failed to resend verification email. Please try again.');
+    } finally {
+      setIsSendingCode(false);
     }
   };
 
@@ -296,7 +310,7 @@ const LoginTemplate = () => {
                     variant="outline"
                     className="w-full h-10 justify-start gap-3"
                     onClick={handleGoogleOAuth}
-                    disabled={isGoogleLoading || isGitHubLoading || isLoading}
+                    disabled={formBusy}
                   >
                     <svg
                       fill="none"
@@ -333,7 +347,7 @@ const LoginTemplate = () => {
                     variant="outline"
                     className="w-full h-10 justify-start gap-3"
                     onClick={handleGitHubOAuth}
-                    disabled={isGoogleLoading || isGitHubLoading || isLoading}
+                    disabled={formBusy}
                   >
                     <svg
                       fill="none"
@@ -378,29 +392,19 @@ const LoginTemplate = () => {
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                       onKeyDown={e => {
-                        if (
-                          e.key === 'Enter' &&
-                          email &&
-                          !isLoading &&
-                          !isGoogleLoading &&
-                          !isGitHubLoading
-                        ) {
+                        if (e.key === 'Enter' && email && !formBusy) {
                           e.preventDefault();
                           handleEmailSubmit();
                         }
                       }}
-                      disabled={isLoading || isGoogleLoading || isGitHubLoading}
+                      disabled={formBusy}
                       autoFocus
                       required
                       className="h-10"
                     />
                   </div>
-                  <Button
-                    type="submit"
-                    disabled={isLoading || isGoogleLoading || isGitHubLoading}
-                    className="w-full h-10"
-                  >
-                    {isLoading ? 'Sending...' : 'Continue'}
+                  <Button type="submit" disabled={formBusy} className="w-full h-10">
+                    {isSendingCode ? 'Sending...' : 'Continue'}
                   </Button>
                 </div>
               </form>
@@ -432,9 +436,9 @@ const LoginTemplate = () => {
                         type="button"
                         onClick={handleResendEmail}
                         className="text-xs text-muted-foreground hover:text-foreground underline"
-                        disabled={isLoading}
+                        disabled={formBusy}
                       >
-                        Resend code
+                        {isSendingCode ? 'Sending...' : 'Resend code'}
                       </button>
                     </div>
                     <div className="relative">
@@ -444,7 +448,7 @@ const LoginTemplate = () => {
                         placeholder="Enter verification code"
                         value={verificationCode}
                         onChange={e => setVerificationCode(e.target.value)}
-                        disabled={isLoading}
+                        disabled={formBusy}
                         autoFocus
                         required
                         className="h-10 pr-10"
@@ -454,8 +458,8 @@ const LoginTemplate = () => {
                     </div>
                   </div>
 
-                  <Button type="submit" disabled={isLoading} className="w-full h-10">
-                    {isLoading ? 'Verifying...' : 'Sign in'}
+                  <Button type="submit" disabled={formBusy} className="w-full h-10">
+                    {isVerifyingCode ? 'Verifying...' : 'Sign in'}
                   </Button>
                 </form>
 
