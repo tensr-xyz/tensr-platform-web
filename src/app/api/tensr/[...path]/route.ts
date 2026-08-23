@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTensrApiBaseUrl, isRemoteTensrApi } from '@/lib/tensr-api-url';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+import { buildTensrProxyTargetUrl } from '@/lib/tensr-proxy-target-url';
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -13,14 +14,7 @@ const HOP_BY_HOP_HEADERS = new Set([
 ]);
 
 function buildTargetUrl(pathSegments: string[], search: string): string {
-  const base = getTensrApiBaseUrl().replace(/\/$/, '');
-  const joined = pathSegments.join('/');
-  let target = isRemoteTensrApi(base) ? `${base}/api/${joined}` : `${base}/${joined}`;
-  // FastAPI list routes are registered as `/datasets/` (trailing slash).
-  if (/^datasets$/i.test(joined)) {
-    target = `${target}/`;
-  }
-  return search ? `${target}${search}` : target;
+  return buildTensrProxyTargetUrl(pathSegments, search, getTensrApiBaseUrl());
 }
 
 function isStreamingProxyPath(pathSegments: string[]): boolean {
