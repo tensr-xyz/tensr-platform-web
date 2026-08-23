@@ -111,7 +111,7 @@ export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
   decision_tree: 'Decision Tree Classification',
   linear_regression: 'Linear Regression',
   logistic_regression: 'Binary Logistic Regression',
-  chi_square: 'Chi-square',
+  chi_square: 'Crosstabs',
   shapiro_wilk: 'Shapiro–Wilk Test',
   sign_test: 'Sign Test',
   probit_regression: 'Probit Regression',

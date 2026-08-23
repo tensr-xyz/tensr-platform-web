@@ -50,7 +50,7 @@ const PALETTE_MENU_KEYS = ACTIVE_PALETTE_TABS;
 const PREFERRED_MENU_NAME_FOR_OP: Partial<Record<AnalysisKey, string>> = {
   descriptives: 'Descriptives',
   correlation: 'Bivariate Correlations',
-  chi_square: 'Chi-square',
+  chi_square: 'Crosstabs',
   linear_regression: 'Linear Regression',
   logistic_regression: 'Binary Logistic Regression',
   partial_correlation: 'Partial Correlation',

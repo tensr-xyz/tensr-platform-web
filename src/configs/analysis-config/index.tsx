@@ -98,7 +98,6 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'Bivariate Correlations': CorrelationLauncher,
   'Binary Logistic Regression': LogisticRegLauncher,
   Crosstabs: ChiSquareLauncher,
-  'Chi-square': ChiSquareLauncher,
   'Chi-Square Test': ChiSquareLauncher,
   Explore: DescriptivesLauncher,
   'Ratio Statistics': DescriptivesLauncher,
