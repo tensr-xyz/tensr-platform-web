@@ -25,7 +25,8 @@ function buildTargetUrl(pathSegments: string[], search: string): string {
 
 function isStreamingProxyPath(pathSegments: string[]): boolean {
   const joined = pathSegments.join('/').toLowerCase();
-  return joined.includes('/analyze/') && joined.endsWith('/stream');
+  if (joined.includes('/analyze/') && joined.endsWith('/stream')) return true;
+  return joined.endsWith('assistant/agent-loop/stream') || joined.endsWith('agent-loop/stream');
 }
 
 function forwardResponseHeaders(from: Headers): Headers {
@@ -131,6 +132,8 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
 }
 
 export const dynamic = 'force-dynamic';
+/** Stay above the 29s API Gateway cap so Vercel does not 500 first. */
+export const maxDuration = 60;
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 

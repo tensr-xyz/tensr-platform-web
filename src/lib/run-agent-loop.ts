@@ -1,5 +1,5 @@
-import { apiClient } from '@/lib/api-client';
 import { ApiRequestError } from '@/lib/api-error';
+import { streamAgentLoop } from '@/lib/stream-agent-loop';
 import { chartFromAnalysisEnvelope } from '@/lib/agent-chart-from-dataset';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import type { AgentMode } from '@/stores/agent-mode-store';
@@ -12,7 +12,7 @@ import type {
 } from '@/lib/chat-pending-action';
 import type { ChatMessage } from '@/stores/chat-store';
 
-const RETRYABLE_AGENT_LOOP_STATUSES = new Set([502, 503, 504]);
+const RETRYABLE_AGENT_LOOP_STATUSES = new Set([502, 503]);
 
 export type AgentLoopOpenDataset = {
   dataset_id: string;
@@ -67,6 +67,7 @@ export type RunAgentLoopParams = {
   approvedToolCall?: AgentLoopApprovedToolCall | null;
   /** Full Plan-mode pipeline from a single approval. */
   approvedToolCalls?: AgentLoopApprovedToolCall[] | null;
+  onProgress?: (progress: { type: string; step: string; message: string }) => void;
 };
 
 export function collectOpenDatasetsFromTabs(tabs: Tab[]): AgentLoopOpenDataset[] {
@@ -93,16 +94,19 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      return await apiClient.assistant.agentLoop({
-        message: params.message,
-        mode: params.mode,
-        datasetId: params.datasetId ?? null,
-        openDatasets: params.openDatasets ?? [],
-        conversationHistory: params.conversationHistory ?? [],
-        glossary: params.glossary ?? null,
-        approvedToolCall: params.approvedToolCall ?? null,
-        approvedToolCalls: params.approvedToolCalls ?? null,
-      });
+      return await streamAgentLoop(
+        {
+          message: params.message,
+          mode: params.mode,
+          datasetId: params.datasetId ?? null,
+          openDatasets: params.openDatasets ?? [],
+          conversationHistory: params.conversationHistory ?? [],
+          glossary: params.glossary ?? null,
+          approvedToolCall: params.approvedToolCall ?? null,
+          approvedToolCalls: params.approvedToolCalls ?? null,
+        },
+        { onProgress: params.onProgress }
+      );
     } catch (error) {
       lastError = error;
       const status = error instanceof ApiRequestError ? error.status : 0;

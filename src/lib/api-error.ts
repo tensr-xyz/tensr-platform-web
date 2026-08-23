@@ -30,6 +30,9 @@ export function formatApiErrorMessage(error: unknown): string {
         if (d.error && ASSISTANT_ERROR_MESSAGES[d.error]) {
           return ASSISTANT_ERROR_MESSAGES[d.error];
         }
+        if (d.error === 'agent_loop_timeout' && typeof d.message === 'string' && d.message.trim()) {
+          return d.message;
+        }
         if (typeof d.message === 'string' && d.message.trim()) {
           return d.message;
         }

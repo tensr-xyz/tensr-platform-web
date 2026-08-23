@@ -494,6 +494,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           glossary: projectGlossary,
           approvedToolCall: opts.approvedToolCall ?? null,
           approvedToolCalls: opts.approvedToolCalls ?? null,
+          onProgress: progress => {
+            updateMessage(projectId, assistantMessageId, {
+              content: progress.message,
+              isStreaming: true,
+            });
+          },
         });
 
         const triggerMessage = opts.triggerMessage ?? opts.message;

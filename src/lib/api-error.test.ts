@@ -16,4 +16,11 @@ describe('formatApiErrorMessage', () => {
   it('handles plain errors', () => {
     expect(formatApiErrorMessage(new Error('Network failed'))).toBe('Network failed');
   });
+
+  it('uses agent_loop_timeout detail message', () => {
+    const err = new Error(
+      'API Error: 504 - {"detail":{"error":"agent_loop_timeout","message":"This request hit the server time limit."}}'
+    );
+    expect(formatApiErrorMessage(err)).toBe('This request hit the server time limit.');
+  });
 });
