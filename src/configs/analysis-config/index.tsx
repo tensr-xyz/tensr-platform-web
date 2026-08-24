@@ -135,8 +135,6 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'Independent Samples T-Test': IndependentTLauncher,
   'Paired Samples T-Test': PairedTLauncher,
   'Friedman Test': L('friedman'),
-  'Sign Test': L('sign_test'),
-  'Runs Test': L('runs_test'),
   'Kolmogorov-Smirnov': L('kolmogorov_smirnov'),
 
   // Advanced Analytics
