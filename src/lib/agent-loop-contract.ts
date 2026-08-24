@@ -105,8 +105,8 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     prompt: 'Could you provide a boxplot for utilisation_rate',
     mode: 'agent',
     expected: 'run_analysis',
-    baselineGate: 'menu-dialog',
-    description: 'Menu label Boxplot steals before Gate 2',
+    baselineGate: 'data-intent',
+    description: 'Inline chart routing skips the Boxplot menu dialog',
   },
   {
     prompt: 'Run a data quality scan',

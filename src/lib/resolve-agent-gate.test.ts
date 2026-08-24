@@ -35,8 +35,8 @@ describe('resolveGateInOrder — baseline cascade (before agent-loop rewrite)', 
         'What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate',
       gate: 'data-intent',
     },
-    // Menu label "Boxplot" steals before Gate 2 chart bucket
-    { prompt: 'Could you provide a boxplot for utilisation_rate', gate: 'menu-dialog' },
+    // Inline chart routing skips the Boxplot menu dialog
+    { prompt: 'Could you provide a boxplot for utilisation_rate', gate: 'data-intent' },
     { prompt: 'one-way ANOVA', gate: 'menu-analysis' },
   ];
 
