@@ -29,7 +29,7 @@ const ANALYZE_MENU_LABELS = [
   'Bivariate Correlations',
   'Linear Regression',
   'Binary Logistic Regression',
-  'Crosstabs',
+  'Chi-square',
   'Wilcoxon Signed-Rank',
   'Friedman Test',
   'Kolmogorov-Smirnov',

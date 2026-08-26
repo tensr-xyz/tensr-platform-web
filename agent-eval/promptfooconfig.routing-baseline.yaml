@@ -38,8 +38,8 @@ tests:
     assert: [{ type: equals, value: "menu-analysis" }]
 
   - vars: { prompt: "Could you provide a boxplot for utilisation_rate" }
-    assert: [{ type: equals, value: "menu-dialog" }]
-    description: "Menu label Boxplot steals before Gate 2"
+    assert: [{ type: equals, value: "data-intent" }]
+    description: "Inline chart routing skips the Boxplot menu dialog"
 
   - vars: { prompt: "Run a data quality scan" }
     assert: [{ type: equals, value: "menu-dialog" }]
