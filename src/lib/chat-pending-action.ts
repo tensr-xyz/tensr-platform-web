@@ -104,7 +104,9 @@ export type ChatPendingAction =
         rationale?: string;
         why_this_test?: string;
         confidence?: number;
+        coverage_line?: string;
       }>;
+      coverageLine?: string;
     }
   | {
       kind: 'proposed_action';
@@ -113,6 +115,7 @@ export type ChatPendingAction =
       summaryText?: string;
       proposedAction: PlaybookProposedAction;
       errorMessage?: string;
+      coverageLine?: string;
     };
 
 const PLANNER_TYPE_TO_OP: Record<string, AnalysisKey> = {

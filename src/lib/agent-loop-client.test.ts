@@ -159,6 +159,34 @@ describe('run-agent-loop client helpers', () => {
     }
   });
 
+  it('copies recode coverage_line onto the approval card payload', () => {
+    const response: AgentLoopResponse = {
+      status: 'awaiting_approval',
+      mode: 'plan',
+      answer_markdown: 'Plan: recode Pos',
+      pending_approvals: [
+        {
+          tool_call_id: 'call_recode',
+          name: 'data_edit',
+          args: { operation: 'recode' },
+          rationale: 'Collapse Pos into PosGroup',
+          why_this_test: 'Two role groups for ANOVA',
+          coverage_line: '1 value not covered: SF-PF (1 row)',
+        },
+      ],
+    };
+
+    const patch = deriveMessageUpdateFromLoopResponse(response, {
+      triggerMessage: 'recode Pos then ANOVA',
+      datasetId: '11111111-1111-4111-8111-111111111111',
+    });
+
+    expect(patch.pendingAction?.kind).toBe('agent_tool_approval');
+    if (patch.pendingAction?.kind === 'agent_tool_approval') {
+      expect(patch.pendingAction.coverageLine).toBe('1 value not covered: SF-PF (1 row)');
+    }
+  });
+
   it('chartsFromToolResults collects chart payloads', () => {
     const charts = chartsFromToolResults([
       {

@@ -42,6 +42,7 @@ import {
   TooltipTrigger,
 } from '@/components/atoms/tooltip';
 import { cn } from '@/utils';
+import { adoptDerivedDataset, type DerivedDatasetPayload } from '@/lib/adopt-derived-dataset';
 import { getDatasetIdFromTab, resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { dispatchApplyColumnFilters } from '@/lib/spreadsheet-commands';
@@ -1210,7 +1211,17 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           pendingAction: { ...action, status: 'accepted' },
         });
         if (derivedId && derivedId !== workspaceDatasetId) {
-          router.push(`/workspace/dataset/${derivedId}`);
+          const adopted = adoptDerivedDataset({
+            dataset_id: derivedId,
+            original_filename:
+              typeof result.original_filename === 'string' ? result.original_filename : undefined,
+            n_rows: typeof result.n_rows === 'number' ? result.n_rows : undefined,
+            n_cols: typeof result.n_cols === 'number' ? result.n_cols : undefined,
+            preview: result.preview as DerivedDatasetPayload['preview'],
+          });
+          if (!adopted) {
+            router.push(`/workspace/dataset/${derivedId}`);
+          }
         }
       } catch (err: unknown) {
         updateMessage(projectId, messageId, {

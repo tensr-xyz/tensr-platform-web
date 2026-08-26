@@ -19,16 +19,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
-import { useRouter } from 'next/navigation';
 import { getAccessToken } from '@/utils/auth';
 import { recodeDatasetColumn } from '@/lib/dataset-data-ops';
+import { adoptDerivedDataset } from '@/lib/adopt-derived-dataset';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
 
 type MappingRow = { from: string; to: string };
 
 export function RecodeVariablesDialog({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const token = getAccessToken();
   const { tabs, activeTabId } = useTabsStore();
   const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId), [tabs, activeTabId]);
@@ -39,6 +38,7 @@ export function RecodeVariablesDialog({ children }: { children: ReactNode }) {
   const [mappings, setMappings] = useState<MappingRow[]>([{ from: '', to: '' }]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   const columns = useMemo(() => {
     if (!activeTab?.data?.initialColumns) return [];
@@ -82,9 +82,8 @@ export function RecodeVariablesDialog({ children }: { children: ReactNode }) {
         },
         token
       );
-      router.push(
-        `/workspace/dataset/${res.dataset_id}?name=${encodeURIComponent(res.original_filename)}`
-      );
+      adoptDerivedDataset(res);
+      setOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Recode failed');
     } finally {
@@ -93,7 +92,7 @@ export function RecodeVariablesDialog({ children }: { children: ReactNode }) {
   };
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
         <DialogHeader>

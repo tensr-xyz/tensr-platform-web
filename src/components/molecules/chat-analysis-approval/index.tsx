@@ -59,6 +59,24 @@ function actionSubtitle(action: ChatPendingAction): string | null {
   return ANALYSIS_LABELS[action.op] ?? null;
 }
 
+function actionCoverageLines(action: ChatPendingAction): string[] {
+  const lines: string[] = [];
+  const push = (line?: string) => {
+    const t = line?.trim();
+    if (t && !lines.includes(t)) lines.push(t);
+  };
+  if (action.kind === 'agent_tool_approval') {
+    push(action.coverageLine);
+    for (const step of action.pipelineSteps ?? []) {
+      push(step.coverage_line);
+    }
+  }
+  if (action.kind === 'proposed_action') {
+    push(action.coverageLine);
+  }
+  return lines;
+}
+
 function acceptLabel(status: ChatPendingAction['status'], kind: ChatPendingAction['kind']): string {
   if (status === 'planning') return 'Planning…';
   if (status === 'running') return 'Running…';
@@ -179,6 +197,12 @@ export function ChatAnalysisApproval({
             {action.whyThisTest}
           </p>
         ) : null}
+        {actionCoverageLines(action).map(line => (
+          <p key={line} className="mt-1 text-[11px] leading-snug text-muted-foreground">
+            <span className="font-medium text-foreground">Coverage: </span>
+            {line}
+          </p>
+        ))}
         {isFailed && action.errorMessage ? (
           <p className="mt-2 text-[11px] leading-snug text-destructive">{action.errorMessage}</p>
         ) : null}

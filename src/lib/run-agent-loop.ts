@@ -27,6 +27,7 @@ export type AgentLoopApprovedToolCall = {
   rationale?: string;
   why_this_test?: string;
   confidence?: number;
+  coverage_line?: string;
 };
 
 export type AgentLoopToolResult = {
@@ -201,6 +202,7 @@ function pendingActionFromDataEditResult(
     title: String(result.operation ?? 'Dataset change'),
     summaryText: result.answer_markdown ? String(result.answer_markdown) : undefined,
     proposedAction: proposed,
+    coverageLine: typeof result.coverage_line === 'string' ? result.coverage_line : undefined,
   };
 }
 
@@ -250,6 +252,7 @@ export function deriveMessageUpdateFromLoopResponse(
           rationale: primary.rationale,
           whyThisTest: primary.why_this_test,
           triggerMessage: context.triggerMessage,
+          coverageLine: primary.coverage_line,
           pipelineSteps: approvals.length > 1 ? approvals : undefined,
         },
       };

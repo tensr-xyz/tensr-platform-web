@@ -536,7 +536,7 @@ const TabManager: React.FC<TabManagerProps> = ({
   const renderSpreadsheetContent = (tab: SpreadsheetTab) => (
     <div className="h-full">
       <Spreadsheet
-        key={`${tab.id}-${spreadsheetVersion}`}
+        key={`${tab.id}-${String(tab.data.datasetId ?? tab.data.filePath ?? '')}-${spreadsheetVersion}`}
         initialData={tab.data.initialData ?? []}
         initialColumns={tab.data.initialColumns ?? []}
         columnStats={tab.data.columnStats ?? {}}

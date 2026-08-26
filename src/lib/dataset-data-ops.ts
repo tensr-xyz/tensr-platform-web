@@ -106,6 +106,8 @@ export function recodeDatasetColumn(
     mappings: { from_value: string; to_value: string }[];
     replace_existing: boolean;
     target_column?: string;
+    unmapped_policy?: 'missing' | 'copy' | 'other';
+    unmapped_other?: string;
   },
   token?: string | null
 ) {
