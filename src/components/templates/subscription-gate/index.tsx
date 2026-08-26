@@ -1,10 +1,12 @@
 'use client';
 
-import { Suspense, useEffect, useRef } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Loading from '@/components/molecules/loading';
+import { Button } from '@/components/atoms/button';
 import { useAuth } from '@/hooks/api/use-auth';
 import { fetchMeProfile } from '@/lib/business-api';
+import { redirectToLogin } from '@/lib/session-expired';
 import {
   entitlementsResolved,
   hasActiveSubscription,
@@ -20,6 +22,33 @@ export function SubscriptionGate({ children }: { children: React.ReactNode }) {
   );
 }
 
+function ProfileLoadError({
+  detail,
+  onRetry,
+  onSignIn,
+}: {
+  detail: string;
+  onRetry: () => void;
+  onSignIn: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex min-h-dvh w-full flex-col items-center justify-center gap-4 bg-background px-6">
+      <h1 className="text-base font-medium">Could not load your profile</h1>
+      <p className="max-w-md text-center text-sm text-muted-foreground">
+        {detail || 'The server returned an error. Retry, or sign in again if your session expired.'}
+      </p>
+      <div className="flex gap-2">
+        <Button type="button" onClick={onRetry}>
+          Try again
+        </Button>
+        <Button type="button" variant="outline" onClick={onSignIn}>
+          Sign in again
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -28,10 +57,15 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
   const setEntitlements = useAuthStore(state => state.setEntitlements);
   const pollingRef = useRef(false);
   const verifyingRef = useRef(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [retryNonce, setRetryNonce] = useState(0);
 
   useEffect(() => {
     if (!isAuthReady || isLoading) return;
-    if (isSubscribed) return;
+    if (isSubscribed) {
+      setProfileError(null);
+      return;
+    }
 
     let cancelled = false;
 
@@ -60,6 +94,7 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
           setEntitlements(profile.entitlements);
           if (hasActiveSubscription(profile.entitlements)) {
             pollingRef.current = false;
+            setProfileError(null);
             return;
           }
         } catch {
@@ -94,6 +129,7 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
       try {
         const profile = await fetchMeProfile();
         if (cancelled) return;
+        setProfileError(null);
         setEntitlements(profile.entitlements);
         if (hasActiveSubscription(profile.entitlements)) {
           return;
@@ -106,13 +142,16 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
         if (entitlementsResolved(profile.entitlements)) {
           redirectUnpaid();
         }
-      } catch {
+      } catch (err) {
         if (cancelled) return;
-        // Profile fetch failed: do not replace-loop on stale null entitlements.
-        // Keep showing the loading gate; AuthProvider / retry will recover.
+        // Do not replace-loop on stale null entitlements. A persistent /me 500
+        // is not a missing subscription and is not a 401 — surface it instead
+        // of spinning forever.
         if (checkoutSuccess) {
           pollAfterCheckout();
+          return;
         }
+        setProfileError(err instanceof Error ? err.message : 'Could not load your profile');
       } finally {
         verifyingRef.current = false;
       }
@@ -123,9 +162,36 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [isSubscribed, isAuthReady, isLoading, pathname, router, searchParams, setEntitlements]);
+  }, [
+    isSubscribed,
+    isAuthReady,
+    isLoading,
+    pathname,
+    router,
+    searchParams,
+    setEntitlements,
+    retryNonce,
+  ]);
 
-  if (!isAuthReady || isLoading || !isSubscribed) {
+  if (!isAuthReady || isLoading) {
+    return <Loading fullScreen />;
+  }
+
+  if (profileError && !isSubscribed) {
+    return (
+      <ProfileLoadError
+        detail={profileError}
+        onRetry={() => {
+          verifyingRef.current = false;
+          setProfileError(null);
+          setRetryNonce(n => n + 1);
+        }}
+        onSignIn={() => redirectToLogin()}
+      />
+    );
+  }
+
+  if (!isSubscribed) {
     return <Loading fullScreen />;
   }
 

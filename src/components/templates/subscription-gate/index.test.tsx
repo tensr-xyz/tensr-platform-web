@@ -1,10 +1,11 @@
 import React from 'react';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { SubscriptionGate } from './index';
 
 const mockReplace = jest.fn();
 const mockFetchMeProfile = jest.fn();
 const mockSetEntitlements = jest.fn();
+const mockRedirectToLogin = jest.fn();
 
 let authState = {
   isAuthReady: true,
@@ -29,6 +30,10 @@ jest.mock('@/lib/business-api', () => ({
 jest.mock('@/stores/auth-store', () => ({
   useAuthStore: (selector: (s: { setEntitlements: typeof mockSetEntitlements }) => unknown) =>
     selector({ setEntitlements: mockSetEntitlements }),
+}));
+
+jest.mock('@/lib/session-expired', () => ({
+  redirectToLogin: (...args: unknown[]) => mockRedirectToLogin(...args),
 }));
 
 jest.mock('@/components/molecules/loading', () => ({
@@ -118,5 +123,67 @@ describe('SubscriptionGate', () => {
       expect(mockFetchMeProfile).toHaveBeenCalled();
     });
     expect(mockReplace).not.toHaveBeenCalled();
+  });
+
+  it('shows a retryable error instead of an infinite spinner when /api/me 500s', async () => {
+    mockFetchMeProfile.mockRejectedValue(new Error('Internal Server Error'));
+
+    render(
+      <SubscriptionGate>
+        <div>app</div>
+      </SubscriptionGate>
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: /could not load your profile/i })
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('loading')).not.toBeInTheDocument();
+    expect(mockReplace).not.toHaveBeenCalled();
+    expect(mockRedirectToLogin).not.toHaveBeenCalled();
+  });
+
+  it('retries /api/me from the profile error screen', async () => {
+    mockFetchMeProfile
+      .mockRejectedValueOnce(new Error('Internal Server Error'))
+      .mockResolvedValueOnce({
+        user: { userId: 'u1' },
+        entitlements: proEntitlements,
+        subscription: { status: 'active', plan_code: 'pro' },
+      });
+
+    render(
+      <SubscriptionGate>
+        <div>app</div>
+      </SubscriptionGate>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+
+    await waitFor(() => {
+      expect(mockSetEntitlements).toHaveBeenCalledWith(proEntitlements);
+    });
+  });
+
+  it('lets the user sign in again from the profile error screen', async () => {
+    mockFetchMeProfile.mockRejectedValue(new Error('Internal Server Error'));
+
+    render(
+      <SubscriptionGate>
+        <div>app</div>
+      </SubscriptionGate>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /sign in again/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /sign in again/i }));
+    expect(mockRedirectToLogin).toHaveBeenCalled();
   });
 });

@@ -57,7 +57,8 @@ function isAuthFetchFailure(err: unknown): boolean {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const stytch = useStytch();
   const { session, isInitialized } = useStytchSession();
-  const { setUser, setEntitlements, setSession, setLoading, setInitialized } = useAuthStore();
+  const { setUser, setEntitlements, setSession, setLoading, setInitialized, setError } =
+    useAuthStore();
 
   // Whenever the SDK has tokens, mirror them to localStorage + cookies (not just memory).
   useEffect(() => {
@@ -103,6 +104,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       void fetchMeProfile()
         .then(profile => {
           if (cancelled) return;
+          setError(null);
           setUser(profile.user);
           setEntitlements(profile.entitlements);
           // Tie anonymous PostHog sessions to this user on OAuth + hard refresh.
@@ -143,6 +145,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               );
               return;
             }
+            setError(err instanceof Error ? err.message : String(err));
             setLoading(false);
             authTrace('AuthProvider:ready-without-profile');
             return;
@@ -221,6 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setSession,
     setLoading,
     setInitialized,
+    setError,
   ]);
 
   return children;
