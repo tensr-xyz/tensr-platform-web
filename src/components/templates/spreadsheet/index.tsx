@@ -72,6 +72,12 @@ import { CategoryCleaner, CategoryMapping } from '@/components/molecules/categor
 import { FillHandle } from '@/components/molecules/fill-handle';
 import { useSheetState } from '@/hooks/ui/use-sheet-state';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import {
+  shouldClearAttemptOnPathChange,
+  shouldClearAttemptOnShowStats,
+  shouldKeepAttemptAfterFetchSettled,
+  shouldLoadColumnStats,
+} from '@/lib/column-stats-load-policy';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { getDatasetIdFromPath } from '@/lib/workspace-dataset';
 import { deriveLiveSheetId } from '@/lib/collaboration-sheet';
@@ -614,7 +620,9 @@ export function Spreadsheet({
   useEffect(() => {
     if (filePath) {
       setLocalColumnStats(undefined);
-      statsLoadAttempted.current = false;
+      if (shouldClearAttemptOnPathChange()) {
+        statsLoadAttempted.current = false;
+      }
     }
   }, [filePath]);
 
@@ -949,7 +957,7 @@ export function Spreadsheet({
         }
       }
     } catch {
-      statsLoadAttempted.current = false;
+      statsLoadAttempted.current = shouldKeepAttemptAfterFetchSettled();
     } finally {
       setIsLoadingStats(false);
     }
@@ -957,7 +965,15 @@ export function Spreadsheet({
 
   useEffect(() => {
     const statsPath = gridDatasetId ?? decodedFilePath;
-    if (statsPath && !hasUsableColumnStats && !isLoadingStats && !isProjectFile) {
+    if (
+      shouldLoadColumnStats({
+        hasPath: !!statsPath,
+        isProjectFile,
+        hasUsableStats: hasUsableColumnStats,
+        isLoading: isLoadingStats,
+        attempted: statsLoadAttempted.current,
+      })
+    ) {
       loadColumnStats();
     }
   }, [
@@ -972,7 +988,9 @@ export function Spreadsheet({
   useEffect(() => {
     const statsPath = gridDatasetId ?? decodedFilePath;
     if (showStats && statsPath && !localColumnStats && !isLoadingStats && !isProjectFile) {
-      statsLoadAttempted.current = false;
+      if (shouldClearAttemptOnShowStats()) {
+        statsLoadAttempted.current = false;
+      }
       loadColumnStats();
     }
   }, [
