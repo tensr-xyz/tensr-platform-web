@@ -187,7 +187,7 @@ export type AnalysisReport = {
   case_exclusion_note?: string;
   analysis_log?: string;
   spss_syntax?: string;
-  reproducibility?: { r_script?: string };
+  reproducibility?: { r_script?: string; spss_syntax?: string };
 };
 
 export type AnalyzeResponse = {

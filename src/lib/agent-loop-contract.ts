@@ -181,6 +181,23 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     expected: 'plan-awaiting-approval',
   },
   { prompt: 'geometric mean of Revenue', mode: 'agent', expected: 'refuse-or-clarify' },
+  {
+    prompt: 'run a mixed model on my dataset',
+    mode: 'agent',
+    expected: 'run_analysis',
+    baselineGate: 'menu-analysis',
+  },
+  {
+    prompt: 'run a mixed model on my dataset',
+    mode: 'plan',
+    expected: 'plan-awaiting-approval',
+  },
+  {
+    prompt: 'GEE for clustered pass fail',
+    mode: 'agent',
+    expected: 'run_analysis',
+    baselineGate: 'menu-analysis',
+  },
 ];
 
 /**

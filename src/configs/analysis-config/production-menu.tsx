@@ -78,7 +78,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Kolmogorov-Smirnov',
         "Cochran's Q",
       ],
-      Reliability: ['Reliability Analysis'],
+      Reliability: ['Reliability Analysis', 'Reliability'],
       Scale: ["Fleiss' Kappa", 'Weighted Kappa', "Kendall's W"],
       Correlate: [
         'Bivariate Correlations',
@@ -96,7 +96,9 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       'General Linear Model': [
         'Two-Way ANOVA',
         'Repeated Measures ANOVA',
+        'RM ANOVA',
         'Mixed ANOVA',
+        'Mixed between/within ANOVA',
         'Multivariate ANOVA',
         'ANCOVA',
       ],
@@ -121,6 +123,8 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Relative Risk',
       ],
       Loglinear: ['Loglinear Analysis'],
+      Network: ['Network'],
+      Text: ['Open-text coding'],
     },
   },
   visualization: {
@@ -153,9 +157,11 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
     icon: <Calculator className="h-4 w-4" />,
     sections: {
       'Mixed Models': [
+        'Mixed Model',
         'Linear Mixed Model (LMM)',
         'Generalized Linear Mixed Model (GLMM)',
         'Multilevel Modelling (HLM)',
+        'GEE (clustered binary)',
       ],
       'Latent Structure': ['Latent Class Analysis (LCA, unvalidated)'],
       'Factor & SEM': ['Confirmatory Factor Analysis (CFA)', 'Structural Equation Modelling (SEM)'],
@@ -232,5 +238,12 @@ export const PRODUCTION_ANALYSIS_LABELS: Record<
   'Loglinear Analysis': 'loglinear',
   'Hierarchical Multiple Regression': 'hierarchical_regression',
   'Mixed ANOVA': 'anova_mixed',
+  'Mixed between/within ANOVA': 'mixed_anova',
   'Moderation Analysis': 'moderation_analysis',
+  'Mixed Model': 'mixed_model',
+  'GEE (clustered binary)': 'gee',
+  Reliability: 'reliability',
+  'RM ANOVA': 'rm_anova',
+  Network: 'network',
+  'Open-text coding': 'code_open_text',
 };

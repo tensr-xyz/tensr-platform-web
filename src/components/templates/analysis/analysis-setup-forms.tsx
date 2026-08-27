@@ -581,6 +581,14 @@ function RegressionVariablesTab({
           errors={errors[WIZARD_FIELD.independentCols]}
         />
       </div>
+      <ColumnSelect
+        label="Cluster groups (optional — cluster-robust SEs)"
+        value={form.clusterByCol}
+        onChange={clusterByCol => setForm(f => ({ ...f, clusterByCol }))}
+        schema={schema}
+        names={allNames}
+        expectedType="categorical"
+      />
     </div>
   );
 }
@@ -1513,8 +1521,28 @@ export function MixedModelForm({ form, setForm, schema, allNames, errors }: Form
         schema={schema}
         filterSlot="numeric"
         showTypeShortcuts
-        minSelected={1}
+        minSelected={0}
         errors={errors[WIZARD_FIELD.independentCols]}
+      />
+      <FormSectionLabel>
+        Random slopes (optional — leave empty for random intercept only)
+      </FormSectionLabel>
+      <MultiColumnPicker
+        selected={form.randomSlopeCols}
+        onChange={randomSlopeCols => setForm(f => ({ ...f, randomSlopeCols }))}
+        schema={schema}
+        filterSlot="numeric"
+        showTypeShortcuts
+        minSelected={0}
+      />
+      <PillToggle
+        value={form.reml ? 'reml' : 'ml'}
+        onChange={v => setForm(f => ({ ...f, reml: v === 'reml' }))}
+        options={[
+          { value: 'reml', label: 'REML' },
+          { value: 'ml', label: 'ML' },
+        ]}
+        aria-label="Estimation method"
       />
     </section>
   );
@@ -2023,7 +2051,20 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'nelson_aalen':
       return <NelsonAalenForm {...props} />;
     case 'linear_mixed_model':
+    case 'mixed_model':
       return <MixedModelForm {...props} />;
+    case 'gee':
+      return <MixedModelForm {...props} />;
+    case 'reliability':
+      return <ReliabilityForm {...props} />;
+    case 'rm_anova':
+      return <RepeatedMeasuresAnovaForm {...props} />;
+    case 'mixed_anova':
+      return <MixedAnovaForm {...props} />;
+    case 'network':
+      return <ChiSquareForm {...props} />;
+    case 'code_open_text':
+      return <ReliabilityForm {...props} />;
     case 'generalized_linear_mixed_model':
       return <GlmmForm {...props} />;
     case 'multilevel_modelling':

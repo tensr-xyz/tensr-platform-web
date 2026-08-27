@@ -316,11 +316,39 @@ function appendRequiredFieldErrors(
         .length >= 2, 'Select at least two measure columns.');
       break;
     case 'linear_mixed_model':
+    case 'mixed_model':
+    case 'gee':
     case 'generalized_linear_mixed_model':
       require(WIZARD_FIELD.depCol, !!form.depCol?.trim(), 'Select a dependent variable.');
       require(WIZARD_FIELD.groupCol, !!form.groupCol?.trim(), 'Select a grouping variable.');
-      require(WIZARD_FIELD.independentCols, form.independentCols.length >
-        0, 'Add at least one fixed effect.');
+      if (op !== 'mixed_model') {
+        require(WIZARD_FIELD.independentCols, form.independentCols.length >
+          0, 'Add at least one fixed effect.');
+      }
+      break;
+    case 'reliability':
+      require(WIZARD_FIELD.columns, form.selectedCols.filter(c => numericNames.includes(c))
+        .length >= 2, 'Select at least two items.');
+      break;
+    case 'rm_anova':
+      require(WIZARD_FIELD.groupCol, !!form.subjectCol?.trim(), 'Select a subject identifier.');
+      require(WIZARD_FIELD.columns, form.selectedCols.filter(c => numericNames.includes(c))
+        .length >= 2, 'Select at least two measure columns.');
+      break;
+    case 'mixed_anova':
+      require(WIZARD_FIELD.groupCol, !!form.subjectCol?.trim(), 'Select a subject ID column.');
+      require(WIZARD_FIELD.groupCol, !!form.groupCol?.trim(), 'Select a between-subjects factor.');
+      require(WIZARD_FIELD.columns, form.selectedCols.length >=
+        2, 'Select at least two within-subject measures.');
+      break;
+    case 'network':
+      require(WIZARD_FIELD.chiA, !!(form.chiA?.trim() && form.chiB?.trim()) ||
+        form.selectedCols.length >=
+          2, 'Select source and target columns, or at least two adjacency columns.');
+      break;
+    case 'code_open_text':
+      require(WIZARD_FIELD.columns, form.selectedCols.length >= 1 ||
+        !!form.valueCol?.trim(), 'Select a free-text column.');
       break;
     case 'multilevel_modelling':
       require(WIZARD_FIELD.valueCol, !!form.valueCol?.trim(), 'Select an outcome variable.');
@@ -988,7 +1016,12 @@ export function computeWizardFieldErrors(
       if (form.depCol) checkColumnSlot(errors, WIZARD_FIELD.depCol, schema, form.depCol, 'numeric');
       break;
     case 'linear_mixed_model':
+    case 'mixed_model':
       if (form.depCol) checkColumnSlot(errors, WIZARD_FIELD.depCol, schema, form.depCol, 'numeric');
+      if (form.groupCol)
+        checkColumnSlot(errors, WIZARD_FIELD.groupCol, schema, form.groupCol, 'categorical');
+      break;
+    case 'gee':
       if (form.groupCol)
         checkColumnSlot(errors, WIZARD_FIELD.groupCol, schema, form.groupCol, 'categorical');
       break;
@@ -1158,6 +1191,23 @@ export function analysisRequiredFieldsSatisfied(
       return !!(form.depCol?.trim() && form.independentCols.length > 0);
     case 'linear_mixed_model':
       return !!(form.depCol?.trim() && form.groupCol?.trim() && form.independentCols.length > 0);
+    case 'mixed_model':
+      return !!(form.depCol?.trim() && form.groupCol?.trim());
+    case 'gee':
+      return !!(form.depCol?.trim() && form.groupCol?.trim() && form.independentCols.length > 0);
+    case 'reliability':
+      return form.selectedCols.filter(c => numericNames.includes(c)).length >= 2;
+    case 'rm_anova':
+      return !!(
+        form.subjectCol?.trim() &&
+        form.selectedCols.filter(c => numericNames.includes(c)).length >= 2
+      );
+    case 'mixed_anova':
+      return !!(form.subjectCol?.trim() && form.groupCol?.trim() && form.selectedCols.length >= 2);
+    case 'network':
+      return !!(form.chiA?.trim() && form.chiB?.trim()) || form.selectedCols.length >= 2;
+    case 'code_open_text':
+      return form.selectedCols.length >= 1 || !!form.valueCol?.trim();
     case 'generalized_linear_mixed_model':
       return !!(form.depCol?.trim() && form.groupCol?.trim() && form.independentCols.length > 0);
     case 'multilevel_modelling':
