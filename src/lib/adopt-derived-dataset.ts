@@ -103,7 +103,10 @@ export function adoptDerivedDataset(result: DerivedDatasetPayload): boolean {
     });
   }
   if (project.fileSystem.length) {
-    project.setFileSystem(project.fileSystem.map(f => (f.fileId ? { ...f, fileId: id } : f)));
+    const previousId = String(sheet.data?.datasetId || sheet.data?.filePath || '');
+    project.setFileSystem(
+      project.fileSystem.map(f => (f.fileId && f.fileId === previousId ? { ...f, fileId: id } : f))
+    );
   }
 
   if (typeof window !== 'undefined') {

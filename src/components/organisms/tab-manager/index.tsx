@@ -43,6 +43,7 @@ import { Separator } from '@/components/atoms/separator';
 // Removed context actions import - using store actions instead
 import { LeftPanel } from '@/components/organisms/left-panel';
 import { useFileHandler } from '@/hooks/api/use-file';
+import { adoptDerivedDataset } from '@/lib/adopt-derived-dataset';
 import { recordTabSnapshot, redoTab, undoTab } from '@/lib/tab-history';
 import { useTabHistoryStore } from '@/stores/tab-history-store';
 import { toast } from '@/hooks/ui/use-toast';
@@ -403,7 +404,16 @@ const TabManager: React.FC<TabManagerProps> = ({
     setReverting(true);
 
     try {
-      await revertToVersion(currentFileId, versionId);
+      const restored = await revertToVersion(currentFileId, versionId);
+      if (!restored) {
+        throw new Error('Failed to revert to version');
+      }
+      adoptDerivedDataset({
+        dataset_id: restored.dataset_id,
+        original_filename: restored.original_filename,
+        n_rows: restored.n_rows,
+        n_cols: restored.n_cols,
+      });
 
       // Close the dialog
       setShowVersionHistory(false);
@@ -976,13 +986,13 @@ const TabManager: React.FC<TabManagerProps> = ({
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">
+                        <span className="font-medium">{version.label || 'Version'}</span>
+                      </div>
+                      {version.lastModified ? (
+                        <span className="text-xs text-muted-foreground">
                           {new Date(version.lastModified).toLocaleString()}
                         </span>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {Math.round(version.size / 1024)} KB
-                      </span>
+                      ) : null}
                     </div>
                     <div className="mt-2 flex items-center gap-2">
                       {version.isLatest && (
