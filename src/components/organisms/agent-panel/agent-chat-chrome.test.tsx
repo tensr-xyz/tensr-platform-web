@@ -3,6 +3,7 @@ import {
   AgentWorkingLabel,
   CHAT_THREAD_CLOSE_BUTTON_CLASS,
   ChatThreadCloseButton,
+  visibleThinkingLines,
 } from './agent-chat-chrome';
 
 describe('agent chat chrome', () => {
@@ -12,6 +13,12 @@ describe('agent chat chrome', () => {
     expect(label).toHaveClass('animate-pulse', 'text-muted-foreground');
     expect(label).not.toHaveClass('bg-primary');
     expect(container.querySelector('[aria-hidden]')).toBeNull();
+  });
+
+  it('hides planning progress once the result is on screen', () => {
+    const lines = ['Planning the next step…'];
+    expect(visibleThinkingLines(lines, { hasResult: false, isStreaming: true })).toEqual(lines);
+    expect(visibleThinkingLines(lines, { hasResult: true, isStreaming: false })).toEqual([]);
   });
 
   it('uses a pointer cursor on the chat-tab close control', () => {

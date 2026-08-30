@@ -98,7 +98,11 @@ import {
   runAgentLoop,
   type AgentLoopApprovedToolCall,
 } from '@/lib/run-agent-loop';
-import { AgentWorkingLabel, ChatThreadCloseButton } from './agent-chat-chrome';
+import {
+  AgentWorkingLabel,
+  ChatThreadCloseButton,
+  visibleThinkingLines,
+} from './agent-chat-chrome';
 
 const ANALYSIS_HISTORY_LIMIT = 20;
 
@@ -153,8 +157,12 @@ function ChatMessageBody({
     return <div className="whitespace-pre-wrap break-words text-sm">{content}</div>;
   }
 
-  const hasThinking = (thinkingLines?.length ?? 0) > 0;
-  const showChecklist = (thinkingLines?.length ?? 0) >= 5;
+  const liveThinking = visibleThinkingLines(thinkingLines, {
+    hasResult: Boolean(resultMarkdown?.trim()),
+    isStreaming: Boolean(isStreaming),
+  });
+  const hasThinking = liveThinking.length > 0;
+  const showChecklist = liveThinking.length >= 5;
   const showPlan = Boolean(content?.trim());
   const showResult = Boolean(resultMarkdown?.trim());
   const streamingResult = isStreaming && showResult;
@@ -172,8 +180,8 @@ function ChatMessageBody({
                 showPlan && 'mt-2'
               )}
             >
-              {thinkingLines!.map((line, i) => {
-                const isLast = i === thinkingLines!.length - 1;
+              {liveThinking.map((line, i) => {
+                const isLast = i === liveThinking.length - 1;
                 const done = !isLast || !isStreaming;
                 return (
                   <li
@@ -193,7 +201,7 @@ function ChatMessageBody({
             </ol>
           ) : hasThinking ? (
             <div className={cn('space-y-1.5', showPlan && 'mt-2')}>
-              {thinkingLines!.map((line, i) => (
+              {liveThinking.map((line, i) => (
                 <p
                   key={`${i}-${line.slice(0, 24)}`}
                   className="text-sm leading-5 text-muted-foreground"
@@ -489,7 +497,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           approvedToolCalls: opts.approvedToolCalls ?? null,
           onProgress: progress => {
             updateMessage(projectId, assistantMessageId, {
-              content: progress.message,
+              thinkingLines: [progress.message],
               isStreaming: true,
             });
           },
@@ -634,6 +642,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           logAgentChatRenderPayload(chatFields);
           updateMessage(projectId, assistantMessageId, {
             ...chatFields,
+            thinkingLines: undefined,
             isStreaming: false,
           });
         } else if (enrichmentNotes.length) {
@@ -841,7 +850,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
 
       updateMessage(projectId, messageId, {
         ...chatFields,
-        thinkingLines: [...progressLines],
+        thinkingLines: undefined,
         isStreaming: false,
         charts: reportChart ? [reportChart] : undefined,
         pendingAction: current

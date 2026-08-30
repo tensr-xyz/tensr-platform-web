@@ -5,6 +5,15 @@ import { cn } from '@/utils';
 export const CHAT_THREAD_CLOSE_BUTTON_CLASS =
   'mr-0.5 cursor-pointer rounded p-0.5 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100';
 
+export function visibleThinkingLines(
+  thinkingLines: string[] | undefined,
+  { hasResult, isStreaming }: { hasResult: boolean; isStreaming: boolean }
+): string[] {
+  if (!thinkingLines?.length) return [];
+  if (hasResult && !isStreaming) return [];
+  return thinkingLines;
+}
+
 export function AgentWorkingLabel({ className }: { className?: string }) {
   return (
     <span
