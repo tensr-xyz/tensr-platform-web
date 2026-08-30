@@ -14,7 +14,7 @@ import {
   MessageScrollerItem,
   MessageScrollerViewport,
 } from '@/components/molecules/message-scroller';
-import { Send, AlertCircle, Trash2, History, Plus, X } from 'lucide-react';
+import { Send, AlertCircle, Trash2, History, Plus } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import {
@@ -98,6 +98,7 @@ import {
   runAgentLoop,
   type AgentLoopApprovedToolCall,
 } from '@/lib/run-agent-loop';
+import { AgentWorkingLabel, ChatThreadCloseButton } from './agent-chat-chrome';
 
 const ANALYSIS_HISTORY_LIMIT = 20;
 
@@ -219,13 +220,7 @@ function ChatMessageBody({
           ) : null}
 
           {isStreaming && !showResult ? (
-            <span
-              className={cn(
-                'ml-0.5 inline-block h-[1.1em] w-0.5 animate-pulse bg-primary align-text-bottom',
-                (showPlan || hasThinking) && 'mt-1'
-              )}
-              aria-hidden
-            />
+            <AgentWorkingLabel className={cn((showPlan || hasThinking) && 'mt-1 block')} />
           ) : null}
 
           {showResult ? (
@@ -233,10 +228,7 @@ function ChatMessageBody({
               {streamingResult ? (
                 <div className="whitespace-pre-wrap text-sm leading-5">
                   {resultMarkdown}
-                  <span
-                    className="ml-0.5 inline-block h-[1.1em] w-0.5 animate-pulse bg-primary align-text-bottom"
-                    aria-hidden
-                  />
+                  <AgentWorkingLabel className="ml-1" />
                 </div>
               ) : (
                 <AgentMarkdown>{resultMarkdown!}</AgentMarkdown>
@@ -1421,17 +1413,13 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                     {thread.title}
                   </button>
                   {chatThreads.length > 1 ? (
-                    <button
-                      type="button"
+                    <ChatThreadCloseButton
+                      title={thread.title}
                       onClick={e => {
                         e.stopPropagation();
                         closeThread(projectId, thread.id);
                       }}
-                      className="mr-0.5 rounded p-0.5 opacity-0 group-hover:opacity-100"
-                      aria-label={`Close ${thread.title}`}
-                    >
-                      <X className="size-3" />
-                    </button>
+                    />
                   ) : null}
                 </div>
               );
