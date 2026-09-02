@@ -1,4 +1,4 @@
-import { formatApiErrorMessage } from './api-error';
+import { ApiRequestError, formatApiErrorMessage } from './api-error';
 
 describe('formatApiErrorMessage', () => {
   it('maps assistant plan 402 to friendly text', () => {
@@ -22,6 +22,21 @@ describe('formatApiErrorMessage', () => {
       'API Error: 504 - {"detail":{"error":"agent_loop_timeout","message":"This request hit the server time limit."}}'
     );
     expect(formatApiErrorMessage(err)).toBe('This request hit the server time limit.');
+  });
+
+  it('maps a bare API Gateway 503 body to a retry sentence, not raw JSON', () => {
+    const err = new Error('{"message":"Service Unavailable"}');
+    const shown = formatApiErrorMessage(err);
+    expect(shown).not.toContain('{');
+    expect(shown.toLowerCase()).toMatch(/unavailable|timed out|try again/);
+  });
+
+  it('maps ApiRequestError 503 the same way', () => {
+    const shown = formatApiErrorMessage(
+      new ApiRequestError(503, '{"message":"Service Unavailable"}')
+    );
+    expect(shown).not.toContain('{');
+    expect(shown.toLowerCase()).toMatch(/unavailable|timed out|try again/);
   });
 
   it('shows the table fingerprint refuse paragraph, not a code object', () => {

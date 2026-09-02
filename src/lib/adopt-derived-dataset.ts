@@ -5,6 +5,10 @@ import { useProjectStore } from '@/stores/project-store';
 /** Lineage internals — never show these as spreadsheet columns after a transform. */
 export const LINEAGE_HIDDEN_COLUMNS = new Set(['_row_uid', '_weight']);
 
+export function userFacingSchemaColumns<T extends { name: string }>(columns: T[]): T[] {
+  return columns.filter(c => Boolean(c.name) && !LINEAGE_HIDDEN_COLUMNS.has(c.name));
+}
+
 export type DerivedDatasetPayload = {
   dataset_id: string;
   original_filename?: string;

@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
+import { LINEAGE_HIDDEN_COLUMNS, userFacingSchemaColumns } from '@/lib/adopt-derived-dataset';
 
 function buildPreviewFromTab(tab: Tab | undefined): DatasetPreview | null {
   const cols = tab?.data?.initialColumns;
@@ -44,11 +45,13 @@ function buildPreviewFromTab(tab: Tab | undefined): DatasetPreview | null {
 
 function columnsFromTab(tab: Tab | undefined): SchemaColumn[] {
   if (!tab?.data?.initialColumns?.length) return [];
-  return tab.data.initialColumns.map(col => ({
-    name: col.id,
-    type: col.type === 'number' || col.type === 'numeric' ? 'numeric' : 'categorical',
-    missing_count: 0,
-  }));
+  return tab.data.initialColumns
+    .filter(col => !LINEAGE_HIDDEN_COLUMNS.has(col.id))
+    .map(col => ({
+      name: col.id,
+      type: col.type === 'number' || col.type === 'numeric' ? 'numeric' : 'categorical',
+      missing_count: 0,
+    }));
 }
 
 /**
@@ -141,7 +144,7 @@ export function AnalysisSetupHost() {
       try {
         const res = await apiClient.datasets.getSchema(datasetId);
         if (cancelled) return;
-        const apiSchema = (res.schema as SchemaColumn[]) || [];
+        const apiSchema = userFacingSchemaColumns((res.schema as SchemaColumn[]) || []);
         setSchema(apiSchema.length ? apiSchema : fallback);
       } catch {
         if (!cancelled) setSchema(fallback);

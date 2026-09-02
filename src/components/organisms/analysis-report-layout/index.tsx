@@ -9,6 +9,7 @@ import { AnalysisReportToolbar } from '@/components/organisms/analysis-report-to
 import { buildReportOutline } from '@/lib/build-report-outline';
 import {
   downloadTextFile,
+  exportIdentityFrom,
   reportTablesToCsv,
   reportToHtml,
   reportToMarkdown,
@@ -49,6 +50,15 @@ export function AnalysisReportLayout({
   const openSetup = useAnalysisSetupStore(s => s.openSetup);
 
   const outline = useMemo(() => buildReportOutline(report), [report]);
+  const exportIdentity = useMemo(
+    () =>
+      exportIdentityFrom({
+        runId: analysisRunId,
+        datasetId: sourceDatasetId,
+        provenance,
+      }),
+    [analysisRunId, sourceDatasetId, provenance]
+  );
 
   const focusAnnotations = useCallback(() => {
     setRailOpen(true);
@@ -125,23 +135,23 @@ export function AnalysisReportLayout({
   }, []);
 
   const handleExportCsv = useCallback(() => {
-    const csv = reportTablesToCsv(report);
+    const csv = reportTablesToCsv(report, exportIdentity);
     if (!csv) return;
     const slug = report.meta.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'report';
     downloadTextFile(csv, `${slug}_tables.csv`, 'text/csv;charset=utf-8');
-  }, [report]);
+  }, [exportIdentity, report]);
 
   const handleExportMarkdown = useCallback(() => {
-    const md = reportToMarkdown(report);
+    const md = reportToMarkdown(report, exportIdentity);
     const slug = report.meta.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'report';
     downloadTextFile(md, `${slug}.md`, 'text/markdown;charset=utf-8');
-  }, [report]);
+  }, [exportIdentity, report]);
 
   const handleExportHtml = useCallback(() => {
-    const html = reportToHtml(report);
+    const html = reportToHtml(report, { identity: exportIdentity });
     const slug = report.meta.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'report';
     downloadTextFile(html, `${slug}.html`, 'text/html;charset=utf-8');
-  }, [report]);
+  }, [exportIdentity, report]);
 
   const handleExportNarrative = useCallback(async () => {
     if (synthesizing) return;
@@ -161,14 +171,17 @@ export function AnalysisReportLayout({
       });
       const slug = report.meta.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'report';
       downloadTextFile(result.markdown, `${slug}_narrative.md`, 'text/markdown;charset=utf-8');
-      const html = reportToHtml(report, { narrativeMarkdown: result.markdown });
+      const html = reportToHtml(report, {
+        narrativeMarkdown: result.markdown,
+        identity: exportIdentity,
+      });
       downloadTextFile(html, `${slug}_narrative.html`, 'text/html;charset=utf-8');
     } catch (err) {
       console.error('Narrative report synthesis failed', err);
     } finally {
       setSynthesizing(false);
     }
-  }, [report, sourceDatasetId, synthesizing]);
+  }, [exportIdentity, report, sourceDatasetId, synthesizing]);
 
   return (
     <div className="flex h-full min-h-0 w-full overflow-hidden bg-muted/20">

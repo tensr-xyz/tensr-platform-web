@@ -1,5 +1,6 @@
 import type { AnalysisReport } from '@/lib/analysis-report-types';
-import { reportToHtml, reportToMarkdown } from '@/lib/report-export';
+import { reportTablesToCsv, reportToHtml, reportToMarkdown } from '@/lib/report-export';
+import { provenanceBannerText } from '@/lib/analysis-runs';
 
 function sampleReport(overrides: Partial<AnalysisReport> = {}): AnalysisReport {
   return {
@@ -116,5 +117,26 @@ describe('reportToMarkdown', () => {
     expect(md).toContain('# Descriptives: Revenue');
     expect(md).toContain('## Summary');
     expect(md).toContain('Mean Revenue by Region');
+  });
+
+  it('stamps run id, dataset id, fingerprint, and the same trace banner as the UI', () => {
+    const banner = provenanceBannerText({ kind: 'unknown' });
+    const identity = {
+      runId: 'run-abc',
+      datasetId: 'ccd0d02c-cf1d-4e40-8a60-2759d3cfa4f1',
+      contentFingerprint: 'fp-deadbeef',
+      traceState: 'unknown',
+      traceBanner: banner,
+    };
+    const md = reportToMarkdown(sampleReport(), identity);
+    const html = reportToHtml(sampleReport(), { identity });
+    const csv = reportTablesToCsv(sampleReport(), identity);
+    for (const body of [md, html, csv]) {
+      expect(body).toContain('run-abc');
+      expect(body).toContain('ccd0d02c-cf1d-4e40-8a60-2759d3cfa4f1');
+      expect(body).toContain('fp-deadbeef');
+      expect(body).toContain('Traceability unknown');
+      expect(body).toContain('Numbers cannot be traced to the rows they came from');
+    }
   });
 });

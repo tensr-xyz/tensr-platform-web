@@ -1,4 +1,8 @@
-import { derivedWorkspacePath, spreadsheetPatchFromDerivedDataset } from './adopt-derived-dataset';
+import {
+  derivedWorkspacePath,
+  spreadsheetPatchFromDerivedDataset,
+  userFacingSchemaColumns,
+} from './adopt-derived-dataset';
 import type { TabData } from '@/stores/tabs-store';
 
 describe('spreadsheetPatchFromDerivedDataset', () => {
@@ -49,6 +53,18 @@ describe('spreadsheetPatchFromDerivedDataset', () => {
     const patch = spreadsheetPatchFromDerivedDataset(current, { dataset_id: derivedId });
     expect(patch.datasetId).toBe(derivedId);
     expect(patch.initialColumns).toEqual(current.initialColumns);
+  });
+});
+
+describe('userFacingSchemaColumns', () => {
+  it('drops lineage internals so analysis pickers cannot select _row_uid', () => {
+    const cols = userFacingSchemaColumns([
+      { name: 'Pos', type: 'categorical', missing_count: 0 },
+      { name: '_row_uid', type: 'categorical', missing_count: 0 },
+      { name: '_weight', type: 'numeric', missing_count: 0 },
+      { name: 'Age', type: 'numeric', missing_count: 0 },
+    ]);
+    expect(cols.map(c => c.name)).toEqual(['Pos', 'Age']);
   });
 });
 

@@ -1,5 +1,18 @@
 /** Turn tensr-api error bodies into user-facing chat messages. */
 
+export class ApiRequestError extends Error {
+  readonly status: number;
+
+  constructor(status: number, bodyText: string) {
+    super(`API Error: ${status} - ${bodyText}`);
+    this.name = 'ApiRequestError';
+    this.status = status;
+  }
+}
+
+const SERVICE_UNAVAILABLE =
+  'Service timed out or is still starting — wait a few seconds and try again.';
+
 const ASSISTANT_ERROR_MESSAGES: Record<string, string> = {
   subscription_required:
     'An active subscription is required to use Tensr. Choose a plan to continue.',
@@ -17,10 +30,11 @@ export function formatApiErrorMessage(error: unknown): string {
   }
 
   const raw = error.message || '';
+  const status = error instanceof ApiRequestError ? error.status : undefined;
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
     try {
-      const outer = JSON.parse(jsonMatch[0]) as { detail?: unknown };
+      const outer = JSON.parse(jsonMatch[0]) as { detail?: unknown; message?: string };
       const detail = outer.detail;
       if (typeof detail === 'string' && detail.trim()) {
         return detail;
@@ -36,6 +50,12 @@ export function formatApiErrorMessage(error: unknown): string {
         if (typeof d.message === 'string' && d.message.trim()) {
           return d.message;
         }
+      }
+      if (typeof outer.message === 'string' && outer.message.trim()) {
+        if (status === 503 || /^service unavailable$/i.test(outer.message.trim())) {
+          return SERVICE_UNAVAILABLE;
+        }
+        return outer.message.trim();
       }
     } catch {
       // fall through
@@ -54,8 +74,8 @@ export function formatApiErrorMessage(error: unknown): string {
   if (raw.startsWith('API Error: 502')) {
     return 'The AI service is temporarily unavailable. Check that LLM_API_KEY is configured on the API, then try again.';
   }
-  if (raw.startsWith('API Error: 503')) {
-    return 'Service timed out or is still starting — wait a few seconds and try again.';
+  if (status === 503 || raw.startsWith('API Error: 503')) {
+    return SERVICE_UNAVAILABLE;
   }
   if (raw.startsWith('API Error: 504')) {
     return 'The AI service timed out. Try again, or use Manage to run the analysis manually.';
@@ -69,16 +89,6 @@ export function formatApiErrorMessage(error: unknown): string {
   }
 
   return raw || 'Something went wrong. Please try again.';
-}
-
-export class ApiRequestError extends Error {
-  readonly status: number;
-
-  constructor(status: number, bodyText: string) {
-    super(`API Error: ${status} - ${bodyText}`);
-    this.name = 'ApiRequestError';
-    this.status = status;
-  }
 }
 
 export function userMessageFromApiError(error: unknown): string {
