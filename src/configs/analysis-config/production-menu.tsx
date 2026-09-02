@@ -124,7 +124,6 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       ],
       Loglinear: ['Loglinear Analysis'],
       Network: ['Network'],
-      Text: ['Open-text coding'],
     },
   },
   visualization: {
@@ -245,5 +244,4 @@ export const PRODUCTION_ANALYSIS_LABELS: Record<
   Reliability: 'reliability',
   'RM ANOVA': 'rm_anova',
   Network: 'network',
-  'Open-text coding': 'code_open_text',
 };
