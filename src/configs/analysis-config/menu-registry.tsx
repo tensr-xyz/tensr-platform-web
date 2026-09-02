@@ -23,9 +23,6 @@ import FindDuplicatesDialog from '@/components/templates/data/find-duplicates';
 import { StandardizeVariablesDialog } from '@/components/templates/transform/standardize-variables';
 import { BinVariablesDialog } from '@/components/templates/transform/bin-variables';
 import { RecodeVariablesDialog } from '@/components/templates/transform/recode-variables';
-import ComputeVariablesDialog from '@/components/templates/transform/compute-variable';
-import CountValuesDialog from '@/components/templates/transform/count-values';
-import ShiftValuesDialog from '@/components/templates/transform/shift-values';
 import { RankCasesDialog } from '@/components/templates/transform/rank-cases';
 import {
   LagCasesDialog,
@@ -44,9 +41,6 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Merge Datasets': MergeDatasetDialog,
   'Handle Missing Data': HandleMissingDataDialog,
   'Find Duplicates': FindDuplicatesDialog,
-  'Compute Variable': ComputeVariablesDialog,
-  'Count Values': CountValuesDialog,
-  'Shift Values': ShiftValuesDialog,
   'Standardize Variables': StandardizeVariablesDialog,
   'Standardize Values': StandardizeVariablesDialog,
   'Visual Binning': BinVariablesDialog,
@@ -61,7 +55,6 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   Histogram: chartMenuItem('Histogram'),
   Boxplot: chartMenuItem('Boxplot'),
   'Pie Chart': chartMenuItem('Pie Chart'),
-  Heatmap: chartMenuItem('Heatmap'),
   'Area Chart': chartMenuItem('Area Chart'),
 };
 

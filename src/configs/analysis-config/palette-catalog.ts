@@ -1,7 +1,6 @@
 /**
- * Extra ⌘K sections beyond production-menu (browse-only / coming-soon badges).
+ * Extra ⌘K sections beyond production-menu.
  * Sprint 1–4 shipped analyses live in production-menu under Data · Analyze · Transform.
- * Charts / Time series / ML & AI are tab-level placeholders only (see utils.ts).
  */
 import type { MenuSection } from './index';
 
@@ -22,17 +21,8 @@ export const PALETTE_CATALOG: PaletteCatalog = {
         'Histogram',
         'Boxplot',
         'Pie Chart',
-        'Heatmap',
         'Area Chart',
       ],
-    },
-  },
-  analyze: {
-    sections: {
-      // Post-launch per launch plan v2 — section badge only, no per-item launchers.
-      'Advanced analytics (coming soon)': [],
-      'Nonparametric tests (coming soon)': [],
-      'Regression extensions (coming soon)': [],
     },
   },
   data: {
@@ -42,9 +32,5 @@ export const PALETTE_CATALOG: PaletteCatalog = {
   },
 };
 
-/** Section titles that show a coming-soon badge and no per-item launchers in ⌘K. */
-export const COMING_SOON_SECTIONS = new Set(
-  Object.values(PALETTE_CATALOG).flatMap(tab =>
-    Object.keys(tab.sections).filter(name => name.toLowerCase().includes('coming soon'))
-  )
-);
+/** Section titles that show a coming-soon badge. Kept empty — we do not advertise unfinished work. */
+export const COMING_SOON_SECTIONS = new Set<string>();

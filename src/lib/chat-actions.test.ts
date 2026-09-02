@@ -37,11 +37,8 @@ describe('resolveChatAction', () => {
     });
   });
 
-  it('parses group commands', () => {
-    expect(resolveChatAction('group by Team')).toEqual({
-      kind: 'group_by',
-      column: 'Team',
-    });
+  it('falls through to chat for group-by (no aggregate dialog)', () => {
+    expect(resolveChatAction('group by Team')).toEqual({ kind: 'chat' });
   });
 
   it('falls through to chat for unknown input', () => {
@@ -103,5 +100,15 @@ describe('resolveChatAction', () => {
       kind: 'dialog',
       menuName: 'Standardize Variables',
     });
+  });
+
+  it('does not route chat to removed false-door labels', () => {
+    expect(resolveChatAction('open-text coding')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('mcnemar test')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('loglinear analysis')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('stepwise')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('compute variable')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('count values')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('shift values')).toEqual({ kind: 'chat' });
   });
 });
