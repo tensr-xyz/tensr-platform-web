@@ -15,7 +15,6 @@ import {
   Wallet,
   Building,
   Check,
-  Plus,
   Settings,
   Users,
   BookOpen,
@@ -240,16 +239,6 @@ function ControlCenter() {
                 )}
               </DropdownMenuItem>
             ))}
-
-            <DropdownMenuItem
-              className="gap-2 p-2"
-              onClick={() => router.push('/organizations/create')}
-            >
-              <div className="w-6 h-6 rounded-md border bg-background flex items-center justify-center">
-                <Plus className="w-4 h-4" />
-              </div>
-              <div className="font-medium text-muted-foreground">Create organization</div>
-            </DropdownMenuItem>
 
             {/* Organization-specific actions - Only show when in an organization */}
             {!isPersonalAccount && activeOrganization && (

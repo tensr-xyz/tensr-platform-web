@@ -8,7 +8,6 @@ import {
   LayoutGrid,
   Compass,
   Settings,
-  HelpCircle,
   Sparkles,
   Bell,
   Search,
@@ -402,19 +401,6 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                                 </div>
                               </button>
                             </Link>
-                          </li>
-                          <li className="group/menu-item relative" data-sidebar="menu-item">
-                            <button
-                              className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
-                              data-active="false"
-                              data-sidebar="menu-button"
-                              data-size="lg"
-                            >
-                              <div className="flex flex-row items-center justify-center gap-3">
-                                <HelpCircle className="size-4" />
-                                <span className="text-sm">Help</span>
-                              </div>
-                            </button>
                           </li>
                           <li
                             className="group/menu-item relative flex items-center px-3"

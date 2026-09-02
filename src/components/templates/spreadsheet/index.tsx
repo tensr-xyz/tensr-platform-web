@@ -3709,8 +3709,6 @@ export function Spreadsheet({
                 const ri = ctxMenuRowIndex;
                 const ctxRow = ri !== null ? rows[ri] : null;
                 if (!ctxRow || ri === null) return null;
-                const rowData = ctxRow.original as Record<string, any>;
-                const datasetId = gridDatasetId || tabId;
                 const isRowGutter = ctxMenuColumnId === 'select';
                 return (
                   <>
@@ -3731,83 +3729,11 @@ export function Spreadsheet({
                             Delete row
                           </ContextMenuItem>
                         )}
-                        <ContextMenuSeparator />
+                        {!isRowGutter ? <ContextMenuSeparator /> : null}
                       </>
                     )}
-                    <ContextMenuItem
-                      onClick={async () => {
-                        try {
-                          setSelectedRowId(`row-${ri}`);
-                          setSelectedRowData(rowData);
-                          const response = await apiClient.ai.rowInsight({
-                            datasetId,
-                            rowId: `row-${ri}`,
-                            rowData,
-                            teachingMode: activeTab?.data?.teachingMode || false,
-                          } as any);
-                          setRowInsight(response);
-                        } catch (error) {
-                          console.error('Failed to get row insight', error);
-                        }
-                      }}
-                    >
-                      Why is this row unusual?
-                    </ContextMenuItem>
-                    <ContextMenuItem
-                      onClick={async () => {
-                        try {
-                          setSelectedRowId(`row-${ri}`);
-                          setSelectedRowData(rowData);
-                          const response = await apiClient.ai.rowInsight({
-                            datasetId,
-                            rowId: `row-${ri}`,
-                            rowData,
-                            mode: 'similar',
-                            teachingMode: activeTab?.data?.teachingMode || false,
-                          } as any);
-                          setRowInsight(response);
-                          if (response?.similarRows && Array.isArray(response.similarRows)) {
-                            setHighlightedRows(new Set(response.similarRows));
-                          }
-                        } catch (error) {
-                          console.error('Failed to get similar rows insight', error);
-                        }
-                      }}
-                    >
-                      Show similar rows
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                    <ContextMenuItem
-                      onClick={async () => {
-                        try {
-                          setSelectedRowId(`row-${ri}`);
-                          setSelectedRowData(rowData);
-                          setCurrentRowIndexForFix(ri);
-                          setRowFixLoading(true);
-                          setRowFixModalOpen(true);
-                          const response = await apiClient.ai.fixRow({
-                            datasetId,
-                            rowId: `row-${ri}`,
-                            rowData,
-                            columnStats: mergedColumnStats,
-                            teachingMode: activeTab?.data?.teachingMode || false,
-                          } as any);
-                          setRowFixIssues(response.issues || []);
-                          setRowFixSummary(response.summary || '');
-                        } catch (error) {
-                          console.error('Failed to get row fixes', error);
-                          setRowFixIssues([]);
-                          setRowFixSummary('Failed to analyze row issues.');
-                        } finally {
-                          setRowFixLoading(false);
-                        }
-                      }}
-                    >
-                      Fix row issues
-                    </ContextMenuItem>
                     {!isRowGutter && (
                       <>
-                        <ContextMenuSeparator />
                         <ContextMenuItem onClick={handleCopy}>
                           <Copy className="mr-2 h-4 w-4" />
                           Copy

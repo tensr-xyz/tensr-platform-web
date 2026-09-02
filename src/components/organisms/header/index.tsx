@@ -1,18 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import {
-  User,
-  Building,
-  X,
-  Menu,
-  Check,
-  Plus,
-  Settings,
-  Users,
-  LogOut,
-  BookOpen,
-} from 'lucide-react';
+import { User, Building, X, Menu, Check, Settings, Users, LogOut, BookOpen } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/atoms/button';
 import { ChevronsUpDown } from 'lucide-react';
@@ -409,16 +398,6 @@ export const AccountSwitcher: React.FC = () => {
             )}
           </DropdownMenuItem>
         ))}
-
-        <DropdownMenuItem
-          className="gap-2 p-2"
-          onClick={() => router.push('/organizations/create')}
-        >
-          <div className="w-6 h-6 rounded-md border bg-background flex items-center justify-center">
-            <Plus className="w-4 h-4" />
-          </div>
-          <div className="font-medium text-muted-foreground">Create organization</div>
-        </DropdownMenuItem>
 
         {/* Organization-specific actions - Only show when in an organization */}
         {!isPersonalAccount && activeOrganization && (

@@ -3,16 +3,12 @@ import {
   ArrowDownWideNarrow,
   ArrowUpDown,
   ArrowUpWideNarrow,
-  Box,
   Eye,
   EyeOff,
   Filter as FilterIcon,
-  Users as Group,
   Loader2 as Loader,
   Pencil,
   Trash2,
-  Wrench,
-  Info,
   Check,
   Copy,
   Pin,
@@ -348,89 +344,49 @@ const HeaderCell = React.memo<HeaderCellProps>(
                   ) : null}
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
-                    <DropdownMenuItem onClick={() => onColumnAction?.('group-by', column.id)}>
-                      <Group className="mr-2 h-4 w-4" />
-                      <span>Group by</span>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        column.toggleVisibility(false);
+                        onColumnAction?.('hide-column', column.id);
+                      }}
+                    >
+                      <EyeOff className="mr-2 h-4 w-4" />
+                      <span>Hide column</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => onColumnAction?.('aggregate-by', column.id)}>
-                      <Box className="mr-2 h-4 w-4" />
-                      <span>Aggregate by</span>
-                      <DropdownMenuShortcut>⌘+T</DropdownMenuShortcut>
+                    <DropdownMenuCheckboxItem
+                      checked={isFrozen}
+                      onCheckedChange={() => onColumnAction?.('toggle-freeze-column', column.id)}
+                    >
+                      <Pin className="mr-2 h-4 w-4" />
+                      <span>{isFrozen ? 'Unfreeze column' : 'Freeze column'}</span>
+                      {isFrozen ? <Check className="ml-auto h-4 w-4 text-primary" /> : null}
+                    </DropdownMenuCheckboxItem>
+                    <DropdownMenuItem
+                      onClick={() => onColumnAction?.('show-hidden-columns', column.id)}
+                    >
+                      <Eye className="mr-2 h-4 w-4" />
+                      <span>Show hidden columns</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => onColumnAction?.('copy-column', column.id)}>
+                      <Copy className="mr-2 h-4 w-4" />
+                      <span>Copy column</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleRenameClick}>
+                      <Pencil className="mr-2 h-4 w-4" />
+                      <span>Rename</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => onColumnAction?.('delete-column', column.id)}
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      <span>Delete column</span>
+                      <DropdownMenuShortcut className="text-muted-foreground">
+                        ⌘Z to undo
+                      </DropdownMenuShortcut>
                     </DropdownMenuItem>
                   </DropdownMenuGroup>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuGroup>
-                    <DropdownMenuItem
-                      onClick={() => onColumnAction?.('suggest-transformations', column.id)}
-                    >
-                      <Wrench className="mr-2 h-4 w-4" />
-                      <span>Suggest transformations</span>
-                    </DropdownMenuItem>
-                    {stats?.categorical_stats && (
-                      <DropdownMenuItem
-                        onClick={() => onColumnAction?.('clean-categories', column.id)}
-                      >
-                        <Wrench className="mr-2 h-4 w-4" />
-                        <span>Clean categories</span>
-                      </DropdownMenuItem>
-                    )}
-                    {stats?.numeric_stats && (
-                      <DropdownMenuItem
-                        onClick={() => onColumnAction?.('detect-outliers', column.id)}
-                      >
-                        <Info className="mr-2 h-4 w-4" />
-                        <span>Detect outliers</span>
-                      </DropdownMenuItem>
-                    )}
-                    <DropdownMenuItem
-                      onClick={() => onColumnAction?.('check-relationships', column.id)}
-                    >
-                      <Info className="mr-2 h-4 w-4" />
-                      <span>Check relationships</span>
-                    </DropdownMenuItem>
-                  </DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      column.toggleVisibility(false);
-                      onColumnAction?.('hide-column', column.id);
-                    }}
-                  >
-                    <EyeOff className="mr-2 h-4 w-4" />
-                    <span>Hide column</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuCheckboxItem
-                    checked={isFrozen}
-                    onCheckedChange={() => onColumnAction?.('toggle-freeze-column', column.id)}
-                  >
-                    <Pin className="mr-2 h-4 w-4" />
-                    <span>{isFrozen ? 'Unfreeze column' : 'Freeze column'}</span>
-                    {isFrozen ? <Check className="ml-auto h-4 w-4 text-primary" /> : null}
-                  </DropdownMenuCheckboxItem>
-                  <DropdownMenuItem
-                    onClick={() => onColumnAction?.('show-hidden-columns', column.id)}
-                  >
-                    <Eye className="mr-2 h-4 w-4" />
-                    <span>Show hidden columns</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onColumnAction?.('copy-column', column.id)}>
-                    <Copy className="mr-2 h-4 w-4" />
-                    <span>Copy column</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={handleRenameClick}>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    <span>Rename</span>
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => onColumnAction?.('delete-column', column.id)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    <span>Delete column</span>
-                    <DropdownMenuShortcut className="text-muted-foreground">
-                      ⌘Z to undo
-                    </DropdownMenuShortcut>
-                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -469,26 +425,6 @@ const HeaderCell = React.memo<HeaderCellProps>(
                 height={12}
               />
             ) : null}
-
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="grid size-[18px] shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={e => {
-                      e.stopPropagation();
-                      onColumnAction?.('show-insight', column.id);
-                    }}
-                  >
-                    <Info className="size-2.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs">
-                  <div className="text-xs">{quickSummary || 'Column insights'}</div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
 
             <button
               type="button"
