@@ -3150,9 +3150,6 @@ export function Spreadsheet({
 
         case 'group-by':
         case 'aggregate-by':
-          // No bespoke grouping UI yet — open the Aggregate / Compute Variable
-          // dialog which is the closest available flow.
-          useAnalysisSetupStore.getState().openDialog('Aggregate Data');
           break;
 
         case 'delete-column': {

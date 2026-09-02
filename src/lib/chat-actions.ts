@@ -29,8 +29,6 @@ export type ChatAction =
   | { kind: 'show_hidden_columns' }
   | { kind: 'clear_filters' }
   | { kind: 'clear_sort' }
-  | { kind: 'group_by'; column: string }
-  | { kind: 'aggregate_by'; column: string }
   | { kind: 'chat' };
 
 /** Every label that lives in MENU_ITEMS (lowercase → original casing). */
@@ -87,8 +85,8 @@ const SYNONYMS: Record<string, string> = {
   'linear regression': 'Linear Regression',
   predicting: 'Linear Regression',
   'predict ': 'Linear Regression',
-  'multiple regression': 'Multiple Regression',
-  'logistic regression': 'Logistic Regression',
+  'multiple regression': 'Linear Regression',
+  'logistic regression': 'Binary Logistic Regression',
   'mann whitney': 'Mann-Whitney U',
   'mann-whitney': 'Mann-Whitney U',
   kruskal: 'Kruskal-Wallis H',
@@ -140,8 +138,6 @@ const SYNONYMS: Record<string, string> = {
   'lambda association': 'Goodman-Kruskal Lambda',
   'cochran armitage': 'Cochran-Armitage Trend Test',
   'trend test': 'Cochran-Armitage Trend Test',
-  loglinear: 'Loglinear Analysis',
-  'log linear': 'Loglinear Analysis',
   'hierarchical regression': 'Hierarchical Multiple Regression',
   'hierarchical multiple regression': 'Hierarchical Multiple Regression',
   'block regression': 'Hierarchical Multiple Regression',
@@ -156,8 +152,6 @@ const SYNONYMS: Record<string, string> = {
   'within subjects anova': 'Repeated Measures ANOVA',
   'within-subjects anova': 'Repeated Measures ANOVA',
   'rm anova': 'Repeated Measures ANOVA',
-  stepwise: 'Stepwise Regression',
-  'stepwise regression': 'Stepwise Regression',
   poisson: 'Poisson Regression',
   'ordinal regression': 'Ordinal Regression',
   'ordered logistic': 'Ordinal Regression',
@@ -186,10 +180,6 @@ const SYNONYMS: Record<string, string> = {
   shapiro: 'Shapiro–Wilk Test',
   'shapiro wilk': 'Shapiro–Wilk Test',
   probit: 'Probit Regression',
-  mcnemar: 'McNemar Test',
-  'mcnemar test': 'McNemar Test',
-  'paired chi-square': 'McNemar Test',
-  'paired chi square': 'McNemar Test',
   'structural equation model': 'Structural Equation Modelling (SEM)',
   'structural equation modelling': 'Structural Equation Modelling (SEM)',
   'sem model': 'Structural Equation Modelling (SEM)',
@@ -215,7 +205,6 @@ const SYNONYMS: Record<string, string> = {
   missing: 'Handle Missing Data',
   'missing data': 'Handle Missing Data',
   'handle missing': 'Handle Missing Data',
-  'replace missing': 'Replace Missing Values',
   standardize: 'Standardize Variables',
   standardise: 'Standardize Variables',
   'standardize variables': 'Standardize Variables',
@@ -229,17 +218,8 @@ const SYNONYMS: Record<string, string> = {
   'quality report': 'Data Quality Report',
 
   // transforms
-  'compute variable': 'Compute Variable',
-  'new variable': 'Compute Variable',
-  'create variable': 'Compute Variable',
-  'count values': 'Count Values',
-  'shift values': 'Shift Values',
   recode: 'Recode Variables',
   rank: 'Rank Cases',
-  sample: 'Sample Data',
-  aggregate: 'Aggregate Data',
-  reshape: 'Reshape Data',
-  transpose: 'Transpose Data',
 };
 
 /** Analysis synonyms checked before spreadsheet filter/sort parsing (avoids mis-routing). */
@@ -386,20 +366,6 @@ function tryStructuredColumnEdit(message: string): ChatAction | null {
     };
   }
 
-  // ───── Group / aggregate (opens Aggregate Data dialog) ───────────────────
-  const groupBy = /^group\s+(?:by\s+)?(?:the\s+)?(?:column\s+)?["']?([\w. -]+?)["']?$/i.exec(
-    trimmed
-  );
-  if (groupBy) {
-    return { kind: 'group_by', column: groupBy[1].trim() };
-  }
-
-  const aggregateBy =
-    /^aggregate\s+(?:by\s+)?(?:the\s+)?(?:column\s+)?["']?([\w. -]+?)["']?$/i.exec(trimmed);
-  if (aggregateBy) {
-    return { kind: 'aggregate_by', column: aggregateBy[1].trim() };
-  }
-
   return null;
 }
 
@@ -458,11 +424,10 @@ export function resolveChatAction(message: string): ChatAction {
 /** Help text the chat can show users so they know what verbs work. */
 export const CHAT_ACTION_HINTS: string[] = [
   'Run correlation / regression / ANOVA / t-test / chi-square',
-  'Compute Variable, Recode, Count Values, Standardize',
+  'Recode, Standardize, Visual Binning, Rank Cases',
   'Import Data, Export Data, Merge Datasets',
   'Find Duplicates, Handle Missing Data, Data Quality Report',
   'Rename column X to Y · Delete column X',
   'Sort by X desc · Filter X > 10 · Filter X contains "foo"',
   'Hide column X · Show hidden columns · Clear filters · Clear sort',
-  'Group by X · Aggregate by X',
 ];

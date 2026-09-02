@@ -49,9 +49,6 @@ const ANALYZE_MENU_LABELS = [
 ];
 
 const TRANSFORM_MENU_LABELS = [
-  'Compute Variable',
-  'Count Values',
-  'Shift Values',
   'Recode Variables',
   'Standardize Variables',
   'Visual Binning',
@@ -60,12 +57,6 @@ const TRANSFORM_MENU_LABELS = [
 ];
 
 const UNAVAILABLE_COPY = 'on the launch roadmap';
-
-const COMING_SOON_TAB_LABELS = [
-  'Charts (coming soon)',
-  'Time series (coming soon)',
-  'ML & AI (coming soon)',
-];
 
 test.describe('Analyze command palette', () => {
   test.beforeEach(async ({ page }) => {
@@ -96,11 +87,6 @@ test.describe('Analyze command palette', () => {
     await selectPaletteTab(page, 'Transform');
     for (const label of TRANSFORM_MENU_LABELS) {
       await expect(palette.getByRole('button', { name: label, exact: true })).toBeVisible();
-    }
-
-    for (const tabLabel of COMING_SOON_TAB_LABELS) {
-      await expect(palette.getByText(tabLabel, { exact: true })).toBeVisible();
-      await expect(palette.getByRole('tab', { name: tabLabel, exact: true })).toHaveCount(0);
     }
 
     const allLabels = [...DATA_MENU_LABELS, ...ANALYZE_MENU_LABELS, ...TRANSFORM_MENU_LABELS];

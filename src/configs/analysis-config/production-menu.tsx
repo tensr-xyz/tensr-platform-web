@@ -48,9 +48,6 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
     icon: <Database className="h-4 w-4" />,
     sections: {
       Transform: [
-        'Compute Variable',
-        'Count Values',
-        'Shift Values',
         'Recode Variables',
         'Standardize Variables',
         'Visual Binning',
@@ -103,7 +100,6 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       Classification: ['Discriminant Analysis', 'Cluster Analysis', 'Decision Tree Classification'],
       Regression: [
         'Linear Regression',
-        'Stepwise Regression',
         'Hierarchical Multiple Regression',
         'Moderation Analysis',
         'Binary Logistic Regression',
@@ -112,7 +108,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Ordinal Regression',
       ],
       Agreement: ["Cohen's Kappa"],
-      'Normality & related': ['Shapiro–Wilk Test', 'McNemar Test'],
+      'Normality & related': ['Shapiro–Wilk Test'],
       'Regression (extended)': ['Probit Regression'],
       'Descriptive Statistics (tables)': [
         'Chi-square',
@@ -120,7 +116,6 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Odds Ratio',
         'Relative Risk',
       ],
-      Loglinear: ['Loglinear Analysis'],
     },
   },
   visualization: {
@@ -133,7 +128,6 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Histogram',
         'Boxplot',
         'Pie Chart',
-        'Heatmap',
         'Area Chart',
       ],
     },
@@ -177,7 +171,6 @@ export const PRODUCTION_ANALYSIS_LABELS: Record<
   'Kruskal-Wallis H': 'kruskal_wallis',
   'Bivariate Correlations': 'correlation',
   'Linear Regression': 'linear_regression',
-  'Stepwise Regression': 'stepwise_regression',
   'Binary Logistic Regression': 'logistic_regression',
   'Chi-square': 'chi_square',
   Crosstabs: 'chi_square',
@@ -203,7 +196,6 @@ export const PRODUCTION_ANALYSIS_LABELS: Record<
   'Decision Trees': 'decision_tree',
   'Shapiro–Wilk Test': 'shapiro_wilk',
   'Probit Regression': 'probit_regression',
-  'McNemar Test': 'mcnemar',
   'Negative Binomial Regression': 'negative_binomial_regression',
   'Ordinal Regression': 'ordinal_regression',
   "Cochran's Q": 'cochrans_q',
@@ -229,7 +221,6 @@ export const PRODUCTION_ANALYSIS_LABELS: Record<
   "Somers' D": 'somers_d',
   'Goodman-Kruskal Lambda': 'goodman_kruskal_lambda',
   'Cochran-Armitage Trend Test': 'cochran_armitage',
-  'Loglinear Analysis': 'loglinear',
   'Hierarchical Multiple Regression': 'hierarchical_regression',
   'Mixed ANOVA': 'anova_mixed',
   'Moderation Analysis': 'moderation_analysis',
