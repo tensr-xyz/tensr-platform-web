@@ -10,6 +10,7 @@ export interface AnalysisItem {
   section: string;
   analysisKey?: AnalysisKey;
   component: ReturnType<typeof getMenuItemComponent> | undefined;
+  searchBlob?: string;
 }
 
 export const DATA_TAB_VALUE = 'data';
@@ -157,6 +158,8 @@ export function getAllAnalysisItems(): AnalysisItem[] {
           section: sectionName,
           analysisKey: op,
           component,
+          searchBlob:
+            menuName === 'Custom Tables' ? 'banner custom tables stub nested banner' : undefined,
         });
       }
     }
@@ -176,6 +179,9 @@ export function filterAnalysisItems(items: AnalysisItem[], searchTerm: string): 
   const lowerSearchTerm = searchTerm.toLowerCase();
 
   return items.filter(item => {
+    if (item.searchBlob?.toLowerCase().includes(lowerSearchTerm)) {
+      return true;
+    }
     if (item.analysisKey && analysisSearchBlob(item.analysisKey).includes(lowerSearchTerm)) {
       return true;
     }

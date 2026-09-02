@@ -1,5 +1,5 @@
 import { PRODUCTION_MENU_ITEMS, PRODUCTION_ANALYSIS_LABELS } from './production-menu';
-import { getAllAnalysisItems } from './utils';
+import { getAllAnalysisItems, filterAnalysisItems } from './utils';
 import { COMING_SOON_SECTIONS } from './palette-catalog';
 import { isDialogMenuItem, getAnalysisOpForMenuName } from './menu-registry';
 import { RETIRED_FROM_UI_OPS } from '@/lib/retired-from-ui';
@@ -64,6 +64,18 @@ describe('production menu false-door sweep', () => {
       expect(isDialogMenuItem(name)).toBe(true);
       expect(getAllAnalysisItems().some(item => item.name === name)).toBe(true);
     }
+  });
+
+  it('puts Custom Tables under Analyze → Tables as a dialog, not Chi-square', () => {
+    expect(PRODUCTION_MENU_ITEMS.analyze.sections['Tables']).toEqual(['Custom Tables']);
+    expect(isDialogMenuItem('Custom Tables')).toBe(true);
+    expect(getAnalysisOpForMenuName('Custom Tables')).toBeUndefined();
+    const item = getAllAnalysisItems().find(i => i.name === 'Custom Tables');
+    expect(item?.section).toBe('Tables');
+    expect(item?.category).toBe('analyze');
+    expect(
+      filterAnalysisItems(getAllAnalysisItems(), 'banner').some(i => i.name === 'Custom Tables')
+    ).toBe(true);
   });
 
   it('every remaining catalog label launches a dialog or a real analysis op', () => {

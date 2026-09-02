@@ -63,6 +63,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
     icon: <Calculator className="h-4 w-4" />,
     sections: {
       'Descriptive Statistics': ['Descriptives'],
+      Tables: ['Custom Tables'],
       'Compare Means': [
         'Independent-Samples T Test',
         'Paired-Samples T Test',

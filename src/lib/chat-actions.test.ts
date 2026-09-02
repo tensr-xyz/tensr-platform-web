@@ -134,6 +134,22 @@ describe('resolveChatAction', () => {
     });
   });
 
+  it('opens Custom Tables from banner synonyms, not Chi-square', () => {
+    expect(resolveChatAction('custom tables')).toEqual({
+      kind: 'dialog',
+      menuName: 'Custom Tables',
+    });
+    expect(resolveChatAction('banner table')).toEqual({
+      kind: 'dialog',
+      menuName: 'Custom Tables',
+    });
+    expect(resolveChatAction('crosstab')).toEqual({
+      kind: 'analysis',
+      op: 'chi_square',
+      menuName: 'Chi-square',
+    });
+  });
+
   it('routes reliability synonyms to the more complete Reliability op', () => {
     expect(resolveChatAction('reliability analysis')).toEqual({
       kind: 'analysis',

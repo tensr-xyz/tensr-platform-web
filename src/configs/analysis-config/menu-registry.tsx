@@ -26,6 +26,7 @@ import { RecodeVariablesDialog } from '@/components/templates/transform/recode-v
 import { RankCasesDialog } from '@/components/templates/transform/rank-cases';
 import ComputeVariablesDialog from '@/components/templates/transform/compute-variable';
 import ShiftValuesDialog from '@/components/templates/transform/shift-values';
+import { CustomTablesDialog } from '@/components/templates/analysis/custom-tables';
 import {
   LagCasesDialog,
   LeadCasesDialog,
@@ -49,6 +50,7 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Recode Variables': RecodeVariablesDialog,
   'Compute Variable': ComputeVariablesDialog,
   'Shift Values': ShiftValuesDialog,
+  'Custom Tables': CustomTablesDialog,
   'Lag Cases': LagCasesDialog,
   'Lead Cases': LeadCasesDialog,
   'Rank Cases': RankCasesDialog,
