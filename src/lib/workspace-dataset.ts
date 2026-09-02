@@ -11,6 +11,7 @@ type TabDatasetFields = {
   datasetId?: string;
   fileId?: string;
   filePath?: string;
+  sourceDatasetId?: string;
 };
 
 /** Resolve tensr-api dataset id from a workspace tab or path string. */
@@ -18,6 +19,7 @@ export function getDatasetIdFromTab(tab: Tab | undefined): string | null {
   if (!tab) return null;
   const data = tab.data as TabDatasetFields | undefined;
   if (data?.datasetId && isDatasetId(data.datasetId)) return data.datasetId;
+  if (data?.sourceDatasetId && isDatasetId(data.sourceDatasetId)) return data.sourceDatasetId;
   if (data?.fileId && isDatasetId(data.fileId)) return data.fileId;
   return getDatasetIdFromPath(data?.filePath) ?? getDatasetIdFromPath(tab.path) ?? null;
 }

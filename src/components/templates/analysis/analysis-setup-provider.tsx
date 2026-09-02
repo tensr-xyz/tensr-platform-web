@@ -8,7 +8,11 @@ import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import { runDatasetAnalysis } from '@/lib/workspace-analysis';
 import { getMenuItemComponent } from '@/configs/analysis-config/menu-registry';
 import { recordTabSnapshot } from '@/lib/tab-history';
-import { resolveWorkspaceDatasetId, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
+import {
+  resolveSpreadsheetContextTab,
+  resolveWorkspaceDatasetId,
+  WORKSPACE_DATASET_REQUIRED,
+} from '@/lib/workspace-dataset';
 import { apiClient } from '@/lib/api-client';
 import { useTabsStore, type Tab } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -96,24 +100,29 @@ export function AnalysisSetupHost() {
   const [schema, setSchema] = useState<SchemaColumn[]>([]);
   // Only subscribe to the active tab's id so unrelated tabs being edited don't rerender the host.
   const activeTabId = useTabsStore(s => s.activeTabId);
+  const tabs = useTabsStore(s => s.tabs);
   // Materialise the actual tab object lazily and only when one of the surfaces is open.
   const activeTab = useTabsStore(s => s.tabs.find(t => t.id === activeTabId));
+  const contextTab = useMemo(
+    () => resolveSpreadsheetContextTab(tabs, activeTab) ?? activeTab,
+    [tabs, activeTab]
+  );
   const fileSystem = useProjectStore(s => s.fileSystem);
   const currentProject = useProjectStore(s => s.currentProject);
-  const activeTabFingerprint = activeTab
-    ? `${activeTab.id}:${activeTab.data?.initialColumns?.length ?? 0}`
+  const contextTabFingerprint = contextTab
+    ? `${contextTab.id}:${contextTab.data?.initialColumns?.length ?? 0}`
     : '';
-  const preview = useMemo(() => buildPreviewFromTab(activeTab), [activeTab]);
-  const tabSchema = useMemo(() => columnsFromTab(activeTab), [activeTabFingerprint]);
+  const preview = useMemo(() => buildPreviewFromTab(contextTab), [contextTab]);
+  const tabSchema = useMemo(() => columnsFromTab(contextTab), [contextTabFingerprint]);
   const effectiveSchema = schema.length ? schema : tabSchema;
   const datasetId = useMemo(
     () =>
       resolveWorkspaceDatasetId({
-        tab: activeTab,
+        tab: contextTab ?? activeTab,
         projectId: currentProject?.id,
         fileSystem,
       }),
-    [activeTab, currentProject?.id, fileSystem]
+    [contextTab, activeTab, currentProject?.id, fileSystem]
   );
 
   const setupOpen = setupOp !== null;
@@ -121,7 +130,9 @@ export function AnalysisSetupHost() {
 
   useEffect(() => {
     if (!setupOpen && !unavailableOpen) return;
-    const currentTab = useTabsStore.getState().tabs.find(t => t.id === activeTabId);
+    const currentTabs = useTabsStore.getState().tabs;
+    const currentActive = currentTabs.find(t => t.id === activeTabId);
+    const currentTab = resolveSpreadsheetContextTab(currentTabs, currentActive) ?? currentActive;
     const fallback = columnsFromTab(currentTab);
     setSchema(fallback);
     if (!datasetId) return;
@@ -139,7 +150,7 @@ export function AnalysisSetupHost() {
     return () => {
       cancelled = true;
     };
-  }, [setupOpen, unavailableOpen, datasetId, activeTabFingerprint, activeTabId]);
+  }, [setupOpen, unavailableOpen, datasetId, contextTabFingerprint, activeTabId]);
 
   const onRun = useCallback(
     async (op: AnalysisKey, body: Record<string, unknown>) => {

@@ -6,6 +6,7 @@ import {
   canvasFromStoredSpec,
   defaultCanvas,
   moveCategory,
+  resetBuilderSurface,
   nestUnderBanner,
   savedSpecLabel,
   uniqueColumnValues,
@@ -147,5 +148,15 @@ describe('custom table spec builder', () => {
         created_at: '2026-09-02T12:00:00Z',
       })
     ).toMatch(/aaaaaaaa/);
+  });
+
+  it('reset clears the canvas, run error, book, and preview warning', () => {
+    const next = resetBuilderSurface();
+    expect(next.canvas).toEqual(defaultCanvas());
+    expect(next.error).toBeNull();
+    expect(next.book).toBeNull();
+    expect(next.previewWarning).toBeNull();
+    expect(next.activeSpecId).toBeNull();
+    expect(next.cellClick).toBeNull();
   });
 });

@@ -235,10 +235,23 @@ const SYNONYMS: Record<string, string> = {
   'latent class analysis': 'Latent Class Analysis (LCA)',
 };
 
+const RETIRED_CHAT_SYNONYMS: Record<string, string> = {
+  mcnemar: 'McNemar Test',
+  'mcnemar test': 'McNemar Test',
+  loglinear: 'Loglinear Analysis',
+  'loglinear analysis': 'Loglinear Analysis',
+  stepwise: 'Stepwise Regression',
+  'stepwise regression': 'Stepwise Regression',
+  'open-text coding': 'Open-text coding',
+  'open text coding': 'Open-text coding',
+  'count values': 'Count Values',
+};
+
 /** Analysis synonyms checked before spreadsheet filter/sort parsing (avoids mis-routing). */
 const PRIORITY_ANALYSIS_SYNONYMS: Record<string, string> = {
   'latent class analysis': 'Latent Class Analysis (LCA)',
   'latent class': 'Latent Class Analysis (LCA)',
+  lca: 'Latent Class Analysis (LCA)',
   'structural equation model': 'Structural Equation Modelling (SEM)',
   'structural equation': 'Structural Equation Modelling (SEM)',
   'sem model': 'Structural Equation Modelling (SEM)',
@@ -254,13 +267,21 @@ const PRIORITY_ANALYSIS_SYNONYMS: Record<string, string> = {
   'coefficient of concordance': "Kendall's W",
 };
 
+function mentionsPhrase(lower: string, key: string): boolean {
+  if (key.length <= 3) {
+    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(lower);
+  }
+  return lower.includes(key);
+}
+
 function tryPriorityAnalysisAction(message: string): ChatAction | null {
   const lower = message.toLowerCase();
   const entries = Object.entries(PRIORITY_ANALYSIS_SYNONYMS).sort(
     (a, b) => b[0].length - a[0].length
   );
   for (const [key, label] of entries) {
-    if (!lower.includes(key)) continue;
+    if (!mentionsPhrase(lower, key)) continue;
     const op = getAnalysisOpForMenuName(label);
     if (op) return { kind: 'analysis', op, menuName: label };
   }
@@ -399,7 +420,7 @@ function matchMenuLabel(message: string): string | null {
   // synonyms
   const synonymsByLength = Object.entries(SYNONYMS).sort((a, b) => b[0].length - a[0].length);
   for (const [key, label] of synonymsByLength) {
-    if (lower.includes(key)) return label;
+    if (mentionsPhrase(lower, key)) return label;
   }
 
   return null;
@@ -411,11 +432,23 @@ function matchMenuLabel(message: string): string | null {
  * Returns `{ kind: 'chat' }` when no menu intent is detected so callers can
  * fall back to the LLM agent.
  */
+function matchRetiredChatAsk(message: string): string | null {
+  const lower = message.toLowerCase();
+  const entries = Object.entries(RETIRED_CHAT_SYNONYMS).sort((a, b) => b[0].length - a[0].length);
+  for (const [key, label] of entries) {
+    if (lower.includes(key)) return label;
+  }
+  return null;
+}
+
 export function resolveChatAction(message: string): ChatAction {
   const trimmed = message.trim();
   if (!trimmed) return { kind: 'chat' };
 
   if (shouldRouteToInlineChart(trimmed)) return { kind: 'chat' };
+
+  const retired = matchRetiredChatAsk(trimmed);
+  if (retired) return { kind: 'unavailable', menuName: retired };
 
   const priorityAnalysis = tryPriorityAnalysisAction(trimmed);
   if (priorityAnalysis) return priorityAnalysis;
@@ -434,6 +467,15 @@ export function resolveChatAction(message: string): ChatAction {
   if (op) return { kind: 'analysis', op, menuName: label };
 
   return { kind: 'unavailable', menuName: label };
+}
+
+/** Menu / refuse steal that must run before POST /assistant/agent-loop. */
+export function chatMenuSteal(message: string): ChatAction | null {
+  const action = resolveChatAction(message);
+  if (action.kind === 'analysis' || action.kind === 'dialog' || action.kind === 'unavailable') {
+    return action;
+  }
+  return null;
 }
 
 /** Help text the chat can show users so they know what verbs work. */

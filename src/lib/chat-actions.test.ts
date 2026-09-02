@@ -1,4 +1,4 @@
-import { resolveChatAction } from './chat-actions';
+import { chatMenuSteal, resolveChatAction } from './chat-actions';
 
 describe('resolveChatAction', () => {
   it('parses sort commands', () => {
@@ -103,11 +103,30 @@ describe('resolveChatAction', () => {
   });
 
   it('does not route chat to removed false-door labels', () => {
-    expect(resolveChatAction('open-text coding')).toEqual({ kind: 'chat' });
-    expect(resolveChatAction('mcnemar test')).toEqual({ kind: 'chat' });
-    expect(resolveChatAction('loglinear analysis')).toEqual({ kind: 'chat' });
-    expect(resolveChatAction('stepwise')).toEqual({ kind: 'chat' });
-    expect(resolveChatAction('count values')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('open-text coding')).toEqual({
+      kind: 'unavailable',
+      menuName: 'Open-text coding',
+    });
+    expect(resolveChatAction('mcnemar')).toEqual({
+      kind: 'unavailable',
+      menuName: 'McNemar Test',
+    });
+    expect(resolveChatAction('mcnemar test')).toEqual({
+      kind: 'unavailable',
+      menuName: 'McNemar Test',
+    });
+    expect(resolveChatAction('loglinear analysis')).toEqual({
+      kind: 'unavailable',
+      menuName: 'Loglinear Analysis',
+    });
+    expect(resolveChatAction('stepwise')).toEqual({
+      kind: 'unavailable',
+      menuName: 'Stepwise Regression',
+    });
+    expect(resolveChatAction('count values')).toEqual({
+      kind: 'unavailable',
+      menuName: 'Count Values',
+    });
   });
 
   it('opens validated LCA from chat synonyms', () => {
@@ -121,6 +140,29 @@ describe('resolveChatAction', () => {
       op: 'latent_class_analysis',
       menuName: 'Latent Class Analysis (LCA)',
     });
+    expect(resolveChatAction('lca')).toEqual({
+      kind: 'analysis',
+      op: 'latent_class_analysis',
+      menuName: 'Latent Class Analysis (LCA)',
+    });
+    expect(resolveChatAction('calculate the mean of Age')).toEqual({ kind: 'chat' });
+  });
+
+  it('steals retired and named-menu asks before the agent loop', () => {
+    expect(chatMenuSteal('mcnemar')).toEqual({
+      kind: 'unavailable',
+      menuName: 'McNemar Test',
+    });
+    expect(chatMenuSteal('lca')).toEqual({
+      kind: 'analysis',
+      op: 'latent_class_analysis',
+      menuName: 'Latent Class Analysis (LCA)',
+    });
+    expect(chatMenuSteal('compute variable')).toEqual({
+      kind: 'dialog',
+      menuName: 'Compute Variable',
+    });
+    expect(chatMenuSteal('hello there')).toBeNull();
   });
 
   it('opens restored compute and shift dialogs', () => {

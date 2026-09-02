@@ -21,7 +21,11 @@ import {
 } from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
-import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
+import {
+  getDatasetIdFromTab,
+  resolveSpreadsheetContextTab,
+  WORKSPACE_DATASET_REQUIRED,
+} from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
 import {
   downloadTableExport,
@@ -47,6 +51,7 @@ import {
   buildTableRequest,
   canvasFromStoredSpec,
   defaultCanvas,
+  resetBuilderSurface,
   moveCategory,
   nestUnderBanner,
   savedSpecLabel,
@@ -65,7 +70,11 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const token = getAccessToken();
   const { tabs, activeTabId } = useTabsStore();
   const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId), [tabs, activeTabId]);
-  const datasetId = getDatasetIdFromTab(activeTab);
+  const sheetTab = useMemo(
+    () => resolveSpreadsheetContextTab(tabs, activeTab) ?? activeTab,
+    [tabs, activeTab]
+  );
+  const datasetId = getDatasetIdFromTab(sheetTab) ?? getDatasetIdFromTab(activeTab);
   const [open, setOpen] = useState(false);
   const [canvas, setCanvas] = useState<CustomTableCanvas>(defaultCanvas);
   const [error, setError] = useState<string | null>(null);
@@ -79,13 +88,13 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [cellClick, setCellClick] = useState<string | null>(null);
 
   const columns = useMemo(() => {
-    if (!activeTab?.data?.initialColumns) return [];
-    return activeTab.data.initialColumns
+    if (!sheetTab?.data?.initialColumns) return [];
+    return sheetTab.data.initialColumns
       .map(c => ({ id: c.id, label: c.header || c.id }))
       .filter(c => !LINEAGE_HIDDEN_COLUMNS.has(c.id));
-  }, [activeTab?.data?.initialColumns]);
+  }, [sheetTab?.data?.initialColumns]);
 
-  const rows = useMemo(() => activeTab?.data?.initialData || [], [activeTab?.data?.initialData]);
+  const rows = useMemo(() => sheetTab?.data?.initialData || [], [sheetTab?.data?.initialData]);
 
   const runDatasetId = useMemo(() => {
     const selected = weightOptions.find(o => o.datasetId === weightChoice);
@@ -534,7 +543,19 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           ) : null}
         </div>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => setCanvas(defaultCanvas())}>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              const next = resetBuilderSurface();
+              setCanvas(next.canvas);
+              setError(next.error);
+              setBook(next.book);
+              setPreviewWarning(next.previewWarning);
+              setActiveSpecId(next.activeSpecId);
+              setCellClick(next.cellClick);
+            }}
+          >
             Reset
           </Button>
           <Button type="button" onClick={() => void run()} disabled={busy}>

@@ -1,5 +1,9 @@
-import { resolveWorkspaceDatasetId, getDatasetIdFromTab } from './workspace-dataset';
-import type { Tab } from '@/stores/tabs-store';
+import {
+  getDatasetIdFromTab,
+  resolveSpreadsheetContextTab,
+  resolveWorkspaceDatasetId,
+} from './workspace-dataset';
+import { ViewType, type Tab } from '@/stores/tabs-store';
 
 describe('resolveWorkspaceDatasetId', () => {
   const datasetId = '11111111-1111-4111-8111-111111111111';
@@ -37,5 +41,38 @@ describe('resolveWorkspaceDatasetId', () => {
         fileSystem: [{ fileId: datasetId }],
       })
     ).toBe(datasetId);
+  });
+
+  it('reads sourceDatasetId from an analysis result tab', () => {
+    const report: Tab = {
+      id: 'tab-report',
+      name: 'One-Way ANOVA',
+      type: ViewType.ANALYSIS_RESULT,
+      content: '',
+      isDirty: false,
+      path: datasetId,
+      data: {
+        sourceDatasetId: datasetId,
+        filePath: datasetId,
+      },
+    };
+    expect(getDatasetIdFromTab(report)).toBe(datasetId);
+  });
+
+  it('finds the sheet when a report tab is active so wizards keep the schema', () => {
+    const sheet = tab;
+    const report: Tab = {
+      id: 'tab-report',
+      name: 'One-Way ANOVA',
+      type: ViewType.ANALYSIS_RESULT,
+      content: '',
+      isDirty: false,
+      path: datasetId,
+      data: { sourceDatasetId: datasetId, filePath: datasetId },
+    };
+    expect(resolveSpreadsheetContextTab([sheet, report], report)).toEqual(sheet);
+    expect(resolveWorkspaceDatasetId({ tab: report, fileSystem: [{ fileId: datasetId }] })).toBe(
+      datasetId
+    );
   });
 });

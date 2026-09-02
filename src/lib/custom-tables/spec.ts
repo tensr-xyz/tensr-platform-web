@@ -35,6 +35,24 @@ export type TableRequestBody = {
   low_base_threshold: number;
 };
 
+export function resetBuilderSurface(): {
+  canvas: CustomTableCanvas;
+  error: null;
+  book: null;
+  previewWarning: null;
+  activeSpecId: null;
+  cellClick: null;
+} {
+  return {
+    canvas: defaultCanvas(),
+    error: null,
+    book: null,
+    previewWarning: null,
+    activeSpecId: null,
+    cellClick: null,
+  };
+}
+
 export function defaultCanvas(): CustomTableCanvas {
   return {
     stubs: [],

@@ -43,6 +43,7 @@ import {
 } from '@/components/atoms/tooltip';
 import { cn } from '@/utils';
 import { adoptDerivedDataset, type DerivedDatasetPayload } from '@/lib/adopt-derived-dataset';
+import { chatMenuSteal } from '@/lib/chat-actions';
 import { getDatasetIdFromTab, resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { dispatchApplyColumnFilters } from '@/lib/spreadsheet-commands';
@@ -690,9 +691,36 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     setError(projectId, null);
 
     try {
-      // Single POST /assistant/agent-loop replaces gates 1–5, menu steal, prep trigger,
-      // data-intent, exploratory, analysis, quality scan, and tutor fallback.
-      // (Removing the cascade also eliminates the old Gate 4 catch fall-through bug.)
+      const steal = chatMenuSteal(currentMessage);
+      if (steal) {
+        const setupStore = useAnalysisSetupStore.getState();
+        if (steal.kind === 'analysis') {
+          setupStore.openSetup(steal.op);
+          addMessage(projectId, {
+            role: 'assistant',
+            content: `Opening ${steal.menuName}.`,
+            timestamp: new Date(),
+          });
+        } else if (steal.kind === 'dialog') {
+          setupStore.openDialog(steal.menuName);
+          addMessage(projectId, {
+            role: 'assistant',
+            content: `Opening ${steal.menuName}.`,
+            timestamp: new Date(),
+          });
+        } else if (steal.kind === 'unavailable') {
+          setupStore.openUnavailable(steal.menuName, 'retired');
+          addMessage(projectId, {
+            role: 'assistant',
+            content:
+              `${steal.menuName} is no longer offered in the workspace. ` +
+              'Saved reports still open; new runs cannot be started from the menu, search, or the agent.',
+            timestamp: new Date(),
+          });
+        }
+        return;
+      }
+      // Single POST /assistant/agent-loop for asks that are not a named menu action.
       await invokeAgentLoop({
         message: currentMessage,
         triggerMessage: currentMessage,
