@@ -54,6 +54,32 @@ export function getSavedTable(datasetId: string, specId: string, token?: string 
   );
 }
 
+export function downloadTableExport(
+  datasetId: string,
+  specId: string,
+  kind: 'xlsx' | 'pptx',
+  token?: string | null
+) {
+  return fetch(tensrApiUrl(`/datasets/${datasetId}/tables/${specId}/export.${kind}`), {
+    method: 'GET',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  }).then(async res => {
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(formatApiErrorMessage(new Error(text || `Request failed (${res.status})`)));
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = kind === 'xlsx' ? 'banner.xlsx' : 'banner.pptx';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  });
+}
+
 export function previewCustomTable(
   datasetId: string,
   body: TableRequestBody,

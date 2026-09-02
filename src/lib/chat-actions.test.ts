@@ -150,6 +150,11 @@ describe('resolveChatAction', () => {
     });
   });
 
+  it('opens Rake Weights from raking synonyms, not Weight Cases', () => {
+    expect(resolveChatAction('rake')).toEqual({ kind: 'dialog', menuName: 'Rake Weights' });
+    expect(resolveChatAction('rake weights')).toEqual({ kind: 'dialog', menuName: 'Rake Weights' });
+  });
+
   it('routes reliability synonyms to the more complete Reliability op', () => {
     expect(resolveChatAction('reliability analysis')).toEqual({
       kind: 'analysis',

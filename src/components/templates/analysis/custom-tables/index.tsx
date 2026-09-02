@@ -24,6 +24,7 @@ import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
 import {
+  downloadTableExport,
   getSavedTable,
   listDatasetVersions,
   listSavedTables,
@@ -31,7 +32,13 @@ import {
   runCustomTable,
 } from '@/lib/custom-tables/api';
 import { netPreset, NET_HELPER_COPY, type NetPresetId } from '@/lib/custom-tables/nets';
-import { displayBannerTable, type BannerBook } from '@/lib/custom-tables/render';
+import {
+  netUnionReconciles,
+  resolveCompleteCell,
+  type CellClickResult,
+} from '@/lib/custom-tables/click-through';
+import { exportAuditCopy, exportTraceFromBook } from '@/lib/custom-tables/export';
+import { displayBannerTable, type BannerBook, type DisplayCell } from '@/lib/custom-tables/render';
 import {
   addBannerQuestion,
   addStubQuestion,
@@ -69,6 +76,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [previewWarning, setPreviewWarning] = useState<string | null>(null);
   const [savedSpecs, setSavedSpecs] = useState<SavedTableSpecRow[]>([]);
   const [activeSpecId, setActiveSpecId] = useState<string | null>(null);
+  const [cellClick, setCellClick] = useState<string | null>(null);
 
   const columns = useMemo(() => {
     if (!activeTab?.data?.initialColumns) return [];
@@ -173,6 +181,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       };
       setBook(result);
       setActiveSpecId(String(result.spec?.id || '') || null);
+      setCellClick(null);
       await refreshSavedSpecs(runId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Table failed');
@@ -194,6 +203,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       };
       setBook(result);
       setActiveSpecId(specId);
+      setCellClick(null);
       if (result.spec) setCanvas(c => canvasFromStoredSpec(result.spec as StoredTableSpec, c));
     } catch (e) {
       setBook(null);
@@ -204,6 +214,47 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   };
 
   const table = book ? displayBannerTable(book) : null;
+  const exportTrace = book ? exportTraceFromBook(book) : null;
+  const originOrder = book?.row_uid_order || [];
+
+  const clickCell = (cell: DisplayCell, stubLabel: string) => {
+    const resolved: CellClickResult = resolveCompleteCell(
+      { kind: cell.kind, unweighted_n: cell.unweighted_n, provenance: cell.provenance },
+      originOrder
+    );
+    if (resolved.kind !== 'complete') {
+      setCellClick(
+        `Click-through is complete-only. This cell is ${resolved.kind}: ${resolved.reason}.`
+      );
+      return;
+    }
+    const netNote =
+      cell.kind === 'net'
+        ? netUnionReconciles(
+            { kind: cell.kind, unweighted_n: cell.unweighted_n, provenance: cell.provenance },
+            originOrder
+          )
+          ? ` Net union n=${resolved.n} reconciles with the cell count.`
+          : ` Net union n=${resolved.n} does not reconcile with the cell count.`
+        : '';
+    setCellClick(`${stubLabel}: ${resolved.n} origin respondents.${netNote}`);
+  };
+
+  const exportBook = async (kind: 'xlsx' | 'pptx') => {
+    if (!activeSpecId || !runDatasetId) {
+      setError('Run and save a table before exporting.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await downloadTableExport(runDatasetId, activeSpecId, kind, token);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
     <Dialog
@@ -419,24 +470,66 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                       <td className="px-2 py-1 font-medium">{row.label}</td>
                       {row.cells.map((cell, i) => (
                         <td key={`${row.label}-${i}`} className="px-2 py-1">
-                          <div>
-                            {canvas.columnPercent ? cell.columnPercent : null}
-                            {canvas.rowPercent ? (
-                              <span className="ml-1 text-muted-foreground">
-                                {cell.rowPercent} row
-                              </span>
-                            ) : null}
-                            {cell.letters ? (
-                              <sup className="ml-0.5 font-medium">{cell.letters}</sup>
-                            ) : null}
-                          </div>
-                          <div className="text-[10px] text-muted-foreground">{cell.bases}</div>
+                          <button
+                            type="button"
+                            className="w-full text-left"
+                            onClick={() => clickCell(cell, row.label)}
+                          >
+                            <div>
+                              {canvas.columnPercent ? cell.columnPercent : null}
+                              {canvas.rowPercent ? (
+                                <span className="ml-1 text-muted-foreground">
+                                  {cell.rowPercent} row
+                                </span>
+                              ) : null}
+                              {cell.letters ? (
+                                <sup className="ml-0.5 font-medium">{cell.letters}</sup>
+                              ) : null}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">{cell.bases}</div>
+                          </button>
                         </td>
                       ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+          ) : null}
+          {cellClick ? (
+            <Alert>
+              <AlertDescription>{cellClick}</AlertDescription>
+            </Alert>
+          ) : null}
+          {exportTrace && activeSpecId ? (
+            <div className="space-y-1 text-[11px] text-muted-foreground">
+              <p>
+                Weight identity {exportTrace.identity} · trace {exportTrace.kind}
+              </p>
+              <p>{exportAuditCopy.xlsx}</p>
+              <p>{exportAuditCopy.pptx}</p>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[10px]"
+                  disabled={busy}
+                  onClick={() => void exportBook('xlsx')}
+                >
+                  Excel
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 text-[10px]"
+                  disabled={busy}
+                  onClick={() => void exportBook('pptx')}
+                >
+                  PowerPoint
+                </Button>
+              </div>
             </div>
           ) : null}
         </div>

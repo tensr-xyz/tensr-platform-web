@@ -159,7 +159,11 @@ export function getAllAnalysisItems(): AnalysisItem[] {
           analysisKey: op,
           component,
           searchBlob:
-            menuName === 'Custom Tables' ? 'banner custom tables stub nested banner' : undefined,
+            menuName === 'Custom Tables'
+              ? 'banner custom tables stub nested banner'
+              : menuName === 'Rake Weights'
+                ? 'rake raking ipf weight cases rim'
+                : undefined,
         });
       }
     }

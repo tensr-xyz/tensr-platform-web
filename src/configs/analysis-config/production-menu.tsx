@@ -41,6 +41,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Handle Missing Data',
         'Find Duplicates',
         'Data Quality Report',
+        'Rake Weights',
       ],
     },
   },

@@ -18,7 +18,7 @@ const DEAD_OR_MISLEADING_LABELS = [
   'Mixed between/within ANOVA',
 ];
 
-const REQUIRED_DIALOG_LABELS = ['Compute Variable', 'Shift Values'];
+const REQUIRED_DIALOG_LABELS = ['Compute Variable', 'Shift Values', 'Rake Weights'];
 
 function flattenMenuLabels(): string[] {
   const labels: string[] = [];
@@ -64,6 +64,16 @@ describe('production menu false-door sweep', () => {
       expect(isDialogMenuItem(name)).toBe(true);
       expect(getAllAnalysisItems().some(item => item.name === name)).toBe(true);
     }
+  });
+
+  it('puts Rake Weights under Data as a real form, not Weight Cases', () => {
+    expect(PRODUCTION_MENU_ITEMS.data.sections['Data preparation']).toContain('Rake Weights');
+    expect(flattenMenuLabels()).not.toContain('Weight Cases');
+    expect(isDialogMenuItem('Rake Weights')).toBe(true);
+    expect(getAnalysisOpForMenuName('Rake Weights')).toBeUndefined();
+    expect(
+      filterAnalysisItems(getAllAnalysisItems(), 'rake').some(i => i.name === 'Rake Weights')
+    ).toBe(true);
   });
 
   it('puts Custom Tables under Analyze → Tables as a dialog, not Chi-square', () => {

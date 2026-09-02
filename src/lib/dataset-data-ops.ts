@@ -158,6 +158,20 @@ export function standardizeDatasetValues(
   );
 }
 
+export type RakeWeightsResult = DerivedDatasetResult & {
+  derived_dataset_id: string;
+  parent_dataset_id?: string;
+  weight_vector?: { identity?: string; method?: string };
+};
+
+export function rakeDatasetWeights(
+  datasetId: string,
+  payload: { categorical_targets: Record<string, Record<string, number>> },
+  token?: string | null
+) {
+  return authedJson<RakeWeightsResult>(`/datasets/${datasetId}/weights/rake`, payload, token);
+}
+
 export type DataQualityReport = {
   n_rows: number;
   n_columns: number;

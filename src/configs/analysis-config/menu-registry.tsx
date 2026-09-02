@@ -27,6 +27,7 @@ import { RankCasesDialog } from '@/components/templates/transform/rank-cases';
 import ComputeVariablesDialog from '@/components/templates/transform/compute-variable';
 import ShiftValuesDialog from '@/components/templates/transform/shift-values';
 import { CustomTablesDialog } from '@/components/templates/analysis/custom-tables';
+import { RakeWeightsDialog } from '@/components/templates/data/rake-weights';
 import {
   LagCasesDialog,
   LeadCasesDialog,
@@ -51,6 +52,7 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Compute Variable': ComputeVariablesDialog,
   'Shift Values': ShiftValuesDialog,
   'Custom Tables': CustomTablesDialog,
+  'Rake Weights': RakeWeightsDialog,
   'Lag Cases': LagCasesDialog,
   'Lead Cases': LeadCasesDialog,
   'Rank Cases': RankCasesDialog,
