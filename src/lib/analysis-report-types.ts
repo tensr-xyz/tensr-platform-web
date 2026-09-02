@@ -188,10 +188,24 @@ export type AnalysisReport = {
   analysis_log?: string;
   spss_syntax?: string;
   reproducibility?: { r_script?: string };
+  r_syntax_verification?: {
+    kind: 'verified' | 'verified_in_ci' | 'not_verified' | 'unknown';
+    reason?: string;
+    statement?: string;
+    build_id?: string;
+    delta?: { f?: number; df_between?: number; df_within?: number; n?: number };
+  };
+  plugin_verification?: {
+    kind: 'not_verified' | 'unknown';
+    reason?: string;
+    statement?: string;
+  };
 };
 
 export type AnalyzeResponse = {
   result: Record<string, unknown>;
   report: AnalysisReport;
   run_id?: string;
+  provenance?: Record<string, unknown>;
+  convention?: Record<string, unknown>;
 };

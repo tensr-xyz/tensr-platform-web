@@ -1,4 +1,5 @@
 import type { AnalysisReport, AnalyzeResponse } from '@/lib/analysis-report-types';
+import { PLUGIN_UNVERIFIED_STATEMENT } from '@/lib/analysis-runs';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import type { PluginRecord } from '@/types/plugin';
 
@@ -62,9 +63,20 @@ export function pluginResultToAnalysisReport(
     tables,
     trust: {
       notes: ['Marketplace plugin (QuickJS / VPC-isolated executor)'],
-      warnings: tables.length
-        ? []
-        : ['Result was not a table — raw payload is in the report data.'],
+      warnings: [
+        PLUGIN_UNVERIFIED_STATEMENT,
+        ...(tables.length ? [] : ['Result was not a table — raw payload is in the report data.']),
+      ],
+    },
+    r_syntax_verification: {
+      kind: 'not_verified',
+      reason: 'plugin',
+      statement: PLUGIN_UNVERIFIED_STATEMENT,
+    },
+    plugin_verification: {
+      kind: 'not_verified',
+      reason: 'plugin',
+      statement: PLUGIN_UNVERIFIED_STATEMENT,
     },
   };
 }

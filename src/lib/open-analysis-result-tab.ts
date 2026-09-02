@@ -80,6 +80,7 @@ export function openAnalysisResultTab(params: {
       analysisRunId: params.envelope?.run_id,
       analysisReport: report,
       analysisResult: params.envelope?.result,
+      analysisProvenance: params.envelope?.provenance,
       filePath: params.sourceDatasetId,
     },
   });

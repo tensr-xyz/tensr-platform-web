@@ -26,6 +26,26 @@ describe('openAnalysisResultTab', () => {
     });
     expect(tab?.data?.analysisResult).toEqual({ r_squared: 0.5, dependent: 'PTS' });
     expect(tab?.data?.analysisRunId).toBe('run-1');
+    expect(tab?.data?.analysisProvenance).toBeUndefined();
+  });
+
+  it('stores envelope provenance on the tab for the three-state banner', () => {
+    const tabId = openAnalysisResultTab({
+      op: 'anova_oneway',
+      sourceDatasetId: 'ds1',
+      parameters: { group_column: 'Pos', value_column: 'Age' },
+      envelope: {
+        result: { f_statistic: 12 },
+        report: { summary: 'Groups differed' } as never,
+        run_id: 'run-2',
+        provenance: { row_uid_bitset: 'BQ==', row_uid_bitset_miss_count: 0 },
+      },
+    });
+    const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+    expect(tab?.data?.analysisProvenance).toEqual({
+      row_uid_bitset: 'BQ==',
+      row_uid_bitset_miss_count: 0,
+    });
   });
 
   it('opens a permanent loading placeholder when only raw stats are passed as envelope', () => {

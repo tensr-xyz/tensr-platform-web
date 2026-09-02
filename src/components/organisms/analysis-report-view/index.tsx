@@ -14,6 +14,11 @@ import {
   type AnalysisRelatedLink,
 } from '@/lib/analysis-chain-links';
 import { resolveReportBlocks } from '@/lib/report-blocks';
+import {
+  PLUGIN_UNVERIFIED_STATEMENT,
+  provenanceBannerText,
+  provenanceTraceState,
+} from '@/lib/analysis-runs';
 import { copyTableRich } from '@/utils/apa-clipboard';
 import { ReportChartCard } from '@/components/molecules/report-chart-card';
 import { Button } from '@/components/atoms/button';
@@ -374,9 +379,16 @@ type Props = {
   onAnnotateChart?: (sectionId: string, chartTitle: string) => void;
   /** Sibling chained reports from the same Plan/Agent pipeline turn. */
   relatedAnalyses?: AnalysisRelatedLink[] | null;
+  provenance?: Record<string, unknown> | null;
 };
 
-export function AnalysisReportView({ report, rawResult, onAnnotateChart, relatedAnalyses }: Props) {
+export function AnalysisReportView({
+  report,
+  rawResult,
+  onAnnotateChart,
+  relatedAnalyses,
+  provenance,
+}: Props) {
   const [copyState, setCopyState] = React.useState<string | null>(null);
   const [rawOpen, setRawOpen] = React.useState(false);
   const primaryTable = report.tables[0];
@@ -424,6 +436,13 @@ export function AnalysisReportView({ report, rawResult, onAnnotateChart, related
     .filter(Boolean)
     .join(' · ');
 
+  const pluginMark = report.plugin_verification;
+  const provenanceBanner = provenanceBannerText(provenanceTraceState(provenance));
+  const statusBanner =
+    pluginMark && (pluginMark.kind === 'not_verified' || pluginMark.kind === 'unknown')
+      ? pluginMark.statement || PLUGIN_UNVERIFIED_STATEMENT
+      : provenanceBanner;
+
   return (
     <div id="tensr-report-print-root" className="w-full text-left">
       {/* Page title — outside the result card */}
@@ -459,6 +478,18 @@ export function AnalysisReportView({ report, rawResult, onAnnotateChart, related
           {report.meta.title ? <MetaChip label="Test" value={report.meta.title} /> : null}
           <span className="flex-1" />
         </div>
+
+        {statusBanner ? (
+          <div
+            role="status"
+            className="border-b border-amber-500/20 bg-amber-500/[0.07] px-[22px] py-3"
+          >
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">
+              {pluginMark ? 'Unverified' : 'Traceability'}
+            </p>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{statusBanner}</p>
+          </div>
+        ) : null}
 
         {report.approach?.plan ||
         report.approach?.why_this_test ||

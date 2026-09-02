@@ -59,6 +59,8 @@ export interface TabData {
   analysisOp?: string;
   sourceDatasetId?: string;
   analysisRunId?: string;
+  /** Envelope provenance for the three-state report banner. Absent = unknown. */
+  analysisProvenance?: Record<string, unknown> | null;
   /** Dedupe key for workspace results tabs (op + sorted parameters). */
   analysisFingerprint?: string;
   analysisParameters?: Record<string, unknown>;

@@ -26,6 +26,7 @@ type Props = {
   analysisOp?: string;
   analysisRunId?: string;
   relatedAnalyses?: AnalysisRelatedLink[] | null;
+  provenance?: Record<string, unknown> | null;
 };
 
 export function AnalysisReportLayout({
@@ -35,6 +36,7 @@ export function AnalysisReportLayout({
   analysisOp,
   analysisRunId,
   relatedAnalyses,
+  provenance,
 }: Props) {
   const [railOpen, setRailOpen] = useState(true);
   const [activeSection, setActiveSection] = useState<string | undefined>();
@@ -178,6 +180,7 @@ export function AnalysisReportLayout({
               rawResult={rawResult}
               onAnnotateChart={handleAnnotateChart}
               relatedAnalyses={relatedAnalyses}
+              provenance={provenance}
             />
           </div>
         </div>

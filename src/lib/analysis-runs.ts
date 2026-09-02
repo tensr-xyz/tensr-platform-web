@@ -4,6 +4,55 @@ import { ANALYSIS_LABELS, type AnalysisKey } from '@/lib/analysis-definitions';
 import { isRetiredFromUi, retiredFromUiUserMessage } from '@/lib/retired-from-ui';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import { useTabsStore, ViewType, type AgentAnalysisHistoryEntry } from '@/stores/tabs-store';
+
+export type ProvenanceTraceState =
+  | { kind: 'unknown' }
+  | { kind: 'complete' }
+  | { kind: 'unavailable'; reason: string };
+
+export const PLUGIN_UNVERIFIED_STATEMENT =
+  'Plugin output is unverified. These numbers cannot be traced to the rows they came from.';
+
+export function provenanceTraceState(provenance: unknown): ProvenanceTraceState {
+  if (provenance === undefined || provenance === null || typeof provenance !== 'object') {
+    return { kind: 'unknown' };
+  }
+  const p = provenance as Record<string, unknown>;
+  const unavailable = p.provenance_unavailable;
+  if (typeof unavailable === 'string' && unavailable.trim()) {
+    return { kind: 'unavailable', reason: unavailable.trim() };
+  }
+  const miss = p.row_uid_bitset_miss_count;
+  const bitset = p.row_uid_bitset;
+  if (typeof miss === 'number' && miss > 0) {
+    return { kind: 'unavailable', reason: 'unknown_row_uids' };
+  }
+  if (typeof bitset === 'string' && bitset && (miss == null || miss === 0)) {
+    return { kind: 'complete' };
+  }
+  return { kind: 'unknown' };
+}
+
+export function provenanceBannerText(state: ProvenanceTraceState): string | null {
+  if (state.kind === 'unknown') {
+    return (
+      'Traceability unknown. This run has no stored provenance. ' +
+      'Numbers cannot be traced to the rows they came from.'
+    );
+  }
+  if (state.kind === 'unavailable') {
+    return (
+      `Provenance unavailable: ${state.reason}. ` +
+      'These numbers should not be trusted as a complete row set.'
+    );
+  }
+  return null;
+}
+
+export function canRevealConsumedRows(provenance: unknown): boolean {
+  return provenanceTraceState(provenance).kind === 'complete';
+}
+
 export type StoredAnalysisRun = {
   id: string;
   dataset_id: string;
@@ -11,6 +60,7 @@ export type StoredAnalysisRun = {
   created_at: string;
   report: AnalysisReport;
   result: Record<string, unknown>;
+  provenance?: Record<string, unknown> | null;
 };
 
 export async function listDatasetAnalysisRuns(datasetId: string): Promise<StoredAnalysisRun[]> {
@@ -33,6 +83,7 @@ export async function openStoredAnalysisRun(run: StoredAnalysisRun): Promise<voi
     result: run.result,
     report: run.report,
     run_id: run.id,
+    provenance: run.provenance ?? undefined,
   };
   openAnalysisResultTab({
     op: run.op,
@@ -122,6 +173,10 @@ export function normalizeStoredAnalysisRun(row: unknown): StoredAnalysisRun | nu
     created_at,
     report: report?.meta ? report : stubReportForOp(op, created_at),
     result: (r.result as Record<string, unknown>) ?? {},
+    provenance:
+      r.provenance && typeof r.provenance === 'object'
+        ? (r.provenance as Record<string, unknown>)
+        : null,
   };
 }
 
