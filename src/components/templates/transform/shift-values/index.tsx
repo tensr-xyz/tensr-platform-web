@@ -1,16 +1,16 @@
-import { ReactNode, useState, useMemo } from 'react';
+import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
   DialogTrigger,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
-import { Label } from '@/components/atoms/label';
 import { Input } from '@/components/atoms/input';
+import { Label } from '@/components/atoms/label';
 import {
   Select,
   SelectContent,
@@ -18,310 +18,129 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
+import { getAccessToken } from '@/utils/auth';
+import { shiftDatasetColumns } from '@/lib/dataset-data-ops';
+import { adoptDerivedDataset, LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
+import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
-import { Loader2 as Loader } from 'lucide-react';
-import { ColumnSummary } from '@/types/file';
-import useAuth from '@/hooks/api/use-auth';
-import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 
-const API_BASE_URL = getTensrApiBaseUrl();
+type ShiftDirection = 'lag' | 'lead';
 
-type ShiftDirection = 'previous' | 'next';
-type MissingValueHandling = 'sysmis' | 'value' | 'preserve';
-
-interface ShiftValuesRequest {
-  path: string;
-  variables: string[];
-  direction: ShiftDirection;
-  units: number;
-  missing_value_handling: MissingValueHandling;
-  custom_missing_value?: number;
-}
-
-interface ShiftValuesResponse {
-  success: boolean;
-  updated_columns: Record<string, string[]>; // Map of column name to shifted values
-  column_infos: Record<string, ColumnSummary>; // Map of column name to column summary
-  rows_affected: number;
-  column_types: Record<string, string>; // Map of column name to type
-}
-
-interface ShiftValuesDialogProps {
-  children: ReactNode;
-}
-
-export const ShiftValuesDialog = ({ children }: ShiftValuesDialogProps) => {
-  const [isLoading, setIsLoading] = useState(false);
+export function ShiftValuesDialog({ children }: { children: ReactNode }) {
+  const token = getAccessToken();
+  const { tabs, activeTabId } = useTabsStore();
+  const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId), [tabs, activeTabId]);
+  const datasetId = getDatasetIdFromTab(activeTab);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [direction, setDirection] = useState<ShiftDirection>('lag');
+  const [periods, setPeriods] = useState('1');
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<ShiftValuesResponse | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  // Shift configuration state
-  const [selectedVariables, setSelectedVariables] = useState<string[]>([]);
-  const [direction, setDirection] = useState<ShiftDirection>('previous');
-  const [units, setUnits] = useState<number>(1);
-  const [missingValueHandling, setMissingValueHandling] = useState<MissingValueHandling>('sysmis');
-  const [customMissingValue, setCustomMissingValue] = useState<string>('');
+  const columns = useMemo(() => {
+    if (!activeTab?.data?.initialColumns) return [];
+    return activeTab.data.initialColumns
+      .map(c => c.id)
+      .filter(id => !LINEAGE_HIDDEN_COLUMNS.has(id));
+  }, [activeTab?.data?.initialColumns]);
 
-  const { tabs, activeTabId, updateTab } = useTabsStore();
-  // Removed tokens - using getIdToken() directly
-  const { session } = useAuth();
-
-  const token = session?.sessionJwt || null;
-
-  const activeTab = useMemo(() => tabs.find(tab => tab.id === activeTabId), [tabs, activeTabId]);
-
-  const columnNames = useMemo(() => {
-    if (!activeTab?.data?.initialData?.[0]) {
-      return [];
-    }
-    const cols = Object.keys(activeTab.data.initialData[0]).filter(key => key !== 'id');
-    return cols;
-  }, [activeTab?.data?.initialData]);
-
-  const handleVariableSelect = (variable: string) => {
-    setSelectedVariables(prev =>
-      prev.includes(variable) ? prev.filter(v => v !== variable) : [...prev, variable]
-    );
+  const toggle = (col: string) => {
+    setSelected(prev => (prev.includes(col) ? prev.filter(c => c !== col) : [...prev, col]));
   };
 
-  const validateInput = () => {
-    if (selectedVariables.length === 0) return 'Please select at least one variable';
-    if (units < 1) return 'Units must be greater than 0';
-    if (missingValueHandling === 'value' && !customMissingValue) {
-      return 'Please specify a custom value for missing values';
-    }
-    return null;
-  };
-
-  const handleShift = async () => {
-    const validationError = validateInput();
-    if (validationError) {
-      setError(validationError);
+  const run = async () => {
+    if (!datasetId) {
+      setError(WORKSPACE_DATASET_REQUIRED);
       return;
     }
-
-    if (!activeTab?.data?.filePath) {
-      setError('File path not available');
+    if (!selected.length) {
+      setError('Select at least one column');
       return;
     }
-
-    if (!activeTab.id) {
-      setError('No active tab found');
+    const n = Number(periods);
+    if (!periods.trim() || Number.isNaN(n) || n < 1) {
+      setError('Periods must be at least 1');
       return;
     }
-
+    setBusy(true);
+    setError(null);
     try {
-      setIsLoading(true);
-      setError(null);
-      setSuccess(null);
-
-      const request: ShiftValuesRequest = {
-        path: activeTab.data.filePath,
-        variables: selectedVariables,
-        direction,
-        units,
-        missing_value_handling: missingValueHandling,
-        custom_missing_value:
-          missingValueHandling === 'value' ? parseFloat(customMissingValue) : undefined,
-      };
-
-      // Call the API endpoint
-      const response = await fetch(`${API_BASE_URL}/api/transform/shift-values`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(request),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.text();
-        throw new Error(errorData || 'Failed to shift values');
-      }
-
-      // Get the response data - now a ShiftValuesResponse
-      const data: ShiftValuesResponse = await response.json();
-      setSuccess(data);
-
-      if (!activeTab.data.initialData) {
-        throw new Error('No data available in the current tab');
-      }
-
-      // Update the current tab's data with the shifted columns
-      const updatedData = [...activeTab.data.initialData];
-
-      // For each shifted column, update the values
-      for (const columnName of Object.keys(data.updated_columns)) {
-        const columnValues = data.updated_columns[columnName];
-        const columnType = data.column_types[columnName];
-
-        // Add the shifted values to each row
-        for (let i = 0; i < updatedData.length; i++) {
-          if (i < columnValues.length) {
-            const value = columnValues[i];
-            // Convert value based on column type
-            let parsedValue: any = value;
-            if (columnType === 'Float64' && value !== 'null') {
-              parsedValue = parseFloat(value);
-            } else if (columnType === 'Int64' && value !== 'null') {
-              parsedValue = parseInt(value, 10);
-            } else if (value === 'null') {
-              parsedValue = null;
-            }
-
-            updatedData[i][columnName] = parsedValue;
-          }
-        }
-      }
-
-      // Update stats with the new column info
-      const updatedStats = {
-        ...(activeTab.data.columnStats || {}),
-      };
-
-      // Add stats for each updated column
-      for (const [columnName, columnInfo] of Object.entries(data.column_infos)) {
-        updatedStats[columnName] = columnInfo;
-      }
-
-      // Update the tab with the new data
-      updateTab(activeTab.id, {
-        data: {
-          ...activeTab.data,
-          initialData: updatedData,
-          columnStats: updatedStats,
-        },
-      });
-
-      // Reset form after successful operation
-      setSelectedVariables([]);
-      setDirection('previous');
-      setUnits(1);
-      setMissingValueHandling('sysmis');
-      setCustomMissingValue('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to shift values');
+      const res = await shiftDatasetColumns(
+        datasetId,
+        { columns: selected, direction, periods: n },
+        token
+      );
+      adoptDerivedDataset(res);
+      setOpen(false);
+      setSelected([]);
+      setDirection('lag');
+      setPeriods('1');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Shift failed');
     } finally {
-      setIsLoading(false);
+      setBusy(false);
     }
   };
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Shift Values</DialogTitle>
         </DialogHeader>
-
-        <div className="space-y-4">
-          {/* Variables Selection */}
-          <div className="space-y-2">
-            <Label>Variables to Shift</Label>
-            <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded-sm">
-              {columnNames.map(variable => (
-                <div key={variable} className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id={`var-${variable}`}
-                    checked={selectedVariables.includes(variable)}
-                    onChange={() => handleVariableSelect(variable)}
-                    className="rounded-sm border-gray-300"
-                  />
-                  <Label htmlFor={`var-${variable}`} className="cursor-pointer">
-                    {variable}
-                  </Label>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Shift Direction */}
-          <div className="space-y-2">
-            <Label htmlFor="direction">Shift Direction</Label>
-            <Select
-              value={direction}
-              onValueChange={(value: ShiftDirection) => setDirection(value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select shift direction" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="previous">Previous Value (Lag)</SelectItem>
-                <SelectItem value="next">Next Value (Lead)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Units */}
-          <div className="space-y-2">
-            <Label htmlFor="units">Number of Units</Label>
-            <Input
-              id="units"
-              type="number"
-              min="1"
-              value={units}
-              onChange={e => setUnits(parseInt(e.target.value) || 1)}
-            />
-          </div>
-
-          {/* Missing Value Handling */}
-          <div className="space-y-2">
-            <Label htmlFor="missing-handling">Missing Value Handling</Label>
-            <Select
-              value={missingValueHandling}
-              onValueChange={(value: MissingValueHandling) => setMissingValueHandling(value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select how to handle missing values" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sysmis">System-Missing</SelectItem>
-                <SelectItem value="value">Custom Value</SelectItem>
-                <SelectItem value="preserve">Preserve Original Values</SelectItem>
-              </SelectContent>
-            </Select>
-
-            {missingValueHandling === 'value' && (
-              <Input
-                type="number"
-                value={customMissingValue}
-                onChange={e => setCustomMissingValue(e.target.value)}
-                placeholder="Enter value for missing data"
-                className="mt-2"
+        <p className="text-sm text-muted-foreground">
+          Copies values from earlier (lag) or later (lead) rows into new columns. Vacated rows are
+          system-missing. Same endpoint as Lag Cases / Lead Cases.
+        </p>
+        <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
+          {columns.map(col => (
+            <label key={col} className="flex cursor-pointer items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={selected.includes(col)}
+                onChange={() => toggle(col)}
               />
-            )}
-          </div>
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {success && (
-            <Alert variant="default">
-              <AlertDescription>
-                Successfully shifted values in {selectedVariables.length} variable(s) (
-                {success.rows_affected} rows affected)
-              </AlertDescription>
-            </Alert>
-          )}
-
-          <div className="text-sm text-gray-500">
-            File: {activeTab?.data?.filePath || 'No file selected'}
-          </div>
+              {col}
+            </label>
+          ))}
         </div>
-
+        <div className="space-y-1">
+          <Label>Direction</Label>
+          <Select value={direction} onValueChange={value => setDirection(value as ShiftDirection)}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lag">Previous value (lag)</SelectItem>
+              <SelectItem value="lead">Next value (lead)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="shift-values-periods">Number of periods</Label>
+          <Input
+            id="shift-values-periods"
+            type="number"
+            min={1}
+            value={periods}
+            onChange={e => setPeriods(e.target.value)}
+          />
+        </div>
+        {error ? (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        ) : null}
         <DialogFooter>
-          <Button onClick={handleShift} disabled={isLoading || !activeTab?.data?.filePath}>
-            {isLoading ? <Loader className="h-4 w-4 animate-spin" /> : 'Shift Values'}
+          <Button onClick={run} disabled={busy}>
+            {busy ? 'Working…' : 'Shift Values'}
           </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
-};
+}
 
 export default ShiftValuesDialog;

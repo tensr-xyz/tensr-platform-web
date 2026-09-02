@@ -342,9 +342,13 @@ function appendRequiredFieldErrors(
         2, 'Select at least two within-subject measures.');
       break;
     case 'network':
-      require(WIZARD_FIELD.chiA, !!(form.chiA?.trim() && form.chiB?.trim()) ||
-        form.selectedCols.length >=
-          2, 'Select source and target columns, or at least two adjacency columns.');
+      if (form.networkIngest === 'adjacency') {
+        require(WIZARD_FIELD.columns, form.selectedCols.length >=
+          2, 'Select at least two adjacency columns.');
+      } else {
+        require(WIZARD_FIELD.chiA, !!form.chiA?.trim(), 'Select a source column.');
+        require(WIZARD_FIELD.chiB, !!form.chiB?.trim(), 'Select a target column.');
+      }
       break;
     case 'code_open_text':
       require(WIZARD_FIELD.columns, form.selectedCols.length >= 1 ||
@@ -1205,7 +1209,10 @@ export function analysisRequiredFieldsSatisfied(
     case 'mixed_anova':
       return !!(form.subjectCol?.trim() && form.groupCol?.trim() && form.selectedCols.length >= 2);
     case 'network':
-      return !!(form.chiA?.trim() && form.chiB?.trim()) || form.selectedCols.length >= 2;
+      if (form.networkIngest === 'adjacency') {
+        return form.selectedCols.length >= 2;
+      }
+      return !!(form.chiA?.trim() && form.chiB?.trim());
     case 'code_open_text':
       return form.selectedCols.length >= 1 || !!form.valueCol?.trim();
     case 'generalized_linear_mixed_model':

@@ -33,7 +33,7 @@ const ANALYZE_MENU_LABELS = [
   'Wilcoxon Signed-Rank',
   'Friedman Test',
   'Kolmogorov-Smirnov',
-  'Reliability Analysis',
+  'Reliability',
   'Partial Correlation',
   'Principal Component Analysis',
   'Exploratory Factor Analysis',
@@ -49,7 +49,9 @@ const ANALYZE_MENU_LABELS = [
 ];
 
 const TRANSFORM_MENU_LABELS = [
+  'Compute Variable',
   'Recode Variables',
+  'Shift Values',
   'Standardize Variables',
   'Visual Binning',
   'Lag Cases',

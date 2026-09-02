@@ -768,6 +768,8 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     clusterByCol,
     randomSlopeCols,
     reml,
+    networkIngest,
+    networkWeightCol,
   } = form;
 
   if (analysis === 'descriptives') {
@@ -1321,12 +1323,15 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     };
   }
   if (analysis === 'network') {
-    if (selectedCols.length >= 2 && !chiA) {
+    if (networkIngest === 'adjacency') {
+      if (selectedCols.length < 2) throw new Error('Select at least two adjacency columns');
       return { adjacency_columns: selectedCols };
     }
+    if (!chiA.trim() || !chiB.trim()) throw new Error('Select source and target columns');
     return {
-      source: chiA || selectedCols[0],
-      target: chiB || selectedCols[1],
+      source: chiA,
+      target: chiB,
+      ...(networkWeightCol.trim() ? { weight: networkWeightCol.trim() } : {}),
     };
   }
   if (analysis === 'code_open_text') {
@@ -1432,6 +1437,8 @@ export function defaultFormFieldsFromSchema(
     clusterByCol: '',
     randomSlopeCols: [] as string[],
     reml: true,
+    networkIngest: 'edge_list' as const,
+    networkWeightCol: '',
   };
 }
 
@@ -1502,6 +1509,8 @@ export type AnalysisFormState = {
   clusterByCol: string;
   randomSlopeCols: string[];
   reml: boolean;
+  networkIngest: 'edge_list' | 'adjacency';
+  networkWeightCol: string;
 };
 
 export function formStateFromBody(
@@ -1678,6 +1687,21 @@ export function formStateFromBody(
     const ind = body.indicators as string[] | undefined;
     if (ind?.length) state.selectedCols = ind;
     if (body.n_classes != null) state.pcaNComponents = String(body.n_classes);
+  }
+  if (op === 'network') {
+    const adj = body.adjacency_columns as string[] | undefined;
+    if (adj?.length) {
+      state.networkIngest = 'adjacency';
+      state.selectedCols = adj;
+      state.chiA = '';
+      state.chiB = '';
+      state.networkWeightCol = '';
+    } else {
+      state.networkIngest = 'edge_list';
+      if (typeof body.source === 'string') state.chiA = body.source;
+      if (typeof body.target === 'string') state.chiB = body.target;
+      state.networkWeightCol = typeof body.weight === 'string' ? body.weight : '';
+    }
   }
   if (op === 'confirmatory_factor_analysis') {
     const ind = body.indicators as string[] | undefined;

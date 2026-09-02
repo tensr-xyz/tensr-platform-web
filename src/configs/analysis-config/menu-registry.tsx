@@ -24,6 +24,8 @@ import { StandardizeVariablesDialog } from '@/components/templates/transform/sta
 import { BinVariablesDialog } from '@/components/templates/transform/bin-variables';
 import { RecodeVariablesDialog } from '@/components/templates/transform/recode-variables';
 import { RankCasesDialog } from '@/components/templates/transform/rank-cases';
+import ComputeVariablesDialog from '@/components/templates/transform/compute-variable';
+import ShiftValuesDialog from '@/components/templates/transform/shift-values';
 import {
   LagCasesDialog,
   LeadCasesDialog,
@@ -45,6 +47,8 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Standardize Values': StandardizeVariablesDialog,
   'Visual Binning': BinVariablesDialog,
   'Recode Variables': RecodeVariablesDialog,
+  'Compute Variable': ComputeVariablesDialog,
+  'Shift Values': ShiftValuesDialog,
   'Lag Cases': LagCasesDialog,
   'Lead Cases': LeadCasesDialog,
   'Rank Cases': RankCasesDialog,

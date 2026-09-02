@@ -123,6 +123,35 @@ describe('assistantUpdateFromParseIntent data actions', () => {
   });
 });
 
+describe('retired analysis ops are not agent-runnable', () => {
+  const menuFallback = {
+    op: 'descriptives' as const,
+    menuName: 'Descriptives',
+    triggerMessage: 'run lca',
+  };
+
+  it('refuses McNemar, stepwise, loglinear, and open-text from parse-intent', () => {
+    for (const analysis_type of ['mcnemar', 'stepwise_regression', 'loglinear', 'code_open_text']) {
+      const update = assistantUpdateFromParseIntent(
+        {
+          status: 'plan',
+          interpretation: `I'll run ${analysis_type}.`,
+          analysis_type,
+          request_body: { columns: ['a', 'b'] },
+          auto_execute: true,
+        },
+        'Analysis',
+        analysis_type
+      );
+      expect(update.type).toBe('unsupported');
+      if (update.type === 'unsupported') {
+        expect(update.content).toMatch(/no longer offered/);
+      }
+      expect(pendingActionFromParseIntentUpdate(update, menuFallback)).toBeUndefined();
+    }
+  });
+});
+
 describe('resolveChatAction new synonyms', () => {
   it('matches independent samples t-test phrasing', () => {
     const action = resolveChatAction(
