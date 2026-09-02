@@ -139,7 +139,8 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
 
   // Advanced Analytics
   'Factor Analysis': U('Factor analysis'),
-  'Reliability Analysis': L('reliability_cronbach'),
+  'Reliability Analysis': L('reliability'),
+  Reliability: L('reliability'),
   'Multidimensional Scaling (MDS)': L('multidimensional_scaling'),
   'Correspondence Analysis': U('Correspondence analysis'),
   'Survival Analysis': U('Survival analysis'),

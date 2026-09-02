@@ -1,5 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 import type { AnalysisReport, AnalyzeResponse } from '@/lib/analysis-report-types';
+import { ANALYSIS_LABELS, type AnalysisKey } from '@/lib/analysis-definitions';
+import { isRetiredFromUi, retiredFromUiUserMessage } from '@/lib/retired-from-ui';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import { useTabsStore, ViewType, type AgentAnalysisHistoryEntry } from '@/stores/tabs-store';
 export type StoredAnalysisRun = {
@@ -14,13 +16,13 @@ export type StoredAnalysisRun = {
 export async function listDatasetAnalysisRuns(datasetId: string): Promise<StoredAnalysisRun[]> {
   const res = await apiClient.datasets.analyze.listRuns(datasetId);
   const runs = Array.isArray(res) ? res : ((res as { runs?: StoredAnalysisRun[] })?.runs ?? []);
-  return runs.map(normalizeRun).filter((r): r is StoredAnalysisRun => r !== null);
+  return runs.map(normalizeStoredAnalysisRun).filter((r): r is StoredAnalysisRun => r !== null);
 }
 
 export async function fetchAnalysisRun(runId: string): Promise<StoredAnalysisRun | null> {
   try {
     const row = await apiClient.datasets.analyze.get(runId);
-    return normalizeRun(row);
+    return normalizeStoredAnalysisRun(row);
   } catch {
     return null;
   }
@@ -84,21 +86,41 @@ export function appendAnalysisRunToDatasetTab(params: {
   });
 }
 
-function normalizeRun(row: unknown): StoredAnalysisRun | null {
+function stubReportForOp(op: string, createdAt: string): AnalysisReport {
+  const title = ANALYSIS_LABELS[op as AnalysisKey] || op.replace(/_/g, ' ');
+  const summary = isRetiredFromUi(op)
+    ? retiredFromUiUserMessage(op)
+    : 'This saved run has no stored report. The original output cannot be reconstructed from the list entry.';
+  return {
+    meta: {
+      analysis_key: op,
+      title,
+      subtitle: '',
+      generated_at: createdAt || new Date().toISOString(),
+      rows_dataset: 0,
+    },
+    summary,
+    metrics: [],
+    tables: [],
+    trust: { notes: [], warnings: [] },
+  };
+}
+
+export function normalizeStoredAnalysisRun(row: unknown): StoredAnalysisRun | null {
   if (!row || typeof row !== 'object') return null;
   const r = row as Record<string, unknown>;
   const id = String(r.id ?? '');
   const dataset_id = String(r.dataset_id ?? '');
   const op = String(r.op ?? '');
   if (!id || !dataset_id || !op) return null;
+  const created_at = String(r.created_at ?? '');
   const report = r.report as AnalysisReport | undefined;
-  if (!report?.meta) return null;
   return {
     id,
     dataset_id,
     op,
-    created_at: String(r.created_at ?? ''),
-    report,
+    created_at,
+    report: report?.meta ? report : stubReportForOp(op, created_at),
     result: (r.result as Record<string, unknown>) ?? {},
   };
 }
