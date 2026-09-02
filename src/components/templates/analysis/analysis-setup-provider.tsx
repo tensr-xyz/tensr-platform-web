@@ -87,6 +87,7 @@ export function AnalysisSetupHost() {
   const dialogName = useAnalysisSetupStore(s => s.dialogName);
   const dialogNonce = useAnalysisSetupStore(s => s.dialogNonce);
   const unavailableName = useAnalysisSetupStore(s => s.unavailableName);
+  const unavailableKind = useAnalysisSetupStore(s => s.unavailableKind);
   const closeSetup = useAnalysisSetupStore(s => s.closeSetup);
   const closeUnavailable = useAnalysisSetupStore(s => s.closeUnavailable);
   const returnToCommandPalette = useAnalysisSetupStore(s => s.returnToCommandPalette);
@@ -193,9 +194,9 @@ export function AnalysisSetupHost() {
             <DialogHeader>
               <DialogTitle>{unavailableName}</DialogTitle>
               <DialogDescription>
-                This capability is on the launch roadmap. It needs more than a stats endpoint — for
-                example dedicated charts, model builders, or pipeline UX — so we are shipping it
-                after the core Analyze and Data tools are solid.
+                {unavailableKind === 'retired'
+                  ? 'This analysis is no longer offered in the workspace. Saved reports still open; new runs cannot be started from the menu, search, or the agent.'
+                  : 'This capability is on the launch roadmap. It needs more than a stats endpoint — for example dedicated charts, model builders, or pipeline UX — so we are shipping it after the core Analyze and Data tools are solid.'}
               </DialogDescription>
             </DialogHeader>
             <Button variant="outline" onClick={() => closeUnavailable()}>

@@ -716,6 +716,72 @@ function RegressionTabs(props: FormSliceProps & { logistic?: boolean }) {
   );
 }
 
+export function NetworkForm({ form, setForm, schema, allNames, notices, errors }: FormSliceProps) {
+  const ingest = form.networkIngest ?? 'edge_list';
+  return (
+    <section className="space-y-3">
+      <FormSectionLabel>Input</FormSectionLabel>
+      <PillToggle
+        value={ingest}
+        onChange={networkIngest => setForm(f => ({ ...f, networkIngest }))}
+        options={[
+          { value: 'edge_list' as const, label: 'Edge list' },
+          { value: 'adjacency' as const, label: 'Adjacency matrix' },
+        ]}
+        aria-label="Network input type"
+      />
+      {ingest === 'edge_list' ? (
+        <>
+          <p className="text-[10px] leading-snug text-muted-foreground">
+            Each row is a tie. Source and target name the two ends of that tie.
+          </p>
+          <ColumnSelect
+            label="Source"
+            value={form.chiA}
+            onChange={chiA => setForm(f => ({ ...f, chiA }))}
+            schema={schema}
+            names={allNames}
+            errors={errors[WIZARD_FIELD.chiA]}
+          />
+          <ColumnSelect
+            label="Target"
+            value={form.chiB}
+            onChange={chiB => setForm(f => ({ ...f, chiB }))}
+            schema={schema}
+            names={allNames}
+            errors={errors[WIZARD_FIELD.chiB]}
+          />
+          <ColumnSelect
+            label="Weight (optional)"
+            value={form.networkWeightCol}
+            onChange={networkWeightCol => setForm(f => ({ ...f, networkWeightCol }))}
+            schema={schema}
+            names={allNames}
+            expectedType="numeric"
+            notices={notices[WIZARD_FIELD.valueCol]}
+          />
+        </>
+      ) : (
+        <>
+          <p className="text-[10px] leading-snug text-muted-foreground">
+            Select the columns of a square numeric matrix. Rows are treated as the same nodes, in
+            the same order.
+          </p>
+          <MultiColumnPicker
+            selected={form.selectedCols}
+            onChange={selectedCols => setForm(f => ({ ...f, selectedCols }))}
+            schema={schema}
+            filterSlot="numeric"
+            showTypeShortcuts
+            minSelected={2}
+            errors={errors[WIZARD_FIELD.columns]}
+          />
+        </>
+      )}
+    </section>
+  );
+}
+
 export function ChiSquareForm({
   form,
   setForm,
@@ -2023,7 +2089,20 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'nelson_aalen':
       return <NelsonAalenForm {...props} />;
     case 'linear_mixed_model':
+    case 'mixed_model':
       return <MixedModelForm {...props} />;
+    case 'gee':
+      return <MixedModelForm {...props} />;
+    case 'reliability':
+      return <ReliabilityForm {...props} />;
+    case 'rm_anova':
+      return <RepeatedMeasuresAnovaForm {...props} />;
+    case 'mixed_anova':
+      return <MixedAnovaForm {...props} />;
+    case 'network':
+      return <NetworkForm {...props} />;
+    case 'code_open_text':
+      return <ReliabilityForm {...props} />;
     case 'generalized_linear_mixed_model':
       return <GlmmForm {...props} />;
     case 'multilevel_modelling':

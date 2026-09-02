@@ -106,12 +106,12 @@ const SYNONYMS: Record<string, string> = {
   'test for normality': 'Shapiro–Wilk Test',
   'normality test': 'Shapiro–Wilk Test',
   'check normality': 'Shapiro–Wilk Test',
-  cronbach: 'Reliability Analysis',
-  "cronbach's alpha": 'Reliability Analysis',
-  'reliability analysis': 'Reliability Analysis',
-  'internal consistency': 'Reliability Analysis',
-  'scale reliability': 'Reliability Analysis',
-  reliability: 'Reliability Analysis',
+  cronbach: 'Reliability',
+  "cronbach's alpha": 'Reliability',
+  'reliability analysis': 'Reliability',
+  'internal consistency': 'Reliability',
+  'scale reliability': 'Reliability',
+  reliability: 'Reliability',
   pca: 'Principal Component Analysis',
   'principal component': 'Principal Component Analysis',
   'partial correlation': 'Partial Correlation',
@@ -220,10 +220,17 @@ const SYNONYMS: Record<string, string> = {
   // transforms
   recode: 'Recode Variables',
   rank: 'Rank Cases',
+  'compute variable': 'Compute Variable',
+  'shift values': 'Shift Values',
+  lca: 'Latent Class Analysis (LCA)',
+  'latent class': 'Latent Class Analysis (LCA)',
+  'latent class analysis': 'Latent Class Analysis (LCA)',
 };
 
 /** Analysis synonyms checked before spreadsheet filter/sort parsing (avoids mis-routing). */
 const PRIORITY_ANALYSIS_SYNONYMS: Record<string, string> = {
+  'latent class analysis': 'Latent Class Analysis (LCA)',
+  'latent class': 'Latent Class Analysis (LCA)',
   'structural equation model': 'Structural Equation Modelling (SEM)',
   'structural equation': 'Structural Equation Modelling (SEM)',
   'sem model': 'Structural Equation Modelling (SEM)',
@@ -424,7 +431,7 @@ export function resolveChatAction(message: string): ChatAction {
 /** Help text the chat can show users so they know what verbs work. */
 export const CHAT_ACTION_HINTS: string[] = [
   'Run correlation / regression / ANOVA / t-test / chi-square',
-  'Recode, Standardize, Visual Binning, Rank Cases',
+  'Recode, Standardize, Visual Binning, Rank Cases, Compute Variable, Shift Values',
   'Import Data, Export Data, Merge Datasets',
   'Find Duplicates, Handle Missing Data, Data Quality Report',
   'Rename column X to Y · Delete column X',

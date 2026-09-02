@@ -79,7 +79,14 @@ export type AnalysisKey =
   | 'hierarchical_regression'
   | 'anova_mixed'
   | 'anova_threeway'
-  | 'moderation_analysis';
+  | 'moderation_analysis'
+  | 'mixed_model'
+  | 'gee'
+  | 'reliability'
+  | 'rm_anova'
+  | 'mixed_anova'
+  | 'network'
+  | 'code_open_text';
 
 export type KolmogorovTestType = 'normality' | 'two_sample';
 
@@ -163,6 +170,13 @@ export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
   anova_mixed: 'Mixed ANOVA',
   anova_threeway: 'Three-Way ANOVA',
   moderation_analysis: 'Moderation Analysis',
+  mixed_model: 'Mixed Model',
+  gee: 'GEE (clustered binary)',
+  reliability: 'Reliability',
+  rm_anova: 'Repeated Measures ANOVA',
+  mixed_anova: 'Mixed ANOVA',
+  network: 'Network',
+  code_open_text: 'Open-text coding',
 };
 
 export const SPSS_MENU_PATHS: Record<AnalysisKey, string> = {
@@ -245,6 +259,13 @@ export const SPSS_MENU_PATHS: Record<AnalysisKey, string> = {
   anova_mixed: 'Analyze → General Linear Model → Mixed ANOVA',
   anova_threeway: 'Analyze → General Linear Model → Three-Way ANOVA',
   moderation_analysis: 'Analyze → Regression → Moderation',
+  mixed_model: 'Analyze → Mixed Models → Mixed Model',
+  gee: 'Analyze → Generalized Linear Models → GEE',
+  reliability: 'Analyze → Scale → Reliability Analysis',
+  rm_anova: 'Analyze → General Linear Model → Repeated Measures',
+  mixed_anova: 'Analyze → General Linear Model → Mixed ANOVA',
+  network: 'Analyze → Network → Centrality',
+  code_open_text: 'Analyze → Text → Code open text',
 };
 
 /** Category ids for the command palette (display order). */
@@ -345,6 +366,13 @@ export const ANALYSIS_PALETTE_CATEGORY: Record<AnalysisKey, PaletteCategoryId> =
   anova_mixed: 'compare',
   anova_threeway: 'compare',
   moderation_analysis: 'prediction',
+  mixed_model: 'prediction',
+  gee: 'prediction',
+  reliability: 'describe',
+  rm_anova: 'compare',
+  mixed_anova: 'compare',
+  network: 'relationships',
+  code_open_text: 'describe',
 };
 
 export const HISTORY_LIMIT = 20;
@@ -737,6 +765,11 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     eventCol,
     semModelSpec,
     glmmFamily,
+    clusterByCol,
+    randomSlopeCols,
+    reml,
+    networkIngest,
+    networkWeightCol,
   } = form;
 
   if (analysis === 'descriptives') {
@@ -1255,6 +1288,55 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       confidence_level: confidenceLevelNumber(confidenceLevel),
     };
   }
+  if (analysis === 'mixed_model') {
+    return {
+      outcome: depCol,
+      fixed_effects: independentCols,
+      group: groupCol,
+      random_slopes: randomSlopeCols,
+      reml,
+    };
+  }
+  if (analysis === 'gee') {
+    if (!independentCols.length) throw new Error('Add at least one predictor');
+    return { outcome: depCol, independents: independentCols, group: groupCol };
+  }
+  if (analysis === 'reliability') {
+    if (selectedCols.length < 2) throw new Error('Select at least two items');
+    return { columns: selectedCols };
+  }
+  if (analysis === 'rm_anova') {
+    if (!subjectCol.trim()) throw new Error('Select a subject ID column');
+    if (selectedCols.length < 2) throw new Error('Select at least two measure columns');
+    return { subject_column: subjectCol, measure_columns: selectedCols };
+  }
+  if (analysis === 'mixed_anova') {
+    if (!subjectCol.trim()) throw new Error('Select a subject ID column');
+    if (selectedCols.length < 2) throw new Error('Select at least two within-subject measures');
+    return {
+      subject_column: subjectCol,
+      between_factor: groupCol,
+      within_measures: selectedCols,
+      confidence_level: confidenceLevelNumber(confidenceLevel),
+    };
+  }
+  if (analysis === 'network') {
+    if (networkIngest === 'adjacency') {
+      if (selectedCols.length < 2) throw new Error('Select at least two adjacency columns');
+      return { adjacency_columns: selectedCols };
+    }
+    if (!chiA.trim() || !chiB.trim()) throw new Error('Select source and target columns');
+    return {
+      source: chiA,
+      target: chiB,
+      ...(networkWeightCol.trim() ? { weight: networkWeightCol.trim() } : {}),
+    };
+  }
+  if (analysis === 'code_open_text') {
+    const col = selectedCols[0] || valueCol;
+    if (!col) throw new Error('Select a text column');
+    return { text_column: col, codebook: [], assignments: [] };
+  }
   return {};
 }
 
@@ -1350,6 +1432,11 @@ export function defaultFormFieldsFromSchema(
     eventCol: num[1] ?? schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
     semModelSpec: 'F1 =~ item1 + item2 + item3',
     glmmFamily: 'binomial' as const,
+    clusterByCol: '',
+    randomSlopeCols: [] as string[],
+    reml: true,
+    networkIngest: 'edge_list' as const,
+    networkWeightCol: '',
   };
 }
 
@@ -1417,6 +1504,11 @@ export type AnalysisFormState = {
   eventCol: string;
   semModelSpec: string;
   glmmFamily: 'binomial' | 'poisson';
+  clusterByCol: string;
+  randomSlopeCols: string[];
+  reml: boolean;
+  networkIngest: 'edge_list' | 'adjacency';
+  networkWeightCol: string;
 };
 
 export function formStateFromBody(
@@ -1568,6 +1660,21 @@ export function formStateFromBody(
     const fam = body.family;
     if (fam === 'binomial' || fam === 'poisson') state.glmmFamily = fam;
   }
+  if (op === 'mixed_model') {
+    if (typeof body.outcome === 'string') state.depCol = body.outcome;
+    const fixed = body.fixed_effects as string[] | undefined;
+    if (fixed?.length) state.independentCols = fixed;
+    if (typeof body.group === 'string') state.groupCol = body.group;
+    const slopes = body.random_slopes as string[] | undefined;
+    if (slopes?.length) state.randomSlopeCols = slopes;
+    if (typeof body.reml === 'boolean') state.reml = body.reml;
+  }
+  if (op === 'gee') {
+    if (typeof body.outcome === 'string') state.depCol = body.outcome;
+    const inds = body.independents as string[] | undefined;
+    if (inds?.length) state.independentCols = inds;
+    if (typeof body.group === 'string') state.groupCol = body.group;
+  }
   if (op === 'multilevel_modelling') {
     if (typeof body.outcome_column === 'string') state.valueCol = body.outcome_column;
     const preds = body.level1_predictors as string[] | undefined;
@@ -1578,6 +1685,21 @@ export function formStateFromBody(
     const ind = body.indicators as string[] | undefined;
     if (ind?.length) state.selectedCols = ind;
     if (body.n_classes != null) state.pcaNComponents = String(body.n_classes);
+  }
+  if (op === 'network') {
+    const adj = body.adjacency_columns as string[] | undefined;
+    if (adj?.length) {
+      state.networkIngest = 'adjacency';
+      state.selectedCols = adj;
+      state.chiA = '';
+      state.chiB = '';
+      state.networkWeightCol = '';
+    } else {
+      state.networkIngest = 'edge_list';
+      if (typeof body.source === 'string') state.chiA = body.source;
+      if (typeof body.target === 'string') state.chiB = body.target;
+      state.networkWeightCol = typeof body.weight === 'string' ? body.weight : '';
+    }
   }
   if (op === 'confirmatory_factor_analysis') {
     const ind = body.indicators as string[] | undefined;
@@ -1840,6 +1962,29 @@ export const ANALYSIS_WIZARD_META: Record<AnalysisKey, AnalysisWizardMeta> = {
   },
   moderation_analysis: {
     summary: 'Test whether X→Y relationship differs across levels of moderator M.',
+  },
+  mixed_model: {
+    summary:
+      'Random intercept/slope model for people nested in groups, with ICC and fit diagnostics.',
+  },
+  gee: {
+    summary: 'Clustered yes/no outcomes with an exchangeable working correlation.',
+  },
+  reliability: {
+    summary: "Cronbach's alpha, item-total correlations, and alpha-if-item-deleted.",
+  },
+  rm_anova: {
+    summary: 'Repeated measures on the same cases; wide columns are reshaped to long.',
+  },
+  mixed_anova: {
+    summary: 'Between-subjects grouping plus repeated measures on the same cases.',
+  },
+  network: {
+    summary:
+      'Centrality, density, components, and modularity from an edge list or adjacency matrix.',
+  },
+  code_open_text: {
+    summary: 'Code a free-text column with quote spans traced back to source rows.',
   },
 };
 

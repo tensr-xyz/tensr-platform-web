@@ -48,7 +48,9 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
     icon: <Database className="h-4 w-4" />,
     sections: {
       Transform: [
+        'Compute Variable',
         'Recode Variables',
+        'Shift Values',
         'Standardize Variables',
         'Visual Binning',
         'Lag Cases',
@@ -75,7 +77,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Kolmogorov-Smirnov',
         "Cochran's Q",
       ],
-      Reliability: ['Reliability Analysis'],
+      Reliability: ['Reliability'],
       Scale: ["Fleiss' Kappa", 'Weighted Kappa', "Kendall's W"],
       Correlate: [
         'Bivariate Correlations',
@@ -116,6 +118,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Odds Ratio',
         'Relative Risk',
       ],
+      Network: ['Network'],
     },
   },
   visualization: {
@@ -151,8 +154,8 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Generalized Linear Mixed Model (GLMM)',
         'Multilevel Modelling (HLM)',
       ],
-      'Latent Structure': ['Latent Class Analysis (LCA, unvalidated)'],
       'Factor & SEM': ['Confirmatory Factor Analysis (CFA)', 'Structural Equation Modelling (SEM)'],
+      'Latent Structure': ['Latent Class Analysis (LCA)'],
     },
   },
 };
@@ -177,7 +180,7 @@ export const PRODUCTION_ANALYSIS_LABELS: Record<
   'Wilcoxon Signed-Rank': 'wilcoxon_signed_rank',
   'Friedman Test': 'friedman',
   'Kolmogorov-Smirnov': 'kolmogorov_smirnov',
-  'Reliability Analysis': 'reliability_cronbach',
+  Reliability: 'reliability',
   'Partial Correlation': 'partial_correlation',
   'Principal Component Analysis': 'pca',
   PCA: 'pca',
@@ -207,8 +210,6 @@ export const PRODUCTION_ANALYSIS_LABELS: Record<
   'Linear Mixed Model (LMM)': 'linear_mixed_model',
   'Generalized Linear Mixed Model (GLMM)': 'generalized_linear_mixed_model',
   'Multilevel Modelling (HLM)': 'multilevel_modelling',
-  'Latent Class Analysis (LCA)': 'latent_class_analysis',
-  'Latent Class Analysis (LCA, unvalidated)': 'latent_class_analysis',
   'Confirmatory Factor Analysis (CFA)': 'confirmatory_factor_analysis',
   'Structural Equation Modelling (SEM)': 'structural_equation_modelling',
   "Fleiss' Kappa": 'fleiss_kappa',
@@ -224,4 +225,8 @@ export const PRODUCTION_ANALYSIS_LABELS: Record<
   'Hierarchical Multiple Regression': 'hierarchical_regression',
   'Mixed ANOVA': 'anova_mixed',
   'Moderation Analysis': 'moderation_analysis',
+  'Mixed Model': 'mixed_model',
+  'GEE (clustered binary)': 'gee',
+  Network: 'network',
+  'Latent Class Analysis (LCA)': 'latent_class_analysis',
 };

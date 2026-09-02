@@ -103,9 +103,7 @@ export function getPaletteTabContent(
 }
 
 function isLaunchableMenuName(name: string): boolean {
-  return (
-    name in ANALYSIS_COMPONENTS || name in PRODUCTION_ANALYSIS_LABELS || isDialogMenuItem(name)
-  );
+  return isDialogMenuItem(name) || name in PRODUCTION_ANALYSIS_LABELS;
 }
 
 function paletteItemName(menuName: string, op?: AnalysisKey): string {

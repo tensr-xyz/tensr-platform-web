@@ -99,6 +99,14 @@ export function binDatasetColumn(
   return authedJson<DerivedDatasetResult>(`/datasets/${datasetId}/bin`, payload, token);
 }
 
+export function computeDataset(
+  datasetId: string,
+  payload: { transforms: Array<Record<string, unknown>> },
+  token?: string | null
+) {
+  return authedJson<DerivedDatasetResult>(`/datasets/${datasetId}/compute`, payload, token);
+}
+
 export function recodeDatasetColumn(
   datasetId: string,
   payload: {

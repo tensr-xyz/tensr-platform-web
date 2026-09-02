@@ -50,6 +50,53 @@ const MOCK_DESCRIPTIVES_REPORT = {
   trust: { notes: [], warnings: [] },
 };
 
+const MOCK_COMPUTED_DATASET_ID = 'e5d1c555-9f80-497d-b0fb-2bfa07983d4c';
+const MOCK_SHIFTED_DATASET_ID = 'a1b2c3d4-1111-4111-8111-111111111111';
+
+const MOCK_COMPUTE_RESPONSE = {
+  dataset_id: MOCK_COMPUTED_DATASET_ID,
+  original_filename: 'e2e-sample_computed.csv',
+  n_rows: 3,
+  n_cols: 4,
+  preview: {
+    headers: ['age', 'group', 'score', 'age_plus_score'],
+    variable_names: ['age', 'group', 'score', 'age_plus_score'],
+    rows: [
+      [25, 'A', 88, 113],
+      [30, 'B', 92, 122],
+      [28, 'A', 85, 113],
+    ],
+    columns: [
+      { name: 'age', type: 'numeric' },
+      { name: 'group', type: 'string' },
+      { name: 'score', type: 'numeric' },
+      { name: 'age_plus_score', type: 'numeric' },
+    ],
+  },
+};
+
+const MOCK_SHIFT_RESPONSE = {
+  dataset_id: MOCK_SHIFTED_DATASET_ID,
+  original_filename: 'e2e-sample_lag.csv',
+  n_rows: 3,
+  n_cols: 4,
+  preview: {
+    headers: ['age', 'group', 'score', 'score_lag1'],
+    variable_names: ['age', 'group', 'score', 'score_lag1'],
+    rows: [
+      [25, 'A', 88, null],
+      [30, 'B', 92, 88],
+      [28, 'A', 85, 92],
+    ],
+    columns: [
+      { name: 'age', type: 'numeric' },
+      { name: 'group', type: 'string' },
+      { name: 'score', type: 'numeric' },
+      { name: 'score_lag1', type: 'numeric' },
+    ],
+  },
+};
+
 const MOCK_ANALYZE_RESPONSE = {
   result: { columns: MOCK_COLUMNS },
   report: MOCK_DESCRIPTIVES_REPORT,
@@ -127,6 +174,16 @@ async function fulfillDatasetRoute(route: Route): Promise<boolean> {
 
   if (method === 'GET' && url.includes(`/datasets/${E2E_DATASET_ID}/preview`)) {
     await json(route, MOCK_PREVIEW);
+    return true;
+  }
+
+  if (method === 'POST' && url.includes(`/datasets/${E2E_DATASET_ID}/compute`)) {
+    await json(route, MOCK_COMPUTE_RESPONSE);
+    return true;
+  }
+
+  if (method === 'POST' && url.includes(`/datasets/${E2E_DATASET_ID}/shift`)) {
+    await json(route, MOCK_SHIFT_RESPONSE);
     return true;
   }
 

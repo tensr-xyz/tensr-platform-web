@@ -12,6 +12,7 @@ import { interpretProgressMessage } from '@/lib/agent-analysis-progress';
 import { streamAgentAnalysisRun } from '@/lib/stream-agent-analysis';
 import { resolveChatAction } from '@/lib/chat-actions';
 import { formatUnsupportedWithClosest } from '@/lib/agent-capabilities';
+import { isRetiredFromUi, retiredFromUiUserMessage } from '@/lib/retired-from-ui';
 
 export type ParseIntentResult = {
   status: string;
@@ -83,6 +84,13 @@ export function assistantUpdateFromParseIntent(
   menuName: string,
   triggerMessage?: string
 ): ParseIntentAssistantUpdate {
+  if (isRetiredFromUi(intent.analysis_type)) {
+    return {
+      type: 'unsupported',
+      content: retiredFromUiUserMessage(intent.analysis_type),
+    };
+  }
+
   if (intent.status === 'plan' && (intent.intent_kind === 'action' || intent.action_type)) {
     if (intent.action_type) {
       return {
@@ -203,6 +211,10 @@ export async function runAgentAnalysisPlan(
           ? 'correlation'
           : op;
 
+  if (isRetiredFromUi(String(resolvedOp))) {
+    throw new Error(retiredFromUiUserMessage(String(resolvedOp)));
+  }
+
   const resolvedSpec =
     op === 'regression'
       ? {
@@ -311,6 +323,9 @@ export function planFromParseIntent(res: ParseIntentResult): AgentAnalysisPlan |
   if (res.status !== 'plan' || !res.analysis_type || !res.request_body) {
     return null;
   }
+  if (isRetiredFromUi(res.analysis_type)) {
+    return null;
+  }
   return {
     analysisType: res.analysis_type,
     spec: res.request_body,
@@ -332,7 +347,7 @@ export async function fetchExploratorySuggestions(
     datasetId,
     conversationHistory,
   });
-  return res.suggestions ?? [];
+  return (res.suggestions ?? []).filter(item => !isRetiredFromUi(item.analysis_type));
 }
 
 export function suggestionToPlan(item: SuggestAnalysisResult): AgentAnalysisPlan {

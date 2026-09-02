@@ -107,8 +107,43 @@ describe('resolveChatAction', () => {
     expect(resolveChatAction('mcnemar test')).toEqual({ kind: 'chat' });
     expect(resolveChatAction('loglinear analysis')).toEqual({ kind: 'chat' });
     expect(resolveChatAction('stepwise')).toEqual({ kind: 'chat' });
-    expect(resolveChatAction('compute variable')).toEqual({ kind: 'chat' });
     expect(resolveChatAction('count values')).toEqual({ kind: 'chat' });
-    expect(resolveChatAction('shift values')).toEqual({ kind: 'chat' });
+  });
+
+  it('opens validated LCA from chat synonyms', () => {
+    expect(resolveChatAction('latent class analysis')).toEqual({
+      kind: 'analysis',
+      op: 'latent_class_analysis',
+      menuName: 'Latent Class Analysis (LCA)',
+    });
+    expect(resolveChatAction('run lca')).toEqual({
+      kind: 'analysis',
+      op: 'latent_class_analysis',
+      menuName: 'Latent Class Analysis (LCA)',
+    });
+  });
+
+  it('opens restored compute and shift dialogs', () => {
+    expect(resolveChatAction('compute variable')).toEqual({
+      kind: 'dialog',
+      menuName: 'Compute Variable',
+    });
+    expect(resolveChatAction('shift values')).toEqual({
+      kind: 'dialog',
+      menuName: 'Shift Values',
+    });
+  });
+
+  it('routes reliability synonyms to the more complete Reliability op', () => {
+    expect(resolveChatAction('reliability analysis')).toEqual({
+      kind: 'analysis',
+      op: 'reliability',
+      menuName: 'Reliability',
+    });
+    expect(resolveChatAction("cronbach's alpha")).toEqual({
+      kind: 'analysis',
+      op: 'reliability',
+      menuName: 'Reliability',
+    });
   });
 });
