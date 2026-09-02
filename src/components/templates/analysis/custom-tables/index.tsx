@@ -23,7 +23,13 @@ import { getAccessToken } from '@/utils/auth';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
-import { listDatasetVersions, previewCustomTable, runCustomTable } from '@/lib/custom-tables/api';
+import {
+  getSavedTable,
+  listDatasetVersions,
+  listSavedTables,
+  previewCustomTable,
+  runCustomTable,
+} from '@/lib/custom-tables/api';
 import { netPreset, NET_HELPER_COPY, type NetPresetId } from '@/lib/custom-tables/nets';
 import { displayBannerTable, type BannerBook } from '@/lib/custom-tables/render';
 import {
@@ -32,10 +38,14 @@ import {
   applyNetToStub,
   bannerColumnProduct,
   buildTableRequest,
+  canvasFromStoredSpec,
   defaultCanvas,
   moveCategory,
   nestUnderBanner,
+  savedSpecLabel,
   type CustomTableCanvas,
+  type SavedTableSpecRow,
+  type StoredTableSpec,
 } from '@/lib/custom-tables/spec';
 import {
   pickRunDatasetId,
@@ -57,6 +67,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [weightOptions, setWeightOptions] = useState<WeightOption[]>([]);
   const [weightChoice, setWeightChoice] = useState<string>('');
   const [previewWarning, setPreviewWarning] = useState<string | null>(null);
+  const [savedSpecs, setSavedSpecs] = useState<SavedTableSpecRow[]>([]);
+  const [activeSpecId, setActiveSpecId] = useState<string | null>(null);
 
   const columns = useMemo(() => {
     if (!activeTab?.data?.initialColumns) return [];
@@ -66,6 +78,24 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   }, [activeTab?.data?.initialColumns]);
 
   const rows = useMemo(() => activeTab?.data?.initialData || [], [activeTab?.data?.initialData]);
+
+  const runDatasetId = useMemo(() => {
+    const selected = weightOptions.find(o => o.datasetId === weightChoice);
+    return selected ? pickRunDatasetId(selected) : weightChoice || datasetId || '';
+  }, [weightOptions, weightChoice, datasetId]);
+
+  const refreshSavedSpecs = async (targetId: string) => {
+    if (!targetId) {
+      setSavedSpecs([]);
+      return;
+    }
+    try {
+      const listed = await listSavedTables(targetId, token);
+      setSavedSpecs(listed.specs || []);
+    } catch {
+      setSavedSpecs([]);
+    }
+  };
 
   useEffect(() => {
     if (!open || !datasetId) return;
@@ -87,6 +117,11 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       cancelled = true;
     };
   }, [open, datasetId, token]);
+
+  useEffect(() => {
+    if (!open || !runDatasetId) return;
+    void refreshSavedSpecs(runDatasetId);
+  }, [open, runDatasetId, token]);
 
   const product = bannerColumnProduct(canvas.banners, canvas.nestBanners);
   const largeBanner = product > 16;
@@ -125,8 +160,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     setError(null);
     setPreviewWarning(null);
     const body = buildTableRequest(canvas);
-    const selected = weightOptions.find(o => o.datasetId === weightChoice);
-    const runId = selected ? pickRunDatasetId(selected) : weightChoice || datasetId;
+    const runId = runDatasetId;
     try {
       const preview = await previewCustomTable(runId, body, token);
       const warn = (preview.warnings || [])
@@ -134,10 +168,36 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
         .filter(Boolean)
         .join(' ');
       if (warn) setPreviewWarning(warn);
-      const result = (await runCustomTable(runId, body, token)) as BannerBook;
+      const result = (await runCustomTable(runId, body, token)) as BannerBook & {
+        spec?: StoredTableSpec;
+      };
       setBook(result);
+      setActiveSpecId(String(result.spec?.id || '') || null);
+      await refreshSavedSpecs(runId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Table failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const reopen = async (row: SavedTableSpecRow) => {
+    const specId = row.spec_id || row.id;
+    const targetId = row.dataset_id || runDatasetId;
+    if (!specId || !targetId) return;
+    setBusy(true);
+    setError(null);
+    setPreviewWarning(null);
+    try {
+      const result = (await getSavedTable(targetId, specId, token)) as BannerBook & {
+        spec?: StoredTableSpec;
+      };
+      setBook(result);
+      setActiveSpecId(specId);
+      if (result.spec) setCanvas(c => canvasFromStoredSpec(result.spec as StoredTableSpec, c));
+    } catch (e) {
+      setBook(null);
+      setError(e instanceof Error ? e.message : 'Could not reopen table');
     } finally {
       setBusy(false);
     }
@@ -296,9 +356,45 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           ) : null}
           {error ? (
             <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
+              <AlertDescription className="whitespace-pre-wrap">{error}</AlertDescription>
             </Alert>
           ) : null}
+          <div className="rounded-md border border-border p-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Saved tables
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Run stores the spec. Reopen regenerates cells from the parquet.
+            </p>
+            {savedSpecs.length ? (
+              <ul className="mt-2 space-y-1">
+                {savedSpecs.map(row => {
+                  const id = row.spec_id || row.id || '';
+                  return (
+                    <li key={id} className="flex items-center justify-between gap-2 text-xs">
+                      <span className={id === activeSpecId ? 'font-medium' : ''}>
+                        {savedSpecLabel(row)}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-[10px]"
+                        disabled={busy}
+                        onClick={() => void reopen(row)}
+                      >
+                        Reopen
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-2 text-[11px] text-muted-foreground">
+                No saved specs on this file yet.
+              </p>
+            )}
+          </div>
           {table ? (
             <div className="overflow-x-auto rounded-md border border-border">
               <table className="w-full text-left text-xs">
@@ -349,7 +445,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
             Reset
           </Button>
           <Button type="button" onClick={() => void run()} disabled={busy}>
-            {busy ? 'Running…' : 'Run'}
+            {busy ? 'Running…' : 'Run and save'}
           </Button>
         </DialogFooter>
       </DialogContent>

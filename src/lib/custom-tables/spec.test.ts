@@ -3,9 +3,11 @@ import {
   addStubQuestion,
   bannerColumnProduct,
   buildTableRequest,
+  canvasFromStoredSpec,
   defaultCanvas,
   moveCategory,
   nestUnderBanner,
+  savedSpecLabel,
   uniqueColumnValues,
   type CustomTableCanvas,
 } from './spec';
@@ -94,5 +96,56 @@ describe('custom table spec builder', () => {
         'colour'
       )
     ).toEqual(['red', 'blue']);
+  });
+
+  it('restores the canvas from a persisted spec so reopen matches save', () => {
+    const restored = canvasFromStoredSpec({
+      id: 'spec-1',
+      stubs: [
+        {
+          column: 'nps',
+          values: ['9', '8', '6'],
+          nets: [{ label: 'NET Promoter', values: ['9'] }],
+        },
+      ],
+      banner: [
+        {
+          column: 'age_band',
+          values: ['18-34', '35-54'],
+          nested: [{ column: 'gender', values: ['Male', 'Female'] }],
+        },
+      ],
+      statistics: ['column_proportion', 'row_proportion'],
+      nest_banners: true,
+      significance_display: 'column_letters',
+    });
+    expect(restored.stubs[0]).toEqual({
+      column: 'nps',
+      values: ['9', '8', '6'],
+      nets: [{ label: 'NET Promoter', values: ['9'] }],
+    });
+    expect(restored.banners[0].column).toBe('age_band');
+    expect(restored.banners[0].nested[0].column).toBe('gender');
+    expect(restored.rowPercent).toBe(true);
+    expect(restored.columnPercent).toBe(true);
+    expect(restored.nestBanners).toBe(true);
+    expect(restored.significanceDisplay).toBe('column_letters');
+    expect(buildTableRequest(restored).stubs[0].nets?.[0].label).toBe('NET Promoter');
+  });
+
+  it('labels a saved spec from stub and banner columns, not a code', () => {
+    expect(
+      savedSpecLabel({
+        spec_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        created_at: '2026-09-02T12:00:00Z',
+        label: 'gender by age_band',
+      })
+    ).toBe('gender by age_band');
+    expect(
+      savedSpecLabel({
+        spec_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+        created_at: '2026-09-02T12:00:00Z',
+      })
+    ).toMatch(/aaaaaaaa/);
   });
 });

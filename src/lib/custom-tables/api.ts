@@ -1,6 +1,6 @@
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { formatApiErrorMessage } from '@/lib/api-error';
-import type { TableRequestBody } from './spec';
+import type { TableRequestBody, SavedTableSpecRow } from './spec';
 import type { LineageVersion } from './weight';
 
 async function authedJson<T>(path: string, init: RequestInit, token?: string | null): Promise<T> {
@@ -34,6 +34,22 @@ export function runCustomTable(datasetId: string, body: TableRequestBody, token?
       method: 'POST',
       body: JSON.stringify(body),
     },
+    token
+  );
+}
+
+export function listSavedTables(datasetId: string, token?: string | null) {
+  return authedJson<{ ok?: boolean; specs: SavedTableSpecRow[] }>(
+    `/datasets/${datasetId}/tables`,
+    { method: 'GET' },
+    token
+  );
+}
+
+export function getSavedTable(datasetId: string, specId: string, token?: string | null) {
+  return authedJson<Record<string, unknown>>(
+    `/datasets/${datasetId}/tables/${specId}`,
+    { method: 'GET' },
     token
   );
 }

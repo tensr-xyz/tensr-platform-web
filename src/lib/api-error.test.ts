@@ -23,4 +23,13 @@ describe('formatApiErrorMessage', () => {
     );
     expect(formatApiErrorMessage(err)).toBe('This request hit the server time limit.');
   });
+
+  it('shows the table fingerprint refuse paragraph, not a code object', () => {
+    const paragraph =
+      'This table was built against dataset ds-1 (fingerprint abcdef123456…). The current data no longer matches (fingerprint fedcba654321…). What changed: removed Male; added Non-binary. Options: rebuild a new spec against the current dataset version, or point this spec at the original DatasetVersion it was built against. The stored spec was not mutated.';
+    const err = new Error(`{"detail":${JSON.stringify(paragraph)}}`);
+    const shown = formatApiErrorMessage(err);
+    expect(shown).toBe(paragraph);
+    expect(shown).not.toMatch(/"code"/);
+  });
 });

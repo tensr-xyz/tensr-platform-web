@@ -178,3 +178,82 @@ export function buildTableRequest(canvas: CustomTableCanvas): TableRequestBody {
     low_base_threshold: 30,
   };
 }
+
+export type StoredTableSpec = {
+  id?: string;
+  stubs?: Array<{ column?: string; values?: unknown[]; nets?: CustomTableNet[] }>;
+  banner?: Array<{
+    column?: string;
+    values?: unknown[];
+    nested?: Array<{ column?: string; values?: unknown[] }>;
+  }>;
+  banners?: Array<{
+    column?: string;
+    columns?: string[];
+    values?: unknown[];
+    nested?: Array<{ column?: string; columns?: string[]; values?: unknown[] }>;
+  }>;
+  statistics?: string[];
+  nest_banners?: boolean;
+  significance_display?: string;
+};
+
+function asStringValues(values: unknown[] | undefined): string[] {
+  if (!Array.isArray(values)) return [];
+  return values.map(v => String(v));
+}
+
+function bannerFromStored(
+  item:
+    | NonNullable<StoredTableSpec['banner']>[number]
+    | NonNullable<StoredTableSpec['banners']>[number]
+): BannerQuestion | null {
+  const column =
+    ('column' in item && item.column) || ('columns' in item && item.columns?.[0]) || '';
+  if (!column) return null;
+  const nestedRaw = Array.isArray(item.nested) ? item.nested : [];
+  return {
+    column: String(column),
+    values: asStringValues(item.values),
+    nested: nestedRaw.map(n => bannerFromStored(n)).filter((n): n is BannerQuestion => n != null),
+  };
+}
+
+export function canvasFromStoredSpec(
+  spec: StoredTableSpec,
+  current?: CustomTableCanvas
+): CustomTableCanvas {
+  const stats = spec.statistics || [];
+  const bannerSource = spec.banner?.length ? spec.banner : spec.banners || [];
+  return {
+    ...(current || defaultCanvas()),
+    stubs: (spec.stubs || [])
+      .filter(s => s.column)
+      .map(s => ({
+        column: String(s.column),
+        values: asStringValues(s.values),
+        nets: Array.isArray(s.nets) ? s.nets : [],
+      })),
+    banners: bannerSource.map(bannerFromStored).filter((b): b is BannerQuestion => b != null),
+    nestBanners: spec.nest_banners !== false,
+    columnPercent: stats.includes('column_proportion') || !stats.includes('row_proportion'),
+    rowPercent: stats.includes('row_proportion'),
+    significanceDisplay:
+      spec.significance_display === 'cell_comparisons' ? 'cell_comparisons' : 'column_letters',
+  };
+}
+
+export type SavedTableSpecRow = {
+  spec_id?: string;
+  id?: string;
+  created_at?: string;
+  label?: string;
+  dataset_id?: string;
+  content_fingerprint?: string;
+};
+
+export function savedSpecLabel(row: SavedTableSpecRow): string {
+  if (row.label && row.label.trim()) return row.label.trim();
+  const id = row.spec_id || row.id || 'saved table';
+  return id.slice(0, 8);
+}
