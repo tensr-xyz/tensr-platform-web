@@ -61,3 +61,12 @@ export function mergeColumnFilter(
   const next = buildInFilter(columnName, values);
   return next ? [...rest, next] : rest;
 }
+
+export function filterRowsByRowUids<T extends Record<string, unknown>>(
+  rows: T[],
+  rowUids: string[]
+): T[] {
+  if (rowUids.length === 0) return [];
+  const allowed = new Set(rowUids.map(String));
+  return rows.filter(row => allowed.has(String(row._row_uid ?? '')));
+}

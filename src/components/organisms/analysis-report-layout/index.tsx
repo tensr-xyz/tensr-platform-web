@@ -16,6 +16,7 @@ import {
 import { apiClient } from '@/lib/api-client';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import type { AnalysisKey } from '@/lib/analysis-definitions';
+import { revealConsumedRowsFromRun } from '@/lib/provenance-click-through';
 
 import type { ReportAnnotation } from '@/lib/report-annotations';
 
@@ -100,6 +101,19 @@ export function AnalysisReportLayout({
     if (key) openSetup(key);
   }, [analysisOp, report.meta.analysis_key, openSetup]);
 
+  const handleRevealConsumedRows = useCallback(
+    (group?: string) => {
+      if (!analysisRunId || !sourceDatasetId) return;
+      void revealConsumedRowsFromRun({
+        runId: analysisRunId,
+        sourceDatasetId,
+        provenance,
+        group,
+      });
+    },
+    [analysisRunId, sourceDatasetId, provenance]
+  );
+
   const handleNewAnalysis = useCallback(() => {
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true, bubbles: true }));
   }, []);
@@ -181,6 +195,9 @@ export function AnalysisReportLayout({
               onAnnotateChart={handleAnnotateChart}
               relatedAnalyses={relatedAnalyses}
               provenance={provenance}
+              onRevealConsumedRows={
+                analysisRunId && sourceDatasetId ? handleRevealConsumedRows : undefined
+              }
             />
           </div>
         </div>

@@ -23,11 +23,10 @@ function sampleReport(overrides: Partial<AnalysisReport> = {}): AnalysisReport {
 describe('AnalysisReportView provenance banner', () => {
   it('prints the Stage 3 unknown sentence when provenance is missing', () => {
     render(<AnalysisReportView report={sampleReport()} />);
-    expect(screen.getByRole('status')).toHaveTextContent(/traceability unknown/i);
-    expect(screen.getByRole('status')).toHaveTextContent(/no stored provenance/i);
-    expect(screen.getByRole('status')).toHaveTextContent(
-      /cannot be traced to the rows they came from/i
-    );
+    const banner = screen.getByText('Traceability').closest('[role="status"]');
+    expect(banner).toHaveTextContent(/traceability unknown/i);
+    expect(banner).toHaveTextContent(/no stored provenance/i);
+    expect(banner).toHaveTextContent(/cannot be traced to the rows they came from/i);
   });
 
   it('prints unavailable with the reason, not the unknown sentence', () => {
@@ -37,7 +36,8 @@ describe('AnalysisReportView provenance banner', () => {
         provenance={{ provenance_unavailable: 'multi_origin' }}
       />
     );
-    expect(screen.getByRole('status')).toHaveTextContent(/provenance unavailable: multi_origin/i);
+    const banner = screen.getByText('Traceability').closest('[role="status"]');
+    expect(banner).toHaveTextContent(/provenance unavailable: multi_origin/i);
     expect(screen.queryByText(/traceability unknown/i)).not.toBeInTheDocument();
   });
 

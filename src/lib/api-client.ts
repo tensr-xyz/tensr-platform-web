@@ -1120,6 +1120,18 @@ class ApiClient {
         this.request<{ dataset_id: string; runs: unknown[] }>(`/datasets/${datasetId}/runs`),
 
       get: (runId: string) => this.request<any>(`/datasets/analysis-runs/${runId}`),
+
+      resolve: (runId: string, group?: string) => {
+        const q = group ? `?group=${encodeURIComponent(group)}` : '';
+        return this.request<{
+          run_id: string;
+          n: number;
+          row_uids: string[];
+          rows: Record<string, unknown>[];
+          origin_dataset_id?: string;
+          group?: string | null;
+        }>(`/datasets/analysis-runs/${runId}/resolve${q}`);
+      },
     },
   };
 

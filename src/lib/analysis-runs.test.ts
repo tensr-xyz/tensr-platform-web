@@ -3,6 +3,7 @@ import {
   normalizeStoredAnalysisRun,
   provenanceBannerText,
   provenanceTraceState,
+  rSyntaxBadgeText,
 } from './analysis-runs';
 
 describe('normalizeStoredAnalysisRun', () => {
@@ -116,5 +117,23 @@ describe('canRevealConsumedRows', () => {
     expect(canRevealConsumedRows({ row_uid_bitset: 'BQ==', row_uid_bitset_miss_count: 0 })).toBe(
       true
     );
+  });
+});
+
+describe('rSyntaxBadgeText', () => {
+  it('treats a missing stamp as unknown, not verified', () => {
+    expect(rSyntaxBadgeText(undefined).kind).toBe('unknown');
+    expect(rSyntaxBadgeText(undefined).text).toMatch(/unknown/i);
+  });
+
+  it('keeps verified, verified_in_ci, and not_verified distinct', () => {
+    expect(rSyntaxBadgeText({ kind: 'verified', statement: 'ok' })).toEqual({
+      kind: 'verified',
+      text: 'ok',
+    });
+    expect(rSyntaxBadgeText({ kind: 'verified_in_ci', statement: 'ci' }).kind).toBe(
+      'verified_in_ci'
+    );
+    expect(rSyntaxBadgeText({ kind: 'not_verified', statement: 'miss' }).kind).toBe('not_verified');
   });
 });

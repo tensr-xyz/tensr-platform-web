@@ -37,7 +37,7 @@ import { createColumns, CreateColumnsProps } from '@/components/templates/spread
 import { HeaderComponent } from '@/components/templates/spreadsheet/header';
 import { useSession } from '@/hooks/ui/use-session';
 import { cn } from '@/utils';
-import { useTabsStore } from '@/stores/tabs-store';
+import { useTabsStore, type TabData } from '@/stores/tabs-store';
 import { ColumnSummary } from '@/types/file';
 import Filters from '@/components/templates/spreadsheet/filters';
 import {
@@ -84,7 +84,7 @@ import { deriveLiveSheetId } from '@/lib/collaboration-sheet';
 import { useProjectStore } from '@/stores/project-store';
 import Loading from '@/components/molecules/loading';
 import UserCursors from '@/components/molecules/cursor';
-import { applyClientColumnFilters } from '@/utils/column-filters';
+import { applyClientColumnFilters, filterRowsByRowUids } from '@/utils/column-filters';
 import { toast } from '@/hooks/ui/use-toast';
 import {
   fetchDatasetColumnMetadata,
@@ -1809,6 +1809,8 @@ export function Spreadsheet({
   );
 
   const isDatasetWorkspace = useMemo(() => !!gridDatasetId, [gridDatasetId]);
+  const rowUidFilter = (activeTab?.data as TabData | undefined)?.rowUidFilter;
+  const provenanceOverlayRows = (activeTab?.data as TabData | undefined)?.provenanceOverlayRows;
 
   const tableData = useMemo(() => {
     let rows: RowType[] =
@@ -1818,11 +1820,23 @@ export function Spreadsheet({
             data as RowType[],
             columnFilters as { id: string; value: { operator: string; value: unknown } }[]
           );
-    if (totalRowCount && rows.length > totalRowCount) {
+    if (rowUidFilter && rowUidFilter.length) {
+      const filtered = filterRowsByRowUids(rows, rowUidFilter);
+      if (filtered.length === rowUidFilter.length) {
+        rows = filtered;
+      } else if (provenanceOverlayRows && provenanceOverlayRows.length) {
+        rows = provenanceOverlayRows.map((r, i) => ({
+          id: `prov-${i}`,
+          ...r,
+        })) as RowType[];
+      } else {
+        rows = filtered;
+      }
+    } else if (totalRowCount && rows.length > totalRowCount) {
       rows = rows.slice(0, totalRowCount);
     }
     return rows;
-  }, [data, columnFilters, isDatasetWorkspace, totalRowCount]);
+  }, [data, columnFilters, isDatasetWorkspace, totalRowCount, rowUidFilter, provenanceOverlayRows]);
 
   const heatmapColumns =
     (tabData as any)?.heatmapColumns ?? (activeTab?.data as any)?.heatmapColumns ?? {};
@@ -1986,6 +2000,16 @@ export function Spreadsheet({
 
     const onClearFilters = () => {
       setColumnFilters([]);
+      if (activeTab?.id && activeTab.data) {
+        updateTab(activeTab.id, {
+          data: {
+            ...activeTab.data,
+            columnFilters: [],
+            rowUidFilter: undefined,
+            provenanceOverlayRows: undefined,
+          },
+        });
+      }
       if (!getDatasetIdFromPath(activeTab?.data?.filePath)) {
         setData([]);
         lastLoadedRowRef.current = 0;
@@ -2012,7 +2036,14 @@ export function Spreadsheet({
       window.removeEventListener(SPREADSHEET_EVENTS.APPLY_FILTERS, onApplyFilters as EventListener);
       window.removeEventListener(SPREADSHEET_EVENTS.CLEAR_FILTERS, onClearFilters as EventListener);
     };
-  }, [table, activeTab?.data?.filePath, fetchFilteredData, fetchMoreRows]);
+  }, [
+    table,
+    activeTab?.data?.filePath,
+    activeTab?.id,
+    fetchFilteredData,
+    fetchMoreRows,
+    updateTab,
+  ]);
 
   // Full scroll height in file mode so unloaded rows render empty grid placeholders.
   const virtualizationCount = useMemo(() => {
@@ -3485,6 +3516,16 @@ export function Spreadsheet({
             table={table}
             onClearFilters={() => {
               setColumnFilters([]);
+              if (activeTab?.id && activeTab.data) {
+                updateTab(activeTab.id, {
+                  data: {
+                    ...activeTab.data,
+                    columnFilters: [],
+                    rowUidFilter: undefined,
+                    provenanceOverlayRows: undefined,
+                  },
+                });
+              }
               setData([]);
               lastLoadedRowRef.current = 0;
               // Clear prefetched data since filters were cleared

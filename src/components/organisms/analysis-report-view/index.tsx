@@ -16,8 +16,10 @@ import {
 import { resolveReportBlocks } from '@/lib/report-blocks';
 import {
   PLUGIN_UNVERIFIED_STATEMENT,
+  canRevealConsumedRows,
   provenanceBannerText,
   provenanceTraceState,
+  rSyntaxBadgeText,
 } from '@/lib/analysis-runs';
 import { copyTableRich } from '@/utils/apa-clipboard';
 import { ReportChartCard } from '@/components/molecules/report-chart-card';
@@ -93,6 +95,25 @@ function formatP(p: number | null): string {
   return p.toFixed(3);
 }
 
+function isConsumedRowsMetric(label: string): boolean {
+  const n = label.trim().toLowerCase();
+  return (
+    n === 'f statistic' ||
+    n === 'f' ||
+    n === 'n' ||
+    n === 'h statistic' ||
+    n === 'h' ||
+    n === 'u statistic' ||
+    n === 'u' ||
+    n === 'χ²' ||
+    n === 'chi²' ||
+    n === 'chi2' ||
+    n === 'r²' ||
+    n === 'r2' ||
+    n === 'observations'
+  );
+}
+
 function MetaChip({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <span className="inline-flex h-6 items-center gap-1.5 rounded-full border border-border bg-muted/50 px-2.5 text-[11.5px] text-muted-foreground">
@@ -135,10 +156,12 @@ function BlockHeader({
   kind,
   title,
   subtitle,
+  nButton,
 }: {
   kind: string;
   title: string;
   subtitle?: string;
+  nButton?: { label: string; ariaLabel: string; onClick: () => void };
 }) {
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 border-b border-border px-[18px] py-3.5">
@@ -151,6 +174,16 @@ function BlockHeader({
         </div>
         {subtitle ? (
           <p className="mt-1 text-xs leading-snug text-muted-foreground">{subtitle}</p>
+        ) : null}
+        {nButton ? (
+          <button
+            type="button"
+            className="mt-1 text-xs leading-snug text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+            aria-label={nButton.ariaLabel}
+            onClick={nButton.onClick}
+          >
+            {nButton.label}
+          </button>
         ) : null}
       </div>
     </div>
@@ -308,6 +341,7 @@ function BlockRenderer({
   onAnnotateChart,
   onChartExportError,
   emphasized,
+  onRevealConsumedRows,
 }: {
   block: AnalysisReportBlock;
   blockIndex: number;
@@ -315,6 +349,7 @@ function BlockRenderer({
   onAnnotateChart?: (sectionId: string, chartTitle: string) => void;
   onChartExportError?: (message: string) => void;
   emphasized?: boolean;
+  onRevealConsumedRows?: (group?: string) => void;
 }) {
   if (block.type === 'interpretation') {
     return (
@@ -327,15 +362,36 @@ function BlockRenderer({
     return (
       <ReportSection sectionId="metrics" label="Key results">
         <div className="flex flex-wrap gap-2">
-          {block.metrics.map((m, i) => (
-            <div
-              key={i}
-              className="rounded-md border border-border bg-muted/20 px-3 py-2 text-[12px]"
-            >
-              <span className="text-muted-foreground">{m.label}: </span>
-              <span className="font-mono tabular-nums text-foreground">{m.value}</span>
-            </div>
-          ))}
+          {block.metrics.map((m, i) => {
+            const clickable = onRevealConsumedRows && isConsumedRowsMetric(m.label);
+            const inner = (
+              <>
+                <span className="text-muted-foreground">{m.label}: </span>
+                <span className="font-mono tabular-nums text-foreground">{m.value}</span>
+              </>
+            );
+            if (clickable) {
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  className="rounded-md border border-border bg-muted/20 px-3 py-2 text-left text-[12px] underline decoration-border underline-offset-2 hover:decoration-foreground"
+                  aria-label={`Show rows for ${m.label}`}
+                  onClick={() => onRevealConsumedRows()}
+                >
+                  {inner}
+                </button>
+              );
+            }
+            return (
+              <div
+                key={i}
+                className="rounded-md border border-border bg-muted/20 px-3 py-2 text-[12px]"
+              >
+                {inner}
+              </div>
+            );
+          })}
         </div>
       </ReportSection>
     );
@@ -380,6 +436,7 @@ type Props = {
   /** Sibling chained reports from the same Plan/Agent pipeline turn. */
   relatedAnalyses?: AnalysisRelatedLink[] | null;
   provenance?: Record<string, unknown> | null;
+  onRevealConsumedRows?: (group?: string) => void;
 };
 
 export function AnalysisReportView({
@@ -388,6 +445,7 @@ export function AnalysisReportView({
   onAnnotateChart,
   relatedAnalyses,
   provenance,
+  onRevealConsumedRows,
 }: Props) {
   const [copyState, setCopyState] = React.useState<string | null>(null);
   const [rawOpen, setRawOpen] = React.useState(false);
@@ -427,21 +485,22 @@ export function AnalysisReportView({
     minute: '2-digit',
   });
 
-  const blockSubtitle = [
-    report.meta.subtitle,
-    report.exclusion_summary
-      ? `n = ${report.exclusion_summary.rows_used} · ${report.exclusion_summary.rows_excluded} excluded`
-      : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-
   const pluginMark = report.plugin_verification;
   const provenanceBanner = provenanceBannerText(provenanceTraceState(provenance));
   const statusBanner =
     pluginMark && (pluginMark.kind === 'not_verified' || pluginMark.kind === 'unknown')
       ? pluginMark.statement || PLUGIN_UNVERIFIED_STATEMENT
       : provenanceBanner;
+  const rBadge = rSyntaxBadgeText(report.r_syntax_verification);
+  const showRBadge = !report.meta.analysis_key.startsWith('plugin:');
+  const canReveal = canRevealConsumedRows(provenance) && typeof onRevealConsumedRows === 'function';
+  const nUsed = report.exclusion_summary ? `n = ${report.exclusion_summary.rows_used}` : null;
+  const nSubtitle = report.exclusion_summary
+    ? `${nUsed} · ${report.exclusion_summary.rows_excluded} excluded`
+    : null;
+  const blockSubtitle = [report.meta.subtitle, canReveal ? null : nSubtitle]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <div id="tensr-report-print-root" className="w-full text-left">
@@ -470,6 +529,15 @@ export function AnalysisReportView({
           kind={analysisKind}
           title={report.meta.title}
           subtitle={blockSubtitle || undefined}
+          nButton={
+            canReveal && nUsed && nSubtitle
+              ? {
+                  label: nSubtitle,
+                  ariaLabel: `Show rows for ${nUsed}`,
+                  onClick: () => onRevealConsumedRows?.(),
+                }
+              : undefined
+          }
         />
 
         <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/20 px-[22px] py-3">
@@ -488,6 +556,24 @@ export function AnalysisReportView({
               {pluginMark ? 'Unverified' : 'Traceability'}
             </p>
             <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{statusBanner}</p>
+          </div>
+        ) : null}
+
+        {showRBadge ? (
+          <div
+            data-testid="r-syntax-badge"
+            data-r-syntax-kind={rBadge.kind}
+            role="status"
+            className={cn(
+              'border-b px-[22px] py-3',
+              rBadge.kind === 'not_verified' && 'border-amber-500/20 bg-amber-500/[0.07]',
+              rBadge.kind === 'unknown' && 'border-border/60 bg-muted/30',
+              (rBadge.kind === 'verified' || rBadge.kind === 'verified_in_ci') &&
+                'border-border/60 bg-muted/20'
+            )}
+          >
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">R syntax</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{rBadge.text}</p>
           </div>
         ) : null}
 
@@ -614,6 +700,7 @@ export function AnalysisReportView({
               onAnnotateChart={onAnnotateChart}
               onChartExportError={msg => flash(msg)}
               emphasized={i === 0}
+              onRevealConsumedRows={canReveal ? onRevealConsumedRows : undefined}
             />
           ))
         ) : (
@@ -629,31 +716,64 @@ export function AnalysisReportView({
             {report.metrics.length > 0 ? (
               <ReportSection sectionId="metrics" label="Key metrics" dense>
                 <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
-                  {report.metrics.map((m, i) => (
-                    <div
-                      key={i}
-                      className={cn(
-                        'bg-card px-4 py-3',
-                        m.emphasis && 'ring-1 ring-inset ring-primary/15'
-                      )}
-                    >
-                      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                        {m.label}
-                      </p>
-                      <p
+                  {report.metrics.map((m, i) => {
+                    const clickable = canReveal && isConsumedRowsMetric(m.label);
+                    if (clickable) {
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          className={cn(
+                            'bg-card px-4 py-3 text-left',
+                            m.emphasis && 'ring-1 ring-inset ring-primary/15'
+                          )}
+                          aria-label={`Show rows for ${m.label}`}
+                          onClick={() => onRevealConsumedRows?.()}
+                        >
+                          <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                            {m.label}
+                          </p>
+                          <p
+                            className={cn(
+                              'mt-1 font-mono text-base tabular-nums text-foreground',
+                              m.emphasis && 'font-semibold',
+                              !m.value && 'text-muted-foreground'
+                            )}
+                          >
+                            {m.value || '—'}
+                          </p>
+                          {m.hint ? (
+                            <p className="mt-1 text-[10px] text-muted-foreground">{m.hint}</p>
+                          ) : null}
+                        </button>
+                      );
+                    }
+                    return (
+                      <div
+                        key={i}
                         className={cn(
-                          'mt-1 font-mono text-base tabular-nums text-foreground',
-                          m.emphasis && 'font-semibold',
-                          !m.value && 'text-muted-foreground'
+                          'bg-card px-4 py-3',
+                          m.emphasis && 'ring-1 ring-inset ring-primary/15'
                         )}
                       >
-                        {m.value || '—'}
-                      </p>
-                      {m.hint ? (
-                        <p className="mt-1 text-[10px] text-muted-foreground">{m.hint}</p>
-                      ) : null}
-                    </div>
-                  ))}
+                        <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                          {m.label}
+                        </p>
+                        <p
+                          className={cn(
+                            'mt-1 font-mono text-base tabular-nums text-foreground',
+                            m.emphasis && 'font-semibold',
+                            !m.value && 'text-muted-foreground'
+                          )}
+                        >
+                          {m.value || '—'}
+                        </p>
+                        {m.hint ? (
+                          <p className="mt-1 text-[10px] text-muted-foreground">{m.hint}</p>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               </ReportSection>
             ) : null}

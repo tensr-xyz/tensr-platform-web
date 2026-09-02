@@ -53,6 +53,69 @@ export function canRevealConsumedRows(provenance: unknown): boolean {
   return provenanceTraceState(provenance).kind === 'complete';
 }
 
+export type RSyntaxVerificationKind = 'verified' | 'verified_in_ci' | 'not_verified' | 'unknown';
+
+export type RSyntaxVerification = {
+  kind: RSyntaxVerificationKind;
+  reason?: string;
+  statement?: string;
+  build_id?: string;
+  delta?: { f?: number; df_between?: number; df_within?: number; n?: number };
+};
+
+export function rSyntaxVerificationState(value: unknown): RSyntaxVerification {
+  if (!value || typeof value !== 'object') {
+    return {
+      kind: 'unknown',
+      reason: 'missing',
+      statement: 'R syntax reproduction unknown.',
+    };
+  }
+  const v = value as Record<string, unknown>;
+  if (
+    v.kind === 'verified' ||
+    v.kind === 'verified_in_ci' ||
+    v.kind === 'not_verified' ||
+    v.kind === 'unknown'
+  ) {
+    return {
+      kind: v.kind,
+      reason: typeof v.reason === 'string' ? v.reason : undefined,
+      statement: typeof v.statement === 'string' ? v.statement : undefined,
+      build_id: typeof v.build_id === 'string' ? v.build_id : undefined,
+      delta: v.delta as RSyntaxVerification['delta'],
+    };
+  }
+  return {
+    kind: 'unknown',
+    reason: 'missing',
+    statement: 'R syntax reproduction unknown.',
+  };
+}
+
+export function rSyntaxBadgeText(value: unknown): { kind: RSyntaxVerificationKind; text: string } {
+  const state = rSyntaxVerificationState(value);
+  if (state.kind === 'verified') {
+    return { kind: 'verified', text: state.statement || 'R syntax reproduced F, df and n.' };
+  }
+  if (state.kind === 'verified_in_ci') {
+    return {
+      kind: 'verified_in_ci',
+      text: state.statement || 'This syntax reproduced against a reference dataset on this build.',
+    };
+  }
+  if (state.kind === 'not_verified') {
+    return {
+      kind: 'not_verified',
+      text: state.statement || 'Generated R does not reproduce the engine result.',
+    };
+  }
+  return {
+    kind: 'unknown',
+    text: state.statement || 'R syntax reproduction unknown.',
+  };
+}
+
 export type StoredAnalysisRun = {
   id: string;
   dataset_id: string;
