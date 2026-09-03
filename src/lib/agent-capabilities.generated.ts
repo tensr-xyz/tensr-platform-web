@@ -53,6 +53,9 @@ export const AGENT_FIDELITY_IDS = [
   "not_equal",
   "distinct",
   "proportion",
+  "gee",
+  "repeated_measures_anova",
+  "reliability",
   "z_score",
 ] as const;
 
@@ -156,6 +159,9 @@ export const AGENT_CAPABILITY_CATALOG = {
     "not_equal",
     "distinct",
     "proportion",
+    "gee",
+    "repeated_measures_anova",
+    "reliability",
     "z_score"
   ],
   "filter_aliases": {
