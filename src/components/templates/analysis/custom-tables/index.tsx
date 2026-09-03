@@ -65,6 +65,7 @@ import {
   weightPickerOptions,
   type WeightOption,
 } from '@/lib/custom-tables/weight';
+import { WincrossImport } from './wincross-import';
 
 export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const token = getAccessToken();
@@ -419,6 +420,17 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               <AlertDescription className="whitespace-pre-wrap">{error}</AlertDescription>
             </Alert>
           ) : null}
+          <WincrossImport
+            token={token}
+            onLoadCanvas={(next, tableName) => {
+              setCanvas(next);
+              setBook(null);
+              setError(null);
+              setCellClick(
+                `Loaded ${tableName} from the .job. Review nets and the weight, then run.`
+              );
+            }}
+          />
           <div className="rounded-md border border-border p-2">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Saved tables

@@ -80,6 +80,21 @@ export function downloadTableExport(
   });
 }
 
+export function parseWincrossJob(
+  job: string,
+  token?: string | null,
+  convention?: Record<string, unknown>
+) {
+  return authedJson<import('./wincross-report').WincrossParseResult>(
+    '/datasets/wincross/parse',
+    {
+      method: 'POST',
+      body: JSON.stringify({ job, ...(convention ? { convention } : {}) }),
+    },
+    token
+  );
+}
+
 export function previewCustomTable(
   datasetId: string,
   body: TableRequestBody,
