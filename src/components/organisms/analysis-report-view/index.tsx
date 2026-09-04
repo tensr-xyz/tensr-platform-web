@@ -498,9 +498,19 @@ export function AnalysisReportView({
   const nSubtitle = report.exclusion_summary
     ? `${nUsed} · ${report.exclusion_summary.rows_excluded} excluded`
     : null;
-  const blockSubtitle = [report.meta.subtitle, canReveal ? null : nSubtitle]
-    .filter(Boolean)
-    .join(' · ');
+  const isBannerTable = report.meta.analysis_key === 'banner_table';
+  const blockTitle = report.meta.subtitle?.trim() || report.meta.title;
+  const blockSubtitle = [canReveal ? null : nSubtitle].filter(Boolean).join(' · ') || undefined;
+  const metaTestLabel =
+    isBannerTable && report.meta.subtitle ? report.meta.subtitle : report.meta.title;
+  const approachExploration =
+    report.approach?.exploration?.trim() || report.session_trace?.trim() || '';
+  const assumptionInterpretations = (report.assumption_checks?.interpretations ?? []).filter(
+    line =>
+      !report.trust.warnings.includes(line) &&
+      !report.trust.notes.includes(line) &&
+      line.trim() !== approachExploration
+  );
 
   return (
     <div id="tensr-report-print-root" className="w-full text-left">
@@ -527,8 +537,8 @@ export function AnalysisReportView({
       <article className="overflow-hidden rounded-lg border border-border bg-card">
         <BlockHeader
           kind={analysisKind}
-          title={report.meta.title}
-          subtitle={blockSubtitle || undefined}
+          title={blockTitle}
+          subtitle={blockSubtitle}
           nButton={
             canReveal && nUsed && nSubtitle
               ? {
@@ -543,7 +553,7 @@ export function AnalysisReportView({
         <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/20 px-[22px] py-3">
           <MetaChip label="Rows" value={String(report.meta.rows_dataset)} mono />
           <MetaChip label="Run" value={generatedLabel} />
-          {report.meta.title ? <MetaChip label="Test" value={report.meta.title} /> : null}
+          {metaTestLabel ? <MetaChip label="Test" value={metaTestLabel} /> : null}
           <span className="flex-1" />
         </div>
 
@@ -580,8 +590,7 @@ export function AnalysisReportView({
         {report.approach?.plan ||
         report.approach?.why_this_test ||
         report.approach?.rejected_alternative ||
-        report.approach?.exploration ||
-        report.session_trace ||
+        approachExploration ||
         related.length > 0 ? (
           <ReportSection sectionId="approach" label="Approach" hint="Why this analysis was chosen">
             <div className="space-y-3 text-[13px] leading-relaxed text-foreground">
@@ -613,13 +622,13 @@ export function AnalysisReportView({
                   </p>
                 </div>
               ) : null}
-              {report.approach?.exploration || report.session_trace ? (
+              {approachExploration ? (
                 <div>
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Exploration
                   </p>
                   <pre className="whitespace-pre-wrap font-sans text-muted-foreground">
-                    {report.approach?.exploration || report.session_trace}
+                    {approachExploration}
                   </pre>
                 </div>
               ) : null}
@@ -647,16 +656,16 @@ export function AnalysisReportView({
           </ReportSection>
         ) : null}
 
-        {report.assumption_checks?.interpretations?.length ? (
+        {assumptionInterpretations.length ? (
           <ReportSection sectionId="assumptions" label="Tests of assumptions">
             <ul className="space-y-2 text-[13px] leading-relaxed text-foreground">
-              {report.assumption_checks.interpretations.map((line, i) => (
+              {assumptionInterpretations.map((line, i) => (
                 <li key={i} className="rounded-md border border-border bg-muted/20 px-3 py-2">
                   {line}
                 </li>
               ))}
             </ul>
-            {report.assumption_checks.summary ? (
+            {report.assumption_checks?.summary ? (
               <p className="mt-3 rounded-md border border-border bg-muted/30 px-3 py-2.5 text-[13px] leading-relaxed text-foreground">
                 {report.assumption_checks.summary}
               </p>
@@ -706,11 +715,17 @@ export function AnalysisReportView({
         ) : (
           <>
             {report.summary ? (
-              <div id="report-section-interpretation" className="scroll-mt-24">
-                <InterpretationBlock>
-                  <p>{report.summary}</p>
-                </InterpretationBlock>
-              </div>
+              isBannerTable ? (
+                <ReportSection sectionId="interpretation" label="Summary">
+                  <p className="text-[13px] leading-relaxed text-foreground">{report.summary}</p>
+                </ReportSection>
+              ) : (
+                <div id="report-section-interpretation" className="scroll-mt-24">
+                  <InterpretationBlock>
+                    <p>{report.summary}</p>
+                  </InterpretationBlock>
+                </div>
+              )
             ) : null}
 
             {report.metrics.length > 0 ? (
@@ -818,7 +833,13 @@ export function AnalysisReportView({
               <ReportSection
                 key={t.id}
                 sectionId={`table-${t.id}`}
-                label={i === 0 && !report.spss_blocks?.length ? 'Primary result' : t.title}
+                label={
+                  t.id === 'banner_table'
+                    ? 'Crosstab'
+                    : i === 0 && !report.spss_blocks?.length
+                      ? 'Primary result'
+                      : t.title
+                }
               >
                 <ReportTable
                   table={t}

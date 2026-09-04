@@ -99,6 +99,7 @@ function buildInterpretation(report: AnalysisReport): string | null {
 
 function pickHighlightTable(report: AnalysisReport): AnalysisReportTable | undefined {
   const priority = [
+    'banner_table',
     'anova_groups',
     'ttest_groups',
     'regression_coef',
@@ -148,7 +149,13 @@ export function formatAnalysisReportForAgentChat(report: AnalysisReport): string
   if (table) {
     lines.push(`**${table.title}**`);
     lines.push('');
-    lines.push(formatMarkdownTable(table));
+    if (table.id === 'banner_table' && table.columns.length > 12) {
+      lines.push(
+        `*Full crosstab (${table.rows.length} rows × ${table.columns.length - 1} columns) — open the Analysis Report tab and scroll horizontally.*`
+      );
+      lines.push('');
+    }
+    lines.push(formatMarkdownTable(table, table.id === 'banner_table' ? 12 : 8));
     lines.push('');
   }
 

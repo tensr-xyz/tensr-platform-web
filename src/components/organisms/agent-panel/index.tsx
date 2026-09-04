@@ -192,7 +192,7 @@ function ChatMessageBody({
                 );
               })}
             </ol>
-          ) : hasThinking ? (
+          ) : hasThinking && !showResult ? (
             <div className={cn('space-y-1.5', showPlan && 'mt-2')}>
               {thinkingLines!.map((line, i) => (
                 <p
@@ -594,7 +594,6 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           if (report && execSummary) {
             report = {
               ...report,
-              session_trace: report.session_trace || execSummary,
               approach: {
                 ...(report.approach || {}),
                 exploration: report.approach?.exploration || execSummary,
@@ -656,14 +655,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           logAgentChatRenderPayload(chatFields);
           updateMessage(projectId, assistantMessageId, {
             ...chatFields,
-            thinkingLines: progressLines.length ? [...progressLines] : undefined,
+            thinkingLines: undefined,
             isStreaming: false,
           });
         } else if (enrichmentNotes.length) {
           // Enrichment-only edge case — still acknowledge in chat.
           updateMessage(projectId, assistantMessageId, {
             content: enrichmentNotes.join('\n'),
-            thinkingLines: progressLines.length ? [...progressLines] : undefined,
+            thinkingLines: undefined,
             isStreaming: false,
           });
         }
