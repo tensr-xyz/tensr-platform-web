@@ -72,6 +72,7 @@ import {
   logAgentChatRenderPayload,
   preferRicherPlan,
 } from '@/lib/agent-analysis-chat-fields';
+import { interpretAgentLoopProgressMessage } from '@/lib/agent-analysis-progress';
 import {
   analysisTabLabel,
   enrichmentCompletionNote,
@@ -484,6 +485,20 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           timestamp: new Date(),
         });
 
+      const progressLines: string[] = [];
+      const seenProgress = new Set<string>();
+      const pushAgentProgress = (progress: { type: string; step: string; message: string }) => {
+        const line = interpretAgentLoopProgressMessage(progress);
+        if (!line || seenProgress.has(line)) return;
+        seenProgress.add(line);
+        progressLines.push(line);
+        updateMessage(projectId, assistantMessageId, {
+          thinkingLines: [...progressLines],
+          isStreaming: true,
+        });
+      };
+
+      pushAgentProgress({ type: 'progress', step: 'start', message: '' });
       setLoading(projectId, false);
 
       try {
@@ -496,12 +511,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           glossary: projectGlossary,
           approvedToolCall: opts.approvedToolCall ?? null,
           approvedToolCalls: opts.approvedToolCalls ?? null,
-          onProgress: progress => {
-            updateMessage(projectId, assistantMessageId, {
-              content: progress.message,
-              isStreaming: true,
-            });
-          },
+          onProgress: pushAgentProgress,
         });
 
         const triggerMessage = opts.triggerMessage ?? opts.message;
@@ -521,7 +531,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           triggerMessage,
           datasetId,
         });
-        updateMessage(projectId, assistantMessageId, patch);
+        updateMessage(projectId, assistantMessageId, {
+          ...patch,
+          thinkingLines: progressLines.length ? [...progressLines] : undefined,
+        });
 
         const execSummary = String(response.execution_summary || '').trim();
         const openedTabs: OpenedAnalysisTab[] = [];
@@ -643,12 +656,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           logAgentChatRenderPayload(chatFields);
           updateMessage(projectId, assistantMessageId, {
             ...chatFields,
+            thinkingLines: progressLines.length ? [...progressLines] : undefined,
             isStreaming: false,
           });
         } else if (enrichmentNotes.length) {
           // Enrichment-only edge case — still acknowledge in chat.
           updateMessage(projectId, assistantMessageId, {
             content: enrichmentNotes.join('\n'),
+            thinkingLines: progressLines.length ? [...progressLines] : undefined,
             isStreaming: false,
           });
         }

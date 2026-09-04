@@ -1,4 +1,8 @@
-import { interpretProgressMessage } from './agent-analysis-progress';
+import {
+  AGENT_LOOP_INITIAL_PROGRESS,
+  interpretAgentLoopProgressMessage,
+  interpretProgressMessage,
+} from './agent-analysis-progress';
 import type { AgentAnalysisPlan } from '@/lib/chat-pending-action';
 
 function plan(analysisType: string, spec: Record<string, unknown>): AgentAnalysisPlan {
@@ -65,5 +69,33 @@ describe('interpretProgressMessage', () => {
   it('falls back to generic columns phrase when spec has no known fields', () => {
     const msg = interpretProgressMessage(plan('descriptives', {}), 'validating');
     expect(msg).toMatch(/Checking your columns look right for a Frequencies/i);
+  });
+});
+
+describe('interpretAgentLoopProgressMessage', () => {
+  it('seeds with Working when no backend message yet', () => {
+    expect(
+      interpretAgentLoopProgressMessage({ type: 'progress', step: 'start', message: '' })
+    ).toBe(AGENT_LOOP_INITIAL_PROGRESS);
+  });
+
+  it('maps run_analysis tool start to Working through copy', () => {
+    expect(
+      interpretAgentLoopProgressMessage({
+        type: 'tool_start',
+        step: 'run_analysis',
+        message: 'Working through the Custom Tables…',
+      })
+    ).toBe('Working through the Custom Tables…');
+  });
+
+  it('passes through planning progress from the loop', () => {
+    expect(
+      interpretAgentLoopProgressMessage({
+        type: 'progress',
+        step: 'thinking',
+        message: 'Planning the next step…',
+      })
+    ).toBe('Planning the next step…');
   });
 });

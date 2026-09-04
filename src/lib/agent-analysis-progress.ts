@@ -1,8 +1,51 @@
 import type { AgentAnalysisPlan } from '@/lib/chat-pending-action';
 import { ANALYSIS_LABELS, type AnalysisKey, isAnalysisKey } from '@/lib/analysis-definitions';
+import type { AgentLoopStreamProgress } from '@/lib/stream-agent-loop';
 
 export const ANALYSIS_PLANNING_MESSAGE =
   'Let me look at your columns and figure out the best way to run this…';
+
+export const AGENT_LOOP_INITIAL_PROGRESS = 'Working…';
+
+export function analysisLabelFromType(analysisType: string): string {
+  if (isAnalysisKey(analysisType)) {
+    return ANALYSIS_LABELS[analysisType as AnalysisKey];
+  }
+  return analysisType.replace(/_/g, ' ');
+}
+
+/** Colleague-style progress lines for agent-loop SSE (not legacy analyze-plan streaming). */
+export function interpretAgentLoopProgressMessage(
+  progress: Pick<AgentLoopStreamProgress, 'type' | 'step' | 'message'>
+): string {
+  const raw = progress.message.trim();
+  const step = progress.step.toLowerCase();
+  const rawLower = raw.toLowerCase();
+
+  if (step === 'run_analysis' || rawLower.includes('run_analysis')) {
+    const workingMatch = raw.match(/Working through the (.+?)…/i);
+    if (workingMatch?.[1]) {
+      return `Working through the ${workingMatch[1]}…`;
+    }
+    return 'Working through the analysis…';
+  }
+
+  if (rawLower.startsWith('working through the ')) {
+    return raw.endsWith('…') ? raw : `${raw}…`;
+  }
+
+  if (step === 'thinking' || rawLower.includes('planning the next step')) {
+    return raw || 'Planning the next step…';
+  }
+
+  if (progress.type === 'tool_start') {
+    const readable = step.replace(/_/g, ' ');
+    return raw || `Running ${readable}…`;
+  }
+
+  if (raw) return raw;
+  return AGENT_LOOP_INITIAL_PROGRESS;
+}
 
 export function analysisLabelForPlan(plan: AgentAnalysisPlan): string {
   if (isAnalysisKey(plan.analysisType)) {
