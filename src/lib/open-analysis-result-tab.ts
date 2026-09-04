@@ -25,6 +25,9 @@ export function formatAnalysisRunTabLabel(op: string, parameters: Record<string,
     parameters.independent ??
     parameters.factor ??
     parameters.group;
+  const stub = parameters.stub_column ?? parameters.column_a ?? parameters.stub;
+  const banner = parameters.banner_column ?? parameters.column_b ?? parameters.banner;
+  if (stub && banner) return `${base} — ${stub} by ${banner}`;
   if (dv && iv) return `${base} — ${dv} by ${iv}`;
   if (dv) return `${base} — ${dv}`;
   const vars = parameters.variables;

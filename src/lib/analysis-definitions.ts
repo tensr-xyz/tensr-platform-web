@@ -29,6 +29,7 @@ export type AnalysisKey =
   | 'linear_regression'
   | 'logistic_regression'
   | 'chi_square'
+  | 'banner_table'
   | 'shapiro_wilk'
   | 'sign_test'
   | 'probit_regression'
@@ -119,6 +120,7 @@ export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
   linear_regression: 'Linear Regression',
   logistic_regression: 'Binary Logistic Regression',
   chi_square: 'Chi-square',
+  banner_table: 'Custom Tables',
   shapiro_wilk: 'Shapiro–Wilk Test',
   sign_test: 'Sign Test',
   probit_regression: 'Probit Regression',
@@ -208,6 +210,7 @@ export const SPSS_MENU_PATHS: Record<AnalysisKey, string> = {
   linear_regression: 'Analyze → Regression → Linear',
   logistic_regression: 'Analyze → Regression → Binary Logistic',
   chi_square: 'Analyze → Descriptive Statistics → Crosstabs',
+  banner_table: 'Analyze → Tables → Custom Tables',
   shapiro_wilk: 'Analyze → Nonparametric Tests → Normality',
   sign_test: 'Analyze → Nonparametric Tests → Related Samples',
   probit_regression: 'Analyze → Regression → Probit',
@@ -315,6 +318,7 @@ export const ANALYSIS_PALETTE_CATEGORY: Record<AnalysisKey, PaletteCategoryId> =
   linear_regression: 'prediction',
   logistic_regression: 'prediction',
   chi_square: 'frequencies',
+  banner_table: 'frequencies',
   shapiro_wilk: 'compare',
   sign_test: 'compare',
   probit_regression: 'prediction',
@@ -1804,6 +1808,9 @@ export const ANALYSIS_WIZARD_META: Record<AnalysisKey, AnalysisWizardMeta> = {
   },
   chi_square: {
     summary: 'Test whether two categorical variables are associated.',
+  },
+  banner_table: {
+    summary: 'Banner crosstab with column %, significance letters, and weighted bases.',
   },
   shapiro_wilk: {
     summary: 'Test whether a numeric variable is normally distributed.',

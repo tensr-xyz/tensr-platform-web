@@ -176,16 +176,11 @@ describe('resolveChatAction', () => {
     });
   });
 
-  it('opens Custom Tables from banner synonyms, not Chi-square', () => {
-    expect(resolveChatAction('custom tables')).toEqual({
-      kind: 'dialog',
-      menuName: 'Custom Tables',
-    });
-    expect(resolveChatAction('banner table')).toEqual({
-      kind: 'dialog',
-      menuName: 'Custom Tables',
-    });
-    expect(resolveChatAction('crosstab')).toEqual({
+  it('routes banner/crosstab prompts to the agent, not empty dialogs or chi-square', () => {
+    expect(resolveChatAction('custom tables')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('banner table')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('crosstab Pos by Age')).toEqual({ kind: 'chat' });
+    expect(resolveChatAction('chi-square Pos by Age')).toEqual({
       kind: 'analysis',
       op: 'chi_square',
       menuName: 'Chi-square',

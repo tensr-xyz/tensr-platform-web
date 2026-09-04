@@ -70,8 +70,6 @@ const SYNONYMS: Record<string, string> = {
   descriptives: 'Descriptives',
   'descriptive statistics': 'Descriptives',
   frequencies: 'Descriptives',
-  crosstab: 'Chi-square',
-  'cross tab': 'Chi-square',
   'chi squared': 'Chi-square',
   'chi-square': 'Chi-square',
   'chi square': 'Chi-square',
@@ -222,11 +220,6 @@ const SYNONYMS: Record<string, string> = {
   rank: 'Rank Cases',
   'compute variable': 'Compute Variable',
   'shift values': 'Shift Values',
-  'custom tables': 'Custom Tables',
-  'custom table': 'Custom Tables',
-  banner: 'Custom Tables',
-  'banner table': 'Custom Tables',
-  'banner tables': 'Custom Tables',
   rake: 'Rake Weights',
   raking: 'Rake Weights',
   'rake weights': 'Rake Weights',
@@ -405,6 +398,12 @@ function tryStructuredColumnEdit(message: string): ChatAction | null {
   return null;
 }
 
+/** Banner / crosstab asks run through the agent (banner_table), not the empty Custom Tables dialog. */
+function shouldRouteBannerTableToAgent(message: string): boolean {
+  const lower = message.toLowerCase();
+  return /\b(banner|crosstab|cross[\s-]?tab|custom\s+tables?)\b/.test(lower);
+}
+
 /** Best-effort menu label match. */
 function matchMenuLabel(message: string): string | null {
   const lower = message.toLowerCase();
@@ -456,6 +455,8 @@ export function resolveChatAction(message: string): ChatAction {
   const structured = tryStructuredColumnEdit(trimmed);
   if (structured) return structured;
 
+  if (shouldRouteBannerTableToAgent(trimmed)) return { kind: 'chat' };
+
   const label = matchMenuLabel(trimmed);
   if (!label) return { kind: 'chat' };
 
@@ -481,7 +482,7 @@ export function chatMenuSteal(message: string): ChatAction | null {
 /** Help text the chat can show users so they know what verbs work. */
 export const CHAT_ACTION_HINTS: string[] = [
   'Run correlation / regression / ANOVA / t-test / chi-square',
-  'Custom Tables, banner table',
+  'Crosstab / banner table / custom tables (e.g. Pos by Age)',
   'Recode, Standardize, Visual Binning, Rank Cases, Compute Variable, Shift Values',
   'Import Data, Export Data, Merge Datasets',
   'Find Duplicates, Handle Missing Data, Data Quality Report, Rake Weights',
