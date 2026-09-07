@@ -38,6 +38,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       'Import & Export': ['Import Data', 'Export Data'],
       'Data preparation': [
         'Merge Datasets',
+        'Fuse Waves',
         'Handle Missing Data',
         'Find Duplicates',
         'Data Quality Report',
@@ -56,13 +57,14 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Lag Cases',
         'Lead Cases',
         'Rank Cases',
+        'Rake Weights',
       ],
     },
   },
   analyze: {
     icon: <Calculator className="h-4 w-4" />,
     sections: {
-      'Descriptive Statistics': ['Descriptives'],
+      'Descriptive Statistics': ['Descriptives', 'Custom Tables', 'Batch Tables'],
       'Compare Means': [
         'Independent-Samples T Test',
         'Paired-Samples T Test',
@@ -119,6 +121,18 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Relative Risk',
       ],
       Network: ['Network'],
+      'Survey techniques': [
+        'TURF',
+        'Driver Analysis',
+        'Correspondence Analysis',
+        'Van Westendorp',
+        'Gabor-Granger',
+        'NPS',
+        'Brand Funnel',
+        'Open-text coding',
+        'MaxDiff (counting / MNL)',
+        'Conjoint (MNL)',
+      ],
     },
   },
   visualization: {

@@ -6,7 +6,7 @@ import { RETIRED_FROM_UI_OPS } from '@/lib/retired-from-ui';
 
 /** Labels that open the wrong wizard, a blocked form, or a missing endpoint. */
 const DEAD_OR_MISLEADING_LABELS = [
-  'Open-text coding',
+  'McNemar Test leftover',
   'McNemar Test',
   'Loglinear Analysis',
   'Stepwise Regression',

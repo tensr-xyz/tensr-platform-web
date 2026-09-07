@@ -32,6 +32,22 @@ import {
 } from '@/components/templates/transform/lag-lead-variables';
 import { DataQualityReportDialog } from '@/components/templates/data/data-quality-report';
 import { ChartBuilderDialog } from '@/components/templates/visualization/chart-builder';
+import {
+  BatchTablesDialog,
+  ConjointDialog,
+  CorrespondenceDialog,
+  CustomTablesDialog,
+  DriversDialog,
+  FuseWavesDialog,
+  FunnelDialog,
+  GaborGrangerDialog,
+  MaxDiffDialog,
+  NpsDialog,
+  OpenTextCodingDialog,
+  RakeWeightsDialog,
+  TurfDialog,
+  VanWestendorpDialog,
+} from '@/components/templates/analysis/agency-dialogs';
 
 const chartMenuItem =
   (name: string): AnalysisComponent =>
@@ -41,6 +57,7 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Import Data': LazyFilePickerWrapper,
   'Export Data': ExportDialog,
   'Merge Datasets': MergeDatasetDialog,
+  'Fuse Waves': FuseWavesDialog,
   'Handle Missing Data': HandleMissingDataDialog,
   'Find Duplicates': FindDuplicatesDialog,
   'Standardize Variables': StandardizeVariablesDialog,
@@ -48,6 +65,19 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Visual Binning': BinVariablesDialog,
   'Recode Variables': RecodeVariablesDialog,
   'Compute Variable': ComputeVariablesDialog,
+  'Rake Weights': RakeWeightsDialog,
+  'Custom Tables': CustomTablesDialog,
+  'Batch Tables': BatchTablesDialog,
+  'Open-text coding': OpenTextCodingDialog,
+  TURF: TurfDialog,
+  'Driver Analysis': DriversDialog,
+  'Correspondence Analysis': CorrespondenceDialog,
+  'Van Westendorp': VanWestendorpDialog,
+  'Gabor-Granger': GaborGrangerDialog,
+  NPS: NpsDialog,
+  'Brand Funnel': FunnelDialog,
+  'MaxDiff (counting / MNL)': MaxDiffDialog,
+  'Conjoint (MNL)': ConjointDialog,
   'Shift Values': ShiftValuesDialog,
   'Lag Cases': LagCasesDialog,
   'Lead Cases': LeadCasesDialog,

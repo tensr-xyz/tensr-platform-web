@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { apiClient } from '@/lib/api-client';
 import {
   CreditCard,
   Shield,
@@ -289,6 +290,8 @@ export default function BillingSettings() {
             )}
           </div>
 
+          <ReferralCard />
+
           {usageStats && (
             <div className="mb-6 rounded-md border border-border bg-muted/30 p-4">
               <div className="mb-2 flex justify-between">
@@ -474,6 +477,27 @@ export default function BillingSettings() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function ReferralCard() {
+  const [code, setCode] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    apiClient.billing
+      .referral()
+      .then(row => setCode(row.code))
+      .catch(err => setError(err instanceof Error ? err.message : 'Referral unavailable'));
+  }, []);
+  return (
+    <div className="mb-6 rounded-md border border-border bg-muted/30 p-4">
+      <p className="text-sm font-medium">Referral code</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        One month at your monthly rate when a referee pays their first invoice. They get a 60-day
+        trial. Teams is not eligible. Not shown on the pricing page.
+      </p>
+      <p className="mt-2 font-mono text-sm">{code || error || 'Loading…'}</p>
     </div>
   );
 }

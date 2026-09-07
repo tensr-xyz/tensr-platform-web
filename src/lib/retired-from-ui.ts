@@ -9,7 +9,6 @@ export const RETIRED_FROM_UI_OPS = new Set<AnalysisKey>([
   'stepwise_regression',
   'loglinear',
   'mcnemar',
-  'code_open_text',
 ]);
 
 export function isRetiredFromUi(op: string | null | undefined): op is AnalysisKey {

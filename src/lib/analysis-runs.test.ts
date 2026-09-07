@@ -30,12 +30,12 @@ describe('normalizeStoredAnalysisRun', () => {
     const run = normalizeStoredAnalysisRun({
       id: 'run-2',
       dataset_id: '11111111-1111-4111-8111-111111111111',
-      op: 'code_open_text',
+      op: 'mcnemar',
       created_at: '2026-01-01T00:00:00.000Z',
       result: {},
     });
     expect(run).not.toBeNull();
-    expect(run?.report.meta.title).toBe('Open-text coding');
+    expect(run?.report.meta.title).toMatch(/McNemar/);
     expect(run?.report.summary).toMatch(/no longer offered/);
   });
 });

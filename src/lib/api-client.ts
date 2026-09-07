@@ -311,6 +311,17 @@ class ApiClient {
         method: 'PUT',
         body: JSON.stringify(data),
       }),
+
+    referral: () =>
+      this.request<{ code: string; ledger: unknown[]; referee_trial_days: number }>(
+        '/billing/referral'
+      ),
+
+    projectCheckout: (origin_dataset_id: string) =>
+      this.request<any>('/billing/project-checkout', {
+        method: 'POST',
+        body: JSON.stringify({ origin_dataset_id }),
+      }),
   };
 
   // Organizations API
@@ -1120,6 +1131,52 @@ class ApiClient {
         this.request<{ dataset_id: string; runs: unknown[] }>(`/datasets/${datasetId}/runs`),
 
       get: (runId: string) => this.request<any>(`/datasets/analysis-runs/${runId}`),
+    },
+
+    tables: {
+      create: (datasetId: string, body: Record<string, unknown>) =>
+        this.request<any>(`/datasets/${datasetId}/tables`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+      preview: (datasetId: string, body: Record<string, unknown>) =>
+        this.request<any>(`/datasets/${datasetId}/tables/preview`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+      refresh: (datasetId: string, specId: string) =>
+        this.request<any>(`/datasets/${datasetId}/tables/${specId}/refresh`, { method: 'POST' }),
+      batch: (datasetId: string, body: Record<string, unknown>) =>
+        this.request<any>(`/datasets/${datasetId}/tables/batch`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+      exportUrl: (datasetId: string, specId: string, kind: 'xlsx' | 'pptx' | 'docx') =>
+        tensrApiUrl(`/datasets/${datasetId}/tables/${specId}/export.${kind}`),
+    },
+
+    weights: {
+      rake: (datasetId: string, body: Record<string, unknown>) =>
+        this.request<any>(`/datasets/${datasetId}/weights/rake`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+    },
+
+    intake: {
+      fuseDatasets: (body: Record<string, unknown>) =>
+        this.request<any>('/datasets/intake/fuse-datasets', {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+    },
+
+    techniques: {
+      run: (datasetId: string, name: string, body: Record<string, unknown>) =>
+        this.request<any>(`/datasets/${datasetId}/techniques/${name}`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
     },
   };
 

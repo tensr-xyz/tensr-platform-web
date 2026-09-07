@@ -131,7 +131,7 @@ describe('retired analysis ops are not agent-runnable', () => {
   };
 
   it('refuses McNemar, stepwise, loglinear, and open-text from parse-intent', () => {
-    for (const analysis_type of ['mcnemar', 'stepwise_regression', 'loglinear', 'code_open_text']) {
+    for (const analysis_type of ['mcnemar', 'stepwise_regression', 'loglinear']) {
       const update = assistantUpdateFromParseIntent(
         {
           status: 'plan',

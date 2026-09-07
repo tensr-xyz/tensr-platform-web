@@ -26,6 +26,10 @@ import {
   FormMessage,
 } from '@/components/atoms/form';
 import { useProject } from '@/hooks/api/use-project';
+import {
+  ACCEPTED_UPLOAD_ACCEPT,
+  ACCEPTED_UPLOAD_DOT_EXTENSIONS,
+} from '@/lib/accepted-upload-types';
 import { useProjectFileUpload } from '@/hooks/api/use-project-file-upload';
 import { ProjectStatus } from '@/types/project';
 import posthog from 'posthog-js';
@@ -56,7 +60,7 @@ export default function NewProjectForm() {
     isLoading: isUploading,
     error: uploadError,
   } = useProjectFileUpload({
-    allowedExtensions: ['.csv', '.xlsx', '.xls', '.json'],
+    allowedExtensions: [...ACCEPTED_UPLOAD_DOT_EXTENSIONS],
     onUploadComplete: projectId => {
       router.push(`/workspace/project/${projectId}`);
     },
@@ -144,7 +148,7 @@ export default function NewProjectForm() {
               <label className="text-sm font-medium">Select File</label>
               <input
                 type="file"
-                accept=".csv,.xlsx,.xls,.json"
+                accept={ACCEPTED_UPLOAD_ACCEPT}
                 onChange={handleFileSelect}
                 className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
               />

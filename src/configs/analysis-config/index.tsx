@@ -27,6 +27,10 @@ import { ExportDialog } from '@/components/templates/data';
 import ComputeVariablesDialog from '@/components/templates/transform/compute-variable';
 import CountValuesDialog from '@/components/templates/transform/count-values';
 import ShiftValuesDialog from '@/components/templates/transform/shift-values';
+import {
+  CustomTablesDialog,
+  RakeWeightsDialog,
+} from '@/components/templates/analysis/agency-dialogs';
 import { MessageCircle } from 'lucide-react';
 import { PRODUCTION_MENU_ITEMS } from './production-menu';
 
@@ -102,7 +106,7 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'Chi-Square Test': ChiSquareLauncher,
   Explore: DescriptivesLauncher,
   'Ratio Statistics': DescriptivesLauncher,
-  'Custom Tables': DescriptivesLauncher,
+  'Custom Tables': CustomTablesDialog,
   'Pivot Tables': DescriptivesLauncher,
 
   // Correlation & Regression
@@ -216,7 +220,7 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'Split Files': ComputeVariablesDialog,
   'Propensity Matching': ComputeVariablesDialog,
   'Case Control Matching': ComputeVariablesDialog,
-  'Rake Weights': ComputeVariablesDialog,
+  'Rake Weights': RakeWeightsDialog,
   'Text Processing': ComputeVariablesDialog,
   'Conditional Logic': ComputeVariablesDialog,
   'Percentile Calculations': ComputeVariablesDialog,
