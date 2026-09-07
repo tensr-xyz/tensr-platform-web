@@ -11,7 +11,7 @@ export type SubscriptionTier = 'pro' | 'pro_plus' | 'team';
 export const SUBSCRIPTION_TIERS: SubscriptionTier[] = ['pro', 'pro_plus', 'team'];
 
 export const DEFAULT_TEAM_SEATS = 3;
-export const MIN_TEAM_SEATS = 1;
+export const MIN_TEAM_SEATS = 3;
 export const MAX_TEAM_SEATS = 500;
 
 export const SUBSCRIPTION_TIER_LABELS: Record<SubscriptionTier, string> = {
@@ -27,18 +27,18 @@ export const DEFAULT_SUBSCRIPTION_PRICING: Record<
   { monthly: number; annual: number; description: string }
 > = {
   pro: {
-    monthly: 20,
-    annual: 16,
+    monthly: 79,
+    annual: 63,
     description: 'For individual analysts running real tests on real data.',
   },
   pro_plus: {
-    monthly: 60,
-    annual: 48,
+    monthly: 149,
+    annual: 119,
     description: 'For power users who live in the agent and ship more analyses.',
   },
   team: {
-    monthly: 40,
-    annual: 32,
+    monthly: 119,
+    annual: 95,
     description: 'For research groups and analytics teams working in one place.',
   },
 };
@@ -94,7 +94,7 @@ export const SUBSCRIPTION_PLAN_CARDS: SubscriptionPlanCardMeta[] = [
     tier: 'team',
     name: 'Teams',
     subtitle: 'For research groups and analytics teams working in one place.',
-    note: 'Per seat · billed to your organisation',
+    note: 'Per seat · 3 seats minimum · billed to your organisation',
     featured: false,
     perSeat: true,
     cta: 'Get Teams',
@@ -109,9 +109,9 @@ export const SUBSCRIPTION_PLAN_CARDS: SubscriptionPlanCardMeta[] = [
   },
 ];
 
-/** `annual` prices are monthly equivalents (20% off), not lump-sum yearly totals. */
+/** `annual` prices are monthly equivalents (20% off, nearest whole unit), not lump-sum yearly totals. */
 export function monthlyEquivalentRate(monthly: number): number {
-  return Math.round(monthly * ANNUAL_MONTHLY_DISCOUNT * 100) / 100;
+  return Math.round(monthly * ANNUAL_MONTHLY_DISCOUNT);
 }
 
 export function unitPriceForBilling(

@@ -59,11 +59,17 @@ const PLAN_KEY_MAP: Record<string, SubscriptionTier> = {
 };
 
 function monthlyPriceFromPlan(plan: {
+  monthly?: number;
   monthly_usd?: number;
+  price_gbp_month?: number;
+  price_gbp_per_seat_month?: number;
   price_usd_month?: number;
   price_usd_per_seat_month?: number;
   monthlyPrice?: number;
 }): number | null {
+  if (typeof plan.monthly === 'number') return plan.monthly;
+  if (typeof plan.price_gbp_month === 'number') return plan.price_gbp_month;
+  if (typeof plan.price_gbp_per_seat_month === 'number') return plan.price_gbp_per_seat_month;
   if (typeof plan.monthly_usd === 'number') return plan.monthly_usd;
   if (typeof plan.price_usd_month === 'number') return plan.price_usd_month;
   if (typeof plan.price_usd_per_seat_month === 'number') return plan.price_usd_per_seat_month;
@@ -82,7 +88,10 @@ function pricingFromApiPlans(plans: unknown[]): PricingData {
       name?: string;
       description?: string;
       operations?: number;
+      monthly?: number;
       monthly_usd?: number;
+      price_gbp_month?: number;
+      price_gbp_per_seat_month?: number;
       price_usd_month?: number;
       price_usd_per_seat_month?: number;
       monthlyPrice?: number;
@@ -399,13 +408,13 @@ export default function SubscriptionCheckoutPage() {
                     {plan.subtitle}
                   </p>
                   <div className="mt-6 flex items-baseline gap-1">
-                    <span className="text-lg text-muted-foreground">$</span>
+                    <span className="text-lg text-muted-foreground">£</span>
                     <span className="text-4xl tracking-tight">{price}</span>
                     <span className="text-sm text-muted-foreground">{period}</span>
                   </div>
                   {billingType === 'annual' && (
                     <p className="mt-1 text-xs text-muted-foreground/80">
-                      ${yearlyTotal}
+                      £{yearlyTotal}
                       {plan.perSeat ? ' / seat' : ''} billed yearly
                     </p>
                   )}
@@ -436,7 +445,7 @@ export default function SubscriptionCheckoutPage() {
                         <p className="text-sm text-red-600">{errors.teamSeats}</p>
                       ) : (
                         <p className="text-xs text-muted-foreground">
-                          ${price} × {teamSeats} seats = ${price * teamSeats}{' '}
+                          £{price} × {teamSeats} seats = £{price * teamSeats}{' '}
                           {billingType === 'annual' ? '/mo billed annually' : '/mo'}
                         </p>
                       )}
