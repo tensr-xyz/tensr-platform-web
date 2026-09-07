@@ -8,6 +8,7 @@ import type { AnalyzeResponse } from '@/lib/analysis-report-types';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import type { AnalysisKey } from '@/lib/analysis-definitions';
 import { isAnalysisKey } from '@/lib/analysis-definitions';
+import { isQAgentAnalysisType } from '@/configs/analysis-config/q-program-catalog';
 import { interpretProgressMessage } from '@/lib/agent-analysis-progress';
 import { streamAgentAnalysisRun } from '@/lib/stream-agent-analysis';
 import { resolveChatAction } from '@/lib/chat-actions';
@@ -238,6 +239,7 @@ export async function runAgentAnalysisPlan(
 
   if (
     !isAnalysisKey(resolvedOp) &&
+    !isQAgentAnalysisType(String(resolvedOp)) &&
     op !== 'regression' &&
     op !== 'anova' &&
     op !== 'correlations'
@@ -295,6 +297,17 @@ export const AGENT_OP_MAP: Record<string, string> = {
   anova: 'anova_oneway',
   correlations: 'correlation',
 };
+
+export function isAgentRunnableAnalysisType(op: string | null | undefined): boolean {
+  if (!op) return false;
+  return (
+    isAnalysisKey(op) ||
+    isQAgentAnalysisType(op) ||
+    op === 'regression' ||
+    op === 'anova' ||
+    op === 'correlations'
+  );
+}
 
 export function openResultTabForPlan(
   plan: AgentAnalysisPlan,

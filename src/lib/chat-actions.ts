@@ -12,6 +12,7 @@ import {
   getAnalysisOpForMenuName,
   isDialogMenuItem,
 } from '@/configs/analysis-config/menu-registry';
+import { Q_CHAT_SYNONYMS } from '@/configs/analysis-config/q-program-catalog';
 import type { AnalysisKey } from '@/lib/analysis-definitions';
 import { shouldRouteToInlineChart } from '@/lib/chart-intent';
 
@@ -223,6 +224,7 @@ const SYNONYMS: Record<string, string> = {
   rank: 'Rank Cases',
   'compute variable': 'Compute Variable',
   'shift values': 'Shift Values',
+  ...Q_CHAT_SYNONYMS,
   lca: 'Latent Class Analysis (LCA)',
   'latent class': 'Latent Class Analysis (LCA)',
   'latent class analysis': 'Latent Class Analysis (LCA)',

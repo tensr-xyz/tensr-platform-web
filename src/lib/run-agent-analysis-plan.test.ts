@@ -130,7 +130,7 @@ describe('retired analysis ops are not agent-runnable', () => {
     triggerMessage: 'run lca',
   };
 
-  it('refuses McNemar, stepwise, loglinear, and open-text from parse-intent', () => {
+  it('refuses McNemar, stepwise, and loglinear from parse-intent', () => {
     for (const analysis_type of ['mcnemar', 'stepwise_regression', 'loglinear']) {
       const update = assistantUpdateFromParseIntent(
         {

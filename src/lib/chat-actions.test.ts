@@ -102,8 +102,18 @@ describe('resolveChatAction', () => {
     });
   });
 
+  it('opens restored open-text coding as the menu dialog', () => {
+    expect(resolveChatAction('open-text coding')).toEqual({
+      kind: 'dialog',
+      menuName: 'Open-text coding',
+    });
+    expect(resolveChatAction('code the comments')).toEqual({
+      kind: 'dialog',
+      menuName: 'Open-text coding',
+    });
+  });
+
   it('does not route chat to removed false-door labels', () => {
-    expect(resolveChatAction('open-text coding')).toEqual({ kind: 'chat' });
     expect(resolveChatAction('mcnemar test')).toEqual({ kind: 'chat' });
     expect(resolveChatAction('loglinear analysis')).toEqual({ kind: 'chat' });
     expect(resolveChatAction('stepwise')).toEqual({ kind: 'chat' });
