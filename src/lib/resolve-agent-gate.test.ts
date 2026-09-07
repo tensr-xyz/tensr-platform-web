@@ -14,8 +14,8 @@ describe('resolveGateInOrder — baseline cascade (before agent-loop rewrite)', 
     { prompt: 'run one for me', gate: 'tutor' },
     { prompt: 'why is that significant?', gate: 'tutor' },
     { prompt: 'Can you help me understand the groups?', gate: 'tutor' },
-    // Menu steals before Gate 4
-    { prompt: 't test for me on my dataset', gate: 'menu-analysis' },
+    // Agent loop (Gate 4) — menu no longer steals statistical analyses
+    { prompt: 't test for me on my dataset', gate: 'analysis-question' },
     { prompt: 'How many members joined after 2024?', gate: 'data-intent' },
     { prompt: 'Sum of Revenue by Region', gate: 'data-intent' },
     { prompt: 'Make a monthly line chart', gate: 'data-intent' },
@@ -24,8 +24,8 @@ describe('resolveGateInOrder — baseline cascade (before agent-loop rewrite)', 
     { prompt: 'Where do I start?', gate: 'data-intent' },
     { prompt: 'Clean this dataset', gate: 'prep-playbook' },
     // Menu steals before Gate 5
-    { prompt: 'Run a data quality scan', gate: 'menu-dialog' },
-    { prompt: 'correlation between Age and PTS', gate: 'menu-analysis' },
+    { prompt: 'Run a data quality scan', gate: 'data-quality' },
+    { prompt: 'correlation between Age and PTS', gate: 'analysis-question' },
     // Screenshot / fidelity regression phrases (routing layer only)
     { prompt: 'I want percentile values for utilisation_rate', gate: 'data-intent' },
     { prompt: 'Can we get Percentile Values for these KPIs', gate: 'data-intent' },
@@ -37,7 +37,7 @@ describe('resolveGateInOrder — baseline cascade (before agent-loop rewrite)', 
     },
     // Inline chart routing skips the Boxplot menu dialog
     { prompt: 'Could you provide a boxplot for utilisation_rate', gate: 'data-intent' },
-    { prompt: 'one-way ANOVA', gate: 'menu-analysis' },
+    { prompt: 'one-way ANOVA', gate: 'analysis-question' },
   ];
 
   it.each(cases)('$prompt → $gate', ({ prompt, gate }) => {

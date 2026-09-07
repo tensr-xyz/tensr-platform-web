@@ -1,4 +1,4 @@
-import { chatMenuSteal, resolveChatAction } from './chat-actions';
+import { resolveChatAction } from './chat-actions';
 
 describe('resolveChatAction', () => {
   it('parses sort commands', () => {
@@ -148,21 +148,20 @@ describe('resolveChatAction', () => {
     expect(resolveChatAction('calculate the mean of Age')).toEqual({ kind: 'chat' });
   });
 
-  it('steals retired and named-menu asks before the agent loop', () => {
-    expect(chatMenuSteal('mcnemar')).toEqual({
+  it('classifies menu labels for hints but chat always uses the agent loop', () => {
+    expect(resolveChatAction('mcnemar')).toEqual({
       kind: 'unavailable',
       menuName: 'McNemar Test',
     });
-    expect(chatMenuSteal('lca')).toEqual({
-      kind: 'analysis',
-      op: 'latent_class_analysis',
-      menuName: 'Latent Class Analysis (LCA)',
-    });
-    expect(chatMenuSteal('compute variable')).toEqual({
+    expect(resolveChatAction('compute variable')).toEqual({
       kind: 'dialog',
       menuName: 'Compute Variable',
     });
-    expect(chatMenuSteal('hello there')).toBeNull();
+    expect(resolveChatAction('run anova on Age and Pos')).toEqual({
+      kind: 'analysis',
+      op: 'anova_oneway',
+      menuName: 'One-Way ANOVA',
+    });
   });
 
   it('opens restored compute and shift dialogs', () => {

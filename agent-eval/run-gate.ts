@@ -6,7 +6,6 @@
  * Usage: npx tsx agent-eval/run-gate.ts "Hello"
  */
 import { shouldSuggestExploratoryAnalyses } from '../src/lib/agent-exploratory-intent';
-import { resolveChatAction } from '../src/lib/chat-actions';
 import { shouldRouteToInlineChart } from '../src/lib/chart-intent';
 import { isPrepPlaybookTrigger } from '../src/lib/prep-playbook';
 import { shouldRouteMessageToDataIntent } from '../src/lib/run-agent-data-action';
@@ -22,12 +21,6 @@ function resolveGateInOrder(message: string): string {
   if (!text) return 'tutor';
 
   const inlineChart = shouldRouteToInlineChart(text);
-  if (!inlineChart) {
-    const action = resolveChatAction(text);
-    if (action.kind === 'analysis') return 'menu-analysis';
-    if (action.kind === 'dialog') return 'menu-dialog';
-    if (action.kind !== 'chat') return 'menu-other';
-  }
 
   if (isPrepPlaybookTrigger(text)) return 'prep-playbook';
   if (shouldRouteMessageToDataIntent(text)) return 'data-intent';

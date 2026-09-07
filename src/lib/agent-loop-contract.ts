@@ -27,8 +27,8 @@ export type BaselineGate =
   | 'data-intent'
   | 'exploratory'
   | 'prep-playbook'
-  | 'menu-analysis'
-  | 'menu-dialog';
+  | 'analysis-question'
+  | 'data-quality';
 
 export type BaselineContractCase = {
   prompt: string;
@@ -81,25 +81,25 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     mode: 'agent',
     expected: 'ask_clarifying_question',
   },
-  // Former menu-* / gates
+  // Former menu-* / gates — chat always uses agent-loop now
   {
     prompt: 't test for me on my dataset',
     mode: 'agent',
     expected: 'run_analysis',
-    baselineGate: 'menu-analysis',
-    description: 'Menu synonym steals before Gate 4',
+    baselineGate: 'analysis-question',
+    description: 'Analysis synonym → agent run_analysis (no setup modal steal)',
   },
   {
     prompt: 'correlation between Age and PTS',
     mode: 'agent',
     expected: 'run_analysis',
-    baselineGate: 'menu-analysis',
+    baselineGate: 'analysis-question',
   },
   {
     prompt: 'one-way ANOVA',
     mode: 'agent',
     expected: 'run_analysis',
-    baselineGate: 'menu-analysis',
+    baselineGate: 'analysis-question',
   },
   {
     prompt: 'Could you provide a boxplot for utilisation_rate',
@@ -112,8 +112,8 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     prompt: 'Run a data quality scan',
     mode: 'agent',
     expected: 'run_data_quality_scan',
-    baselineGate: 'menu-dialog',
-    description: 'Menu synonym steals before Gate 5',
+    baselineGate: 'data-quality',
+    description: 'Agent run_data_quality_scan tool (no dialog steal)',
   },
   {
     prompt: 'How many members joined after 2024?',

@@ -1,8 +1,7 @@
 /**
  * Pure replica of agent-panel `handleSendMessage` gate order for offline eval.
  *
- * Order (must stay aligned with agent-panel/index.tsx):
- *   0. Menu dispatch via resolveChatAction (unless shouldRouteToInlineChart)
+ * Chat always POSTs /assistant/agent-loop (no menu/dialog steal). Order:
  *   1. Prep playbook
  *   2. Data-intent
  *   3. Exploratory suggestions
@@ -15,16 +14,12 @@
  */
 
 import { shouldSuggestExploratoryAnalyses } from '@/lib/agent-exploratory-intent';
-import { resolveChatAction } from '@/lib/chat-actions';
 import { shouldRouteToInlineChart } from '@/lib/chart-intent';
 import { isPrepPlaybookTrigger } from '@/lib/prep-playbook';
 import { shouldRouteMessageToDataIntent } from '@/lib/run-agent-data-action';
 
-/** Labels used by the §4.1 baseline / before-state corpus. */
+/** Labels used by the offline routing eval corpus. */
 export type AgentGateLabel =
-  | 'menu-analysis'
-  | 'menu-dialog'
-  | 'menu-other'
   | 'prep-playbook'
   | 'data-intent'
   | 'exploratory'
@@ -59,14 +54,6 @@ export function resolveGateInOrder(
   const hasDatasetId = options.hasDatasetId !== false;
   const hasActiveTabData = options.hasActiveTabData !== false;
   const inlineChart = shouldRouteToInlineChart(text);
-
-  // Stage 0 — menu dispatch (skipped for inline chart intents)
-  if (!inlineChart) {
-    const action = resolveChatAction(text);
-    if (action.kind === 'analysis') return 'menu-analysis';
-    if (action.kind === 'dialog') return 'menu-dialog';
-    if (action.kind !== 'chat') return 'menu-other';
-  }
 
   // Gate 1 — prep playbook
   if (hasDatasetId && isPrepPlaybookTrigger(text)) return 'prep-playbook';

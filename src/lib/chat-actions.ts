@@ -470,15 +470,6 @@ export function resolveChatAction(message: string): ChatAction {
   return { kind: 'unavailable', menuName: label };
 }
 
-/** Menu / refuse steal that must run before POST /assistant/agent-loop. */
-export function chatMenuSteal(message: string): ChatAction | null {
-  const action = resolveChatAction(message);
-  if (action.kind === 'analysis' || action.kind === 'dialog' || action.kind === 'unavailable') {
-    return action;
-  }
-  return null;
-}
-
 /** Help text the chat can show users so they know what verbs work. */
 export const CHAT_ACTION_HINTS: string[] = [
   'Run correlation / regression / ANOVA / t-test / chi-square',
