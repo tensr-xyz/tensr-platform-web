@@ -21,14 +21,17 @@ export type ContractOutcome =
 
 export type AgentMode = 'ask' | 'plan' | 'agent';
 
-/** Baseline gate label from the pre-rewrite resolveGate cascade. */
+/**
+ * Historical baseline gate label from the pre-rewrite resolveGate cascade.
+ * Live chat (`handleSendMessage` → `runAgentLoop`) does not use these gates.
+ */
 export type BaselineGate =
   | 'tutor'
   | 'data-intent'
   | 'exploratory'
   | 'prep-playbook'
-  | 'analysis-question'
-  | 'data-quality';
+  | 'menu-analysis'
+  | 'menu-dialog';
 
 export type BaselineContractCase = {
   prompt: string;
@@ -81,25 +84,25 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     mode: 'agent',
     expected: 'ask_clarifying_question',
   },
-  // Former menu-* / gates — chat always uses agent-loop now
+  // Former menu-* / gates
   {
     prompt: 't test for me on my dataset',
     mode: 'agent',
     expected: 'run_analysis',
-    baselineGate: 'analysis-question',
-    description: 'Analysis synonym → agent run_analysis (no setup modal steal)',
+    baselineGate: 'menu-analysis',
+    description: 'Menu synonym steals before Gate 4',
   },
   {
     prompt: 'correlation between Age and PTS',
     mode: 'agent',
     expected: 'run_analysis',
-    baselineGate: 'analysis-question',
+    baselineGate: 'menu-analysis',
   },
   {
     prompt: 'one-way ANOVA',
     mode: 'agent',
     expected: 'run_analysis',
-    baselineGate: 'analysis-question',
+    baselineGate: 'menu-analysis',
   },
   {
     prompt: 'Could you provide a boxplot for utilisation_rate',
@@ -112,8 +115,8 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     prompt: 'Run a data quality scan',
     mode: 'agent',
     expected: 'run_data_quality_scan',
-    baselineGate: 'data-quality',
-    description: 'Agent run_data_quality_scan tool (no dialog steal)',
+    baselineGate: 'menu-dialog',
+    description: 'Menu synonym steals before Gate 5',
   },
   {
     prompt: 'How many members joined after 2024?',
@@ -181,6 +184,23 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     expected: 'plan-awaiting-approval',
   },
   { prompt: 'geometric mean of Revenue', mode: 'agent', expected: 'refuse-or-clarify' },
+  {
+    prompt: 'run a mixed model on my dataset',
+    mode: 'agent',
+    expected: 'run_analysis',
+    baselineGate: 'menu-analysis',
+  },
+  {
+    prompt: 'run a mixed model on my dataset',
+    mode: 'plan',
+    expected: 'plan-awaiting-approval',
+  },
+  {
+    prompt: 'GEE for clustered pass fail',
+    mode: 'agent',
+    expected: 'run_analysis',
+    baselineGate: 'menu-analysis',
+  },
 ];
 
 /**

@@ -1,7 +1,10 @@
 /**
- * Pure replica of agent-panel `handleSendMessage` gate order for offline eval.
+ * Historical replica of the pre-rewrite `handleSendMessage` gate order for
+ * offline baseline eval. Live chat does not use this cascade — it posts to
+ * `/assistant/agent-loop` only.
  *
- * Chat always POSTs /assistant/agent-loop (no menu/dialog steal). Order:
+ * Order (must stay aligned with the *old* agent-panel, not current code):
+ *   0. Menu dispatch via resolveChatAction (unless shouldRouteToInlineChart)
  *   1. Prep playbook
  *   2. Data-intent
  *   3. Exploratory suggestions
@@ -14,12 +17,16 @@
  */
 
 import { shouldSuggestExploratoryAnalyses } from '@/lib/agent-exploratory-intent';
+import { resolveChatAction } from '@/lib/chat-actions';
 import { shouldRouteToInlineChart } from '@/lib/chart-intent';
 import { isPrepPlaybookTrigger } from '@/lib/prep-playbook';
 import { shouldRouteMessageToDataIntent } from '@/lib/run-agent-data-action';
 
-/** Labels used by the offline routing eval corpus. */
+/** Labels used by the §4.1 baseline / before-state corpus. */
 export type AgentGateLabel =
+  | 'menu-analysis'
+  | 'menu-dialog'
+  | 'menu-other'
   | 'prep-playbook'
   | 'data-intent'
   | 'exploratory'
@@ -35,7 +42,7 @@ export type ResolveAgentGateOptions = {
 };
 
 const ANALYSIS_QUESTION_RE =
-  /(predict|analyze|analys|relationship|correlation|regression|anova|compare|difference|effect|impact|test|wilcoxon|mann|kruskal|chi|crosstab|pca|cluster|factor|reliability|normality|shapiro|sign test|mcnemar|probit|logistic|poisson|ttest|t-test|kappa|cohen|spearman|kendall|canonical|discriminant|manova|ancova|glmm|mixed model|survival|kaplan|cox|arima)/i;
+  /(predict|analyze|analys|relationship|correlation|regression|anova|compare|difference|effect|impact|test|wilcoxon|mann|kruskal|chi|crosstab|pca|cluster|factor|reliability|normality|shapiro|sign test|mcnemar|probit|logistic|poisson|ttest|t-test|kappa|cohen|spearman|kendall|canonical|discriminant|manova|ancova|glmm|mixed model|survival|kaplan|cox|arima|maxdiff|conjoint|turf|nps|rake|funnel)/i;
 
 const DATA_QUALITY_RE =
   /(data quality|quality scan|check data|data issues|scan data|data problems)/i;
@@ -54,6 +61,14 @@ export function resolveGateInOrder(
   const hasDatasetId = options.hasDatasetId !== false;
   const hasActiveTabData = options.hasActiveTabData !== false;
   const inlineChart = shouldRouteToInlineChart(text);
+
+  // Stage 0 — menu dispatch (skipped for inline chart intents)
+  if (!inlineChart) {
+    const action = resolveChatAction(text);
+    if (action.kind === 'analysis') return 'menu-analysis';
+    if (action.kind === 'dialog') return 'menu-dialog';
+    if (action.kind !== 'chat') return 'menu-other';
+  }
 
   // Gate 1 — prep playbook
   if (hasDatasetId && isPrepPlaybookTrigger(text)) return 'prep-playbook';

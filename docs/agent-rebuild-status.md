@@ -1,7 +1,10 @@
 # Tensr Agent Rebuild — Status Report
 
 **Primary surfaces:** `tensr-platform-web` + `tensr-api`  
-**Updated:** 2026-08-03 (final pre-push)
+**Updated:** 2026-09-08
+
+Live chat is agent-loop only. `menu-dialog` / `menu-analysis` in the Jest
+baseline corpus are historical eval labels, not current chat routing.
 
 ---
 
