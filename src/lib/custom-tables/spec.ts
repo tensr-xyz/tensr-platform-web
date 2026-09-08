@@ -20,6 +20,7 @@ export type CustomTableCanvas = {
   rowPercent: boolean;
   significanceDisplay: 'column_letters' | 'cell_comparisons';
   weightDatasetId: string | null;
+  bannerId: string | null;
 };
 
 export type TableRequestBody = {
@@ -33,6 +34,7 @@ export type TableRequestBody = {
   significance_display: 'column_letters' | 'cell_comparisons';
   nest_banners: boolean;
   low_base_threshold: number;
+  banner_id?: string;
 };
 
 export function resetBuilderSurface(): {
@@ -62,6 +64,7 @@ export function defaultCanvas(): CustomTableCanvas {
     rowPercent: false,
     significanceDisplay: 'column_letters',
     weightDatasetId: null,
+    bannerId: null,
   };
 }
 
@@ -194,6 +197,19 @@ export function buildTableRequest(canvas: CustomTableCanvas): TableRequestBody {
     significance_display: canvas.significanceDisplay,
     nest_banners: canvas.nestBanners,
     low_base_threshold: 30,
+    ...(canvas.bannerId ? { banner_id: canvas.bannerId } : {}),
+  };
+}
+
+export function namedBannerPayload(
+  canvas: CustomTableCanvas,
+  id: string,
+  label?: string
+): { id: string; label: string; banner: TableRequestBody['banner'] } {
+  return {
+    id,
+    label: (label && label.trim()) || id,
+    banner: buildTableRequest(canvas).banner,
   };
 }
 
@@ -214,6 +230,7 @@ export type StoredTableSpec = {
   statistics?: string[];
   nest_banners?: boolean;
   significance_display?: string;
+  banner_id?: string;
 };
 
 function asStringValues(values: unknown[] | undefined): string[] {
@@ -258,6 +275,7 @@ export function canvasFromStoredSpec(
     rowPercent: stats.includes('row_proportion'),
     significanceDisplay:
       spec.significance_display === 'cell_comparisons' ? 'cell_comparisons' : 'column_letters',
+    bannerId: spec.banner_id || current?.bannerId || null,
   };
 }
 

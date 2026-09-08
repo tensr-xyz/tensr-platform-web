@@ -64,6 +64,9 @@ describe('banner table renderer model', () => {
     expect(cell.letters).toBe('b');
     expect(cell.bases).toMatch(/n=1/);
     expect(cell.bases).toMatch(/ESS/);
+    expect(cell.stubRowId).toBe('gender:Male');
+    expect(cell.bannerId).toBe('age_band=18-34');
+    expect(table.rows[0].id).toBe('gender:Male');
   });
 
   it('shows a suppression marker instead of a fake percent on low base', () => {

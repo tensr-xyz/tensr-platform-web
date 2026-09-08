@@ -29,14 +29,19 @@ import {
 import { useTabsStore } from '@/stores/tabs-store';
 import {
   downloadTableExport,
+  drillTableCell,
   getSavedTable,
   listDatasetVersions,
+  listNamedBanners,
   listSavedTables,
   previewCustomTable,
   runCustomTable,
+  saveNamedBanner,
 } from '@/lib/custom-tables/api';
 import { netPreset, NET_HELPER_COPY, type NetPresetId } from '@/lib/custom-tables/nets';
 import {
+  drillClickCopy,
+  drillRequest,
   netUnionReconciles,
   resolveCompleteCell,
   type CellClickResult,
@@ -53,6 +58,7 @@ import {
   defaultCanvas,
   resetBuilderSurface,
   moveCategory,
+  namedBannerPayload,
   nestUnderBanner,
   savedSpecLabel,
   type CustomTableCanvas,
@@ -87,6 +93,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [savedSpecs, setSavedSpecs] = useState<SavedTableSpecRow[]>([]);
   const [activeSpecId, setActiveSpecId] = useState<string | null>(null);
   const [cellClick, setCellClick] = useState<string | null>(null);
+  const [namedBanners, setNamedBanners] = useState<Array<{ id: string; label?: string }>>([]);
+  const [bannerIdDraft, setBannerIdDraft] = useState('');
 
   const columns = useMemo(() => {
     if (!sheetTab?.data?.initialColumns) return [];
@@ -101,6 +109,19 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     const selected = weightOptions.find(o => o.datasetId === weightChoice);
     return selected ? pickRunDatasetId(selected) : weightChoice || datasetId || '';
   }, [weightOptions, weightChoice, datasetId]);
+
+  const refreshNamedBanners = async (targetId: string) => {
+    if (!targetId) {
+      setNamedBanners([]);
+      return;
+    }
+    try {
+      const listed = await listNamedBanners(targetId, token);
+      setNamedBanners(listed.banners || []);
+    } catch {
+      setNamedBanners([]);
+    }
+  };
 
   const refreshSavedSpecs = async (targetId: string) => {
     if (!targetId) {
@@ -139,6 +160,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!open || !runDatasetId) return;
     void refreshSavedSpecs(runDatasetId);
+    void refreshNamedBanners(runDatasetId);
   }, [open, runDatasetId, token]);
 
   const product = bannerColumnProduct(canvas.banners, canvas.nestBanners);
@@ -192,6 +214,9 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       setBook(result);
       setActiveSpecId(String(result.spec?.id || '') || null);
       setCellClick(null);
+      if (result.spec?.banner_id) {
+        setCanvas(c => ({ ...c, bannerId: String(result.spec?.banner_id) }));
+      }
       await refreshSavedSpecs(runId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Table failed');
@@ -227,7 +252,31 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const exportTrace = book ? exportTraceFromBook(book) : null;
   const originOrder = book?.row_uid_order || [];
 
-  const clickCell = (cell: DisplayCell, stubLabel: string) => {
+  const saveBanner = async () => {
+    const id = bannerIdDraft.trim() || canvas.bannerId || '';
+    if (!runDatasetId) {
+      setError(WORKSPACE_DATASET_REQUIRED);
+      return;
+    }
+    if (!id || !canvas.banners.length) {
+      setError('Name the banner and drop at least one Banner question before saving.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const saved = await saveNamedBanner(runDatasetId, namedBannerPayload(canvas, id, id), token);
+      setCanvas(c => ({ ...c, bannerId: saved.banner.id }));
+      setBannerIdDraft(saved.banner.id);
+      await refreshNamedBanners(runDatasetId);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save banner');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const clickCell = async (cell: DisplayCell, stubLabel: string) => {
     const resolved: CellClickResult = resolveCompleteCell(
       { kind: cell.kind, unweighted_n: cell.unweighted_n, provenance: cell.provenance },
       originOrder
@@ -247,7 +296,25 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           ? ` Net union n=${resolved.n} reconciles with the cell count.`
           : ` Net union n=${resolved.n} does not reconcile with the cell count.`
         : '';
-    setCellClick(`${stubLabel}: ${resolved.n} origin respondents.${netNote}`);
+    const originCopy = `${stubLabel}: ${resolved.n} origin respondents.${netNote}`;
+    if (activeSpecId && runDatasetId && cell.stubRowId && cell.bannerId) {
+      try {
+        const drilled = await drillTableCell(
+          runDatasetId,
+          activeSpecId,
+          drillRequest(cell.stubRowId, cell.bannerId),
+          token
+        );
+        setCellClick(`${originCopy} ${drillClickCopy(drilled)}`);
+        return;
+      } catch (e) {
+        setCellClick(
+          `${originCopy} Drill failed: ${e instanceof Error ? e.message : 'unknown error'}.`
+        );
+        return;
+      }
+    }
+    setCellClick(originCopy);
   };
 
   const exportBook = async (kind: 'xlsx' | 'pptx') => {
@@ -433,6 +500,55 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           />
           <div className="rounded-md border border-border p-2">
             <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Named banner
+            </p>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Save the Banner questions as a reusable banner_id. Later tables can reuse it.
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                className="h-7 min-w-[8rem] rounded-md border border-input bg-background px-2 text-xs"
+                placeholder="banner id"
+                value={bannerIdDraft || canvas.bannerId || ''}
+                onChange={e => {
+                  setBannerIdDraft(e.target.value);
+                  setCanvas(c => ({ ...c, bannerId: e.target.value.trim() || null }));
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-[10px]"
+                disabled={busy}
+                onClick={() => void saveBanner()}
+              >
+                Save banner
+              </Button>
+              {namedBanners.length ? (
+                <Select
+                  value={canvas.bannerId || ''}
+                  onValueChange={value => {
+                    setCanvas(c => ({ ...c, bannerId: value || null }));
+                    setBannerIdDraft(value);
+                  }}
+                >
+                  <SelectTrigger className="h-7 w-[10rem] text-xs">
+                    <SelectValue placeholder="Reuse banner" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {namedBanners.map(banner => (
+                      <SelectItem key={banner.id} value={banner.id}>
+                        {banner.label || banner.id}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : null}
+            </div>
+          </div>
+          <div className="rounded-md border border-border p-2">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               Saved tables
             </p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
@@ -494,7 +610,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                           <button
                             type="button"
                             className="w-full text-left"
-                            onClick={() => clickCell(cell, row.label)}
+                            onClick={() => void clickCell(cell, row.label)}
                           >
                             <div>
                               {canvas.columnPercent ? cell.columnPercent : null}

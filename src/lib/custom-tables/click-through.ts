@@ -73,3 +73,22 @@ export function netUnionReconciles(cell: ClickableCell, originUids: string[]): b
     (nUids == null || nUids === unique.size)
   );
 }
+
+export function drillRequest(
+  stubRowId: string,
+  bannerId: string
+): {
+  stub_row_id: string;
+  banner_id: string;
+} {
+  return { stub_row_id: stubRowId, banner_id: bannerId };
+}
+
+export function drillClickCopy(payload: {
+  filter_ref?: { filters?: unknown[] };
+  child?: { n_rows_filtered?: number };
+}): string {
+  const nFilters = payload.filter_ref?.filters?.length || 0;
+  const nRows = payload.child?.n_rows_filtered;
+  return `Intersection filter (${nFilters} clauses) · ${nRows ?? '—'} rows.`;
+}

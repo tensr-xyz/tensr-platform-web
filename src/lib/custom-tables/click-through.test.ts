@@ -1,5 +1,7 @@
 import {
   decodeRowUidBitset,
+  drillClickCopy,
+  drillRequest,
   netUnionReconciles,
   provenanceTraceKind,
   resolveCompleteCell,
@@ -61,5 +63,21 @@ describe('banner cell click-through', () => {
     };
     expect(netUnionReconciles(cell, ORIGIN)).toBe(true);
     expect(netUnionReconciles({ ...cell, unweighted_n: 3 }, ORIGIN)).toBe(false);
+  });
+
+  it('posts stub_row_id and banner_id for a cell drill', () => {
+    expect(drillRequest('gender:Male', 'age_band=18-34')).toEqual({
+      stub_row_id: 'gender:Male',
+      banner_id: 'age_band=18-34',
+    });
+  });
+
+  it('summarises the intersection filter and child row count', () => {
+    expect(
+      drillClickCopy({
+        filter_ref: { filters: [{ column: 'gender' }, { column: 'age_band' }] },
+        child: { n_rows_filtered: 2 },
+      })
+    ).toBe('Intersection filter (2 clauses) · 2 rows.');
   });
 });

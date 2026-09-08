@@ -106,3 +106,40 @@ export function previewCustomTable(
     token
   );
 }
+
+export function listNamedBanners(datasetId: string, token?: string | null) {
+  return authedJson<{ ok?: boolean; banners: Array<{ id: string; label?: string }> }>(
+    `/datasets/${datasetId}/banners`,
+    { method: 'GET' },
+    token
+  );
+}
+
+export function saveNamedBanner(
+  datasetId: string,
+  body: { id: string; label?: string; banner: TableRequestBody['banner'] },
+  token?: string | null
+) {
+  return authedJson<{ ok?: boolean; banner: { id: string; label?: string } }>(
+    `/datasets/${datasetId}/banners`,
+    { method: 'POST', body: JSON.stringify(body) },
+    token
+  );
+}
+
+export function drillTableCell(
+  datasetId: string,
+  specId: string,
+  body: { stub_row_id: string; banner_id: string },
+  token?: string | null
+) {
+  return authedJson<{
+    ok?: boolean;
+    filter_ref?: { filters?: unknown[] };
+    child?: { ok?: boolean; n_rows_filtered?: number };
+  }>(
+    `/datasets/${datasetId}/tables/${specId}/drill`,
+    { method: 'POST', body: JSON.stringify(body) },
+    token
+  );
+}

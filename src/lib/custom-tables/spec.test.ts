@@ -10,6 +10,7 @@ import {
   nestUnderBanner,
   savedSpecLabel,
   uniqueColumnValues,
+  namedBannerPayload,
   type CustomTableCanvas,
 } from './spec';
 
@@ -158,5 +159,37 @@ describe('custom table spec builder', () => {
     expect(next.previewWarning).toBeNull();
     expect(next.activeSpecId).toBeNull();
     expect(next.cellClick).toBeNull();
+  });
+
+  it('stores banner_id on the table request when a named banner is selected', () => {
+    const canvas: CustomTableCanvas = {
+      ...defaultCanvas(),
+      bannerId: 'demo',
+      stubs: [{ column: 'gender', values: ['Male', 'Female'], nets: [] }],
+      banners: [{ column: 'age_band', values: ['18-34'], nested: [] }],
+    };
+    expect(buildTableRequest(canvas).banner_id).toBe('demo');
+  });
+
+  it('named banner payload reuses the canvas banner questions', () => {
+    const canvas: CustomTableCanvas = {
+      ...defaultCanvas(),
+      stubs: [{ column: 'gender', values: ['Male'], nets: [] }],
+      banners: [{ column: 'age_band', values: ['18-34', '35-54'], nested: [] }],
+    };
+    expect(namedBannerPayload(canvas, 'demo', 'Demographics')).toEqual({
+      id: 'demo',
+      label: 'Demographics',
+      banner: [{ column: 'age_band', values: ['18-34', '35-54'] }],
+    });
+  });
+
+  it('restores banner_id from a persisted spec', () => {
+    const restored = canvasFromStoredSpec({
+      banner_id: 'demo',
+      stubs: [{ column: 'gender', values: ['Male'] }],
+      banner: [{ column: 'age_band', values: ['18-34'] }],
+    });
+    expect(restored.bannerId).toBe('demo');
   });
 });

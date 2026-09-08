@@ -38,9 +38,12 @@ export type DisplayCell = {
   kind?: string;
   unweighted_n?: number | null;
   provenance?: CellProvenance;
+  stubRowId?: string;
+  bannerId?: string;
 };
 
 export type DisplayRow = {
+  id?: string;
   label: string;
   kind?: string;
   cells: DisplayCell[];
@@ -73,6 +76,7 @@ export function displayBannerTable(book: BannerBook): DisplayTable {
     letterMap.set(key, item.letter_display || item.letter || '');
   }
   const rows: DisplayRow[] = (book.rows || []).map(row => ({
+    id: row.id,
     label: row.label || row.id || '',
     kind: row.kind,
     cells: (row.cells || []).map(cell => {
@@ -86,6 +90,8 @@ export function displayBannerTable(book: BannerBook): DisplayTable {
         kind: cell.kind || row.kind,
         unweighted_n: cell.unweighted_n,
         provenance: cell.provenance,
+        stubRowId: cell.stub_row_id || row.id,
+        bannerId: cell.banner_id,
       };
     }),
   }));
