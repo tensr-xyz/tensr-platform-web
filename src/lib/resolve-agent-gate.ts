@@ -1,7 +1,9 @@
 /**
- * Pure replica of agent-panel `handleSendMessage` gate order for offline eval.
+ * Historical replica of the pre-rewrite `handleSendMessage` gate order for
+ * offline baseline eval. Live chat does not use this cascade — it posts to
+ * `/assistant/agent-loop` only.
  *
- * Order (must stay aligned with agent-panel/index.tsx):
+ * Order (must stay aligned with the *old* agent-panel, not current code):
  *   0. Menu dispatch via resolveChatAction (unless shouldRouteToInlineChart)
  *   1. Prep playbook
  *   2. Data-intent

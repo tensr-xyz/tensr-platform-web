@@ -1,7 +1,8 @@
 import { resolveGateInOrder } from '@/lib/resolve-agent-gate';
 
 /**
- * Baseline corpus — documents the FULL live cascade including menu dispatch.
+ * Baseline corpus — documents the FULL *historical* cascade including menu dispatch.
+ * Live chat does not steal to dialogs; these labels are before/after eval only.
  * Expected values are the probed actual outcomes (option 1), not the original
  * build-spec YAML guesses that ignored resolveChatAction.
  */

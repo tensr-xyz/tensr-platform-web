@@ -21,7 +21,10 @@ export type ContractOutcome =
 
 export type AgentMode = 'ask' | 'plan' | 'agent';
 
-/** Baseline gate label from the pre-rewrite resolveGate cascade. */
+/**
+ * Historical baseline gate label from the pre-rewrite resolveGate cascade.
+ * Live chat (`handleSendMessage` → `runAgentLoop`) does not use these gates.
+ */
 export type BaselineGate =
   | 'tutor'
   | 'data-intent'

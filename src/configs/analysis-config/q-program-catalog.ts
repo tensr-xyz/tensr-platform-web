@@ -28,9 +28,8 @@ export const Q_PROCEDURES: readonly QProcedure[] = [
   },
   {
     menuLabel: 'Fuse Waves',
-    analysisType: null,
+    analysisType: 'fuse_waves',
     chatPhrases: ['fuse waves', 'fuse datasets'],
-    dialogOnly: true,
   },
   {
     menuLabel: 'Open-text coding',

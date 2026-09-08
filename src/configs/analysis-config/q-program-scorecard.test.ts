@@ -56,7 +56,7 @@ describe('Q-page + billing scorecard (UI is wired)', () => {
     expect(blob).not.toMatch(/referral|refer a friend|TENSR-/i);
   });
 
-  it('routes every Q chat phrase to the same dialog the menu opens', () => {
+  it('maps every Q chat phrase to the same dialog label for historical baseline eval (live chat does not steal)', () => {
     for (const proc of Q_PROCEDURES) {
       expect(isDialogMenuItem(proc.menuLabel)).toBe(true);
       for (const phrase of proc.chatPhrases) {
@@ -70,6 +70,7 @@ describe('Q-page + billing scorecard (UI is wired)', () => {
   it('lets the agent execute Q analysis types instead of dropping the plan', () => {
     expect(isQAgentAnalysisType('nps')).toBe(true);
     expect(isQAgentAnalysisType('maxdiff_count')).toBe(true);
+    expect(isQAgentAnalysisType('fuse_waves')).toBe(true);
     expect(isQAgentAnalysisType('mcnemar')).toBe(false);
     expect(isAgentRunnableAnalysisType('nps')).toBe(true);
     expect(isAgentRunnableAnalysisType('maxdiff_mnl')).toBe(true);
