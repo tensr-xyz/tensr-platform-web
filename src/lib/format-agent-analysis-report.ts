@@ -1,14 +1,20 @@
 import type { AnalysisReport, AnalysisReportTable } from '@/lib/analysis-report-types';
 import { formatProvenanceConventionMarkdown } from '@/lib/provenance-inspector';
 
+function isRegressionCoefficientTable(table: AnalysisReportTable): boolean {
+  if (table.id === 'regression_coef') return true;
+  return /coefficient|odds ratio/i.test(table.title || '');
+}
+
 function formatMarkdownTable(table: AnalysisReportTable, maxRows = 8): string {
   if (!table.columns.length) return '';
-  const rows = table.rows.slice(0, maxRows);
+  const limit = isRegressionCoefficientTable(table) ? table.rows.length : maxRows;
+  const rows = table.rows.slice(0, limit);
   const header = `| ${table.columns.join(' | ')} |`;
   const sep = `| ${table.columns.map(() => '---').join(' | ')} |`;
   const body = rows.map(r => `| ${r.map(c => String(c ?? '')).join(' | ')} |`).join('\n');
   const more =
-    table.rows.length > maxRows ? `\n\n*Showing ${maxRows} of ${table.rows.length} rows.*` : '';
+    table.rows.length > limit ? `\n\n*Showing ${limit} of ${table.rows.length} rows.*` : '';
   return `${header}\n${sep}\n${body}${more}`;
 }
 
