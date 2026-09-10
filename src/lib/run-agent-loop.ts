@@ -233,6 +233,7 @@ export function deriveMessageUpdateFromLoopResponse(
       content: `${answer}${questionBlock}`.trim(),
       charts: charts.length ? charts : undefined,
       isStreaming: false,
+      thinkingLines: undefined,
     };
   }
 
@@ -243,6 +244,7 @@ export function deriveMessageUpdateFromLoopResponse(
       return {
         content: answer,
         isStreaming: false,
+        thinkingLines: undefined,
         pendingAction: {
           kind: 'agent_tool_approval',
           status: 'pending',
@@ -280,6 +282,7 @@ export function deriveMessageUpdateFromLoopResponse(
     content: answer,
     charts: charts.length ? charts : undefined,
     isStreaming: false,
+    thinkingLines: undefined,
     pendingAction,
   };
 }

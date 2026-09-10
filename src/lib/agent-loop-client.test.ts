@@ -185,6 +185,29 @@ describe('run-agent-loop client helpers', () => {
     if (patch.pendingAction?.kind === 'agent_tool_approval') {
       expect(patch.pendingAction.coverageLine).toBe('1 value not covered: SF-PF (1 row)');
     }
+    expect(patch.thinkingLines).toBeUndefined();
+    expect(patch.isStreaming).toBe(false);
+  });
+
+  it('clears thinkingLines on clarification, approval, and completed answers', () => {
+    const clarification = deriveMessageUpdateFromLoopResponse(
+      {
+        status: 'clarification',
+        mode: 'agent',
+        answer_markdown: 'Which columns?',
+        clarification_questions: ['Which columns?'],
+      },
+      { triggerMessage: 'use the two COHS subscales', datasetId: null }
+    );
+    expect(clarification.thinkingLines).toBeUndefined();
+    expect(clarification.isStreaming).toBe(false);
+
+    const done = deriveMessageUpdateFromLoopResponse(
+      { status: 'ok', mode: 'agent', answer_markdown: 'Odds ratio 0.59' },
+      { triggerMessage: 'give me odds ratios', datasetId: null }
+    );
+    expect(done.thinkingLines).toBeUndefined();
+    expect(done.isStreaming).toBe(false);
   });
 
   it('chartsFromToolResults collects chart payloads', () => {

@@ -650,12 +650,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           updateMessage(projectId, assistantMessageId, {
             content: enrichmentNotes.join('\n'),
             isStreaming: false,
+            thinkingLines: undefined,
           });
         }
       } catch (err: unknown) {
         updateMessage(projectId, assistantMessageId, {
           content: formatApiErrorMessage(err),
           isStreaming: false,
+          thinkingLines: undefined,
         });
         throw err;
       }

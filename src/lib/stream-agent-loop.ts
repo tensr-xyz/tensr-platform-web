@@ -80,6 +80,7 @@ export async function streamAgentLoop(
 
   const response = await fetch(tensrApiUrl('/assistant/agent-loop/stream'), {
     method: 'POST',
+    cache: 'no-store',
     headers: {
       ...getTensrApiHeaders(),
       'Content-Type': 'application/json',
