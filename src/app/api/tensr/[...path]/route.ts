@@ -51,6 +51,7 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
   const init: RequestInit = {
     method: req.method,
     headers,
+    cache: 'no-store',
   };
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {

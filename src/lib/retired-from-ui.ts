@@ -1,16 +1,11 @@
 import { ANALYSIS_LABELS, type AnalysisKey } from '@/lib/analysis-definitions';
 
 /**
- * Analysis ops that still exist on tensr-api but must not be launched from the
- * workspace (broken wizard or removed false door).
- * Saved reports can still open; new runs and setup wizards cannot.
+ * Analysis ops retired from the UI. Empty after full-catalog restore —
+ * stepwise / loglinear / mcnemar / code_open_text now have real wizards.
+ * Saved reports for any historically retired op still open.
  */
-export const RETIRED_FROM_UI_OPS = new Set<AnalysisKey>([
-  'stepwise_regression',
-  'loglinear',
-  'mcnemar',
-  'code_open_text',
-]);
+export const RETIRED_FROM_UI_OPS = new Set<AnalysisKey>([]);
 
 export function isRetiredFromUi(op: string | null | undefined): op is AnalysisKey {
   return !!op && RETIRED_FROM_UI_OPS.has(op as AnalysisKey);

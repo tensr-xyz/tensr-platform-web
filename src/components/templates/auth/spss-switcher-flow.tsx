@@ -63,9 +63,11 @@ export function SpssCostComparison() {
     <div className="rounded-lg border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
       <p className="font-medium text-foreground">Switching from SPSS?</p>
       <p className="mt-1 text-muted-foreground">
-        Tensr from <span className="font-semibold text-foreground">$9.99/month</span> vs IBM SPSS
-        from <span className="font-semibold text-foreground">~£1,200/year</span> — same rigour,
-        modern UI, AI built in.
+        Tensr from <span className="font-semibold text-foreground">£79/month</span> vs IBM SPSS from{' '}
+        <span className="font-semibold text-foreground">~£1,200/year</span>. Import{' '}
+        <span className="font-semibold text-foreground">.sav</span> and{' '}
+        <span className="font-semibold text-foreground">.dta</span> directly — Custom Tables live on
+        Analyze, not a SPSS syntax runner.
       </p>
     </div>
   );

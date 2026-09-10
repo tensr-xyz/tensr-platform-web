@@ -5,6 +5,14 @@ import { devLog } from '@/lib/dev-log';
 import { useProjectStore } from '@/stores/project-store';
 import { getIdToken } from '@/utils/auth';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import {
+  downloadDatasetVersion,
+  fetchDatasetVersions,
+  mapDatasetVersionToFileVersion,
+  restoreDatasetVersion,
+  type DatasetVersionRow,
+  type FileVersion,
+} from '@/lib/dataset-versions';
 
 const apiBase = () => getTensrApiBaseUrl();
 
@@ -24,13 +32,7 @@ export interface FileMetadata {
   uploadedAt: string;
 }
 
-// File version interface
-export interface FileVersion {
-  versionId: string;
-  lastModified: string;
-  size: number;
-  isLatest: boolean;
-}
+export type { FileVersion };
 
 export const useFileHandler = ({
   allowedExtensions = ['.csv', '.xlsx', '.xls'],
@@ -550,20 +552,8 @@ export const useFileHandler = ({
         throw new Error('Authentication required. Please log in again.');
       }
 
-      const response = await fetch(`${apiBase()}/files/${fileId}/versions`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to get file versions: ${response.statusText} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      const versions = data.versions || [];
+      const rows = await fetchDatasetVersions(fileId, token);
+      const versions = rows.map(mapDatasetVersionToFileVersion);
       setFileVersions(versions);
       return versions;
     } catch (err: any) {
@@ -590,20 +580,7 @@ export const useFileHandler = ({
         throw new Error('Authentication required. Please log in again.');
       }
 
-      const response = await fetch(`${apiBase()}/files/${fileId}/versions/${versionId}`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to get file version: ${response.statusText} - ${errorText}`);
-      }
-
-      const data = await response.json();
-      return data;
+      return await downloadDatasetVersion(versionId, token);
     } catch (err: any) {
       console.error('Error fetching file version:', err);
       setError(err.message || 'Failed to fetch file version');
@@ -614,7 +591,10 @@ export const useFileHandler = ({
   };
 
   // Revert to a specific version
-  const revertToVersion = async (fileId: string, versionId: string): Promise<boolean> => {
+  const revertToVersion = async (
+    fileId: string,
+    versionId: string
+  ): Promise<DatasetVersionRow | null> => {
     devLog('revertToVersion called with fileId:', fileId, 'versionId:', versionId);
     setIsLoading(true);
     setError(null);
@@ -625,30 +605,18 @@ export const useFileHandler = ({
         throw new Error('Authentication required. Please log in again.');
       }
 
-      const response = await fetch(`${apiBase()}/files/${fileId}/revert/${versionId}`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const restored = await restoreDatasetVersion(fileId, versionId, token);
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to revert to version: ${response.statusText} - ${errorText}`);
-      }
-
-      // Update last saved time
       const now = new Date();
       setLastSavedTime(now);
 
-      // Refresh versions
-      await getFileVersions(fileId);
+      await getFileVersions(restored.dataset_id || fileId);
 
-      return true;
+      return restored;
     } catch (err: any) {
       console.error('Error reverting to version:', err);
       setError(err.message || 'Failed to revert to version');
-      return false;
+      return null;
     } finally {
       setIsLoading(false);
     }

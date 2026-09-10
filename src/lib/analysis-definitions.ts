@@ -705,6 +705,26 @@ function confidenceLevelNumber(key: ConfidenceLevelKey): number {
   return Number(key) || 0.95;
 }
 
+/** Parse `theme: word1, word2` lines into a lexicon map for keyword coding. */
+export function parseOpenTextLexicon(raw: string): Record<string, string[]> {
+  const lexicon: Record<string, string[]> = {};
+  for (const line of (raw || '').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const colon = trimmed.indexOf(':');
+    if (colon <= 0) continue;
+    const theme = trimmed.slice(0, colon).trim();
+    const words = trimmed
+      .slice(colon + 1)
+      .split(',')
+      .map(w => w.trim())
+      .filter(Boolean);
+    if (!theme || !words.length) continue;
+    lexicon[theme] = words;
+  }
+  return lexicon;
+}
+
 export function buildBodyFromForm(form: AnalysisFormState): Record<string, unknown> {
   const {
     analysis,
@@ -774,6 +794,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     reml,
     networkIngest,
     networkWeightCol,
+    openTextLexicon,
   } = form;
 
   if (analysis === 'descriptives') {
@@ -969,14 +990,21 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       missing_values: regressionMissingValues,
       residual_plots: regressionResidualPlots,
       collinearity_diagnostics: regressionCollinearity,
+      ...(clusterByCol.trim() ? { cluster_by: clusterByCol } : {}),
     };
   }
   if (analysis === 'stepwise_regression') {
     if (!independentCols.length) throw new Error('Add at least one predictor');
+    const method =
+      regressionMethod === 'forward' ||
+      regressionMethod === 'backward' ||
+      regressionMethod === 'stepwise'
+        ? regressionMethod
+        : 'stepwise';
     return {
       dependent: depCol,
       independents: independentCols,
-      method: 'stepwise',
+      method,
       confidence_level: confidenceLevelNumber(confidenceLevel),
       include_constant: regressionIncludeConstant,
       missing_values: regressionMissingValues,
@@ -993,6 +1021,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       max_iter: Number(logisticMaxIterations) || 20,
       include_constant: logisticIncludeConstant,
       hosmer_lemeshow: logisticHosmerLemeshow,
+      ...(clusterByCol.trim() ? { cluster_by: clusterByCol } : {}),
     };
   }
   if (analysis === 'chi_square') {
@@ -1339,7 +1368,11 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
   if (analysis === 'code_open_text') {
     const col = selectedCols[0] || valueCol;
     if (!col) throw new Error('Select a text column');
-    return { text_column: col, codebook: [], assignments: [] };
+    const lexicon = parseOpenTextLexicon(openTextLexicon);
+    if (!Object.keys(lexicon).length) {
+      throw new Error('Add at least one lexicon theme (theme: keyword1, keyword2)');
+    }
+    return { text_column: col, lexicon, multi_response: false };
   }
   return {};
 }
@@ -1441,6 +1474,7 @@ export function defaultFormFieldsFromSchema(
     reml: true,
     networkIngest: 'edge_list' as const,
     networkWeightCol: '',
+    openTextLexicon: '',
   };
 }
 
@@ -1513,6 +1547,7 @@ export type AnalysisFormState = {
   reml: boolean;
   networkIngest: 'edge_list' | 'adjacency';
   networkWeightCol: string;
+  openTextLexicon: string;
 };
 
 export function formStateFromBody(

@@ -59,3 +59,9 @@ tests:
     assert: [{ type: equals, value: "plan-awaiting-approval" }]
   - vars: { prompt: "geometric mean of Revenue", mode: agent }
     assert: [{ type: equals, value: "refuse-or-clarify" }]
+  - vars: { prompt: "run a mixed model on my dataset", mode: agent }
+    assert: [{ type: equals, value: "run_analysis" }]
+  - vars: { prompt: "run a mixed model on my dataset", mode: plan }
+    assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "GEE for clustered pass fail", mode: agent }
+    assert: [{ type: equals, value: "run_analysis" }]

@@ -6,6 +6,12 @@ export type DatasetUploadResult = {
   [key: string]: unknown;
 };
 
+/** Same Content-Type must be signed on the presign and sent on the S3 PUT. */
+export function contentTypeForDatasetUpload(fileType?: string | null): string {
+  const trimmed = (fileType || '').trim();
+  return trimmed || 'application/octet-stream';
+}
+
 /** Presigned S3 upload when bucket is configured; direct POST for local dev only. */
 export async function uploadDatasetFile(
   file: File,
@@ -14,6 +20,7 @@ export async function uploadDatasetFile(
   onProgress?: (pct: number) => void
 ): Promise<DatasetUploadResult> {
   const fileName = file.name;
+  const contentType = contentTypeForDatasetUpload(file.type);
   onProgress?.(5);
 
   const uploadUrlRes = await fetch(tensrApiUrl(`/datasets/upload-url?scope=${scope}`), {
@@ -24,7 +31,7 @@ export async function uploadDatasetFile(
     },
     body: JSON.stringify({
       filename: fileName,
-      content_type: file.type || 'application/octet-stream',
+      content_type: contentType,
     }),
   }).catch(() => {
     throw new Error(
@@ -65,7 +72,7 @@ export async function uploadDatasetFile(
         )
       );
       xhr.open('PUT', presign.upload_url!);
-      if (file.type) xhr.setRequestHeader('Content-Type', file.type);
+      xhr.setRequestHeader('Content-Type', contentType);
       xhr.send(file);
     });
 

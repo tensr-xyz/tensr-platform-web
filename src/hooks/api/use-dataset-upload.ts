@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
+import { ACCEPTED_UPLOAD_EXTENSIONS } from '@/lib/accepted-upload-types';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
 
-const ALLOWED = new Set(['csv', 'xlsx', 'xls']);
+const ALLOWED = new Set<string>(ACCEPTED_UPLOAD_EXTENSIONS);
 
 export function useDatasetUpload(
   scope: 'personal' | 'team' = 'personal',
@@ -25,7 +26,7 @@ export function useDatasetUpload(
 
       const ext = file.name.split('.').pop()?.toLowerCase();
       if (!ext || !ALLOWED.has(ext)) {
-        setError('Unsupported file type. Use CSV or Excel (.xlsx, .xls).');
+        setError('Unsupported file type. Use CSV, Excel, SPSS (.sav), or Stata (.dta).');
         setIsLoading(false);
         return null;
       }

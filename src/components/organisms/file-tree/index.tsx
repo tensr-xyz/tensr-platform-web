@@ -54,7 +54,8 @@ import {
   AccordionTrigger,
 } from '@/components/molecules/accordion';
 import { ScrollArea } from '@/components/atoms/scroll-area';
-import { MENU_ITEMS, ANALYSIS_COMPONENTS } from '@/configs/analysis-config';
+import { MENU_ITEMS } from '@/configs/analysis-config';
+import { getMenuItemComponent } from '@/configs/analysis-config/menu-registry';
 
 interface FileEntry {
   name: string;
@@ -488,17 +489,12 @@ export const FileTree: React.FC<FileTreeProps> = ({ item, selectedPath, onRefres
   );
 };
 
-// Fix DataOperationItem component to eliminate ESLint warning
+// Launch via menu-registry so real ops are never wrapped as AnalysisUnavailable.
 const DataOperationItem = ({ item }: { item: string }) => {
-  const AnalysisComponent = ANALYSIS_COMPONENTS[item];
-
-  if (!AnalysisComponent) {
-    return null;
-  }
+  const AnalysisComponent = getMenuItemComponent(item);
 
   return (
     <AnalysisComponent>
-      {/* Use children properly by not using children prop */}
       <div className="py-2 px-2 hover:bg-accent">
         <div className="px-2 py-1 cursor-pointer">{item}</div>
       </div>

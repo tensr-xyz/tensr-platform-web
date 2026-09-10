@@ -9,7 +9,6 @@ import {
   Loader2 as Loader,
   Pencil,
   Trash2,
-  Info,
   Check,
   Copy,
   Pin,
@@ -426,26 +425,6 @@ const HeaderCell = React.memo<HeaderCellProps>(
                 height={12}
               />
             ) : null}
-
-            <TooltipProvider delayDuration={200}>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    className="grid size-[18px] shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
-                    onClick={e => {
-                      e.stopPropagation();
-                      onColumnAction?.('show-insight', column.id);
-                    }}
-                  >
-                    <Info className="size-2.5" />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom" className="max-w-xs">
-                  <div className="text-xs">{quickSummary || 'Column insights'}</div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
 
             <button
               type="button"

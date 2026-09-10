@@ -102,31 +102,37 @@ describe('resolveChatAction', () => {
     });
   });
 
-  it('does not route chat to removed false-door labels', () => {
+  it('opens restored open-text coding as the menu dialog', () => {
     expect(resolveChatAction('open-text coding')).toEqual({
-      kind: 'unavailable',
+      kind: 'dialog',
       menuName: 'Open-text coding',
     });
-    expect(resolveChatAction('mcnemar')).toEqual({
-      kind: 'unavailable',
-      menuName: 'McNemar Test',
+    expect(resolveChatAction('code the comments')).toEqual({
+      kind: 'dialog',
+      menuName: 'Open-text coding',
     });
+  });
+
+  it('opens restored catalog labels that used to be false doors', () => {
     expect(resolveChatAction('mcnemar test')).toEqual({
-      kind: 'unavailable',
+      kind: 'analysis',
+      op: 'mcnemar',
       menuName: 'McNemar Test',
     });
     expect(resolveChatAction('loglinear analysis')).toEqual({
-      kind: 'unavailable',
+      kind: 'analysis',
+      op: 'loglinear',
       menuName: 'Loglinear Analysis',
     });
     expect(resolveChatAction('stepwise')).toEqual({
-      kind: 'unavailable',
+      kind: 'analysis',
+      op: 'stepwise_regression',
       menuName: 'Stepwise Regression',
     });
-    expect(resolveChatAction('count values')).toEqual({
-      kind: 'unavailable',
-      menuName: 'Count Values',
-    });
+  });
+
+  it('falls through to chat for count-values phrasing with no dialog', () => {
+    expect(resolveChatAction('count values')).toEqual({ kind: 'chat' });
   });
 
   it('opens validated LCA from chat synonyms', () => {
@@ -150,7 +156,8 @@ describe('resolveChatAction', () => {
 
   it('classifies menu labels for hints but chat always uses the agent loop', () => {
     expect(resolveChatAction('mcnemar')).toEqual({
-      kind: 'unavailable',
+      kind: 'analysis',
+      op: 'mcnemar',
       menuName: 'McNemar Test',
     });
     expect(resolveChatAction('compute variable')).toEqual({

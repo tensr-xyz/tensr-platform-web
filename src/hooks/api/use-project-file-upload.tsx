@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
+import { ACCEPTED_UPLOAD_DOT_EXTENSIONS } from '@/lib/accepted-upload-types';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
 import { devLog } from '@/lib/dev-log';
 
@@ -14,7 +15,7 @@ interface UseProjectFileUploadProps {
  * page, useProject) already resolve ids against /datasets first.
  */
 export const useProjectFileUpload = ({
-  allowedExtensions = ['.csv', '.xlsx', '.xls'],
+  allowedExtensions = [...ACCEPTED_UPLOAD_DOT_EXTENSIONS],
   onUploadComplete,
 }: UseProjectFileUploadProps) => {
   const [isLoading, setIsLoading] = useState(false);
@@ -34,7 +35,9 @@ export const useProjectFileUpload = ({
           !fileExtension ||
           !allowedExtensions?.map(ext => ext.replace('.', '')).includes(fileExtension)
         ) {
-          throw new Error('Unsupported file type. Please select a CSV or Excel file.');
+          throw new Error(
+            'Unsupported file type. Please select CSV, Excel, SPSS (.sav), or Stata (.dta).'
+          );
         }
 
         const token = getStytchBearerForTensrApi();

@@ -6,10 +6,6 @@ import { RETIRED_FROM_UI_OPS } from '@/lib/retired-from-ui';
 
 /** Labels that open the wrong wizard, a blocked form, or a missing endpoint. */
 const DEAD_OR_MISLEADING_LABELS = [
-  'Open-text coding',
-  'McNemar Test',
-  'Loglinear Analysis',
-  'Stepwise Regression',
   'Count Values',
   'Heatmap',
   'Latent Class Analysis (LCA, unvalidated)',
@@ -71,6 +67,7 @@ describe('production menu false-door sweep', () => {
 
   it('puts Rake Weights under Data as a real form, not Weight Cases', () => {
     expect(PRODUCTION_MENU_ITEMS.data.sections['Data preparation']).toContain('Rake Weights');
+    expect(PRODUCTION_MENU_ITEMS.transform.sections.Transform).not.toContain('Rake Weights');
     expect(flattenMenuLabels()).not.toContain('Weight Cases');
     expect(isDialogMenuItem('Rake Weights')).toBe(true);
     expect(getAnalysisOpForMenuName('Rake Weights')).toBeUndefined();
@@ -81,7 +78,13 @@ describe('production menu false-door sweep', () => {
 
   it('puts Custom Tables under Analyze → Tables as a dialog, not Chi-square', () => {
     expect(PRODUCTION_MENU_ITEMS.analyze.sections['Tables']).toEqual(['Custom Tables']);
+    expect(PRODUCTION_MENU_ITEMS.analyze.sections['Descriptive Statistics']).toEqual([
+      'Descriptives',
+      'Batch Tables',
+    ]);
     expect(isDialogMenuItem('Custom Tables')).toBe(true);
+    expect(isDialogMenuItem('Batch Tables')).toBe(true);
+    expect(isDialogMenuItem('Fuse Waves')).toBe(true);
     expect(getAnalysisOpForMenuName('Custom Tables')).toBeUndefined();
     const item = getAllAnalysisItems().find(i => i.name === 'Custom Tables');
     expect(item?.section).toBe('Tables');
@@ -89,6 +92,54 @@ describe('production menu false-door sweep', () => {
     expect(
       filterAnalysisItems(getAllAnalysisItems(), 'banner').some(i => i.name === 'Custom Tables')
     ).toBe(true);
+  });
+
+  it('wires Legacy import dialogs under Data', () => {
+    const legacy = PRODUCTION_MENU_ITEMS.data.sections['Legacy import'];
+    expect(legacy).toEqual([
+      'WinCross Job Import',
+      'Qualtrics Definition',
+      'QPack Ingest',
+      'Triple-S Import',
+      'MDD Import',
+      'SPS Translate',
+      'Quantum Axis',
+    ]);
+    for (const name of legacy) {
+      expect(isDialogMenuItem(name)).toBe(true);
+      expect(getAnalysisOpForMenuName(name)).toBeUndefined();
+    }
+  });
+
+  it('restores formerly retired ops on the Analyze menu', () => {
+    const labels = flattenMenuLabels();
+    expect(labels).toContain('Stepwise Regression');
+    expect(labels).toContain('McNemar Test');
+    expect(labels).toContain('Loglinear Analysis');
+    expect(labels).toContain('Open-text coding');
+    expect(getAnalysisOpForMenuName('Stepwise Regression')).toBe('stepwise_regression');
+    expect(getAnalysisOpForMenuName('McNemar Test')).toBe('mcnemar');
+    expect(getAnalysisOpForMenuName('Loglinear Analysis')).toBe('loglinear');
+    // Open-text coding stays an agency dialog on development (Q scorecard).
+    expect(isDialogMenuItem('Open-text coding')).toBe(true);
+    expect(getAnalysisOpForMenuName('Open-text coding')).toBeUndefined();
+  });
+
+  it('surfaces formerly hidden families including time series', () => {
+    const labels = flattenMenuLabels();
+    expect(labels).toContain('Kaplan–Meier');
+    expect(labels).toContain('ARIMA / SARIMA');
+    expect(labels).toContain('Support Vector Machines (Classification)');
+    expect(labels).toContain('Three-Way ANOVA');
+    expect(labels).toContain('Find Outliers');
+    expect(labels).toContain('Verbatim Coding');
+    expect(PRODUCTION_MENU_ITEMS.time_series.sections.Forecasting).toContain('ARIMA / SARIMA');
+  });
+
+  it('keeps both Gradient Boosting mode variants on the palette', () => {
+    const names = getAllAnalysisItems().map(item => item.name);
+    expect(names).toContain('Gradient Boosting (Classification)');
+    expect(names).toContain('Gradient Boosting (Regression)');
   });
 
   it('every remaining catalog label launches a dialog or a real analysis op', () => {
@@ -112,7 +163,7 @@ describe('production menu false-door sweep', () => {
       counts.set(op, (counts.get(op) ?? 0) + 1);
     }
     const duplicates = [...counts.entries()].filter(([, n]) => n > 1).map(([op]) => op);
-    expect(duplicates.sort()).toEqual(['gradient_boosting']);
+    expect(duplicates.sort()).toEqual(['gradient_boosting', 'neural_network_mlp']);
   });
 
   it('does not map a menu label to an op retired from the UI', () => {

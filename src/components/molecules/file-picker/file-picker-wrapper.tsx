@@ -20,7 +20,17 @@ export const FilePickerWrapper = ({ children, onUploadComplete }: FilePickerWrap
   const [open, setOpen] = useState(false);
 
   const { uploadFile, isLoading, error, clearError, uploadProgress } = useProjectFileUpload({
-    allowedExtensions: ['.csv', '.xlsx', '.xls'],
+    allowedExtensions: [
+      '.csv',
+      '.xlsx',
+      '.xls',
+      '.parquet',
+      '.sav',
+      '.dta',
+      '.json',
+      '.sss',
+      '.mdd',
+    ],
     onUploadComplete: projectId => {
       setOpen(false);
       onUploadComplete?.(projectId);

@@ -12,6 +12,7 @@ import {
   getAnalysisOpForMenuName,
   isDialogMenuItem,
 } from '@/configs/analysis-config/menu-registry';
+import { Q_CHAT_SYNONYMS } from '@/configs/analysis-config/q-program-catalog';
 import type { AnalysisKey } from '@/lib/analysis-definitions';
 import { shouldRouteToInlineChart } from '@/lib/chart-intent';
 
@@ -223,22 +224,19 @@ const SYNONYMS: Record<string, string> = {
   rake: 'Rake Weights',
   raking: 'Rake Weights',
   'rake weights': 'Rake Weights',
+  ...Q_CHAT_SYNONYMS,
   lca: 'Latent Class Analysis (LCA)',
   'latent class': 'Latent Class Analysis (LCA)',
   'latent class analysis': 'Latent Class Analysis (LCA)',
-};
-
-const RETIRED_CHAT_SYNONYMS: Record<string, string> = {
   mcnemar: 'McNemar Test',
   'mcnemar test': 'McNemar Test',
   loglinear: 'Loglinear Analysis',
   'loglinear analysis': 'Loglinear Analysis',
   stepwise: 'Stepwise Regression',
   'stepwise regression': 'Stepwise Regression',
-  'open-text coding': 'Open-text coding',
-  'open text coding': 'Open-text coding',
-  'count values': 'Count Values',
 };
+
+const RETIRED_CHAT_SYNONYMS: Record<string, string> = {};
 
 /** Analysis synonyms checked before spreadsheet filter/sort parsing (avoids mis-routing). */
 const PRIORITY_ANALYSIS_SYNONYMS: Record<string, string> = {

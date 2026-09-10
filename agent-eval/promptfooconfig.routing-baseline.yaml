@@ -73,3 +73,9 @@ tests:
   - vars: { prompt: "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate" }
     assert: [{ type: equals, value: "data-intent" }]
     description: "Gate 2 top/best bucket steals via \\bbest\\b (also matches top 5%)"
+
+  - vars: { prompt: "run a mixed model on my dataset" }
+    assert: [{ type: equals, value: "menu-analysis" }]
+
+  - vars: { prompt: "GEE for clustered pass fail" }
+    assert: [{ type: equals, value: "menu-analysis" }]

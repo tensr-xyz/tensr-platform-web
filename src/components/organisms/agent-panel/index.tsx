@@ -14,8 +14,9 @@ import {
   MessageScrollerItem,
   MessageScrollerViewport,
 } from '@/components/molecules/message-scroller';
-import { Send, AlertCircle, Trash2, History, Plus, X } from 'lucide-react';
+import { Send, AlertCircle, Trash2, History, Plus } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import {
   Command,
@@ -99,6 +100,12 @@ import {
   runAgentLoop,
   type AgentLoopApprovedToolCall,
 } from '@/lib/run-agent-loop';
+import {
+  AgentWorkingLabel,
+  ChatThreadCloseButton,
+  accumulateThinkingLines,
+  visibleThinkingLines,
+} from './agent-chat-chrome';
 
 const ANALYSIS_HISTORY_LIMIT = 20;
 
@@ -153,8 +160,12 @@ function ChatMessageBody({
     return <div className="whitespace-pre-wrap break-words text-sm">{content}</div>;
   }
 
-  const hasThinking = (thinkingLines?.length ?? 0) > 0;
-  const showChecklist = (thinkingLines?.length ?? 0) >= 5;
+  const liveThinking = visibleThinkingLines(thinkingLines, {
+    hasResult: Boolean(resultMarkdown?.trim()),
+    isStreaming: Boolean(isStreaming),
+  });
+  const hasThinking = liveThinking.length > 0;
+  const showChecklist = liveThinking.length >= 5;
   const showPlan = Boolean(content?.trim());
   const showResult = Boolean(resultMarkdown?.trim());
   const streamingResult = isStreaming && showResult;
@@ -172,8 +183,8 @@ function ChatMessageBody({
                 showPlan && 'mt-2'
               )}
             >
-              {thinkingLines!.map((line, i) => {
-                const isLast = i === thinkingLines!.length - 1;
+              {liveThinking.map((line, i) => {
+                const isLast = i === liveThinking.length - 1;
                 const done = !isLast || !isStreaming;
                 return (
                   <li
@@ -193,7 +204,7 @@ function ChatMessageBody({
             </ol>
           ) : hasThinking && !showResult ? (
             <div className={cn('space-y-1.5', showPlan && 'mt-2')}>
-              {thinkingLines!.map((line, i) => (
+              {liveThinking.map((line, i) => (
                 <p
                   key={`${i}-${line.slice(0, 24)}`}
                   className="text-sm leading-5 text-muted-foreground"
@@ -220,13 +231,7 @@ function ChatMessageBody({
           ) : null}
 
           {isStreaming && !showResult ? (
-            <span
-              className={cn(
-                'ml-0.5 inline-block h-[1.1em] w-0.5 animate-pulse bg-primary align-text-bottom',
-                (showPlan || hasThinking) && 'mt-1'
-              )}
-              aria-hidden
-            />
+            <AgentWorkingLabel className={cn((showPlan || hasThinking) && 'mt-1 block')} />
           ) : null}
 
           {showResult ? (
@@ -234,10 +239,7 @@ function ChatMessageBody({
               {streamingResult ? (
                 <div className="whitespace-pre-wrap text-sm leading-5">
                   {resultMarkdown}
-                  <span
-                    className="ml-0.5 inline-block h-[1.1em] w-0.5 animate-pulse bg-primary align-text-bottom"
-                    aria-hidden
-                  />
+                  <AgentWorkingLabel className="ml-1" />
                 </div>
               ) : (
                 <AgentMarkdown>{resultMarkdown!}</AgentMarkdown>
@@ -510,7 +512,22 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           glossary: projectGlossary,
           approvedToolCall: opts.approvedToolCall ?? null,
           approvedToolCalls: opts.approvedToolCalls ?? null,
-          onProgress: pushAgentProgress,
+          onProgress: async progress => {
+            pushAgentProgress(progress);
+            const prev = useChatStore
+              .getState()
+              .getMessages(projectId)
+              .find(m => m.id === assistantMessageId)?.thinkingLines;
+            flushSync(() => {
+              updateMessage(projectId, assistantMessageId, {
+                thinkingLines: accumulateThinkingLines(prev, progress.message),
+                isStreaming: true,
+              });
+            });
+            await new Promise<void>(resolve => {
+              requestAnimationFrame(() => resolve());
+            });
+          },
         });
 
         const triggerMessage = opts.triggerMessage ?? opts.message;
@@ -654,6 +671,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           logAgentChatRenderPayload(chatFields);
           updateMessage(projectId, assistantMessageId, {
             ...chatFields,
+            lastFittedModel: patch.lastFittedModel,
             thinkingLines: undefined,
             isStreaming: false,
           });
@@ -669,6 +687,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         updateMessage(projectId, assistantMessageId, {
           content: formatApiErrorMessage(err),
           isStreaming: false,
+          thinkingLines: undefined,
         });
         throw err;
       }
@@ -798,12 +817,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       if (!trimmed || seenProgress.has(trimmed)) return;
       seenProgress.add(trimmed);
       progressLines.push(trimmed);
-      updateMessage(projectId, messageId, {
-        thinkingLines: [...progressLines],
-        isStreaming: true,
-        pendingAction: current
-          ? patchPendingAction(current, { status: 'running', plan })
-          : undefined,
+      flushSync(() => {
+        updateMessage(projectId, messageId, {
+          thinkingLines: [...progressLines],
+          isStreaming: true,
+          pendingAction: current
+            ? patchPendingAction(current, { status: 'running', plan })
+            : undefined,
+        });
       });
     };
 
@@ -860,7 +881,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
 
       updateMessage(projectId, messageId, {
         ...chatFields,
-        thinkingLines: [...progressLines],
+        thinkingLines: undefined,
         isStreaming: false,
         charts: reportChart ? [reportChart] : undefined,
         pendingAction: current
@@ -924,16 +945,19 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       }
     } catch (err: unknown) {
       const latestAction = getMessagePendingAction(messageId);
-      if (latestAction) {
-        updateMessage(projectId, messageId, {
-          isStreaming: false,
-          pendingAction: patchPendingAction(latestAction, {
-            status: 'failed',
-            plan,
-            errorMessage: formatApiErrorMessage(err),
-          }),
-        });
-      }
+      updateMessage(projectId, messageId, {
+        isStreaming: false,
+        thinkingLines: undefined,
+        ...(latestAction
+          ? {
+              pendingAction: patchPendingAction(latestAction, {
+                status: 'failed',
+                plan,
+                errorMessage: formatApiErrorMessage(err),
+              }),
+            }
+          : {}),
+      });
     } finally {
       setBusyMessageId(null);
     }
@@ -1432,17 +1456,13 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                     {thread.title}
                   </button>
                   {chatThreads.length > 1 ? (
-                    <button
-                      type="button"
+                    <ChatThreadCloseButton
+                      title={thread.title}
                       onClick={e => {
                         e.stopPropagation();
                         closeThread(projectId, thread.id);
                       }}
-                      className="mr-0.5 rounded p-0.5 opacity-0 group-hover:opacity-100"
-                      aria-label={`Close ${thread.title}`}
-                    >
-                      <X className="size-3" />
-                    </button>
+                    />
                   ) : null}
                 </div>
               );

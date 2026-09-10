@@ -185,6 +185,57 @@ describe('run-agent-loop client helpers', () => {
     if (patch.pendingAction?.kind === 'agent_tool_approval') {
       expect(patch.pendingAction.coverageLine).toBe('1 value not covered: SF-PF (1 row)');
     }
+    expect(patch.thinkingLines).toBeUndefined();
+    expect(patch.isStreaming).toBe(false);
+  });
+
+  it('clears thinkingLines on clarification, approval, and completed answers', () => {
+    const clarification = deriveMessageUpdateFromLoopResponse(
+      {
+        status: 'clarification',
+        mode: 'agent',
+        answer_markdown: 'Which columns?',
+        clarification_questions: ['Which columns?'],
+      },
+      { triggerMessage: 'use the two COHS subscales', datasetId: null }
+    );
+    expect(clarification.thinkingLines).toBeUndefined();
+    expect(clarification.isStreaming).toBe(false);
+
+    const done = deriveMessageUpdateFromLoopResponse(
+      { status: 'ok', mode: 'agent', answer_markdown: 'Odds ratio 0.59' },
+      { triggerMessage: 'give me odds ratios', datasetId: null }
+    );
+    expect(done.thinkingLines).toBeUndefined();
+    expect(done.isStreaming).toBe(false);
+  });
+
+  it('keeps lastFittedModel on the chat message so follow-ups inherit the spec', () => {
+    const spec = {
+      analysis_type: 'logistic_regression',
+      request_body: {
+        dependent: 'Full_retention',
+        independents: ['Interval', 'Pay', 'Total_approvals'],
+        reference_levels: { Interval: 'short', Pay: 'low' },
+      },
+    };
+    const patch = deriveMessageUpdateFromLoopResponse(
+      {
+        status: 'ok',
+        mode: 'agent',
+        answer_markdown: `Fitted.\n<!-- tensr_last_model:${JSON.stringify(spec)} -->`,
+        tool_results: [
+          {
+            name: 'run_analysis',
+            result: { ok: true, last_fitted_model: spec },
+          },
+        ],
+      },
+      { triggerMessage: 'interaction logistic', datasetId: null }
+    );
+    expect(patch.lastFittedModel).toEqual(spec);
+    expect(patch.content).toBe('Fitted.');
+    expect(patch.thinkingLines).toBeUndefined();
   });
 
   it('chartsFromToolResults collects chart payloads', () => {

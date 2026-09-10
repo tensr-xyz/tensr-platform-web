@@ -28,6 +28,7 @@ import ComputeVariablesDialog from '@/components/templates/transform/compute-var
 import CountValuesDialog from '@/components/templates/transform/count-values';
 import ShiftValuesDialog from '@/components/templates/transform/shift-values';
 import { CustomTablesDialog } from '@/components/templates/analysis/custom-tables';
+import { RakeWeightsDialog } from '@/components/templates/data/rake-weights';
 import { MessageCircle } from 'lucide-react';
 import { PRODUCTION_MENU_ITEMS } from './production-menu';
 
@@ -217,7 +218,7 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'Split Files': ComputeVariablesDialog,
   'Propensity Matching': ComputeVariablesDialog,
   'Case Control Matching': ComputeVariablesDialog,
-  'Rake Weights': ComputeVariablesDialog,
+  'Rake Weights': RakeWeightsDialog,
   'Text Processing': ComputeVariablesDialog,
   'Conditional Logic': ComputeVariablesDialog,
   'Percentile Calculations': ComputeVariablesDialog,

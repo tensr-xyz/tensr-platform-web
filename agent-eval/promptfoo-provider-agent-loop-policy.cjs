@@ -26,7 +26,7 @@ function classifyHeuristic(prompt, mode) {
   const wantsQuality = /(data quality|quality scan)/i.test(text);
   const wantsAnalysis =
     !columnDefinition &&
-    (/\b(t[\s-]?test|anova|correlation|regression|chi[\s-]?square|descriptives?|boxplot|percentile|how many|count|sum|average|mean|median|chart|graph|plot|histogram)\b/i.test(
+    (/\b(t[\s-]?test|anova|correlation|regression|chi[\s-]?square|descriptives?|boxplot|percentile|how many|count|sum|average|mean|median|chart|graph|plot|histogram|mixed model|gee|reliability|network|open-text|rm anova|clustered)\b/i.test(
       text
     ) ||
       /one-way\s+anova/i.test(text));

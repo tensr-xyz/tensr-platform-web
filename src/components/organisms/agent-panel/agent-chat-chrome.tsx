@@ -1,0 +1,53 @@
+import type { MouseEvent } from 'react';
+import { X } from 'lucide-react';
+import { cn } from '@/utils';
+
+export const CHAT_THREAD_CLOSE_BUTTON_CLASS =
+  'mr-0.5 cursor-pointer rounded p-0.5 text-muted-foreground opacity-0 hover:bg-muted hover:text-foreground group-hover:opacity-100';
+
+export function visibleThinkingLines(
+  thinkingLines: string[] | undefined,
+  { hasResult, isStreaming }: { hasResult: boolean; isStreaming: boolean }
+): string[] {
+  if (!thinkingLines?.length) return [];
+  if (hasResult && !isStreaming) return [];
+  return thinkingLines;
+}
+
+/** Append a progress line without dropping earlier steps (needed for live SSE). */
+export function accumulateThinkingLines(prev: string[] | undefined, next: string): string[] {
+  const trimmed = next.trim();
+  if (!trimmed) return prev ?? [];
+  if (prev?.includes(trimmed)) return prev;
+  return [...(prev ?? []), trimmed];
+}
+
+export function AgentWorkingLabel({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn('animate-pulse text-sm text-muted-foreground', className)}
+      aria-live="polite"
+    >
+      Working
+    </span>
+  );
+}
+
+export function ChatThreadCloseButton({
+  title,
+  onClick,
+}: {
+  title: string;
+  onClick: (event: MouseEvent<HTMLButtonElement>) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={CHAT_THREAD_CLOSE_BUTTON_CLASS}
+      aria-label={`Close ${title}`}
+    >
+      <X className="size-3" />
+    </button>
+  );
+}

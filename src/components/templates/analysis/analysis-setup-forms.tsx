@@ -581,6 +581,14 @@ function RegressionVariablesTab({
           errors={errors[WIZARD_FIELD.independentCols]}
         />
       </div>
+      <ColumnSelect
+        label="Cluster groups (optional — cluster-robust SEs)"
+        value={form.clusterByCol}
+        onChange={clusterByCol => setForm(f => ({ ...f, clusterByCol }))}
+        schema={schema}
+        names={allNames}
+        expectedType="categorical"
+      />
     </div>
   );
 }
@@ -699,7 +707,8 @@ function RegressionOptionsTab({
 }
 
 function RegressionTabs(props: FormSliceProps & { logistic?: boolean }) {
-  const showEntryMethod = props.form.analysis === 'linear_regression';
+  const showEntryMethod =
+    props.form.analysis === 'linear_regression' || props.form.analysis === 'stepwise_regression';
   return (
     <Tabs defaultValue="variables" className="w-full">
       <TabsList className="mb-4 grid w-full grid-cols-2">
@@ -926,6 +935,71 @@ export function ReliabilityForm({ form, setForm, schema, notices, errors }: Form
         notices={notices[WIZARD_FIELD.columns]}
         errors={errors[WIZARD_FIELD.columns]}
       />
+    </section>
+  );
+}
+
+export function LoglinearForm({ form, setForm, schema, notices, errors }: FormSliceProps) {
+  return (
+    <section className="space-y-3">
+      <FormSectionLabel>Categorical factors</FormSectionLabel>
+      <p className="text-[10px] leading-snug text-muted-foreground">
+        Saturated loglinear model on the selected categorical variables. Sparse multi-way tables may
+        fail to converge.
+      </p>
+      <MultiColumnPicker
+        selected={form.selectedCols}
+        onChange={selectedCols => setForm(f => ({ ...f, selectedCols }))}
+        schema={schema}
+        filterSlot="categorical"
+        showTypeShortcuts
+        minSelected={2}
+        notices={notices[WIZARD_FIELD.columns]}
+        errors={errors[WIZARD_FIELD.columns]}
+      />
+    </section>
+  );
+}
+
+export function CodeOpenTextForm({
+  form,
+  setForm,
+  schema,
+  allNames,
+  notices,
+  errors,
+}: FormSliceProps) {
+  return (
+    <section className="space-y-3">
+      <FormSectionLabel>Text column</FormSectionLabel>
+      <ColumnSelect
+        label="Free-text / open-end column"
+        value={form.valueCol}
+        onChange={valueCol =>
+          setForm(f => ({ ...f, valueCol, selectedCols: valueCol ? [valueCol] : [] }))
+        }
+        schema={schema}
+        names={allNames}
+        errors={errors[WIZARD_FIELD.columns]}
+        notices={notices[WIZARD_FIELD.columns]}
+      />
+      <FormSectionLabel>Keyword lexicon</FormSectionLabel>
+      <p className="text-[10px] leading-snug text-muted-foreground">
+        One theme per line: <code className="text-[10px]">theme: keyword1, keyword2</code>. Matching
+        is case-insensitive substring search (not NLP).
+      </p>
+      <textarea
+        className="min-h-[120px] w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-xs"
+        value={form.openTextLexicon}
+        onChange={e => setForm(f => ({ ...f, openTextLexicon: e.target.value }))}
+        placeholder={'quality: great, excellent, love\nprice: expensive, cheap, cost'}
+        aria-label="Keyword lexicon"
+      />
+      {errors[WIZARD_FIELD.openTextLexicon]?.length ? (
+        <p className="text-xs text-destructive">
+          {(errors[WIZARD_FIELD.openTextLexicon] ?? []).join(' ')}
+        </p>
+      ) : null}
     </section>
   );
 }
@@ -1579,8 +1653,28 @@ export function MixedModelForm({ form, setForm, schema, allNames, errors }: Form
         schema={schema}
         filterSlot="numeric"
         showTypeShortcuts
-        minSelected={1}
+        minSelected={0}
         errors={errors[WIZARD_FIELD.independentCols]}
+      />
+      <FormSectionLabel>
+        Random slopes (optional — leave empty for random intercept only)
+      </FormSectionLabel>
+      <MultiColumnPicker
+        selected={form.randomSlopeCols}
+        onChange={randomSlopeCols => setForm(f => ({ ...f, randomSlopeCols }))}
+        schema={schema}
+        filterSlot="numeric"
+        showTypeShortcuts
+        minSelected={0}
+      />
+      <PillToggle
+        value={form.reml ? 'reml' : 'ml'}
+        onChange={v => setForm(f => ({ ...f, reml: v === 'reml' }))}
+        options={[
+          { value: 'reml', label: 'REML' },
+          { value: 'ml', label: 'ML' },
+        ]}
+        aria-label="Estimation method"
       />
     </section>
   );
@@ -1992,10 +2086,12 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'ttest_one_sample':
       return <OneSampleTTestForm {...props} />;
     case 'linear_regression':
+    case 'stepwise_regression':
       return <RegressionTabs {...props} />;
     case 'logistic_regression':
       return <RegressionTabs {...props} logistic />;
     case 'chi_square':
+    case 'mcnemar':
       return <ChiSquareForm {...props} />;
     case 'mann_whitney_u':
       return (
@@ -2042,7 +2138,7 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'cochran_armitage':
       return <TrendTestForm {...props} />;
     case 'loglinear':
-      return <ReliabilityForm {...props} />;
+      return <LoglinearForm {...props} />;
     case 'hierarchical_regression':
       return <HierarchicalRegressionForm {...props} />;
     case 'anova_mixed':
@@ -2102,7 +2198,7 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'network':
       return <NetworkForm {...props} />;
     case 'code_open_text':
-      return <ReliabilityForm {...props} />;
+      return <CodeOpenTextForm {...props} />;
     case 'generalized_linear_mixed_model':
       return <GlmmForm {...props} />;
     case 'multilevel_modelling':

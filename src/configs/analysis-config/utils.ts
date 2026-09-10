@@ -107,6 +107,9 @@ function isLaunchableMenuName(name: string): boolean {
   return isDialogMenuItem(name) || name in PRODUCTION_ANALYSIS_LABELS;
 }
 
+/** Mode-variant menu names that share one API op but must both appear in ⌘K. */
+const MODE_VARIANT_OPS = new Set<AnalysisKey>(['gradient_boosting', 'neural_network_mlp']);
+
 function paletteItemName(menuName: string, op?: AnalysisKey): string {
   if (op && PREFERRED_MENU_NAME_FOR_OP[op]) {
     return PREFERRED_MENU_NAME_FOR_OP[op]!;
@@ -139,8 +142,10 @@ export function getAllAnalysisItems(): AnalysisItem[] {
           if (preferred && menuName !== preferred && menuName !== displayName) {
             if (names.includes(preferred)) continue;
           }
-          if (seenOps.has(op)) continue;
-          seenOps.add(op);
+          // Mode variants (GB Class/Reg, MLP Class/Reg) share an op — keep both labels.
+          if (seenOps.has(op) && !MODE_VARIANT_OPS.has(op)) continue;
+          if (!MODE_VARIANT_OPS.has(op)) seenOps.add(op);
+          else if (seenNames.has(displayName)) continue;
         }
 
         if (seenNames.has(displayName) || !isLaunchableMenuName(menuName)) continue;

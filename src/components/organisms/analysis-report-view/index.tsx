@@ -24,6 +24,7 @@ import {
 import { copyTableRich } from '@/utils/apa-clipboard';
 import { ReportChartCard } from '@/components/molecules/report-chart-card';
 import { Button } from '@/components/atoms/button';
+import { ProvenanceInspector } from '@/components/organisms/provenance-inspector';
 import { cn } from '@/utils';
 
 function tableToTsv(t: AnalysisReportTable): string {
@@ -486,14 +487,20 @@ export function AnalysisReportView({
   });
 
   const pluginMark = report.plugin_verification;
-  const provenanceBanner = provenanceBannerText(provenanceTraceState(provenance));
+  const inspectorProvenance =
+    provenance ??
+    (rawResult?.provenance && typeof rawResult.provenance === 'object'
+      ? (rawResult.provenance as Record<string, unknown>)
+      : null);
+  const provenanceBanner = provenanceBannerText(provenanceTraceState(inspectorProvenance));
   const statusBanner =
     pluginMark && (pluginMark.kind === 'not_verified' || pluginMark.kind === 'unknown')
       ? pluginMark.statement || PLUGIN_UNVERIFIED_STATEMENT
       : provenanceBanner;
   const rBadge = rSyntaxBadgeText(report.r_syntax_verification);
   const showRBadge = !report.meta.analysis_key.startsWith('plugin:');
-  const canReveal = canRevealConsumedRows(provenance) && typeof onRevealConsumedRows === 'function';
+  const canReveal =
+    canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
   const nUsed = report.exclusion_summary ? `n = ${report.exclusion_summary.rows_used}` : null;
   const nSubtitle = report.exclusion_summary
     ? `${nUsed} · ${report.exclusion_summary.rows_excluded} excluded`
@@ -586,6 +593,8 @@ export function AnalysisReportView({
             <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{rBadge.text}</p>
           </div>
         ) : null}
+
+        <ProvenanceInspector provenance={inspectorProvenance} />
 
         {report.approach?.plan ||
         report.approach?.why_this_test ||

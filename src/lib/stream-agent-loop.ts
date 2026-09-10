@@ -11,11 +11,11 @@ export type AgentLoopStreamProgress = {
 };
 
 export type AgentLoopStreamHandlers = {
-  onProgress?: (progress: AgentLoopStreamProgress) => void;
+  onProgress?: (progress: AgentLoopStreamProgress) => void | Promise<void>;
   signal?: AbortSignal;
 };
 
-function processSseLine(
+async function processSseLine(
   line: string,
   onProgress: AgentLoopStreamHandlers['onProgress'],
   acc: { result: AgentLoopResponse | null; timeout: AgentLoopResponse | null }
@@ -43,7 +43,7 @@ function processSseLine(
     payload.type === 'tool_result'
   ) {
     if (payload.message) {
-      onProgress?.({
+      await onProgress?.({
         type: payload.type,
         step: payload.step ?? 'progress',
         message: payload.message,
@@ -80,6 +80,7 @@ export async function streamAgentLoop(
 
   const response = await fetch(tensrApiUrl('/assistant/agent-loop/stream'), {
     method: 'POST',
+    cache: 'no-store',
     headers: {
       ...getTensrApiHeaders(),
       'Content-Type': 'application/json',
@@ -129,12 +130,12 @@ export async function streamAgentLoop(
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        processSseLine(line, handlers.onProgress, acc);
+        await processSseLine(line, handlers.onProgress, acc);
       }
     }
 
     if (buffer.trim()) {
-      processSseLine(buffer, handlers.onProgress, acc);
+      await processSseLine(buffer, handlers.onProgress, acc);
     }
   } finally {
     reader.releaseLock();

@@ -203,3 +203,62 @@ export async function fetchDataQualityReport(datasetId: string, token?: string |
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<DataQualityReport>;
 }
+
+export function findDatasetOutliers(
+  datasetId: string,
+  payload: { columns: string[]; method?: string },
+  token?: string | null
+) {
+  return authedJson<Record<string, unknown>>(
+    `/datasets/${datasetId}/find-outliers`,
+    payload,
+    token
+  );
+}
+
+export function handleDatasetOutliers(
+  datasetId: string,
+  payload: {
+    columns: string[];
+    method?: 'cap' | 'remove' | 'flag';
+  },
+  token?: string | null
+) {
+  return authedJson<DerivedDatasetResult>(`/datasets/${datasetId}/handle-outliers`, payload, token);
+}
+
+export function fixDatasetDataTypes(
+  datasetId: string,
+  payload: { casts: Array<{ name: string; target_type: string }> },
+  token?: string | null
+) {
+  return authedJson<DerivedDatasetResult>(`/datasets/${datasetId}/fix-data-types`, payload, token);
+}
+
+export function fuseWaveDatasets(
+  payload: { dataset_ids: string[]; wave_column?: string },
+  token?: string | null
+) {
+  return authedJson<DerivedDatasetResult>(
+    `/datasets/intake/fuse-datasets`,
+    {
+      dataset_ids: payload.dataset_ids,
+      key: payload.wave_column,
+    },
+    token
+  );
+}
+
+export function fuseSurveyDatasets(
+  payload: { dataset_ids: string[]; key_columns?: string[] },
+  token?: string | null
+) {
+  return authedJson<DerivedDatasetResult>(
+    `/datasets/intake/fuse-datasets`,
+    {
+      dataset_ids: payload.dataset_ids,
+      key: payload.key_columns?.[0],
+    },
+    token
+  );
+}

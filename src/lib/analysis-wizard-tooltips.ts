@@ -536,4 +536,50 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
     assumptions: ['Full semopy model spec with measurement and structural paths.'],
     output: ['Path coefficients, fit indices, SEM path diagram.'],
   },
+  mixed_model: {
+    useWhen: [
+      'People nested in groups (pupils in schools, patients in clinics) and the groups matter.',
+      'You want a random intercept or random slope, plus the ICC from a null model.',
+    ],
+    assumptions: [
+      'Need about 10 or more groups. Fewer groups: use cluster-robust OLS instead.',
+      'An unconverged or singular fit is not a finished result.',
+    ],
+    output: [
+      'Fixed effects with SE, z, p, and 95% CI.',
+      'Variance components, ICC, group counts, and fit diagnostics.',
+    ],
+  },
+  gee: {
+    useWhen: [
+      'Yes/no outcomes that cluster in groups (pass/fail, dropout) when you want the overall effect.',
+    ],
+    assumptions: ['Binary outcome. Groups are clusters. Exchangeable working correlation.'],
+    output: ['GEE coefficients with cluster-robust SEs.'],
+  },
+  reliability: {
+    useWhen: ['Several questionnaire items meant to measure the same thing.'],
+    assumptions: ['Items are numeric. Reverse-coded items must already be reversed.'],
+    output: ["Cronbach's alpha, item-total correlations, alpha if item deleted."],
+  },
+  rm_anova: {
+    useWhen: ['The same people measured several times, stored as wide columns (pre/post).'],
+    assumptions: ['A subject ID column and at least two measure columns.'],
+    output: ['Repeated-measures ANOVA table.'],
+  },
+  mixed_anova: {
+    useWhen: ['A grouping factor plus repeated measures on the same people.'],
+    assumptions: ['Subject ID, a between-subjects factor, and at least two within measures.'],
+    output: ['Between, within, and interaction effects.'],
+  },
+  network: {
+    useWhen: ['Two columns that name each end of a tie, or a square connection grid.'],
+    assumptions: ['No graph editor — ingest is an edge list or adjacency matrix.'],
+    output: ['Centrality table, density, components, modularity, spring layout.'],
+  },
+  code_open_text: {
+    useWhen: ['A free-text column you want to code, with quotes traced back to the source cell.'],
+    assumptions: ['Assignments carry quote span and row index.'],
+    output: ['Code frequencies, optional crosstab, Krippendorff alpha if two coder columns.'],
+  },
 };

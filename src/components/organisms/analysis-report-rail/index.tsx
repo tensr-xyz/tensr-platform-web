@@ -206,13 +206,6 @@ export function AnalysisReportRail({
             <Command className="size-3.5" aria-hidden />
           </Button>
         </div>
-        <button
-          type="button"
-          className="mt-2 inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-        >
-          <Plus className="size-3" aria-hidden />
-          Add covariate
-        </button>
       </RailSection>
 
       {otherRuns.length > 0 ? (

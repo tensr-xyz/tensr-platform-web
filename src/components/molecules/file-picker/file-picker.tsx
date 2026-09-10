@@ -28,7 +28,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
   setError,
   uploadProgress,
   onFileSelect,
-  acceptedFileTypes = '.csv,.xlsx,.xls',
+  acceptedFileTypes = '.csv,.xlsx,.xls,.parquet,.sav,.dta,.json,.sss,.mdd',
   children,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,7 +99,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
           </div>
           <Progress value={uploadProgress} className="h-2" />
           <p className="text-xs text-muted-foreground">
-            {uploadProgress < 100 ? 'Uploading to secure storage' : 'Processing file contents'}
+            {uploadProgress < 100 ? 'Uploading file…' : 'Processing file…'}
           </p>
         </div>
       ) : (
