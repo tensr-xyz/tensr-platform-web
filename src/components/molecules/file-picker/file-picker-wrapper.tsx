@@ -9,7 +9,6 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { useProjectFileUpload } from '@/hooks/api/use-project-file-upload';
-import { ACCEPTED_UPLOAD_DOT_EXTENSIONS } from '@/lib/accepted-upload-types';
 import { FilePicker } from './file-picker';
 
 interface FilePickerWrapperProps {
@@ -21,7 +20,17 @@ export const FilePickerWrapper = ({ children, onUploadComplete }: FilePickerWrap
   const [open, setOpen] = useState(false);
 
   const { uploadFile, isLoading, error, clearError, uploadProgress } = useProjectFileUpload({
-    allowedExtensions: [...ACCEPTED_UPLOAD_DOT_EXTENSIONS],
+    allowedExtensions: [
+      '.csv',
+      '.xlsx',
+      '.xls',
+      '.parquet',
+      '.sav',
+      '.dta',
+      '.json',
+      '.sss',
+      '.mdd',
+    ],
     onUploadComplete: projectId => {
       setOpen(false);
       onUploadComplete?.(projectId);

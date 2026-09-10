@@ -4,6 +4,32 @@ import { ANALYSIS_LABELS, type AnalysisKey } from '@/lib/analysis-definitions';
 import { isRetiredFromUi, retiredFromUiUserMessage } from '@/lib/retired-from-ui';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import { useTabsStore, ViewType, type AgentAnalysisHistoryEntry } from '@/stores/tabs-store';
+
+export type ProvenanceTraceState =
+  | { kind: 'unknown' }
+  | { kind: 'complete' }
+  | { kind: 'unavailable'; reason: string };
+
+export function provenanceTraceState(provenance: unknown): ProvenanceTraceState {
+  if (provenance === undefined || provenance === null || typeof provenance !== 'object') {
+    return { kind: 'unknown' };
+  }
+  const p = provenance as Record<string, unknown>;
+  const unavailable = p.provenance_unavailable;
+  if (typeof unavailable === 'string' && unavailable.trim()) {
+    return { kind: 'unavailable', reason: unavailable.trim() };
+  }
+  const miss = p.row_uid_bitset_miss_count;
+  const bitset = p.row_uid_bitset;
+  if (typeof miss === 'number' && miss > 0) {
+    return { kind: 'unavailable', reason: 'unknown_row_uids' };
+  }
+  if (typeof bitset === 'string' && bitset && (miss == null || miss === 0)) {
+    return { kind: 'complete' };
+  }
+  return { kind: 'unknown' };
+}
+
 export type StoredAnalysisRun = {
   id: string;
   dataset_id: string;

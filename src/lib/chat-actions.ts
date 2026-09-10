@@ -228,6 +228,12 @@ const SYNONYMS: Record<string, string> = {
   lca: 'Latent Class Analysis (LCA)',
   'latent class': 'Latent Class Analysis (LCA)',
   'latent class analysis': 'Latent Class Analysis (LCA)',
+  mcnemar: 'McNemar Test',
+  'mcnemar test': 'McNemar Test',
+  loglinear: 'Loglinear Analysis',
+  'loglinear analysis': 'Loglinear Analysis',
+  stepwise: 'Stepwise Regression',
+  'stepwise regression': 'Stepwise Regression',
 };
 
 /** Analysis synonyms checked before spreadsheet filter/sort parsing (avoids mis-routing). */

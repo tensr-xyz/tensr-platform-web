@@ -10,6 +10,7 @@ export interface AnalysisItem {
   section: string;
   analysisKey?: AnalysisKey;
   component: ReturnType<typeof getMenuItemComponent> | undefined;
+  searchBlob?: string;
 }
 
 export const DATA_TAB_VALUE = 'data';
@@ -32,6 +33,7 @@ export const ACTIVE_PALETTE_TABS = [
   'analyze',
   'transform',
   'visualization',
+  'time_series',
   'ml_ai',
   'multivariate',
 ] as const;
@@ -106,6 +108,9 @@ function isLaunchableMenuName(name: string): boolean {
   return isDialogMenuItem(name) || name in PRODUCTION_ANALYSIS_LABELS;
 }
 
+/** Mode-variant menu names that share one API op but must both appear in ⌘K. */
+const MODE_VARIANT_OPS = new Set<AnalysisKey>(['gradient_boosting', 'neural_network_mlp']);
+
 function paletteItemName(menuName: string, op?: AnalysisKey): string {
   if (op && PREFERRED_MENU_NAME_FOR_OP[op]) {
     return PREFERRED_MENU_NAME_FOR_OP[op]!;
@@ -138,8 +143,10 @@ export function getAllAnalysisItems(): AnalysisItem[] {
           if (preferred && menuName !== preferred && menuName !== displayName) {
             if (names.includes(preferred)) continue;
           }
-          if (seenOps.has(op)) continue;
-          seenOps.add(op);
+          // Mode variants (GB Class/Reg, MLP Class/Reg) share an op — keep both labels.
+          if (seenOps.has(op) && !MODE_VARIANT_OPS.has(op)) continue;
+          if (!MODE_VARIANT_OPS.has(op)) seenOps.add(op);
+          else if (seenNames.has(displayName)) continue;
         }
 
         if (seenNames.has(displayName) || !isLaunchableMenuName(menuName)) continue;
@@ -157,6 +164,12 @@ export function getAllAnalysisItems(): AnalysisItem[] {
           section: sectionName,
           analysisKey: op,
           component,
+          searchBlob:
+            menuName === 'Custom Tables'
+              ? 'banner custom tables stub nested banner'
+              : menuName === 'Rake Weights'
+                ? 'rake raking ipf weight cases rim'
+                : undefined,
         });
       }
     }
@@ -176,6 +189,9 @@ export function filterAnalysisItems(items: AnalysisItem[], searchTerm: string): 
   const lowerSearchTerm = searchTerm.toLowerCase();
 
   return items.filter(item => {
+    if (item.searchBlob?.toLowerCase().includes(lowerSearchTerm)) {
+      return true;
+    }
     if (item.analysisKey && analysisSearchBlob(item.analysisKey).includes(lowerSearchTerm)) {
       return true;
     }

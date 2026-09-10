@@ -35,6 +35,7 @@ export const WIZARD_FIELD = {
   forecastSteps: 'forecastSteps',
   acfMaxLags: 'acfMaxLags',
   semModelSpec: 'semModelSpec',
+  openTextLexicon: 'openTextLexicon',
 } as const;
 
 export type WizardFieldId = (typeof WIZARD_FIELD)[keyof typeof WIZARD_FIELD];
@@ -199,6 +200,7 @@ function appendRequiredFieldErrors(
     case 'somers_d':
     case 'goodman_kruskal_lambda':
     case 'weighted_kappa':
+    case 'mcnemar':
       require(WIZARD_FIELD.chiA, !!form.chiA?.trim(), 'Select the first variable.');
       require(WIZARD_FIELD.chiB, !!form.chiB?.trim(), 'Select the second variable.');
       break;
@@ -353,6 +355,21 @@ function appendRequiredFieldErrors(
     case 'code_open_text':
       require(WIZARD_FIELD.columns, form.selectedCols.length >= 1 ||
         !!form.valueCol?.trim(), 'Select a free-text column.');
+      {
+        const lex = form.openTextLexicon || '';
+        const hasTheme = lex.split('\n').some(line => {
+          const t = line.trim();
+          const c = t.indexOf(':');
+          return c > 0 && t.slice(c + 1).trim().length > 0;
+        });
+        if (!hasTheme) {
+          pushError(
+            errors,
+            WIZARD_FIELD.openTextLexicon,
+            'Add at least one lexicon theme (theme: keyword1, keyword2).'
+          );
+        }
+      }
       break;
     case 'multilevel_modelling':
       require(WIZARD_FIELD.valueCol, !!form.valueCol?.trim(), 'Select an outcome variable.');

@@ -286,8 +286,12 @@ export function analysisResultMarkdown(analysisResult: Record<string, unknown> |
   }
 
   const summary = report.summary || 'Analysis completed.';
+  const provenance =
+    analysisResult?.provenance && typeof analysisResult.provenance === 'object'
+      ? (analysisResult.provenance as Record<string, unknown>)
+      : undefined;
   return {
-    markdown: formatAnalysisReportForAgentChat(report),
+    markdown: formatAnalysisReportForAgentChat(report, { provenance }),
     summary,
   };
 }

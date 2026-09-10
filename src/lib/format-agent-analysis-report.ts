@@ -1,4 +1,5 @@
 import type { AnalysisReport, AnalysisReportTable } from '@/lib/analysis-report-types';
+import { formatProvenanceConventionMarkdown } from '@/lib/provenance-inspector';
 
 function formatMarkdownTable(table: AnalysisReportTable, maxRows = 8): string {
   if (!table.columns.length) return '';
@@ -113,7 +114,10 @@ function pickHighlightTable(report: AnalysisReport): AnalysisReportTable | undef
 }
 
 /** Rich markdown for agent chat — answer first, then metrics/detail. */
-export function formatAnalysisReportForAgentChat(report: AnalysisReport): string {
+export function formatAnalysisReportForAgentChat(
+  report: AnalysisReport,
+  opts?: { provenance?: Record<string, unknown> | null }
+): string {
   const lines: string[] = [];
 
   if (report.summary) {
@@ -156,6 +160,12 @@ export function formatAnalysisReportForAgentChat(report: AnalysisReport): string
     lines.push(
       `*Analysis used ${report.exclusion_summary.rows_used.toLocaleString()} of ${report.exclusion_summary.rows_total.toLocaleString()} rows (${report.exclusion_summary.rows_excluded.toLocaleString()} excluded due to missing data).*`
     );
+  }
+
+  const provenanceSection = formatProvenanceConventionMarkdown(opts?.provenance);
+  if (provenanceSection) {
+    lines.push('');
+    lines.push(provenanceSection);
   }
 
   return lines.join('\n').trim();

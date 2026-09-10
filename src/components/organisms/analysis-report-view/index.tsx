@@ -17,6 +17,7 @@ import { resolveReportBlocks } from '@/lib/report-blocks';
 import { copyTableRich } from '@/utils/apa-clipboard';
 import { ReportChartCard } from '@/components/molecules/report-chart-card';
 import { Button } from '@/components/atoms/button';
+import { ProvenanceInspector } from '@/components/organisms/provenance-inspector';
 import { cn } from '@/utils';
 
 function tableToTsv(t: AnalysisReportTable): string {
@@ -415,6 +416,11 @@ export function AnalysisReportView({ report, rawResult, onAnnotateChart, related
     minute: '2-digit',
   });
 
+  const provenance =
+    rawResult?.provenance && typeof rawResult.provenance === 'object'
+      ? (rawResult.provenance as Record<string, unknown>)
+      : null;
+
   const blockSubtitle = [
     report.meta.subtitle,
     report.exclusion_summary
@@ -459,6 +465,8 @@ export function AnalysisReportView({ report, rawResult, onAnnotateChart, related
           {report.meta.title ? <MetaChip label="Test" value={report.meta.title} /> : null}
           <span className="flex-1" />
         </div>
+
+        <ProvenanceInspector provenance={provenance} />
 
         {report.approach?.plan ||
         report.approach?.why_this_test ||

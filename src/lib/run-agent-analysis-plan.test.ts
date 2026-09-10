@@ -1,4 +1,5 @@
 import { resolveChatAction } from './chat-actions';
+import { isRetiredFromUi } from './retired-from-ui';
 import {
   assistantUpdateFromParseIntent,
   pendingActionFromParseIntentUpdate,
@@ -124,31 +125,10 @@ describe('assistantUpdateFromParseIntent data actions', () => {
 });
 
 describe('retired analysis ops are not agent-runnable', () => {
-  const menuFallback = {
-    op: 'descriptives' as const,
-    menuName: 'Descriptives',
-    triggerMessage: 'run lca',
-  };
-
-  it('refuses McNemar, stepwise, and loglinear from parse-intent', () => {
-    for (const analysis_type of ['mcnemar', 'stepwise_regression', 'loglinear']) {
-      const update = assistantUpdateFromParseIntent(
-        {
-          status: 'plan',
-          interpretation: `I'll run ${analysis_type}.`,
-          analysis_type,
-          request_body: { columns: ['a', 'b'] },
-          auto_execute: true,
-        },
-        'Analysis',
-        analysis_type
-      );
-      expect(update.type).toBe('unsupported');
-      if (update.type === 'unsupported') {
-        expect(update.content).toMatch(/no longer offered/);
-      }
-      expect(pendingActionFromParseIntentUpdate(update, menuFallback)).toBeUndefined();
-    }
+  it('has no retired ops after full-catalog restore', () => {
+    expect(isRetiredFromUi('mcnemar')).toBe(false);
+    expect(isRetiredFromUi('stepwise_regression')).toBe(false);
+    expect(isRetiredFromUi('loglinear')).toBe(false);
   });
 });
 

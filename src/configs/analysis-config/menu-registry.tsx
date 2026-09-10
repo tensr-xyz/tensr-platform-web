@@ -31,7 +31,24 @@ import {
   LeadCasesDialog,
 } from '@/components/templates/transform/lag-lead-variables';
 import { DataQualityReportDialog } from '@/components/templates/data/data-quality-report';
+import { FindOutliersDialog } from '@/components/templates/data/find-outliers';
+import { HandleOutliersDialog } from '@/components/templates/data/handle-outliers';
+import { FixDataTypesDialog } from '@/components/templates/data/fix-data-types';
+import { FuseDatasetsDialog } from '@/components/templates/data/fuse-datasets';
 import { ChartBuilderDialog } from '@/components/templates/visualization/chart-builder';
+import {
+  MddImportDialog,
+  QPackIngestDialog,
+  QualtricsDefinitionDialog,
+  QuantumAxisDialog,
+  SpsTranslateDialog,
+  TripleSImportDialog,
+  WincrossJobImportDialog,
+} from '@/components/templates/data/intake';
+import {
+  createTechniqueDialog,
+  TECHNIQUE_CONFIGS,
+} from '@/components/templates/analysis/techniques';
 import {
   BatchTablesDialog,
   ConjointDialog,
@@ -53,13 +70,26 @@ const chartMenuItem =
   (name: string): AnalysisComponent =>
   ({ children }) => <ChartBuilderDialog chartMenuName={name}>{children}</ChartBuilderDialog>;
 
+const techniqueMenuEntries = Object.fromEntries(
+  Object.keys(TECHNIQUE_CONFIGS).map(label => [label, createTechniqueDialog(label)])
+) as Record<string, AnalysisComponent>;
+
+/**
+ * Technique dialogs first; development agency dialogs overwrite shared labels
+ * (Custom Tables, Batch Tables, Fuse Waves, Rake, Survey techniques, …).
+ */
 const DIALOG_MENU: Record<string, AnalysisComponent> = {
+  ...techniqueMenuEntries,
   'Import Data': LazyFilePickerWrapper,
   'Export Data': ExportDialog,
   'Merge Datasets': MergeDatasetDialog,
   'Fuse Waves': FuseWavesDialog,
+  'Fuse Datasets': FuseDatasetsDialog,
   'Handle Missing Data': HandleMissingDataDialog,
   'Find Duplicates': FindDuplicatesDialog,
+  'Find Outliers': FindOutliersDialog,
+  'Handle Outliers': HandleOutliersDialog,
+  'Fix Data Types': FixDataTypesDialog,
   'Standardize Variables': StandardizeVariablesDialog,
   'Standardize Values': StandardizeVariablesDialog,
   'Visual Binning': BinVariablesDialog,
@@ -83,6 +113,13 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Lead Cases': LeadCasesDialog,
   'Rank Cases': RankCasesDialog,
   'Data Quality Report': DataQualityReportDialog,
+  'WinCross Job Import': WincrossJobImportDialog,
+  'Qualtrics Definition': QualtricsDefinitionDialog,
+  'QPack Ingest': QPackIngestDialog,
+  'Triple-S Import': TripleSImportDialog,
+  'MDD Import': MddImportDialog,
+  'SPS Translate': SpsTranslateDialog,
+  'Quantum Axis': QuantumAxisDialog,
   'Bar Chart': chartMenuItem('Bar Chart'),
   'Line Chart': chartMenuItem('Line Chart'),
   'Scatter Chart': chartMenuItem('Scatter Chart'),
