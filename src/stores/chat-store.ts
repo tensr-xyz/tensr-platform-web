@@ -18,6 +18,8 @@ export interface ChatMessage {
   isStreaming?: boolean;
   /** Muted inline thinking lines shown while analysis runs. */
   thinkingLines?: string[];
+  /** Last fitted inferential spec so follow-ups can inherit it. */
+  lastFittedModel?: { analysis_type: string; request_body: Record<string, unknown> };
   /** Result markdown appended after thinking lines (typewriter + final render). */
   resultMarkdown?: string;
   /** Alternate columns suggested after a failed/empty data action (A6). */
@@ -114,6 +116,8 @@ function reviveProjects(projects: ChatState['projects'] | undefined): ChatState[
           ...message,
           timestamp:
             message.timestamp instanceof Date ? message.timestamp : new Date(message.timestamp),
+          isStreaming: false,
+          thinkingLines: undefined,
         })),
       };
     }

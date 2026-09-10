@@ -3,6 +3,7 @@ import {
   AgentWorkingLabel,
   CHAT_THREAD_CLOSE_BUTTON_CLASS,
   ChatThreadCloseButton,
+  accumulateThinkingLines,
   visibleThinkingLines,
 } from './agent-chat-chrome';
 
@@ -19,6 +20,14 @@ describe('agent chat chrome', () => {
     const lines = ['Planning the next step…'];
     expect(visibleThinkingLines(lines, { hasResult: false, isStreaming: true })).toEqual(lines);
     expect(visibleThinkingLines(lines, { hasResult: true, isStreaming: false })).toEqual([]);
+  });
+
+  it('accumulates distinct progress lines so the UI can paint each step', () => {
+    const first = accumulateThinkingLines(undefined, 'Reading dataset schema…');
+    const second = accumulateThinkingLines(first, 'Planning the next step…');
+    const third = accumulateThinkingLines(second, 'Planning the next step…');
+    expect(second).toEqual(['Reading dataset schema…', 'Planning the next step…']);
+    expect(third).toEqual(second);
   });
 
   it('uses a pointer cursor on the chat-tab close control', () => {

@@ -14,6 +14,14 @@ export function visibleThinkingLines(
   return thinkingLines;
 }
 
+/** Append a progress line without dropping earlier steps (needed for live SSE). */
+export function accumulateThinkingLines(prev: string[] | undefined, next: string): string[] {
+  const trimmed = next.trim();
+  if (!trimmed) return prev ?? [];
+  if (prev?.includes(trimmed)) return prev;
+  return [...(prev ?? []), trimmed];
+}
+
 export function AgentWorkingLabel({ className }: { className?: string }) {
   return (
     <span

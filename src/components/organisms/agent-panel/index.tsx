@@ -16,6 +16,7 @@ import {
 } from '@/components/molecules/message-scroller';
 import { Send, AlertCircle, Trash2, History, Plus } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { flushSync } from 'react-dom';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import {
   Command,
@@ -101,6 +102,7 @@ import {
 import {
   AgentWorkingLabel,
   ChatThreadCloseButton,
+  accumulateThinkingLines,
   visibleThinkingLines,
 } from './agent-chat-chrome';
 
@@ -495,10 +497,19 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           glossary: projectGlossary,
           approvedToolCall: opts.approvedToolCall ?? null,
           approvedToolCalls: opts.approvedToolCalls ?? null,
-          onProgress: progress => {
-            updateMessage(projectId, assistantMessageId, {
-              thinkingLines: [progress.message],
-              isStreaming: true,
+          onProgress: async progress => {
+            const prev = useChatStore
+              .getState()
+              .getMessages(projectId)
+              .find(m => m.id === assistantMessageId)?.thinkingLines;
+            flushSync(() => {
+              updateMessage(projectId, assistantMessageId, {
+                thinkingLines: accumulateThinkingLines(prev, progress.message),
+                isStreaming: true,
+              });
+            });
+            await new Promise<void>(resolve => {
+              requestAnimationFrame(() => resolve());
             });
           },
         });
@@ -642,6 +653,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           logAgentChatRenderPayload(chatFields);
           updateMessage(projectId, assistantMessageId, {
             ...chatFields,
+            lastFittedModel: patch.lastFittedModel,
             thinkingLines: undefined,
             isStreaming: false,
           });
@@ -790,12 +802,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       if (!trimmed || seenProgress.has(trimmed)) return;
       seenProgress.add(trimmed);
       progressLines.push(trimmed);
-      updateMessage(projectId, messageId, {
-        thinkingLines: [...progressLines],
-        isStreaming: true,
-        pendingAction: current
-          ? patchPendingAction(current, { status: 'running', plan })
-          : undefined,
+      flushSync(() => {
+        updateMessage(projectId, messageId, {
+          thinkingLines: [...progressLines],
+          isStreaming: true,
+          pendingAction: current
+            ? patchPendingAction(current, { status: 'running', plan })
+            : undefined,
+        });
       });
     };
 
@@ -916,16 +930,19 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       }
     } catch (err: unknown) {
       const latestAction = getMessagePendingAction(messageId);
-      if (latestAction) {
-        updateMessage(projectId, messageId, {
-          isStreaming: false,
-          pendingAction: patchPendingAction(latestAction, {
-            status: 'failed',
-            plan,
-            errorMessage: formatApiErrorMessage(err),
-          }),
-        });
-      }
+      updateMessage(projectId, messageId, {
+        isStreaming: false,
+        thinkingLines: undefined,
+        ...(latestAction
+          ? {
+              pendingAction: patchPendingAction(latestAction, {
+                status: 'failed',
+                plan,
+                errorMessage: formatApiErrorMessage(err),
+              }),
+            }
+          : {}),
+      });
     } finally {
       setBusyMessageId(null);
     }

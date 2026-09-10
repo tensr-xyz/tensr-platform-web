@@ -210,6 +210,34 @@ describe('run-agent-loop client helpers', () => {
     expect(done.isStreaming).toBe(false);
   });
 
+  it('keeps lastFittedModel on the chat message so follow-ups inherit the spec', () => {
+    const spec = {
+      analysis_type: 'logistic_regression',
+      request_body: {
+        dependent: 'Full_retention',
+        independents: ['Interval', 'Pay', 'Total_approvals'],
+        reference_levels: { Interval: 'short', Pay: 'low' },
+      },
+    };
+    const patch = deriveMessageUpdateFromLoopResponse(
+      {
+        status: 'ok',
+        mode: 'agent',
+        answer_markdown: `Fitted.\n<!-- tensr_last_model:${JSON.stringify(spec)} -->`,
+        tool_results: [
+          {
+            name: 'run_analysis',
+            result: { ok: true, last_fitted_model: spec },
+          },
+        ],
+      },
+      { triggerMessage: 'interaction logistic', datasetId: null }
+    );
+    expect(patch.lastFittedModel).toEqual(spec);
+    expect(patch.content).toBe('Fitted.');
+    expect(patch.thinkingLines).toBeUndefined();
+  });
+
   it('chartsFromToolResults collects chart payloads', () => {
     const charts = chartsFromToolResults([
       {

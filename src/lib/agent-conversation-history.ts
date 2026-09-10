@@ -5,16 +5,53 @@ export type AgentConversationTurn = {
   content: string;
 };
 
+export function lastFittedModelMarker(spec: unknown): string {
+  return `<!-- tensr_last_model:${JSON.stringify(spec)} -->`;
+}
+
+const LAST_MODEL_COMMENT = /<!--\s*tensr_last_model:[\s\S]*?-->/g;
+
+export function stripLastFittedModelMarker(text: string): string {
+  return text.replace(LAST_MODEL_COMMENT, '').trim();
+}
+
+export function lastFittedModelFromToolResults(
+  toolResults: Array<{ result?: Record<string, unknown> | null }> | undefined
+): { analysis_type: string; request_body: Record<string, unknown> } | undefined {
+  for (const entry of [...(toolResults ?? [])].reverse()) {
+    const spec = entry.result?.last_fitted_model;
+    if (
+      spec &&
+      typeof spec === 'object' &&
+      spec !== null &&
+      'request_body' in spec &&
+      (spec as { request_body?: unknown }).request_body
+    ) {
+      return spec as { analysis_type: string; request_body: Record<string, unknown> };
+    }
+  }
+  return undefined;
+}
+
 export function buildAgentConversationHistory(
-  messages: Array<{ role: string; content: string }>,
+  messages: Array<{
+    role: string;
+    content: string;
+    lastFittedModel?: unknown;
+  }>,
   limit = 8
 ): AgentConversationTurn[] {
   return messages
     .slice(-limit)
-    .map(m => ({
-      role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
-      content: (m.content ?? '').trim(),
-    }))
+    .map(m => {
+      const base = (m.content ?? '').trim();
+      const marker =
+        m.role === 'assistant' && m.lastFittedModel ? lastFittedModelMarker(m.lastFittedModel) : '';
+      return {
+        role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
+        content: [base, marker].filter(Boolean).join('\n'),
+      };
+    })
     .filter(m => m.content.length > 0);
 }
 

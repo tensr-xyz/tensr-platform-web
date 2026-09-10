@@ -11,6 +11,10 @@ import type {
   PrepPlaybookStep,
 } from '@/lib/chat-pending-action';
 import type { ChatMessage } from '@/stores/chat-store';
+import {
+  lastFittedModelFromToolResults,
+  stripLastFittedModelMarker,
+} from '@/lib/agent-conversation-history';
 
 const RETRYABLE_AGENT_LOOP_STATUSES = new Set([502, 503]);
 
@@ -216,8 +220,10 @@ export function deriveMessageUpdateFromLoopResponse(
   response: AgentLoopResponse,
   context: DeriveLoopMessageContext
 ): Partial<Omit<ChatMessage, 'id'>> {
-  const answer = response.answer_markdown?.trim() || '_No answer returned._';
+  const answer =
+    stripLastFittedModelMarker(response.answer_markdown?.trim() || '') || '_No answer returned._';
   const charts = chartsFromToolResults(response.tool_results);
+  const lastFittedModel = lastFittedModelFromToolResults(response.tool_results);
 
   if (response.status === 'clarification') {
     const questions = response.clarification_questions?.filter(Boolean) ?? [];
@@ -234,6 +240,7 @@ export function deriveMessageUpdateFromLoopResponse(
       charts: charts.length ? charts : undefined,
       isStreaming: false,
       thinkingLines: undefined,
+      lastFittedModel,
     };
   }
 
@@ -245,6 +252,7 @@ export function deriveMessageUpdateFromLoopResponse(
         content: answer,
         isStreaming: false,
         thinkingLines: undefined,
+        lastFittedModel,
         pendingAction: {
           kind: 'agent_tool_approval',
           status: 'pending',
@@ -283,6 +291,7 @@ export function deriveMessageUpdateFromLoopResponse(
     charts: charts.length ? charts : undefined,
     isStreaming: false,
     thinkingLines: undefined,
+    lastFittedModel,
     pendingAction,
   };
 }
