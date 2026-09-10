@@ -26,7 +26,7 @@ describe('normalizeStoredAnalysisRun', () => {
     expect(run?.report.tables[0].rows[0][0]).toBe('4.2');
   });
 
-  it('does not drop a retired run that has no report payload', () => {
+  it('does not drop a live run that has no report payload', () => {
     const run = normalizeStoredAnalysisRun({
       id: 'run-2',
       dataset_id: '11111111-1111-4111-8111-111111111111',
@@ -36,6 +36,6 @@ describe('normalizeStoredAnalysisRun', () => {
     });
     expect(run).not.toBeNull();
     expect(run?.report.meta.title).toMatch(/McNemar/);
-    expect(run?.report.summary).toMatch(/no longer offered/);
+    expect(run?.report.summary).toMatch(/no stored report/);
   });
 });

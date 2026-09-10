@@ -12,12 +12,12 @@ describe('analysis-setup-store retired ops', () => {
     });
   });
 
-  it('does not open a wizard for retired ops; shows the retired notice instead', () => {
+  it('opens a wizard for restored ops that used to be retired', () => {
     useAnalysisSetupStore.getState().openSetup('mcnemar');
     const state = useAnalysisSetupStore.getState();
-    expect(state.setupOp).toBeNull();
-    expect(state.unavailableName).toBe('McNemar Test');
-    expect(state.unavailableKind).toBe('retired');
+    expect(state.setupOp).toBe('mcnemar');
+    expect(state.unavailableName).toBeNull();
+    expect(state.unavailableKind).toBeNull();
   });
 
   it('still opens a wizard for a live analysis', () => {

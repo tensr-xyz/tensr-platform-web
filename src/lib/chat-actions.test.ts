@@ -113,10 +113,25 @@ describe('resolveChatAction', () => {
     });
   });
 
-  it('does not route chat to removed false-door labels', () => {
-    expect(resolveChatAction('mcnemar test')).toEqual({ kind: 'chat' });
-    expect(resolveChatAction('loglinear analysis')).toEqual({ kind: 'chat' });
-    expect(resolveChatAction('stepwise')).toEqual({ kind: 'chat' });
+  it('opens restored catalog labels that used to be false doors', () => {
+    expect(resolveChatAction('mcnemar test')).toEqual({
+      kind: 'analysis',
+      op: 'mcnemar',
+      menuName: 'McNemar Test',
+    });
+    expect(resolveChatAction('loglinear analysis')).toEqual({
+      kind: 'analysis',
+      op: 'loglinear',
+      menuName: 'Loglinear Analysis',
+    });
+    expect(resolveChatAction('stepwise')).toEqual({
+      kind: 'analysis',
+      op: 'stepwise_regression',
+      menuName: 'Stepwise Regression',
+    });
+  });
+
+  it('falls through to chat for count-values phrasing with no dialog', () => {
     expect(resolveChatAction('count values')).toEqual({ kind: 'chat' });
   });
 
