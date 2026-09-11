@@ -13,6 +13,8 @@ As an analyst, I want Working / schema / summary progress to disappear once the 
 - GREEN: same command plus `src/lib/agent-loop-client.test.ts` — 14 passed. `updateMessage(..., patch)` again keeps `thinkingLines: undefined` from `deriveMessageUpdateFromLoopResponse`.
 - Follow-up: merge also stacked raw SSE `progress.message` on interpreted lines. RED/GREEN via `accumulateInterpretedLoopProgress` in `agent-analysis-progress.test.ts`.
 - Follow-up: report view showed the amber Traceability banner and ProvenanceInspector for the same object. Banner now only for plugin-unverified or missing provenance. RED/GREEN in `analysis-report-view/index.test.tsx`.
+- Follow-up: merge brought main commit `7007a38` which seeded `pushAgentProgress({ step: 'start', message: '' })` → static `Working…` next to development's pulsing `Working`. That start seed is removed; empty progress interpolates to `''`; pulse-only lines are filtered. RED/GREEN in `agent-analysis-progress.test.ts` and `agent-chat-chrome.test.tsx`.
+- Follow-up (P1): report leads with `Verified against R ✓`, `N of M source rows used`, and the R/SPSS equivalent syntax. Convention jargon (`variance_mode`) is not shown. RED/GREEN in `analysis-report-view/index.test.tsx`.
 
 ## Test specification
 

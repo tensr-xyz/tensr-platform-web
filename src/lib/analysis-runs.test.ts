@@ -4,6 +4,7 @@ import {
   provenanceBannerText,
   provenanceTraceState,
   rSyntaxBadgeText,
+  sourceRowsUsedLabel,
 } from './analysis-runs';
 
 describe('normalizeStoredAnalysisRun', () => {
@@ -117,6 +118,15 @@ describe('canRevealConsumedRows', () => {
     expect(canRevealConsumedRows({ row_uid_bitset: 'BQ==', row_uid_bitset_miss_count: 0 })).toBe(
       true
     );
+  });
+});
+
+describe('sourceRowsUsedLabel', () => {
+  it('prints N of M source rows used', () => {
+    expect(sourceRowsUsedLabel({ rows_used: 504, rows_total: 505 })).toBe(
+      '504 of 505 source rows used'
+    );
+    expect(sourceRowsUsedLabel(undefined)).toBeNull();
   });
 });
 

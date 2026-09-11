@@ -7,6 +7,16 @@ export const ANALYSIS_PLANNING_MESSAGE =
 
 export const AGENT_LOOP_INITIAL_PROGRESS = 'Working…';
 
+/** Pulse-only placeholder — the chrome already shows a flashing "Working". */
+export function isPulseOnlyWorkingLine(line: string): boolean {
+  return (
+    line
+      .trim()
+      .replace(/[.…]+$/u, '')
+      .toLowerCase() === 'working'
+  );
+}
+
 export function analysisLabelFromType(analysisType: string): string {
   if (isAnalysisKey(analysisType)) {
     return ANALYSIS_LABELS[analysisType as AnalysisKey];
@@ -44,7 +54,7 @@ export function interpretAgentLoopProgressMessage(
   }
 
   if (raw) return raw;
-  return AGENT_LOOP_INITIAL_PROGRESS;
+  return '';
 }
 
 /** Live chat progress: interpreted copy only, never the raw SSE step name. */
@@ -53,7 +63,7 @@ export function accumulateInterpretedLoopProgress(
   progress: Pick<AgentLoopStreamProgress, 'type' | 'step' | 'message'>
 ): string[] {
   const line = interpretAgentLoopProgressMessage(progress);
-  if (!line) return prev ?? [];
+  if (!line || isPulseOnlyWorkingLine(line)) return prev ?? [];
   if (prev?.includes(line)) return prev;
   return [...(prev ?? []), line];
 }

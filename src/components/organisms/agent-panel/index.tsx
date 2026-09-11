@@ -72,10 +72,7 @@ import {
   logAgentChatRenderPayload,
   preferRicherPlan,
 } from '@/lib/agent-analysis-chat-fields';
-import {
-  accumulateInterpretedLoopProgress,
-  interpretAgentLoopProgressMessage,
-} from '@/lib/agent-analysis-progress';
+import { accumulateInterpretedLoopProgress } from '@/lib/agent-analysis-progress';
 import {
   analysisTabLabel,
   enrichmentCompletionNote,
@@ -488,20 +485,6 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           timestamp: new Date(),
         });
 
-      const progressLines: string[] = [];
-      const seenProgress = new Set<string>();
-      const pushAgentProgress = (progress: { type: string; step: string; message: string }) => {
-        const line = interpretAgentLoopProgressMessage(progress);
-        if (!line || seenProgress.has(line)) return;
-        seenProgress.add(line);
-        progressLines.push(line);
-        updateMessage(projectId, assistantMessageId, {
-          thinkingLines: [...progressLines],
-          isStreaming: true,
-        });
-      };
-
-      pushAgentProgress({ type: 'progress', step: 'start', message: '' });
       setLoading(projectId, false);
 
       try {

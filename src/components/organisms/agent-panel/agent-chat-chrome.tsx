@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
 import { X } from 'lucide-react';
+import { isPulseOnlyWorkingLine } from '@/lib/agent-analysis-progress';
 import { cn } from '@/utils';
 
 export const CHAT_THREAD_CLOSE_BUTTON_CLASS =
@@ -11,7 +12,7 @@ export function visibleThinkingLines(
 ): string[] {
   if (!thinkingLines?.length) return [];
   if (!isStreaming) return [];
-  return thinkingLines;
+  return thinkingLines.filter(line => !isPulseOnlyWorkingLine(line));
 }
 
 /** Append a progress line without dropping earlier steps (needed for live SSE). */

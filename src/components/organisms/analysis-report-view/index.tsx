@@ -20,11 +20,11 @@ import {
   provenanceBannerText,
   provenanceTraceState,
   rSyntaxBadgeText,
+  sourceRowsUsedLabel,
 } from '@/lib/analysis-runs';
 import { copyTableRich } from '@/utils/apa-clipboard';
 import { ReportChartCard } from '@/components/molecules/report-chart-card';
 import { Button } from '@/components/atoms/button';
-import { ProvenanceInspector } from '@/components/organisms/provenance-inspector';
 import { cn } from '@/utils';
 
 function tableToTsv(t: AnalysisReportTable): string {
@@ -497,15 +497,17 @@ export function AnalysisReportView({
     pluginMark && (pluginMark.kind === 'not_verified' || pluginMark.kind === 'unknown')
       ? pluginMark.statement || PLUGIN_UNVERIFIED_STATEMENT
       : null;
-  const statusBanner = pluginBanner ?? (inspectorProvenance ? null : provenanceBanner);
+  const statusBanner = pluginBanner ?? provenanceBanner;
   const rBadge = rSyntaxBadgeText(report.r_syntax_verification);
   const showRBadge = !report.meta.analysis_key.startsWith('plugin:');
+  const rBadgeTitle =
+    rBadge.kind === 'verified' || rBadge.kind === 'verified_in_ci'
+      ? 'Verified against R ✓'
+      : 'R syntax';
   const canReveal =
     canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
-  const nUsed = report.exclusion_summary ? `n = ${report.exclusion_summary.rows_used}` : null;
-  const nSubtitle = report.exclusion_summary
-    ? `${nUsed} · ${report.exclusion_summary.rows_excluded} excluded`
-    : null;
+  const rowsUsedLabel = sourceRowsUsedLabel(report.exclusion_summary, report.meta.rows_dataset);
+  const nSubtitle = rowsUsedLabel;
   const isBannerTable = report.meta.analysis_key === 'banner_table';
   const blockTitle = report.meta.subtitle?.trim() || report.meta.title;
   const blockSubtitle = [canReveal ? null : nSubtitle].filter(Boolean).join(' · ') || undefined;
@@ -548,10 +550,10 @@ export function AnalysisReportView({
           title={blockTitle}
           subtitle={blockSubtitle}
           nButton={
-            canReveal && nUsed && nSubtitle
+            canReveal && rowsUsedLabel
               ? {
-                  label: nSubtitle,
-                  ariaLabel: `Show rows for ${nUsed}`,
+                  label: rowsUsedLabel,
+                  ariaLabel: `Show rows for ${rowsUsedLabel}`,
                   onClick: () => onRevealConsumedRows?.(),
                 }
               : undefined
@@ -590,12 +592,26 @@ export function AnalysisReportView({
                 'border-border/60 bg-muted/20'
             )}
           >
-            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">R syntax</p>
+            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">{rBadgeTitle}</p>
             <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{rBadge.text}</p>
+            {report.reproducibility?.r_script ? (
+              <pre
+                data-testid="r-equivalent-syntax"
+                className="mt-2 max-h-40 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[11px] leading-relaxed text-foreground"
+              >
+                {report.reproducibility.r_script}
+              </pre>
+            ) : null}
+            {report.spss_syntax ? (
+              <pre
+                data-testid="spss-equivalent-syntax"
+                className="mt-2 max-h-32 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[11px] leading-relaxed text-foreground"
+              >
+                {report.spss_syntax}
+              </pre>
+            ) : null}
           </div>
         ) : null}
-
-        <ProvenanceInspector provenance={inspectorProvenance} />
 
         {report.approach?.plan ||
         report.approach?.why_this_test ||
@@ -942,7 +958,7 @@ export function AnalysisReportView({
         </details>
       ) : null}
 
-      {report.spss_syntax ? (
+      {report.spss_syntax && !showRBadge ? (
         <details className="mt-4 print:hidden">
           <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
             SPSS syntax (reference)
@@ -953,7 +969,7 @@ export function AnalysisReportView({
         </details>
       ) : null}
 
-      {report.reproducibility?.r_script ? (
+      {report.reproducibility?.r_script && !showRBadge ? (
         <div className="mt-4 print:hidden">
           <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             Reproducibility (R)
