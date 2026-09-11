@@ -73,4 +73,36 @@ describe('formatAnalysisReportForAgentChat coefficient tables', () => {
     expect(md).toContain('term_12');
     expect(md).not.toMatch(/Showing \d+ of \d+ rows/i);
   });
+
+  it('renders predicted-probability tables alongside coefficients', () => {
+    const md = formatAnalysisReportForAgentChat({
+      ...sampleReport(),
+      meta: {
+        ...sampleReport().meta,
+        analysis_key: 'logistic_regression',
+        title: 'Logistic Regression',
+        subtitle: 'Full_retention',
+      },
+      tables: [
+        {
+          id: 'logit_coef',
+          title: 'Logistic regression coefficients',
+          columns: ['Term', 'Estimate'],
+          rows: [['Intercept', '0.37']],
+        },
+        {
+          id: 'logit_predict',
+          title: 'Predicted probabilities (others at mean)',
+          columns: ['At', 'Probability', 'Percent'],
+          rows: [
+            ['cohs_routine=1', '0.42', '42'],
+            ['cohs_routine=5', '0.61', '61'],
+          ],
+        },
+      ],
+    });
+    expect(md).toContain('Predicted probabilities (others at mean)');
+    expect(md).toContain('cohs_routine=1');
+    expect(md).toContain('cohs_routine=5');
+  });
 });

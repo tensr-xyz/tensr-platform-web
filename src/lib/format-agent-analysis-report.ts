@@ -2,7 +2,7 @@ import type { AnalysisReport, AnalysisReportTable } from '@/lib/analysis-report-
 import { formatProvenanceConventionMarkdown } from '@/lib/provenance-inspector';
 
 function isRegressionCoefficientTable(table: AnalysisReportTable): boolean {
-  if (table.id === 'regression_coef') return true;
+  if (table.id === 'regression_coef' || table.id === 'logit_coef') return true;
   return /coefficient|odds ratio/i.test(table.title || '');
 }
 
@@ -104,22 +104,6 @@ function buildInterpretation(report: AnalysisReport): string | null {
   return null;
 }
 
-function pickHighlightTable(report: AnalysisReport): AnalysisReportTable | undefined {
-  const priority = [
-    'banner_table',
-    'anova_groups',
-    'ttest_groups',
-    'regression_coef',
-    'correlation',
-    'descriptives',
-  ];
-  for (const id of priority) {
-    const t = report.tables.find(tbl => tbl.id === id);
-    if (t?.rows.length) return t;
-  }
-  return report.tables.find(t => t.rows.length > 0);
-}
-
 /** Rich markdown for agent chat — answer first, then metrics/detail. */
 export function formatAnalysisReportForAgentChat(
   report: AnalysisReport,
@@ -155,8 +139,8 @@ export function formatAnalysisReportForAgentChat(
     lines.push('');
   }
 
-  const table = pickHighlightTable(report);
-  if (table) {
+  const tablesToShow = report.tables.filter(t => t.rows.length > 0);
+  for (const table of tablesToShow) {
     lines.push(`**${table.title}**`);
     lines.push('');
     if (table.id === 'banner_table' && table.columns.length > 12) {
