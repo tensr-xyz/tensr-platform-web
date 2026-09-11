@@ -1,4 +1,5 @@
 import {
+  derivedDatasetFromToolResults,
   derivedWorkspacePath,
   spreadsheetPatchFromDerivedDataset,
   userFacingSchemaColumns,
@@ -62,6 +63,7 @@ describe('userFacingSchemaColumns', () => {
       { name: 'Pos', type: 'categorical', missing_count: 0 },
       { name: '_row_uid', type: 'categorical', missing_count: 0 },
       { name: '_weight', type: 'numeric', missing_count: 0 },
+      { name: '_source_row_uids', type: 'string', missing_count: 0 },
       { name: 'Age', type: 'numeric', missing_count: 0 },
     ]);
     expect(cols.map(c => c.name)).toEqual(['Pos', 'Age']);
@@ -73,5 +75,53 @@ describe('derivedWorkspacePath', () => {
     expect(derivedWorkspacePath('e5d1c555-9f80-497d-b0fb-2bfa07983d4c', 'nba_recoded.csv')).toBe(
       '/workspace/dataset/e5d1c555-9f80-497d-b0fb-2bfa07983d4c?name=nba_recoded.csv'
     );
+  });
+});
+
+describe('derivedDatasetFromToolResults', () => {
+  it('adopts an auto-persisted speed-cell table from data_edit', () => {
+    const payload = derivedDatasetFromToolResults([
+      {
+        name: 'data_edit',
+        result: {
+          ok: true,
+          executed: true,
+          apply_to_ui: true,
+          derived_dataset_id: 'e49b16bd-2045-4879-8399-ab949fb5efd4',
+          n_rows: 45,
+          derived: {
+            dataset_id: 'e49b16bd-2045-4879-8399-ab949fb5efd4',
+            original_filename: 'wave.csv',
+            n_rows: 45,
+            n_cols: 6,
+            preview: {
+              variable_names: ['Interval', 'Pay', 'Session', 'Time_50', 'Time_90', 'Time_cv'],
+              headers: ['Interval', 'Pay', 'Session', 'Time_50', 'Time_90', 'Time_cv'],
+              rows: [['short', 'high', 1, 0.1, 0.4, 1.0]],
+            },
+          },
+        },
+      },
+    ]);
+    expect(payload?.dataset_id).toBe('e49b16bd-2045-4879-8399-ab949fb5efd4');
+    expect(payload?.n_rows).toBe(45);
+    expect(payload?.preview?.rows).toHaveLength(1);
+  });
+
+  it('does not replace the working wave with a response-speed summary table', () => {
+    expect(
+      derivedDatasetFromToolResults([
+        {
+          name: 'data_edit',
+          result: {
+            ok: true,
+            executed: true,
+            apply_to_ui: false,
+            derived_dataset_id: 'e49b16bd-2045-4879-8399-ab949fb5efd4',
+            n_rows: 45,
+          },
+        },
+      ])
+    ).toBeNull();
   });
 });

@@ -43,7 +43,11 @@ import {
   TooltipTrigger,
 } from '@/components/atoms/tooltip';
 import { cn } from '@/utils';
-import { adoptDerivedDataset, type DerivedDatasetPayload } from '@/lib/adopt-derived-dataset';
+import {
+  adoptDerivedDataset,
+  derivedDatasetFromToolResults,
+  type DerivedDatasetPayload,
+} from '@/lib/adopt-derived-dataset';
 import { getDatasetIdFromTab, resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { dispatchApplyColumnFilters } from '@/lib/spreadsheet-commands';
@@ -640,6 +644,11 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         }
 
         wireAnalysisChainLinks(openedTabs);
+
+        const derivedSheet = derivedDatasetFromToolResults(response.tool_results);
+        if (derivedSheet) {
+          adoptDerivedDataset(derivedSheet);
+        }
 
         if (primaryChatFields) {
           const contentWithEnrichment = enrichmentNotes.length

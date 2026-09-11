@@ -105,4 +105,33 @@ describe('formatAnalysisReportForAgentChat coefficient tables', () => {
     expect(md).toContain('cohs_routine=1');
     expect(md).toContain('cohs_routine=5');
   });
+
+  it('omits equivalent R/SPSS syntax tables from chat', () => {
+    const md = formatAnalysisReportForAgentChat({
+      ...sampleReport(),
+      meta: {
+        ...sampleReport().meta,
+        analysis_key: 'anova_twoway',
+        title: 'Two-Way ANOVA',
+        subtitle: 'Time_90 by Interval × Pay',
+      },
+      tables: [
+        {
+          id: 'anova2',
+          title: 'Type II ANOVA',
+          columns: ['Source', 'F', 'p-value'],
+          rows: [['Interval', '2.4', '.105']],
+        },
+        {
+          id: 'equivalent_syntax',
+          title: 'Equivalent R and SPSS syntax',
+          columns: ['System', 'Syntax'],
+          rows: [['R', "df <- read.csv('dataset.csv')\n# anova_twoway"]],
+        },
+      ],
+    });
+    expect(md).toContain('Type II ANOVA');
+    expect(md).not.toContain('Equivalent R and SPSS syntax');
+    expect(md).not.toContain('# anova_twoway');
+  });
 });

@@ -139,7 +139,7 @@ export function formatAnalysisReportForAgentChat(
     lines.push('');
   }
 
-  const tablesToShow = report.tables.filter(t => t.rows.length > 0);
+  const tablesToShow = report.tables.filter(t => t.rows.length > 0 && t.id !== 'equivalent_syntax');
   for (const table of tablesToShow) {
     lines.push(`**${table.title}**`);
     lines.push('');
