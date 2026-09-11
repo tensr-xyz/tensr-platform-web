@@ -105,6 +105,14 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     baselineGate: 'menu-analysis',
   },
   {
+    prompt:
+      'logistic of Full_retention on Interval and Pay, reference short and low, approvals per 1000',
+    mode: 'agent',
+    expected: 'run_analysis',
+    description: 'Demo: persist refs and per-N must still route to run_analysis',
+    baselineGate: 'menu-analysis',
+  },
+  {
     prompt: 'Could you provide a boxplot for utilisation_rate',
     mode: 'agent',
     expected: 'run_analysis',

@@ -178,6 +178,8 @@ describe('analysis report R syntax badge (menu-catalog)', () => {
       'verified_in_ci'
     );
     expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent(/reference dataset/i);
+    expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent(/not verified against r/i);
+    expect(screen.getByTestId('r-syntax-badge')).not.toHaveTextContent('Verified against R ✓');
 
     rerender(
       <AnalysisReportView

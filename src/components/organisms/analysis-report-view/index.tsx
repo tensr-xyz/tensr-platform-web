@@ -501,9 +501,11 @@ export function AnalysisReportView({
   const rBadge = rSyntaxBadgeText(report.r_syntax_verification);
   const showRBadge = !report.meta.analysis_key.startsWith('plugin:');
   const rBadgeTitle =
-    rBadge.kind === 'verified' || rBadge.kind === 'verified_in_ci'
+    rBadge.kind === 'verified'
       ? 'Verified against R ✓'
-      : 'R syntax';
+      : rBadge.kind === 'not_verified'
+        ? 'R check failed'
+        : 'Not verified against R';
   const canReveal =
     canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
   const rowsUsedLabel = sourceRowsUsedLabel(report.exclusion_summary, report.meta.rows_dataset);
