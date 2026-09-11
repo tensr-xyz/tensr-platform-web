@@ -18,4 +18,11 @@ describe('buildTensrProxyTargetUrl', () => {
       `${API}/api/datasets/abc/schema`
     );
   });
+
+  it('prefixes /api on a custom API host so chat does not 404 at /assistant', () => {
+    const custom = 'https://api.tensr.example';
+    expect(buildTensrProxyTargetUrl(['assistant', 'agent-loop', 'stream'], '', custom)).toBe(
+      `${custom}/api/assistant/agent-loop/stream`
+    );
+  });
 });

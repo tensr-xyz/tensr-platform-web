@@ -7,10 +7,10 @@ export const CHAT_THREAD_CLOSE_BUTTON_CLASS =
 
 export function visibleThinkingLines(
   thinkingLines: string[] | undefined,
-  { hasResult, isStreaming }: { hasResult: boolean; isStreaming: boolean }
+  { isStreaming }: { hasResult: boolean; isStreaming: boolean }
 ): string[] {
   if (!thinkingLines?.length) return [];
-  if (hasResult && !isStreaming) return [];
+  if (!isStreaming) return [];
   return thinkingLines;
 }
 

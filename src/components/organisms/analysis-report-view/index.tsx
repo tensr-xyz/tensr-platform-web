@@ -493,10 +493,11 @@ export function AnalysisReportView({
       ? (rawResult.provenance as Record<string, unknown>)
       : null);
   const provenanceBanner = provenanceBannerText(provenanceTraceState(inspectorProvenance));
-  const statusBanner =
+  const pluginBanner =
     pluginMark && (pluginMark.kind === 'not_verified' || pluginMark.kind === 'unknown')
       ? pluginMark.statement || PLUGIN_UNVERIFIED_STATEMENT
-      : provenanceBanner;
+      : null;
+  const statusBanner = pluginBanner ?? (inspectorProvenance ? null : provenanceBanner);
   const rBadge = rSyntaxBadgeText(report.r_syntax_verification);
   const showRBadge = !report.meta.analysis_key.startsWith('plugin:');
   const canReveal =

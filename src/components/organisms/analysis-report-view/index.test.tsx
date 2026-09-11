@@ -36,9 +36,19 @@ describe('AnalysisReportView provenance banner', () => {
         provenance={{ provenance_unavailable: 'multi_origin' }}
       />
     );
-    const banner = screen.getByText('Traceability').closest('[role="status"]');
-    expect(banner).toHaveTextContent(/provenance unavailable: multi_origin/i);
+    expect(screen.getByTestId('provenance-inspector')).toHaveTextContent(/multi_origin/i);
     expect(screen.queryByText(/traceability unknown/i)).not.toBeInTheDocument();
+  });
+
+  it('does not pair the amber banner with the inspector for the same provenance object', () => {
+    render(
+      <AnalysisReportView
+        report={sampleReport()}
+        provenance={{ provenance_unavailable: 'multi_origin' }}
+      />
+    );
+    expect(screen.getByTestId('provenance-inspector')).toBeInTheDocument();
+    expect(screen.queryByText('Traceability')).not.toBeInTheDocument();
   });
 
   it('shows no provenance banner when the bitset is complete', () => {

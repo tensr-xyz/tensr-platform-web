@@ -22,6 +22,12 @@ describe('agent chat chrome', () => {
     expect(visibleThinkingLines(lines, { hasResult: true, isStreaming: false })).toEqual([]);
   });
 
+  it('hides Working/schema progress after a chat-only answer finishes', () => {
+    const lines = ['Working…', 'Reading dataset schema…', 'Computing the requested summary…'];
+    expect(visibleThinkingLines(lines, { hasResult: false, isStreaming: true })).toEqual(lines);
+    expect(visibleThinkingLines(lines, { hasResult: false, isStreaming: false })).toEqual([]);
+  });
+
   it('accumulates distinct progress lines so the UI can paint each step', () => {
     const first = accumulateThinkingLines(undefined, 'Reading dataset schema…');
     const second = accumulateThinkingLines(first, 'Planning the next step…');

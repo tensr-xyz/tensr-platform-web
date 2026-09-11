@@ -47,4 +47,23 @@ describe('formatApiErrorMessage', () => {
     expect(shown).toBe(paragraph);
     expect(shown).not.toMatch(/"code"/);
   });
+
+  it('does not dump API Gateway {"message":"Not Found"} into chat', () => {
+    const shown = formatApiErrorMessage(new ApiRequestError(404, '{"message":"Not Found"}'));
+    expect(shown.toLowerCase()).not.toBe('not found');
+    expect(shown).not.toMatch(/^\s*\{/);
+    expect(shown.toLowerCase()).toMatch(/assistant|try again|refresh/);
+  });
+
+  it('does not dump FastAPI {"detail":"Not Found"} into chat', () => {
+    const shown = formatApiErrorMessage(new ApiRequestError(404, '{"detail":"Not Found"}'));
+    expect(shown.toLowerCase()).not.toBe('not found');
+    expect(shown.toLowerCase()).toMatch(/assistant|try again|refresh/);
+  });
+
+  it('keeps a real dataset 404', () => {
+    expect(formatApiErrorMessage(new ApiRequestError(404, '{"detail":"Dataset not found"}'))).toBe(
+      'Dataset not found'
+    );
+  });
 });

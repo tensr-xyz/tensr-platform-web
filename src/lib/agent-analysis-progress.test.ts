@@ -1,5 +1,6 @@
 import {
   AGENT_LOOP_INITIAL_PROGRESS,
+  accumulateInterpretedLoopProgress,
   interpretAgentLoopProgressMessage,
   interpretProgressMessage,
 } from './agent-analysis-progress';
@@ -97,5 +98,21 @@ describe('interpretAgentLoopProgressMessage', () => {
         message: 'Planning the next step…',
       })
     ).toBe('Planning the next step…');
+  });
+
+  it('does not stack the raw SSE step name on top of interpreted copy', () => {
+    const first = accumulateInterpretedLoopProgress(undefined, {
+      type: 'tool_start',
+      step: 'run_analysis',
+      message: 'run_analysis',
+    });
+    const second = accumulateInterpretedLoopProgress(first, {
+      type: 'tool_start',
+      step: 'run_analysis',
+      message: 'run_analysis',
+    });
+    expect(first).toEqual(['Working through the analysis…']);
+    expect(second).toEqual(first);
+    expect(second).not.toContain('run_analysis');
   });
 });

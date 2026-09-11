@@ -72,7 +72,10 @@ import {
   logAgentChatRenderPayload,
   preferRicherPlan,
 } from '@/lib/agent-analysis-chat-fields';
-import { interpretAgentLoopProgressMessage } from '@/lib/agent-analysis-progress';
+import {
+  accumulateInterpretedLoopProgress,
+  interpretAgentLoopProgressMessage,
+} from '@/lib/agent-analysis-progress';
 import {
   analysisTabLabel,
   enrichmentCompletionNote,
@@ -103,7 +106,6 @@ import {
 import {
   AgentWorkingLabel,
   ChatThreadCloseButton,
-  accumulateThinkingLines,
   visibleThinkingLines,
 } from './agent-chat-chrome';
 
@@ -513,14 +515,13 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           approvedToolCall: opts.approvedToolCall ?? null,
           approvedToolCalls: opts.approvedToolCalls ?? null,
           onProgress: async progress => {
-            pushAgentProgress(progress);
             const prev = useChatStore
               .getState()
               .getMessages(projectId)
               .find(m => m.id === assistantMessageId)?.thinkingLines;
             flushSync(() => {
               updateMessage(projectId, assistantMessageId, {
-                thinkingLines: accumulateThinkingLines(prev, progress.message),
+                thinkingLines: accumulateInterpretedLoopProgress(prev, progress),
                 isStreaming: true,
               });
             });
@@ -547,10 +548,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           triggerMessage,
           datasetId,
         });
-        updateMessage(projectId, assistantMessageId, {
-          ...patch,
-          thinkingLines: progressLines.length ? [...progressLines] : undefined,
-        });
+        updateMessage(projectId, assistantMessageId, patch);
 
         const execSummary = String(response.execution_summary || '').trim();
         const openedTabs: OpenedAnalysisTab[] = [];

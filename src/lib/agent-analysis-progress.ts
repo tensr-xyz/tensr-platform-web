@@ -47,6 +47,17 @@ export function interpretAgentLoopProgressMessage(
   return AGENT_LOOP_INITIAL_PROGRESS;
 }
 
+/** Live chat progress: interpreted copy only, never the raw SSE step name. */
+export function accumulateInterpretedLoopProgress(
+  prev: string[] | undefined,
+  progress: Pick<AgentLoopStreamProgress, 'type' | 'step' | 'message'>
+): string[] {
+  const line = interpretAgentLoopProgressMessage(progress);
+  if (!line) return prev ?? [];
+  if (prev?.includes(line)) return prev;
+  return [...(prev ?? []), line];
+}
+
 export function analysisLabelForPlan(plan: AgentAnalysisPlan): string {
   if (isAnalysisKey(plan.analysisType)) {
     return ANALYSIS_LABELS[plan.analysisType as AnalysisKey];
