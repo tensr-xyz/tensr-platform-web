@@ -13,6 +13,12 @@ export class ApiRequestError extends Error {
 const SERVICE_UNAVAILABLE =
   'Service timed out or is still starting — wait a few seconds and try again.';
 
+const ASSISTANT_ROUTE_NOT_FOUND = 'The AI assistant could not be reached. Refresh and try again.';
+
+function isGenericHttpNotFound(text: string): boolean {
+  return /^not found$/i.test(text.trim());
+}
+
 const ASSISTANT_ERROR_MESSAGES: Record<string, string> = {
   subscription_required:
     'An active subscription is required to use Tensr. Choose a plan to continue.',
@@ -37,6 +43,9 @@ export function formatApiErrorMessage(error: unknown): string {
       const outer = JSON.parse(jsonMatch[0]) as { detail?: unknown; message?: string };
       const detail = outer.detail;
       if (typeof detail === 'string' && detail.trim()) {
+        if ((status === 404 || status === undefined) && isGenericHttpNotFound(detail)) {
+          return ASSISTANT_ROUTE_NOT_FOUND;
+        }
         return detail;
       }
       if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
@@ -52,10 +61,14 @@ export function formatApiErrorMessage(error: unknown): string {
         }
       }
       if (typeof outer.message === 'string' && outer.message.trim()) {
-        if (status === 503 || /^service unavailable$/i.test(outer.message.trim())) {
+        const msg = outer.message.trim();
+        if (status === 503 || /^service unavailable$/i.test(msg)) {
           return SERVICE_UNAVAILABLE;
         }
-        return outer.message.trim();
+        if (status === 404 && isGenericHttpNotFound(msg)) {
+          return ASSISTANT_ROUTE_NOT_FOUND;
+        }
+        return msg;
       }
     } catch {
       // fall through
@@ -79,6 +92,9 @@ export function formatApiErrorMessage(error: unknown): string {
   }
   if (raw.startsWith('API Error: 504')) {
     return 'The AI service timed out. Try again, or use Manage to run the analysis manually.';
+  }
+  if (status === 404 || raw.startsWith('API Error: 404')) {
+    return ASSISTANT_ROUTE_NOT_FOUND;
   }
 
   if (raw.startsWith('API Error:')) {

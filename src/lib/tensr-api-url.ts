@@ -30,9 +30,20 @@ export function getTensrApiBaseUrl(): string {
   return resolveTensrApiBaseUrl() ?? 'http://127.0.0.1:8000';
 }
 
+function isLocalTensrApi(baseUrl: string): boolean {
+  try {
+    const host = new URL(baseUrl).hostname.toLowerCase();
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]';
+  } catch {
+    return /localhost|127\.0\.0\.1/i.test(baseUrl);
+  }
+}
+
 /** True when the UI talks to split Lambda stacks behind API Gateway (not local uvicorn monolith). */
 export function isRemoteTensrApi(baseUrl: string = getTensrApiBaseUrl()): boolean {
-  return /execute-api\.[^.]+\.amazonaws\.com/i.test(baseUrl);
+  if (!baseUrl) return false;
+  if (isLocalTensrApi(baseUrl)) return false;
+  return /^https?:\/\//i.test(baseUrl) || /execute-api\./i.test(baseUrl);
 }
 
 /**
