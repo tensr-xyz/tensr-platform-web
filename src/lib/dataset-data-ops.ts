@@ -36,12 +36,36 @@ export type DuplicateDetectionResult = {
   affected_rows: number[];
 };
 
+export type MergeReport = {
+  how?: string;
+  row_count?: number;
+  unmatched_left_count?: number;
+  unmatched_right_count?: number;
+  unmatched_left_keys?: string[];
+  unmatched_right_keys?: string[];
+  duplicate_key_count_left?: number;
+  duplicate_key_count_right?: number;
+  columns_only_left?: string[];
+  columns_only_right?: string[];
+  column_suffixes?: string[];
+};
+
+export type MergeDatasetsPayload = {
+  secondary_dataset_id: string;
+  merge_type: 'add_cases' | 'add_variables' | 'stack' | 'inner' | 'left' | 'right' | 'outer';
+  keys?: string[];
+  allow_many?: boolean;
+  preview?: boolean;
+};
+
 export type DerivedDatasetResult = {
   dataset_id: string;
+  derived_dataset_id?: string;
   original_filename: string;
   n_rows: number;
   n_cols: number;
   replaced_values_count?: number;
+  merge_report?: MergeReport;
   preview?: {
     headers: string[];
     variable_names: string[];
@@ -74,12 +98,23 @@ export function imputeDatasetMissing(
   return authedJson<DerivedDatasetResult>(`/datasets/${datasetId}/impute-missing`, payload, token);
 }
 
+export type MergePreviewResult = {
+  preview: true;
+  row_count: number;
+  columns: string[];
+  merge_report: MergeReport;
+};
+
 export function mergeDatasets(
   datasetId: string,
-  payload: { secondary_dataset_id: string; merge_type: 'add_cases' | 'add_variables' },
+  payload: MergeDatasetsPayload,
   token?: string | null
 ) {
-  return authedJson<DerivedDatasetResult>(`/datasets/${datasetId}/merge`, payload, token);
+  return authedJson<DerivedDatasetResult | MergePreviewResult>(
+    `/datasets/${datasetId}/merge`,
+    payload,
+    token
+  );
 }
 
 export function standardizeDataset(
