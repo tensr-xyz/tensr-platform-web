@@ -14,7 +14,7 @@ import {
   MessageScrollerItem,
   MessageScrollerViewport,
 } from '@/components/molecules/message-scroller';
-import { Send, AlertCircle, Trash2, History, Plus } from 'lucide-react';
+import { Send, AlertCircle, Trash2, History, Plus, Paperclip } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
@@ -102,6 +102,7 @@ import {
   deriveMessageUpdateFromLoopResponse,
   runAgentLoop,
   type AgentLoopApprovedToolCall,
+  type AgentLoopAttachment,
 } from '@/lib/run-agent-loop';
 import {
   AgentWorkingLabel,
@@ -419,6 +420,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   }, [messages, activeApprovalMessageId]);
 
   const [inputMessage, setInputMessage] = useState('');
+  const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
+  const attachmentsRef = useRef(attachments);
+  attachmentsRef.current = attachments;
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [busyMessageId, setBusyMessageId] = useState<string | null>(null);
   const [showRuns, setShowRuns] = useState(false);
   const [slashColumnsOpen, setSlashColumnsOpen] = useState(false);
@@ -472,7 +477,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       approvedToolCalls?: AgentLoopApprovedToolCall[];
       triggerMessage?: string;
       conversationHistory?: ReturnType<typeof buildAgentConversationHistory>;
+      attachments?: AgentLoopAttachment[];
     }) => {
+      const turnAttachments = opts.attachments ?? attachmentsRef.current;
       const datasetId = workspaceDatasetId ?? getDatasetIdFromTab(activeTab);
       const openDatasets = collectOpenDatasetsFromTabs(tabs);
       const conversationHistory =
@@ -514,6 +521,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           glossary: projectGlossary,
           approvedToolCall: opts.approvedToolCall ?? null,
           approvedToolCalls: opts.approvedToolCalls ?? null,
+          attachments: turnAttachments,
           onProgress: async progress => {
             const prev = useChatStore
               .getState()
@@ -547,7 +555,11 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         const patch = deriveMessageUpdateFromLoopResponse(response, {
           triggerMessage,
           datasetId,
+          attachments: turnAttachments,
         });
+        if (response.status === 'ok' && response.approved_execution) {
+          setAttachments([]);
+        }
         updateMessage(projectId, assistantMessageId, patch);
 
         const execSummary = String(response.execution_summary || '').trim();
@@ -703,12 +715,40 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     ]
   );
 
+  const attachFiles = async (list: FileList | null) => {
+    if (!list?.length) return;
+    const next: AgentLoopAttachment[] = [];
+    const rejected: string[] = [];
+    for (const file of Array.from(list)) {
+      if (!/\.(csv|xlsx|xls|sav)$/i.test(file.name)) {
+        rejected.push(`${file.name} must be CSV, Excel, or .sav`);
+        continue;
+      }
+      if (file.size > 8 * 1024 * 1024) {
+        rejected.push(`${file.name} is larger than 8 MB`);
+        continue;
+      }
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let binary = '';
+      const chunk = 0x8000;
+      for (let offset = 0; offset < bytes.length; offset += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(offset, offset + chunk));
+      }
+      next.push({ filename: file.name, content_base64: btoa(binary) });
+    }
+    if (rejected.length) setError(projectId, rejected.join(' '));
+    if (next.length) setAttachments(current => [...current, ...next]);
+  };
+
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || isLoading) return;
 
+    const attachmentNote = attachments.length
+      ? `Attached: ${attachments.map(file => file.filename).join(', ')}`
+      : '';
     const userMessage = {
       role: 'user' as const,
-      content: inputMessage,
+      content: attachmentNote ? `${inputMessage}\n\n${attachmentNote}` : inputMessage,
       timestamp: new Date(),
     };
 
@@ -725,6 +765,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         message: currentMessage,
         triggerMessage: currentMessage,
         conversationHistory: buildAgentConversationHistory([...messages, userMessage]),
+        attachments,
       });
     } catch (err: unknown) {
       setError(projectId, formatApiErrorMessage(err));
@@ -1197,6 +1238,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         await invokeAgentLoop({
           message: action.triggerMessage,
           assistantMessageId: messageId,
+          attachments: action.attachments?.length ? action.attachments : attachmentsRef.current,
           approvedToolCall: pipeline?.length
             ? undefined
             : {
@@ -1717,6 +1759,25 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             </MessageScroller>
 
             <div className="shrink-0 bg-background px-3.5 pt-2 pb-1">
+              {attachments.length ? (
+                <div className="mb-1.5 flex flex-wrap gap-1">
+                  {attachments.map(file => (
+                    <button
+                      key={file.filename}
+                      type="button"
+                      className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                      onClick={() =>
+                        setAttachments(current =>
+                          current.filter(item => item.filename !== file.filename)
+                        )
+                      }
+                      title={`Remove ${file.filename}`}
+                    >
+                      {file.filename} ×
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <div
                 className={cn(
                   'grid gap-x-1.5 gap-y-2 rounded-xl border border-border bg-muted/40 px-2 py-1.5 transition-shadow',
@@ -1778,10 +1839,33 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                               </CommandItem>
                             ))}
                           </CommandGroup>
+                          <CommandGroup heading="Files">
+                            <CommandItem
+                              value="Attach CSV Excel SPSS"
+                              onSelect={() => {
+                                setPlusMenuOpen(false);
+                                fileInputRef.current?.click();
+                              }}
+                            >
+                              <Paperclip className="size-3" aria-hidden />
+                              <span>Attach CSV, Excel, or SPSS</span>
+                            </CommandItem>
+                          </CommandGroup>
                         </CommandList>
                       </Command>
                     </PopoverContent>
                   </Popover>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls,.sav,text/csv"
+                    multiple
+                    className="hidden"
+                    onChange={event => {
+                      void attachFiles(event.target.files);
+                      event.target.value = '';
+                    }}
+                  />
                 </div>
 
                 <div

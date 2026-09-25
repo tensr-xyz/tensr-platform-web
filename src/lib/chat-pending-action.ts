@@ -95,6 +95,8 @@ export type ChatPendingAction =
       rationale?: string;
       whyThisTest?: string;
       triggerMessage: string;
+      /** Files from the turn that proposed this plan. Approval resends them. */
+      attachments?: Array<{ filename: string; content_base64: string; role?: string | null }>;
       errorMessage?: string;
       /** When set, one Approve runs the full Plan-mode pipeline. */
       pipelineSteps?: Array<{
