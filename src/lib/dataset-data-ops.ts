@@ -105,6 +105,18 @@ export type MergePreviewResult = {
   merge_report: MergeReport;
 };
 
+export function replayOperations(
+  datasetId: string,
+  payload: { operation_list: Record<string, unknown>; inputs?: Record<string, string> },
+  token?: string | null
+) {
+  return authedJson<DerivedDatasetResult & { replay_report?: Record<string, unknown> }>(
+    `/datasets/${datasetId}/operations/replay`,
+    payload,
+    token
+  );
+}
+
 export function setActiveWeight(datasetId: string, column: string | null, token?: string | null) {
   return authedJson<{ ok: boolean; active_weight_column: string | null; warnings: string[] }>(
     `/datasets/${datasetId}/weights/active`,

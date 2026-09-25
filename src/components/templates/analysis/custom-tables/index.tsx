@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
-import { setActiveWeight } from '@/lib/dataset-data-ops';
+import { replayOperations, setActiveWeight } from '@/lib/dataset-data-ops';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
 import {
   getDatasetIdFromTab,
@@ -728,6 +728,40 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
             }}
           >
             Reset
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={busy || !datasetId}
+            onClick={() => {
+              if (!datasetId) return;
+              setBusy(true);
+              setError(null);
+              void replayOperations(
+                datasetId,
+                {
+                  operation_list: {
+                    schema_version: 1,
+                    ops: [
+                      { op: 'import', role: 'survey' },
+                      {
+                        op: 'table_spec',
+                        input: 'survey',
+                        spec: buildTableRequest(canvas),
+                      },
+                    ],
+                  },
+                },
+                token
+              )
+                .then(() => setError(null))
+                .catch(err =>
+                  setError(err instanceof Error ? err.message : 'Could not run these tables')
+                )
+                .finally(() => setBusy(false));
+            }}
+          >
+            Run these tables on this file
           </Button>
           <Button type="button" onClick={() => void run()} disabled={busy}>
             {busy ? 'Running…' : 'Run and save'}
