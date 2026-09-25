@@ -113,7 +113,7 @@ export const TECHNIQUE_CONFIGS: Record<string, TechniqueConfig> = {
   'Brand Funnel': {
     label: 'Brand Funnel',
     route: 'techniques/funnel',
-    analysisOp: 'brand_funnel',
+    analysisOp: 'funnel',
     fields: [{ kind: 'columns', key: 'stages', label: 'Stage columns' }],
   },
   'MaxDiff (Count)': {
