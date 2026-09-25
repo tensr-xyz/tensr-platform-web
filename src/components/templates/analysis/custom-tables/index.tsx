@@ -455,6 +455,11 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               />
               Column letters
             </label>
+            <p className="text-[10px] text-muted-foreground sm:col-span-2">
+              A letter is shown only when the corrected pairwise test passes (adjusted p &lt; .05).
+              Lowercase is .001 &lt; p &lt; .05. Uppercase is p ≤ .001. Letters in one cell are
+              concatenated, so BD means that cell differs from columns B and D.
+            </p>
             <div className="sm:col-span-2">
               <Label className="text-[10px] uppercase text-muted-foreground">Weight</Label>
               <Select value={weightChoice} onValueChange={setWeightChoice}>

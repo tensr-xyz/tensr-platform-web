@@ -5,6 +5,8 @@ export type BannerBookCell = {
   stub_row_id?: string;
   percent?: number | null;
   row_percent?: number | null;
+  mean?: number | null;
+  sd?: number | null;
   unweighted_n?: number | null;
   weighted_n?: number | null;
   kish_ess?: number | null;
@@ -64,6 +66,13 @@ function fmtNum(value: number | null | undefined): string {
   return Number.isInteger(value) ? String(value) : Number(value).toFixed(1);
 }
 
+function fmtMean(cell: BannerBookCell): string | null {
+  if (cell.mean == null || Number.isNaN(Number(cell.mean))) return null;
+  const mean = Number(cell.mean).toFixed(2);
+  if (cell.sd == null || Number.isNaN(Number(cell.sd))) return mean;
+  return `${mean} (SD ${Number(cell.sd).toFixed(2)})`;
+}
+
 export function displayBannerTable(book: BannerBook): DisplayTable {
   const headers = (book.banner_columns || []).map(col => ({
     id: col.id,
@@ -73,7 +82,10 @@ export function displayBannerTable(book: BannerBook): DisplayTable {
   const letterMap = new Map<string, string>();
   for (const item of book.letters || []) {
     const key = `${item.stub_row_id}::${item.banner_id}`;
-    letterMap.set(key, item.letter_display || item.letter || '');
+    const next = item.letter_display || item.letter || '';
+    if (!next) continue;
+    const prev = letterMap.get(key) || '';
+    letterMap.set(key, prev.includes(next) ? prev : `${prev}${next}`);
   }
   const rows: DisplayRow[] = (book.rows || []).map(row => ({
     id: row.id,
@@ -82,7 +94,7 @@ export function displayBannerTable(book: BannerBook): DisplayTable {
     cells: (row.cells || []).map(cell => {
       const lowBase = Boolean(cell.low_base_suppressed);
       return {
-        columnPercent: lowBase ? '*' : fmtPct(cell.percent),
+        columnPercent: lowBase ? '*' : (fmtMean(cell) ?? fmtPct(cell.percent)),
         rowPercent: lowBase ? '*' : fmtPct(cell.row_percent),
         letters: letterMap.get(`${cell.stub_row_id}::${cell.banner_id}`) || '',
         bases: `n=${fmtNum(cell.unweighted_n)} · wn=${fmtNum(cell.weighted_n)} · ESS=${fmtNum(cell.kish_ess)}`,
