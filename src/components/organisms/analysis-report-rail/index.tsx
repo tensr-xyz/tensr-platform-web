@@ -111,6 +111,7 @@ type Props = {
   onAnnotationTargetChange?: (target: string | undefined) => void;
   onAnnotationComposerOpenChange?: (open: boolean) => void;
   onAddAnnotation?: (text: string) => void;
+  onResolveAnnotation?: (id: string, resolved: boolean) => void;
 };
 
 export function AnalysisReportRail({
@@ -135,6 +136,7 @@ export function AnalysisReportRail({
   onAnnotationTargetChange,
   onAnnotationComposerOpenChange,
   onAddAnnotation,
+  onResolveAnnotation,
 }: Props) {
   const [draft, setDraft] = React.useState('');
   const [otherRuns, setOtherRuns] = React.useState<StoredAnalysisRun[]>([]);
@@ -276,8 +278,19 @@ export function AnalysisReportRail({
                   ) : null}
                   <p>{note.text}</p>
                   <p className="mt-1 text-[9px] text-muted-foreground">
+                    {note.authorName ? `${note.authorName} · ` : ''}
                     {new Date(note.createdAt).toLocaleString()}
+                    {note.resolved ? ' · resolved' : ''}
                   </p>
+                  {onResolveAnnotation ? (
+                    <button
+                      type="button"
+                      className="mt-1 text-[10px] text-primary"
+                      onClick={() => onResolveAnnotation(note.id, !note.resolved)}
+                    >
+                      {note.resolved ? 'Reopen' : 'Resolve'}
+                    </button>
+                  ) : null}
                 </div>
               ))}
             </div>
