@@ -108,6 +108,11 @@ interface UseOrganizationReturn {
   ) => Promise<Organization>;
   deleteOrganization: (orgId: string) => Promise<boolean>;
   members: OrganizationMember[];
+  seatUsage: {
+    used: number;
+    max_team_seats: number | null;
+    pending_invites: number;
+  } | null;
   addMember: (
     orgId: string,
     userId: string,
@@ -176,6 +181,11 @@ export const useOrganization = (): UseOrganizationReturn => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [seatUsage, setSeatUsage] = useState<{
+    used: number;
+    max_team_seats: number | null;
+    pending_invites: number;
+  } | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -418,6 +428,7 @@ export const useOrganization = (): UseOrganizationReturn => {
       const data = await response.json();
       const orgMembers = data.members || [];
       setMembers(orgMembers);
+      setSeatUsage(data.seats || null);
       return orgMembers;
     } catch (err: any) {
       console.error('Error fetching members:', err);
@@ -1044,6 +1055,7 @@ export const useOrganization = (): UseOrganizationReturn => {
     updateOrganization,
     deleteOrganization,
     members,
+    seatUsage,
     addMember,
     removeMember,
     updateMemberRole,

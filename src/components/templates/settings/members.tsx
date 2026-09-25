@@ -36,6 +36,7 @@ export default function TeamMembers() {
   const {
     activeOrganization,
     members,
+    seatUsage,
     fetchMembers,
     createInvitation,
     removeMember,
@@ -189,7 +190,10 @@ export default function TeamMembers() {
           <div>
             <h3 className="text-base font-medium">Team members</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              People with access to this organization
+              {seatUsage?.max_team_seats
+                ? `${seatUsage.used} of ${seatUsage.max_team_seats} seats`
+                : 'People with access to this organization'}
+              {seatUsage?.pending_invites ? ` · ${seatUsage.pending_invites} pending` : ''}
             </p>
           </div>
           <Button onClick={handleAddButtonClick} size="sm">
