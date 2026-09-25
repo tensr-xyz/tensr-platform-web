@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
+import { setActiveWeight } from '@/lib/dataset-data-ops';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
 import {
   getDatasetIdFromTab,
@@ -89,6 +90,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [book, setBook] = useState<BannerBook | null>(null);
   const [weightOptions, setWeightOptions] = useState<WeightOption[]>([]);
   const [weightChoice, setWeightChoice] = useState<string>('');
+  const [activeWeightColumn, setActiveWeightColumn] = useState<string>('none');
+  const [weightWarnings, setWeightWarnings] = useState<string[]>([]);
   const [previewWarning, setPreviewWarning] = useState<string | null>(null);
   const [savedSpecs, setSavedSpecs] = useState<SavedTableSpecRow[]>([]);
   const [activeSpecId, setActiveSpecId] = useState<string | null>(null);
@@ -467,6 +470,46 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                 </SelectContent>
               </Select>
               <p className="mt-1 text-[11px] text-muted-foreground">{WEIGHT_CROSSTAB_COPY}</p>
+              <Label className="mt-2 text-[10px] uppercase text-muted-foreground">
+                Active weight column
+              </Label>
+              <div className="mt-1 flex gap-2">
+                <Select value={activeWeightColumn} onValueChange={setActiveWeightColumn}>
+                  <SelectTrigger className="h-8 text-xs">
+                    <SelectValue placeholder="No active weight" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No active weight</SelectItem>
+                    {columns.map(col => (
+                      <SelectItem key={col.id} value={col.id}>
+                        {col.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    if (!datasetId) return;
+                    setError(null);
+                    try {
+                      const result = await setActiveWeight(
+                        datasetId,
+                        activeWeightColumn === 'none' ? null : activeWeightColumn,
+                        token
+                      );
+                      setWeightWarnings(result.warnings || []);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : 'Could not set the weight');
+                    }
+                  }}
+                >
+                  Set weight
+                </Button>
+              </div>
+              {weightWarnings.length > 0 && (
+                <p className="mt-1 text-[11px] text-muted-foreground">{weightWarnings.join(' ')}</p>
+              )}
             </div>
           </div>
           {largeBanner ? (

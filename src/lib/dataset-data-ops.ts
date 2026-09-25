@@ -105,6 +105,14 @@ export type MergePreviewResult = {
   merge_report: MergeReport;
 };
 
+export function setActiveWeight(datasetId: string, column: string | null, token?: string | null) {
+  return authedJson<{ ok: boolean; active_weight_column: string | null; warnings: string[] }>(
+    `/datasets/${datasetId}/weights/active`,
+    { column },
+    token
+  );
+}
+
 export function mergeDatasets(
   datasetId: string,
   payload: MergeDatasetsPayload,
