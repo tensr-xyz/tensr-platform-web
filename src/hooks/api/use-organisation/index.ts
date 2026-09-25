@@ -24,6 +24,7 @@ function mapApiOrganization(raw: Record<string, unknown>): Organization {
     description: raw.description as string | undefined,
     slug: raw.slug as string | undefined,
     logoUrl: raw.logo_url as string | undefined,
+    privacyMode: raw.privacy_mode === 'schema_only' ? 'schema_only' : 'full',
   };
 }
 
@@ -38,6 +39,7 @@ export interface Organization {
   role: 'ADMIN' | 'MEMBER' | 'VIEWER'; // User's role in this organization
   slug?: string;
   logoUrl?: string;
+  privacyMode?: 'full' | 'schema_only';
 }
 
 export interface OrganizationMember {
@@ -104,7 +106,12 @@ interface UseOrganizationReturn {
   }) => Promise<Organization>;
   updateOrganization: (
     orgId: string,
-    data: { name?: string; description?: string; settings?: any }
+    data: {
+      name?: string;
+      description?: string;
+      settings?: any;
+      privacy_mode?: 'full' | 'schema_only';
+    }
   ) => Promise<Organization>;
   deleteOrganization: (orgId: string) => Promise<boolean>;
   members: OrganizationMember[];
@@ -304,7 +311,12 @@ export const useOrganization = (): UseOrganizationReturn => {
   // Function to update an organization
   const updateOrganization = async (
     orgId: string,
-    data: { name?: string; description?: string; settings?: any }
+    data: {
+      name?: string;
+      description?: string;
+      settings?: any;
+      privacy_mode?: 'full' | 'schema_only';
+    }
   ): Promise<Organization> => {
     try {
       setIsLoading(true);
@@ -331,7 +343,13 @@ export const useOrganization = (): UseOrganizationReturn => {
         );
       }
 
-      const updatedOrg = await response.json();
+      const payload = await response.json();
+      const raw = (payload.organization ?? payload) as Record<string, unknown>;
+      const previous = organizations.find(org => org.id === orgId);
+      const updatedOrg = mapApiOrganization({
+        ...raw,
+        role: raw.role ?? previous?.role,
+      });
 
       // Update local state
       setOrganizations(prev => prev.map(org => (org.id === orgId ? updatedOrg : org)));
