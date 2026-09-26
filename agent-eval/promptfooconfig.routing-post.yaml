@@ -29,6 +29,8 @@ tests:
     assert: [{ type: equals, value: "run_analysis" }]
   - vars: { prompt: "one-way ANOVA", mode: agent }
     assert: [{ type: equals, value: "run_analysis" }]
+  - vars: { prompt: "logistic of Full_retention on Interval and Pay, reference short and low, approvals per 1000", mode: agent }
+    assert: [{ type: equals, value: "run_analysis" }]
   - vars: { prompt: "Could you provide a boxplot for utilisation_rate", mode: agent }
     assert: [{ type: equals, value: "run_analysis" }]
   - vars: { prompt: "Run a data quality scan", mode: agent }

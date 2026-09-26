@@ -3,7 +3,7 @@ import { useTabsStore } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
 
 /** Lineage internals — never show these as spreadsheet columns after a transform. */
-export const LINEAGE_HIDDEN_COLUMNS = new Set(['_row_uid', '_weight']);
+export const LINEAGE_HIDDEN_COLUMNS = new Set(['_row_uid', '_weight', '_source_row_uids']);
 
 export function userFacingSchemaColumns<T extends { name: string }>(columns: T[]): T[] {
   return columns.filter(c => Boolean(c.name) && !LINEAGE_HIDDEN_COLUMNS.has(c.name));
@@ -21,6 +21,33 @@ export type DerivedDatasetPayload = {
     columns?: Array<{ name: string; type?: string; label?: string | null }>;
   };
 };
+
+export function derivedDatasetFromToolResults(
+  toolResults: Array<{ name?: string; result?: Record<string, unknown> | null }> | undefined
+): DerivedDatasetPayload | null {
+  for (const entry of toolResults ?? []) {
+    if (entry.name !== 'data_edit') continue;
+    const result = entry.result;
+    if (!result || result.ok === false || result.executed !== true) continue;
+    if (result.apply_to_ui === false) continue;
+    const nested =
+      result.derived && typeof result.derived === 'object'
+        ? (result.derived as Record<string, unknown>)
+        : null;
+    const id = String(result.derived_dataset_id || nested?.dataset_id || '').trim();
+    if (!id) continue;
+    return {
+      dataset_id: id,
+      original_filename:
+        typeof nested?.original_filename === 'string' ? nested.original_filename : undefined,
+      n_rows:
+        typeof result.n_rows === 'number' ? result.n_rows : (nested?.n_rows as number | undefined),
+      n_cols: typeof nested?.n_cols === 'number' ? nested.n_cols : undefined,
+      preview: nested?.preview as DerivedDatasetPayload['preview'],
+    };
+  }
+  return null;
+}
 
 export function derivedWorkspacePath(datasetId: string, filename?: string): string {
   const name = filename?.trim();

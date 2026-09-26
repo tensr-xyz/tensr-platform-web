@@ -114,7 +114,7 @@ describe('analysis report F/n click-through (menu-catalog)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /show rows for f statistic/i }));
     expect(onReveal).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: /show rows for n = 504/i }));
+    fireEvent.click(screen.getByRole('button', { name: /504 of 505 source rows used/i }));
     expect(onReveal).toHaveBeenCalledTimes(2);
   });
 
@@ -122,7 +122,7 @@ describe('analysis report F/n click-through (menu-catalog)', () => {
     const onReveal = jest.fn();
     render(<AnalysisReportView report={sampleReport()} onRevealConsumedRows={onReveal} />);
     expect(screen.queryByRole('button', { name: /show rows for f statistic/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /show rows for n = 504/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /504 of 505 source rows used/i })).toBeNull();
   });
 
   it('does not offer F/n click-through when provenance is unavailable', () => {
@@ -135,7 +135,7 @@ describe('analysis report F/n click-through (menu-catalog)', () => {
       />
     );
     expect(screen.queryByRole('button', { name: /show rows for f statistic/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /show rows for n = 504/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /504 of 505 source rows used/i })).toBeNull();
   });
 });
 
@@ -178,6 +178,8 @@ describe('analysis report R syntax badge (menu-catalog)', () => {
       'verified_in_ci'
     );
     expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent(/reference dataset/i);
+    expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent(/not verified against r/i);
+    expect(screen.getByTestId('r-syntax-badge')).not.toHaveTextContent('Verified against R ✓');
 
     rerender(
       <AnalysisReportView

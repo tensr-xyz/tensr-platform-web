@@ -43,7 +43,11 @@ import {
   TooltipTrigger,
 } from '@/components/atoms/tooltip';
 import { cn } from '@/utils';
-import { adoptDerivedDataset, type DerivedDatasetPayload } from '@/lib/adopt-derived-dataset';
+import {
+  adoptDerivedDataset,
+  derivedDatasetFromToolResults,
+  type DerivedDatasetPayload,
+} from '@/lib/adopt-derived-dataset';
 import { getDatasetIdFromTab, resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { dispatchApplyColumnFilters } from '@/lib/spreadsheet-commands';
@@ -72,10 +76,7 @@ import {
   logAgentChatRenderPayload,
   preferRicherPlan,
 } from '@/lib/agent-analysis-chat-fields';
-import {
-  accumulateInterpretedLoopProgress,
-  interpretAgentLoopProgressMessage,
-} from '@/lib/agent-analysis-progress';
+import { accumulateInterpretedLoopProgress } from '@/lib/agent-analysis-progress';
 import {
   analysisTabLabel,
   enrichmentCompletionNote,
@@ -488,20 +489,6 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           timestamp: new Date(),
         });
 
-      const progressLines: string[] = [];
-      const seenProgress = new Set<string>();
-      const pushAgentProgress = (progress: { type: string; step: string; message: string }) => {
-        const line = interpretAgentLoopProgressMessage(progress);
-        if (!line || seenProgress.has(line)) return;
-        seenProgress.add(line);
-        progressLines.push(line);
-        updateMessage(projectId, assistantMessageId, {
-          thinkingLines: [...progressLines],
-          isStreaming: true,
-        });
-      };
-
-      pushAgentProgress({ type: 'progress', step: 'start', message: '' });
       setLoading(projectId, false);
 
       try {
@@ -657,6 +644,11 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         }
 
         wireAnalysisChainLinks(openedTabs);
+
+        const derivedSheet = derivedDatasetFromToolResults(response.tool_results);
+        if (derivedSheet) {
+          adoptDerivedDataset(derivedSheet);
+        }
 
         if (primaryChatFields) {
           const contentWithEnrichment = enrichmentNotes.length
