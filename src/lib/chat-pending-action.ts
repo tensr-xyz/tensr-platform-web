@@ -97,6 +97,8 @@ export type ChatPendingAction =
       triggerMessage: string;
       /** Files from the turn that proposed this plan. Approval resends them. */
       attachments?: Array<{ filename: string; content_base64: string; role?: string | null }>;
+      /** Datasets created for this plan. Skip deletes them; an approved plan keeps them. */
+      stagedDatasetIds?: string[];
       errorMessage?: string;
       /** When set, one Approve runs the full Plan-mode pipeline. */
       pipelineSteps?: Array<{

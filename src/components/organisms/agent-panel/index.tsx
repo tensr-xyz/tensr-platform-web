@@ -1147,6 +1147,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       return;
     }
 
+    if (action.kind === 'agent_tool_approval' && action.stagedDatasetIds?.length) {
+      void apiClient.assistant.discardStagedImports(action.stagedDatasetIds).catch(() => undefined);
+    }
+
     updateMessage(projectId, messageId, {
       pendingAction: patchPendingAction(action, { status: 'skipped' }),
     });

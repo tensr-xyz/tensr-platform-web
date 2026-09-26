@@ -998,6 +998,11 @@ class ApiClient {
           conversation_history: data.conversationHistory ?? null,
         }),
       }),
+    discardStagedImports: (datasetIds: string[]) =>
+      this.request<{ ok: boolean; removed: string[] }>('/assistant/staged-imports/discard', {
+        method: 'POST',
+        body: JSON.stringify({ dataset_ids: datasetIds }),
+      }),
     agentLoop: (data: {
       message: string;
       mode: 'ask' | 'plan' | 'agent';

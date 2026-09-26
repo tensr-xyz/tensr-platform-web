@@ -48,6 +48,8 @@ export type AgentLoopResponse = {
   pending_approvals?: AgentLoopApprovedToolCall[];
   pipeline?: boolean;
   approval_batch?: boolean;
+  /** Imports created when the plan was proposed. Skip deletes these; approval reuses them. */
+  staged_dataset_ids?: string[];
   pipeline_halted?: boolean;
   failed_step_index?: number;
   reapprove_pipeline?: boolean;
@@ -272,6 +274,7 @@ export function deriveMessageUpdateFromLoopResponse(
           whyThisTest: primary.why_this_test,
           triggerMessage: context.triggerMessage,
           attachments: context.attachments ?? undefined,
+          stagedDatasetIds: response.staged_dataset_ids,
           coverageLine: primary.coverage_line,
           pipelineSteps: approvals.length > 1 ? approvals : undefined,
         },
