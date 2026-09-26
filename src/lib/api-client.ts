@@ -1095,6 +1095,12 @@ class ApiClient {
 
     get: (id: string) => this.request<any>(`/datasets/${id}`),
 
+    getMetadata: (datasetId: string) =>
+      this.request<{
+        dataset_id: string;
+        active_weight_column?: string | null;
+      }>(`/datasets/${datasetId}/metadata`),
+
     getSchema: (datasetId: string) =>
       this.request<{
         dataset_id: string;
