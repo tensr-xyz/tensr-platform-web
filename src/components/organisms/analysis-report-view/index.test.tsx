@@ -36,19 +36,44 @@ describe('AnalysisReportView provenance banner', () => {
         provenance={{ provenance_unavailable: 'multi_origin' }}
       />
     );
-    expect(screen.getByTestId('provenance-inspector')).toHaveTextContent(/multi_origin/i);
+    const banner = screen.getByText('Traceability').closest('[role="status"]');
+    expect(banner).toHaveTextContent(/provenance unavailable: multi_origin/i);
     expect(screen.queryByText(/traceability unknown/i)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('provenance-inspector')).not.toBeInTheDocument();
   });
 
-  it('does not pair the amber banner with the inspector for the same provenance object', () => {
+  it('leads with Verified against R and source-row lineage, not convention jargon', () => {
     render(
       <AnalysisReportView
-        report={sampleReport()}
-        provenance={{ provenance_unavailable: 'multi_origin' }}
+        report={sampleReport({
+          exclusion_summary: { rows_total: 505, rows_used: 504, rows_excluded: 1 },
+          r_syntax_verification: {
+            kind: 'verified',
+            statement: 'R reproduced F, df and n.',
+          },
+          reproducibility: { r_script: 'aov(Time_90 ~ Interval, data = d)' },
+          spss_syntax: 'ONEWAY Time_90 BY Interval.',
+        })}
+        provenance={{
+          row_uid_bitset: 'BQ==',
+          row_uid_bitset_miss_count: 0,
+          convention: { variance_mode: 'q_taylor_srs', test_type: 't' },
+        }}
+        onRevealConsumedRows={() => undefined}
       />
     );
-    expect(screen.getByTestId('provenance-inspector')).toBeInTheDocument();
-    expect(screen.queryByText('Traceability')).not.toBeInTheDocument();
+    expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent('Verified against R ✓');
+    expect(screen.getByTestId('r-equivalent-syntax')).toHaveTextContent(
+      'aov(Time_90 ~ Interval, data = d)'
+    );
+    expect(screen.getByTestId('spss-equivalent-syntax')).toHaveTextContent(
+      'ONEWAY Time_90 BY Interval.'
+    );
+    expect(
+      screen.getByRole('button', { name: /504 of 505 source rows used/i })
+    ).toBeInTheDocument();
+    expect(screen.queryByText('variance_mode')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('provenance-inspector')).not.toBeInTheDocument();
   });
 
   it('shows no provenance banner when the bitset is complete', () => {

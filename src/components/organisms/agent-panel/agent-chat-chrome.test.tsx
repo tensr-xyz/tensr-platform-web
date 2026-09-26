@@ -24,8 +24,16 @@ describe('agent chat chrome', () => {
 
   it('hides Working/schema progress after a chat-only answer finishes', () => {
     const lines = ['Working…', 'Reading dataset schema…', 'Computing the requested summary…'];
-    expect(visibleThinkingLines(lines, { hasResult: false, isStreaming: true })).toEqual(lines);
+    expect(visibleThinkingLines(lines, { hasResult: false, isStreaming: true })).toEqual([
+      'Reading dataset schema…',
+      'Computing the requested summary…',
+    ]);
     expect(visibleThinkingLines(lines, { hasResult: false, isStreaming: false })).toEqual([]);
+  });
+
+  it('drops the static Working… seed so only the pulse label remains', () => {
+    expect(visibleThinkingLines(['Working…'], { hasResult: false, isStreaming: true })).toEqual([]);
+    expect(visibleThinkingLines(['Working'], { hasResult: false, isStreaming: true })).toEqual([]);
   });
 
   it('accumulates distinct progress lines so the UI can paint each step', () => {
