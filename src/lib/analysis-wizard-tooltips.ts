@@ -14,10 +14,7 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
       'You are exploring a new dataset and need to understand the scale, spread, and shape of your variables.',
       'You need to check for extreme values or unusual distributions before modelling.',
     ],
-    assumptions: [
-      'None. Descriptive statistics make no distributional assumptions.',
-      'Results reflect the 250-row preview sample, not the full dataset.',
-    ],
+    assumptions: ['None. Descriptive statistics make no distributional assumptions.'],
     output: [
       'Count (non-missing cases), mean, standard deviation, minimum, maximum for each numeric column.',
       'Mode and frequency count for categorical columns.',
@@ -289,7 +286,6 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
       'Both variables are categorical.',
       'For chi-square: expected count ≥ 5 in at least 80% of cells.',
       'No cell has an expected count below 1.',
-      'Results are based on the 250-row preview sample.',
     ],
     output: [
       'Contingency table showing counts.',
