@@ -56,13 +56,25 @@ describe('Q-page + billing scorecard (UI is wired)', () => {
     expect(blob).not.toMatch(/referral|refer a friend|TENSR-/i);
   });
 
-  it('maps every Q chat phrase to the same dialog label for historical baseline eval (live chat does not steal)', () => {
+  it('maps Q chat phrases to their dialog, and sends Custom Tables phrases to the agent', () => {
     for (const proc of Q_PROCEDURES) {
       expect(isDialogMenuItem(proc.menuLabel)).toBe(true);
       for (const phrase of proc.chatPhrases) {
-        const action = resolveChatAction(`run ${phrase}`);
+        const message = `run ${phrase}`;
+        const action = resolveChatAction(message);
+        const gate = resolveGateInOrder(message);
+        if (proc.analysisType === 'banner_table') {
+          expect(action).toEqual({ kind: 'chat' });
+          expect(gate).not.toBe('menu-dialog');
+          continue;
+        }
+        if (phrase === 'fuse datasets') {
+          expect(action).toEqual({ kind: 'dialog', menuName: 'Fuse Datasets' });
+          expect(gate).toBe('menu-dialog');
+          continue;
+        }
         expect(action).toEqual({ kind: 'dialog', menuName: proc.menuLabel });
-        expect(resolveGateInOrder(`run ${phrase}`)).toBe('menu-dialog');
+        expect(gate).toBe('menu-dialog');
       }
     }
   });
