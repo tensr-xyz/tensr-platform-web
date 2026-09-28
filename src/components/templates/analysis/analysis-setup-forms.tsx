@@ -1299,10 +1299,16 @@ export function DecisionTreeForm({ form, setForm, schema, allNames, errors }: Fo
         errors={errors[WIZARD_FIELD.independentCols]}
       />
       <NumericField
-        label="Maximum tree depth (optional)"
+        label="Maximum tree depth"
         value={form.treeMaxDepth}
         onChange={treeMaxDepth => setForm(f => ({ ...f, treeMaxDepth }))}
-        hint="Leave blank for an unrestricted tree."
+        hint="Default 5. Clear the field for an unrestricted tree."
+      />
+      <NumericField
+        label="Minimum samples per leaf"
+        value={form.treeMinSamplesLeaf}
+        onChange={treeMinSamplesLeaf => setForm(f => ({ ...f, treeMinSamplesLeaf }))}
+        hint="Default 5. Larger values grow a simpler tree."
       />
     </section>
   );
@@ -1330,6 +1336,14 @@ export function MlClassificationForm({ form, setForm, schema, allNames, errors }
         minSelected={1}
         errors={errors[WIZARD_FIELD.independentCols]}
       />
+      {form.analysis === 'random_forest_classification' ? (
+        <NumericField
+          label="Minimum samples per leaf"
+          value={form.treeMinSamplesLeaf}
+          onChange={treeMinSamplesLeaf => setForm(f => ({ ...f, treeMinSamplesLeaf }))}
+          hint="Default 5. No depth cap on the forest."
+        />
+      ) : null}
     </section>
   );
 }
@@ -1355,6 +1369,12 @@ export function MlRegressionForm({ form, setForm, schema, allNames, errors }: Fo
         showTypeShortcuts
         minSelected={1}
         errors={errors[WIZARD_FIELD.independentCols]}
+      />
+      <NumericField
+        label="Minimum samples per leaf"
+        value={form.treeMinSamplesLeaf}
+        onChange={treeMinSamplesLeaf => setForm(f => ({ ...f, treeMinSamplesLeaf }))}
+        hint="Default 5. No depth cap on the forest."
       />
     </section>
   );
