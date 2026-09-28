@@ -998,6 +998,11 @@ class ApiClient {
           conversation_history: data.conversationHistory ?? null,
         }),
       }),
+    discardStagedImports: (datasetIds: string[]) =>
+      this.request<{ ok: boolean; removed: string[] }>('/assistant/staged-imports/discard', {
+        method: 'POST',
+        body: JSON.stringify({ dataset_ids: datasetIds }),
+      }),
     agentLoop: (data: {
       message: string;
       mode: 'ask' | 'plan' | 'agent';
@@ -1089,6 +1094,12 @@ class ApiClient {
       tensrApiUrl(`/datasets/${id}/export?format=${format}`),
 
     get: (id: string) => this.request<any>(`/datasets/${id}`),
+
+    getMetadata: (datasetId: string) =>
+      this.request<{
+        dataset_id: string;
+        active_weight_column?: string | null;
+      }>(`/datasets/${datasetId}/metadata`),
 
     getSchema: (datasetId: string) =>
       this.request<{

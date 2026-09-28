@@ -91,6 +91,7 @@ describe('run-agent-loop client helpers', () => {
       status: 'awaiting_approval',
       mode: 'plan',
       answer_markdown: 'Plan: run t-test',
+      staged_dataset_ids: ['ds-staged'],
       pending_approvals: [
         {
           tool_call_id: 'call_1',
@@ -112,6 +113,7 @@ describe('run-agent-loop client helpers', () => {
       expect(patch.pendingAction.toolCallId).toBe('call_1');
       expect(patch.pendingAction.whyThisTest).toBe('Independent groups t-test');
       expect(patch.pendingAction.pipelineSteps).toBeUndefined();
+      expect(patch.pendingAction.stagedDatasetIds).toEqual(['ds-staged']);
     }
   });
 

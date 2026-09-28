@@ -96,6 +96,7 @@ export async function streamAgentLoop(
       glossary: params.glossary ?? null,
       approved_tool_call: params.approvedToolCall ?? null,
       approved_tool_calls: params.approvedToolCalls ?? null,
+      attachments: params.attachments ?? null,
     }),
     signal: handlers.signal,
   });
