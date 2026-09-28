@@ -974,12 +974,12 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
   }
   if (analysis === 'decision_tree') {
     if (!independentCols.length) throw new Error('Add at least one predictor');
-    const depth = treeMaxDepth.trim() ? Number(treeMaxDepth) : undefined;
+    const depth = treeMaxDepth.trim() ? Number(treeMaxDepth) : null;
     const leaf = treeMinSamplesLeaf.trim() ? Number(treeMinSamplesLeaf) : 5;
     return {
       dependent: depCol,
       independents: independentCols,
-      max_depth: depth && !Number.isNaN(depth) ? depth : undefined,
+      max_depth: depth != null && !Number.isNaN(depth) ? depth : null,
       min_samples_leaf: leaf && !Number.isNaN(leaf) ? leaf : 5,
     };
   }

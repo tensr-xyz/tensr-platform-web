@@ -43,7 +43,7 @@ describe('tree wizard defaults', () => {
     expect(body.min_samples_leaf).toBe(5);
   });
 
-  it('omits max_depth when the depth field is cleared', () => {
+  it('sends max_depth null when the depth field is cleared', () => {
     const form: AnalysisFormState = {
       analysis: 'decision_tree',
       ...defaultFormFieldsFromSchema(SCHEMA),
@@ -52,7 +52,7 @@ describe('tree wizard defaults', () => {
       treeMaxDepth: '',
     };
     const body = buildBodyFromForm(form);
-    expect(body.max_depth).toBeUndefined();
+    expect(body.max_depth).toBeNull();
     expect(body.min_samples_leaf).toBe(5);
   });
 });
