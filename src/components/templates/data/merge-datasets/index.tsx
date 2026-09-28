@@ -30,6 +30,7 @@ import {
 import { columnNamesFromSchemaResponse } from '@/lib/dataset-schema';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
+import { mergeUnmatchedReportLines } from '@/lib/merge-unmatched-report';
 import { useTabsStore } from '@/stores/tabs-store';
 
 type JoinHow = 'inner' | 'left' | 'right' | 'outer';
@@ -274,29 +275,9 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
 
           {report && (
             <div className="space-y-1 rounded border p-2 text-sm">
-              <p>{report.row_count ?? 0} rows in the result.</p>
-              {keyed && (
-                <>
-                  <p>
-                    Unmatched on this file: {report.unmatched_left_count ?? 0}
-                    {(report.unmatched_left_keys || []).length
-                      ? ` (${report.unmatched_left_keys!.join(', ')})`
-                      : ''}
-                  </p>
-                  <p>
-                    Unmatched on the other file: {report.unmatched_right_count ?? 0}
-                    {(report.unmatched_right_keys || []).length
-                      ? ` (${report.unmatched_right_keys!.join(', ')})`
-                      : ''}
-                  </p>
-                </>
-              )}
-              {(report.columns_only_left || []).length > 0 && (
-                <p>Only on this file: {report.columns_only_left!.join(', ')}</p>
-              )}
-              {(report.columns_only_right || []).length > 0 && (
-                <p>Only on the other file: {report.columns_only_right!.join(', ')}</p>
-              )}
+              {mergeUnmatchedReportLines(report, keyed).map(line => (
+                <p key={line}>{line}</p>
+              ))}
             </div>
           )}
 

@@ -45,6 +45,7 @@ export type MergeReport = {
   unmatched_right_keys?: string[];
   duplicate_key_count_left?: number;
   duplicate_key_count_right?: number;
+  warnings?: string[];
   columns_only_left?: string[];
   columns_only_right?: string[];
   column_suffixes?: string[];
