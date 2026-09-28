@@ -55,6 +55,9 @@ export type ChartAxisScale = 'linear' | 'datetime' | 'category';
 type ChartAxisHints = {
   x_scale?: ChartAxisScale;
   y_scale?: ChartAxisScale;
+  weighting?: 'weighted' | 'unweighted' | 'none';
+  weighted_n?: number;
+  unweighted_n?: number;
 };
 
 export type AnalysisReportChart =

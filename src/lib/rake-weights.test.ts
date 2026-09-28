@@ -1,4 +1,10 @@
-import { buildRakePayload, rakeMarginFromColumn, RAKE_COPY } from './rake-weights';
+import {
+  buildRakePayload,
+  marginsFromTargetsCsv,
+  rakeMarginFromColumn,
+  RAKE_COPY,
+  RAKE_MISSING_CATEGORY_WARNING,
+} from './rake-weights';
 
 const ROWS = [
   { gender: 'Male', region: 'North' },
@@ -26,6 +32,29 @@ describe('rake form payload', () => {
       column: 'gender',
       targets: { Male: '', Female: '' },
     });
+  });
+
+  it('defaults to excluding missing categories and names the targets file', () => {
+    const payload = buildRakePayload(
+      [{ column: 'gender', targets: { Female: '104', Male: '96' } }],
+      {
+        targetsFilename: 'targets.csv',
+      }
+    );
+    expect(payload.missing_handling).toBe('exclude');
+    expect(payload.targets_filename).toBe('targets.csv');
+  });
+
+  it('reads a variable, category, population targets file', () => {
+    const margins = marginsFromTargetsCsv(
+      'variable,level,population\ngender,Female,104\ngender,Male,96\n'
+    );
+    expect(margins).toEqual([{ column: 'gender', targets: { Female: '104', Male: '96' } }]);
+  });
+
+  it('warns that missing categories are excluded', () => {
+    expect(RAKE_MISSING_CATEGORY_WARNING.toLowerCase()).toMatch(/weight 0/);
+    expect(RAKE_MISSING_CATEGORY_WARNING.toLowerCase()).toMatch(/excluded/);
   });
 
   it('says raking is a new version, not Weight Cases', () => {

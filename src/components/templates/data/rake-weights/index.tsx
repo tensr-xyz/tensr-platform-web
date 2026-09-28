@@ -27,8 +27,10 @@ import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace
 import { useTabsStore } from '@/stores/tabs-store';
 import {
   buildRakePayload,
+  marginsFromTargetsCsv,
   rakeMarginFromColumn,
   RAKE_COPY,
+  RAKE_MISSING_CATEGORY_WARNING,
   type RakeMargin,
 } from '@/lib/rake-weights';
 
@@ -41,6 +43,8 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
   const [margins, setMargins] = useState<RakeMargin[]>([]);
   const [pendingColumn, setPendingColumn] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [targetsFilename, setTargetsFilename] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
   const columns = useMemo(() => {
@@ -76,7 +80,7 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
       setError(WORKSPACE_DATASET_REQUIRED);
       return;
     }
-    const payload = buildRakePayload(margins);
+    const payload = buildRakePayload(margins, { targetsFilename });
     if (!Object.keys(payload.categorical_targets).length) {
       setError('Add at least one raking variable with numeric targets.');
       return;
@@ -92,8 +96,15 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
         n_cols: res.n_cols,
         preview: res.preview,
       });
-      setOpen(false);
-      setMargins([]);
+      const warning = res.diagnostics?.missing_category_warning;
+      if (warning) {
+        setNotice(warning);
+      } else {
+        setOpen(false);
+        setMargins([]);
+        setTargetsFilename(undefined);
+        setNotice(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Rake failed');
     } finally {
@@ -110,6 +121,39 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
         </DialogHeader>
         <div className="space-y-3 text-sm">
           <p className="text-xs text-muted-foreground">{RAKE_COPY}</p>
+          <Alert>
+            <AlertDescription>{RAKE_MISSING_CATEGORY_WARNING}</AlertDescription>
+          </Alert>
+          <div className="space-y-1">
+            <Label htmlFor="rake-targets-file">Targets file (CSV)</Label>
+            <Input
+              id="rake-targets-file"
+              type="file"
+              accept=".csv,text/csv"
+              className="text-xs"
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (!file) return;
+                if (!file.name.toLowerCase().endsWith('.csv')) {
+                  setError('Save an Excel targets file as CSV, or attach it in chat.');
+                  return;
+                }
+                void file.text().then(text => {
+                  try {
+                    setMargins(marginsFromTargetsCsv(text));
+                    setTargetsFilename(file.name);
+                    setError(null);
+                  } catch (parseError) {
+                    setError(
+                      parseError instanceof Error
+                        ? parseError.message
+                        : 'Could not read the targets file.'
+                    );
+                  }
+                });
+              }}
+            />
+          </div>
           <div className="flex items-end gap-2">
             <div className="min-w-0 flex-1 space-y-1">
               <Label>Categorical variable</Label>
@@ -149,6 +193,11 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
               </div>
             </div>
           ))}
+          {notice ? (
+            <Alert>
+              <AlertDescription>{notice}</AlertDescription>
+            </Alert>
+          ) : null}
           {error ? (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>

@@ -48,6 +48,8 @@ export type AgentLoopResponse = {
   pending_approvals?: AgentLoopApprovedToolCall[];
   pipeline?: boolean;
   approval_batch?: boolean;
+  /** Imports created when the plan was proposed. Skip deletes these; approval reuses them. */
+  staged_dataset_ids?: string[];
   pipeline_halted?: boolean;
   failed_step_index?: number;
   reapprove_pipeline?: boolean;
@@ -62,6 +64,12 @@ export type AgentLoopResponse = {
   execution_summary?: string;
 };
 
+export type AgentLoopAttachment = {
+  filename: string;
+  content_base64: string;
+  role?: string | null;
+};
+
 export type RunAgentLoopParams = {
   message: string;
   mode: AgentMode;
@@ -72,6 +80,7 @@ export type RunAgentLoopParams = {
   approvedToolCall?: AgentLoopApprovedToolCall | null;
   /** Full Plan-mode pipeline from a single approval. */
   approvedToolCalls?: AgentLoopApprovedToolCall[] | null;
+  attachments?: AgentLoopAttachment[] | null;
   onProgress?: (progress: { type: string; step: string; message: string }) => void;
 };
 
@@ -109,6 +118,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           glossary: params.glossary ?? null,
           approvedToolCall: params.approvedToolCall ?? null,
           approvedToolCalls: params.approvedToolCalls ?? null,
+          attachments: params.attachments ?? null,
         },
         { onProgress: params.onProgress }
       );
@@ -213,6 +223,7 @@ function pendingActionFromDataEditResult(
 export type DeriveLoopMessageContext = {
   triggerMessage: string;
   datasetId: string | null;
+  attachments?: AgentLoopAttachment[] | null;
 };
 
 /** Map an agent-loop API response to chat message fields + optional pending action. */
@@ -262,6 +273,8 @@ export function deriveMessageUpdateFromLoopResponse(
           rationale: primary.rationale,
           whyThisTest: primary.why_this_test,
           triggerMessage: context.triggerMessage,
+          attachments: context.attachments ?? undefined,
+          stagedDatasetIds: response.staged_dataset_ids,
           coverageLine: primary.coverage_line,
           pipelineSteps: approvals.length > 1 ? approvals : undefined,
         },

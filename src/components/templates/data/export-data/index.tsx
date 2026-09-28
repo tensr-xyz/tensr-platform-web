@@ -97,6 +97,13 @@ export const ExportDialog = ({ children }: ExportDialogProps) => {
       if (!exportRes.ok) throw new Error(`Export failed (${exportRes.status})`);
       const blob = await exportRes.blob();
       downloadBlob(filename, blob);
+      if (format.id === 'sav') {
+        const syntaxRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/export?format=sps`), {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!syntaxRes.ok) throw new Error(`SPSS syntax export failed (${syntaxRes.status})`);
+        downloadBlob(`${baseName}.sps`, await syntaxRes.blob());
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Export failed');
     } finally {

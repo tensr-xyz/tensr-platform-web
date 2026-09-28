@@ -65,12 +65,24 @@ function categoricalColumns(columns: ColumnLike[], rows: Record<string, unknown>
 /**
  * Best-effort client chart from the active sheet when the assistant reply has no chart payload.
  */
+function observationWeight(
+  row: Record<string, unknown>,
+  weightColumn: string | null | undefined
+): number | null {
+  if (!weightColumn) return 1;
+  const weight = parseNumericCellValue(row[weightColumn]);
+  if (weight === null || weight <= 0) return null;
+  return weight;
+}
+
 export function buildChartFromDataset(
   message: string,
   columns: ColumnLike[],
-  rows: Record<string, unknown>[]
+  rows: Record<string, unknown>[],
+  weightColumn?: string | null
 ): AnalysisReportChart | null {
   if (!columns.length || !rows.length) return null;
+  const weighted = Boolean(weightColumn);
 
   const hints = tokenizeColumnHints(message);
   const resolveHint = (hint: string) => {
@@ -141,7 +153,7 @@ export function buildChartFromDataset(
         for (const row of rows) {
           const label = String(row[cat.id] ?? '').trim();
           const n = parseNumericCellValue(row[num.id]);
-          if (!label || n === null) continue;
+          if (!label || n === null || observationWeight(row, weightColumn) === null) continue;
           const list = byGroup.get(label) ?? [];
           list.push(n);
           byGroup.set(label, list);
@@ -154,16 +166,18 @@ export function buildChartFromDataset(
         const values: number[] = [];
         for (const row of rows) {
           const n = parseNumericCellValue(row[num.id]);
-          if (n !== null) values.push(n);
+          if (n !== null && observationWeight(row, weightColumn) !== null) values.push(n);
         }
         collect(num.header, values);
       }
       if (groups.length) {
+        const title = cat ? `${num.header} by ${cat.header}` : `Boxplot of ${num.header}`;
         return {
           kind: 'boxplot',
-          title: cat ? `${num.header} by ${cat.header}` : `Boxplot of ${num.header}`,
+          title: weighted ? `Unweighted ${title}` : title,
           y_label: num.header,
           groups,
+          weighting: weighted ? 'unweighted' : 'none',
         };
       }
     }
@@ -179,9 +193,10 @@ export function buildChartFromDataset(
       for (const row of rows) {
         const label = String(row[cat.id] ?? '');
         const n = parseNumericCellValue(row[num.id]);
-        if (!label || n === null) continue;
-        counts.set(label, (counts.get(label) ?? 0) + 1);
-        sums.set(label, (sums.get(label) ?? 0) + n);
+        const weight = observationWeight(row, weightColumn);
+        if (!label || n === null || weight === null) continue;
+        counts.set(label, (counts.get(label) ?? 0) + weight);
+        sums.set(label, (sums.get(label) ?? 0) + n * weight);
       }
       const categories = [...counts.keys()].slice(0, 12);
       const values = categories.map(c => {
@@ -191,11 +206,14 @@ export function buildChartFromDataset(
       });
       return {
         kind: 'bar_grouped',
-        title: `${num.header} by ${cat.header}`,
+        title: weighted
+          ? `Weighted mean ${num.header} by ${cat.header}`
+          : `${num.header} by ${cat.header}`,
         x_label: cat.header,
-        y_label: num.header,
+        y_label: weighted ? `Weighted mean ${num.header}` : num.header,
         categories,
         series: [{ name: num.header, values }],
+        weighting: weighted ? 'weighted' : 'none',
       };
     }
   }
@@ -207,17 +225,19 @@ export function buildChartFromDataset(
     for (const row of rows) {
       const x = parseNumericCellValue(row[xCol.id]);
       const y = parseNumericCellValue(row[yCol.id]);
-      if (x === null || y === null) continue;
+      if (x === null || y === null || observationWeight(row, weightColumn) === null) continue;
       points.push({ x, y });
       if (points.length >= 400) break;
     }
     if (points.length >= 2) {
+      const title = `${yCol.header} vs ${xCol.header}`;
       return {
         kind: 'scatter',
-        title: `${yCol.header} vs ${xCol.header}`,
+        title: weighted ? `Unweighted scatter of ${title}` : title,
         x_label: xCol.header,
         y_label: yCol.header,
         points,
+        weighting: weighted ? 'unweighted' : 'none',
       };
     }
   }
@@ -240,15 +260,19 @@ export function buildChartFromDataset(
       end: min + (i + 1) * width,
       count: 0,
     }));
-    for (const v of values) {
-      const idx = Math.min(binCount - 1, Math.floor((v - min) / width));
-      bins[idx].count += 1;
+    for (const row of rows) {
+      const n = parseNumericCellValue(row[col.id]);
+      const weight = observationWeight(row, weightColumn);
+      if (n === null || weight === null) continue;
+      const idx = Math.min(binCount - 1, Math.floor((n - min) / width));
+      bins[idx].count += weight;
     }
     return {
       kind: 'histogram',
-      title: `Distribution of ${col.header}`,
+      title: weighted ? `Weighted distribution of ${col.header}` : `Distribution of ${col.header}`,
       x_label: col.header,
       bins,
+      weighting: weighted ? 'weighted' : 'none',
     };
   }
 

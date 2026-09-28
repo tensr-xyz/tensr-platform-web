@@ -23,6 +23,7 @@ import { useTabsStore } from '@/stores/tabs-store';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import { buildChartFromDataset } from '@/lib/agent-chart-from-dataset';
+import { apiClient } from '@/lib/api-client';
 
 type ChartKind = 'bar' | 'line' | 'scatter' | 'histogram' | 'boxplot' | 'pie' | 'area';
 
@@ -57,7 +58,7 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
 
   const kind = MENU_TO_KIND[chartMenuName] ?? 'bar';
 
-  const run = () => {
+  const run = async () => {
     if (!activeTab?.data?.initialData?.length) {
       setError('Open a dataset with preview rows first');
       return;
@@ -69,21 +70,29 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
       return;
     }
     const prompt = `${kind} chart of ${y} by ${x}`;
+    const datasetId = activeTab.data?.datasetId ?? activeTab.data?.filePath;
+    if (!datasetId) {
+      setError('Dataset id not available');
+      return;
+    }
+    let weightColumn: string | null = null;
+    try {
+      const meta = await apiClient.datasets.getMetadata(datasetId);
+      weightColumn = meta.active_weight_column ?? null;
+    } catch {
+      weightColumn = null;
+    }
     const built = buildChartFromDataset(
       prompt,
       columns.map(c => ({ id: c.id, header: c.header })),
-      activeTab.data.initialData
+      activeTab.data.initialData,
+      weightColumn
     );
     if (!built) {
       setError('Could not build chart from selected columns');
       return;
     }
     const chart = built as AnalysisReportChart;
-    const datasetId = activeTab.data?.datasetId ?? activeTab.data?.filePath;
-    if (!datasetId) {
-      setError('Dataset id not available');
-      return;
-    }
     openAnalysisResultTab({
       op: 'chart_builder',
       envelope: {

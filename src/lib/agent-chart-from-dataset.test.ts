@@ -56,4 +56,36 @@ describe('agent chart from dataset', () => {
     expect(chart?.y_label).toBe('PTS');
     expect(chart?.points?.length).toBeGreaterThan(1);
   });
+
+  it('weights a histogram and labels a scatter as unweighted', () => {
+    const weightedRows = [
+      { score: 1, w: 1 },
+      { score: 1, w: 0 },
+      { score: 2, w: 3 },
+    ];
+    const cols = [
+      { id: 'score', header: 'score' },
+      { id: 'w', header: 'w' },
+    ];
+    const hist = buildChartFromDataset(
+      'show the distribution',
+      [{ id: 'score', header: 'score' }],
+      weightedRows,
+      'w'
+    );
+    expect(hist?.kind).toBe('histogram');
+    expect(hist?.title).toContain('Weighted');
+    const total = hist && 'bins' in hist ? hist.bins.reduce((sum, bin) => sum + bin.count, 0) : 0;
+    expect(total).toBe(4);
+
+    const scatter = buildChartFromDataset(
+      'Plot the correlation between score and w',
+      cols,
+      weightedRows,
+      'w'
+    );
+    expect(scatter?.kind).toBe('scatter');
+    expect(scatter?.title.toLowerCase()).toContain('unweighted');
+    expect(scatter?.points?.length).toBe(2);
+  });
 });
