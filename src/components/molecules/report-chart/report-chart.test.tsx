@@ -63,4 +63,19 @@ describe('ReportChart axes', () => {
     expect(label).toBeTruthy();
     expect((label!.textContent || '').length).toBeGreaterThan(8);
   });
+
+  it('adds an APA figure caption without changing the default chart', () => {
+    const chart: AnalysisReportChart = {
+      kind: 'bar',
+      title: 'Scores by group',
+      x_label: 'Group',
+      y_label: 'Score',
+      categories: ['A'],
+      series: [{ name: 'Score', values: [10] }],
+    };
+    render(<ReportChart chart={chart} density="comfortable" preset="apa" />);
+    expect(screen.getByText('Figure 1')).toBeTruthy();
+    expect(screen.getByText('Scores by group')).toBeTruthy();
+    expect(screen.getByText(/Note\./)).toBeTruthy();
+  });
 });

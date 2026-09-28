@@ -24,6 +24,7 @@ function mapApiOrganization(raw: Record<string, unknown>): Organization {
     description: raw.description as string | undefined,
     slug: raw.slug as string | undefined,
     logoUrl: raw.logo_url as string | undefined,
+    privacyMode: raw.privacy_mode === 'schema_only' ? 'schema_only' : 'full',
   };
 }
 
@@ -38,6 +39,7 @@ export interface Organization {
   role: 'ADMIN' | 'MEMBER' | 'VIEWER'; // User's role in this organization
   slug?: string;
   logoUrl?: string;
+  privacyMode?: 'full' | 'schema_only';
 }
 
 export interface OrganizationMember {
@@ -104,10 +106,20 @@ interface UseOrganizationReturn {
   }) => Promise<Organization>;
   updateOrganization: (
     orgId: string,
-    data: { name?: string; description?: string; settings?: any }
+    data: {
+      name?: string;
+      description?: string;
+      settings?: any;
+      privacy_mode?: 'full' | 'schema_only';
+    }
   ) => Promise<Organization>;
   deleteOrganization: (orgId: string) => Promise<boolean>;
   members: OrganizationMember[];
+  seatUsage: {
+    used: number;
+    max_team_seats: number | null;
+    pending_invites: number;
+  } | null;
   addMember: (
     orgId: string,
     userId: string,
@@ -176,6 +188,11 @@ export const useOrganization = (): UseOrganizationReturn => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null);
   const [members, setMembers] = useState<OrganizationMember[]>([]);
+  const [seatUsage, setSeatUsage] = useState<{
+    used: number;
+    max_team_seats: number | null;
+    pending_invites: number;
+  } | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [invitations, setInvitations] = useState<OrganizationInvitation[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -294,7 +311,12 @@ export const useOrganization = (): UseOrganizationReturn => {
   // Function to update an organization
   const updateOrganization = async (
     orgId: string,
-    data: { name?: string; description?: string; settings?: any }
+    data: {
+      name?: string;
+      description?: string;
+      settings?: any;
+      privacy_mode?: 'full' | 'schema_only';
+    }
   ): Promise<Organization> => {
     try {
       setIsLoading(true);
@@ -321,7 +343,13 @@ export const useOrganization = (): UseOrganizationReturn => {
         );
       }
 
-      const updatedOrg = await response.json();
+      const payload = await response.json();
+      const raw = (payload.organization ?? payload) as Record<string, unknown>;
+      const previous = organizations.find(org => org.id === orgId);
+      const updatedOrg = mapApiOrganization({
+        ...raw,
+        role: raw.role ?? previous?.role,
+      });
 
       // Update local state
       setOrganizations(prev => prev.map(org => (org.id === orgId ? updatedOrg : org)));
@@ -418,6 +446,7 @@ export const useOrganization = (): UseOrganizationReturn => {
       const data = await response.json();
       const orgMembers = data.members || [];
       setMembers(orgMembers);
+      setSeatUsage(data.seats || null);
       return orgMembers;
     } catch (err: any) {
       console.error('Error fetching members:', err);
@@ -1044,6 +1073,7 @@ export const useOrganization = (): UseOrganizationReturn => {
     updateOrganization,
     deleteOrganization,
     members,
+    seatUsage,
     addMember,
     removeMember,
     updateMemberRole,

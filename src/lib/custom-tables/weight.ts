@@ -12,7 +12,7 @@ export type WeightOption = {
 };
 
 export const WEIGHT_CROSSTAB_COPY =
-  'Weighted crosstabs. Chi-square, t-tests and regression are unweighted.';
+  'Crosstabs, means, t-tests, chi-square, and regression use the active weight. Other analyses refuse while a weight is active.';
 
 function isWeightedOp(producing: string): boolean {
   const p = producing.toLowerCase();

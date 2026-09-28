@@ -23,3 +23,21 @@ export const CHART_GRID_STYLE = {
 } as const;
 
 export const CHART_CURSOR_FILL = 'hsl(var(--primary) / 0.08)';
+
+/** Current Tensr look. APA is opt-in so existing charts stay as they are. */
+export const CHART_STYLE_PRESETS = {
+  default: {
+    fontFamily: CHART_AXIS_TICK_STYLE.fontFamily,
+    series: [...CHART_SERIES_COLORS],
+    gridOpacity: CHART_GRID_STYLE.strokeOpacity,
+    greyscale: false,
+  },
+  apa: {
+    fontFamily: 'Arial, Helvetica, sans-serif',
+    series: ['#222222', '#555555', '#888888', '#bbbbbb'],
+    gridOpacity: 0,
+    greyscale: true,
+  },
+} as const;
+
+export type ChartStylePreset = keyof typeof CHART_STYLE_PRESETS;

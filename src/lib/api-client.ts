@@ -1308,6 +1308,39 @@ class ApiClient {
       }),
   };
 
+  reportComments = {
+    list: (reportId: string, datasetId: string) =>
+      this.request<{ comments: Array<Record<string, unknown>> }>(
+        `/reports/${encodeURIComponent(reportId)}/comments?dataset_id=${encodeURIComponent(datasetId)}`
+      ),
+    create: (
+      reportId: string,
+      body: {
+        text: string;
+        dataset_id: string;
+        session_id?: string;
+        parent_id?: string;
+        anchor?: { kind: string; id: string };
+      }
+    ) =>
+      this.request<{ comment: Record<string, unknown> }>(
+        `/reports/${encodeURIComponent(reportId)}/comments`,
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }
+      ),
+    resolve: (
+      reportId: string,
+      commentId: string,
+      body: { resolved: boolean; dataset_id: string; session_id?: string }
+    ) =>
+      this.request<{ comment: Record<string, unknown> }>(
+        `/reports/${encodeURIComponent(reportId)}/comments/${encodeURIComponent(commentId)}/resolve`,
+        { method: 'POST', body: JSON.stringify(body) }
+      ),
+  };
+
   // Worker API
   workers = {
     summarize: (data: any) =>

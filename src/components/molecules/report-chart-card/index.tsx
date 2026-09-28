@@ -13,6 +13,7 @@ import {
 } from '@/components/molecules/dropdown';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/molecules/dialog';
 import { exportSvgElementAsPng, exportSvgElementAsSvg } from '@/utils/chart-export';
+import type { ChartStylePreset } from '@/lib/chart-theme';
 
 type Props = {
   chart: AnalysisReportChart;
@@ -25,6 +26,7 @@ export function ReportChartCard({ chart, onAnnotate, onExportError }: Props) {
   const fullscreenRef = useRef<HTMLDivElement>(null);
   const exportRef = useRef<HTMLDivElement>(null);
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
+  const [preset, setPreset] = useState<ChartStylePreset>('default');
   const title = chart.title || 'chart';
 
   const getSvg = (scope: 'inline' | 'fullscreen' | 'export') => {
@@ -60,6 +62,15 @@ export function ReportChartCard({ chart, onAnnotate, onExportError }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2 print:hidden">
           <h4 className="text-[12.5px] font-medium text-foreground">{title}</h4>
           <div className="flex items-center gap-1">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 px-2 text-[11px]"
+              onClick={() => setPreset(preset === 'apa' ? 'default' : 'apa')}
+            >
+              {preset === 'apa' ? 'Default style' : 'APA style'}
+            </Button>
             {onAnnotate ? (
               <Button
                 type="button"
@@ -99,7 +110,7 @@ export function ReportChartCard({ chart, onAnnotate, onExportError }: Props) {
           </div>
         </div>
         <div ref={containerRef} className="p-4 pb-2">
-          <ReportChart chart={chart} density="inline" />
+          <ReportChart chart={chart} density="inline" preset={preset} />
         </div>
       </div>
 
@@ -109,7 +120,7 @@ export function ReportChartCard({ chart, onAnnotate, onExportError }: Props) {
             <DialogTitle>{title}</DialogTitle>
           </DialogHeader>
           <div ref={fullscreenRef} className="min-h-[420px] p-2">
-            <ReportChart chart={chart} density="comfortable" />
+            <ReportChart chart={chart} density="comfortable" preset={preset} />
           </div>
           <div className="flex justify-end gap-1 pt-2">
             <Button
@@ -139,7 +150,7 @@ export function ReportChartCard({ chart, onAnnotate, onExportError }: Props) {
         className="pointer-events-none fixed -left-[10000px] top-0 w-[880px]"
         aria-hidden
       >
-        <ReportChart chart={chart} density="comfortable" />
+        <ReportChart chart={chart} density="comfortable" preset={preset} />
       </div>
     </>
   );

@@ -3,4 +3,7 @@ export type ReportAnnotation = {
   text: string;
   target?: string;
   createdAt: string;
+  authorName?: string;
+  parentId?: string;
+  resolved?: boolean;
 };
