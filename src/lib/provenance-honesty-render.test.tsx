@@ -45,16 +45,18 @@ describe('analysis report honesty banners (menu-catalog)', () => {
     expect(screen.queryByText(/^Unverified$/)).not.toBeInTheDocument();
   });
 
-  it('prints unavailable with the reason, not the unknown sentence', () => {
+  it('prints unavailable in the inspector, not an unknown Traceability banner', () => {
     render(
       <AnalysisReportView
         report={sampleReport()}
         provenance={{ provenance_unavailable: 'multi_origin' }}
       />
     );
-    const banner = getTraceabilityBanner();
-    expect(banner).toHaveTextContent(UNAVAILABLE_BANNER);
-    expect(banner).not.toHaveTextContent(/traceability unknown/i);
+    expect(screen.getByTestId('provenance-inspector')).toHaveTextContent(/unavailable/i);
+    expect(screen.getByTestId('provenance-inspector')).toHaveTextContent(/multi_origin/i);
+    expect(screen.queryByText('Traceability')).not.toBeInTheDocument();
+    expect(screen.queryByText(/traceability unknown/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(UNAVAILABLE_BANNER)).not.toBeInTheDocument();
   });
 
   it('does not print a Traceability banner when the bitset is complete', () => {
