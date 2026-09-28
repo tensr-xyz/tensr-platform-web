@@ -25,6 +25,10 @@ export type ReportChartProps = {
   /** inline = chat/card; comfortable = fullscreen (and preferred export source). */
   density?: ChartDensity;
   className?: string;
+  /** `default` keeps the current palette. `apa` is greyscale, sans-serif, with a figure caption. */
+  preset?: 'default' | 'apa';
+  figureNumber?: number;
+  note?: string;
 };
 
 function resolveNumericScale(
@@ -753,8 +757,15 @@ function ChartBody({
   return null;
 }
 
-export function ReportChart({ chart, density = 'inline', className }: ReportChartProps) {
-  const wrapRef = useRef<HTMLDivElement>(null);
+export function ReportChart({
+  chart,
+  density = 'inline',
+  className,
+  preset = 'default',
+  figureNumber = 1,
+  note = 'Axes are labelled in the units of the plotted variables.',
+}: ReportChartProps) {
+  const wrapRef = useRef<HTMLElement>(null);
   const [width, setWidth] = useState(0);
 
   useEffect(() => {
@@ -771,9 +782,25 @@ export function ReportChart({ chart, density = 'inline', className }: ReportChar
 
   const layout = computeLayout(density, width);
 
+  const apa = preset === 'apa';
+
   return (
-    <div ref={wrapRef} className={className ?? 'w-full'}>
+    <figure
+      ref={wrapRef}
+      className={className ?? 'w-full'}
+      data-chart-preset={preset}
+      style={
+        apa ? { fontFamily: 'Arial, Helvetica, sans-serif', filter: 'grayscale(1)' } : undefined
+      }
+    >
+      {apa ? (
+        <>
+          <p className="text-sm font-bold">Figure {figureNumber}</p>
+          {chart.title ? <p className="text-sm italic">{chart.title}</p> : null}
+        </>
+      ) : null}
       <ChartBody chart={chart} layout={layout} />
-    </div>
+      {apa ? <figcaption className="text-xs">Note. {note}</figcaption> : null}
+    </figure>
   );
 }

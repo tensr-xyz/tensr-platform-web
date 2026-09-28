@@ -41,8 +41,8 @@ describe('weight version picker', () => {
     expect(pickRunDatasetId(opts.find(o => o.kind === 'this_file')!)).toBe(RAKED);
   });
 
-  it('says weighted crosstabs are not weighted inferential tests', () => {
-    expect(WEIGHT_CROSSTAB_COPY.toLowerCase()).toContain('weighted crosstabs');
-    expect(WEIGHT_CROSSTAB_COPY.toLowerCase()).toContain('unweighted');
+  it('says inferential tests use the active weight and other analyses refuse', () => {
+    expect(WEIGHT_CROSSTAB_COPY.toLowerCase()).toContain('active weight');
+    expect(WEIGHT_CROSSTAB_COPY.toLowerCase()).toContain('refuse');
   });
 });

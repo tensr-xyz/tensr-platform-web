@@ -189,6 +189,48 @@ export default function OrganizationSettings() {
 
       <section className="overflow-hidden rounded-lg border border-border bg-background">
         <div className="border-b border-border px-6 py-4">
+          <h3 className="text-base font-medium">Schema only</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            When this is on, the assistant receives column names, types, missing counts, and numeric
+            ranges. Category levels, sample rows, and full tables stay on screen for you and are
+            left out of what is sent to the model.
+          </p>
+        </div>
+        <div className="flex items-center justify-between p-6">
+          <label htmlFor="schema-only" className="text-sm font-medium">
+            Schema only privacy
+          </label>
+          <input
+            id="schema-only"
+            type="checkbox"
+            className="h-4 w-4"
+            checked={(editedOrg?.privacyMode ?? 'full') === 'schema_only'}
+            disabled={isLoading || !activeOrganization}
+            onChange={async event => {
+              if (!activeOrganization) return;
+              const privacy_mode = event.target.checked ? 'schema_only' : 'full';
+              try {
+                const updated = await updateOrganization(activeOrganization.id, { privacy_mode });
+                setEditedOrg(updated);
+                toast({
+                  title:
+                    privacy_mode === 'schema_only' ? 'Schema only is on' : 'Schema only is off',
+                  description: 'This setting is recorded on each assistant turn.',
+                });
+              } catch (err: any) {
+                toast({
+                  title: 'Failed to update privacy setting',
+                  description: err.message || 'An error occurred while updating the organization',
+                  variant: 'destructive',
+                });
+              }
+            }}
+          />
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-lg border border-border bg-background">
+        <div className="border-b border-border px-6 py-4">
           <h3 className="text-base font-medium text-red-600">Danger zone</h3>
           <p className="mt-1 text-sm text-muted-foreground">Irreversible and destructive actions</p>
         </div>

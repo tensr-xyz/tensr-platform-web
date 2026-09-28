@@ -75,4 +75,52 @@ describe('banner table renderer model', () => {
     expect(suppressed.columnPercent).toBe('*');
     expect(suppressed.lowBase).toBe(true);
   });
+
+  it('concatenates every significant letter in one cell', () => {
+    const table = displayBannerTable({
+      ...BOOK,
+      letters: [
+        {
+          stub_row_id: 'gender:Male',
+          banner_id: 'age_band=18-34',
+          letter: 'B',
+          letter_display: 'B',
+        },
+        {
+          stub_row_id: 'gender:Male',
+          banner_id: 'age_band=18-34',
+          letter: 'D',
+          letter_display: 'D',
+        },
+      ],
+    });
+    expect(table.rows[0].cells[1].letters).toBe('BD');
+  });
+
+  it('shows mean and SD on a numeric stub row', () => {
+    const table = displayBannerTable({
+      ...BOOK,
+      rows: [
+        {
+          id: 'score:mean',
+          label: 'score',
+          kind: 'mean',
+          cells: [
+            {
+              banner_id: 'age_band=18-34',
+              stub_row_id: 'score:mean',
+              mean: 3.5,
+              sd: 1.2,
+              unweighted_n: 40,
+              weighted_n: 40,
+              kish_ess: 40,
+              low_base_suppressed: false,
+            },
+          ],
+        },
+      ],
+    });
+    expect(table.rows[0].cells[0].columnPercent).toBe('3.50 (SD 1.20)');
+    expect(table.rows[0].cells[0].bases).toMatch(/n=40/);
+  });
 });

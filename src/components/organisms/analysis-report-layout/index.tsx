@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
 import type { AnalysisRelatedLink } from '@/lib/analysis-chain-links';
 import { AnalysisReportView } from '@/components/organisms/analysis-report-view';
@@ -50,6 +50,36 @@ export function AnalysisReportLayout({
   const openSetup = useAnalysisSetupStore(s => s.openSetup);
 
   const outline = useMemo(() => buildReportOutline(report), [report]);
+
+  useEffect(() => {
+    if (!analysisRunId || !sourceDatasetId) return;
+    let cancelled = false;
+    apiClient.reportComments
+      .list(analysisRunId, sourceDatasetId)
+      .then(payload => {
+        if (cancelled) return;
+        setAnnotations(
+          (payload.comments || []).map(row => ({
+            id: String(row.id),
+            text: String(row.text || ''),
+            target:
+              row.anchor && typeof row.anchor === 'object'
+                ? String((row.anchor as { id?: string }).id || '')
+                : undefined,
+            createdAt: String(row.created_at || new Date().toISOString()),
+            authorName: row.author_name ? String(row.author_name) : undefined,
+            parentId: row.parent_id ? String(row.parent_id) : undefined,
+            resolved: Boolean(row.resolved),
+          }))
+        );
+      })
+      .catch(() => {
+        /* Keep local notes if the report has not been saved yet. */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [analysisRunId, sourceDatasetId]);
   const exportIdentity = useMemo(
     () =>
       exportIdentityFrom({
@@ -91,19 +121,55 @@ export function AnalysisReportLayout({
     (text: string) => {
       const trimmed = text.trim();
       if (!trimmed) return;
-      setAnnotations(prev => [
-        ...prev,
-        {
-          id: crypto.randomUUID(),
-          text: trimmed,
-          target: annotationTarget,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+      const local = {
+        id: crypto.randomUUID(),
+        text: trimmed,
+        target: annotationTarget,
+        createdAt: new Date().toISOString(),
+      };
+      setAnnotations(prev => [...prev, local]);
       setAnnotationTarget(undefined);
       setAnnotationComposerOpen(false);
+      if (!analysisRunId || !sourceDatasetId) return;
+      void apiClient.reportComments
+        .create(analysisRunId, {
+          text: trimmed,
+          dataset_id: sourceDatasetId,
+          anchor: annotationTarget ? { kind: 'section', id: annotationTarget } : undefined,
+        })
+        .then(payload => {
+          const saved = payload.comment;
+          setAnnotations(prev =>
+            prev.map(note =>
+              note.id === local.id
+                ? {
+                    ...note,
+                    id: String(saved.id || note.id),
+                    createdAt: String(saved.created_at || note.createdAt),
+                    authorName: saved.author_name ? String(saved.author_name) : note.authorName,
+                  }
+                : note
+            )
+          );
+        })
+        .catch(err => {
+          console.error('Saving the report comment failed', err);
+        });
     },
-    [annotationTarget]
+    [analysisRunId, annotationTarget, sourceDatasetId]
+  );
+
+  const handleResolveAnnotation = useCallback(
+    (id: string, resolved: boolean) => {
+      setAnnotations(prev => prev.map(note => (note.id === id ? { ...note, resolved } : note)));
+      if (!analysisRunId || !sourceDatasetId) return;
+      void apiClient.reportComments
+        .resolve(analysisRunId, id, { resolved, dataset_id: sourceDatasetId })
+        .catch(err => {
+          console.error('Updating the report comment failed', err);
+        });
+    },
+    [analysisRunId, sourceDatasetId]
   );
 
   const handleRerun = useCallback(() => {
@@ -238,6 +304,7 @@ export function AnalysisReportLayout({
           onAnnotationTargetChange={setAnnotationTarget}
           onAnnotationComposerOpenChange={setAnnotationComposerOpen}
           onAddAnnotation={handleAddAnnotation}
+          onResolveAnnotation={handleResolveAnnotation}
         />
       ) : null}
     </div>
