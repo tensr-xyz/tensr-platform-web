@@ -30,6 +30,33 @@ describe('survival SPSS menu paths', () => {
   });
 });
 
+describe('tree wizard defaults', () => {
+  it('posts max_depth 5 and min_samples_leaf 5', () => {
+    const form: AnalysisFormState = {
+      analysis: 'decision_tree',
+      ...defaultFormFieldsFromSchema(SCHEMA),
+      depCol: 'y',
+      independentCols: ['x'],
+    };
+    const body = buildBodyFromForm(form);
+    expect(body.max_depth).toBe(5);
+    expect(body.min_samples_leaf).toBe(5);
+  });
+
+  it('omits max_depth when the depth field is cleared', () => {
+    const form: AnalysisFormState = {
+      analysis: 'decision_tree',
+      ...defaultFormFieldsFromSchema(SCHEMA),
+      depCol: 'y',
+      independentCols: ['x'],
+      treeMaxDepth: '',
+    };
+    const body = buildBodyFromForm(form);
+    expect(body.max_depth).toBeUndefined();
+    expect(body.min_samples_leaf).toBe(5);
+  });
+});
+
 describe('cluster k field', () => {
   it('posts n_clusters from nClusters, not pcaNComponents', () => {
     const body = buildBodyFromForm(clusterForm({ nClusters: '4', pcaNComponents: '9' }));
