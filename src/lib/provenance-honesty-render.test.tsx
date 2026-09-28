@@ -5,8 +5,6 @@ import { AnalysisReportView } from '@/components/organisms/analysis-report-view'
 
 const UNKNOWN_BANNER =
   'Traceability unknown. This run has no stored provenance. Numbers cannot be traced to the rows they came from.';
-const UNAVAILABLE_BANNER =
-  'Provenance unavailable: multi_origin. These numbers should not be trusted as a complete row set.';
 
 function sampleReport(overrides: Partial<AnalysisReport> = {}): AnalysisReport {
   return {
@@ -45,16 +43,16 @@ describe('analysis report honesty banners (menu-catalog)', () => {
     expect(screen.queryByText(/^Unverified$/)).not.toBeInTheDocument();
   });
 
-  it('prints unavailable with the reason, not the unknown sentence', () => {
+  it('shows unavailable provenance in the inspector, not the Traceability banner', () => {
     render(
       <AnalysisReportView
         report={sampleReport()}
         provenance={{ provenance_unavailable: 'multi_origin' }}
       />
     );
-    const banner = getTraceabilityBanner();
-    expect(banner).toHaveTextContent(UNAVAILABLE_BANNER);
-    expect(banner).not.toHaveTextContent(/traceability unknown/i);
+    expect(screen.getByTestId('provenance-inspector')).toHaveTextContent(/multi_origin/i);
+    expect(screen.queryByText('Traceability')).not.toBeInTheDocument();
+    expect(screen.queryByText(/traceability unknown/i)).not.toBeInTheDocument();
   });
 
   it('does not print a Traceability banner when the bitset is complete', () => {
