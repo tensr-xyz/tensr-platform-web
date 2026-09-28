@@ -1171,8 +1171,8 @@ export function ClusterForm({ form, setForm, schema, errors }: FormSliceProps) {
       />
       <NumericField
         label="Number of clusters"
-        value={form.pcaNComponents || '3'}
-        onChange={pcaNComponents => setForm(f => ({ ...f, pcaNComponents }))}
+        value={form.nClusters || '3'}
+        onChange={nClusters => setForm(f => ({ ...f, nClusters }))}
       />
       <CheckboxRow
         id="cluster-standardize"

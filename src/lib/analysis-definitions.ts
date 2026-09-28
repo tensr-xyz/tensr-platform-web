@@ -237,9 +237,9 @@ export const SPSS_MENU_PATHS: Record<AnalysisKey, string> = {
   stl_decomposition: 'Time series → Decomposition → STL',
   stationarity_tests: 'Time series → Diagnostics → Stationarity',
   autocorrelation: 'Time series → Diagnostics → ACF / PACF',
-  kaplan_meier: 'Time series → Survival → Kaplan-Meier',
-  cox_proportional_hazards: 'Time series → Survival → Cox PH',
-  nelson_aalen: 'Time series → Survival → Nelson-Aalen',
+  kaplan_meier: 'Analyze → Survival → Kaplan-Meier',
+  cox_proportional_hazards: 'Analyze → Survival → Cox PH',
+  nelson_aalen: 'Analyze → Survival → Nelson-Aalen',
   linear_mixed_model: 'Multivariate → Mixed Models → LMM',
   generalized_linear_mixed_model: 'Multivariate → Mixed Models → GLMM',
   multilevel_modelling: 'Multivariate → Mixed Models → HLM',
@@ -767,6 +767,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     factorBCol,
     subjectCol,
     pcaNComponents,
+    nClusters,
     anovaInteraction,
     covariateCol,
     clusterMethod,
@@ -946,7 +947,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
   }
   if (analysis === 'cluster_analysis') {
     if (selectedCols.length < 1) throw new Error('Select at least one variable');
-    const k = pcaNComponents.trim() ? Number(pcaNComponents) : 3;
+    const k = nClusters.trim() ? Number(nClusters) : 3;
     return {
       columns: selectedCols,
       method: clusterMethod,
@@ -1446,6 +1447,7 @@ export function defaultFormFieldsFromSchema(
     factorBCol: schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
     subjectCol: inferSubjectColumnFromSchema(schema),
     pcaNComponents: '',
+    nClusters: '3',
     anovaInteraction: true,
     covariateCol: num[1] ?? schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
     clusterMethod: 'kmeans' as const,
@@ -1520,6 +1522,7 @@ export type AnalysisFormState = {
   factorBCol: string;
   subjectCol: string;
   pcaNComponents: string;
+  nClusters: string;
   anovaInteraction: boolean;
   covariateCol: string;
   clusterMethod: 'kmeans' | 'hierarchical';
@@ -1642,7 +1645,7 @@ export function formStateFromBody(
     const method = body.method;
     if (method === 'kmeans' || method === 'hierarchical') state.clusterMethod = method;
     if (typeof body.standardize === 'boolean') state.clusterStandardize = body.standardize;
-    if (body.n_clusters != null) state.pcaNComponents = String(body.n_clusters);
+    if (body.n_clusters != null) state.nClusters = String(body.n_clusters);
   }
   if (op === 'decision_tree') {
     if (typeof body.dependent === 'string') state.depCol = body.dependent;
