@@ -56,36 +56,25 @@ describe('Q-page + billing scorecard (UI is wired)', () => {
     expect(blob).not.toMatch(/referral|refer a friend|TENSR-/i);
   });
 
-  it('maps Q chat phrases to their dialog, except banner tables which stay in the agent', () => {
-    // Banner / crosstab / custom-tables asks run through banner_table.
-    // Opening the empty Custom Tables dialog would drop that request.
-    const agentTableGates: Record<string, 'tutor' | 'analysis-question'> = {
-      'custom tables': 'tutor',
-      crosstab: 'analysis-question',
-      'cross tab': 'tutor',
-      'banner table': 'tutor',
-    };
-    // The production menu has its own Fuse Datasets dialog, so that phrase
-    // opens it instead of the Fuse Waves catalog label.
-    const dialogLabel: Record<string, string> = {
-      'fuse datasets': 'Fuse Datasets',
-    };
+  it('maps Q chat phrases to their dialog, and sends Custom Tables phrases to the agent', () => {
     for (const proc of Q_PROCEDURES) {
       expect(isDialogMenuItem(proc.menuLabel)).toBe(true);
       for (const phrase of proc.chatPhrases) {
         const message = `run ${phrase}`;
         const action = resolveChatAction(message);
-        const agentGate = agentTableGates[phrase];
-        if (agentGate) {
+        const gate = resolveGateInOrder(message);
+        if (proc.analysisType === 'banner_table') {
           expect(action).toEqual({ kind: 'chat' });
-          expect(resolveGateInOrder(message)).toBe(agentGate);
-        } else {
-          expect(action).toEqual({
-            kind: 'dialog',
-            menuName: dialogLabel[phrase] ?? proc.menuLabel,
-          });
-          expect(resolveGateInOrder(message)).toBe('menu-dialog');
+          expect(gate).not.toBe('menu-dialog');
+          continue;
         }
+        if (phrase === 'fuse datasets') {
+          expect(action).toEqual({ kind: 'dialog', menuName: 'Fuse Datasets' });
+          expect(gate).toBe('menu-dialog');
+          continue;
+        }
+        expect(action).toEqual({ kind: 'dialog', menuName: proc.menuLabel });
+        expect(gate).toBe('menu-dialog');
       }
     }
   });
