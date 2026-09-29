@@ -4,6 +4,7 @@ import React, { useRef } from 'react';
 import { FileSpreadsheet, Upload } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Progress } from '@/components/atoms/progress';
+import { ACCEPTED_UPLOAD_ACCEPT, ACCEPTED_UPLOAD_HELP } from '@/lib/accepted-upload-types';
 
 export const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
@@ -28,7 +29,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
   setError,
   uploadProgress,
   onFileSelect,
-  acceptedFileTypes = '.csv,.xlsx,.xls,.parquet,.sav,.dta,.json,.sss,.mdd',
+  acceptedFileTypes = ACCEPTED_UPLOAD_ACCEPT,
   children,
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,7 +138,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
             <span>Select File</span>
           </button>
           <p className="text-xs text-muted-foreground mt-4">
-            Supports CSV, Excel (.xlsx, .xls) • Max size: 100MB
+            {ACCEPTED_UPLOAD_HELP} • Max size: 100MB
           </p>
         </div>
       )}
