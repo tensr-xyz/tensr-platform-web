@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { Loader2 as Loader } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { apiClient } from '@/lib/api-client';
 import { fuseWaveDatasets, fuseSurveyDatasets } from '@/lib/dataset-data-ops';
@@ -42,6 +43,7 @@ function FuseDialog({
   title: string;
 }) {
   const token = getStytchBearerForTensrApi();
+  const router = useRouter();
   const { toast } = useToast();
   const { tabs, activeTabId } = useTabsStore();
   const fileSystem = useProjectStore(s => s.fileSystem);
@@ -117,11 +119,15 @@ function FuseDialog({
               },
               token
             );
-      console.info(`[${title}]`, result);
+      const saved = result as { dataset_id?: string; original_filename?: string; n_rows?: number };
+      if (!saved.dataset_id) throw new Error('Fuse did not save a dataset');
       toast({
         title: title,
-        description: `Fused ${selectedIds.length} datasets (${(result as { n_rows?: number }).n_rows ?? '?'} rows).`,
+        description: `Fused ${selectedIds.length} datasets (${saved.n_rows ?? '?'} rows).`,
       });
+      router.push(
+        `/workspace/dataset/${saved.dataset_id}?name=${encodeURIComponent(saved.original_filename || 'fused')}`
+      );
     } catch (err) {
       setError(formatApiErrorMessage(err));
     } finally {
