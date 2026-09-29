@@ -9,7 +9,10 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { useProjectFileUpload } from '@/hooks/api/use-project-file-upload';
-import { ACCEPTED_UPLOAD_ACCEPT, ACCEPTED_UPLOAD_DOT_EXTENSIONS } from '@/lib/accepted-upload-types';
+import {
+  ACCEPTED_UPLOAD_ACCEPT,
+  ACCEPTED_UPLOAD_DOT_EXTENSIONS,
+} from '@/lib/accepted-upload-types';
 import { FilePicker } from './file-picker';
 
 interface FilePickerWrapperProps {

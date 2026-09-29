@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { ACCEPTED_UPLOAD_EXTENSIONS, ACCEPTED_UPLOAD_HELP } from '@/lib/accepted-upload-types';
-import { uploadDatasetFile } from '@/lib/upload-dataset';
+import { uploadDatasetFile, type UploadScope } from '@/lib/upload-dataset';
 
 const ALLOWED = new Set<string>(ACCEPTED_UPLOAD_EXTENSIONS);
 
 export function useDatasetUpload(
-  scope: 'personal' | 'team' = 'personal',
+  scope: UploadScope = 'workspace',
   onUploadComplete?: (datasetId: string, fileName: string) => void
 ) {
   const cbRef = useRef(onUploadComplete);

@@ -1,6 +1,8 @@
 export const CHANGELOG_SEEN_STORAGE_KEY = 'tensr.whats-new.seen-version';
 export const CHANGELOG_PAGE_URL = 'https://www.tensr.xyz/changelog';
 export const LANDING_CHANGELOG_URL = 'https://www.tensr.xyz/api/changelog';
+/** Browser reads the feed through this app's route, which fetches LANDING_CHANGELOG_URL. */
+export const CHANGELOG_FEED_PATH = '/api/changelog';
 
 export type ChangelogTag = 'feature' | 'fix' | 'improvement';
 
@@ -94,7 +96,7 @@ export function writeSeenVersion(version: string, storage: StorageSet = localSto
 export async function fetchChangelogFeed(
   fetchImpl: typeof fetch = fetch
 ): Promise<ChangelogEntry[]> {
-  const response = await fetchImpl(LANDING_CHANGELOG_URL, {
+  const response = await fetchImpl(CHANGELOG_FEED_PATH, {
     headers: { Accept: 'application/json' },
   });
   if (!response.ok) {

@@ -43,7 +43,7 @@ export const useProjectFileUpload = ({
           throw new Error('Authentication required. Please log in again.');
         }
 
-        const result = await uploadDatasetFile(file, token, 'personal', setUploadProgress);
+        const result = await uploadDatasetFile(file, token, 'workspace', setUploadProgress);
         devLog('Dataset upload completed:', result.dataset_id);
 
         onUploadComplete?.(result.dataset_id);

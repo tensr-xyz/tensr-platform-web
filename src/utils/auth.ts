@@ -1,3 +1,4 @@
+import { PERSONAL_ACCOUNT_KEY } from '@/lib/active-organisation';
 import { devLog } from '@/lib/dev-log';
 import { STYTCH_SESSION_COOKIE_DAYS } from '@/lib/stytch-session';
 const SESSION_TOKEN_KEY = 'stytch_session_token';
@@ -229,8 +230,6 @@ export const decodeSessionJwt = (sessionJwt: string) => {
 // callers must fall back to the opaque session_token when the JWT is expired.
 export const getIdToken = getStytchBearerForTensrApi;
 export const getAccessToken = getSessionToken;
-
-const PERSONAL_ACCOUNT_KEY = 'PERSONAL_ACCOUNT';
 
 /** Auth + active organization headers for tensr-api dataset/project routes. */
 export function getTensrApiHeaders(extra?: HeadersInit): HeadersInit {

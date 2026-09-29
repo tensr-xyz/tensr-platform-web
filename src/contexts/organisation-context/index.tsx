@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/api/use-auth';
 import {
   decodeSessionJwt,
@@ -12,6 +13,12 @@ import {
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse, SessionExpiredError } from '@/lib/session-expired';
 import { Organization, OrganizationMember } from '@/hooks/api/use-organisation';
+import {
+  PERSONAL_ACCOUNT_KEY,
+  readIsPersonal,
+  resolveWorkspaceSelection,
+  saveActiveOrganisationId,
+} from '@/lib/active-organisation';
 import { authTrace } from '@/lib/auth-trace';
 import { devLog } from '@/lib/dev-log';
 
@@ -33,6 +40,11 @@ function normalizeOrganization(raw: Record<string, unknown>): Organization {
     createdAt: String(raw.created_at ?? raw.createdAt ?? now),
     updatedAt: String(raw.updated_at ?? raw.updatedAt ?? now),
     role,
+    description: raw.description as string | undefined,
+    slug: raw.slug as string | undefined,
+    logoUrl: raw.logo_url as string | undefined,
+    privacyMode: raw.privacy_mode === 'schema_only' ? 'schema_only' : 'full',
+    isPersonal: readIsPersonal(raw),
   };
 }
 
@@ -62,7 +74,7 @@ interface OrganizationContextType {
   error: string | null;
 
   // Refresh functions
-  refreshOrganizations: () => Promise<void>;
+  refreshOrganizations: () => Promise<Organization[]>;
   refreshCurrentOrganization: () => Promise<void>;
 }
 
@@ -75,14 +87,13 @@ const ROLE_HIERARCHY: Record<OrganizationMember['role'], number> = {
   ADMIN: 3,
 };
 
-const PERSONAL_ACCOUNT_KEY = 'PERSONAL_ACCOUNT';
-
 interface OrganizationProviderProps {
   children: ReactNode;
 }
 
 export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ children }) => {
   const { user, isAuthenticated, isAuthReady, session } = useAuth();
+  const queryClient = useQueryClient();
   const [mounted, setMounted] = useState(false);
   const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<OrganizationMember['role'] | null>(null);
@@ -212,9 +223,18 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     }
   };
 
+  // Cached lists were fetched with the previous X-Organization-Id.
+  const refetchForWorkspace = (previousOrgId: string | null) => {
+    const nextOrgId = localStorage.getItem('activeOrganizationId');
+    if (previousOrgId !== nextOrgId) {
+      void queryClient.invalidateQueries();
+    }
+  };
+
   // Switch to personal account
   const switchToPersonalAccount = () => {
     devLog('Switching to personal account');
+    const previousOrgId = localStorage.getItem('activeOrganizationId');
 
     setActiveOrganization(null);
     setCurrentUserRole(null);
@@ -223,8 +243,9 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     setIsSwitching(false);
 
     // Clear persisted organization
-    localStorage.setItem('activeOrganizationId', PERSONAL_ACCOUNT_KEY);
+    saveActiveOrganisationId(PERSONAL_ACCOUNT_KEY);
     localStorage.removeItem('activeOrganizationRole');
+    refetchForWorkspace(previousOrgId);
 
     // Emit event for other components to react to account switch
     window.dispatchEvent(
@@ -234,45 +255,24 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     );
   };
 
-  // Switch to organization using JWT claims (no API call needed!)
-  const switchOrganizationFromClaims = (orgId: string) => {
-    const claims = getOrganizationClaimsFromToken();
-    const orgClaim = claims.find(claim => claim.orgId === orgId);
-
-    if (!orgClaim) {
-      throw new Error('User is not a member of this organization');
-    }
-
-    // Find the organization in our list or create a minimal one
-    let organization = userOrganizations.find(org => org.id === orgId);
-    if (!organization) {
-      organization = {
-        id: orgId,
-        name: PENDING_ORGANISATION_NAME,
-        role: orgClaim.role,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-    }
-
-    // Update state
+  const openOrganisation = (organization: Organization) => {
+    const previousOrgId = localStorage.getItem('activeOrganizationId');
     setActiveOrganization(organization);
-    setCurrentUserRole(orgClaim.role);
+    setCurrentUserRole(organization.role);
     setIsPersonalAccount(false);
-
-    // Persist active organization
-    localStorage.setItem('activeOrganizationId', orgId);
-    localStorage.setItem('activeOrganizationRole', orgClaim.role);
-
-    // Emit event
+    setError(null);
+    saveActiveOrganisationId(organization.id);
+    localStorage.setItem('activeOrganizationRole', organization.role);
+    refetchForWorkspace(previousOrgId);
     window.dispatchEvent(
       new CustomEvent('organizationSwitched', {
-        detail: { organization, role: orgClaim.role, isPersonalAccount: false },
+        detail: { organization, role: organization.role, isPersonalAccount: false },
       })
     );
   };
 
-  // Switch to a different organization or personal account
+  // Switch to a different organization or personal account.
+  // Membership comes from the API list. Session tokens do not include these orgs.
   const switchOrganization = async (orgId: string | null) => {
     devLog('Switching organization to:', orgId);
 
@@ -280,7 +280,6 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
       throw new Error('User not authenticated');
     }
 
-    // Handle switching to personal account
     if (!orgId || orgId === '' || orgId === PERSONAL_ACCOUNT_KEY) {
       switchToPersonalAccount();
       return;
@@ -290,15 +289,15 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     setError(null);
 
     try {
-      // Use JWT claims for instant switching (no API call needed)
-      switchOrganizationFromClaims(orgId);
-
-      devLog('Successfully switched to organization using JWT claims');
+      const organization = userOrganizations.find(org => org.id === orgId && !org.isPersonal);
+      if (!organization) {
+        throw new Error('User is not a member of this organization');
+      }
+      openOrganisation(organization);
+      devLog('Switched to organization', organization.id);
     } catch (err: any) {
       console.error('Error switching organization:', err);
       setError(err.message);
-
-      // If switching fails, fall back to personal account
       switchToPersonalAccount();
       throw err;
     } finally {
@@ -307,14 +306,13 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
   };
 
   // Refresh organizations list
-  const refreshOrganizations = async () => {
-    if (!isAuthenticated) return;
+  const refreshOrganizations = async (): Promise<Organization[]> => {
+    if (!isAuthenticated) return [];
 
-    // Check if token is available before making API calls
     const token = getAuthToken();
     if (!token) {
       console.warn('Cannot refresh organizations: no authentication token available');
-      return;
+      return [];
     }
 
     setOrgsLoading(true);
@@ -323,19 +321,20 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
     try {
       const orgs = await fetchUserOrganizations();
       setUserOrganizations(orgs);
-
       devLog(`Refreshed ${orgs.length} organizations`);
+      return orgs;
     } catch (err: any) {
       console.error('Error refreshing organizations:', err);
       setError(err.message);
 
-      // Fallback to token claims
       try {
         const tokenOrgs = getOrganizationsFromToken();
         setUserOrganizations(tokenOrgs);
         devLog(`Using ${tokenOrgs.length} organizations from token claims`);
+        return tokenOrgs;
       } catch (tokenErr) {
         console.error('Failed to get organizations from token:', tokenErr);
+        return [];
       }
     } finally {
       setOrgsLoading(false);
@@ -392,26 +391,20 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
 
       devLog('Found saved org state:', { savedOrgId, savedRole });
 
-      // First, always refresh organizations (this will also populate from token claims)
       refreshOrganizations()
-        .then(() => {
-          if (savedOrgId && savedOrgId !== PERSONAL_ACCOUNT_KEY && savedRole) {
-            devLog('Attempting to restore saved organization');
-            // Try to switch to the saved organization using claims (fast)
-            try {
-              switchOrganizationFromClaims(savedOrgId);
-              devLog('Successfully restored organization from claims');
-            } catch (err) {
-              console.warn(
-                'Failed to restore saved organization from claims, using personal account:',
-                err
-              );
-              switchToPersonalAccount();
-            }
-          } else {
-            devLog('No saved organization or personal account saved, defaulting to personal');
+        .then(orgs => {
+          const choice = resolveWorkspaceSelection(orgs, savedOrgId);
+          if (choice.kind === 'personal') {
             switchToPersonalAccount();
+            return;
           }
+          const organization = orgs.find(org => org.id === choice.id);
+          if (!organization) {
+            switchToPersonalAccount();
+            return;
+          }
+          openOrganisation(organization);
+          devLog('Opened organisation', organization.id);
         })
         .catch(err => {
           console.error('Failed to refresh organizations:', err);
@@ -428,7 +421,7 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
       setOrgsLoading(false);
       setIsSwitching(false);
       setError(null);
-      localStorage.removeItem('activeOrganizationId');
+      saveActiveOrganisationId(null);
       localStorage.removeItem('activeOrganizationRole');
     }
   }, [mounted, isAuthReady, isAuthenticated, user?.userId]);

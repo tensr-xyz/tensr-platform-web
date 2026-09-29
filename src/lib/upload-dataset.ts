@@ -1,5 +1,25 @@
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
+import { PERSONAL_ACCOUNT_KEY } from '@/lib/active-organisation';
+
+export type UploadScope = 'personal' | 'team' | 'workspace';
+
+/** Team scope and org header for the workspace the user has open. */
+export function resolveUploadTarget(
+  scope: UploadScope,
+  savedOrgId: string | null
+): { scope: 'personal' | 'team'; orgId: string | null } {
+  const orgId = savedOrgId && savedOrgId !== PERSONAL_ACCOUNT_KEY ? savedOrgId : null;
+  if (scope === 'workspace') {
+    return orgId ? { scope: 'team', orgId } : { scope: 'personal', orgId: null };
+  }
+  return { scope, orgId };
+}
+
+function activeOrgIdFromStorage(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('activeOrganizationId');
+}
 
 export type DatasetUploadResult = {
   dataset_id: string;
@@ -16,11 +36,13 @@ export function contentTypeForDatasetUpload(fileType?: string | null): string {
 export async function uploadDatasetFile(
   file: File,
   token: string,
-  scope: 'personal' | 'team',
+  requestedScope: UploadScope,
   onProgress?: (pct: number) => void
 ): Promise<DatasetUploadResult> {
   const fileName = file.name;
   const contentType = contentTypeForDatasetUpload(file.type);
+  const { scope, orgId } = resolveUploadTarget(requestedScope, activeOrgIdFromStorage());
+  const orgHeader: Record<string, string> = orgId ? { 'X-Organization-Id': orgId } : {};
   onProgress?.(5);
 
   const uploadUrlRes = await fetch(tensrApiUrl(`/datasets/upload-url?scope=${scope}`), {
@@ -28,6 +50,7 @@ export async function uploadDatasetFile(
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
+      ...orgHeader,
     },
     body: JSON.stringify({
       filename: fileName,
@@ -84,6 +107,7 @@ export async function uploadDatasetFile(
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
+          ...orgHeader,
         },
         body: JSON.stringify({
           s3_key: presign.s3_key,
@@ -139,6 +163,7 @@ export async function uploadDatasetFile(
     );
     xhr.open('POST', tensrApiUrl(`/datasets/upload?scope=${scope}`));
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    if (orgId) xhr.setRequestHeader('X-Organization-Id', orgId);
     xhr.send(formData);
   });
 }
