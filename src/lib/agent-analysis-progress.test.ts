@@ -74,10 +74,25 @@ describe('interpretProgressMessage', () => {
 });
 
 describe('interpretAgentLoopProgressMessage', () => {
-  it('seeds with Working when no backend message yet', () => {
+  it('does not seed a static Working… line — the pulse label covers that', () => {
+    // Main merge used to interpret empty start as "Working…" next to the pulse.
     expect(
       interpretAgentLoopProgressMessage({ type: 'progress', step: 'start', message: '' })
-    ).toBe(AGENT_LOOP_INITIAL_PROGRESS);
+    ).toBe('');
+    expect(
+      accumulateInterpretedLoopProgress(undefined, {
+        type: 'progress',
+        step: 'start',
+        message: '',
+      })
+    ).toEqual([]);
+    expect(
+      accumulateInterpretedLoopProgress(undefined, {
+        type: 'progress',
+        step: 'start',
+        message: AGENT_LOOP_INITIAL_PROGRESS,
+      })
+    ).toEqual([]);
   });
 
   it('maps run_analysis tool start to Working through copy', () => {

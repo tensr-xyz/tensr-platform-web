@@ -43,16 +43,17 @@ describe('analysis report honesty banners (menu-catalog)', () => {
     expect(screen.queryByText(/^Unverified$/)).not.toBeInTheDocument();
   });
 
-  it('shows unavailable provenance in the inspector, not the Traceability banner', () => {
+  it('prints unavailable with the reason, not the unknown sentence', () => {
     render(
       <AnalysisReportView
         report={sampleReport()}
         provenance={{ provenance_unavailable: 'multi_origin' }}
       />
     );
-    expect(screen.getByTestId('provenance-inspector')).toHaveTextContent(/multi_origin/i);
-    expect(screen.queryByText('Traceability')).not.toBeInTheDocument();
-    expect(screen.queryByText(/traceability unknown/i)).not.toBeInTheDocument();
+    const banner = getTraceabilityBanner();
+    expect(banner).toHaveTextContent(/provenance unavailable: multi_origin/i);
+    expect(banner).not.toHaveTextContent(/traceability unknown/i);
+    expect(screen.queryByTestId('provenance-inspector')).not.toBeInTheDocument();
   });
 
   it('does not print a Traceability banner when the bitset is complete', () => {
@@ -112,7 +113,7 @@ describe('analysis report F/n click-through (menu-catalog)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /show rows for f statistic/i }));
     expect(onReveal).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: /show rows for n = 504/i }));
+    fireEvent.click(screen.getByRole('button', { name: /504 of 505 source rows used/i }));
     expect(onReveal).toHaveBeenCalledTimes(2);
   });
 
@@ -120,7 +121,7 @@ describe('analysis report F/n click-through (menu-catalog)', () => {
     const onReveal = jest.fn();
     render(<AnalysisReportView report={sampleReport()} onRevealConsumedRows={onReveal} />);
     expect(screen.queryByRole('button', { name: /show rows for f statistic/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /show rows for n = 504/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /504 of 505 source rows used/i })).toBeNull();
   });
 
   it('does not offer F/n click-through when provenance is unavailable', () => {
@@ -133,7 +134,7 @@ describe('analysis report F/n click-through (menu-catalog)', () => {
       />
     );
     expect(screen.queryByRole('button', { name: /show rows for f statistic/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /show rows for n = 504/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /504 of 505 source rows used/i })).toBeNull();
   });
 });
 
@@ -176,6 +177,8 @@ describe('analysis report R syntax badge (menu-catalog)', () => {
       'verified_in_ci'
     );
     expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent(/reference dataset/i);
+    expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent(/not verified against r/i);
+    expect(screen.getByTestId('r-syntax-badge')).not.toHaveTextContent('Verified against R ✓');
 
     rerender(
       <AnalysisReportView

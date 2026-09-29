@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowLeft, ArrowRight, FlaskConical, Loader2, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Loader2, X } from 'lucide-react';
 
 import type { AnalysisWizardMeta } from '@/lib/analysis-definitions';
 import type { AnalysisWizardTooltip } from '@/lib/analysis-wizard-tooltips';
@@ -101,10 +101,6 @@ export function AnalysisDialogShell({
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-6 py-3">
           <div className="min-w-0 flex-1 space-y-1">
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-              <FlaskConical className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
-              <span>250-row preview</span>
-            </div>
             {!canRun && !busy && runBlockers.length > 0 && !serverError ? (
               <p className="text-[11px] leading-snug text-red-600 dark:text-red-400" role="status">
                 {runBlockers[0]}
