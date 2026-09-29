@@ -2,6 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
 import { getIdToken } from '@/utils/auth';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
+import {
+  PERSONAL_ACCOUNT_KEY,
+  readIsPersonal,
+  resolveWorkspaceSelection,
+  saveActiveOrganisationId,
+} from '@/lib/active-organisation';
 import { devLog } from '@/lib/dev-log';
 
 const API_BASE_URL = getTensrApiBaseUrl();
@@ -25,6 +31,7 @@ function mapApiOrganization(raw: Record<string, unknown>): Organization {
     slug: raw.slug as string | undefined,
     logoUrl: raw.logo_url as string | undefined,
     privacyMode: raw.privacy_mode === 'schema_only' ? 'schema_only' : 'full',
+    isPersonal: readIsPersonal(raw),
   };
 }
 
@@ -40,6 +47,7 @@ export interface Organization {
   slug?: string;
   logoUrl?: string;
   privacyMode?: 'full' | 'schema_only';
+  isPersonal?: boolean;
 }
 
 export interface OrganizationMember {
@@ -238,12 +246,19 @@ export const useOrganization = (): UseOrganizationReturn => {
         : [];
       setOrganizations(userOrgs);
 
-      // If we have organizations but no active one, set the first as active
-      if (userOrgs.length > 0 && !activeOrganization) {
-        setActiveOrganization(userOrgs[0]);
-
-        // Save to localStorage for persistence
-        localStorage.setItem('activeOrganizationId', userOrgs[0].id);
+      // Follow the saved team. Do not write the personal organisation id:
+      // that header keeps the personal plan and hides the shared trial.
+      if (!activeOrganization) {
+        const saved = localStorage.getItem('activeOrganizationId');
+        const choice = resolveWorkspaceSelection(userOrgs, saved);
+        if (choice.kind === 'organisation') {
+          const next = userOrgs.find(org => org.id === choice.id);
+          if (next) {
+            setActiveOrganization(next);
+            saveActiveOrganisationId(next.id);
+            localStorage.setItem('activeOrganizationRole', next.role);
+          }
+        }
       }
 
       return userOrgs;
@@ -296,7 +311,8 @@ export const useOrganization = (): UseOrganizationReturn => {
 
       // Set as active organization
       setActiveOrganization(newOrg);
-      localStorage.setItem('activeOrganizationId', newOrg.id);
+      saveActiveOrganisationId(newOrg.id);
+      localStorage.setItem('activeOrganizationRole', newOrg.role);
 
       return newOrg;
     } catch (err: any) {
@@ -400,12 +416,19 @@ export const useOrganization = (): UseOrganizationReturn => {
       // If we deleted the active organization, set a new active one
       if (activeOrganization?.id === orgId) {
         const remainingOrgs = organizations.filter(org => org.id !== orgId);
-        if (remainingOrgs.length > 0) {
-          setActiveOrganization(remainingOrgs[0]);
-          localStorage.setItem('activeOrganizationId', remainingOrgs[0].id);
+        const choice = resolveWorkspaceSelection(remainingOrgs, null);
+        const next =
+          choice.kind === 'organisation'
+            ? remainingOrgs.find(org => org.id === choice.id)
+            : undefined;
+        if (next) {
+          setActiveOrganization(next);
+          saveActiveOrganisationId(next.id);
+          localStorage.setItem('activeOrganizationRole', next.role);
         } else {
           setActiveOrganization(null);
-          localStorage.removeItem('activeOrganizationId');
+          saveActiveOrganisationId(PERSONAL_ACCOUNT_KEY);
+          localStorage.removeItem('activeOrganizationRole');
         }
       }
 
@@ -1067,7 +1090,7 @@ export const useOrganization = (): UseOrganizationReturn => {
     activeOrganization,
     setActiveOrganization: (org: Organization) => {
       setActiveOrganization(org);
-      localStorage.setItem('activeOrganizationId', org.id);
+      saveActiveOrganisationId(org.id);
     },
     createOrganization,
     updateOrganization,

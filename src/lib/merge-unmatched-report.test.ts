@@ -36,6 +36,10 @@ describe('mergeUnmatchedReportLines', () => {
         },
         true
       )
-    ).toEqual(['1 rows in the result.', 'Unmatched on this file: 0', 'Unmatched on the other file: 0']);
+    ).toEqual([
+      '1 rows in the result.',
+      'Unmatched on this file: 0',
+      'Unmatched on the other file: 0',
+    ]);
   });
 });

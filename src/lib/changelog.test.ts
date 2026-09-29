@@ -1,6 +1,6 @@
 import {
+  CHANGELOG_FEED_PATH,
   CHANGELOG_SEEN_STORAGE_KEY,
-  LANDING_CHANGELOG_URL,
   fetchChangelogFeed,
   hasUnread,
   latestVersion,
@@ -87,7 +87,7 @@ describe('unread state', () => {
 });
 
 describe('fetchChangelogFeed', () => {
-  it('GETs the landing changelog API', async () => {
+  it('GETs the changelog through the same-origin route', async () => {
     const fetchImpl = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -96,7 +96,7 @@ describe('fetchChangelogFeed', () => {
 
     const entries = await fetchChangelogFeed(fetchImpl);
     expect(fetchImpl).toHaveBeenCalledWith(
-      LANDING_CHANGELOG_URL,
+      CHANGELOG_FEED_PATH,
       expect.objectContaining({ headers: { Accept: 'application/json' } })
     );
     expect(entries[0].version).toBe('0.4.1');

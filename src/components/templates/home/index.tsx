@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/ui/use-toast';
 import { useDatasetUpload } from '@/hooks/api/use-dataset-upload';
 import { Avatar, AvatarFallback } from '@/components/atoms/avatar';
 import useAuth from '@/hooks/api/use-auth';
+import { useOrganizationContext } from '@/contexts/organisation-context';
 import { cn } from '@/utils';
 import { apiClient } from '@/lib/api-client';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
@@ -166,6 +167,7 @@ const HomeTemplate: React.FC = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { activeOrganization, isPersonalAccount } = useOrganizationContext();
   const [searchQ, setSearchQ] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [uploadPickerOpen, setUploadPickerOpen] = useState(false);
@@ -184,7 +186,10 @@ const HomeTemplate: React.FC = () => {
     [router, toast]
   );
 
-  const { uploadFile, isLoading: uploadBusy } = useDatasetUpload('personal', handleDatasetUploaded);
+  const { uploadFile, isLoading: uploadBusy } = useDatasetUpload(
+    'workspace',
+    handleDatasetUploaded
+  );
 
   const projectsArray: HomeDatasetRow[] = Array.isArray(projects)
     ? (projects as HomeDatasetRow[])
@@ -336,7 +341,10 @@ const HomeTemplate: React.FC = () => {
       }));
   }, [projectsArray]);
 
-  const workspaceLabel = user?.email?.split('@')[0] ?? 'personal';
+  const workspaceLabel =
+    !isPersonalAccount && activeOrganization
+      ? activeOrganization.name
+      : (user?.email?.split('@')[0] ?? 'personal');
   const userInitials = (user?.email ?? 'YO').slice(0, 2).toUpperCase();
 
   return (

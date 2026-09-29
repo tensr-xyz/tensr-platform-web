@@ -12,7 +12,12 @@ import {
   Search,
   Upload,
   MessageSquare,
+  Building,
+  Check,
+  User,
 } from 'lucide-react';
+import { useOrganizationContext } from '@/contexts/organisation-context';
+import { toast } from '@/hooks/ui/use-toast';
 import { Button } from '@/components/atoms/button';
 import { DatasetFilePicker } from '@/components/molecules/dataset-file-picker';
 import { FeedbackDialog } from '@/components/molecules/feedback-button';
@@ -91,7 +96,30 @@ function MinimalShellNavTabs({ pathname }: { pathname: string }) {
 
 const UserMenu: React.FC = () => {
   const { user, handleLogout } = useAuth();
+  const {
+    activeOrganization,
+    isPersonalAccount,
+    userOrganizations,
+    switchOrganization,
+    switchToPersonalAccount,
+    isSwitching,
+  } = useOrganizationContext();
   const [feedbackOpen, setFeedbackOpen] = React.useState(false);
+  const teamOrganizations = userOrganizations.filter(org => !org.isPersonal);
+
+  const handleSwitch = async (orgId: string) => {
+    try {
+      await switchOrganization(orgId);
+      const name = teamOrganizations.find(org => org.id === orgId)?.name;
+      toast({ title: 'Workspace switched', description: `Now working in ${name}` });
+    } catch (err) {
+      toast({
+        title: 'Could not switch workspace',
+        description: err instanceof Error ? err.message : 'Try again.',
+        variant: 'destructive',
+      });
+    }
+  };
 
   if (!user) return null;
 
@@ -134,9 +162,47 @@ const UserMenu: React.FC = () => {
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
               <p className="text-sm leading-none">{user.email}</p>
-              <p className="text-xs leading-none text-muted-foreground">{user.subscriptionTier}</p>
+              <p className="text-xs leading-none text-muted-foreground">
+                {isPersonalAccount || !activeOrganization
+                  ? user.subscriptionTier
+                  : activeOrganization.name}
+              </p>
             </div>
           </DropdownMenuLabel>
+          {teamOrganizations.length > 0 ? (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="text-xs font-normal text-muted-foreground">
+                Workspace
+              </DropdownMenuLabel>
+              <DropdownMenuItem
+                className="cursor-pointer"
+                disabled={isSwitching}
+                onSelect={() => {
+                  switchToPersonalAccount();
+                  toast({ title: 'Workspace switched', description: 'Now working in Personal' });
+                }}
+              >
+                <User className="size-4 shrink-0" />
+                <span className="flex-1">Personal</span>
+                {isPersonalAccount ? <Check className="size-4 shrink-0" /> : null}
+              </DropdownMenuItem>
+              {teamOrganizations.map(org => (
+                <DropdownMenuItem
+                  key={org.id}
+                  className="cursor-pointer"
+                  disabled={isSwitching}
+                  onSelect={() => void handleSwitch(org.id)}
+                >
+                  <Building className="size-4 shrink-0" />
+                  <span className="flex-1 truncate">{org.name}</span>
+                  {!isPersonalAccount && activeOrganization?.id === org.id ? (
+                    <Check className="size-4 shrink-0" />
+                  ) : null}
+                </DropdownMenuItem>
+              ))}
+            </>
+          ) : null}
           <DropdownMenuSeparator />
           <DropdownMenuItem asChild>
             <Link href="/settings/general" className="cursor-pointer">

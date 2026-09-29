@@ -105,6 +105,7 @@ function ControlCenter() {
     canManageMembers,
     isSwitching,
   } = useOrganizationContext();
+  const teamOrganizations = userOrganizations.filter(org => !org.isPersonal);
 
   const [isOpen, setIsOpen] = useState(false);
 
@@ -212,10 +213,10 @@ function ControlCenter() {
 
             {/* Organizations */}
             <DropdownMenuLabel className="text-xs text-muted-foreground">
-              Organizations ({userOrganizations.length})
+              Organizations ({teamOrganizations.length})
             </DropdownMenuLabel>
 
-            {userOrganizations.map(org => (
+            {teamOrganizations.map(org => (
               <DropdownMenuItem
                 key={org.id}
                 onClick={() => handleSwitchOrganization(org.id)}

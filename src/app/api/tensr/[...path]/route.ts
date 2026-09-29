@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import { buildTensrProxyTargetUrl } from '@/lib/tensr-proxy-target-url';
+import { ACTIVE_ORGANISATION_COOKIE, resolveProxyOrganisationId } from '@/lib/active-organisation';
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -40,7 +41,10 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
   const headers = new Headers();
   const auth = req.headers.get('authorization');
   if (auth) headers.set('Authorization', auth);
-  const orgId = req.headers.get('x-organization-id');
+  const orgId = resolveProxyOrganisationId(
+    req.headers.get('x-organization-id'),
+    req.cookies.get(ACTIVE_ORGANISATION_COOKIE)?.value
+  );
   if (orgId) headers.set('X-Organization-Id', orgId);
   const contentType = req.headers.get('content-type');
   if (contentType) headers.set('Content-Type', contentType);

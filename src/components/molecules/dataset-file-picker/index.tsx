@@ -11,12 +11,13 @@ import {
 import { FilePicker } from '@/components/molecules/file-picker/file-picker';
 import { useDatasetUpload } from '@/hooks/api/use-dataset-upload';
 import { ACCEPTED_UPLOAD_ACCEPT } from '@/lib/accepted-upload-types';
+import type { UploadScope } from '@/lib/upload-dataset';
 
 interface DatasetFilePickerProps {
   children?: ReactNode;
   /** Called after a successful tensr-api dataset upload */
   onUploaded?: (datasetId: string, fileName: string) => void;
-  scope?: 'personal' | 'team';
+  scope?: UploadScope;
   /** Controlled open state — use to open the picker from template buttons, etc. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -25,7 +26,7 @@ interface DatasetFilePickerProps {
 export function DatasetFilePicker({
   children,
   onUploaded,
-  scope = 'personal',
+  scope = 'workspace',
   open: controlledOpen,
   onOpenChange,
 }: DatasetFilePickerProps) {
