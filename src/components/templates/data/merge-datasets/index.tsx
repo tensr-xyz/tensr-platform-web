@@ -30,10 +30,12 @@ import {
 import { columnNamesFromSchemaResponse } from '@/lib/dataset-schema';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
+import { mergeUnmatchedReportLines } from '@/lib/merge-unmatched-report';
+import { pickObviousIdColumn } from '@/lib/obvious-id-column';
 import { useTabsStore } from '@/stores/tabs-store';
 
 type JoinHow = 'inner' | 'left' | 'right' | 'outer';
-type MergeMode = 'stack' | JoinHow;
+type MergeMode = 'stack' | 'add_variables' | JoinHow;
 
 interface MergeDatasetProps {
   children: ReactNode;
@@ -60,7 +62,9 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   const { tabs, activeTabId } = useTabsStore();
   const activeTab = tabs.find(t => t.id === activeTabId);
   const primaryDatasetId = getDatasetIdFromTab(activeTab);
-  const keyed = mode !== 'stack';
+  const keyed = mode !== 'stack' && mode !== 'add_variables';
+  const addVariables = mode === 'add_variables';
+  const radioKind = mode === 'stack' ? 'stack' : addVariables ? 'add_variables' : 'join';
   const stamp = useMemo(
     () => JSON.stringify({ secondaryDataset, mode, keys }),
     [secondaryDataset, mode, keys]
@@ -88,7 +92,7 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   }, [primaryDatasetId]);
 
   useEffect(() => {
-    if (!keyed || !primaryDatasetId || !secondaryDataset) {
+    if (!primaryDatasetId || !secondaryDataset) {
       setKeyOptions([]);
       return;
     }
@@ -111,7 +115,16 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
         );
         if (!cancelled) {
           setKeyOptions(shared);
-          setKeys(prev => prev.filter(key => shared.includes(key)));
+          const obvious = pickObviousIdColumn(shared);
+          if (obvious) {
+            setMode(prev => (prev === 'add_variables' ? 'inner' : prev));
+            setKeys(prev => {
+              const kept = prev.filter(key => shared.includes(key));
+              return kept.length ? kept : [obvious];
+            });
+          } else {
+            setKeys(prev => prev.filter(key => shared.includes(key)));
+          }
         }
       } catch {
         if (!cancelled) setKeyOptions([]);
@@ -120,7 +133,7 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
     return () => {
       cancelled = true;
     };
-  }, [keyed, primaryDatasetId, secondaryDataset, token]);
+  }, [primaryDatasetId, secondaryDataset, token]);
 
   const payload = () => ({
     secondary_dataset_id: secondaryDataset,
@@ -188,9 +201,11 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
           <div className="space-y-2">
             <Label>Merge type</Label>
             <RadioGroup
-              value={keyed ? 'join' : 'stack'}
+              value={radioKind}
               onValueChange={value => {
-                setMode(value === 'stack' ? 'stack' : 'inner');
+                if (value === 'stack') setMode('stack');
+                else if (value === 'add_variables') setMode('add_variables');
+                else setMode(keyed ? (mode as JoinHow) : 'inner');
                 setReport(null);
               }}
             >
@@ -199,11 +214,24 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
                 <Label htmlFor="join">Join on keys</Label>
               </div>
               <div className="flex items-center space-x-2">
+                <RadioGroupItem value="add_variables" id="add_variables" />
+                <Label htmlFor="add_variables">Add variables (side by side)</Label>
+              </div>
+              <div className="flex items-center space-x-2">
                 <RadioGroupItem value="stack" id="stack" />
                 <Label htmlFor="stack">Stack rows (union columns)</Label>
               </div>
             </RadioGroup>
           </div>
+
+          {addVariables && (
+            <Alert>
+              <AlertDescription>
+                Rows are matched by position, not by a key. Both files must have the same number of
+                rows.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {keyed && (
             <div className="space-y-2">
@@ -274,29 +302,9 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
 
           {report && (
             <div className="space-y-1 rounded border p-2 text-sm">
-              <p>{report.row_count ?? 0} rows in the result.</p>
-              {keyed && (
-                <>
-                  <p>
-                    Unmatched on this file: {report.unmatched_left_count ?? 0}
-                    {(report.unmatched_left_keys || []).length
-                      ? ` (${report.unmatched_left_keys!.join(', ')})`
-                      : ''}
-                  </p>
-                  <p>
-                    Unmatched on the other file: {report.unmatched_right_count ?? 0}
-                    {(report.unmatched_right_keys || []).length
-                      ? ` (${report.unmatched_right_keys!.join(', ')})`
-                      : ''}
-                  </p>
-                </>
-              )}
-              {(report.columns_only_left || []).length > 0 && (
-                <p>Only on this file: {report.columns_only_left!.join(', ')}</p>
-              )}
-              {(report.columns_only_right || []).length > 0 && (
-                <p>Only on the other file: {report.columns_only_right!.join(', ')}</p>
-              )}
+              {mergeUnmatchedReportLines(report, keyed).map(line => (
+                <p key={line}>{line}</p>
+              ))}
             </div>
           )}
 

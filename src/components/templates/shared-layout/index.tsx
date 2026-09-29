@@ -9,7 +9,6 @@ import {
   Compass,
   Settings,
   Sparkles,
-  Bell,
   Search,
   Upload,
   MessageSquare,
@@ -18,6 +17,7 @@ import { Button } from '@/components/atoms/button';
 import { DatasetFilePicker } from '@/components/molecules/dataset-file-picker';
 import { FeedbackDialog } from '@/components/molecules/feedback-button';
 import { ThemeToggle } from '@/components/molecules/theme-toggle';
+import { WhatsNewPopover } from '@/components/molecules/whats-new-popover';
 import useAuth from '@/hooks/api/use-auth';
 import Titlebar from '@/components/organisms/titlebar';
 import { useTabsStore } from '@/stores/tabs-store';
@@ -55,30 +55,6 @@ const getInitials = (value: string) => {
   }
   return localPart.slice(0, 2).toUpperCase();
 };
-
-const NotificationMenu: React.FC = () => (
-  <div className="flex h-10 w-10 items-center justify-center">
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="relative inline-flex h-[38px] w-[38px] items-center justify-center rounded-full transition-all border border-border hover:bg-accent data-[state=open]:bg-accent"
-        >
-          <Bell className="h-[15px] w-[15px]" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[220px]">
-        <DropdownMenuLabel>Notifications</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem className="flex flex-col items-start gap-1 py-2">
-          <p className="text-sm leading-none">All caught up</p>
-          <p className="text-xs text-muted-foreground">You do not have new alerts right now.</p>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  </div>
-);
 
 function MinimalShellNavTabs({ pathname }: { pathname: string }) {
   const router = useRouter();
@@ -224,6 +200,7 @@ const SharedHeader: React.FC = () => {
           </div>
         )}
         <div className="relative z-[1] flex shrink-0 items-center gap-2">
+          {isAuthenticated ? <WhatsNewPopover /> : null}
           {isAuthenticated ? <UserMenu /> : null}
         </div>
       </header>
