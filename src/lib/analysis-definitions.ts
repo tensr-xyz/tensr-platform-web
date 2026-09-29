@@ -237,9 +237,9 @@ export const SPSS_MENU_PATHS: Record<AnalysisKey, string> = {
   stl_decomposition: 'Time series → Decomposition → STL',
   stationarity_tests: 'Time series → Diagnostics → Stationarity',
   autocorrelation: 'Time series → Diagnostics → ACF / PACF',
-  kaplan_meier: 'Time series → Survival → Kaplan-Meier',
-  cox_proportional_hazards: 'Time series → Survival → Cox PH',
-  nelson_aalen: 'Time series → Survival → Nelson-Aalen',
+  kaplan_meier: 'Analyze → Survival → Kaplan-Meier',
+  cox_proportional_hazards: 'Analyze → Survival → Cox PH',
+  nelson_aalen: 'Analyze → Survival → Nelson-Aalen',
   linear_mixed_model: 'Multivariate → Mixed Models → LMM',
   generalized_linear_mixed_model: 'Multivariate → Mixed Models → GLMM',
   multilevel_modelling: 'Multivariate → Mixed Models → HLM',
@@ -767,11 +767,13 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     factorBCol,
     subjectCol,
     pcaNComponents,
+    nClusters,
     anovaInteraction,
     covariateCol,
     clusterMethod,
     clusterStandardize,
     treeMaxDepth,
+    treeMinSamplesLeaf,
     chiIncludePhi,
     chiIncludeCramersV,
     chiUseFishersExact,
@@ -946,7 +948,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
   }
   if (analysis === 'cluster_analysis') {
     if (selectedCols.length < 1) throw new Error('Select at least one variable');
-    const k = pcaNComponents.trim() ? Number(pcaNComponents) : 3;
+    const k = nClusters.trim() ? Number(nClusters) : 3;
     return {
       columns: selectedCols,
       method: clusterMethod,
@@ -972,11 +974,13 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
   }
   if (analysis === 'decision_tree') {
     if (!independentCols.length) throw new Error('Add at least one predictor');
-    const depth = treeMaxDepth.trim() ? Number(treeMaxDepth) : undefined;
+    const depth = treeMaxDepth.trim() ? Number(treeMaxDepth) : null;
+    const leaf = treeMinSamplesLeaf.trim() ? Number(treeMinSamplesLeaf) : 5;
     return {
       dependent: depCol,
       independents: independentCols,
-      max_depth: depth && !Number.isNaN(depth) ? depth : undefined,
+      max_depth: depth != null && !Number.isNaN(depth) ? depth : null,
+      min_samples_leaf: leaf && !Number.isNaN(leaf) ? leaf : 5,
     };
   }
   if (analysis === 'linear_regression') {
@@ -1177,11 +1181,25 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
   }
   if (analysis === 'random_forest_classification' || analysis === 'svm_classification') {
     if (!independentCols.length) throw new Error('Add at least one feature');
-    return { dependent: depCol, independents: independentCols, test_fraction: 0.25 };
+    const leaf = treeMinSamplesLeaf.trim() ? Number(treeMinSamplesLeaf) : 5;
+    return {
+      dependent: depCol,
+      independents: independentCols,
+      test_fraction: 0.25,
+      ...(analysis === 'random_forest_classification'
+        ? { min_samples_leaf: leaf && !Number.isNaN(leaf) ? leaf : 5 }
+        : {}),
+    };
   }
   if (analysis === 'random_forest_regression') {
     if (!independentCols.length) throw new Error('Add at least one feature');
-    return { dependent: depCol, independents: independentCols, test_fraction: 0.25 };
+    const leaf = treeMinSamplesLeaf.trim() ? Number(treeMinSamplesLeaf) : 5;
+    return {
+      dependent: depCol,
+      independents: independentCols,
+      test_fraction: 0.25,
+      min_samples_leaf: leaf && !Number.isNaN(leaf) ? leaf : 5,
+    };
   }
   if (analysis === 'gradient_boosting' || analysis === 'neural_network_mlp') {
     if (!independentCols.length) throw new Error('Add at least one feature');
@@ -1446,11 +1464,13 @@ export function defaultFormFieldsFromSchema(
     factorBCol: schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
     subjectCol: inferSubjectColumnFromSchema(schema),
     pcaNComponents: '',
+    nClusters: '3',
     anovaInteraction: true,
     covariateCol: num[1] ?? schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
     clusterMethod: 'kmeans' as const,
     clusterStandardize: true,
-    treeMaxDepth: '',
+    treeMaxDepth: '5',
+    treeMinSamplesLeaf: '5',
     chiIncludePhi: true,
     chiIncludeCramersV: true,
     chiUseFishersExact: false,
@@ -1520,11 +1540,13 @@ export type AnalysisFormState = {
   factorBCol: string;
   subjectCol: string;
   pcaNComponents: string;
+  nClusters: string;
   anovaInteraction: boolean;
   covariateCol: string;
   clusterMethod: 'kmeans' | 'hierarchical';
   clusterStandardize: boolean;
   treeMaxDepth: string;
+  treeMinSamplesLeaf: string;
   chiIncludePhi: boolean;
   chiIncludeCramersV: boolean;
   chiUseFishersExact: boolean;
@@ -1642,13 +1664,14 @@ export function formStateFromBody(
     const method = body.method;
     if (method === 'kmeans' || method === 'hierarchical') state.clusterMethod = method;
     if (typeof body.standardize === 'boolean') state.clusterStandardize = body.standardize;
-    if (body.n_clusters != null) state.pcaNComponents = String(body.n_clusters);
+    if (body.n_clusters != null) state.nClusters = String(body.n_clusters);
   }
   if (op === 'decision_tree') {
     if (typeof body.dependent === 'string') state.depCol = body.dependent;
     const inds = body.independents as string[] | undefined;
     if (inds?.length) state.independentCols = inds;
     if (body.max_depth != null) state.treeMaxDepth = String(body.max_depth);
+    if (body.min_samples_leaf != null) state.treeMinSamplesLeaf = String(body.min_samples_leaf);
   }
   if (
     op === 'random_forest_classification' ||
@@ -1662,6 +1685,7 @@ export function formStateFromBody(
     if (inds?.length) state.independentCols = inds;
     const mode = body.mode;
     if (mode === 'classification' || mode === 'regression') state.mlMode = mode;
+    if (body.min_samples_leaf != null) state.treeMinSamplesLeaf = String(body.min_samples_leaf);
   }
   if (op === 'dbscan') {
     const cols = body.columns as string[] | undefined;

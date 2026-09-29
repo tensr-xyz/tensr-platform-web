@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
-import { ACCEPTED_UPLOAD_DOT_EXTENSIONS } from '@/lib/accepted-upload-types';
+import { ACCEPTED_UPLOAD_DOT_EXTENSIONS, ACCEPTED_UPLOAD_HELP } from '@/lib/accepted-upload-types';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
 import { devLog } from '@/lib/dev-log';
 
@@ -35,9 +35,7 @@ export const useProjectFileUpload = ({
           !fileExtension ||
           !allowedExtensions?.map(ext => ext.replace('.', '')).includes(fileExtension)
         ) {
-          throw new Error(
-            'Unsupported file type. Please select CSV, Excel, SPSS (.sav), or Stata (.dta).'
-          );
+          throw new Error(`Unsupported file type. ${ACCEPTED_UPLOAD_HELP}`);
         }
 
         const token = getStytchBearerForTensrApi();

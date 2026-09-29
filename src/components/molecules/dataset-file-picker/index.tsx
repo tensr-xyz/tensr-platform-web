@@ -10,6 +10,7 @@ import {
 } from '@/components/molecules/dialog';
 import { FilePicker } from '@/components/molecules/file-picker/file-picker';
 import { useDatasetUpload } from '@/hooks/api/use-dataset-upload';
+import { ACCEPTED_UPLOAD_ACCEPT } from '@/lib/accepted-upload-types';
 
 interface DatasetFilePickerProps {
   children?: ReactNode;
@@ -61,6 +62,7 @@ export function DatasetFilePicker({
           error={error}
           setError={clearError}
           uploadProgress={uploadProgress}
+          acceptedFileTypes={ACCEPTED_UPLOAD_ACCEPT}
           onFileSelect={file => uploadFile(file)}
         />
       </DialogContent>

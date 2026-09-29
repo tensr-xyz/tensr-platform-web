@@ -36,6 +36,7 @@ export const WIZARD_FIELD = {
   acfMaxLags: 'acfMaxLags',
   semModelSpec: 'semModelSpec',
   openTextLexicon: 'openTextLexicon',
+  nClusters: 'nClusters',
 } as const;
 
 export type WizardFieldId = (typeof WIZARD_FIELD)[keyof typeof WIZARD_FIELD];
@@ -986,9 +987,9 @@ export function computeWizardFieldErrors(
     case 'efa':
       break;
     case 'cluster_analysis': {
-      const k = Number(form.pcaNComponents || '3');
+      const k = Number(form.nClusters || '3');
       if (Number.isNaN(k) || k < 2) {
-        pushError(errors, WIZARD_FIELD.columns, 'Number of clusters must be at least 2.');
+        pushError(errors, WIZARD_FIELD.nClusters, 'Number of clusters must be at least 2.');
       }
       break;
     }

@@ -484,7 +484,9 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
   kaplan_meier: {
     useWhen: ['You want survival curves from duration and event indicators.'],
     assumptions: ['Duration is positive numeric.', 'Event is 0/1 (censored vs event).'],
-    output: ['Survival curve with confidence bands; log-rank p-value if grouped.'],
+    output: [
+      'Survival step curve with censored marks; log-rank p-value if two groups. The report does not draw confidence bands.',
+    ],
   },
   cox_proportional_hazards: {
     useWhen: ['You want to model hazard as a function of covariates.'],
