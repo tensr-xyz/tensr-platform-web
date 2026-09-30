@@ -25,8 +25,9 @@ export type DerivedDatasetPayload = {
 export function derivedDatasetFromToolResults(
   toolResults: Array<{ name?: string; result?: Record<string, unknown> | null }> | undefined
 ): DerivedDatasetPayload | null {
+  let latest: DerivedDatasetPayload | null = null;
   for (const entry of toolResults ?? []) {
-    if (entry.name !== 'data_edit') continue;
+    if (entry.name !== 'data_edit' && entry.name !== 'run_analysis') continue;
     const result = entry.result;
     if (!result || result.ok === false || result.executed !== true) continue;
     if (result.apply_to_ui === false) continue;
@@ -34,9 +35,11 @@ export function derivedDatasetFromToolResults(
       result.derived && typeof result.derived === 'object'
         ? (result.derived as Record<string, unknown>)
         : null;
+    // Analyses only replace the sheet when they return a new dataset preview (e.g. merge).
+    if (entry.name === 'run_analysis' && !nested?.preview) continue;
     const id = String(result.derived_dataset_id || nested?.dataset_id || '').trim();
     if (!id) continue;
-    return {
+    latest = {
       dataset_id: id,
       original_filename:
         typeof nested?.original_filename === 'string' ? nested.original_filename : undefined,
@@ -46,7 +49,7 @@ export function derivedDatasetFromToolResults(
       preview: nested?.preview as DerivedDatasetPayload['preview'],
     };
   }
-  return null;
+  return latest;
 }
 
 export function derivedWorkspacePath(datasetId: string, filename?: string): string {

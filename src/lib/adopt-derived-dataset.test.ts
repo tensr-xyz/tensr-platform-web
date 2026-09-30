@@ -108,6 +108,59 @@ describe('derivedDatasetFromToolResults', () => {
     expect(payload?.preview?.rows).toHaveLength(1);
   });
 
+  it('opens the merged dataset from a chat merge plan, not the imported file', () => {
+    const mergedId = '7b0c6a1e-0f3d-4d8e-9a55-3c2f1d9e8a10';
+    const payload = derivedDatasetFromToolResults([
+      {
+        name: 'import_file',
+        result: {
+          ok: true,
+          dataset_id: 'a1a1a1a1-0000-4000-8000-000000000001',
+          derived_dataset_id: 'a1a1a1a1-0000-4000-8000-000000000001',
+          role: 'merge_file',
+        },
+      },
+      {
+        name: 'run_analysis',
+        result: {
+          ok: true,
+          executed: true,
+          derived_dataset_id: mergedId,
+          n_rows: 24,
+          derived: {
+            dataset_id: mergedId,
+            original_filename: 'survey_wave1_merged.csv',
+            n_rows: 24,
+            n_cols: 8,
+            preview: {
+              variable_names: ['respondent_id', 'gender', 'income_band'],
+              headers: ['respondent_id', 'gender', 'income_band'],
+              rows: [[1001, 'Female', '<25k']],
+            },
+          },
+        },
+      },
+    ]);
+    expect(payload?.dataset_id).toBe(mergedId);
+    expect(payload?.n_rows).toBe(24);
+    expect(payload?.preview?.variable_names).toContain('income_band');
+  });
+
+  it('ignores analysis results that carry no dataset preview', () => {
+    expect(
+      derivedDatasetFromToolResults([
+        {
+          name: 'run_analysis',
+          result: {
+            ok: true,
+            executed: true,
+            derived_dataset_id: 'e49b16bd-2045-4879-8399-ab949fb5efd4',
+          },
+        },
+      ])
+    ).toBeNull();
+  });
+
   it('does not replace the working wave with a response-speed summary table', () => {
     expect(
       derivedDatasetFromToolResults([
