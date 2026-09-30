@@ -1,5 +1,6 @@
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
+import type { AnalysisReport } from '@/lib/analysis-report-types';
 
 async function authedJson<T>(
   path: string,
@@ -73,6 +74,8 @@ export type DerivedDatasetResult = {
     rows: unknown[][];
     columns: { name: string; type: string }[];
   };
+  report?: AnalysisReport;
+  provenance?: Record<string, unknown>;
 };
 
 export function findDatasetDuplicates(

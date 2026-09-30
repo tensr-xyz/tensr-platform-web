@@ -22,7 +22,8 @@ import {
 } from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
 import { rakeDatasetWeights } from '@/lib/dataset-data-ops';
-import { adoptDerivedDataset, LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
+import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
+import { showDerivedResult } from '@/lib/show-derived-result';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
 import {
@@ -89,13 +90,11 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const res = await rakeDatasetWeights(datasetId, payload, token);
-      adoptDerivedDataset({
-        dataset_id: res.derived_dataset_id || res.dataset_id,
-        original_filename: res.original_filename,
-        n_rows: res.n_rows,
-        n_cols: res.n_cols,
-        preview: res.preview,
-      });
+      showDerivedResult(
+        'rake',
+        { ...res, dataset_id: res.derived_dataset_id || res.dataset_id },
+        payload
+      );
       const warning = res.diagnostics?.missing_category_warning;
       if (warning) {
         setNotice(warning);

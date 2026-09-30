@@ -191,75 +191,13 @@ class ApiClient {
       if (dsRes.status === 401) {
         handleUnauthorizedResponse(dsRes, 'projects.get');
       }
-      if (dsRes.status !== 404) {
-        const errorText = await dsRes.text();
-        throw new Error(`Failed to load dataset: ${dsRes.status} - ${errorText}`);
-      }
-
-      return this.request<any>(`/projects/${id}`);
+      const errorText = await dsRes.text();
+      throw new Error(
+        dsRes.status === 404
+          ? 'Dataset not found'
+          : `Failed to load dataset: ${dsRes.status} - ${errorText}`
+      );
     },
-
-    create: (data: any) =>
-      this.request<any>('/projects/create', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    update: (id: string, data: any) =>
-      this.request<any>(`/projects/${id}`, {
-        method: 'PUT',
-        body: JSON.stringify(data),
-      }),
-
-    delete: (id: string) => this.request<void>(`/projects/${id}`, { method: 'DELETE' }),
-
-    uploadUrl: (id: string, data: any) =>
-      this.request<any>(`/projects/${id}/upload-url`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    completeUpload: (id: string, data: any) =>
-      this.request<any>(`/projects/${id}/complete-upload`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    // New project management methods
-    getUploadUrl: (data: any) =>
-      this.request<any>(`/projects/${data.projectId}/upload`, {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    getUserProjects: (userId: string) => this.request<any[]>(`/users/${userId}/projects`),
-  };
-
-  // Auth API
-  auth = {
-    refreshTokens: (data: any) =>
-      this.request<any>('/auth/refresh-tokens', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    initiateAuth: (data: any) =>
-      this.request<any>('/auth/initiate-auth', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    verifyAuth: (data: any) =>
-      this.request<any>('/auth/verify-auth', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    resendCode: (data: any) =>
-      this.request<any>('/auth/resend-code', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
   };
 
   // Users API
@@ -453,123 +391,6 @@ class ApiClient {
 
     connectStatus: () =>
       this.request<import('@/types/plugin').ConnectStatusResponse>('/creator/connect/status'),
-  };
-
-  // Statistics API
-  statistics = {
-    mean: (data: any) =>
-      this.request<any>('/api/statistics/calculate-means', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    ttest: (data: any) =>
-      this.request<any>('/api/statistics/calculate-one-sample-ttest', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    anova: (data: any) =>
-      this.request<any>('/api/statistics/calculate-anova', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    // New descriptive statistics endpoints
-    comprehensiveDescriptives: (data: any) =>
-      this.request<any>('/api/statistics/calculate-comprehensive-descriptives', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    mode: (data: any) =>
-      this.request<any>('/api/statistics/calculate-mode', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    // Correlation and regression
-    correlation: (data: any) =>
-      this.request<any>('/api/statistics/calculate-correlation', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    linearRegression: (data: any) =>
-      this.request<any>('/api/statistics/perform-linear-regression', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    // Non-parametric tests
-    chiSquare: (data: any) =>
-      this.request<any>('/api/statistics/perform-chi-square-test', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    mannWhitneyU: (data: any) =>
-      this.request<any>('/api/statistics/perform-mann-whitney-u-test', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    wilcoxonSignedRank: (data: any) =>
-      this.request<any>('/api/statistics/perform-wilcoxon-signed-rank-test', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    kruskalWallis: (data: any) =>
-      this.request<any>('/api/statistics/perform-kruskal-wallis-test', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    // Clustering methods
-    kmeans: (data: any) =>
-      this.request<any>('/api/analysis/clustering/kmeans', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    hierarchicalClustering: (data: any) =>
-      this.request<any>('/api/analysis/clustering/hierarchical', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    dbscan: (data: any) =>
-      this.request<any>('/api/analysis/clustering/dbscan', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    // Time series methods
-    arima: (data: any) =>
-      this.request<any>('/api/analysis/time-series/arima', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    exponentialSmoothing: (data: any) =>
-      this.request<any>('/api/analysis/time-series/exponential-smoothing', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    seasonalDecomposition: (data: any) =>
-      this.request<any>('/api/analysis/time-series/seasonal-decomposition', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    // Factor analysis
-    factorAnalysis: (data: any) =>
-      this.request<any>('/api/analysis/factor-analysis', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
   };
 
   // Analysis API
@@ -816,27 +637,6 @@ class ApiClient {
           body: JSON.stringify(data),
         }),
     },
-  };
-
-  // Transform API
-  transform = {
-    countValues: (data: any) =>
-      this.request<any>('/api/transform/count-values', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    shiftValues: (data: any) =>
-      this.request<any>('/api/transform/shift-values', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    computeVariable: (data: any) =>
-      this.request<any>('/api/transform/compute-variable', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
   };
 
   // Collaboration sessions (tensr-api)
@@ -1350,15 +1150,6 @@ class ApiClient {
         `/reports/${encodeURIComponent(reportId)}/comments/${encodeURIComponent(commentId)}/resolve`,
         { method: 'POST', body: JSON.stringify(body) }
       ),
-  };
-
-  // Worker API
-  workers = {
-    summarize: (data: any) =>
-      this.request<any>('/workers/summarize', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
   };
 }
 

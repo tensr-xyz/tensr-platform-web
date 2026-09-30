@@ -32,6 +32,7 @@ import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { mergeUnmatchedReportLines } from '@/lib/merge-unmatched-report';
 import { pickObviousIdColumn } from '@/lib/obvious-id-column';
+import { showDerivedResult } from '@/lib/show-derived-result';
 import { useTabsStore } from '@/stores/tabs-store';
 
 type JoinHow = 'inner' | 'left' | 'right' | 'outer';
@@ -50,6 +51,7 @@ function isPreview(value: DerivedDatasetResult | MergePreviewResult): value is M
 export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   const router = useRouter();
   const token = getAccessToken();
+  const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<MergeMode>('inner');
@@ -174,6 +176,11 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
       if (isPreview(response) || !('dataset_id' in response)) {
         throw new Error('Merge did not save a dataset');
       }
+      if (showDerivedResult('merge_datasets', response, payload())) {
+        setOpen(false);
+        setReport(null);
+        return;
+      }
       router.push(
         `/workspace/dataset/${response.dataset_id}?name=${encodeURIComponent(response.original_filename)}`
       );
@@ -190,7 +197,7 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   };
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>

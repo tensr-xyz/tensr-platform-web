@@ -30,6 +30,7 @@ import { resolveWorkspaceDatasetId, WORKSPACE_DATASET_REQUIRED } from '@/lib/wor
 import { useTabsStore } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useToast } from '@/hooks/ui/use-toast';
+import { showDerivedResult } from '@/lib/show-derived-result';
 
 type FuseMode = 'waves' | 'datasets';
 
@@ -65,6 +66,7 @@ function FuseDialog({
   const [keyColumn, setKeyColumn] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,12 +121,17 @@ function FuseDialog({
               },
               token
             );
-      const saved = result as { dataset_id?: string; original_filename?: string; n_rows?: number };
+      const saved = result;
       if (!saved.dataset_id) throw new Error('Fuse did not save a dataset');
       toast({
         title: title,
         description: `Fused ${selectedIds.length} datasets (${saved.n_rows ?? '?'} rows).`,
       });
+      const parameters = { dataset_ids: selectedIds, key: keyColumn || undefined };
+      if (showDerivedResult('fuse_waves', saved, parameters)) {
+        setOpen(false);
+        return;
+      }
       router.push(
         `/workspace/dataset/${saved.dataset_id}?name=${encodeURIComponent(saved.original_filename || 'fused')}`
       );
@@ -136,7 +143,7 @@ function FuseDialog({
   };
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>

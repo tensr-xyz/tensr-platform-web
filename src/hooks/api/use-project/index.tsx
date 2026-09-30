@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Project, ProjectUpload } from '@/types/project';
+import { Project } from '@/types/project';
 import useAuth from '@/hooks/api/use-auth';
 import { getAccessToken, getTensrApiHeaders } from '@/utils/auth';
 import { devLog } from '@/lib/dev-log';
@@ -99,7 +99,6 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
       setError(null);
 
       try {
-        // tensr-api: UUID opens as /datasets/:id — avoid a pointless GET /projects/:id (404)
         const dsRes = await fetch(tensrApiUrl(`/datasets/${id}/schema`), {
           headers: getTensrApiHeaders(),
         });
@@ -120,222 +119,18 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
           return transformedProject as unknown as Project;
         }
 
-        // Dataset exists but this session/org cannot access it — do not fall through to /projects (misleading 404)
         if (dsRes.status === 403) {
           throw new Error(
             'This dataset is not available in your current organization. Switch to Personal account or the team that owns the dataset, then try again.'
           );
         }
 
-        // Only try legacy /projects when the id is not a dataset (404), not on other failures
-        if (dsRes.status !== 404) {
-          const errorText = await dsRes.text();
-          throw new Error(`Failed to load dataset: ${dsRes.status} ${errorText}`);
-        }
-
-        const response = await fetch(tensrApiUrl(`/projects/${id}`), {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to fetch project: ${response.status} ${errorText}`);
-        }
-
-        const data = await response.json();
-        devLog('Project API response:', data);
-
-        const transformedProject = {
-          ...data,
-          id: data.projectId,
-          name: data.projectName,
-          path: data.projectId,
-        };
-
-        setProject(transformedProject);
-        return transformedProject;
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err : new Error(String(err));
-        setError(errorMessage);
-        throw errorMessage;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [getToken]
-  );
-
-  // Create a new project
-  const createProject = useCallback(
-    async (projectData: Partial<Project>): Promise<Project> => {
-      const token = getToken();
-      if (!token) {
-        const errorMessage = new Error('Authentication required. Please log in again.');
-        setError(errorMessage);
-        throw errorMessage;
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(tensrApiUrl('/projects/create'), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(projectData),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to create project: ${response.status} ${errorText}`);
-        }
-
-        const data = await response.json();
-
-        // Update projects list
-        setProjects(prev => [...prev, data]);
-
-        return data;
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err : new Error(String(err));
-        setError(errorMessage);
-        throw errorMessage;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [getToken]
-  );
-
-  // Update a project
-  const updateProject = useCallback(
-    async (id: string, projectData: Partial<Project>): Promise<Project> => {
-      const token = getToken();
-      if (!token) {
-        const errorMessage = new Error('Authentication required. Please log in again.');
-        setError(errorMessage);
-        throw errorMessage;
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(tensrApiUrl(`/projects/${id}`), {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify(projectData),
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to update project: ${response.status} ${errorText}`);
-        }
-
-        const data = await response.json();
-
-        // Update local state
-        setProjects(prev => prev.map(p => (p.projectId === id ? data : p)));
-        if (project && project.projectId === id) {
-          setProject(data);
-        }
-
-        return data;
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err : new Error(String(err));
-        setError(errorMessage);
-        throw errorMessage;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [project, getToken]
-  );
-
-  // Delete a project
-  const deleteProject = useCallback(
-    async (id: string): Promise<void> => {
-      const token = getToken();
-      if (!token) {
-        const errorMessage = new Error('Authentication required. Please log in again.');
-        setError(errorMessage);
-        throw errorMessage;
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(tensrApiUrl(`/projects/${id}`), {
-          method: 'DELETE',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to delete project: ${response.status} ${errorText}`);
-        }
-
-        // Update local state
-        setProjects(prev => prev.filter(p => p.projectId !== id));
-        if (project && project.projectId === id) {
-          setProject(null);
-        }
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err : new Error(String(err));
-        setError(errorMessage);
-        throw errorMessage;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [project, getToken]
-  );
-
-  // Get a project upload URL
-  const getUploadUrl = useCallback(
-    async (id: string, fileName: string): Promise<ProjectUpload> => {
-      const token = getToken();
-      if (!token) {
-        const errorMessage = new Error('Authentication required. Please log in again.');
-        setError(errorMessage);
-        throw errorMessage;
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(
-          tensrApiUrl(`/projects/${id}/upload-url?fileName=${encodeURIComponent(fileName)}`),
-          {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-          }
+        const errorText = await dsRes.text();
+        throw new Error(
+          dsRes.status === 404
+            ? 'Dataset not found'
+            : `Failed to load dataset: ${dsRes.status} ${errorText}`
         );
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to get upload URL: ${response.status} ${errorText}`);
-        }
-
-        return await response.json();
       } catch (err) {
         const errorMessage = err instanceof Error ? err : new Error(String(err));
         setError(errorMessage);
@@ -345,53 +140,6 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
       }
     },
     [getToken]
-  );
-
-  // Complete a project upload
-  const completeUpload = useCallback(
-    async (id: string): Promise<Project> => {
-      const token = getToken();
-      if (!token) {
-        const errorMessage = new Error('Authentication required. Please log in again.');
-        setError(errorMessage);
-        throw errorMessage;
-      }
-
-      setIsLoading(true);
-      setError(null);
-
-      try {
-        const response = await fetch(tensrApiUrl(`/projects/${id}/complete-upload`), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to complete upload: ${response.status} ${errorText}`);
-        }
-
-        const data = await response.json();
-
-        // Update local state
-        setProjects(prev => prev.map(p => (p.projectId === id ? data : p)));
-        if (project && project.projectId === id) {
-          setProject(data);
-        }
-
-        return data;
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err : new Error(String(err));
-        setError(errorMessage);
-        throw errorMessage;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [project, getToken]
   );
 
   // Load initial data if requested - FIXED TO PREVENT INFINITE LOOP
@@ -441,10 +189,5 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
     // Methods
     getProject,
     getProjects,
-    createProject,
-    updateProject,
-    deleteProject,
-    getUploadUrl,
-    completeUpload,
   };
 };

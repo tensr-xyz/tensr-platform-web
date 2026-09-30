@@ -89,6 +89,11 @@ import { executeDataActionForDataset } from '@/lib/run-agent-data-action';
 import { revealAssistantText } from '@/lib/reveal-assistant-text';
 import { buildAgentConversationHistory } from '@/lib/agent-conversation-history';
 import type { AgentDataAction } from '@/lib/chat-pending-action';
+import {
+  ACCEPTED_UPLOAD_ACCEPT,
+  ACCEPTED_UPLOAD_HELP,
+  isAcceptedUploadExtension,
+} from '@/lib/accepted-upload-types';
 import { useRouter } from 'next/navigation';
 import {
   PREP_PLAYBOOK_STEPS,
@@ -712,8 +717,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     const next: AgentLoopAttachment[] = [];
     const rejected: string[] = [];
     for (const file of Array.from(list)) {
-      if (!/\.(csv|xlsx|xls|sav)$/i.test(file.name)) {
-        rejected.push(`${file.name} must be CSV, Excel, or .sav`);
+      if (!isAcceptedUploadExtension(file.name)) {
+        rejected.push(`${file.name} must be ${ACCEPTED_UPLOAD_HELP.replace(/\.$/, '')}`);
         continue;
       }
       if (file.size > 8 * 1024 * 1024) {
@@ -1854,7 +1859,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept=".csv,.xlsx,.xls,.sav,text/csv"
+                    accept={`${ACCEPTED_UPLOAD_ACCEPT},text/csv`}
                     multiple
                     className="hidden"
                     onChange={event => {
