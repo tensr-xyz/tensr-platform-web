@@ -66,9 +66,13 @@ import {
   VanWestendorpDialog,
 } from '@/components/templates/analysis/agency-dialogs';
 
-const chartMenuItem =
-  (name: string): AnalysisComponent =>
-  ({ children }) => <ChartBuilderDialog chartMenuName={name}>{children}</ChartBuilderDialog>;
+const chartMenuItem = (name: string): AnalysisComponent => {
+  const ChartMenuItem = ({ children }: { children: ReactNode }) => (
+    <ChartBuilderDialog chartMenuName={name}>{children}</ChartBuilderDialog>
+  );
+  ChartMenuItem.displayName = `ChartMenuItem(${name})`;
+  return ChartMenuItem;
+};
 
 const techniqueMenuEntries = Object.fromEntries(
   Object.keys(TECHNIQUE_CONFIGS).map(label => [label, createTechniqueDialog(label)])

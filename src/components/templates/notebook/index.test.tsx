@@ -604,7 +604,7 @@ describe('Notebook component', () => {
     });
 
     it('omits inline data from python setup when dataset_id is available', async () => {
-      const { getDatasetIdFromTab } = require('@/lib/workspace-dataset');
+      const { getDatasetIdFromTab } = jest.requireMock('@/lib/workspace-dataset');
       getDatasetIdFromTab.mockReturnValue('11111111-1111-1111-8111-111111111111');
 
       seedTab();

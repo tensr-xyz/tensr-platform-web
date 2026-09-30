@@ -60,7 +60,7 @@ export const FileSelector: React.FC<FileSelectorProps> = ({
         <div className="space-y-4">
           <p className="text-sm text-gray-700">
             This project contains {files.length} file{files.length !== 1 ? 's' : ''}. Please select
-            which file you'd like to import and analyze.
+            which file you&apos;d like to import and analyze.
           </p>
 
           <div className="space-y-2 max-h-96 overflow-y-auto">

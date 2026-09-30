@@ -78,7 +78,7 @@ function detectWeekdayPattern(values: string[]): DetectedPattern | null {
   const normalized = values.map(v => v.toLowerCase().trim());
 
   // Check for full weekday names
-  let indices: number[] = [];
+  const indices: number[] = [];
   for (const val of normalized) {
     const index = weekdays.findIndex(w => val.includes(w));
     if (index !== -1) {
@@ -150,7 +150,7 @@ function detectMonthPattern(values: string[]): DetectedPattern | null {
 
   const normalized = values.map(v => v.toLowerCase().trim());
 
-  let indices: number[] = [];
+  const indices: number[] = [];
   for (const val of normalized) {
     const index = months.findIndex(m => val.includes(m));
     if (index !== -1) {

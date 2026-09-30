@@ -1003,7 +1003,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     logEntries: string[],
     fromStep: PrepPlaybookStep = PREP_PLAYBOOK_STEPS[0]
   ): Promise<void> => {
-    let currentDatasetId = datasetId;
+    const currentDatasetId = datasetId;
     let step: PrepPlaybookStep = fromStep;
     let log = logEntries;
 

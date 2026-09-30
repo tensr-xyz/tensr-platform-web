@@ -474,7 +474,9 @@ export function TechniqueDialog({
 export function createTechniqueDialog(label: string) {
   const config = TECHNIQUE_CONFIGS[label];
   if (!config) {
-    return ({ children }: { children: ReactNode }) => <>{children}</>;
+    const Passthrough = ({ children }: { children: ReactNode }) => <>{children}</>;
+    Passthrough.displayName = `TechniqueDialog(${label})`;
+    return Passthrough;
   }
   const Bound = ({ children }: { children: ReactNode }) => (
     <TechniqueDialog config={config}>{children}</TechniqueDialog>

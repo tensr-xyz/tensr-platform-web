@@ -1,15 +1,7 @@
-import { dirname } from 'path';
-import { fileURLToPath } from 'url';
-import { FlatCompat } from '@eslint/eslintrc';
+import nextCoreWebVitals from 'eslint-config-next/core-web-vitals';
+import nextTypescript from 'eslint-config-next/typescript';
 import prettierConfig from 'eslint-config-prettier';
 import eslintPluginPrettier from 'eslint-plugin-prettier';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-});
 
 const eslintConfig = [
   // Ignore patterns (replaces .eslintignore)
@@ -52,7 +44,8 @@ const eslintConfig = [
   },
 
   // Base configs from Next.js (next/typescript already includes typescript-eslint recommended)
-  ...compat.extends('next/core-web-vitals', 'next/typescript'),
+  ...nextCoreWebVitals,
+  ...nextTypescript,
 
   // Add Prettier as a separate config (this must come after other style configs)
   prettierConfig,
@@ -79,6 +72,15 @@ const eslintConfig = [
           'ts-nocheck': 'allow-with-description',
         },
       ],
+
+      // React Compiler rules (react-hooks v7). next.config.ts has reactCompiler: false, so these are advisory.
+      'react-hooks/set-state-in-effect': 'warn',
+      'react-hooks/preserve-manual-memoization': 'warn',
+      'react-hooks/immutability': 'warn',
+      'react-hooks/refs': 'warn',
+      'react-hooks/static-components': 'warn',
+      'react-hooks/purity': 'warn',
+      'react-hooks/use-memo': 'warn',
     },
   },
 ];

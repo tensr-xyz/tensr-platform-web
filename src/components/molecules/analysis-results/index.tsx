@@ -686,7 +686,9 @@ export const AnalysisResults: React.FC<AnalysisResultsProps> = ({ result, classN
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Re-run Analysis with Modifications</DialogTitle>
-            <DialogDescription>Describe how you'd like to modify this analysis</DialogDescription>
+            <DialogDescription>
+              Describe how you&apos;d like to modify this analysis
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <Textarea
