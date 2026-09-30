@@ -12,7 +12,7 @@ import Loading from '@/components/molecules/loading';
 import useAuth from '@/hooks/api/use-auth';
 import { Tab } from '@/stores/tabs-store';
 import PluginsLayout from '@/components/templates/plugins-layout';
-import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { buildDefaultImportSettings, type ImportSettings } from '@/lib/import-settings';
 import { MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
 import { warmAssistantBackend } from '@/lib/warm-assistant';
@@ -39,13 +39,12 @@ function importRowLimit(totalRows?: number): number {
   return Math.min(Math.max(n, 1), SMALL_DATASET_EAGER_LOAD);
 }
 
-/** Column-major grid payload matching legacy `fetch-page` `data` for spreadsheet import */
+/** Column-major grid payload (`data[col][row]`) for spreadsheet import */
 async function fetchDatasetImportGrid(
   datasetId: string,
   token: string,
   rowLimit: number
 ): Promise<{ data: unknown[][] }> {
-  const base = getTensrApiBaseUrl();
   const headers = { Authorization: `Bearer ${token}` };
   const previewRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/preview?limit=${rowLimit}`), {
     headers,
@@ -68,7 +67,6 @@ async function tryDatasetImportGridFromUuidPath(
   rowLimit: number
 ): Promise<{ data: unknown[][] } | null> {
   if (!UUID_PATH_REGEX.test(filePath)) return null;
-  const base = getTensrApiBaseUrl();
   const schemaRes = await fetch(tensrApiUrl(`/datasets/${filePath}/schema`), {
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -288,9 +286,6 @@ export default function Workspace({ resource }: WorkspaceProps) {
         return;
       }
 
-      // Track sheetId for this import
-      let sheetId: string | undefined;
-
       try {
         const columns = settings.columnNames.map(name => ({
           id: name,
@@ -307,267 +302,18 @@ export default function Workspace({ resource }: WorkspaceProps) {
           return;
         }
 
-        // Construct the full S3 key using userId and dataToImport.filePath (which is the fileId)
-        const s3Key =
-          userId && dataToImport.filePath
-            ? `users/${userId}/${dataToImport.filePath}/${dataToImport.fileName || 'untitled'}`
-            : dataToImport.filePath;
-
         const rowLimit = importRowLimit(dataToImport.totalRows);
+        const datasetId = [dataToImport.filePath, dataToImport.fileId].find(
+          id => typeof id === 'string' && UUID_PATH_REGEX.test(id)
+        );
+        if (!datasetId) {
+          throw new Error(`Not a dataset id: ${dataToImport.filePath}`);
+        }
 
         // Load the full dataset (up to SMALL_DATASET_EAGER_LOAD) so scroll is instant
-        let data;
-
-        if (currentResource.type === 'project') {
-          const preloaded = await tryDatasetImportGridFromUuidPath(
-            dataToImport.filePath,
-            token,
-            rowLimit
-          );
-          if (preloaded) {
-            data = preloaded;
-          } else {
-            let requestBody: Record<string, unknown> = {
-              path: dataToImport.filePath,
-              start_row: 0,
-              end_row: rowLimit,
-            };
-
-            const projectResponse = await fetch(
-              `${getTensrApiBaseUrl()}/projects/${dataToImport.filePath}`,
-              {
-                method: 'GET',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
-
-            if (!projectResponse.ok) {
-              throw new Error(`Failed to get project details: ${projectResponse.status}`);
-            }
-
-            const projectData = await projectResponse.json();
-
-            const { fileSystem } = useProjectStore.getState();
-            let fileId: string | undefined;
-
-            if (fileSystem && fileSystem.length > 0) {
-              const matchingFile =
-                fileSystem.find(
-                  (f: { path?: string; name?: string; fileId?: string }) =>
-                    f.path === dataToImport.filePath || f.name === dataToImport.fileName
-                ) || fileSystem[0];
-              fileId = matchingFile?.fileId;
-            }
-
-            if (!fileId) {
-              for (const category of Object.keys(projectData.fileGroups || {})) {
-                const files = projectData.fileGroups[category];
-                if (Array.isArray(files) && files.length > 0) {
-                  const firstFile = files[0];
-                  if (firstFile?.fileId) {
-                    fileId = firstFile.fileId;
-                    break;
-                  }
-                }
-              }
-            }
-
-            if (!fileId && (!fileSystem || fileSystem.length === 0)) {
-              throw new Error('No files found in project');
-            }
-
-            requestBody = {
-              ...requestBody,
-              project_id: dataToImport.filePath,
-              ...(fileId && { file_id: fileId }),
-            };
-
-            if (fileId) {
-              try {
-                const sheetResponse = await fetch(
-                  `${getTensrApiBaseUrl()}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${token}`,
-                    },
-                  }
-                );
-
-                if (sheetResponse.ok) {
-                  const sheetData = await sheetResponse.json();
-                  const createdSheetId = sheetData.sheet?.sheetId;
-                  if (createdSheetId) {
-                    sheetId = createdSheetId;
-                  }
-                }
-              } catch {
-                // Continue without sheet
-              }
-            }
-
-            const response = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify(requestBody),
-            });
-
-            if (!response.ok) {
-              const errorText = await response.text();
-              throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
-            }
-
-            data = await response.json();
-          }
-        } else {
-          const isUuidPath = UUID_PATH_REGEX.test(dataToImport.filePath);
-
-          let requestBody: Record<string, unknown> = {
-            path: dataToImport.filePath,
-            start_row: 0,
-            end_row: rowLimit,
-          };
-
-          let skipFetchPage = false;
-
-          if (isUuidPath) {
-            const preloaded = await tryDatasetImportGridFromUuidPath(
-              dataToImport.filePath,
-              token,
-              rowLimit
-            );
-            if (preloaded) {
-              data = preloaded;
-              skipFetchPage = true;
-            }
-          }
-
-          if (!skipFetchPage && isUuidPath) {
-            const projectResponse = await fetch(
-              `${getTensrApiBaseUrl()}/projects/${dataToImport.filePath}`,
-              {
-                method: 'GET',
-                headers: {
-                  'Content-Type': 'application/json',
-                  Authorization: `Bearer ${token}`,
-                },
-              }
-            );
-
-            if (!projectResponse.ok) {
-              throw new Error(`Failed to get project details: ${projectResponse.status}`);
-            }
-
-            const projectData = await projectResponse.json();
-
-            const { fileSystem } = useProjectStore.getState();
-            let fileId: string | undefined;
-
-            if (fileSystem && fileSystem.length > 0) {
-              const matchingFile =
-                fileSystem.find(
-                  (f: { path?: string; name?: string; fileId?: string }) =>
-                    f.path === dataToImport.filePath || f.name === dataToImport.fileName
-                ) || fileSystem[0];
-              fileId = matchingFile?.fileId;
-            }
-
-            if (!fileId) {
-              for (const category of Object.keys(projectData.fileGroups || {})) {
-                const files = projectData.fileGroups[category];
-                if (Array.isArray(files) && files.length > 0) {
-                  const firstFile = files[0];
-                  if (firstFile?.fileId) {
-                    fileId = firstFile.fileId;
-                    break;
-                  }
-                }
-              }
-            }
-
-            if (!fileId && (!fileSystem || fileSystem.length === 0)) {
-              throw new Error('No files found in project');
-            }
-
-            requestBody = {
-              ...requestBody,
-              project_id: dataToImport.filePath,
-              ...(fileId && { file_id: fileId }),
-            };
-
-            if (fileId) {
-              try {
-                const sheetResponse = await fetch(
-                  `${getTensrApiBaseUrl()}/projects/${dataToImport.filePath}/files/${fileId}/create-sheet`,
-                  {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      Authorization: `Bearer ${token}`,
-                    },
-                  }
-                );
-
-                if (sheetResponse.ok) {
-                  const sheetData = await sheetResponse.json();
-                  const createdSheetId = sheetData.sheet?.sheetId;
-                  if (createdSheetId) {
-                    sheetId = createdSheetId;
-                  }
-                }
-              } catch {
-                // Continue without sheet
-              }
-            }
-          }
-
-          if (!skipFetchPage && !isUuidPath) {
-            const isProjectFilePath =
-              dataToImport.filePath.includes('/users/') &&
-              dataToImport.filePath.includes('/projects/');
-
-            if (isProjectFilePath) {
-              const pathParts = dataToImport.filePath.split('/');
-              const usersIndex = pathParts.indexOf('users');
-              const projectsIndex = pathParts.indexOf('projects');
-
-              if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
-                const projectId = pathParts[projectsIndex + 1];
-                const fileId = pathParts[projectsIndex + 3];
-
-                requestBody = {
-                  ...requestBody,
-                  project_id: projectId,
-                  file_id: fileId,
-                };
-              }
-            }
-          }
-
-          if (!skipFetchPage) {
-            const response = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${token}`,
-              },
-              body: JSON.stringify(requestBody),
-            });
-
-            if (!response.ok) {
-              const errorText = await response.text();
-              throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
-            }
-
-            data = await response.json();
-          }
+        const data = await tryDatasetImportGridFromUuidPath(datasetId, token, rowLimit);
+        if (!data) {
+          throw new Error(`Dataset not found: ${datasetId}`);
         }
 
         // Define types for data processing
@@ -636,9 +382,6 @@ export default function Workspace({ resource }: WorkspaceProps) {
         // Use the file path from import data (which is now correctly formatted with leading /)
         const filePath = dataToImport.filePath;
 
-        // sheetId is already set above for project files, or will be undefined for regular files
-        // (regular files don't support sheets yet - only project files do)
-
         // Create a new tab with the correct type
         const newTab: Omit<Tab, 'id'> = {
           name: dataToImport.fileName || 'Untitled',
@@ -655,7 +398,6 @@ export default function Workspace({ resource }: WorkspaceProps) {
             columnStats: dataToImport.columnSummaries || {},
             importSettings: settings,
             isInitialized: true,
-            sheetId, // Add sheetId for real-time collaboration
             // isProjectFile - removed as it's not in TabData type: false, // Always allow fetchMoreRows to be called
             cleanValue: (value: any) => cleanValue(value, 'string'), // Create wrapper function
             // Pass the custom processing function for future data chunks
@@ -677,15 +419,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
         clearImportData();
       }
     },
-    [
-      projectImportData,
-      resourceId,
-      addTab,
-      setProject,
-      userId,
-      currentResource.type,
-      clearImportData,
-    ]
+    [projectImportData, resourceId, addTab, clearImportData]
   );
 
   // Auto-open dataset when import payload is ready (no confirmation dialog).

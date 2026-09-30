@@ -1,12 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   ColumnFiltersState,
@@ -71,7 +63,7 @@ import { TransformationModal, Transformation } from '@/components/molecules/tran
 import { CategoryCleaner, CategoryMapping } from '@/components/molecules/category-cleaner';
 import { FillHandle } from '@/components/molecules/fill-handle';
 import { useSheetState } from '@/hooks/ui/use-sheet-state';
-import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
 import {
   shouldClearAttemptOnPathChange,
   shouldClearAttemptOnShowStats,
@@ -1170,126 +1162,19 @@ export function Spreadsheet({
             }))
           : undefined;
 
-      const filterConfig = columnFilters.map(filter => {
-        const filterValue = (filter.value as { operator?: string; value?: any }) || {};
-        const operator = filterValue.operator || '';
-        // Always convert value to string
-        const stringValue = String(filterValue.value || '');
-
-        return {
-          column: filter.id,
-          operator,
-          value: stringValue,
-        };
-      });
-
-      // Prefer tensr-api dataset preview (fast, cached) when we know the dataset id.
-      const uuidRegex =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      const isProjectPath = decodedFilePath ? uuidRegex.test(decodedFilePath) : false;
-
-      let response: Response | undefined;
-      let data: { data?: unknown[][] };
-
-      if (gridDatasetId) {
-        const dsPage = await fetchDatasetGridSliceForSpreadsheet(
-          gridDatasetId,
-          idTokenRef.current,
-          startRow,
-          endRow,
-          uuidDatasetGridCacheRef.current,
-          sortConfig
-        );
-        if (dsPage) {
-          data = dsPage;
-        } else if (isProjectPath && decodedFilePath) {
-          const projectResponse = await fetch(
-            `${getTensrApiBaseUrl()}/projects/${decodedFilePath}`,
-            {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${idTokenRef.current}`,
-              },
-            }
-          );
-
-          if (!projectResponse.ok) {
-            throw new Error(`Failed to get project details: ${projectResponse.status}`);
-          }
-
-          const projectData = await projectResponse.json();
-          const firstFile = projectData.fileGroups?.data?.[0];
-          if (!firstFile) {
-            throw new Error('No files found in project');
-          }
-
-          response = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${idTokenRef.current}`,
-            },
-            body: JSON.stringify({
-              path: firstFile.path,
-              start_row: startRow,
-              end_row: endRow,
-              sort_config: sortConfig,
-              filter_config: filterConfig,
-              project_id: decodedFilePath,
-              file_id: firstFile.fileId,
-            }),
-          });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
-          }
-          data = await response.json();
-        } else {
-          throw new Error('Could not load dataset grid slice');
-        }
-      } else {
-        const isProjectFilePath =
-          decodedFilePath.includes('/users/') && decodedFilePath.includes('/projects/');
-
-        let requestBody: Record<string, unknown> = {
-          path: decodedFilePath,
-          start_row: startRow,
-          end_row: endRow,
-          sort_config: sortConfig,
-          filter_config: filterConfig,
-        };
-
-        if (isProjectFilePath) {
-          const pathParts = decodedFilePath.split('/');
-          const usersIndex = pathParts.indexOf('users');
-          const projectsIndex = pathParts.indexOf('projects');
-
-          if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
-            const projectId = pathParts[projectsIndex + 1];
-            const fileId = pathParts[projectsIndex + 3];
-
-            requestBody = {
-              ...requestBody,
-              project_id: projectId,
-              file_id: fileId,
-            };
-          }
-        }
-
-        response = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idTokenRef.current}`,
-          },
-          body: JSON.stringify(requestBody),
-        });
-        if (!response.ok) {
-          const errorText = await response.text();
-          throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
-        }
-        data = await response.json();
+      if (!gridDatasetId) {
+        throw new Error(`No dataset id for ${decodedFilePath}`);
+      }
+      const data = await fetchDatasetGridSliceForSpreadsheet(
+        gridDatasetId,
+        idTokenRef.current,
+        startRow,
+        endRow,
+        uuidDatasetGridCacheRef.current,
+        sortConfig
+      );
+      if (!data) {
+        throw new Error(`Could not load rows for dataset ${gridDatasetId}`);
       }
 
       if (startRow >= (totalRowCount || 0)) {
@@ -1302,8 +1187,8 @@ export function Spreadsheet({
             })),
         ]);
       } else {
-        // Column-major pages: legacy fetch-page or tensr-api dataset preview slice
-        const processedData = data?.data;
+        // Column-major page from the tensr-api dataset preview slice
+        const processedData = data.data;
 
         if (processedData && processedData[0]) {
           const newRows = rowsFromColumnMajorPage(
@@ -1402,124 +1287,15 @@ export function Spreadsheet({
             }))
           : undefined;
 
-      const filterConfig = columnFilters.map(filter => {
-        const filterValue = (filter.value as { operator?: string; value?: any }) || {};
-        const operator = filterValue.operator || '';
-        const stringValue = String(filterValue.value || '');
-
-        return {
-          column: filter.id,
-          operator,
-          value: stringValue,
-        };
-      });
-
-      const uuidRegex =
-        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-      const isProjectPath = decodedFilePath ? uuidRegex.test(decodedFilePath) : false;
-
-      let data: { data?: unknown[][] } | undefined;
-
-      if (gridDatasetId) {
-        const dsPage = await fetchDatasetGridSliceForSpreadsheet(
-          gridDatasetId,
-          idTokenRef.current,
-          nextStartRow,
-          nextEndRow,
-          uuidDatasetGridCacheRef.current,
-          sortConfig
-        );
-        if (dsPage) {
-          data = dsPage;
-        } else if (isProjectPath && decodedFilePath) {
-          const projectResponse = await fetch(
-            `${getTensrApiBaseUrl()}/projects/${decodedFilePath}`,
-            {
-              method: 'GET',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${idTokenRef.current}`,
-              },
-            }
-          );
-
-          if (!projectResponse.ok) {
-            return;
-          }
-
-          const projectData = await projectResponse.json();
-          const firstFile = projectData.fileGroups?.data?.[0];
-          if (!firstFile) {
-            return;
-          }
-
-          const pageRes = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${idTokenRef.current}`,
-            },
-            body: JSON.stringify({
-              path: firstFile.path,
-              start_row: nextStartRow,
-              end_row: nextEndRow,
-              sort_config: sortConfig,
-              filter_config: filterConfig,
-              project_id: decodedFilePath,
-              file_id: firstFile.fileId,
-            }),
-          });
-
-          if (!pageRes.ok) {
-            return;
-          }
-
-          data = await pageRes.json();
-        }
-      } else {
-        const isProjectFilePath =
-          decodedFilePath.includes('/users/') && decodedFilePath.includes('/projects/');
-
-        let requestBody: Record<string, unknown> = {
-          path: decodedFilePath,
-          start_row: nextStartRow,
-          end_row: nextEndRow,
-          sort_config: sortConfig,
-          filter_config: filterConfig,
-        };
-
-        if (isProjectFilePath) {
-          const pathParts = decodedFilePath.split('/');
-          const usersIndex = pathParts.indexOf('users');
-          const projectsIndex = pathParts.indexOf('projects');
-
-          if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
-            const projectId = pathParts[projectsIndex + 1];
-            const fileId = pathParts[projectsIndex + 3];
-
-            requestBody = {
-              ...requestBody,
-              project_id: projectId,
-              file_id: fileId,
-            };
-          }
-        }
-
-        const pageRes = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${idTokenRef.current}`,
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!pageRes.ok) {
-          return;
-        }
-
-        data = await pageRes.json();
-      }
+      if (!gridDatasetId) return;
+      const data = await fetchDatasetGridSliceForSpreadsheet(
+        gridDatasetId,
+        idTokenRef.current,
+        nextStartRow,
+        nextEndRow,
+        uuidDatasetGridCacheRef.current,
+        sortConfig
+      );
 
       const processedData = data?.data;
 
@@ -1701,112 +1477,10 @@ export function Spreadsheet({
     [decodedFilePath, fetchMoreRows]
   );
 
-  const fetchFilteredData = useCallback(
-    (newFilters: ColumnFiltersState) => {
-      // Directly set column filters
-      setColumnFilters(newFilters);
-
-      // Reset data and pagination
-      setData([]);
-      lastLoadedRowRef.current = 0;
-      // Clear prefetched data since filters changed
-      setPrefetchedData([]);
-      prefetchedRowRangeRef.current = null;
-
-      // Use a callback to ensure we're working with the latest state
-      const fetchData = async () => {
-        try {
-          // Capture the filters immediately after setting state
-          const currentFilters = newFilters;
-
-          const startRow = 0;
-          const endRow = ROWS_PER_BATCH;
-
-          const filterConfig = currentFilters.map(filter => {
-            const filterValue = (filter.value as { operator?: string; value?: any }) || {};
-            return {
-              column: filter.id,
-              operator: filterValue.operator || '',
-              value: String(filterValue.value || ''),
-            };
-          });
-
-          // Determine if this is a project file by checking if filePath contains project structure
-          const isProjectFile =
-            decodedFilePath &&
-            decodedFilePath.includes('/users/') &&
-            decodedFilePath.includes('/projects/');
-
-          let requestBody: any = {
-            path: decodedFilePath,
-            start_row: 0,
-            end_row: 100,
-          };
-
-          // If it's a project file, extract project context
-          if (isProjectFile && decodedFilePath) {
-            const pathParts = decodedFilePath.split('/');
-            const usersIndex = pathParts.indexOf('users');
-            const projectsIndex = pathParts.indexOf('projects');
-
-            if (usersIndex !== -1 && projectsIndex !== -1 && projectsIndex > usersIndex) {
-              const userId = pathParts[usersIndex + 1];
-              const projectId = pathParts[projectsIndex + 1];
-              const fileId = pathParts[projectsIndex + 3]; // files/{fileId}/{fileName}
-
-              requestBody = {
-                ...requestBody,
-                project_id: projectId,
-                file_id: fileId,
-              };
-            }
-          }
-
-          const response = await fetch(`${getTensrApiBaseUrl()}/api/files/fetch-page`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${idTokenRef.current}`,
-            },
-            body: JSON.stringify(requestBody),
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Error response:', errorText);
-            throw new Error(`Failed to fetch data: ${response.status} ${errorText}`);
-          }
-
-          const data = await response.json();
-
-          // Process the response
-          if (data.data && data.data[0]) {
-            const newRows = data.data[0].map((_: any, rowIndex: string | number) => {
-              const row: RowType = { id: `row-${rowIndex}` };
-              initialColumns.forEach((col, colIndex) => {
-                if (col.id) {
-                  row[col.id] = data.data[colIndex][rowIndex];
-                }
-              });
-              return row;
-            });
-
-            // Filter updates are non-urgent - use transition
-            startTransition(() => {
-              setData(newRows);
-              lastLoadedRowRef.current = newRows.length;
-            });
-          }
-        } catch (error) {
-          console.error('Failed to fetch filtered data:', error);
-        }
-      };
-
-      // Execute the fetch
-      fetchData();
-    },
-    [decodedFilePath, initialColumns]
-  );
+  // Rows are filtered client-side in tableData; there is no server-side filter endpoint.
+  const fetchFilteredData = useCallback((newFilters: ColumnFiltersState) => {
+    setColumnFilters(newFilters);
+  }, []);
 
   const isDatasetWorkspace = useMemo(() => !!gridDatasetId, [gridDatasetId]);
   const rowUidFilter = (activeTab?.data as TabData | undefined)?.rowUidFilter;
@@ -2085,8 +1759,6 @@ export function Spreadsheet({
 
   /** Single clipboard check per render — not once per cell (was ×30 per row). */
   const clipboardHasDataNow = clipboardHasData();
-
-  const [, startTransition] = useTransition();
 
   const rowVirtualizer = useVirtualizer({
     count: virtualizationCount,
