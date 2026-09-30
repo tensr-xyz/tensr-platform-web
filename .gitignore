@@ -46,3 +46,5 @@ next-env.d.ts
 
 # PostHog wizard agent skill (not app code)
 .claude/
+
+.eslintcache
