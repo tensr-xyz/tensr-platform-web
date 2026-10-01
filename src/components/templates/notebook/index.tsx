@@ -9,6 +9,8 @@ import MarkdownViewer from '@/components/organisms/markdown-viewer';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
 import { apiClient } from '@/lib/api-client';
+import { adoptDerivedDataset } from '@/lib/adopt-derived-dataset';
+import type { DerivedDatasetPayload } from '@/lib/adopt-derived-dataset';
 
 interface Cell {
   id: number;
@@ -102,6 +104,7 @@ interface NotebookCellProps {
   isSelected: boolean;
   onSelect: (cellId: number) => void;
   onTypeChange?: (cellId: number, type: 'code' | 'markdown') => void;
+  onSaveDataset?: (cellId: number) => void;
 }
 
 const NotebookCell: React.FC<NotebookCellProps> = ({
@@ -113,6 +116,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
   isSelected,
   onSelect,
   onTypeChange,
+  onSaveDataset,
 }) => {
   const { theme } = useTheme();
   const [isEditing, setIsEditing] = useState(cell.type === 'markdown' && !cell.content.trim());
@@ -261,6 +265,23 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
             {cell.error}
           </div>
         )}
+
+        {language === 'python' && onSaveDataset && cell.executionCount !== null && !cell.error ? (
+          <div className="py-1 pl-2">
+            <button
+              type="button"
+              data-testid="notebook-save-dataset"
+              className="text-xs font-medium text-primary hover:underline"
+              disabled={isExecuting}
+              onClick={event => {
+                event.stopPropagation();
+                onSaveDataset(cell.id);
+              }}
+            >
+              Save as new dataset
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <div className="absolute right-0 top-0 h-full w-8 flex items-center justify-center invisible group-hover:visible">
@@ -411,7 +432,11 @@ names(df) <- make.names(names(df))`;
   };
 
   // Remove mockExecuteCode and replace with real API call
-  const executeCode = async (code: string, language: 'python' | 'r'): Promise<ExecutionResult> => {
+  const executeCode = async (
+    code: string,
+    language: 'python' | 'r',
+    saveAsDataset = false
+  ): Promise<ExecutionResult & { derived_dataset?: DerivedDatasetPayload | null }> => {
     try {
       if (language === 'r') {
         return apiClient.execute.r({ code });
@@ -420,6 +445,7 @@ names(df) <- make.names(names(df))`;
       return apiClient.execute.python({
         code,
         dataset_id: datasetId,
+        save_as_dataset: saveAsDataset,
       });
     } catch (err) {
       return {
@@ -427,6 +453,31 @@ names(df) <- make.names(names(df))`;
         output: null,
         error: err instanceof Error ? err.message : 'Failed to execute code',
       };
+    }
+  };
+
+  const saveCellAsDataset = async (cellId: number) => {
+    const cell = cells.find(c => c.id === cellId);
+    if (!cell || cell.type !== 'code' || language !== 'python') return;
+    setIsExecuting(true);
+    try {
+      const result = await executeCode(
+        generateSetupCode(language) + '\n' + cell.content,
+        language,
+        true
+      );
+      if (result.derived_dataset) {
+        adoptDerivedDataset(result.derived_dataset);
+      }
+      setCells(prev =>
+        prev.map(c =>
+          c.id === cellId
+            ? { ...c, error: result.error || (result.derived_dataset ? null : 'Nothing was saved') }
+            : c
+        )
+      );
+    } finally {
+      setIsExecuting(false);
     }
   };
 
@@ -613,6 +664,7 @@ names(df) <- make.names(names(df))`;
               isSelected={selectedCell === cell.id}
               onSelect={setSelectedCell}
               onTypeChange={changeCellType}
+              onSaveDataset={saveCellAsDataset}
             />
           ))}
         </div>

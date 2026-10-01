@@ -1004,17 +1004,32 @@ class ApiClient {
   };
 
   execute = {
-    python: (data: { code: string; dataset_id?: string | null }) =>
-      this.request<{ stdout: string | null; output: any; error: string | null }>(
-        '/api/execute/python',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            code: data.code,
-            dataset_id: data.dataset_id ?? null,
-          }),
-        }
-      ),
+    python: (data: { code: string; dataset_id?: string | null; save_as_dataset?: boolean }) =>
+      this.request<{
+        stdout: string | null;
+        output: any;
+        error: string | null;
+        derived_dataset_id?: string | null;
+        derived_dataset?: {
+          dataset_id: string;
+          original_filename?: string;
+          n_rows?: number;
+          n_cols?: number;
+          preview?: {
+            headers: string[];
+            rows: unknown[][];
+            variable_names?: string[];
+          };
+          provenance?: Record<string, unknown>;
+        };
+      }>('/api/execute/python', {
+        method: 'POST',
+        body: JSON.stringify({
+          code: data.code,
+          dataset_id: data.dataset_id ?? null,
+          save_as_dataset: Boolean(data.save_as_dataset),
+        }),
+      }),
 
     r: (data: { code: string }) =>
       this.request<any>('/api/execute/r', {
