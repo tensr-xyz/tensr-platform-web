@@ -1,7 +1,8 @@
 name: CI — e2e
 
-# main is intentionally absent: it is fast-forwarded to commits that already ran
-# here on development or in a pull request. Use workflow_dispatch to run it on main.
+# Web only. Vercel production is main, which is released manually.
+# This job runs on pull requests and on pushes to development (the preview branch).
+# It does not run on main. workflow_dispatch is available if a main SHA needs a rerun.
 on:
   pull_request:
   push:

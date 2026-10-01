@@ -1059,18 +1059,6 @@ class ApiClient {
         body: JSON.stringify(data),
       }),
 
-    cleanCategories: (data: { datasetId: string; columnId: string; uniqueValues?: string[] }) =>
-      this.request<any>('/ai/clean-categories', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
-    detectOutliers: (data: { datasetId: string; columnId: string; stats?: any }) =>
-      this.request<any>('/ai/detect-outliers', {
-        method: 'POST',
-        body: JSON.stringify(data),
-      }),
-
     dataQualityScan: (data: { datasetId: string; datasetSchema?: any; columnStats?: any }) =>
       this.request<any>('/ai/data-quality-scan', {
         method: 'POST',

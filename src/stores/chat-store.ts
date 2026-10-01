@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
 import { v4 as uuidv4 } from 'uuid';
 
+import type { AnalysisReportChatCard } from '@/lib/agent-analysis-chat-fields';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import type { ChatPendingAction } from '@/lib/chat-pending-action';
 
@@ -22,6 +23,8 @@ export interface ChatMessage {
   lastFittedModel?: { analysis_type: string; request_body: Record<string, unknown> };
   /** Result markdown appended after thinking lines (typewriter + final render). */
   resultMarkdown?: string;
+  /** Short summary once the full report lives on its own tab. */
+  reportCard?: AnalysisReportChatCard;
   /** Alternate columns suggested after a failed/empty data action (A6). */
   repairSuggestions?: string[];
   /** Spec used to retry a data action when a repair chip is clicked. */

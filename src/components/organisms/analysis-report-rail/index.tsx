@@ -99,6 +99,7 @@ type Props = {
   onRerun?: () => void;
   onExport?: () => void;
   onExportCsv?: () => void;
+  onExportExcel?: () => void;
   onExportMarkdown?: () => void;
   onExportHtml?: () => void;
   onExportNarrative?: () => void;
@@ -124,6 +125,7 @@ export function AnalysisReportRail({
   onRerun,
   onExport,
   onExportCsv,
+  onExportExcel,
   onExportMarkdown,
   onExportHtml,
   onExportNarrative,
@@ -161,6 +163,7 @@ export function AnalysisReportRail({
   const exportItems = [
     { label: 'Copy summary', icon: FileText, onClick: onExport },
     { label: 'CSV (all tables)', icon: FileText, onClick: onExportCsv },
+    { label: 'Excel', icon: Download, onClick: onExportExcel, testId: 'export-excel' },
     { label: 'Markdown', icon: FileText, onClick: onExportMarkdown },
     { label: 'HTML report', icon: FileText, onClick: onExportHtml },
     {
@@ -402,6 +405,7 @@ export function AnalysisReportRail({
             <button
               key={i}
               type="button"
+              data-testid={(item as { testId?: string }).testId}
               disabled={!item.onClick || Boolean((item as { disabled?: boolean }).disabled)}
               onClick={item.onClick}
               className={cn(

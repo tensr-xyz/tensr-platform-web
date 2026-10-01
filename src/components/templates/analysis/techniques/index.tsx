@@ -25,7 +25,7 @@ import { Loader2 as Loader } from 'lucide-react';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { formatApiErrorMessage } from '@/lib/api-error';
-import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
+import { openSurveyTechniqueReport } from '@/lib/survey-technique-report';
 import { resolveWorkspaceDatasetId, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -333,12 +333,12 @@ export function TechniqueDialog({
         description:
           result.ok === false ? String(result.reason || 'Completed with errors') : 'Result ready',
       });
-      if (datasetId) {
-        openAnalysisResultTab({
+      if (needsDataset && datasetId) {
+        openSurveyTechniqueReport({
+          datasetId,
           op: config.analysisOp,
-          envelope: { result } as import('@/lib/analysis-report-types').AnalyzeResponse,
           parameters: body,
-          sourceDatasetId: datasetId,
+          response: result,
           sourceTabName: activeTab?.name,
         });
       }

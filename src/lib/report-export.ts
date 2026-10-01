@@ -337,6 +337,48 @@ export function reportToHtml(
 </html>`;
 }
 
+export async function downloadReportXlsx(
+  report: AnalysisReport,
+  options: {
+    provenance?: Record<string, unknown> | null;
+    datasetId?: string;
+    raw?: Record<string, unknown> | null;
+  } = {}
+): Promise<void> {
+  const { tensrApiUrl } = await import('@/lib/tensr-api-url');
+  const { getStytchBearerForTensrApi } = await import('@/utils/auth');
+  const token = getStytchBearerForTensrApi();
+  const res = await fetch(tensrApiUrl('/reports/export.xlsx'), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      report,
+      provenance: options.provenance ?? null,
+      dataset_id: options.datasetId ?? null,
+      raw: options.raw ?? null,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Excel export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const named = disposition.match(/filename="([^"]+)"/);
+  const slug = report.meta.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'report';
+  const filename = named?.[1] || `${slug}.xlsx`;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export function downloadTextFile(
   content: string,
   filename: string,

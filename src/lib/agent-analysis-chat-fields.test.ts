@@ -2,6 +2,7 @@ import {
   attachApproachToReport,
   chatFieldsAfterRunAnalysis,
   preferRicherPlan,
+  reportCardForOpenedTab,
 } from '@/lib/agent-analysis-chat-fields';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
 
@@ -70,6 +71,26 @@ describe('chatFieldsAfterRunAnalysis', () => {
     expect(fields.content).not.toContain('Paused for approval');
     expect(fields.resultMarkdown).toBe(reportMd);
     expect(fields.content).not.toBe(fields.resultMarkdown);
+  });
+});
+
+describe('reportCardForOpenedTab', () => {
+  it('returns a short card when a report tab opened', () => {
+    expect(
+      reportCardForOpenedTab({
+        tabId: 'tab-1',
+        title: 'Linear Regression',
+        summary: 'Age and minutes predict points.',
+      })
+    ).toEqual({
+      tabId: 'tab-1',
+      title: 'Linear Regression',
+      summary: 'Age and minutes predict points.',
+    });
+  });
+
+  it('returns null when no tab opened so chat can keep the full markdown', () => {
+    expect(reportCardForOpenedTab({ tabId: null, title: 'Linear Regression' })).toBeNull();
   });
 });
 

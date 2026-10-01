@@ -10,6 +10,7 @@ export type BannerBookCell = {
   unweighted_n?: number | null;
   weighted_n?: number | null;
   kish_ess?: number | null;
+  low_base?: boolean;
   low_base_suppressed?: boolean;
   kind?: string;
   provenance?: CellProvenance;
@@ -92,10 +93,13 @@ export function displayBannerTable(book: BannerBook): DisplayTable {
     label: row.label || row.id || '',
     kind: row.kind,
     cells: (row.cells || []).map(cell => {
-      const lowBase = Boolean(cell.low_base_suppressed);
+      const suppressed = Boolean(cell.low_base_suppressed);
+      const lowBase = Boolean(cell.low_base || cell.low_base_suppressed);
+      const columnValue = fmtMean(cell) ?? fmtPct(cell.percent);
+      const rowValue = fmtPct(cell.row_percent);
       return {
-        columnPercent: lowBase ? '*' : (fmtMean(cell) ?? fmtPct(cell.percent)),
-        rowPercent: lowBase ? '*' : fmtPct(cell.row_percent),
+        columnPercent: suppressed ? '*' : lowBase && columnValue ? `${columnValue} *` : columnValue,
+        rowPercent: suppressed ? '*' : lowBase && rowValue ? `${rowValue} *` : rowValue,
         letters: letterMap.get(`${cell.stub_row_id}::${cell.banner_id}`) || '',
         bases: `n=${fmtNum(cell.unweighted_n)} · wn=${fmtNum(cell.weighted_n)} · ESS=${fmtNum(cell.kish_ess)}`,
         lowBase,

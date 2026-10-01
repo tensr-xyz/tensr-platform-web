@@ -19,6 +19,8 @@ export type CustomTableCanvas = {
   columnPercent: boolean;
   rowPercent: boolean;
   significanceDisplay: 'column_letters' | 'cell_comparisons';
+  lowBaseThreshold: number;
+  suppressLowBase: boolean;
   weightDatasetId: string | null;
   bannerId: string | null;
 };
@@ -34,6 +36,7 @@ export type TableRequestBody = {
   significance_display: 'column_letters' | 'cell_comparisons';
   nest_banners: boolean;
   low_base_threshold: number;
+  suppress_low_base: boolean;
   banner_id?: string;
 };
 
@@ -63,6 +66,8 @@ export function defaultCanvas(): CustomTableCanvas {
     columnPercent: true,
     rowPercent: false,
     significanceDisplay: 'column_letters',
+    lowBaseThreshold: 30,
+    suppressLowBase: false,
     weightDatasetId: null,
     bannerId: null,
   };
@@ -196,7 +201,8 @@ export function buildTableRequest(canvas: CustomTableCanvas): TableRequestBody {
     statistics,
     significance_display: canvas.significanceDisplay,
     nest_banners: canvas.nestBanners,
-    low_base_threshold: 30,
+    low_base_threshold: canvas.lowBaseThreshold,
+    suppress_low_base: canvas.suppressLowBase,
     ...(canvas.bannerId ? { banner_id: canvas.bannerId } : {}),
   };
 }
@@ -230,6 +236,8 @@ export type StoredTableSpec = {
   statistics?: string[];
   nest_banners?: boolean;
   significance_display?: string;
+  low_base_threshold?: number;
+  suppress_low_base?: boolean;
   banner_id?: string;
 };
 
@@ -275,6 +283,11 @@ export function canvasFromStoredSpec(
     rowPercent: stats.includes('row_proportion'),
     significanceDisplay:
       spec.significance_display === 'cell_comparisons' ? 'cell_comparisons' : 'column_letters',
+    lowBaseThreshold:
+      typeof spec.low_base_threshold === 'number'
+        ? spec.low_base_threshold
+        : current?.lowBaseThreshold || 30,
+    suppressLowBase: Boolean(spec.suppress_low_base),
     bannerId: spec.banner_id || current?.bannerId || null,
   };
 }

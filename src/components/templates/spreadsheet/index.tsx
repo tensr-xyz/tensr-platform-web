@@ -61,6 +61,18 @@ import { Copy, Scissors, Clipboard, Trash2 } from 'lucide-react';
 import { RowFixModal, RowFixIssue } from '@/components/molecules/row-fix-modal';
 import { TransformationModal, Transformation } from '@/components/molecules/transformation-modal';
 import { CategoryCleaner, CategoryMapping } from '@/components/molecules/category-cleaner';
+import {
+  ColumnOutlierBanner,
+  type OutlierMethod,
+} from '@/components/templates/spreadsheet/column-outlier-banner';
+import { adoptDerivedDataset } from '@/lib/adopt-derived-dataset';
+import {
+  applyCategoryMerges,
+  findDatasetOutliers,
+  handleDatasetOutliers,
+  previewCategoryMerges,
+  suggestCategoryMerges,
+} from '@/lib/dataset-data-ops';
 import { FillHandle } from '@/components/molecules/fill-handle';
 import { useSheetState } from '@/hooks/ui/use-sheet-state';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
@@ -526,6 +538,12 @@ export function Spreadsheet({
   const [ctxMenuColumnId, setCtxMenuColumnId] = useState<string | null>(null);
   const [selectedRowData, setSelectedRowData] = useState<Record<string, any> | null>(null);
   const [highlightedRows, setHighlightedRows] = useState<Set<number>>(new Set());
+  const [outlierScan, setOutlierScan] = useState<{
+    columnId: string;
+    flagged: number;
+    nRows: number;
+  } | null>(null);
+  const [outlierApplyBusy, setOutlierApplyBusy] = useState(false);
   const [rowInsight, setRowInsight] = useState<any | null>(null);
   const [rowFixModalOpen, setRowFixModalOpen] = useState(false);
   const [rowFixIssues, setRowFixIssues] = useState<RowFixIssue[]>([]);
@@ -540,11 +558,14 @@ export function Spreadsheet({
   >(null);
   const [categoryCleanerOpen, setCategoryCleanerOpen] = useState(false);
   const [categoryMappings, setCategoryMappings] = useState<CategoryMapping[]>([]);
+  const [categorySuggestions, setCategorySuggestions] = useState<CategoryMapping[]>([]);
+  const [categoryModelNotice, setCategoryModelNotice] = useState<string | undefined>();
+  const [categoryModelLabels, setCategoryModelLabels] = useState<string[]>([]);
+  const [categorySummary, setCategorySummary] = useState<string | undefined>();
   const [categoryCleanerLoading, setCategoryCleanerLoading] = useState(false);
   const [currentColumnForCategoryClean, setCurrentColumnForCategoryClean] = useState<string | null>(
     null
   );
-  const [outlierRows, setOutlierRows] = useState<Set<number>>(new Set());
   const [selectedColumnId, setSelectedColumnId] = useState<string | null>(null);
   const [isLoadingStats, setIsLoadingStats] = useState(false);
   const statsLoadAttempted = useRef(false);
@@ -2728,41 +2749,47 @@ export function Spreadsheet({
           setCategoryCleanerLoading(true);
           setCategoryCleanerOpen(true);
           try {
-            // Get unique values from the column
-            const uniqueValues = Array.from(
-              new Set(
-                data
-                  .map(row => row[columnId])
-                  .filter(val => val !== null && val !== undefined && val !== '')
-              )
-            ).map(String);
-
-            const response = await apiClient.ai.cleanCategories({
-              datasetId,
-              columnId,
-              uniqueValues,
-            });
-            setCategoryMappings(response.mapping || []);
+            const response = await previewCategoryMerges(datasetId, columnId, idTokenRef.current);
+            setCategoryMappings(response.mappings || []);
+            setCategorySuggestions(response.suggestions || []);
+            setCategoryModelLabels(response.labels_for_model || []);
+            setCategoryModelNotice(undefined);
+            setCategorySummary(response.summary);
           } catch (error) {
-            console.error('Failed to clean categories', error);
+            console.error('Failed to preview category merges', error);
             setCategoryMappings([]);
+            setCategorySuggestions([]);
+            setCategoryModelLabels([]);
+            setCategoryModelNotice(undefined);
+            toast({
+              title: 'Could not preview category merges',
+              description: error instanceof Error ? error.message : 'Request failed',
+              variant: 'destructive',
+            });
           } finally {
             setCategoryCleanerLoading(false);
           }
           break;
-        case 'detect-outliers':
+        case 'find-outliers':
           try {
-            const response = await apiClient.ai.detectOutliers({
+            const response = await findDatasetOutliers(
               datasetId,
+              { columns: [columnId] },
+              idTokenRef.current
+            );
+            setHighlightedRows(new Set(response.affected_row_indices || []));
+            setOutlierScan({
               columnId,
-              stats,
+              flagged: response.total_flagged_rows,
+              nRows: response.n_rows,
             });
-
-            // Mark outlier rows (we'd need to check actual values against bounds)
-            // Highlight outliers - this is a simplified version
-            // In a full implementation, we'd iterate through data and mark rows
           } catch (error) {
-            console.error('Failed to detect outliers', error);
+            console.error('Failed to find outliers', error);
+            toast({
+              title: 'Could not find outliers',
+              description: error instanceof Error ? error.message : 'Request failed',
+              variant: 'destructive',
+            });
           }
           break;
         case 'check-relationships':
@@ -2935,6 +2962,45 @@ export function Spreadsheet({
     heatmapColumns,
     freezeUpToColumnId,
   };
+
+  const applyOutlierMethod = useCallback(
+    async (method: OutlierMethod) => {
+      if (!outlierScan) return;
+      const datasetId = gridDatasetId || tabId;
+      if (!datasetId) return;
+      setOutlierApplyBusy(true);
+      try {
+        const response = await handleDatasetOutliers(
+          datasetId,
+          { columns: [outlierScan.columnId], method },
+          idTokenRef.current
+        );
+        const adopted = adoptDerivedDataset(response);
+        if (!adopted) {
+          toast({
+            title: 'Could not open the derived dataset',
+            variant: 'destructive',
+          });
+          return;
+        }
+        setHighlightedRows(new Set());
+        setOutlierScan(null);
+        toast({
+          title: 'Saved as a new dataset',
+          description: response.original_filename,
+        });
+      } catch (error) {
+        toast({
+          title: 'Could not handle outliers',
+          description: error instanceof Error ? error.message : 'Request failed',
+          variant: 'destructive',
+        });
+      } finally {
+        setOutlierApplyBusy(false);
+      }
+    },
+    [gridDatasetId, outlierScan, tabId]
+  );
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -3182,6 +3248,19 @@ export function Spreadsheet({
       }}
     >
       {currentSession ? <UserCursors /> : null}
+      {outlierScan ? (
+        <ColumnOutlierBanner
+          columnId={outlierScan.columnId}
+          flagged={outlierScan.flagged}
+          nRows={outlierScan.nRows}
+          busy={outlierApplyBusy}
+          onApply={method => void applyOutlierMethod(method)}
+          onDismiss={() => {
+            setOutlierScan(null);
+            setHighlightedRows(new Set());
+          }}
+        />
+      ) : null}
       {showFilters && (
         <div className="border-b border-border bg-background">
           <Filters
@@ -3344,10 +3423,10 @@ export function Spreadsheet({
                     <TableRow
                       key={row.id}
                       data-index={rowIndex}
+                      data-outlier-row={highlightedRows.has(rowIndex) ? 'true' : undefined}
                       className={cn(
                         isRowSelected && 'bg-primary/5',
-                        highlightedRows.has(rowIndex) &&
-                          'border-l-4 border-l-primary bg-primary/10',
+                        highlightedRows.has(rowIndex) && 'border-l-4 border-l-amber-500',
                         selectedRowId === `row-${rowIndex}` && 'bg-primary/5',
                         '!border-b-0 hover:bg-transparent'
                       )}
@@ -3359,7 +3438,9 @@ export function Spreadsheet({
                         minWidth: `${totalTableWidth}px`,
                         borderBottom: 'none',
                         boxSizing: 'border-box',
-                        backgroundColor: 'var(--background)',
+                        backgroundColor: highlightedRows.has(rowIndex)
+                          ? 'hsl(48 96% 89%)'
+                          : 'var(--background)',
                       }}
                     >
                       {row.getVisibleCells().map(cell => {
@@ -3698,53 +3779,75 @@ export function Spreadsheet({
         open={categoryCleanerOpen}
         onOpenChange={setCategoryCleanerOpen}
         mappings={categoryMappings}
+        suggestions={categorySuggestions}
+        modelLabels={categoryModelLabels}
+        modelNotice={categoryModelNotice}
+        summary={categorySummary}
+        onSuggest={async () => {
+          if (currentColumnForCategoryClean === null) return;
+          const datasetId = gridDatasetId || tabId;
+          if (!datasetId) return;
+          setCategoryCleanerLoading(true);
+          try {
+            const response = await suggestCategoryMerges(
+              datasetId,
+              currentColumnForCategoryClean,
+              idTokenRef.current
+            );
+            setCategorySuggestions(prev => {
+              const seen = new Set(prev.map(item => item.from.join('\u0000')));
+              const added = (response.suggestions || []).filter(
+                item => !seen.has(item.from.join('\u0000'))
+              );
+              return [...prev, ...added];
+            });
+            if (response.model?.used) setCategoryModelNotice(response.model.notice);
+          } catch (error) {
+            toast({
+              title: 'Could not suggest categories',
+              description: error instanceof Error ? error.message : 'Request failed',
+              variant: 'destructive',
+            });
+          } finally {
+            setCategoryCleanerLoading(false);
+          }
+        }}
         isLoading={categoryCleanerLoading}
         onApply={async (mappings: CategoryMapping[]) => {
           if (currentColumnForCategoryClean === null) return;
-
-          // Apply category mappings
-          setData(prevData => {
-            const newData = prevData.map(row => {
-              const newRow = { ...row };
-              mappings.forEach(mapping => {
-                if (mapping.from.includes(String(newRow[currentColumnForCategoryClean]))) {
-                  newRow[currentColumnForCategoryClean] = mapping.to;
-                  // Fire-and-forget async call for sheet operations
-                  handleCellEdit(
-                    data.indexOf(row),
-                    currentColumnForCategoryClean,
-                    mapping.to
-                  ).catch(err =>
-                    console.error('Error in handleCellEdit during category clean:', err)
-                  );
-                }
+          const datasetId = gridDatasetId || tabId;
+          if (!datasetId) return;
+          setCategoryCleanerLoading(true);
+          try {
+            const response = await applyCategoryMerges(
+              datasetId,
+              currentColumnForCategoryClean,
+              mappings,
+              idTokenRef.current
+            );
+            const adopted = adoptDerivedDataset(response);
+            if (!adopted) {
+              toast({
+                title: 'Could not open the derived dataset',
+                variant: 'destructive',
               });
-              return newRow;
-            });
-            return newData;
-          });
-
-          // Update tab data
-          if (tabId && activeTab?.data) {
-            if (tabUpdateTimeoutRef.current) {
-              clearTimeout(tabUpdateTimeoutRef.current);
+              return;
             }
-
-            tabUpdateTimeoutRef.current = setTimeout(() => {
-              if (activeTab?.data) {
-                updateTab(tabId, {
-                  data: {
-                    ...activeTab.data,
-                    initialData: dataRef.current,
-                  },
-                  isDirty: true,
-                });
-              }
-            }, 300);
+            toast({
+              title: 'Saved as a new dataset',
+              description: response.original_filename,
+            });
+            setCategoryCleanerOpen(false);
+            setCurrentColumnForCategoryClean(null);
+          } catch (error) {
+            toast({
+              title: 'Could not clean categories',
+              description: error instanceof Error ? error.message : 'Request failed',
+              variant: 'destructive',
+            });
+          } finally {
+            setCategoryCleanerLoading(false);
           }
-
-          setCategoryCleanerOpen(false);
-          setCurrentColumnForCategoryClean(null);
         }}
       />
     </div>

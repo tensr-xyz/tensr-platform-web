@@ -52,6 +52,8 @@ const MOCK_DESCRIPTIVES_REPORT = {
 
 const MOCK_COMPUTED_DATASET_ID = 'e5d1c555-9f80-497d-b0fb-2bfa07983d4c';
 const MOCK_SHIFTED_DATASET_ID = 'a1b2c3d4-1111-4111-8111-111111111111';
+const MOCK_OUTLIER_DATASET_ID = 'b1b2c3d4-2222-4222-8222-222222222222';
+const MOCK_CATEGORY_DATASET_ID = 'c1c2c3d4-3333-4333-8333-333333333333';
 
 const MOCK_COMPUTE_RESPONSE = {
   dataset_id: MOCK_COMPUTED_DATASET_ID,
@@ -182,6 +184,132 @@ async function fulfillDatasetRoute(route: Route): Promise<boolean> {
     return true;
   }
 
+  if (method === 'POST' && url.includes(`/datasets/${E2E_DATASET_ID}/find-outliers`)) {
+    await json(route, {
+      n_rows: 3,
+      total_flagged_rows: 1,
+      affected_row_indices: [2],
+      columns: [
+        {
+          column: 'score',
+          method: 'iqr',
+          lower_bound: 80,
+          upper_bound: 95,
+          outlier_count: 1,
+          pct_of_rows: 33.33,
+          sample_row_indices: [2],
+        },
+      ],
+    });
+    return true;
+  }
+
+  if (method === 'POST' && url.includes(`/datasets/${E2E_DATASET_ID}/handle-outliers`)) {
+    await json(route, {
+      dataset_id: MOCK_OUTLIER_DATASET_ID,
+      parent_dataset_id: E2E_DATASET_ID,
+      original_filename: 'e2e-sample_outliers_flag.csv',
+      n_rows: 3,
+      n_cols: 4,
+      provenance: { dataset_id: MOCK_OUTLIER_DATASET_ID },
+      preview: {
+        headers: ['age', 'group', 'score', 'score_outlier'],
+        variable_names: ['age', 'group', 'score', 'score_outlier'],
+        rows: [
+          [25, 'A', 88, false],
+          [30, 'B', 92, false],
+          [28, 'A', 85, true],
+        ],
+        columns: [
+          { name: 'age', type: 'numeric' },
+          { name: 'group', type: 'string' },
+          { name: 'score', type: 'numeric' },
+          { name: 'score_outlier', type: 'boolean' },
+        ],
+      },
+    });
+    return true;
+  }
+
+  if (method === 'POST' && url.includes(`/datasets/${E2E_DATASET_ID}/clean-categories/preview`)) {
+    await json(route, {
+      column: 'group',
+      summary: '1 merge(s) proposed for group.',
+      mappings: [
+        {
+          from: ['Male', 'male '],
+          to: 'Male',
+          reason: 'Same text after trimming whitespace and ignoring case',
+        },
+      ],
+      suggestions: [
+        {
+          from: ['UK', 'U.K.', 'United Kingdom'],
+          to: 'United Kingdom',
+          reason: 'Abbreviation',
+          tier: 'fuzzy',
+        },
+      ],
+      labels_for_model: ['Male', 'male ', 'UK', 'U.K.', 'United Kingdom'],
+      model: {
+        used: false,
+        sent: 'distinct_labels_only',
+        label_count: 5,
+        notice:
+          'Semantic suggestions use only the distinct category labels. Respondent rows are not sent to the model.',
+      },
+    });
+    return true;
+  }
+
+  if (method === 'POST' && url.includes(`/datasets/${E2E_DATASET_ID}/clean-categories/suggest`)) {
+    await json(route, {
+      column: 'group',
+      suggestions: [
+        {
+          from: ['Coke', 'Coca-Cola'],
+          to: 'Coke',
+          reason: 'brand',
+          tier: 'semantic',
+        },
+      ],
+      model: {
+        used: true,
+        sent: 'distinct_labels_only',
+        label_count: 5,
+        notice:
+          'Semantic suggestions use only the distinct category labels. Respondent rows are not sent to the model.',
+      },
+    });
+    return true;
+  }
+
+  if (method === 'POST' && url.includes(`/datasets/${E2E_DATASET_ID}/clean-categories`)) {
+    await json(route, {
+      dataset_id: MOCK_CATEGORY_DATASET_ID,
+      parent_dataset_id: E2E_DATASET_ID,
+      original_filename: 'e2e-sample_categories.csv',
+      n_rows: 3,
+      n_cols: 3,
+      provenance: { dataset_id: MOCK_CATEGORY_DATASET_ID },
+      preview: {
+        headers: ['age', 'group', 'score'],
+        variable_names: ['age', 'group', 'score'],
+        rows: [
+          [25, 'Male', 88],
+          [30, 'Male', 92],
+          [28, 'Male', 85],
+        ],
+        columns: [
+          { name: 'age', type: 'numeric' },
+          { name: 'group', type: 'string' },
+          { name: 'score', type: 'numeric' },
+        ],
+      },
+    });
+    return true;
+  }
+
   if (method === 'POST' && url.includes(`/datasets/${E2E_DATASET_ID}/shift`)) {
     await json(route, MOCK_SHIFT_RESPONSE);
     return true;
@@ -235,9 +363,28 @@ async function fulfillDatasetRoute(route: Route): Promise<boolean> {
 export async function installDatasetApiMocks(page: Page): Promise<void> {
   // Catch same-origin proxy (/api/tensr/me) AND local uvicorn (/api/me).
   // Previous glob **/api/me** did NOT match /api/tensr/me → 401 → bounce to login.
+  await page.route('**/reports/export.xlsx', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      headers: { 'Content-Disposition': 'attachment; filename="report.xlsx"' },
+      body: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+    });
+  });
+
   await page.route('**/api/**', async route => {
     const url = route.request().url();
     const method = route.request().method();
+
+    if (method === 'POST' && url.includes('/reports/export.xlsx')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        headers: { 'Content-Disposition': 'attachment; filename="report.xlsx"' },
+        body: Buffer.from([0x50, 0x4b, 0x03, 0x04]),
+      });
+      return;
+    }
 
     if (/\/api\/(?:tensr\/)?me(?:\?|$)/.test(url) && (method === 'GET' || method === 'PATCH')) {
       await json(route, method === 'PATCH' ? { user: MOCK_ME_PROFILE.user } : MOCK_ME_PROFILE);

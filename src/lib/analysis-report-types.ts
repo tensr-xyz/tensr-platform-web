@@ -72,14 +72,14 @@ export type AnalysisReportChart =
       title: string;
       x_label: string;
       y_label: string;
-      points: { x: number; y: number; row_index?: number }[];
+      points: { x: number; y: number; row_index?: number; label?: string }[];
     } & ChartAxisHints)
   | ({
       kind: 'scatter_line';
       title: string;
       x_label: string;
       y_label: string;
-      points: { x: number; y: number; row_index?: number }[];
+      points: { x: number; y: number; row_index?: number; label?: string }[];
       line: { x0: number; y0: number; x1: number; y1: number };
     } & ChartAxisHints)
   | ({

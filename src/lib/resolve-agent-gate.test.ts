@@ -39,6 +39,11 @@ describe('resolveGateInOrder — baseline cascade (before agent-loop rewrite)', 
     // Inline chart routing skips the Boxplot menu dialog
     { prompt: 'Could you provide a boxplot for utilisation_rate', gate: 'data-intent' },
     { prompt: 'one-way ANOVA', gate: 'menu-analysis' },
+    {
+      prompt:
+        'logistic of Full_retention on Interval and Pay, reference short and low, approvals per 1000',
+      gate: 'analysis-question',
+    },
   ];
 
   it.each(cases)('$prompt → $gate', ({ prompt, gate }) => {

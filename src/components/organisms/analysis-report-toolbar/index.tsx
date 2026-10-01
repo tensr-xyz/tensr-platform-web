@@ -21,6 +21,7 @@ type Props = {
   onAnnotate?: () => void;
   onExport?: () => void;
   onExportCsv?: () => void;
+  onExportExcel?: () => void;
   onExportMarkdown?: () => void;
   onExportHtml?: () => void;
   onExportNarrative?: () => void;
@@ -36,6 +37,7 @@ export function AnalysisReportToolbar({
   onAnnotate,
   onExport,
   onExportCsv,
+  onExportExcel,
   onExportMarkdown,
   onExportHtml,
   onExportNarrative,
@@ -94,6 +96,13 @@ export function AnalysisReportToolbar({
               <DropdownMenuItem onClick={onExport}>Copy summary</DropdownMenuItem>
               <DropdownMenuItem onClick={onExportCsv} disabled={!onExportCsv}>
                 CSV (all tables)
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                data-testid="export-excel"
+                onClick={onExportExcel}
+                disabled={!onExportExcel}
+              >
+                Excel
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onExportMarkdown} disabled={!onExportMarkdown}>
                 Markdown

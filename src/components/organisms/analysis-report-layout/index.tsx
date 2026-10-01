@@ -8,6 +8,7 @@ import { AnalysisReportRail } from '@/components/organisms/analysis-report-rail'
 import { AnalysisReportToolbar } from '@/components/organisms/analysis-report-toolbar';
 import { buildReportOutline } from '@/lib/build-report-outline';
 import {
+  downloadReportXlsx,
   downloadTextFile,
   exportIdentityFrom,
   reportTablesToCsv,
@@ -207,6 +208,16 @@ export function AnalysisReportLayout({
     downloadTextFile(csv, `${slug}_tables.csv`, 'text/csv;charset=utf-8');
   }, [exportIdentity, report]);
 
+  const handleExportExcel = useCallback(() => {
+    void downloadReportXlsx(report, {
+      provenance,
+      datasetId: sourceDatasetId,
+      raw: rawResult,
+    }).catch(err => {
+      console.error('Excel export failed', err);
+    });
+  }, [provenance, rawResult, report, sourceDatasetId]);
+
   const handleExportMarkdown = useCallback(() => {
     const md = reportToMarkdown(report, exportIdentity);
     const slug = report.meta.title.replace(/[^a-z0-9]+/gi, '_').replace(/^_|_$/g, '') || 'report';
@@ -260,6 +271,7 @@ export function AnalysisReportLayout({
           onAnnotate={() => handleAnnotate()}
           onExport={handleExportSummary}
           onExportCsv={handleExportCsv}
+          onExportExcel={handleExportExcel}
           onExportMarkdown={handleExportMarkdown}
           onExportHtml={handleExportHtml}
           onExportNarrative={handleExportNarrative}
@@ -292,6 +304,7 @@ export function AnalysisReportLayout({
           onRerun={handleRerun}
           onExport={handleExportSummary}
           onExportCsv={handleExportCsv}
+          onExportExcel={handleExportExcel}
           onExportMarkdown={handleExportMarkdown}
           onExportHtml={handleExportHtml}
           onExportNarrative={handleExportNarrative}

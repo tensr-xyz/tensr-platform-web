@@ -249,6 +249,7 @@ const HeaderCell = React.memo<HeaderCellProps>(
                       <DropdownMenuTrigger asChild onClick={handleDropdownTriggerClick}>
                         <button
                           type="button"
+                          data-testid={`column-menu-${column.id}`}
                           className={cn(
                             'flex h-8 min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-sm px-1.5 text-left hover:bg-muted/60',
                             dropdownOpen && 'bg-muted/60'
@@ -321,6 +322,18 @@ const HeaderCell = React.memo<HeaderCellProps>(
                     <DropdownMenuItem onClick={() => onColumnAction?.('filter', column.id)}>
                       <FilterIcon className="mr-2 h-4 w-4" />
                       <span>Filter…</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      data-testid="column-menu-find-outliers"
+                      onClick={() => onColumnAction?.('find-outliers', column.id)}
+                    >
+                      <span>Find outliers</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      data-testid="column-menu-clean-categories"
+                      onClick={() => onColumnAction?.('clean-categories', column.id)}
+                    >
+                      <span>Clean categories</span>
                     </DropdownMenuItem>
                     {isNumeric && (
                       <DropdownMenuCheckboxItem

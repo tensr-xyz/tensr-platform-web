@@ -1,5 +1,28 @@
 import type { AnalysisReport } from '@/lib/analysis-report-types';
 
+/** Short chat stand-in once the full report is open in its own tab. */
+export type AnalysisReportChatCard = {
+  tabId: string;
+  title: string;
+  summary: string;
+};
+
+export function reportCardForOpenedTab(opts: {
+  tabId: string | null | undefined;
+  title?: string | null;
+  summary?: string | null;
+}): AnalysisReportChatCard | null {
+  const tabId = opts.tabId?.trim();
+  if (!tabId) return null;
+  return {
+    tabId,
+    title: (opts.title || 'Analysis report').trim() || 'Analysis report',
+    summary:
+      (opts.summary || 'Open the report tab for the full table.').trim() ||
+      'Open the report tab for the full table.',
+  };
+}
+
 /** Build chat fields after a successful run_analysis so Plan and report don't double-render. */
 export function chatFieldsAfterRunAnalysis(opts: {
   /** Pre-Approve message body (Plan / Why markdown). */

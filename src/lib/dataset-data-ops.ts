@@ -269,14 +269,75 @@ export async function fetchDataQualityReport(datasetId: string, token?: string |
   return res.json() as Promise<DataQualityReport>;
 }
 
+export type FindOutliersResult = {
+  n_rows: number;
+  total_flagged_rows: number;
+  affected_row_indices: number[];
+  columns: Array<{
+    column: string;
+    method?: string;
+    lower_bound: number;
+    upper_bound: number;
+    outlier_count: number;
+    pct_of_rows: number;
+    sample_row_indices?: number[];
+  }>;
+};
+
 export function findDatasetOutliers(
   datasetId: string,
   payload: { columns: string[]; method?: string },
   token?: string | null
 ) {
-  return authedJson<Record<string, unknown>>(
-    `/datasets/${datasetId}/find-outliers`,
-    payload,
+  return authedJson<FindOutliersResult>(`/datasets/${datasetId}/find-outliers`, payload, token);
+}
+
+export type CategoryMerge = {
+  from: string[];
+  to: string;
+  reason?: string;
+};
+
+export type CategoryMergePreview = {
+  column: string;
+  summary: string;
+  mappings: CategoryMerge[];
+  suggestions?: CategoryMerge[];
+  labels_for_model?: string[];
+  model?: {
+    used: boolean;
+    sent: 'distinct_labels_only';
+    label_count: number;
+    notice: string;
+    warning?: string;
+  };
+};
+
+export function previewCategoryMerges(datasetId: string, column: string, token?: string | null) {
+  return authedJson<CategoryMergePreview>(
+    `/datasets/${datasetId}/clean-categories/preview`,
+    { column },
+    token
+  );
+}
+
+export function suggestCategoryMerges(datasetId: string, column: string, token?: string | null) {
+  return authedJson<CategoryMergePreview>(
+    `/datasets/${datasetId}/clean-categories/suggest`,
+    { column },
+    token
+  );
+}
+
+export function applyCategoryMerges(
+  datasetId: string,
+  column: string,
+  mappings: CategoryMerge[],
+  token?: string | null
+) {
+  return authedJson<DerivedDatasetResult>(
+    `/datasets/${datasetId}/clean-categories`,
+    { column, mappings },
     token
   );
 }

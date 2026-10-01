@@ -455,6 +455,30 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               />
               Column letters
             </label>
+            <label className="flex items-center gap-2">
+              Low base below
+              <input
+                type="number"
+                min={1}
+                max={500}
+                className="h-7 w-16 rounded-md border border-input bg-background px-2"
+                value={canvas.lowBaseThreshold}
+                onChange={e =>
+                  setCanvas(c => ({
+                    ...c,
+                    lowBaseThreshold: Math.max(1, Number(e.target.value) || 30),
+                  }))
+                }
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={canvas.suppressLowBase}
+                onChange={e => setCanvas(c => ({ ...c, suppressLowBase: e.target.checked }))}
+              />
+              Suppress low bases (hide the number)
+            </label>
             <p className="text-[10px] text-muted-foreground sm:col-span-2">
               A letter is shown only when the corrected pairwise test passes (adjusted p &lt; .05).
               Lowercase is .001 &lt; p &lt; .05. Uppercase is p ≤ .001. Letters in one cell are
@@ -679,6 +703,12 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                   ))}
                 </tbody>
               </table>
+              {table.rows.some(row => row.cells.some(cell => cell.lowBase)) ? (
+                <p className="px-2 py-1 text-[10px] text-muted-foreground">
+                  * Base &lt; {canvas.lowBaseThreshold}, treat with caution.
+                  {canvas.suppressLowBase ? ' Suppressed cells show * only.' : ''}
+                </p>
+              ) : null}
             </div>
           ) : null}
           {cellClick ? (

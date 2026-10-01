@@ -1,8 +1,8 @@
 {
-  "evalId": "eval-js1-2026-08-03T16:52:37",
+  "evalId": "eval-qj6-2026-10-01T23:44:49",
   "results": {
     "version": 3,
-    "timestamp": "2026-08-03T16:52:37.241Z",
+    "timestamp": "2026-10-01T23:44:49.261Z",
     "prompts": [
       {
         "id": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
@@ -10,19 +10,19 @@
         "label": "{{prompt}}",
         "provider": "file://promptfoo-provider-routing-baseline.cjs",
         "metrics": {
-          "score": 20,
-          "testPassCount": 20,
+          "score": 23,
+          "testPassCount": 23,
           "testFailCount": 0,
           "testErrorCount": 0,
-          "assertPassCount": 20,
+          "assertPassCount": 23,
           "assertFailCount": 0,
-          "totalLatencyMs": 27865,
+          "totalLatencyMs": 9666,
           "tokenUsage": {
             "prompt": 0,
             "completion": 0,
             "cached": 0,
             "total": 0,
-            "numRequests": 20,
+            "numRequests": 23,
             "completionDetails": {
               "reasoning": 0,
               "acceptedPrediction": 0,
@@ -74,108 +74,13 @@
               "reason": "Assertion passed",
               "assertion": {
                 "type": "equals",
-                "value": "tutor"
-              }
-            }
-          ]
-        },
-        "id": "3dec6666-fd9e-4697-984d-d619b2532369",
-        "latencyMs": 1986,
-        "namedScores": {},
-        "prompt": {
-          "raw": "Hello",
-          "label": "{{prompt}}",
-          "config": {}
-        },
-        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
-        "promptIdx": 0,
-        "provider": {
-          "id": "file://promptfoo-provider-routing-baseline.cjs",
-          "label": ""
-        },
-        "response": {
-          "output": "tutor"
-        },
-        "score": 1,
-        "success": true,
-        "testCase": {
-          "vars": {
-            "prompt": "Hello"
-          },
-          "assert": [
-            {
-              "type": "equals",
-              "value": "tutor"
-            }
-          ],
-          "options": {},
-          "metadata": {}
-        },
-        "testIdx": 0,
-        "tokenUsage": {
-          "prompt": 0,
-          "completion": 0,
-          "cached": 0,
-          "total": 0,
-          "numRequests": 1,
-          "completionDetails": {
-            "reasoning": 0,
-            "acceptedPrediction": 0,
-            "rejectedPrediction": 0,
-            "cacheReadInputTokens": 0,
-            "cacheCreationInputTokens": 0
-          },
-          "assertions": {
-            "total": 0,
-            "prompt": 0,
-            "completion": 0,
-            "cached": 0,
-            "numRequests": 1,
-            "completionDetails": {
-              "reasoning": 0,
-              "acceptedPrediction": 0,
-              "rejectedPrediction": 0,
-              "cacheReadInputTokens": 0,
-              "cacheCreationInputTokens": 0
-            }
-          }
-        },
-        "vars": {
-          "prompt": "Hello"
-        },
-        "metadata": {
-          "_promptfooFileMetadata": {}
-        },
-        "failureReason": 0
-      },
-      {
-        "cost": 0,
-        "gradingResult": {
-          "pass": true,
-          "score": 1,
-          "reason": "All assertions passed",
-          "namedScores": {},
-          "tokensUsed": {
-            "total": 0,
-            "prompt": 0,
-            "completion": 0,
-            "cached": 0,
-            "numRequests": 0
-          },
-          "componentResults": [
-            {
-              "pass": true,
-              "score": 1,
-              "reason": "Assertion passed",
-              "assertion": {
-                "type": "equals",
                 "value": "data-intent"
               }
             }
           ]
         },
-        "id": "399577e3-5448-4c9f-83c1-9485692a3823",
-        "latencyMs": 1985,
+        "id": "170503b9-3c3d-4910-bda7-f7bf3aa1f43b",
+        "latencyMs": 720,
         "namedScores": {},
         "prompt": {
           "raw": "What does Age mean?",
@@ -207,7 +112,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 1,
+        "testIdx": 0,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -270,8 +175,8 @@
             }
           ]
         },
-        "id": "0f970228-9da5-4d42-bdf8-073768ddb64a",
-        "latencyMs": 1985,
+        "id": "5fa85feb-5a72-49a5-a37b-138e1e4e1cb0",
+        "latencyMs": 720,
         "namedScores": {},
         "prompt": {
           "raw": "How do I interpret a p-value?",
@@ -302,7 +207,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 2,
+        "testIdx": 1,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -365,8 +270,103 @@
             }
           ]
         },
-        "id": "3fe72680-5c57-46c4-8e5e-b8968715ea33",
-        "latencyMs": 1985,
+        "id": "cf34a31b-0eb2-4ada-8334-2fe330dde06b",
+        "latencyMs": 720,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Hello",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "tutor"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Hello"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "tutor"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 2,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Hello"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "tutor"
+              }
+            }
+          ]
+        },
+        "id": "81089a0b-6e7c-4961-ad50-a434369a248e",
+        "latencyMs": 720,
         "namedScores": {},
         "prompt": {
           "raw": "run one for me",
@@ -460,8 +460,8 @@
             }
           ]
         },
-        "id": "afbbed14-098d-4042-98b5-2924bd533c1e",
-        "latencyMs": 996,
+        "id": "00573887-78ce-4707-973f-78c716166e62",
+        "latencyMs": 336,
         "namedScores": {},
         "prompt": {
           "raw": "why is that significant?",
@@ -555,8 +555,8 @@
             }
           ]
         },
-        "id": "895e19e6-a6bc-4890-b818-830aafc93f64",
-        "latencyMs": 1492,
+        "id": "17da1a14-e15b-4366-a8ea-c3ba8900f374",
+        "latencyMs": 502,
         "namedScores": {},
         "prompt": {
           "raw": "Can you help me understand the groups?",
@@ -650,8 +650,8 @@
             }
           ]
         },
-        "id": "4b7a91e0-0fe1-4ad1-b073-b9d81837c9f1",
-        "latencyMs": 1492,
+        "id": "d616a659-fbb6-4772-9c70-87a30ff082bd",
+        "latencyMs": 501,
         "namedScores": {},
         "prompt": {
           "raw": "t test for me on my dataset",
@@ -741,13 +741,491 @@
               "reason": "Assertion passed",
               "assertion": {
                 "type": "equals",
+                "value": "menu-analysis"
+              }
+            }
+          ]
+        },
+        "id": "6981a060-7077-4666-a590-332f7ea65fe9",
+        "latencyMs": 334,
+        "namedScores": {},
+        "prompt": {
+          "raw": "correlation between Age and PTS",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "menu-analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "correlation between Age and PTS"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "menu-analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 7,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "correlation between Age and PTS"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "menu-analysis"
+              }
+            }
+          ]
+        },
+        "id": "b19da612-1c0a-4a91-a9b3-c948f968b3ec",
+        "latencyMs": 341,
+        "namedScores": {},
+        "prompt": {
+          "raw": "one-way ANOVA",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "menu-analysis"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "one-way ANOVA"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "menu-analysis"
+            }
+          ],
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 8,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "one-way ANOVA"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "analysis-question"
+              }
+            }
+          ]
+        },
+        "id": "9d4314cb-69b2-4bd6-acc8-96016cc79f7b",
+        "latencyMs": 343,
+        "namedScores": {},
+        "prompt": {
+          "raw": "logistic of Full_retention on Interval and Pay, reference short and low, approvals per 1000",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "analysis-question"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "logistic of Full_retention on Interval and Pay, reference short and low, approvals per 1000"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "analysis-question"
+            }
+          ],
+          "description": "Demo: persist refs and per-N must still route to run_analysis",
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 9,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "logistic of Full_retention on Interval and Pay, reference short and low, approvals per 1000"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
                 "value": "data-intent"
               }
             }
           ]
         },
-        "id": "cde2e2df-24ff-4987-b3af-c3d01572b613",
-        "latencyMs": 991,
+        "id": "5ade8851-df1a-463d-af35-fa9d5e4c96ac",
+        "latencyMs": 338,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Could you provide a boxplot for utilisation_rate",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "data-intent"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Could you provide a boxplot for utilisation_rate"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "data-intent"
+            }
+          ],
+          "description": "Inline chart routing skips the Boxplot menu dialog",
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 10,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Could you provide a boxplot for utilisation_rate"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "menu-dialog"
+              }
+            }
+          ]
+        },
+        "id": "bb9be639-7d2c-4422-95b2-5785353b9548",
+        "latencyMs": 170,
+        "namedScores": {},
+        "prompt": {
+          "raw": "Run a data quality scan",
+          "label": "{{prompt}}",
+          "config": {}
+        },
+        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
+        "promptIdx": 0,
+        "provider": {
+          "id": "file://promptfoo-provider-routing-baseline.cjs",
+          "label": ""
+        },
+        "response": {
+          "output": "menu-dialog"
+        },
+        "score": 1,
+        "success": true,
+        "testCase": {
+          "vars": {
+            "prompt": "Run a data quality scan"
+          },
+          "assert": [
+            {
+              "type": "equals",
+              "value": "menu-dialog"
+            }
+          ],
+          "description": "Menu synonym steals before Gate 5",
+          "options": {},
+          "metadata": {}
+        },
+        "testIdx": 11,
+        "tokenUsage": {
+          "prompt": 0,
+          "completion": 0,
+          "cached": 0,
+          "total": 0,
+          "numRequests": 1,
+          "completionDetails": {
+            "reasoning": 0,
+            "acceptedPrediction": 0,
+            "rejectedPrediction": 0,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0
+          },
+          "assertions": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 1,
+            "completionDetails": {
+              "reasoning": 0,
+              "acceptedPrediction": 0,
+              "rejectedPrediction": 0,
+              "cacheReadInputTokens": 0,
+              "cacheCreationInputTokens": 0
+            }
+          }
+        },
+        "vars": {
+          "prompt": "Run a data quality scan"
+        },
+        "metadata": {
+          "_promptfooFileMetadata": {}
+        },
+        "failureReason": 0
+      },
+      {
+        "cost": 0,
+        "gradingResult": {
+          "pass": true,
+          "score": 1,
+          "reason": "All assertions passed",
+          "namedScores": {},
+          "tokensUsed": {
+            "total": 0,
+            "prompt": 0,
+            "completion": 0,
+            "cached": 0,
+            "numRequests": 0
+          },
+          "componentResults": [
+            {
+              "pass": true,
+              "score": 1,
+              "reason": "Assertion passed",
+              "assertion": {
+                "type": "equals",
+                "value": "data-intent"
+              }
+            }
+          ]
+        },
+        "id": "4ac988bd-66e6-4f28-a2ed-176937f8de79",
+        "latencyMs": 340,
         "namedScores": {},
         "prompt": {
           "raw": "How many members joined after 2024?",
@@ -778,7 +1256,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 7,
+        "testIdx": 12,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -841,8 +1319,8 @@
             }
           ]
         },
-        "id": "22fa32d6-09b9-48c8-89f6-3d5f055b7983",
-        "latencyMs": 1008,
+        "id": "0607a5f9-8373-48fb-8d75-c65e88755029",
+        "latencyMs": 508,
         "namedScores": {},
         "prompt": {
           "raw": "Sum of Revenue by Region",
@@ -873,7 +1351,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 8,
+        "testIdx": 13,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -936,8 +1414,8 @@
             }
           ]
         },
-        "id": "e648bb4c-b6a7-42c8-abdd-79599b7bf031",
-        "latencyMs": 1497,
+        "id": "2e255952-c2ed-4ff1-aa23-b5f32269e923",
+        "latencyMs": 507,
         "namedScores": {},
         "prompt": {
           "raw": "Make a monthly line chart",
@@ -968,7 +1446,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 9,
+        "testIdx": 14,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1031,8 +1509,8 @@
             }
           ]
         },
-        "id": "be0b6508-50ec-4e01-a155-8a8a4e9e9a51",
-        "latencyMs": 1497,
+        "id": "52403a2f-3952-486d-9d25-272b90e00ed4",
+        "latencyMs": 337,
         "namedScores": {},
         "prompt": {
           "raw": "What's interesting?",
@@ -1063,7 +1541,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 10,
+        "testIdx": 15,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1126,8 +1604,8 @@
             }
           ]
         },
-        "id": "a4056c0f-7760-44b4-8709-ff9a66045d74",
-        "latencyMs": 995,
+        "id": "76112e6c-91a2-45bd-925b-9bcbb0fa4941",
+        "latencyMs": 356,
         "namedScores": {},
         "prompt": {
           "raw": "Where do I start?",
@@ -1159,7 +1637,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 11,
+        "testIdx": 16,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1222,8 +1700,8 @@
             }
           ]
         },
-        "id": "ea222c2f-18ca-4a51-88cc-14c41c31c088",
-        "latencyMs": 994,
+        "id": "a78eb840-1dba-44d7-b8b0-367f7fa7a0bc",
+        "latencyMs": 357,
         "namedScores": {},
         "prompt": {
           "raw": "Clean this dataset",
@@ -1254,7 +1732,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 12,
+        "testIdx": 17,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1312,204 +1790,13 @@
               "reason": "Assertion passed",
               "assertion": {
                 "type": "equals",
-                "value": "menu-dialog"
-              }
-            }
-          ]
-        },
-        "id": "4072791f-474d-45a2-b983-cace06e18a64",
-        "latencyMs": 1486,
-        "namedScores": {},
-        "prompt": {
-          "raw": "Run a data quality scan",
-          "label": "{{prompt}}",
-          "config": {}
-        },
-        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
-        "promptIdx": 0,
-        "provider": {
-          "id": "file://promptfoo-provider-routing-baseline.cjs",
-          "label": ""
-        },
-        "response": {
-          "output": "menu-dialog"
-        },
-        "score": 1,
-        "success": true,
-        "testCase": {
-          "vars": {
-            "prompt": "Run a data quality scan"
-          },
-          "assert": [
-            {
-              "type": "equals",
-              "value": "menu-dialog"
-            }
-          ],
-          "description": "Menu synonym steals before Gate 5",
-          "options": {},
-          "metadata": {}
-        },
-        "testIdx": 13,
-        "tokenUsage": {
-          "prompt": 0,
-          "completion": 0,
-          "cached": 0,
-          "total": 0,
-          "numRequests": 1,
-          "completionDetails": {
-            "reasoning": 0,
-            "acceptedPrediction": 0,
-            "rejectedPrediction": 0,
-            "cacheReadInputTokens": 0,
-            "cacheCreationInputTokens": 0
-          },
-          "assertions": {
-            "total": 0,
-            "prompt": 0,
-            "completion": 0,
-            "cached": 0,
-            "numRequests": 1,
-            "completionDetails": {
-              "reasoning": 0,
-              "acceptedPrediction": 0,
-              "rejectedPrediction": 0,
-              "cacheReadInputTokens": 0,
-              "cacheCreationInputTokens": 0
-            }
-          }
-        },
-        "vars": {
-          "prompt": "Run a data quality scan"
-        },
-        "metadata": {
-          "_promptfooFileMetadata": {}
-        },
-        "failureReason": 0
-      },
-      {
-        "cost": 0,
-        "gradingResult": {
-          "pass": true,
-          "score": 1,
-          "reason": "All assertions passed",
-          "namedScores": {},
-          "tokensUsed": {
-            "total": 0,
-            "prompt": 0,
-            "completion": 0,
-            "cached": 0,
-            "numRequests": 0
-          },
-          "componentResults": [
-            {
-              "pass": true,
-              "score": 1,
-              "reason": "Assertion passed",
-              "assertion": {
-                "type": "equals",
-                "value": "menu-analysis"
-              }
-            }
-          ]
-        },
-        "id": "06fbe890-69ca-4727-9609-a45c3cc4f06a",
-        "latencyMs": 1486,
-        "namedScores": {},
-        "prompt": {
-          "raw": "correlation between Age and PTS",
-          "label": "{{prompt}}",
-          "config": {}
-        },
-        "promptId": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
-        "promptIdx": 0,
-        "provider": {
-          "id": "file://promptfoo-provider-routing-baseline.cjs",
-          "label": ""
-        },
-        "response": {
-          "output": "menu-analysis"
-        },
-        "score": 1,
-        "success": true,
-        "testCase": {
-          "vars": {
-            "prompt": "correlation between Age and PTS"
-          },
-          "assert": [
-            {
-              "type": "equals",
-              "value": "menu-analysis"
-            }
-          ],
-          "options": {},
-          "metadata": {}
-        },
-        "testIdx": 14,
-        "tokenUsage": {
-          "prompt": 0,
-          "completion": 0,
-          "cached": 0,
-          "total": 0,
-          "numRequests": 1,
-          "completionDetails": {
-            "reasoning": 0,
-            "acceptedPrediction": 0,
-            "rejectedPrediction": 0,
-            "cacheReadInputTokens": 0,
-            "cacheCreationInputTokens": 0
-          },
-          "assertions": {
-            "total": 0,
-            "prompt": 0,
-            "completion": 0,
-            "cached": 0,
-            "numRequests": 1,
-            "completionDetails": {
-              "reasoning": 0,
-              "acceptedPrediction": 0,
-              "rejectedPrediction": 0,
-              "cacheReadInputTokens": 0,
-              "cacheCreationInputTokens": 0
-            }
-          }
-        },
-        "vars": {
-          "prompt": "correlation between Age and PTS"
-        },
-        "metadata": {
-          "_promptfooFileMetadata": {}
-        },
-        "failureReason": 0
-      },
-      {
-        "cost": 0,
-        "gradingResult": {
-          "pass": true,
-          "score": 1,
-          "reason": "All assertions passed",
-          "namedScores": {},
-          "tokensUsed": {
-            "total": 0,
-            "prompt": 0,
-            "completion": 0,
-            "cached": 0,
-            "numRequests": 0
-          },
-          "componentResults": [
-            {
-              "pass": true,
-              "score": 1,
-              "reason": "Assertion passed",
-              "assertion": {
-                "type": "equals",
                 "value": "data-intent"
               }
             }
           ]
         },
-        "id": "e654ea5e-e84e-4300-8fb9-53896c1f6e9e",
-        "latencyMs": 991,
+        "id": "253f7677-3333-437a-8293-d46e5cc13e56",
+        "latencyMs": 338,
         "namedScores": {},
         "prompt": {
           "raw": "I want percentile values for utilisation_rate",
@@ -1540,7 +1827,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 15,
+        "testIdx": 18,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1603,8 +1890,8 @@
             }
           ]
         },
-        "id": "b1c2cf29-8c58-4882-bee2-d359c5db91df",
-        "latencyMs": 989,
+        "id": "7908ddb1-959c-434d-bd44-436be5c91209",
+        "latencyMs": 168,
         "namedScores": {},
         "prompt": {
           "raw": "Can we get Percentile Values for these KPIs",
@@ -1635,7 +1922,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 16,
+        "testIdx": 19,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1693,13 +1980,13 @@
               "reason": "Assertion passed",
               "assertion": {
                 "type": "equals",
-                "value": "tutor"
+                "value": "data-intent"
               }
             }
           ]
         },
-        "id": "81ca01d9-6da6-4aca-b832-8d9a7aca5c7e",
-        "latencyMs": 1499,
+        "id": "f4eb61ba-96b6-4524-a246-46480d791445",
+        "latencyMs": 336,
         "namedScores": {},
         "prompt": {
           "raw": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate",
@@ -1713,7 +2000,7 @@
           "label": ""
         },
         "response": {
-          "output": "tutor"
+          "output": "data-intent"
         },
         "score": 1,
         "success": true,
@@ -1724,14 +2011,14 @@
           "assert": [
             {
               "type": "equals",
-              "value": "tutor"
+              "value": "data-intent"
             }
           ],
-          "description": "No Gate-2 keyword (quartile/top N%); falls to tutor today",
+          "description": "Gate 2 top/best bucket steals via \\bbest\\b (also matches top 5%)",
           "options": {},
           "metadata": {}
         },
-        "testIdx": 17,
+        "testIdx": 20,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1789,16 +2076,16 @@
               "reason": "Assertion passed",
               "assertion": {
                 "type": "equals",
-                "value": "menu-dialog"
+                "value": "menu-analysis"
               }
             }
           ]
         },
-        "id": "5f17f879-5103-4756-b3ea-05307f8dd34b",
-        "latencyMs": 1499,
+        "id": "bf63fe5f-225a-4930-ad0b-05abc5571639",
+        "latencyMs": 337,
         "namedScores": {},
         "prompt": {
-          "raw": "Could you provide a boxplot for utilisation_rate",
+          "raw": "run a mixed model on my dataset",
           "label": "{{prompt}}",
           "config": {}
         },
@@ -1809,25 +2096,24 @@
           "label": ""
         },
         "response": {
-          "output": "menu-dialog"
+          "output": "menu-analysis"
         },
         "score": 1,
         "success": true,
         "testCase": {
           "vars": {
-            "prompt": "Could you provide a boxplot for utilisation_rate"
+            "prompt": "run a mixed model on my dataset"
           },
           "assert": [
             {
               "type": "equals",
-              "value": "menu-dialog"
+              "value": "menu-analysis"
             }
           ],
-          "description": "Menu label Boxplot steals before Gate 2",
           "options": {},
           "metadata": {}
         },
-        "testIdx": 18,
+        "testIdx": 21,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1857,7 +2143,7 @@
           }
         },
         "vars": {
-          "prompt": "Could you provide a boxplot for utilisation_rate"
+          "prompt": "run a mixed model on my dataset"
         },
         "metadata": {
           "_promptfooFileMetadata": {}
@@ -1890,11 +2176,11 @@
             }
           ]
         },
-        "id": "d8552feb-ac32-4cc9-ae3e-cb205fc3d985",
-        "latencyMs": 1012,
+        "id": "952f5b29-51f3-44ef-9602-1a73378a52b1",
+        "latencyMs": 337,
         "namedScores": {},
         "prompt": {
-          "raw": "one-way ANOVA",
+          "raw": "GEE for clustered pass fail",
           "label": "{{prompt}}",
           "config": {}
         },
@@ -1911,7 +2197,7 @@
         "success": true,
         "testCase": {
           "vars": {
-            "prompt": "one-way ANOVA"
+            "prompt": "GEE for clustered pass fail"
           },
           "assert": [
             {
@@ -1922,7 +2208,7 @@
           "options": {},
           "metadata": {}
         },
-        "testIdx": 19,
+        "testIdx": 22,
         "tokenUsage": {
           "prompt": 0,
           "completion": 0,
@@ -1952,7 +2238,7 @@
           }
         },
         "vars": {
-          "prompt": "one-way ANOVA"
+          "prompt": "GEE for clustered pass fail"
         },
         "metadata": {
           "_promptfooFileMetadata": {}
@@ -1961,7 +2247,7 @@
       }
     ],
     "stats": {
-      "successes": 20,
+      "successes": 23,
       "failures": 0,
       "errors": 0,
       "tokenUsage": {
@@ -1969,7 +2255,7 @@
         "completion": 0,
         "cached": 0,
         "total": 0,
-        "numRequests": 20,
+        "numRequests": 23,
         "completionDetails": {
           "reasoning": 0,
           "acceptedPrediction": 0,
@@ -1992,8 +2278,8 @@
           }
         }
       },
-      "durationMs": 10038,
-      "evaluationDurationMs": 10038
+      "durationMs": 3982,
+      "evaluationDurationMs": 3982
     }
   },
   "config": {
@@ -2002,17 +2288,6 @@
     "prompts": ["{{prompt}}"],
     "providers": ["file://promptfoo-provider-routing-baseline.cjs"],
     "tests": [
-      {
-        "vars": {
-          "prompt": "Hello"
-        },
-        "assert": [
-          {
-            "type": "equals",
-            "value": "tutor"
-          }
-        ]
-      },
       {
         "vars": {
           "prompt": "What does Age mean?"
@@ -2028,6 +2303,17 @@
       {
         "vars": {
           "prompt": "How do I interpret a p-value?"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "tutor"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "Hello"
         },
         "assert": [
           {
@@ -2080,6 +2366,64 @@
           }
         ],
         "description": "Menu synonym steals before Gate 4"
+      },
+      {
+        "vars": {
+          "prompt": "correlation between Age and PTS"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "menu-analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "one-way ANOVA"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "menu-analysis"
+          }
+        ]
+      },
+      {
+        "vars": {
+          "prompt": "logistic of Full_retention on Interval and Pay, reference short and low, approvals per 1000"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "analysis-question"
+          }
+        ],
+        "description": "Demo: persist refs and per-N must still route to run_analysis"
+      },
+      {
+        "vars": {
+          "prompt": "Could you provide a boxplot for utilisation_rate"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "data-intent"
+          }
+        ],
+        "description": "Inline chart routing skips the Boxplot menu dialog"
+      },
+      {
+        "vars": {
+          "prompt": "Run a data quality scan"
+        },
+        "assert": [
+          {
+            "type": "equals",
+            "value": "menu-dialog"
+          }
+        ],
+        "description": "Menu synonym steals before Gate 5"
       },
       {
         "vars": {
@@ -2150,29 +2494,6 @@
       },
       {
         "vars": {
-          "prompt": "Run a data quality scan"
-        },
-        "assert": [
-          {
-            "type": "equals",
-            "value": "menu-dialog"
-          }
-        ],
-        "description": "Menu synonym steals before Gate 5"
-      },
-      {
-        "vars": {
-          "prompt": "correlation between Age and PTS"
-        },
-        "assert": [
-          {
-            "type": "equals",
-            "value": "menu-analysis"
-          }
-        ]
-      },
-      {
-        "vars": {
           "prompt": "I want percentile values for utilisation_rate"
         },
         "assert": [
@@ -2200,26 +2521,25 @@
         "assert": [
           {
             "type": "equals",
-            "value": "tutor"
+            "value": "data-intent"
           }
         ],
-        "description": "No Gate-2 keyword (quartile/top N%); falls to tutor today"
+        "description": "Gate 2 top/best bucket steals via \\bbest\\b (also matches top 5%)"
       },
       {
         "vars": {
-          "prompt": "Could you provide a boxplot for utilisation_rate"
+          "prompt": "run a mixed model on my dataset"
         },
         "assert": [
           {
             "type": "equals",
-            "value": "menu-dialog"
+            "value": "menu-analysis"
           }
-        ],
-        "description": "Menu label Boxplot steals before Gate 2"
+        ]
       },
       {
         "vars": {
-          "prompt": "one-way ANOVA"
+          "prompt": "GEE for clustered pass fail"
         },
         "assert": [
           {
@@ -2238,11 +2558,11 @@
   "shareableUrl": null,
   "metadata": {
     "promptfooVersion": "0.121.20",
-    "nodeVersion": "v22.22.3",
+    "nodeVersion": "v26.9.0",
     "platform": "darwin",
     "arch": "arm64",
-    "exportedAt": "2026-08-03T16:52:47.325Z",
-    "evaluationCreatedAt": "2026-08-03T16:52:37.241Z"
+    "exportedAt": "2026-10-01T23:44:53.265Z",
+    "evaluationCreatedAt": "2026-10-01T23:44:49.261Z"
   },
   "vars": ["prompt"],
   "runtimeOptions": {

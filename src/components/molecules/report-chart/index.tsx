@@ -405,13 +405,24 @@ function ChartBody({
           />
         )}
         {pts.map((p, i) => (
-          <circle
-            key={i}
-            cx={sx(p.x)}
-            cy={sy(p.y)}
-            r={layout.density === 'comfortable' ? 3 : 2.2}
-            className="fill-zinc-600/80"
-          />
+          <g key={i}>
+            <circle
+              cx={sx(p.x)}
+              cy={sy(p.y)}
+              r={layout.density === 'comfortable' ? 3 : 2.2}
+              className="fill-zinc-600/80"
+            />
+            {p.label ? (
+              <text
+                x={sx(p.x) + 6}
+                y={sy(p.y) - 4}
+                fill="#3f3f46"
+                style={{ fontSize: layout.density === 'comfortable' ? 11 : 10 }}
+              >
+                {p.label}
+              </text>
+            ) : null}
+          </g>
         ))}
         <AxisFrame
           layout={layout}
@@ -522,8 +533,11 @@ function ChartBody({
 
   if (chart.kind === 'bar_grouped' || chart.kind === 'line') {
     const { categories, series } = chart;
-    const maxV = Math.max(1, ...series.flatMap(s => s.values));
     const ySamples = series.flatMap(s => s.values);
+    const dataMin = ySamples.length ? Math.min(...ySamples) : 0;
+    const dataMax = ySamples.length ? Math.max(...ySamples) : 1;
+    const minV = Math.min(0, dataMin);
+    const maxV = Math.max(dataMax, minV === 0 ? 1 : 0);
     const catsAreDates =
       chart.x_scale === 'datetime' ||
       (chart.x_scale !== 'category' && valuesLookLikeDatetime(categories));
@@ -556,7 +570,8 @@ function ChartBody({
     );
     const layout = withExtraPadB(layoutForCats, plan.padB + (chart.x_label ? 12 : 0));
     const { padL, padT, plotW, plotH } = layout;
-    const sy = scaleLinear(0, maxV, padT + plotH, padT);
+    const sy = scaleLinear(minV, maxV, padT + plotH, padT);
+    const yZero = sy(0);
     const ng = categories.length;
     const ns = series.length;
     const groupW = plotW / Math.max(1, ng);
@@ -564,7 +579,7 @@ function ChartBody({
     const barW = inner / Math.max(1, ns);
     const gap = groupW * 0.06;
     const isLine = chart.kind === 'line';
-    const yTicks = niceTicks(0, maxV, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
+    const yTicks = niceTicks(minV, maxV, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
     const xs = categories.map((_, i) => padL + i * groupW + groupW / 2);
 
     return (
@@ -609,20 +624,31 @@ function ChartBody({
               series.map((ser, si) => {
                 const v = ser.values[gi] ?? 0;
                 const x = padL + gi * groupW + gap + si * barW;
-                const yTop = sy(v);
+                const yVal = sy(v);
+                const y = Math.min(yZero, yVal);
                 return (
                   <rect
                     key={`${gi}-${si}`}
                     x={x}
-                    y={yTop}
+                    y={y}
                     width={Math.max(1, barW - 1)}
-                    height={Math.max(0, padT + plotH - yTop)}
+                    height={Math.max(0, Math.abs(yZero - yVal))}
                     fill={SERIES_FILL[si % SERIES_FILL.length]}
                     rx={1}
                   />
                 );
               })
             )}
+        {minV < 0 ? (
+          <line
+            x1={padL}
+            x2={padL + plotW}
+            y1={yZero}
+            y2={yZero}
+            stroke="#a1a1aa"
+            strokeWidth={1}
+          />
+        ) : null}
         <AxisFrame
           layout={layout}
           yTicks={yTicks}

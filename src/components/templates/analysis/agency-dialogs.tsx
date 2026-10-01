@@ -14,6 +14,11 @@ import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { apiClient } from '@/lib/api-client';
+import {
+  isTechniqueRun,
+  openSurveyTechniqueReport,
+  techniqueRun,
+} from '@/lib/survey-technique-report';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
@@ -42,6 +47,7 @@ function AgencyDialog({
   children: ReactNode;
   onRun: () => Promise<unknown>;
 }) {
+  const { tabs, activeTabId } = useTabsStore();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -68,6 +74,20 @@ function AgencyDialog({
               setError(null);
               try {
                 const out = await onRun();
+                if (isTechniqueRun(out)) {
+                  const datasetId = getDatasetIdFromTab(tabs.find(t => t.id === activeTabId));
+                  if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
+                  openSurveyTechniqueReport({
+                    datasetId,
+                    op: out.reportRequest.op,
+                    parameters: out.reportRequest.parameters,
+                    response: out.payload,
+                    sourceTabName: tabs.find(t => t.id === activeTabId)?.name,
+                  });
+                  setResult(null);
+                  setOpen(false);
+                  return;
+                }
                 setResult(JSON.stringify(out, null, 2));
               } catch (err) {
                 setError(err instanceof Error ? err.message : String(err));
@@ -243,10 +263,12 @@ export function FuseWavesDialog({ children }: { children: ReactNode }) {
       onRun={async () => {
         if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
         if (!other) throw new Error('Second dataset id required');
-        return apiClient.datasets.intake.fuseDatasets({
+        const parameters = {
           dataset_ids: [datasetId, other],
           wave_names: ['wave_1', 'wave_2'],
-        });
+        };
+        const payload = await apiClient.datasets.intake.fuseDatasets(parameters);
+        return techniqueRun(payload, { op: 'fuse_waves', parameters });
       }}
     >
       <div className="space-y-3">
@@ -266,11 +288,13 @@ export function BatchTablesDialog({ children }: { children: ReactNode }) {
       trigger={children}
       onRun={async () => {
         if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
-        return apiClient.datasets.tables.batch(datasetId, {
+        const parameters = {
           banner: [{ column: banner }],
           stub_columns: columns.filter(c => c !== banner),
           sort_by_significance: true,
-        });
+        };
+        const payload = await apiClient.datasets.tables.batch(datasetId, parameters);
+        return techniqueRun(payload, { op: 'batch_tables', parameters });
       }}
     >
       <div className="space-y-3">
@@ -307,10 +331,16 @@ export function OpenTextCodingDialog({ children }: { children: ReactNode }) {
       trigger={children}
       onRun={async () => {
         if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
-        return apiClient.datasets.techniques.run(datasetId, 'code-open-text', {
+        const parameters = {
           text_column: text,
           lexicon: JSON.parse(lexicon),
-        });
+        };
+        const payload = await apiClient.datasets.techniques.run(
+          datasetId,
+          'code-open-text',
+          parameters
+        );
+        return techniqueRun(payload, { op: 'code_open_text', parameters });
       }}
     >
       <div className="space-y-3">
@@ -338,11 +368,13 @@ export function OpenTextCodingDialog({ children }: { children: ReactNode }) {
 function TechniqueColumnDialog({
   title,
   path,
+  analysisOp,
   fields,
   children,
 }: {
   title: string;
   path: string;
+  analysisOp: string;
   fields: { key: string; label: string; multi?: boolean }[];
   children: ReactNode;
 }) {
@@ -363,7 +395,8 @@ function TechniqueColumnDialog({
                 .filter(Boolean)
             : values[field.key];
         }
-        return apiClient.datasets.techniques.run(datasetId, path, body);
+        const payload = await apiClient.datasets.techniques.run(datasetId, path, body);
+        return techniqueRun(payload, { op: analysisOp, parameters: body });
       }}
     >
       <div className="space-y-3">
@@ -401,6 +434,7 @@ export const TurfDialog = ({ children }: { children: ReactNode }) => (
   <TechniqueColumnDialog
     title="TURF"
     path="turf"
+    analysisOp="turf"
     fields={[{ key: 'items', label: 'Items', multi: true }]}
   >
     {children}
@@ -410,6 +444,7 @@ export const DriversDialog = ({ children }: { children: ReactNode }) => (
   <TechniqueColumnDialog
     title="Driver Analysis"
     path="drivers"
+    analysisOp="drivers"
     fields={[
       { key: 'outcome', label: 'Outcome' },
       { key: 'drivers', label: 'Drivers', multi: true },
@@ -422,6 +457,7 @@ export const CorrespondenceDialog = ({ children }: { children: ReactNode }) => (
   <TechniqueColumnDialog
     title="Correspondence Analysis"
     path="correspondence"
+    analysisOp="correspondence"
     fields={[
       { key: 'row_column', label: 'Row' },
       { key: 'column_column', label: 'Column' },
@@ -434,6 +470,7 @@ export const VanWestendorpDialog = ({ children }: { children: ReactNode }) => (
   <TechniqueColumnDialog
     title="Van Westendorp"
     path="van-westendorp"
+    analysisOp="van_westendorp"
     fields={[
       { key: 'too_cheap', label: 'Too cheap' },
       { key: 'cheap', label: 'Cheap' },
@@ -448,6 +485,7 @@ export const GaborGrangerDialog = ({ children }: { children: ReactNode }) => (
   <TechniqueColumnDialog
     title="Gabor-Granger"
     path="gabor-granger"
+    analysisOp="gabor_granger"
     fields={[
       { key: 'price_column', label: 'Price' },
       { key: 'buy_column', label: 'Buy' },
@@ -457,7 +495,12 @@ export const GaborGrangerDialog = ({ children }: { children: ReactNode }) => (
   </TechniqueColumnDialog>
 );
 export const NpsDialog = ({ children }: { children: ReactNode }) => (
-  <TechniqueColumnDialog title="NPS" path="nps" fields={[{ key: 'score_column', label: 'Score' }]}>
+  <TechniqueColumnDialog
+    title="NPS"
+    path="nps"
+    analysisOp="nps"
+    fields={[{ key: 'score_column', label: 'Score' }]}
+  >
     {children}
   </TechniqueColumnDialog>
 );
@@ -465,6 +508,7 @@ export const FunnelDialog = ({ children }: { children: ReactNode }) => (
   <TechniqueColumnDialog
     title="Brand Funnel"
     path="funnel"
+    analysisOp="funnel"
     fields={[{ key: 'stages', label: 'Stage columns', multi: true }]}
   >
     {children}
@@ -484,21 +528,29 @@ export function MaxDiffDialog({ children }: { children: ReactNode }) {
       onRun={async () => {
         if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
         if (mode === 'count') {
-          return apiClient.datasets.techniques.run(datasetId, 'maxdiff/count', {
-            best_column: best,
-            worst_column: worst,
-          });
+          const parameters = { best_column: best, worst_column: worst };
+          const payload = await apiClient.datasets.techniques.run(
+            datasetId,
+            'maxdiff/count',
+            parameters
+          );
+          return techniqueRun(payload, { op: 'maxdiff_count', parameters });
         }
-        const itemList = items
-          .split(',')
-          .map(s => s.trim())
-          .filter(Boolean);
-        return apiClient.datasets.techniques.run(datasetId, 'maxdiff/mnl', {
+        const parameters = {
           best_column: best,
           worst_column: worst,
           set_columns: columns.filter(c => c.startsWith('set_')),
-          items: itemList,
-        });
+          items: items
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean),
+        };
+        const payload = await apiClient.datasets.techniques.run(
+          datasetId,
+          'maxdiff/mnl',
+          parameters
+        );
+        return techniqueRun(payload, { op: 'maxdiff_mnl', parameters });
       }}
     >
       <div className="space-y-3">
@@ -561,14 +613,20 @@ export function ConjointDialog({ children }: { children: ReactNode }) {
       trigger={children}
       onRun={async () => {
         if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
-        return apiClient.datasets.techniques.run(datasetId, 'conjoint/mnl', {
+        const parameters = {
           chosen_column: chosen,
           profile_id_column: profile,
           attribute_columns: attrs
             .split(',')
             .map(s => s.trim())
             .filter(Boolean),
-        });
+        };
+        const payload = await apiClient.datasets.techniques.run(
+          datasetId,
+          'conjoint/mnl',
+          parameters
+        );
+        return techniqueRun(payload, { op: 'conjoint_mnl', parameters });
       }}
     >
       <div className="space-y-3">

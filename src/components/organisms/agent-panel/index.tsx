@@ -27,6 +27,7 @@ import {
   CommandList,
 } from '@/components/molecules/command';
 import { AgentMarkdown } from '@/components/molecules/agent-markdown';
+import { AnalysisReportChatCard as AnalysisReportSummaryCard } from '@/components/molecules/analysis-report-chat-card';
 import { useTabsStore, ViewType, type AgentAnalysisHistoryEntry } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ColumnFiltersState } from '@tanstack/react-table';
@@ -75,6 +76,8 @@ import {
   chatFieldsAfterRunAnalysis,
   logAgentChatRenderPayload,
   preferRicherPlan,
+  reportCardForOpenedTab,
+  type AnalysisReportChatCard,
 } from '@/lib/agent-analysis-chat-fields';
 import { accumulateInterpretedLoopProgress } from '@/lib/agent-analysis-progress';
 import {
@@ -151,6 +154,8 @@ function ChatMessageBody({
   content,
   thinkingLines,
   resultMarkdown,
+  reportCard,
+  onOpenReport,
   charts,
   isStreaming,
   repairSuggestions,
@@ -160,6 +165,8 @@ function ChatMessageBody({
   content: string;
   thinkingLines?: string[];
   resultMarkdown?: string;
+  reportCard?: AnalysisReportChatCard;
+  onOpenReport?: (tabId: string) => void;
   charts?: AnalysisReportChart[];
   isStreaming?: boolean;
   repairSuggestions?: string[];
@@ -176,12 +183,12 @@ function ChatMessageBody({
   const hasThinking = liveThinking.length > 0;
   const showChecklist = liveThinking.length >= 5;
   const showPlan = Boolean(content?.trim());
-  const showResult = Boolean(resultMarkdown?.trim());
+  const showResult = Boolean(resultMarkdown?.trim()) && !reportCard;
   const streamingResult = isStreaming && showResult;
 
   return (
     <>
-      {showPlan || hasThinking || showResult || isStreaming ? (
+      {showPlan || hasThinking || showResult || reportCard || isStreaming ? (
         <div className="max-w-none break-words text-sm">
           {showPlan ? <AgentMarkdown>{content}</AgentMarkdown> : null}
 
@@ -241,6 +248,14 @@ function ChatMessageBody({
 
           {isStreaming && !showResult ? (
             <AgentWorkingLabel className={cn((showPlan || hasThinking) && 'mt-1 block')} />
+          ) : null}
+
+          {reportCard && onOpenReport ? (
+            <AnalysisReportSummaryCard
+              title={reportCard.title}
+              summary={reportCard.summary}
+              onOpen={() => onOpenReport(reportCard.tabId)}
+            />
           ) : null}
 
           {showResult ? (
@@ -558,6 +573,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         const openedTabs: OpenedAnalysisTab[] = [];
         const enrichmentNotes: string[] = [];
         let primaryChatFields: { content: string; resultMarkdown: string } | null = null;
+        let primaryReportCard: AnalysisReportChatCard | null = null;
 
         for (const entry of response.tool_results ?? []) {
           // Need the full tool envelope ({ result, report, run_id }), not nested
@@ -648,6 +664,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             continue;
           }
 
+          primaryReportCard = reportCardForOpenedTab({
+            tabId,
+            title: report?.meta.title,
+            summary: report?.summary,
+          });
+
           // ChatMessageBody renders content AND resultMarkdown. Setting both to the
           // same report markdown is the live double-render bug — keep Plan in
           // content, report once in resultMarkdown.
@@ -673,11 +695,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             : primaryChatFields.content;
           const chatFields = {
             content: contentWithEnrichment,
-            resultMarkdown: primaryChatFields.resultMarkdown,
+            resultMarkdown: primaryReportCard ? '' : primaryChatFields.resultMarkdown,
           };
           logAgentChatRenderPayload(chatFields);
           updateMessage(projectId, assistantMessageId, {
-            ...chatFields,
+            content: chatFields.content,
+            resultMarkdown: primaryReportCard ? undefined : chatFields.resultMarkdown,
+            reportCard: primaryReportCard ?? undefined,
+            charts: primaryReportCard ? undefined : patch.charts,
             lastFittedModel: patch.lastFittedModel,
             thinkingLines: undefined,
             isStreaming: false,
@@ -906,26 +931,43 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         planSummary,
         reportMarkdown: markdownContent,
       });
-      logAgentChatRenderPayload(chatFields);
-
-      await revealAssistantText(markdownContent, partial => {
-        updateMessage(projectId, messageId, {
-          resultMarkdown: partial,
-          isStreaming: true,
-        });
+      const openedTabId = openResultTabForPlan(
+        plan,
+        analysisEnvelope,
+        datasetId,
+        activeTab?.name,
+        plan.spec
+      );
+      const reportCard = reportCardForOpenedTab({
+        tabId: openedTabId,
+        title: reportWithApproach?.meta.title,
+        summary: reportWithApproach?.summary,
+      });
+      logAgentChatRenderPayload({
+        content: chatFields.content,
+        resultMarkdown: reportCard ? '' : chatFields.resultMarkdown,
       });
 
+      if (!reportCard) {
+        await revealAssistantText(markdownContent, partial => {
+          updateMessage(projectId, messageId, {
+            resultMarkdown: partial,
+            isStreaming: true,
+          });
+        });
+      }
+
       updateMessage(projectId, messageId, {
-        ...chatFields,
+        content: chatFields.content,
+        resultMarkdown: reportCard ? undefined : chatFields.resultMarkdown,
+        reportCard: reportCard ?? undefined,
         thinkingLines: undefined,
         isStreaming: false,
-        charts: reportChart ? [reportChart] : undefined,
+        charts: reportCard ? undefined : reportChart ? [reportChart] : undefined,
         pendingAction: current
           ? patchPendingAction(current, { status: 'accepted', plan })
           : undefined,
       });
-
-      openResultTabForPlan(plan, analysisEnvelope, datasetId, activeTab?.name, plan.spec);
 
       if (activeTab?.type === ViewType.SPREADSHEET && activeTab.data) {
         const prev = activeTab.data.analysisHistory ?? [];
@@ -1582,7 +1624,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           </div>
         ) : (
           <>
-            <MessageScroller className="min-h-0 flex-1">
+            <MessageScroller className="min-h-0 flex-1" data-testid="agent-chat-thread">
               <MessageScrollerViewport className="px-3.5 py-4">
                 {messages.length === 0 && !isLoading ? (
                   <div className="space-y-4">
@@ -1669,6 +1711,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                                       content={message.content}
                                       thinkingLines={message.thinkingLines}
                                       resultMarkdown={message.resultMarkdown}
+                                      reportCard={message.reportCard}
+                                      onOpenReport={tabId =>
+                                        useTabsStore.getState().setActiveTab(tabId)
+                                      }
                                       charts={message.charts}
                                       isStreaming={message.isStreaming}
                                       repairSuggestions={message.repairSuggestions}

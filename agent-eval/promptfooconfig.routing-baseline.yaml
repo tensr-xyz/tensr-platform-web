@@ -38,7 +38,7 @@ tests:
     assert: [{ type: equals, value: "menu-analysis" }]
 
   - vars: { prompt: "logistic of Full_retention on Interval and Pay, reference short and low, approvals per 1000" }
-    assert: [{ type: equals, value: "menu-analysis" }]
+    assert: [{ type: equals, value: "analysis-question" }]
     description: "Demo: persist refs and per-N must still route to run_analysis"
 
   - vars: { prompt: "Could you provide a boxplot for utilisation_rate" }

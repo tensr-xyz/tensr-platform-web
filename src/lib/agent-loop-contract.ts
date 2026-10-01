@@ -31,7 +31,8 @@ export type BaselineGate =
   | 'exploratory'
   | 'prep-playbook'
   | 'menu-analysis'
-  | 'menu-dialog';
+  | 'menu-dialog'
+  | 'analysis-question';
 
 export type BaselineContractCase = {
   prompt: string;
@@ -110,7 +111,7 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     mode: 'agent',
     expected: 'run_analysis',
     description: 'Demo: persist refs and per-N must still route to run_analysis',
-    baselineGate: 'menu-analysis',
+    baselineGate: 'analysis-question',
   },
   {
     prompt: 'Could you provide a boxplot for utilisation_rate',

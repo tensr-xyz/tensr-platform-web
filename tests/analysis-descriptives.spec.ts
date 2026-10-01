@@ -33,5 +33,19 @@ test.describe('Descriptive statistics journey', () => {
     await expect(page.getByText('Descriptive Statistics').first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('E2E mock descriptive statistics summary.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Copy' }).first()).toBeVisible();
+
+    const excelRequest = page.waitForRequest(
+      request => request.method() === 'POST' && request.url().includes('/reports/export.xlsx')
+    );
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'Export' }).click();
+    await page.getByRole('menuitem', { name: 'Excel' }).click();
+    const excel = await excelRequest;
+    const body = excel.postDataJSON();
+    expect(body.dataset_id).toBe(E2E_DATASET_ID);
+    expect(body.report.tables.length).toBeGreaterThan(0);
+    expect(body.report.meta).toBeTruthy();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toContain('.xlsx');
   });
 });

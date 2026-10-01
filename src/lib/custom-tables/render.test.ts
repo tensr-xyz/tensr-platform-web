@@ -69,6 +69,22 @@ describe('banner table renderer model', () => {
     expect(table.rows[0].id).toBe('gender:Male');
   });
 
+  it('keeps the percent and adds a caution mark when the base is low', () => {
+    const table = displayBannerTable({
+      ...BOOK,
+      rows: [
+        {
+          ...BOOK.rows[0],
+          cells: BOOK.rows[0].cells.map((cell, index) =>
+            index === 2 ? { ...cell, low_base: true, low_base_suppressed: false } : cell
+          ),
+        },
+      ],
+    });
+    expect(table.rows[0].cells[2].columnPercent).toBe('33.3% *');
+    expect(table.rows[0].cells[2].lowBase).toBe(true);
+  });
+
   it('shows a suppression marker instead of a fake percent on low base', () => {
     const table = displayBannerTable(BOOK);
     const suppressed = table.rows[0].cells[2];
