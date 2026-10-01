@@ -1,5 +1,5 @@
 import { PRODUCTION_MENU_ITEMS, PRODUCTION_ANALYSIS_LABELS } from './production-menu';
-import { getAllAnalysisItems, filterAnalysisItems } from './utils';
+import { ACTIVE_PALETTE_TABS, getAllAnalysisItems, filterAnalysisItems } from './utils';
 import { COMING_SOON_SECTIONS } from './palette-catalog';
 import { isDialogMenuItem, getAnalysisOpForMenuName } from './menu-registry';
 import { RETIRED_FROM_UI_OPS } from '@/lib/retired-from-ui';
@@ -134,6 +134,7 @@ describe('production menu false-door sweep', () => {
     expect(labels).toContain('Find Outliers');
     expect(labels).toContain('Verbatim Coding');
     expect(PRODUCTION_MENU_ITEMS.time_series.sections.Forecasting).toContain('ARIMA / SARIMA');
+    expect(ACTIVE_PALETTE_TABS).toContain('time_series');
   });
 
   it('keeps both Gradient Boosting mode variants on the palette', () => {

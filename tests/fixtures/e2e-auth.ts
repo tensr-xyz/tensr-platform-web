@@ -63,6 +63,7 @@ export async function selectPaletteTab(
     | 'Analyze'
     | 'Transform'
     | 'Charts'
+    | 'Time series'
     | 'ML & AI'
     | 'Multivariate & SEM'
     | 'Plugins'

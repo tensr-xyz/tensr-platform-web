@@ -33,6 +33,7 @@ export const ACTIVE_PALETTE_TABS = [
   'analyze',
   'transform',
   'visualization',
+  'time_series',
   'ml_ai',
   'multivariate',
 ] as const;
