@@ -1,9 +1,16 @@
 name: CI — e2e
 
+# main is intentionally absent: it is fast-forwarded to commits that already ran
+# here on development or in a pull request. Use workflow_dispatch to run it on main.
 on:
   pull_request:
   push:
-    branches: [main, development]
+    branches: [development]
+  workflow_dispatch:
+
+concurrency:
+  group: e2e-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
