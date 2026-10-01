@@ -249,33 +249,46 @@ export async function installDatasetApiMocks(page: Page): Promise<void> {
       return;
     }
 
+    if (/\/api\/(?:tensr\/)?sessions(?:\?|$)/.test(url) && method === 'GET') {
+      await json(route, []);
+      return;
+    }
+
     if (await fulfillDatasetRoute(route)) return;
+
+    // The fake session token is always rejected by a real tensr-api, and any 401
+    // logs the test user out — so unmocked backend calls must never leave the browser.
+    if (url.includes('/api/tensr/')) {
+      await json(route, { detail: `Not mocked in E2E: ${method} ${url}` }, 404);
+      return;
+    }
     await route.continue();
   });
 
-  // Local uvicorn dataset paths (no /api prefix).
+  // `fallback()` (not `continue()`) so requests reach the `**/api/**` handler above;
+  // `continue()` sends them straight to the network.
   await page.route('**/datasets/**', async route => {
     if (route.request().url().includes('/api/')) {
-      await route.continue();
+      await route.fallback();
       return;
     }
     if (await fulfillDatasetRoute(route)) return;
-    await route.continue();
+    await route.fallback();
   });
 
   await page.route('**/projects**', async route => {
-    if (route.request().method() === 'GET') {
+    if (route.request().method() === 'GET' && route.request().resourceType() !== 'document') {
       await json(route, []);
       return;
     }
-    await route.continue();
+    await route.fallback();
   });
 
   await page.route('**/plugins**', async route => {
-    if (route.request().method() === 'GET') {
+    if (route.request().method() === 'GET' && route.request().resourceType() !== 'document') {
       await json(route, []);
       return;
     }
-    await route.continue();
+    await route.fallback();
   });
 }

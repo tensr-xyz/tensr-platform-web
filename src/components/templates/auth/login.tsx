@@ -10,6 +10,7 @@ import { redeemStoredInvitation, storePendingInviteToken } from '@/lib/business-
 import { entitlementsResolved, subscriptionRedirectPath } from '@/lib/subscription';
 import { safeReturnTo } from '@/lib/safe-return-to';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
+import { stytchErrorMessage } from '@/lib/stytch-error-message';
 import { dumpAuthTrace, authTrace } from '@/lib/auth-trace';
 import { storeSession } from '@/utils/auth';
 import Link from 'next/link';
@@ -108,7 +109,7 @@ const LoginTemplate = () => {
       })
       .catch(err => {
         console.error('OAuth authenticate error:', err);
-        setError(err instanceof Error ? err.message : 'Failed to authenticate');
+        setError(stytchErrorMessage(err, 'Failed to authenticate'));
         hasHandledOAuthRef.current = false;
       })
       .finally(() => {
@@ -131,7 +132,7 @@ const LoginTemplate = () => {
       });
     } catch (err) {
       console.error('Google OAuth start error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to continue with Google');
+      setError(stytchErrorMessage(err, 'Failed to continue with Google'));
       setIsGoogleLoading(false);
     }
   };
@@ -150,7 +151,7 @@ const LoginTemplate = () => {
       });
     } catch (err) {
       console.error('GitHub OAuth start error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to continue with GitHub');
+      setError(stytchErrorMessage(err, 'Failed to continue with GitHub'));
       setIsGitHubLoading(false);
     }
   };
@@ -253,7 +254,7 @@ const LoginTemplate = () => {
       }
     } catch (err) {
       console.error('Failed to resend code:', err);
-      setError('Failed to resend verification email. Please try again.');
+      setError(stytchErrorMessage(err, 'Failed to resend verification email. Please try again.'));
     } finally {
       setIsSendingCode(false);
     }

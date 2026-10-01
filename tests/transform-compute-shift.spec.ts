@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 import {
-  analysisPalette,
   E2E_DATASET_ID,
   openAnalysisPalette,
+  paletteItem,
   selectPaletteTab,
   seedE2eSession,
 } from './fixtures/e2e-auth';
@@ -20,9 +20,7 @@ test.describe('Compute Variable and Shift Values', () => {
     test.setTimeout(90_000);
     await openAnalysisPalette(page);
     await selectPaletteTab(page, 'Transform');
-    await analysisPalette(page)
-      .getByRole('button', { name: 'Compute Variable', exact: true })
-      .click();
+    await paletteItem(page, 'Compute Variable').click();
 
     const dialog = page.getByRole('dialog').filter({
       has: page.getByRole('heading', { name: 'Compute Variable' }),
@@ -41,7 +39,7 @@ test.describe('Compute Variable and Shift Values', () => {
     test.setTimeout(90_000);
     await openAnalysisPalette(page);
     await selectPaletteTab(page, 'Transform');
-    await analysisPalette(page).getByRole('button', { name: 'Shift Values', exact: true }).click();
+    await paletteItem(page, 'Shift Values').click();
 
     const dialog = page.getByRole('dialog').filter({
       has: page.getByRole('heading', { name: 'Shift Values' }),

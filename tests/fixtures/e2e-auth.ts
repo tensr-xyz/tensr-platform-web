@@ -51,9 +51,21 @@ export async function openAnalysisPalette(page: Page): Promise<void> {
   await analysisPalette(page).waitFor();
 }
 
+/** A selectable item (cmdk `option`) in the ⌘K analysis palette. */
+export function paletteItem(page: Page, name: string) {
+  return analysisPalette(page).getByRole('option', { name, exact: true });
+}
+
 export async function selectPaletteTab(
   page: Page,
-  tabName: 'Data' | 'Analyze' | 'Transform' | 'Charts' | 'ML & AI' | 'Plugins'
+  tabName:
+    | 'Data'
+    | 'Analyze'
+    | 'Transform'
+    | 'Charts'
+    | 'ML & AI'
+    | 'Multivariate & SEM'
+    | 'Plugins'
 ): Promise<void> {
   const palette = analysisPalette(page);
   await palette.getByRole('tab', { name: tabName }).click();

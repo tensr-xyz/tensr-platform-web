@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 import {
-  analysisPalette,
   E2E_DATASET_ID,
   openAnalysisPalette,
+  paletteItem,
   selectPaletteTab,
   dismissDialogs,
   seedE2eSession,
@@ -74,21 +74,20 @@ test.describe('Analyze command palette', () => {
     test.setTimeout(120_000);
 
     await openAnalysisPalette(page);
-    const palette = analysisPalette(page);
 
     await selectPaletteTab(page, 'Data');
     for (const label of DATA_MENU_LABELS) {
-      await expect(palette.getByRole('button', { name: label, exact: true })).toBeVisible();
+      await expect(paletteItem(page, label)).toBeVisible();
     }
 
     await selectPaletteTab(page, 'Analyze');
     for (const label of ANALYZE_MENU_LABELS) {
-      await expect(palette.getByRole('button', { name: label, exact: true })).toBeVisible();
+      await expect(paletteItem(page, label)).toBeVisible();
     }
 
     await selectPaletteTab(page, 'Transform');
     for (const label of TRANSFORM_MENU_LABELS) {
-      await expect(palette.getByRole('button', { name: label, exact: true })).toBeVisible();
+      await expect(paletteItem(page, label)).toBeVisible();
     }
 
     const allLabels = [...DATA_MENU_LABELS, ...ANALYZE_MENU_LABELS, ...TRANSFORM_MENU_LABELS];
@@ -96,14 +95,13 @@ test.describe('Analyze command palette', () => {
     for (const label of allLabels) {
       await dismissDialogs(page);
       await openAnalysisPalette(page);
-      const currentPalette = analysisPalette(page);
       const tab = DATA_MENU_LABELS.includes(label)
         ? 'Data'
         : TRANSFORM_MENU_LABELS.includes(label)
           ? 'Transform'
           : 'Analyze';
       await selectPaletteTab(page, tab);
-      await currentPalette.getByRole('button', { name: label, exact: true }).click();
+      await paletteItem(page, label).click();
 
       await expect(page.getByText(UNAVAILABLE_COPY)).toHaveCount(0);
 

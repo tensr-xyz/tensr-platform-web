@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test';
 import {
-  analysisPalette,
   E2E_DATASET_ID,
   openAnalysisPalette,
+  paletteItem,
   selectPaletteTab,
   seedE2eSession,
 } from './fixtures/e2e-auth';
@@ -21,7 +21,7 @@ test.describe('Descriptive statistics journey', () => {
 
     await openAnalysisPalette(page);
     await selectPaletteTab(page, 'Analyze');
-    await analysisPalette(page).getByRole('button', { name: 'Descriptives', exact: true }).click();
+    await paletteItem(page, 'Descriptives').click();
 
     const setupDialog = page
       .getByRole('dialog')

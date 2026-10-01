@@ -7,6 +7,7 @@ import { clearAuthData, getStoredSession, storeSession } from '@/utils/auth';
 import { fetchMeProfile, redeemStoredInvitation } from '@/lib/business-api';
 import { hasActiveSubscription } from '@/lib/subscription';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
+import { stytchErrorMessage } from '@/lib/stytch-error-message';
 import { devLog } from '@/lib/dev-log';
 import posthog from 'posthog-js';
 
@@ -63,9 +64,10 @@ export const useAuth = () => {
       };
     } catch (error) {
       console.error('Auth initiation failed:', error);
-      setError(error instanceof Error ? error.message : 'Authentication failed');
+      const message = stytchErrorMessage(error, 'Failed to send verification code');
+      setError(message);
       setLoading(false);
-      throw error;
+      throw new Error(message);
     }
   };
 
@@ -154,13 +156,15 @@ export const useAuth = () => {
       setLoading(false);
       return { success: true };
     } catch (error) {
+      // The Stytch SDK throws (not returns) on a wrong/expired code.
       console.error('Auth verification failed:', error);
-      setError(error instanceof Error ? error.message : 'Verification failed');
+      const message = stytchErrorMessage(error, 'Verification failed. Please try again.');
+      setError(message);
       setLoading(false);
       return {
         success: false,
-        code: 'INTERNAL_ERROR',
-        message: 'An unexpected error occurred',
+        code: 'VERIFICATION_FAILED',
+        message,
       };
     }
   };
@@ -229,9 +233,10 @@ export const useAuth = () => {
       };
     } catch (error) {
       console.error('Resend code failed:', error);
-      setError(error instanceof Error ? error.message : 'Failed to resend code');
+      const message = stytchErrorMessage(error, 'Failed to resend code');
+      setError(message);
       setLoading(false);
-      throw error;
+      throw new Error(message);
     }
   };
 
