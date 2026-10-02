@@ -4,6 +4,11 @@ import { findColumnByLabel, type ColumnLike } from '@/lib/column-utils';
 import { parseNumericCellValue } from '@/lib/column-heatmap';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getIdToken } from '@/utils/auth';
+import {
+  applyClientColumnFilters,
+  filterRowsByRowUids,
+  type TabColumnFilter,
+} from '@/utils/column-filters';
 
 const CHART_BLOCK_RE = /```chart\s*\n([\s\S]*?)```/gi;
 
@@ -75,12 +80,294 @@ function observationWeight(
   return weight;
 }
 
+export type PaletteChartKind =
+  | 'bar'
+  | 'line'
+  | 'scatter'
+  | 'histogram'
+  | 'boxplot'
+  | 'pie'
+  | 'area';
+
+/** Palette entries that have a real chart kind. Heatmap stays off until one exists. */
+export const PALETTE_MENU_TO_KIND: Record<string, PaletteChartKind> = {
+  'Bar Chart': 'bar',
+  'Line Chart': 'line',
+  'Scatter Chart': 'scatter',
+  Histogram: 'histogram',
+  Boxplot: 'boxplot',
+  'Pie Chart': 'pie',
+  'Area Chart': 'area',
+};
+
+const PALETTE_KIND_WORDS: Record<string, PaletteChartKind> = {
+  bar: 'bar',
+  line: 'line',
+  pie: 'pie',
+  area: 'area',
+  scatter: 'scatter',
+  histogram: 'histogram',
+  boxplot: 'boxplot',
+};
+
+function leadingPaletteKind(message: string): PaletteChartKind | null {
+  const match = message.trim().match(/^(bar|line|pie|area|scatter|histogram|boxplot)\b/i);
+  if (!match?.[1]) return null;
+  return PALETTE_KIND_WORDS[match[1].toLowerCase()] ?? null;
+}
+
+function headerFor(columns: ColumnLike[], id: string): string {
+  return columns.find(column => column.id === id)?.header || id || 'Column';
+}
+
+function axesFromMessage(message: string, columns: ColumnLike[]): { xId: string; yId: string } {
+  const match = message.match(/\bof\s+(.+?)\s+by\s+(.+?)\s*$/i);
+  if (match?.[1] && match[2]) {
+    const yHint = match[1].trim();
+    const xHint = match[2].trim();
+    const y = findColumnByLabel(columns, yHint) ?? columns.find(column => column.id === yHint);
+    const x = findColumnByLabel(columns, xHint) ?? columns.find(column => column.id === xHint);
+    if (x && y) return { xId: x.id, yId: y.id };
+  }
+  return {
+    xId: columns[0]?.id ?? '',
+    yId: columns[1]?.id ?? columns[0]?.id ?? '',
+  };
+}
+
+function columnIsNumeric(rows: Record<string, unknown>[], id: string): boolean {
+  return rows.slice(0, 50).some(row => parseNumericCellValue(row[id]) !== null);
+}
+
+function categorySeries(
+  rows: Record<string, unknown>[],
+  xId: string,
+  yId: string,
+  weightColumn: string | null | undefined,
+  mode: 'mean' | 'sum',
+  cap: number
+): { categories: string[]; values: number[]; weighted: boolean; totalGroups: number } {
+  const numericY = columnIsNumeric(rows, yId);
+  const order: string[] = [];
+  const groups = new Map<string, { sum: number; weight: number }>();
+  let weighted = false;
+  for (const row of rows) {
+    const label = String(row[xId] ?? '').trim();
+    if (!label) continue;
+    const weight = observationWeight(row, weightColumn);
+    if (weight === null) continue;
+    if (weightColumn) weighted = true;
+    const y = parseNumericCellValue(row[yId]);
+    let group = groups.get(label);
+    if (!group) {
+      group = { sum: 0, weight: 0 };
+      groups.set(label, group);
+      order.push(label);
+    }
+    if (numericY && y !== null) {
+      group.sum += mode === 'mean' ? y * weight : y * weight;
+      group.weight += weight;
+    } else if (!numericY) {
+      group.sum += weight;
+      group.weight += weight;
+    }
+  }
+  const shown = order.slice(0, cap);
+  const values = shown.map(label => {
+    const group = groups.get(label);
+    if (!group || group.weight === 0) return 0;
+    return mode === 'mean' && numericY ? group.sum / group.weight : group.sum;
+  });
+  return { categories: shown, values, weighted, totalGroups: order.length };
+}
+
+function quantile(sorted: number[], p: number): number {
+  const idx = (sorted.length - 1) * p;
+  const lo = Math.floor(idx);
+  const hi = Math.ceil(idx);
+  if (lo === hi) return sorted[lo]!;
+  return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (idx - lo);
+}
+
+function buildExplicitPaletteChart(
+  kind: PaletteChartKind,
+  columns: ColumnLike[],
+  rows: Record<string, unknown>[],
+  xId: string,
+  yId: string,
+  weightColumn?: string | null
+): AnalysisReportChart {
+  const xLabel = headerFor(columns, xId);
+  const yLabel = headerFor(columns, yId);
+  const weighted = Boolean(weightColumn);
+
+  if (kind === 'scatter') {
+    const points: { x: number; y: number }[] = [];
+    let numericPairs = 0;
+    for (const row of rows) {
+      const x = parseNumericCellValue(row[xId]);
+      const y = parseNumericCellValue(row[yId]);
+      if (x === null || y === null) continue;
+      numericPairs += 1;
+      if (points.length < 5000) points.push({ x, y });
+    }
+    const base = `${yLabel} vs ${xLabel}`;
+    const title =
+      numericPairs > points.length
+        ? `${weighted ? 'Unweighted scatter of ' : ''}${base} (5,000 of ${numericPairs.toLocaleString()} points)`
+        : weighted
+          ? `Unweighted scatter of ${base}`
+          : points.length
+            ? base
+            : `No rows for ${base}`;
+    return {
+      kind: 'scatter',
+      title,
+      x_label: xLabel,
+      y_label: yLabel,
+      points,
+      weighting: weighted ? 'unweighted' : 'none',
+    };
+  }
+
+  if (kind === 'histogram') {
+    const values: number[] = [];
+    for (const row of rows) {
+      const n = parseNumericCellValue(row[yId] ?? row[xId]);
+      const weight = observationWeight(row, weightColumn);
+      if (n === null || weight === null) continue;
+      values.push(n);
+    }
+    const label = columnIsNumeric(rows, yId) ? yLabel : xLabel;
+    if (values.length < 2) {
+      return {
+        kind: 'histogram',
+        title: values.length ? `Distribution of ${label}` : `No rows for ${label}`,
+        x_label: label,
+        bins: [{ start: values[0] ?? 0, end: (values[0] ?? 0) + 1, count: values.length }],
+        weighting: weighted ? 'weighted' : 'none',
+      };
+    }
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const binCount = 12;
+    const width = (max - min) / binCount || 1;
+    const bins = Array.from({ length: binCount }, (_, i) => ({
+      start: min + i * width,
+      end: min + (i + 1) * width,
+      count: 0,
+    }));
+    for (const row of rows) {
+      const n = parseNumericCellValue(row[yId] ?? row[xId]);
+      const weight = observationWeight(row, weightColumn);
+      if (n === null || weight === null) continue;
+      const idx = Math.min(binCount - 1, Math.floor((n - min) / width));
+      bins[idx]!.count += weight;
+    }
+    return {
+      kind: 'histogram',
+      title: weighted ? `Weighted distribution of ${label}` : `Distribution of ${label}`,
+      x_label: label,
+      bins,
+      weighting: weighted ? 'weighted' : 'none',
+    };
+  }
+
+  if (kind === 'boxplot') {
+    const groups: {
+      label: string;
+      min: number;
+      q1: number;
+      median: number;
+      q3: number;
+      max: number;
+    }[] = [];
+    const byGroup = new Map<string, number[]>();
+    for (const row of rows) {
+      const label = String(row[xId] ?? '').trim() || yLabel;
+      const n = parseNumericCellValue(row[yId]);
+      if (n === null || observationWeight(row, weightColumn) === null) continue;
+      const list = byGroup.get(label) ?? [];
+      list.push(n);
+      byGroup.set(label, list);
+    }
+    for (const [label, list] of byGroup) {
+      if (list.length < 2 || groups.length >= 12) continue;
+      const sorted = [...list].sort((a, b) => a - b);
+      groups.push({
+        label,
+        min: sorted[0]!,
+        q1: quantile(sorted, 0.25),
+        median: quantile(sorted, 0.5),
+        q3: quantile(sorted, 0.75),
+        max: sorted[sorted.length - 1]!,
+      });
+    }
+    const title = `${yLabel} by ${xLabel}`;
+    return {
+      kind: 'boxplot',
+      title: groups.length ? (weighted ? `Unweighted ${title}` : title) : `No rows for ${title}`,
+      y_label: yLabel,
+      groups,
+      weighting: weighted ? 'unweighted' : 'none',
+    };
+  }
+
+  if (kind === 'pie') {
+    const series = categorySeries(rows, xId, yId, weightColumn, 'sum', 11);
+    const categories = [...series.categories];
+    const values = [...series.values];
+    if (series.totalGroups > categories.length) {
+      const remainder = categorySeries(rows, xId, yId, weightColumn, 'sum', series.totalGroups);
+      const rest = remainder.values.slice(categories.length).reduce((sum, value) => sum + value, 0);
+      categories.push('Other');
+      values.push(rest);
+    }
+    const base = `${yLabel} by ${xLabel}`;
+    return {
+      kind: 'pie',
+      title: values.length ? (series.weighted ? `Weighted ${base}` : base) : `No rows for ${base}`,
+      categories,
+      values,
+      weighting: series.weighted ? 'weighted' : 'none',
+      x_scale: 'category',
+    };
+  }
+
+  const series = categorySeries(rows, xId, yId, weightColumn, 'mean', 40);
+  const numericY = columnIsNumeric(rows, yId);
+  const measure = numericY ? `Mean ${yLabel}` : `Count of ${xLabel}`;
+  const base = `${measure} by ${xLabel}`;
+  const capped =
+    series.totalGroups > series.categories.length
+      ? ` (first ${series.categories.length} of ${series.totalGroups} groups)`
+      : '';
+  return {
+    kind,
+    title: series.categories.length
+      ? `${series.weighted ? 'Weighted ' : ''}${base}${capped}`
+      : `No rows for ${base}`,
+    x_label: xLabel,
+    y_label: series.weighted && numericY ? `Weighted ${measure}` : measure,
+    categories: series.categories,
+    series: [{ name: yLabel, values: series.values }],
+    weighting: series.weighted ? 'weighted' : 'none',
+    x_scale: 'category',
+  };
+}
+
 export function buildChartFromDataset(
   message: string,
   columns: ColumnLike[],
   rows: Record<string, unknown>[],
-  weightColumn?: string | null
+  weightColumn?: string | null,
+  palette?: { kind: PaletteChartKind; xId: string; yId: string }
 ): AnalysisReportChart | null {
+  const named = palette?.kind ?? leadingPaletteKind(message);
+  if (named) {
+    const axes = palette ?? axesFromMessage(message, columns);
+    return buildExplicitPaletteChart(named, columns, rows, axes.xId, axes.yId, weightColumn);
+  }
   if (!columns.length || !rows.length) return null;
   const weighted = Boolean(weightColumn);
 
@@ -300,6 +587,65 @@ export async function fetchDatasetPreviewRows(
     });
     return obj;
   });
+}
+
+const CHART_PAGE_ROWS = 5000;
+const CHART_FRAME_MAX_ROWS = 100_000;
+
+/** Every preview page, then the sheet's filters. Charts do not use the tab preview. */
+export async function loadFilteredChartRows(
+  datasetId: string,
+  filters: TabColumnFilter[] = [],
+  rowUids?: string[]
+): Promise<Record<string, unknown>[]> {
+  const token = getIdToken();
+  if (!token) throw new Error('Sign in to load the dataset for this chart.');
+  const all: Record<string, unknown>[] = [];
+  let offset = 0;
+  for (;;) {
+    const res = await fetch(
+      tensrApiUrl(`/datasets/${datasetId}/preview?limit=${CHART_PAGE_ROWS}&offset=${offset}`),
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Could not load the dataset for this chart (${res.status}). ${text}`.trim());
+    }
+    const preview = (await res.json()) as {
+      headers?: string[];
+      variable_names?: string[];
+      rows?: unknown[][];
+      truncated?: boolean;
+      offset?: number;
+    };
+    if (offset > 0 && preview.offset == null) {
+      throw new Error(
+        'This dataset is larger than one preview page, and the preview did not return the next page.'
+      );
+    }
+    const names = preview.variable_names?.length ? preview.variable_names : (preview.headers ?? []);
+    const headers = preview.headers ?? [];
+    const page = (preview.rows ?? []).map(rowArr => {
+      const obj: Record<string, unknown> = {};
+      const cells = rowArr as unknown[];
+      names.forEach((name, i) => {
+        obj[name] = cells[i];
+        const header = headers[i];
+        if (header && header !== name && !(header in obj)) obj[header] = cells[i];
+      });
+      return obj;
+    });
+    all.push(...page);
+    if (!preview.truncated || page.length === 0) break;
+    offset += page.length;
+    if (all.length >= CHART_FRAME_MAX_ROWS) {
+      throw new Error(
+        `This dataset has more than ${CHART_FRAME_MAX_ROWS.toLocaleString()} rows. The chart needs the full frame, and this one is past that limit.`
+      );
+    }
+  }
+  const filtered = applyClientColumnFilters(all, filters);
+  return rowUids?.length ? filterRowsByRowUids(filtered, rowUids) : filtered;
 }
 
 export function chartFromAnalysisEnvelope(

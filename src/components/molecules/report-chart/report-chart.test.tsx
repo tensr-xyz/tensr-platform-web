@@ -75,7 +75,119 @@ describe('ReportChart axes', () => {
     };
     render(<ReportChart chart={chart} density="comfortable" preset="apa" />);
     expect(screen.getByText('Figure 1')).toBeTruthy();
-    expect(screen.getByText('Scores by group')).toBeTruthy();
+    expect(screen.getAllByText('Scores by group').length).toBeGreaterThan(0);
     expect(screen.getByText(/Note\./)).toBeTruthy();
+  });
+});
+
+describe('ReportChart palette kinds', () => {
+  const category = {
+    title: 'PTS by Pos',
+    x_label: 'Pos',
+    y_label: 'PTS',
+    categories: ['G', 'F'],
+    series: [{ name: 'PTS', values: [15, 30] }],
+  };
+
+  it('draws a bar as bars', () => {
+    const { container } = render(
+      <ReportChart chart={{ ...category, kind: 'bar' }} density="comfortable" />
+    );
+    expect(container.querySelector('[data-chart-kind="bar"] rect')).toBeTruthy();
+    expect(container.querySelector('[data-chart-kind="bar"] polyline')).toBeNull();
+  });
+
+  it('draws a line as a line', () => {
+    const { container } = render(
+      <ReportChart chart={{ ...category, kind: 'line' }} density="comfortable" />
+    );
+    expect(container.querySelector('[data-chart-kind="line"] polyline')).toBeTruthy();
+    expect(container.querySelector('[data-chart-kind="line"] polygon')).toBeNull();
+  });
+
+  it('draws an area as a filled area', () => {
+    const { container } = render(
+      <ReportChart chart={{ ...category, kind: 'area' }} density="comfortable" />
+    );
+    expect(container.querySelector('[data-chart-kind="area"] polygon')).toBeTruthy();
+    expect(container.querySelector('[data-chart-kind="area"] polyline')).toBeTruthy();
+  });
+
+  it('draws a pie', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'pie',
+          title: 'PTS by Pos',
+          categories: ['G', 'F'],
+          values: [30, 30],
+        }}
+        density="comfortable"
+      />
+    );
+    expect(container.querySelector('[data-chart-kind="pie"]')).toBeTruthy();
+    expect(container.querySelector('path')).toBeTruthy();
+  });
+
+  it('draws a scatter, a histogram, and a boxplot', () => {
+    const scatter = render(
+      <ReportChart
+        chart={{
+          kind: 'scatter',
+          title: 'PTS vs Age',
+          x_label: 'Age',
+          y_label: 'PTS',
+          points: [
+            { x: 22, y: 10 },
+            { x: 28, y: 30 },
+          ],
+        }}
+      />
+    );
+    expect(scatter.container.querySelector('[data-chart-kind="scatter"]')).toBeTruthy();
+    scatter.unmount();
+
+    const histogram = render(
+      <ReportChart
+        chart={{
+          kind: 'histogram',
+          title: 'PTS',
+          x_label: 'PTS',
+          bins: [
+            { start: 0, end: 10, count: 1 },
+            { start: 10, end: 20, count: 2 },
+          ],
+        }}
+      />
+    );
+    expect(histogram.container.querySelector('[data-chart-kind="histogram"]')).toBeTruthy();
+    histogram.unmount();
+
+    const box = render(
+      <ReportChart
+        chart={{
+          kind: 'boxplot',
+          title: 'PTS by Pos',
+          y_label: 'PTS',
+          groups: [{ label: 'G', min: 10, q1: 12, median: 15, q3: 18, max: 20 }],
+        }}
+      />
+    );
+    expect(box.container.querySelector('[data-chart-kind="boxplot"]')).toBeTruthy();
+  });
+
+  it('draws an empty scatter instead of nothing', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'scatter',
+          title: 'No rows',
+          x_label: 'Age',
+          y_label: 'PTS',
+          points: [],
+        }}
+      />
+    );
+    expect(container.querySelector('[data-chart-kind="scatter"]')).toBeTruthy();
   });
 });

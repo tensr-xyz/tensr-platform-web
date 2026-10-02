@@ -21,22 +21,12 @@ import {
 } from '@/components/atoms/select';
 import { useTabsStore } from '@/stores/tabs-store';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
-import type { AnalysisReportChart } from '@/lib/analysis-report-types';
-import { buildChartFromDataset } from '@/lib/agent-chart-from-dataset';
+import {
+  buildChartFromDataset,
+  loadFilteredChartRows,
+  PALETTE_MENU_TO_KIND,
+} from '@/lib/agent-chart-from-dataset';
 import { apiClient } from '@/lib/api-client';
-
-type ChartKind = 'bar' | 'line' | 'scatter' | 'histogram' | 'boxplot' | 'pie' | 'area';
-
-const MENU_TO_KIND: Record<string, ChartKind> = {
-  'Bar Chart': 'bar',
-  'Line Chart': 'line',
-  'Scatter Chart': 'scatter',
-  Histogram: 'histogram',
-  Boxplot: 'boxplot',
-  'Pie Chart': 'pie',
-  'Area Chart': 'area',
-  Heatmap: 'scatter',
-};
 
 type Props = { children: ReactNode; chartMenuName?: string };
 
@@ -55,72 +45,90 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
   const [xCol, setXCol] = useState('');
   const [yCol, setYCol] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const kind = MENU_TO_KIND[chartMenuName] ?? 'bar';
+  const kind = PALETTE_MENU_TO_KIND[chartMenuName];
 
   const run = async () => {
-    if (!activeTab?.data?.initialData?.length) {
-      setError('Open a dataset with preview rows first');
+    if (!kind) {
+      setError('That chart is not available.');
+      return;
+    }
+    if (!columns.length) {
+      setError('Open a dataset first');
       return;
     }
     const x = xCol || columns[0]?.id;
     const y = yCol || columns[1]?.id || columns[0]?.id;
-    if (!x) {
+    if (!x || !y) {
       setError('Select an X axis column');
       return;
     }
-    const prompt = `${kind} chart of ${y} by ${x}`;
-    const datasetId = activeTab.data?.datasetId ?? activeTab.data?.filePath;
+    const datasetId = activeTab?.data?.datasetId ?? activeTab?.data?.filePath;
     if (!datasetId) {
       setError('Dataset id not available');
       return;
     }
-    let weightColumn: string | null = null;
+    setBusy(true);
+    setError(null);
     try {
-      const meta = await apiClient.datasets.getMetadata(datasetId);
-      weightColumn = meta.active_weight_column ?? null;
-    } catch {
-      weightColumn = null;
-    }
-    const built = buildChartFromDataset(
-      prompt,
-      columns.map(c => ({ id: c.id, header: c.header })),
-      activeTab.data.initialData,
-      weightColumn
-    );
-    if (!built) {
-      setError('Could not build chart from selected columns');
-      return;
-    }
-    const chart = built as AnalysisReportChart;
-    openAnalysisResultTab({
-      op: 'chart_builder',
-      envelope: {
-        result: { chart_type: kind, x, y },
-        report: {
-          meta: {
-            analysis_key: 'chart_builder',
-            title: chartMenuName,
-            subtitle: `${y} vs ${x}`,
-            generated_at: new Date().toISOString(),
-            rows_dataset: activeTab.data.initialData.length,
+      const rows = await loadFilteredChartRows(
+        datasetId,
+        activeTab?.data?.columnFilters ?? [],
+        activeTab?.data?.rowUidFilter
+      );
+      let weightColumn: string | null = null;
+      try {
+        const meta = await apiClient.datasets.getMetadata(datasetId);
+        weightColumn = meta.active_weight_column ?? null;
+      } catch {
+        weightColumn = null;
+      }
+      const prompt = `${kind} chart of ${y} by ${x}`;
+      const built = buildChartFromDataset(
+        prompt,
+        columns.map(c => ({ id: c.id, header: c.header })),
+        rows,
+        weightColumn,
+        { kind, xId: x, yId: y }
+      );
+      if (!built || built.kind !== kind) {
+        setError('Could not build chart from selected columns');
+        return;
+      }
+      openAnalysisResultTab({
+        op: 'chart_builder',
+        envelope: {
+          result: { chart_type: kind, x, y },
+          report: {
+            meta: {
+              analysis_key: 'chart_builder',
+              title: chartMenuName,
+              subtitle: `${y} vs ${x}`,
+              generated_at: new Date().toISOString(),
+              rows_dataset: rows.length,
+            },
+            summary: `Standalone ${chartMenuName.toLowerCase()} from dataset columns.`,
+            metrics: [],
+            chart: built,
+            charts: [built],
+            blocks: [
+              { type: 'interpretation', content: `Standalone ${chartMenuName.toLowerCase()}.` },
+              { type: 'chart', chart: built },
+            ],
+            tables: [],
+            trust: { notes: [], warnings: [] },
           },
-          summary: `Standalone ${chartMenuName.toLowerCase()} from dataset columns.`,
-          metrics: [],
-          chart,
-          charts: [chart],
-          blocks: [
-            { type: 'interpretation', content: `Standalone ${chartMenuName.toLowerCase()}.` },
-            { type: 'chart', chart },
-          ],
-          tables: [],
-          trust: { notes: [], warnings: [] },
         },
-      },
-      parameters: { x_column: x, y_column: y, chart_type: kind },
-      sourceDatasetId: datasetId,
-      sourceTabName: activeTab.name,
-    });
+        parameters: { x_column: x, y_column: y, chart_type: kind },
+        sourceDatasetId: datasetId,
+        sourceTabName: activeTab?.name,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load the dataset for this chart.');
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -171,7 +179,9 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
           ) : null}
         </div>
         <DialogFooter>
-          <Button onClick={run}>Create chart</Button>
+          <Button onClick={run} disabled={busy}>
+            {busy ? 'Creating chart' : 'Create chart'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

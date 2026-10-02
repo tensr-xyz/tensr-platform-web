@@ -7,7 +7,7 @@ alwaysApply: true
 
 Clarification goes through `ask_clarifying_question` only (`tensr-api/app/assistant/agent_tools.py`). `force_clarify` reasons stay the closed set returned by `assess_turn_clarity` in `tensr-api/app/assistant/agent_clarity.py`: `empty_message`, `greeting_no_task`, `underspecified_run`, `underspecified_significance`, `underspecified_groups`, `column_clarification_reply`, `low_clarity`. A new reason needs a test in `tensr-api/tests/test_agent_loop_categories.py`.
 
-The tool set stays the six names in the `agent_tools.py` module docstring: `read_data`, `run_analysis`, `data_edit`, `ask_clarifying_question`, `start_prep_playbook`, `run_data_quality_scan`. Do not add a code-execution tool.
+The tool set stays the seven names in the `agent_tools.py` module docstring: `read_data`, `run_analysis`, `data_edit`, `import_file`, `ask_clarifying_question`, `start_prep_playbook`, `run_data_quality_scan`. `import_file` attaches an uploaded file as a dataset. Do not add a code-execution tool.
 
 A new keyword or deterministic gate ships with a `FULL_BASELINE_CONTRACT` case in `tensr-platform-web/src/lib/agent-loop-contract.ts`, then `pnpm run check:agent-eval-promptfoo` from that repo. "What does X mean" stays `direct_text` via `_COLUMN_DEFINITION`. Do not treat `\bmean\b` or `\bwhere\b` as a filter or an aggregate (`shouldRouteMessageToDataIntent` in `tensr-platform-web/src/lib/run-agent-data-action.ts`).
 

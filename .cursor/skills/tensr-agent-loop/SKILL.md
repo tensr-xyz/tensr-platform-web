@@ -11,7 +11,7 @@ Use this when editing how a chat turn becomes a tool call, a clarification, or a
 
 - `tensr-api/app/assistant/agent_loop.py` — turn entry. Calls `assess_turn_clarity`, then either `ask_clarifying_question` or the tool loop. Plan mode stores `rationale` and `plan_summary` from `materialize_run_analysis_args` (around the approval dict). Comment there: Plan is the executable request; Why is `why_this_test`; do not copy Why into Plan.
 - `tensr-api/app/assistant/agent_clarity.py` — `assess_turn_clarity`. `force_clarify` reasons are only `empty_message`, `greeting_no_task`, `underspecified_run`, `underspecified_significance`, `underspecified_groups`, `column_clarification_reply`, `low_clarity`. `_COLUMN_DEFINITION` (`what does <name> mean`) returns `direct_text` before any tool call. `_EXPLORATORY_ASK` must stay out of `force_clarify`.
-- `tensr-api/app/assistant/agent_tools.py` — six tools in the module docstring. `materialize_run_analysis_args` returns `(materialized_args, plan_text, error)`. Plan text comes from the validated body, not freeform `why_this_test`. `user_message` must be the real user ask. `_unsupported_analysis_type_message` refuses unknown types. `stamp_result_provenance` stamps outputs.
+- `tensr-api/app/assistant/agent_tools.py` — seven tools in the module docstring. `import_file` attaches an uploaded file as a dataset and does not run user code. `materialize_run_analysis_args` returns `(materialized_args, plan_text, error)`. Plan text comes from the validated body, not freeform `why_this_test`. `user_message` must be the real user ask. `_unsupported_analysis_type_message` refuses unknown types. `stamp_result_provenance` stamps outputs.
 - `tensr-api/app/assistant/control_language.py` — "independent of X" excludes X. "controlling for X" keeps X as a covariate, except a shot-volume factor (`_SHOOTING_FACTOR_RE`), which is still excluded.
 - `tensr-platform-web/src/lib/agent-loop-contract.ts` — `FULL_BASELINE_CONTRACT`.
 - `tensr-platform-web/src/lib/run-agent-data-action.ts` — `shouldRouteMessageToDataIntent`. Historical keyword gate, not the live loop, but still what the baseline eval asserts.
@@ -22,7 +22,7 @@ Use this when editing how a chat turn becomes a tool call, a clarification, or a
 
 1. Read the branch in `agent_loop.py` and the matching case in `FULL_BASELINE_CONTRACT`.
 2. If the change is a keyword or a hard `force_clarify` branch, add the case to the contract first. "What does X mean" stays `direct_text`.
-3. Keep the tool name inside the six. Thread plan text from `materialize_run_analysis_args` onto `args["rationale"]` and `plan_summary`. Do not invent a parallel sentence in the web card.
+3. Keep the tool name inside the seven in the module docstring. Thread plan text from `materialize_run_analysis_args` onto `args["rationale"]` and `plan_summary`. Do not invent a parallel sentence in the web card.
 4. Stamp results with `stamp_result_provenance`.
 5. Run `tensr-api`: `.venv/bin/python -m pytest -q --tb=short tests/test_agent_loop_categories.py tests/test_agent_loop_tools.py tests/test_agent_fidelity.py`.
 6. Run `tensr-platform-web`: `pnpm run check:agent-eval-promptfoo` and `pnpm run test:agent-loop`.

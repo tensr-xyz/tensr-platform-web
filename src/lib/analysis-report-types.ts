@@ -113,12 +113,18 @@ export type AnalysisReportChart =
       series: { name: string; values: number[] }[];
     } & ChartAxisHints)
   | ({
-      kind: 'line';
+      kind: 'line' | 'bar' | 'area';
       title: string;
       x_label: string;
       y_label: string;
       categories: string[];
       series: { name: string; values: number[] }[];
+    } & ChartAxisHints)
+  | ({
+      kind: 'pie';
+      title: string;
+      categories: string[];
+      values: number[];
     } & ChartAxisHints)
   | {
       kind: 'path_diagram';

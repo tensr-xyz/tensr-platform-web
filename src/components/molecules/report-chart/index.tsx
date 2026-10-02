@@ -264,6 +264,7 @@ function ChartBody({
 
     return (
       <svg
+        data-chart-kind={chart.kind}
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         className="h-auto w-full max-w-full text-zinc-500"
         aria-hidden
@@ -324,6 +325,7 @@ function ChartBody({
 
     return (
       <svg
+        data-chart-kind={chart.kind}
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         className="h-auto w-full max-w-full"
         aria-hidden
@@ -362,6 +364,18 @@ function ChartBody({
 
   if (chart.kind === 'scatter' || chart.kind === 'scatter_line') {
     const pts = chart.points;
+    if (!pts.length) {
+      return (
+        <svg
+          data-chart-kind={chart.kind}
+          viewBox={`0 0 ${baseLayout.width} ${baseLayout.height}`}
+          className="h-auto w-full max-w-full"
+          aria-hidden
+        >
+          <ChartTitle layout={baseLayout} title={chart.title} />
+        </svg>
+      );
+    }
     const xs = pts.map(p => p.x);
     const ys = pts.map(p => p.y);
     let x0 = Math.min(...xs);
@@ -388,6 +402,7 @@ function ChartBody({
 
     return (
       <svg
+        data-chart-kind={chart.kind}
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         className="h-auto w-full max-w-full"
         aria-hidden
@@ -439,6 +454,18 @@ function ChartBody({
 
   if (chart.kind === 'boxplot') {
     const gs = chart.groups;
+    if (!gs.length) {
+      return (
+        <svg
+          data-chart-kind={chart.kind}
+          viewBox={`0 0 ${baseLayout.width} ${baseLayout.height}`}
+          className="h-auto w-full max-w-full"
+          aria-hidden
+        >
+          <ChartTitle layout={baseLayout} title={chart.title} />
+        </svg>
+      );
+    }
     const yMin = Math.min(...gs.map(g => g.min));
     const yMax = Math.max(...gs.map(g => g.max));
     const pad = (yMax - yMin) * 0.08 || 0.5;
@@ -467,6 +494,7 @@ function ChartBody({
 
     return (
       <svg
+        data-chart-kind={chart.kind}
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         className="h-auto w-full max-w-full"
         aria-hidden
@@ -531,7 +559,12 @@ function ChartBody({
     );
   }
 
-  if (chart.kind === 'bar_grouped' || chart.kind === 'line') {
+  if (
+    chart.kind === 'bar_grouped' ||
+    chart.kind === 'line' ||
+    chart.kind === 'bar' ||
+    chart.kind === 'area'
+  ) {
     const { categories, series } = chart;
     const ySamples = series.flatMap(s => s.values);
     const dataMin = ySamples.length ? Math.min(...ySamples) : 0;
@@ -578,12 +611,14 @@ function ChartBody({
     const inner = groupW * 0.88;
     const barW = inner / Math.max(1, ns);
     const gap = groupW * 0.06;
-    const isLine = chart.kind === 'line';
+    const isArea = chart.kind === 'area';
+    const isLine = chart.kind === 'line' || isArea;
     const yTicks = niceTicks(minV, maxV, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
     const xs = categories.map((_, i) => padL + i * groupW + groupW / 2);
 
     return (
       <svg
+        data-chart-kind={chart.kind}
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         className="h-auto w-full max-w-full"
         aria-hidden
@@ -597,14 +632,17 @@ function ChartBody({
                   return `${xs[gi]},${sy(v)}`;
                 })
                 .join(' ');
+              const color = SERIES_FILL[si % SERIES_FILL.length];
               return (
                 <g key={ser.name}>
-                  <polyline
-                    points={pts}
-                    fill="none"
-                    stroke={SERIES_FILL[si % SERIES_FILL.length]}
-                    strokeWidth={2}
-                  />
+                  {isArea && categories.length ? (
+                    <polygon
+                      points={`${xs[0]},${yZero} ${pts} ${xs[xs.length - 1]},${yZero}`}
+                      fill={color}
+                      fillOpacity={0.28}
+                    />
+                  ) : null}
+                  <polyline points={pts} fill="none" stroke={color} strokeWidth={2} />
                   {categories.map((_, gi) => {
                     const v = ser.values[gi] ?? 0;
                     return (
@@ -693,7 +731,12 @@ function ChartBody({
     const labelChars = layout.density === 'comfortable' ? 18 : 10;
 
     return (
-      <svg viewBox={`0 0 ${PD_W} ${PD_H}`} className="h-auto w-full max-w-full" aria-hidden>
+      <svg
+        data-chart-kind={chart.kind}
+        viewBox={`0 0 ${PD_W} ${PD_H}`}
+        className="h-auto w-full max-w-full"
+        aria-hidden
+      >
         <defs>
           <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
             <path d="M0,0 L6,3 L0,6 Z" className="fill-zinc-400" />
@@ -780,7 +823,56 @@ function ChartBody({
     );
   }
 
-  return null;
+  if (chart.kind === 'pie') {
+    const layout = baseLayout;
+    const total = chart.values.reduce((sum, value) => sum + Math.max(0, value), 0);
+    const cx = layout.padL + layout.plotW / 2;
+    const cy = layout.padT + layout.plotH / 2;
+    const r = Math.max(8, Math.min(layout.plotW, layout.plotH) / 2 - 8);
+    let angle = -Math.PI / 2;
+    const slices = chart.categories.map((label, i) => {
+      const value = Math.max(0, chart.values[i] ?? 0);
+      const sweep = total > 0 ? (value / total) * Math.PI * 2 : 0;
+      const start = angle;
+      angle += sweep;
+      const large = sweep > Math.PI ? 1 : 0;
+      const x1 = cx + r * Math.cos(start);
+      const y1 = cy + r * Math.sin(start);
+      const x2 = cx + r * Math.cos(start + sweep);
+      const y2 = cy + r * Math.sin(start + sweep);
+      const d =
+        sweep <= 0
+          ? ''
+          : sweep >= Math.PI * 2 - 0.0001
+            ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
+            : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
+      return { d, label, fill: SERIES_FILL[i % SERIES_FILL.length] };
+    });
+    return (
+      <svg
+        data-chart-kind="pie"
+        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        className="h-auto w-full max-w-full"
+        aria-hidden
+      >
+        <ChartTitle layout={layout} title={chart.title} />
+        {slices.map((slice, i) =>
+          slice.d ? <path key={`${slice.label}-${i}`} d={slice.d} fill={slice.fill} /> : null
+        )}
+      </svg>
+    );
+  }
+
+  return (
+    <svg
+      data-chart-kind={chart.kind}
+      viewBox={`0 0 ${baseLayout.width} ${baseLayout.height}`}
+      className="h-auto w-full max-w-full"
+      aria-hidden
+    >
+      <ChartTitle layout={baseLayout} title={chart.title} />
+    </svg>
+  );
 }
 
 export function ReportChart({

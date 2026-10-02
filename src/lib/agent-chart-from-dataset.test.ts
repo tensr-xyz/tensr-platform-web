@@ -1,8 +1,14 @@
 import {
   buildChartFromDataset,
   isChartIntent,
+  loadFilteredChartRows,
+  PALETTE_MENU_TO_KIND,
   shouldRouteToInlineChart,
 } from './agent-chart-from-dataset';
+
+jest.mock('@/utils/auth', () => ({
+  getIdToken: () => 'token',
+}));
 
 const columns = [
   { id: 'MP', header: 'MP' },
@@ -87,5 +93,90 @@ describe('agent chart from dataset', () => {
     expect(scatter?.kind).toBe('scatter');
     expect(scatter?.title.toLowerCase()).toContain('unweighted');
     expect(scatter?.points?.length).toBe(2);
+  });
+
+  const paletteColumns = [
+    { id: 'Pos', header: 'Pos' },
+    { id: 'PTS', header: 'PTS' },
+    { id: 'Age', header: 'Age' },
+  ];
+  const paletteRows = [
+    { Pos: 'G', PTS: 10, Age: 22 },
+    { Pos: 'G', PTS: 20, Age: 24 },
+    { Pos: 'F', PTS: 30, Age: 28 },
+    { Pos: 'C', PTS: 12, Age: 26 },
+  ];
+
+  it.each(['bar', 'line', 'pie', 'area', 'scatter', 'histogram', 'boxplot'] as const)(
+    'builds a %s chart as that kind',
+    kind => {
+      const chart = buildChartFromDataset(
+        `${kind} chart of PTS by Pos`,
+        paletteColumns,
+        paletteRows,
+        null,
+        { kind, xId: 'Pos', yId: 'PTS' }
+      );
+      expect(chart).not.toBeNull();
+      expect(chart?.kind).toBe(kind);
+    }
+  );
+
+  it('keeps a bar of two numeric columns a bar', () => {
+    const chart = buildChartFromDataset('bar chart of PTS by Age', paletteColumns, paletteRows);
+    expect(chart?.kind).toBe('bar');
+    expect(chart && 'categories' in chart ? chart.categories.length : 0).toBeGreaterThan(0);
+  });
+
+  it('does not offer Heatmap until a heatmap chart exists', () => {
+    expect(PALETTE_MENU_TO_KIND).not.toHaveProperty('Heatmap');
+    expect(Object.values(PALETTE_MENU_TO_KIND)).toEqual([
+      'bar',
+      'line',
+      'scatter',
+      'histogram',
+      'boxplot',
+      'pie',
+      'area',
+    ]);
+  });
+
+  it('loads every preview page and then applies the sheet filter', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          variable_names: ['Pos', 'PTS'],
+          headers: ['Pos', 'PTS'],
+          rows: [
+            ['G', 10],
+            ['F', 20],
+          ],
+          truncated: true,
+          offset: 0,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          variable_names: ['Pos', 'PTS'],
+          headers: ['Pos', 'PTS'],
+          rows: [['C', 30]],
+          truncated: false,
+          offset: 2,
+        }),
+      });
+    const previous = global.fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const rows = await loadFilteredChartRows('dataset-1', [
+        { id: 'Pos', value: { operator: 'equals', value: 'G' } },
+      ]);
+      expect(rows).toEqual([{ Pos: 'G', PTS: 10 }]);
+      expect(String(fetchMock.mock.calls[1]?.[0])).toContain('offset=2');
+    } finally {
+      global.fetch = previous;
+    }
   });
 });
