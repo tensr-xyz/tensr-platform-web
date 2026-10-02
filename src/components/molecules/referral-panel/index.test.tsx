@@ -65,6 +65,12 @@ describe('ReferButton', () => {
 describe('ReferralPanelBody', () => {
   beforeEach(() => jest.clearAllMocks());
 
+  it('shows the loader while referral details are still loading', () => {
+    render(<ReferralPanelBody loadPanel={() => new Promise(() => undefined)} />);
+    expect(screen.getByRole('status', { name: 'Loading' })).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+  });
+
   it('lists referrals with their status and months earned', async () => {
     const data = panel({
       months_earned: 1,

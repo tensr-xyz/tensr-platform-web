@@ -59,6 +59,16 @@ describe('WhatsNewPopover', () => {
     });
   });
 
+  it('shows the loader while the changelog is still loading', async () => {
+    const fetchFeed = jest.fn().mockReturnValue(new Promise(() => undefined));
+
+    render(<WhatsNewPopover fetchFeed={fetchFeed} storage={memoryStorage()} />);
+    fireEvent.click(await screen.findByRole('button', { name: /what's new/i }));
+
+    expect(await screen.findByRole('status', { name: 'Loading' })).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+  });
+
   it('says the changelog is unavailable when the feed fails', async () => {
     const fetchFeed = jest.fn().mockResolvedValue({
       ok: false,

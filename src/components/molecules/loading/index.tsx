@@ -20,16 +20,27 @@ const Loader: React.FC<LoaderProps> = ({
   message,
 }) => {
   const spinner = (
-    <LoaderCircle
-      size={size === 'sm' ? 32 : size === 'md' ? 72 : 96}
-      strokeWidth={1}
-      className={cn('animate-spin stroke-primary', className)}
-    />
+    <span
+      role={message ? undefined : 'status'}
+      aria-label={message ? undefined : 'Loading'}
+      className="inline-flex"
+    >
+      {message ? null : <span className="sr-only">Loading</span>}
+      <LoaderCircle
+        size={size === 'sm' ? 32 : size === 'md' ? 72 : 96}
+        strokeWidth={1}
+        aria-hidden
+        className={cn('animate-spin stroke-primary', className)}
+      />
+    </span>
   );
 
   if (fullScreen) {
     return (
-      <div className="fixed inset-0 z-50 flex min-h-dvh w-full flex-col items-center justify-center gap-3 bg-background">
+      <div
+        role={message ? 'status' : undefined}
+        className="fixed inset-0 z-50 flex min-h-dvh w-full flex-col items-center justify-center gap-3 bg-background"
+      >
         {spinner}
         {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       </div>
@@ -38,7 +49,10 @@ const Loader: React.FC<LoaderProps> = ({
 
   if (centered) {
     return (
-      <div className="flex min-h-[40vh] w-full flex-col items-center justify-center gap-3">
+      <div
+        role={message ? 'status' : undefined}
+        className="flex min-h-[40vh] w-full flex-col items-center justify-center gap-3"
+      >
         {spinner}
         {message ? <p className="text-sm text-muted-foreground">{message}</p> : null}
       </div>

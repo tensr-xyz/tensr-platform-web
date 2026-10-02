@@ -7,6 +7,7 @@ import posthog from 'posthog-js';
 import { Badge } from '@/components/atoms/badge';
 import { Button } from '@/components/atoms/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
+import { Loader } from '@/components/molecules/loading';
 import {
   REFERRAL_STATUS_LABEL,
   type ReferralPanelData,
@@ -110,7 +111,13 @@ export function ReferralPanelBody({
   }, [copyText, link]);
 
   if (error && !data) return <p className="px-3 py-4 text-sm text-muted-foreground">{error}</p>;
-  if (!data) return <p className="px-3 py-4 text-sm text-muted-foreground">Loading…</p>;
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center px-3 py-6">
+        <Loader size="sm" />
+      </div>
+    );
+  }
   if (!data.enabled) {
     return (
       <p className="px-3 py-4 text-sm text-muted-foreground">Referrals are paused right now.</p>

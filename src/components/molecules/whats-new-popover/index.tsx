@@ -5,6 +5,7 @@ import { Megaphone } from 'lucide-react';
 
 import { Button } from '@/components/atoms/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
+import { Loader } from '@/components/molecules/loading';
 import {
   CHANGELOG_PAGE_URL,
   type ChangelogEntry,
@@ -108,7 +109,9 @@ export function WhatsNewPopover({
         </div>
         <div className="max-h-[min(70vh,360px)] overflow-y-auto">
           {!loaded ? (
-            <p className="px-3 py-4 text-sm text-muted-foreground">Loading…</p>
+            <div className="flex items-center justify-center px-3 py-6">
+              <Loader size="sm" />
+            </div>
           ) : error ? (
             <p className="px-3 py-4 text-sm text-muted-foreground">{error}</p>
           ) : entries.length === 0 ? (
