@@ -1922,6 +1922,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                   <Popover open={slashColumnsOpen} onOpenChange={setSlashColumnsOpen}>
                     <PopoverAnchor asChild>
                       <div className="min-w-0 w-full">
+                        <p className="mb-1 text-xs text-muted-foreground">
+                          Messages are sent as typed.
+                        </p>
                         <ChatComposerInput
                           ref={composerRef}
                           value={inputMessage}

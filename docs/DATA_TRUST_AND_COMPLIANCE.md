@@ -10,16 +10,16 @@ posture relative to typical enterprise LLM / SaaS analytics products.
 
 ## Summary for reviewers
 
-| Topic                               | Current posture                                                                                                                                                                                    |
-| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Encryption in transit               | TLS required for API and browser traffic (`enforce_ssl` on the datasets bucket; HTTPS on API endpoints)                                                                                            |
-| Encryption at rest (object storage) | **SSE-S3** — Amazon S3-managed keys (`BucketEncryption.S3_MANAGED`) on the datasets bucket                                                                                                         |
-| Encryption at rest (metadata DB)    | DynamoDB server-side encryption (AWS-owned keys) with point-in-time recovery enabled on the business table                                                                                         |
-| Customer-managed KMS (CMK)          | **Not enabled today.** Documented future option if procurement requires customer-controlled key material                                                                                           |
-| Data residency                      | Deployed in the AWS region configured for the environment (see infra stage); datasets and business records stay in that account/region                                                             |
-| Retention                           | Dataset objects follow bucket lifecycle / retention of the stage; incomplete multipart uploads aborted after 7 days. Application-level retention follows product/org deletion flows                |
-| LLM / assistant data                | Assistant calls send schema packets / prompts to the configured OpenAI-compatible provider; they are not used to train Tensr models. Provider retention follows the contracted LLM vendor’s policy |
-| Access control                      | Dataset load is authorization-scoped (`load_df_authorized`) to the active user / organization                                                                                                      |
+| Topic                               | Current posture                                                                                                                                                                                                             |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Encryption in transit               | TLS required for API and browser traffic (`enforce_ssl` on the datasets bucket; HTTPS on API endpoints)                                                                                                                     |
+| Encryption at rest (object storage) | **SSE-S3** — Amazon S3-managed keys (`BucketEncryption.S3_MANAGED`) on the datasets bucket                                                                                                                                  |
+| Encryption at rest (metadata DB)    | DynamoDB server-side encryption (AWS-owned keys) with point-in-time recovery enabled on the business table                                                                                                                  |
+| Customer-managed KMS (CMK)          | **Not enabled today.** Documented future option if procurement requires customer-controlled key material                                                                                                                    |
+| Data residency                      | AWS us-east-1 for the current dev and production accounts. Datasets, exports, and the business table stay in that region.                                                                                                   |
+| Retention                           | CloudWatch logs expire after 90 days. Noncurrent S3 versions expire after 30 days. Incomplete multipart uploads abort after 7 days. DynamoDB items that carry a `ttl` attribute expire on that clock.                       |
+| LLM / assistant data                | Schema-only organisations send column names, types, and summary numbers. Category levels, value labels, and sample rows stay out of the model payload. Chat messages are sent as typed. OpenAI requests set `store: false`. |
+| Access control                      | Dataset load is authorization-scoped (`load_df_authorized`) to the active user / organization                                                                                                                               |
 
 ## Encryption at rest — accurate claim
 
@@ -47,15 +47,34 @@ SSE-S3 claim above.
 
 ## Comparison to common enterprise LLM data-handling expectations
 
-| Expectation                                    | Tensr today                                                              |
-| ---------------------------------------------- | ------------------------------------------------------------------------ |
-| Encrypt data at rest                           | Yes — SSE-S3 (S3-managed) + DynamoDB SSE                                 |
-| Encrypt data in transit                        | Yes — TLS / `enforce_ssl`                                                |
-| Isolate tenant data                            | Org/user ownership on datasets; authorized load paths                    |
-| No training on customer prompts by the product | Tensr does not train models on customer data                             |
-| Bring-your-own-key (BYOK)                      | Not available yet — see KMS future option                                |
-| Data processing agreement / DPA                | Provided under commercial agreement (contact sales/legal)                |
-| Subprocessors (LLM)                            | Configured OpenAI-compatible provider (e.g. OpenAI / OpenRouter per env) |
+| Expectation                                    | Tensr today                                                            |
+| ---------------------------------------------- | ---------------------------------------------------------------------- |
+| Encrypt data at rest                           | Yes — SSE-S3 (S3-managed) + DynamoDB SSE                               |
+| Encrypt data in transit                        | Yes — TLS / `enforce_ssl`                                              |
+| Isolate tenant data                            | Org/user ownership on datasets; authorized load paths                  |
+| No training on customer prompts by the product | Tensr does not train models on customer data                           |
+| Bring-your-own-key (BYOK)                      | Not available yet — see KMS future option                              |
+| Data processing agreement / DPA                | Draft for counsel review: `docs/DPA_DRAFT.md`. Not a signed agreement. |
+| Subprocessors                                  | Listed below. Region for AWS processing is us-east-1.                  |
+
+## Subprocessors
+
+| Subprocessor        | Role                                                | Region                                           |
+| ------------------- | --------------------------------------------------- | ------------------------------------------------ |
+| Amazon Web Services | Dataset storage, API compute, database, logs        | us-east-1                                        |
+| OpenAI              | Assistant model calls. Requests set `store: false`. | OpenAI's processing region under their API terms |
+| Stytch              | Email one-time-code sign-in                         | Stytch's processing region                       |
+| Stripe              | Subscription billing                                | Stripe's processing region                       |
+| PostHog             | Product analytics for the app                       | PostHog US project                               |
+| Vercel              | Web app hosting                                     | Vercel project region                            |
+
+## Deletion
+
+Deleting a dataset also deletes datasets derived from it, incoming upload objects, stored exports for that dataset, collaboration sessions owned by the dataset owner, report comments on that dataset's reports, and every stored version of its S3 objects.
+
+`DELETE /organizations/{id}` removes the organisation's datasets and then the organisation record. Personal organisations cannot be deleted this way.
+
+`DELETE /me` removes the signed-in user's own datasets, organisation memberships, and user record. It does not delete datasets owned by an organisation.
 
 ## What the agent may send to the LLM
 
