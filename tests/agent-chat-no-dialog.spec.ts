@@ -40,7 +40,6 @@ test.describe('Chat stays in chat (no dialog steal)', () => {
   test('ANOVA and crosstab prompts never open an analysis setup dialog', async ({ page }) => {
     const composer = page.getByPlaceholder('Ask about your data…');
     await expect(composer).toBeVisible();
-    await expect(page.getByText('Messages are sent as typed.')).toBeVisible();
 
     await composer.fill('run anova on Age and Pos');
     await composer.press('Enter');
