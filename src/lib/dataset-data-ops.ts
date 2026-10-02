@@ -50,12 +50,17 @@ export type MergeReport = {
   columns_only_left?: string[];
   columns_only_right?: string[];
   column_suffixes?: string[];
+  source_wave_column?: string;
+  duplicate_ids?: Array<{ column: string; count: number; ids: string[] }>;
+  type_coercions?: Array<{ column: string; action: string; detail: string }>;
+  key_map?: Array<{ left: string; right: string }>;
 };
 
 export type MergeDatasetsPayload = {
   secondary_dataset_id: string;
   merge_type: 'add_cases' | 'add_variables' | 'stack' | 'inner' | 'left' | 'right' | 'outer';
   keys?: string[];
+  key_map?: Record<string, string>;
   allow_many?: boolean;
   preview?: boolean;
 };
@@ -234,6 +239,27 @@ export type RakeWeightsResult = DerivedDatasetResult & {
     max_weight?: number;
   };
 };
+
+export function poststratifyDatasetWeights(
+  datasetId: string,
+  payload: {
+    variables: string[];
+    cells: Record<string, number>;
+    missing_handling?: 'exclude' | 'impute' | 'missing_target';
+    weight_label?: string;
+  },
+  token?: string | null
+) {
+  return authedJson<RakeWeightsResult>(
+    `/datasets/${datasetId}/weights/poststratify`,
+    payload,
+    token
+  );
+}
+
+export function exportPipelineScript(datasetId: string, token?: string | null) {
+  return authedJson<{ ok: boolean; r_script: string }>(`/datasets/${datasetId}/script`, {}, token);
+}
 
 export function rakeDatasetWeights(
   datasetId: string,

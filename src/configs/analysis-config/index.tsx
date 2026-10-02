@@ -29,6 +29,8 @@ import CountValuesDialog from '@/components/templates/transform/count-values';
 import ShiftValuesDialog from '@/components/templates/transform/shift-values';
 import { CustomTablesDialog } from '@/components/templates/analysis/custom-tables';
 import { RakeWeightsDialog } from '@/components/templates/data/rake-weights';
+import { CellWeightsDialog } from '@/components/templates/data/cell-weights';
+import { PipelineScriptDialog } from '@/components/templates/data/pipeline-script';
 import { MessageCircle } from 'lucide-react';
 import { PRODUCTION_MENU_ITEMS } from './production-menu';
 
@@ -219,6 +221,8 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'Propensity Matching': ComputeVariablesDialog,
   'Case Control Matching': ComputeVariablesDialog,
   'Rake Weights': RakeWeightsDialog,
+  'Cell weighting': CellWeightsDialog,
+  'Export R script': PipelineScriptDialog,
   'Text Processing': ComputeVariablesDialog,
   'Conditional Logic': ComputeVariablesDialog,
   'Percentile Calculations': ComputeVariablesDialog,

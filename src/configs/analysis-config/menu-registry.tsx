@@ -28,6 +28,8 @@ import ComputeVariablesDialog from '@/components/templates/transform/compute-var
 import ShiftValuesDialog from '@/components/templates/transform/shift-values';
 import { CustomTablesDialog } from '@/components/templates/analysis/custom-tables';
 import { RakeWeightsDialog } from '@/components/templates/data/rake-weights';
+import { CellWeightsDialog } from '@/components/templates/data/cell-weights';
+import { PipelineScriptDialog } from '@/components/templates/data/pipeline-script';
 import {
   LagCasesDialog,
   LeadCasesDialog,
@@ -102,6 +104,8 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Shift Values': ShiftValuesDialog,
   'Custom Tables': CustomTablesDialog,
   'Rake Weights': RakeWeightsDialog,
+  'Cell weighting': CellWeightsDialog,
+  'Export R script': PipelineScriptDialog,
   'Batch Tables': BatchTablesDialog,
   'Open-text coding': OpenTextCodingDialog,
   TURF: TurfDialog,

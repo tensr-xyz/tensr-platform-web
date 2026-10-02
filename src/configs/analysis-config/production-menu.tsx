@@ -50,6 +50,8 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Fuse Datasets',
         'Data Quality Report',
         'Rake Weights',
+        'Cell weighting',
+        'Export R script',
       ],
       'Legacy import': [
         'WinCross Job Import',

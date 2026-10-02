@@ -29,5 +29,17 @@ export function mergeUnmatchedReportLines(report: MergeReport, keyed: boolean): 
   if ((report.columns_only_right || []).length > 0) {
     lines.push(`Only on the other file: ${report.columns_only_right!.join(', ')}`);
   }
+  for (const pair of report.key_map || []) {
+    if (pair.left !== pair.right) lines.push(`Key ${pair.left} matched ${pair.right}.`);
+  }
+  if (report.source_wave_column) {
+    lines.push(`Added ${report.source_wave_column} so each row keeps its source file.`);
+  }
+  for (const dup of report.duplicate_ids || []) {
+    lines.push(`Duplicate ${dup.column} across waves: ${dup.count} (${dup.ids.join(', ')}).`);
+  }
+  for (const note of report.type_coercions || []) {
+    lines.push(`${note.column}: ${note.detail}`);
+  }
   return lines;
 }

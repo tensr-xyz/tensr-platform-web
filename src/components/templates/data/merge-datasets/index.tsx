@@ -57,7 +57,8 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   const [mode, setMode] = useState<MergeMode>('inner');
   const [secondaryDataset, setSecondaryDataset] = useState<string>('');
   const [datasetOptions, setDatasetOptions] = useState<{ id: string; name: string }[]>([]);
-  const [keyOptions, setKeyOptions] = useState<string[]>([]);
+  const [keyOptions, setKeyOptions] = useState<{ name: string; label: string }[]>([]);
+  const [keyMap, setKeyMap] = useState<Record<string, string>>({});
   const [keys, setKeys] = useState<string[]>([]);
   const [report, setReport] = useState<MergeReport | null>(null);
   const [previewStamp, setPreviewStamp] = useState<string>('');
@@ -68,8 +69,8 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   const addVariables = mode === 'add_variables';
   const radioKind = mode === 'stack' ? 'stack' : addVariables ? 'add_variables' : 'join';
   const stamp = useMemo(
-    () => JSON.stringify({ secondaryDataset, mode, keys }),
-    [secondaryDataset, mode, keys]
+    () => JSON.stringify({ secondaryDataset, mode, keys, keyMap }),
+    [secondaryDataset, mode, keys, keyMap]
   );
   const previewReady = report !== null && previewStamp === stamp;
 
@@ -111,12 +112,26 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
         ]);
         if (!leftRes.ok || !rightRes.ok) throw new Error('Could not load columns');
         const [leftJson, rightJson] = await Promise.all([leftRes.json(), rightRes.json()]);
-        const rightNames = new Set(columnNamesFromSchemaResponse(rightJson));
-        const shared = columnNamesFromSchemaResponse(leftJson).filter(
-          name => rightNames.has(name) && !SYSTEM_COLUMNS.has(name)
+        const nameKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '');
+        const leftNames = columnNamesFromSchemaResponse(leftJson).filter(
+          name => !SYSTEM_COLUMNS.has(name)
         );
+        const rightNames = columnNamesFromSchemaResponse(rightJson).filter(
+          name => !SYSTEM_COLUMNS.has(name)
+        );
+        const rightSet = new Set(rightNames);
+        const aliases: Record<string, string> = {};
+        const options = leftNames.flatMap(name => {
+          if (rightSet.has(name)) return [{ name, label: name }];
+          const match = rightNames.filter(right => nameKey(right) === nameKey(name));
+          if (match.length !== 1) return [];
+          aliases[name] = match[0];
+          return [{ name, label: `${name} ↔ ${match[0]}` }];
+        });
+        const shared = options.map(option => option.name);
         if (!cancelled) {
-          setKeyOptions(shared);
+          setKeyOptions(options);
+          setKeyMap(aliases);
           const obvious = pickObviousIdColumn(shared);
           if (obvious) {
             setMode(prev => (prev === 'add_variables' ? 'inner' : prev));
@@ -141,6 +156,9 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
     secondary_dataset_id: secondaryDataset,
     merge_type: mode,
     keys: keyed ? keys : [],
+    key_map: keyed
+      ? Object.fromEntries(keys.filter(key => keyMap[key]).map(key => [key, keyMap[key]]))
+      : {},
   });
 
   const handlePreview = async () => {
@@ -293,14 +311,14 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
                 {keyOptions.length === 0 && (
                   <p className="text-sm text-muted-foreground">No shared columns yet.</p>
                 )}
-                {keyOptions.map(name => (
-                  <label key={name} className="flex items-center gap-2 text-sm">
+                {keyOptions.map(option => (
+                  <label key={option.name} className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
-                      checked={keys.includes(name)}
-                      onChange={() => toggleKey(name)}
+                      checked={keys.includes(option.name)}
+                      onChange={() => toggleKey(option.name)}
                     />
-                    {name}
+                    {option.label}
                   </label>
                 ))}
               </div>

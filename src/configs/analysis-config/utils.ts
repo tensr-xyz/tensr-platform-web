@@ -169,7 +169,11 @@ export function getAllAnalysisItems(): AnalysisItem[] {
               ? 'banner custom tables stub nested banner'
               : menuName === 'Rake Weights'
                 ? 'rake raking ipf weight cases rim'
-                : undefined,
+                : menuName === 'Cell weighting'
+                  ? 'poststratify cell weighting post-stratification'
+                  : menuName === 'Export R script'
+                    ? 'r script haven sav pipeline export'
+                    : undefined,
         });
       }
     }

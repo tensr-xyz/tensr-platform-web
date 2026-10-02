@@ -174,6 +174,34 @@ async function fulfillDatasetRoute(route: Route): Promise<boolean> {
     return true;
   }
 
+  if (method === 'POST' && url.includes(`/datasets/${E2E_DATASET_ID}/script`)) {
+    await json(route, {
+      ok: true,
+      language: 'r',
+      r_script: 'library(haven)\ndf <- haven::read_sav("wave.sav")\n',
+    });
+    return true;
+  }
+
+  if (method === 'POST' && url.includes(`/datasets/${E2E_DATASET_ID}/weights/poststratify`)) {
+    await json(route, {
+      ok: true,
+      dataset_id: E2E_DATASET_ID,
+      derived_dataset_id: E2E_DATASET_ID,
+      original_filename: 'e2e-sample.csv',
+      n_rows: 3,
+      n_cols: 3,
+      diagnostics: {
+        kish_ess: 2.5,
+        deff: 1.2,
+        weighting_efficiency: 0.83,
+        min_weight: 0.8,
+        max_weight: 1.4,
+      },
+    });
+    return true;
+  }
+
   if (method === 'GET' && url.includes(`/datasets/${E2E_DATASET_ID}/preview`)) {
     await json(route, MOCK_PREVIEW);
     return true;
