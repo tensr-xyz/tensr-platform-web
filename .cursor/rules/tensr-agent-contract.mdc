@@ -1,0 +1,18 @@
+---
+description: Tensr assistant contract. One clarification tool, closed tool set, contract cases for new gates, plan text from tool args, provenance, and a live check before done.
+alwaysApply: true
+---
+
+# Tensr assistant contract
+
+Clarification goes through `ask_clarifying_question` only (`tensr-api/app/assistant/agent_tools.py`). `force_clarify` reasons stay the closed set returned by `assess_turn_clarity` in `tensr-api/app/assistant/agent_clarity.py`: `empty_message`, `greeting_no_task`, `underspecified_run`, `underspecified_significance`, `underspecified_groups`, `column_clarification_reply`, `low_clarity`. A new reason needs a test in `tensr-api/tests/test_agent_loop_categories.py`.
+
+The tool set stays the six names in the `agent_tools.py` module docstring: `read_data`, `run_analysis`, `data_edit`, `ask_clarifying_question`, `start_prep_playbook`, `run_data_quality_scan`. Do not add a code-execution tool.
+
+A new keyword or deterministic gate ships with a `FULL_BASELINE_CONTRACT` case in `tensr-platform-web/src/lib/agent-loop-contract.ts`, then `pnpm run check:agent-eval-promptfoo` from that repo. "What does X mean" stays `direct_text` via `_COLUMN_DEFINITION`. Do not treat `\bmean\b` or `\bwhere\b` as a filter or an aggregate (`shouldRouteMessageToDataIntent` in `tensr-platform-web/src/lib/run-agent-data-action.ts`).
+
+Plan text the user sees comes from the tool-call args. `materialize_run_analysis_args` derives `plan_text` from the validated body, and `agent_loop.py` stores that on `rationale` and `plan_summary`. Do not write a second plan string. Unsupported requests use `_unsupported_analysis_type_message` and refuse or clarify. Never swap in a different `analysis_type`. `regression` is an alias of `linear_regression` (`ANALYSIS_TYPE_ALIASES` in `tensr-api/app/assistant/constants.py`), not a datasets route.
+
+Analysis outputs go through `stamp_result_provenance`.
+
+Work is not done until the matching pytest, Jest, Promptfoo, or Playwright command has been run and its output is in the reply. Commands are in `.cursor/commands/tensr-prepush.md`.
