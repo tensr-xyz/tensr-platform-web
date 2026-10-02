@@ -14,6 +14,8 @@ const mockStoreSession = jest.fn();
 const mockRedeemStoredInvitation = jest.fn();
 const mockStorePendingInviteToken = jest.fn();
 const mockCapture = jest.fn();
+const mockRedeemStoredReferral = jest.fn();
+const mockStoreReferralCode = jest.fn();
 
 let searchParams = new URLSearchParams();
 
@@ -63,6 +65,11 @@ jest.mock('@/lib/business-api', () => ({
   storePendingInviteToken: (...a: unknown[]) => mockStorePendingInviteToken(...a),
 }));
 
+jest.mock('@/lib/referral', () => ({
+  redeemStoredReferral: (...a: unknown[]) => mockRedeemStoredReferral(...a),
+  storeReferralCode: (...a: unknown[]) => mockStoreReferralCode(...a),
+}));
+
 jest.mock('@/utils/auth', () => ({
   storeSession: (...a: unknown[]) => mockStoreSession(...a),
 }));
@@ -98,6 +105,7 @@ describe('LoginTemplate', () => {
     searchParams = new URLSearchParams();
     authState = { ...loggedOut };
     mockRedeemStoredInvitation.mockResolvedValue(null);
+    mockRedeemStoredReferral.mockResolvedValue(null);
   });
 
   it('offers Google, GitHub and email sign-in', () => {
@@ -342,6 +350,29 @@ describe('LoginTemplate', () => {
       searchParams = new URLSearchParams('invite=invite-abc');
       render(<LoginTemplate />);
       expect(mockStorePendingInviteToken).toHaveBeenCalledWith('invite-abc');
+    });
+
+    it('stores a ?ref= referral code before sign-in', () => {
+      searchParams = new URLSearchParams('ref=TENSR-ABC1234567');
+      render(<LoginTemplate />);
+      expect(mockStoreReferralCode).toHaveBeenCalledWith('TENSR-ABC1234567');
+      expect(mockRedeemStoredReferral).not.toHaveBeenCalled();
+    });
+
+    it('redeems the stored referral after sign-in, before redirecting', async () => {
+      let finishRedeem: (v: null) => void = () => {};
+      mockRedeemStoredReferral.mockReturnValue(new Promise(resolve => (finishRedeem = resolve)));
+      authState = {
+        ...loggedOut,
+        isAuthenticated: true,
+        hasActiveSubscription: true,
+        entitlements: { plan_code: 'trial' },
+      };
+      render(<LoginTemplate />);
+      await waitFor(() => expect(mockRedeemStoredReferral).toHaveBeenCalled());
+      expect(mockPush).not.toHaveBeenCalled();
+      finishRedeem(null);
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
     });
   });
 });

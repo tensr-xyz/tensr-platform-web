@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { apiClient } from '@/lib/api-client';
+import { useState } from 'react';
+import { ReferralPanelBody } from '@/components/molecules/referral-panel';
 import {
   CreditCard,
   Shield,
@@ -482,22 +482,10 @@ export default function BillingSettings() {
 }
 
 function ReferralCard() {
-  const [code, setCode] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    apiClient.billing
-      .referral()
-      .then(row => setCode(row.code))
-      .catch(err => setError(err instanceof Error ? err.message : 'Referral unavailable'));
-  }, []);
   return (
-    <div className="mb-6 rounded-md border border-border bg-muted/30 p-4">
-      <p className="text-sm font-medium">Referral code</p>
-      <p className="mt-1 text-xs text-muted-foreground">
-        One month at your monthly rate when a referee pays their first invoice. They get a 60-day
-        trial. Teams is not eligible. Not shown on the pricing page.
-      </p>
-      <p className="mt-2 font-mono text-sm">{code || error || 'Loading…'}</p>
+    <div className="mb-6 rounded-md border border-border bg-muted/30">
+      <p className="px-3 pt-3 text-sm font-medium">Refer a colleague</p>
+      <ReferralPanelBody />
     </div>
   );
 }

@@ -7,6 +7,7 @@ import React, { FormEvent, useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Eye, EyeOff, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/api/use-auth';
 import { redeemStoredInvitation, storePendingInviteToken } from '@/lib/business-api';
+import { redeemStoredReferral, storeReferralCode } from '@/lib/referral';
 import { entitlementsResolved, subscriptionRedirectPath } from '@/lib/subscription';
 import { safeReturnTo } from '@/lib/safe-return-to';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
@@ -56,6 +57,10 @@ const LoginTemplate = () => {
     if (invite) {
       storePendingInviteToken(invite);
     }
+    const referral = searchParams.get('ref');
+    if (referral) {
+      storeReferralCode(referral);
+    }
   }, [searchParams]);
 
   // Redirect if already logged in (AuthProvider owns session/user sync)
@@ -68,7 +73,7 @@ const LoginTemplate = () => {
 
     authTrace('login:redirect-after-auth');
 
-    void redeemStoredInvitation().finally(() => {
+    void Promise.all([redeemStoredInvitation(), redeemStoredReferral()]).finally(() => {
       const target = safeReturnTo(searchParams.get('returnTo'));
       router.push(hasActiveSubscription ? target : subscriptionRedirectPath(target));
     });

@@ -23,6 +23,7 @@ import { DatasetFilePicker } from '@/components/molecules/dataset-file-picker';
 import { FeedbackDialog } from '@/components/molecules/feedback-button';
 import { ThemeToggle } from '@/components/molecules/theme-toggle';
 import { WhatsNewPopover } from '@/components/molecules/whats-new-popover';
+import { ReferButton } from '@/components/molecules/referral-panel';
 import useAuth from '@/hooks/api/use-auth';
 import Titlebar from '@/components/organisms/titlebar';
 import { useTabsStore } from '@/stores/tabs-store';
@@ -266,6 +267,7 @@ const SharedHeader: React.FC = () => {
           </div>
         )}
         <div className="relative z-[1] flex shrink-0 items-center gap-2">
+          {isAuthenticated ? <ReferButton /> : null}
           {isAuthenticated ? <WhatsNewPopover /> : null}
           {isAuthenticated ? <UserMenu /> : null}
         </div>
