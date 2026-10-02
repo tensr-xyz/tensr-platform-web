@@ -15,9 +15,24 @@ import type { DerivedDatasetPayload } from '@/lib/adopt-derived-dataset';
 
 export const CODE_EXECUTION_UNAVAILABLE = 'Code execution temporarily unavailable';
 
+function detailFromApiBody(message: string): string | null {
+  const jsonMatch = message.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) return null;
+  try {
+    const body = JSON.parse(jsonMatch[0]) as { detail?: unknown };
+    return typeof body.detail === 'string' && body.detail.trim() ? body.detail.trim() : null;
+  } catch {
+    return null;
+  }
+}
+
 function executionErrorMessage(err: unknown, fallback: string): string {
   if (err instanceof ApiRequestError && err.status === 403) {
-    return CODE_EXECUTION_UNAVAILABLE;
+    const detail = detailFromApiBody(err.message);
+    if (detail === CODE_EXECUTION_UNAVAILABLE || err.message.includes(CODE_EXECUTION_UNAVAILABLE)) {
+      return CODE_EXECUTION_UNAVAILABLE;
+    }
+    if (detail) return detail;
   }
   if (err instanceof Error && err.message.includes(CODE_EXECUTION_UNAVAILABLE)) {
     return CODE_EXECUTION_UNAVAILABLE;

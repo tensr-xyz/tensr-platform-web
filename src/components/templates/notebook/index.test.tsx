@@ -204,6 +204,22 @@ describe('Notebook component', () => {
       });
     });
 
+    it('keeps a dataset access 403 distinct from the execution gate', async () => {
+      seedTab();
+      mockApiClient.execute.python.mockRejectedValueOnce(
+        new ApiRequestError(403, '{"detail":"Dataset not accessible in active organization"}')
+      );
+
+      render(<Notebook />);
+      await runSelectedCell();
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Dataset not accessible in active organization')
+        ).toBeInTheDocument();
+      });
+    });
+
     it('shows code execution unavailable when the API returns 403', async () => {
       seedTab();
       mockApiClient.execute.python.mockRejectedValueOnce(
