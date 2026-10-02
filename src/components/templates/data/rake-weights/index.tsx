@@ -95,14 +95,15 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
         { ...res, dataset_id: res.derived_dataset_id || res.dataset_id },
         payload
       );
-      const warning = res.diagnostics?.missing_category_warning;
-      if (warning) {
-        setNotice(warning);
-      } else {
-        setOpen(false);
+      const diagnostics = res.diagnostics;
+      const report = diagnostics
+        ? `ESS ${Number(diagnostics.kish_ess).toFixed(1)}, DEFF ${Number(diagnostics.deff).toFixed(2)}, efficiency ${Number(diagnostics.weighting_efficiency).toFixed(2)}, weights ${Number(diagnostics.min_weight).toFixed(2)}–${Number(diagnostics.max_weight).toFixed(2)}.`
+        : null;
+      const warning = diagnostics?.missing_category_warning;
+      setNotice([report, warning].filter(Boolean).join(' '));
+      if (!warning) {
         setMargins([]);
         setTargetsFilename(undefined);
-        setNotice(null);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Rake failed');

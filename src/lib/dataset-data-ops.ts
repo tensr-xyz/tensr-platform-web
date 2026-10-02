@@ -225,7 +225,14 @@ export type RakeWeightsResult = DerivedDatasetResult & {
   derived_dataset_id: string;
   parent_dataset_id?: string;
   weight_vector?: { identity?: string; method?: string };
-  diagnostics?: { missing_category_warning?: string };
+  diagnostics?: {
+    missing_category_warning?: string;
+    kish_ess?: number;
+    deff?: number;
+    weighting_efficiency?: number;
+    min_weight?: number;
+    max_weight?: number;
+  };
 };
 
 export function rakeDatasetWeights(
