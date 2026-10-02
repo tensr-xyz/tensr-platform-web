@@ -593,6 +593,41 @@ function RegressionVariablesTab({
   );
 }
 
+function DeriveSplitFields({
+  form,
+  setForm,
+}: {
+  form: FormSliceProps['form'];
+  setForm: FormSliceProps['setForm'];
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs text-muted-foreground">Split a numeric column</Label>
+        <PillToggle
+          value={form.logisticDeriveMethod}
+          onChange={logisticDeriveMethod => setForm(f => ({ ...f, logisticDeriveMethod }))}
+          options={[
+            { value: 'none' as const, label: 'Use as entered' },
+            { value: 'above_mean' as const, label: 'Above mean' },
+            { value: 'above_median' as const, label: 'Above median' },
+          ]}
+          aria-label="Derived binary split"
+        />
+      </div>
+      <CheckboxRow
+        id="save-derived-variable"
+        label="Save derived variable"
+        checked={form.saveDerivedVariable}
+        onCheckedChange={saveDerivedVariable => setForm(f => ({ ...f, saveDerivedVariable }))}
+      />
+      <p className="text-[11px] text-muted-foreground">
+        Off by default. The split is temporary unless you save it as a new column.
+      </p>
+    </div>
+  );
+}
+
 function RegressionOptionsTab({
   form,
   setForm,
@@ -700,6 +735,7 @@ function RegressionOptionsTab({
               setForm(f => ({ ...f, logisticHosmerLemeshow }))
             }
           />
+          <DeriveSplitFields form={form} setForm={setForm} />
         </>
       )}
     </div>
@@ -1730,6 +1766,7 @@ export function GlmmForm({ form, setForm, schema, allNames, errors }: FormSliceP
         expectedType="categorical"
         errors={errors[WIZARD_FIELD.groupCol]}
       />
+      {form.glmmFamily === 'binomial' ? <DeriveSplitFields form={form} setForm={setForm} /> : null}
       <FormSectionLabel>Fixed effects</FormSectionLabel>
       <MultiColumnPicker
         selected={form.independentCols}

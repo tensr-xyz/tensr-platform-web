@@ -1,0 +1,30 @@
+name: Live e2e
+
+# Against the development preview alias and the dev API. Not part of pull-request CI.
+# Sign-in needs STYTCH_TEST_EMAIL plus STYTCH_TEST_PASSWORD or STYTCH_TEST_OTP
+# in the repository secrets. Until those are set, the suite records a skip.
+on:
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      - run: pnpm install
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec playwright test -c playwright.live.config.ts
+        env:
+          PLAYWRIGHT_LIVE_BASE_URL: https://tensr-platform-web-git-development-tensr.vercel.app
+          PLAYWRIGHT_LIVE_API_URL: https://5qv9lg3s55.execute-api.us-east-1.amazonaws.com
+          STYTCH_TEST_EMAIL: ${{ secrets.STYTCH_TEST_EMAIL }}
+          STYTCH_TEST_PASSWORD: ${{ secrets.STYTCH_TEST_PASSWORD }}
+          STYTCH_TEST_OTP: ${{ secrets.STYTCH_TEST_OTP }}

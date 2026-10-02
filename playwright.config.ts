@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './tests',
   testMatch: '**/*.spec.ts',
-  testIgnore: ['**/auth.spec.ts', '**/*.test.ts', '**/components/**', '**/utils/**'],
+  testIgnore: ['**/auth.spec.ts', '**/*.test.ts', '**/components/**', '**/utils/**', '**/live/**'],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

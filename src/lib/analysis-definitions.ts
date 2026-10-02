@@ -725,6 +725,14 @@ export function parseOpenTextLexicon(raw: string): Record<string, string[]> {
   return lexicon;
 }
 
+function deriveBinaryPayload(form: AnalysisFormState): Record<string, unknown> {
+  if (form.logisticDeriveMethod === 'none') return {};
+  return {
+    derive_binary_from: { column: form.depCol, method: form.logisticDeriveMethod },
+    save_derived_variable: form.saveDerivedVariable,
+  };
+}
+
 export function buildBodyFromForm(form: AnalysisFormState): Record<string, unknown> {
   const {
     analysis,
@@ -1026,6 +1034,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       include_constant: logisticIncludeConstant,
       hosmer_lemeshow: logisticHosmerLemeshow,
       ...(clusterByCol.trim() ? { cluster_by: clusterByCol } : {}),
+      ...deriveBinaryPayload(form),
     };
   }
   if (analysis === 'chi_square') {
@@ -1127,6 +1136,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       independents: independentCols,
       confidence_level: confidenceLevelNumber(confidenceLevel),
       include_constant: regressionIncludeConstant,
+      ...deriveBinaryPayload(form),
     };
   }
   if (analysis === 'mcnemar') {
@@ -1299,6 +1309,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       fixed_effects: independentCols,
       group_column: groupCol,
       family: glmmFamily,
+      ...(glmmFamily === 'binomial' ? deriveBinaryPayload(form) : {}),
     };
   }
   if (analysis === 'multilevel_modelling') {
@@ -1460,6 +1471,8 @@ export function defaultFormFieldsFromSchema(
     logisticMaxIterations: '20',
     logisticHosmerLemeshow: false,
     logisticIncludeConstant: true,
+    logisticDeriveMethod: 'none' as const,
+    saveDerivedVariable: false,
     ksTestType: 'two_sample',
     factorBCol: schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
     subjectCol: inferSubjectColumnFromSchema(schema),
@@ -1536,6 +1549,8 @@ export type AnalysisFormState = {
   logisticMaxIterations: string;
   logisticHosmerLemeshow: boolean;
   logisticIncludeConstant: boolean;
+  logisticDeriveMethod: 'none' | 'above_mean' | 'above_median';
+  saveDerivedVariable: boolean;
   ksTestType: KolmogorovTestType;
   factorBCol: string;
   subjectCol: string;

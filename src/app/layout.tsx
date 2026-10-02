@@ -9,6 +9,7 @@ import { OrganizationProvider } from '@/contexts/organisation-context';
 
 import { ChartProvider } from '@/contexts/chart-context';
 import { Toaster } from '@/components/molecules/toast/toaster';
+import { ClientErrorReporter } from '@/components/providers/client-error-reporter';
 
 export const metadata: Metadata = {
   metadataBase: new URL('https://app.tensr.xyz'),
@@ -59,21 +60,23 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
-        <Providers>
-          <AppProvider>
-            <ThemeProvider>
-              <ProjectProvider>
-                <OrganizationProvider>
-                  <ChartProvider>
-                    {children}
-                    <Toaster />
-                    {process.env.NODE_ENV === 'production' ? <Analytics /> : null}
-                  </ChartProvider>
-                </OrganizationProvider>
-              </ProjectProvider>
-            </ThemeProvider>
-          </AppProvider>
-        </Providers>
+        <ClientErrorReporter>
+          <Providers>
+            <AppProvider>
+              <ThemeProvider>
+                <ProjectProvider>
+                  <OrganizationProvider>
+                    <ChartProvider>
+                      {children}
+                      <Toaster />
+                      {process.env.NODE_ENV === 'production' ? <Analytics /> : null}
+                    </ChartProvider>
+                  </OrganizationProvider>
+                </ProjectProvider>
+              </ThemeProvider>
+            </AppProvider>
+          </Providers>
+        </ClientErrorReporter>
       </body>
     </html>
   );

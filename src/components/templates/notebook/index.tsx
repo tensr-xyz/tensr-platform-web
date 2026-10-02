@@ -20,6 +20,7 @@ interface Cell {
   output: OutputContent | null;
   error: string | null;
   executionCount: number | null;
+  runId: string | null;
 }
 
 interface ExecutionResult {
@@ -266,7 +267,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
           </div>
         )}
 
-        {language === 'python' && onSaveDataset && cell.executionCount !== null && !cell.error ? (
+        {language === 'python' && onSaveDataset && cell.runId && !cell.error ? (
           <div className="py-1 pl-2">
             <button
               type="button"
@@ -325,6 +326,7 @@ export const Notebook: React.FC = () => {
       output: null,
       error: null,
       executionCount: null,
+      runId: null,
     },
   ]);
   const [selectedCell, setSelectedCell] = useState<number>(1);
@@ -419,6 +421,7 @@ names(df) <- make.names(names(df))`;
       output: null,
       error: null,
       executionCount: null,
+      runId: null,
     };
     setCells([...cells, newCell]);
   };
@@ -434,9 +437,8 @@ names(df) <- make.names(names(df))`;
   // Remove mockExecuteCode and replace with real API call
   const executeCode = async (
     code: string,
-    language: 'python' | 'r',
-    saveAsDataset = false
-  ): Promise<ExecutionResult & { derived_dataset?: DerivedDatasetPayload | null }> => {
+    language: 'python' | 'r'
+  ): Promise<ExecutionResult & { run_id?: string | null }> => {
     try {
       if (language === 'r') {
         return apiClient.execute.r({ code });
@@ -445,7 +447,6 @@ names(df) <- make.names(names(df))`;
       return apiClient.execute.python({
         code,
         dataset_id: datasetId,
-        save_as_dataset: saveAsDataset,
       });
     } catch (err) {
       return {
@@ -458,21 +459,25 @@ names(df) <- make.names(names(df))`;
 
   const saveCellAsDataset = async (cellId: number) => {
     const cell = cells.find(c => c.id === cellId);
-    if (!cell || cell.type !== 'code' || language !== 'python') return;
+    if (!cell || cell.type !== 'code' || language !== 'python' || !cell.runId) return;
     setIsExecuting(true);
     try {
-      const result = await executeCode(
-        generateSetupCode(language) + '\n' + cell.content,
-        language,
-        true
-      );
+      const datasetId = getDatasetIdFromTab(activeTab);
+      const result = await apiClient.execute.python({
+        dataset_id: datasetId,
+        save_as_dataset: true,
+        run_id: cell.runId,
+      });
       if (result.derived_dataset) {
         adoptDerivedDataset(result.derived_dataset);
       }
       setCells(prev =>
         prev.map(c =>
           c.id === cellId
-            ? { ...c, error: result.error || (result.derived_dataset ? null : 'Nothing was saved') }
+            ? {
+                ...c,
+                error: result.error || (result.derived_dataset ? null : 'Nothing was saved'),
+              }
             : c
         )
       );
@@ -535,6 +540,7 @@ names(df) <- make.names(names(df))`;
                 output: output,
                 error: result.error || null,
                 executionCount: (c.executionCount || 0) + 1,
+                runId: result.run_id || null,
               }
             : c
         )
@@ -548,6 +554,7 @@ names(df) <- make.names(names(df))`;
                 error: err instanceof Error ? err.message : String(err),
                 stdout: null,
                 output: null,
+                runId: null,
               }
             : c
         )
@@ -579,6 +586,7 @@ names(df) <- make.names(names(df))`;
                   output: result.output,
                   error: result.error,
                   executionCount: (c.executionCount || 0) + 1,
+                  runId: result.run_id || null,
                 }
               : c
           )
@@ -592,6 +600,7 @@ names(df) <- make.names(names(df))`;
                   error: err instanceof Error ? err.message : String(err),
                   stdout: null,
                   output: null,
+                  runId: null,
                 }
               : c
           )

@@ -322,8 +322,11 @@ export function BatchTablesDialog({ children }: { children: ReactNode }) {
 export function OpenTextCodingDialog({ children }: { children: ReactNode }) {
   const { datasetId, columns } = useWorkspaceColumns();
   const [text, setText] = useState('');
-  const [lexicon, setLexicon] = useState(
-    '{"price": ["expensive", "cost"], "quality": ["quality"]}'
+  const [codes, setCodes] = useState('[]');
+  const [useModel, setUseModel] = useState(false);
+  const [confirmSend, setConfirmSend] = useState(false);
+  const [notice, setNotice] = useState(
+    'Propose a codeframe, edit or merge codes, then apply. Verbatims stay here unless you opt in.'
   );
   return (
     <AgencyDialog
@@ -331,20 +334,25 @@ export function OpenTextCodingDialog({ children }: { children: ReactNode }) {
       trigger={children}
       onRun={async () => {
         if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
-        const parameters = {
-          text_column: text,
-          lexicon: JSON.parse(lexicon),
-        };
-        const payload = await apiClient.datasets.techniques.run(
-          datasetId,
-          'code-open-text',
-          parameters
-        );
-        return techniqueRun(payload, { op: 'code_open_text', parameters });
+        const parsed = JSON.parse(codes) as Array<Record<string, unknown>>;
+        let jobId: string | undefined;
+        let payload: Record<string, unknown> = {};
+        do {
+          payload = await apiClient.datasets.openEnd.apply(datasetId, {
+            text_column: text,
+            codes: parsed,
+            job_id: jobId,
+          });
+          jobId = typeof payload.job_id === 'string' ? payload.job_id : undefined;
+        } while (payload.done === false && jobId);
+        return techniqueRun(payload, {
+          op: 'open_end_coding',
+          parameters: { text_column: text },
+        });
       }}
     >
       <div className="space-y-3">
-        <p className="text-xs text-muted-foreground">Keyword lexicon. This is not NLP.</p>
+        <p className="text-xs text-muted-foreground">{notice}</p>
         <Label>Text column</Label>
         <select
           className="w-full rounded border p-2 text-sm"
@@ -358,8 +366,42 @@ export function OpenTextCodingDialog({ children }: { children: ReactNode }) {
             </option>
           ))}
         </select>
-        <Label>Lexicon JSON</Label>
-        <Input value={lexicon} onChange={e => setLexicon(e.target.value)} />
+        <label className="flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={useModel} onChange={e => setUseModel(e.target.checked)} />
+          Suggest codes with the model
+        </label>
+        {useModel ? (
+          <label className="flex items-center gap-2 text-xs">
+            <input
+              type="checkbox"
+              checked={confirmSend}
+              onChange={e => setConfirmSend(e.target.checked)}
+            />
+            Verbatims are sent to the model
+          </label>
+        ) : null}
+        <button
+          type="button"
+          className="rounded border px-2 py-1 text-xs"
+          onClick={async () => {
+            if (!datasetId || !text) return;
+            const proposed = await apiClient.datasets.openEnd.propose(datasetId, {
+              text_column: text,
+              use_model: useModel,
+              confirm_verbatims_sent: confirmSend,
+            });
+            setCodes(JSON.stringify(proposed.codes ?? [], null, 2));
+            if (typeof proposed.notice === 'string') setNotice(proposed.notice);
+          }}
+        >
+          Propose codeframe
+        </button>
+        <Label>Codes (edit, merge, or split before apply)</Label>
+        <textarea
+          className="min-h-28 w-full rounded border p-2 font-mono text-xs"
+          value={codes}
+          onChange={e => setCodes(e.target.value)}
+        />
       </div>
     </AgencyDialog>
   );

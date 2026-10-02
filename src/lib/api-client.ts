@@ -994,6 +994,22 @@ class ApiClient {
         }),
     },
 
+    openEnd: {
+      propose: (
+        datasetId: string,
+        body: { text_column: string; use_model?: boolean; confirm_verbatims_sent?: boolean }
+      ) =>
+        this.request<{ codes?: unknown[]; notice?: string; model_used?: boolean }>(
+          `/datasets/${datasetId}/open-end/propose`,
+          { method: 'POST', body: JSON.stringify(body) }
+        ),
+      apply: (datasetId: string, body: Record<string, unknown>) =>
+        this.request<Record<string, unknown>>(`/datasets/${datasetId}/open-end/apply`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+    },
+
     techniques: {
       run: (datasetId: string, name: string, body: Record<string, unknown>) =>
         this.request<any>(`/datasets/${datasetId}/techniques/${name}`, {
@@ -1004,11 +1020,17 @@ class ApiClient {
   };
 
   execute = {
-    python: (data: { code: string; dataset_id?: string | null; save_as_dataset?: boolean }) =>
+    python: (data: {
+      code?: string;
+      dataset_id?: string | null;
+      save_as_dataset?: boolean;
+      run_id?: string | null;
+    }) =>
       this.request<{
         stdout: string | null;
         output: any;
         error: string | null;
+        run_id?: string | null;
         derived_dataset_id?: string | null;
         derived_dataset?: {
           dataset_id: string;
@@ -1025,9 +1047,10 @@ class ApiClient {
       }>('/api/execute/python', {
         method: 'POST',
         body: JSON.stringify({
-          code: data.code,
+          code: data.code ?? '',
           dataset_id: data.dataset_id ?? null,
           save_as_dataset: Boolean(data.save_as_dataset),
+          run_id: data.run_id ?? null,
         }),
       }),
 
