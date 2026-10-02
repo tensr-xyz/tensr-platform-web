@@ -72,7 +72,7 @@ SSE-S3 claim above.
 
 Deleting a dataset also deletes datasets derived from it, incoming upload objects, stored exports for that dataset, collaboration sessions owned by the dataset owner, report comments on that dataset's reports, and every stored version of its S3 objects.
 
-`DELETE /organizations/{id}` removes the organisation's datasets and then the organisation record. Personal organisations cannot be deleted this way.
+`DELETE /organizations/{id}` and `DELETE /me` do not delete S3 from the auth Lambda. That Lambda records a purge job (no `ttl`) and queues it. The datasets worker deletes every S3 version for the dataset parquet, metadata, incoming upload, stored exports, and, for an account deletion, that user's notebook-run cache. The job status is `pending`, `running`, `succeeded`, or `failed`. A failed job stays in DynamoDB and the queue retries it, then moves the message to a dead-letter queue. Personal organisations cannot be deleted with `DELETE /organizations/{id}`.
 
 `DELETE /me` removes the signed-in user's own datasets, organisation memberships, and user record. It does not delete datasets owned by an organisation.
 
