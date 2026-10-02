@@ -4,6 +4,7 @@ import { Notebook } from './index';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useNotebookWorkspaceStore } from '@/stores/notebook-workspace-store';
 import { apiClient } from '@/lib/api-client';
+import { ApiRequestError } from '@/lib/api-error';
 import { ViewType } from '@/stores/tabs-store';
 
 // ---------------------------------------------------------------------------
@@ -200,6 +201,20 @@ describe('Notebook component', () => {
 
       await waitFor(() => {
         expect(screen.getByText('Network error')).toBeInTheDocument();
+      });
+    });
+
+    it('shows code execution unavailable when the API returns 403', async () => {
+      seedTab();
+      mockApiClient.execute.python.mockRejectedValueOnce(
+        new ApiRequestError(403, '{"detail":"Code execution temporarily unavailable"}')
+      );
+
+      render(<Notebook />);
+      await runSelectedCell();
+
+      await waitFor(() => {
+        expect(screen.getByText('Code execution temporarily unavailable')).toBeInTheDocument();
       });
     });
 

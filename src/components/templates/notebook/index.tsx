@@ -9,8 +9,21 @@ import MarkdownViewer from '@/components/organisms/markdown-viewer';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
 import { apiClient } from '@/lib/api-client';
+import { ApiRequestError } from '@/lib/api-error';
 import { adoptDerivedDataset } from '@/lib/adopt-derived-dataset';
 import type { DerivedDatasetPayload } from '@/lib/adopt-derived-dataset';
+
+export const CODE_EXECUTION_UNAVAILABLE = 'Code execution temporarily unavailable';
+
+function executionErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiRequestError && err.status === 403) {
+    return CODE_EXECUTION_UNAVAILABLE;
+  }
+  if (err instanceof Error && err.message.includes(CODE_EXECUTION_UNAVAILABLE)) {
+    return CODE_EXECUTION_UNAVAILABLE;
+  }
+  return err instanceof Error ? err.message : fallback;
+}
 
 interface Cell {
   id: number;
@@ -452,7 +465,7 @@ names(df) <- make.names(names(df))`;
       return {
         stdout: null,
         output: null,
-        error: err instanceof Error ? err.message : 'Failed to execute code',
+        error: executionErrorMessage(err, 'Failed to execute code'),
       };
     }
   };
@@ -478,6 +491,14 @@ names(df) <- make.names(names(df))`;
                 ...c,
                 error: result.error || (result.derived_dataset ? null : 'Nothing was saved'),
               }
+            : c
+        )
+      );
+    } catch (err) {
+      setCells(prev =>
+        prev.map(c =>
+          c.id === cellId
+            ? { ...c, error: executionErrorMessage(err, 'Failed to save dataset') }
             : c
         )
       );
@@ -551,7 +572,7 @@ names(df) <- make.names(names(df))`;
           c.id === cellId
             ? {
                 ...c,
-                error: err instanceof Error ? err.message : String(err),
+                error: executionErrorMessage(err, 'Failed to execute code'),
                 stdout: null,
                 output: null,
                 runId: null,
@@ -597,7 +618,7 @@ names(df) <- make.names(names(df))`;
             c.id === cell.id
               ? {
                   ...c,
-                  error: err instanceof Error ? err.message : String(err),
+                  error: executionErrorMessage(err, 'Failed to execute code'),
                   stdout: null,
                   output: null,
                   runId: null,
