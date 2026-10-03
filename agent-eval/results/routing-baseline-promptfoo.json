@@ -1,8 +1,8 @@
 {
-  "evalId": "eval-qj6-2026-10-01T23:44:49",
+  "evalId": "eval-QYS-2026-10-03T02:26:07",
   "results": {
     "version": 3,
-    "timestamp": "2026-10-01T23:44:49.261Z",
+    "timestamp": "2026-10-03T02:26:07.531Z",
     "prompts": [
       {
         "id": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
@@ -16,7 +16,7 @@
           "testErrorCount": 0,
           "assertPassCount": 23,
           "assertFailCount": 0,
-          "totalLatencyMs": 9666,
+          "totalLatencyMs": 11891,
           "tokenUsage": {
             "prompt": 0,
             "completion": 0,
@@ -79,8 +79,8 @@
             }
           ]
         },
-        "id": "170503b9-3c3d-4910-bda7-f7bf3aa1f43b",
-        "latencyMs": 720,
+        "id": "a4edbd6e-9360-40ec-b952-939d6efaf289",
+        "latencyMs": 935,
         "namedScores": {},
         "prompt": {
           "raw": "What does Age mean?",
@@ -175,8 +175,8 @@
             }
           ]
         },
-        "id": "5fa85feb-5a72-49a5-a37b-138e1e4e1cb0",
-        "latencyMs": 720,
+        "id": "8a9d761f-e813-44d7-984e-6492a2ebf1ca",
+        "latencyMs": 934,
         "namedScores": {},
         "prompt": {
           "raw": "How do I interpret a p-value?",
@@ -270,8 +270,8 @@
             }
           ]
         },
-        "id": "cf34a31b-0eb2-4ada-8334-2fe330dde06b",
-        "latencyMs": 720,
+        "id": "1a24a200-a336-4ac3-8f5d-ca5b9e0037ac",
+        "latencyMs": 934,
         "namedScores": {},
         "prompt": {
           "raw": "Hello",
@@ -365,8 +365,8 @@
             }
           ]
         },
-        "id": "81089a0b-6e7c-4961-ad50-a434369a248e",
-        "latencyMs": 720,
+        "id": "9a8a044f-b40d-4554-aba3-f6917fe8ecd8",
+        "latencyMs": 934,
         "namedScores": {},
         "prompt": {
           "raw": "run one for me",
@@ -460,8 +460,8 @@
             }
           ]
         },
-        "id": "00573887-78ce-4707-973f-78c716166e62",
-        "latencyMs": 336,
+        "id": "ec8f191a-118e-448d-ba2a-424d91c70e24",
+        "latencyMs": 418,
         "namedScores": {},
         "prompt": {
           "raw": "why is that significant?",
@@ -555,8 +555,8 @@
             }
           ]
         },
-        "id": "17da1a14-e15b-4366-a8ea-c3ba8900f374",
-        "latencyMs": 502,
+        "id": "e9f26b7c-eee1-43b6-90c5-c283e2c174c6",
+        "latencyMs": 760,
         "namedScores": {},
         "prompt": {
           "raw": "Can you help me understand the groups?",
@@ -650,8 +650,8 @@
             }
           ]
         },
-        "id": "d616a659-fbb6-4772-9c70-87a30ff082bd",
-        "latencyMs": 501,
+        "id": "3c00db4f-d8ab-41a7-9f6d-1ae67ac93e45",
+        "latencyMs": 759,
         "namedScores": {},
         "prompt": {
           "raw": "t test for me on my dataset",
@@ -746,8 +746,8 @@
             }
           ]
         },
-        "id": "6981a060-7077-4666-a590-332f7ea65fe9",
-        "latencyMs": 334,
+        "id": "d1ccd1f1-6e2e-4c4b-bb34-456720f31a9d",
+        "latencyMs": 527,
         "namedScores": {},
         "prompt": {
           "raw": "correlation between Age and PTS",
@@ -841,8 +841,8 @@
             }
           ]
         },
-        "id": "b19da612-1c0a-4a91-a9b3-c948f968b3ec",
-        "latencyMs": 341,
+        "id": "92df1c3f-317a-426b-9d19-2e0b69681c94",
+        "latencyMs": 515,
         "namedScores": {},
         "prompt": {
           "raw": "one-way ANOVA",
@@ -936,8 +936,8 @@
             }
           ]
         },
-        "id": "9d4314cb-69b2-4bd6-acc8-96016cc79f7b",
-        "latencyMs": 343,
+        "id": "1a931a35-52e7-4053-8b0f-485405a8ade7",
+        "latencyMs": 525,
         "namedScores": {},
         "prompt": {
           "raw": "logistic of Full_retention on Interval and Pay, reference short and low, approvals per 1000",
@@ -1032,8 +1032,8 @@
             }
           ]
         },
-        "id": "5ade8851-df1a-463d-af35-fa9d5e4c96ac",
-        "latencyMs": 338,
+        "id": "55651a16-5f42-4898-997a-554a6a9226da",
+        "latencyMs": 284,
         "namedScores": {},
         "prompt": {
           "raw": "Could you provide a boxplot for utilisation_rate",
@@ -1128,8 +1128,8 @@
             }
           ]
         },
-        "id": "bb9be639-7d2c-4422-95b2-5785353b9548",
-        "latencyMs": 170,
+        "id": "6cfef59c-9a54-4bb9-97c4-8d0d880c2e2c",
+        "latencyMs": 218,
         "namedScores": {},
         "prompt": {
           "raw": "Run a data quality scan",
@@ -1224,8 +1224,8 @@
             }
           ]
         },
-        "id": "4ac988bd-66e6-4f28-a2ed-176937f8de79",
-        "latencyMs": 340,
+        "id": "87746282-7c75-4c7e-9233-f40e832b2aef",
+        "latencyMs": 368,
         "namedScores": {},
         "prompt": {
           "raw": "How many members joined after 2024?",
@@ -1319,8 +1319,8 @@
             }
           ]
         },
-        "id": "0607a5f9-8373-48fb-8d75-c65e88755029",
-        "latencyMs": 508,
+        "id": "42417bfa-f6cf-4a80-803e-ec5fbbcb83ac",
+        "latencyMs": 356,
         "namedScores": {},
         "prompt": {
           "raw": "Sum of Revenue by Region",
@@ -1414,8 +1414,8 @@
             }
           ]
         },
-        "id": "2e255952-c2ed-4ff1-aa23-b5f32269e923",
-        "latencyMs": 507,
+        "id": "7842abb6-46a2-4793-911f-6cb507b9cd29",
+        "latencyMs": 179,
         "namedScores": {},
         "prompt": {
           "raw": "Make a monthly line chart",
@@ -1509,8 +1509,8 @@
             }
           ]
         },
-        "id": "52403a2f-3952-486d-9d25-272b90e00ed4",
-        "latencyMs": 337,
+        "id": "5c7ce5df-0622-46fc-bcfa-b5e450f157f4",
+        "latencyMs": 258,
         "namedScores": {},
         "prompt": {
           "raw": "What's interesting?",
@@ -1604,8 +1604,8 @@
             }
           ]
         },
-        "id": "76112e6c-91a2-45bd-925b-9bcbb0fa4941",
-        "latencyMs": 356,
+        "id": "066590b8-3045-4ec0-84e1-c2b6bc6a4a61",
+        "latencyMs": 557,
         "namedScores": {},
         "prompt": {
           "raw": "Where do I start?",
@@ -1700,8 +1700,8 @@
             }
           ]
         },
-        "id": "a78eb840-1dba-44d7-b8b0-367f7fa7a0bc",
-        "latencyMs": 357,
+        "id": "1b8062c2-ed20-4a52-8297-d75726d367e2",
+        "latencyMs": 565,
         "namedScores": {},
         "prompt": {
           "raw": "Clean this dataset",
@@ -1795,8 +1795,8 @@
             }
           ]
         },
-        "id": "253f7677-3333-437a-8293-d46e5cc13e56",
-        "latencyMs": 338,
+        "id": "28040153-e97d-441b-9846-cdc32626c28a",
+        "latencyMs": 268,
         "namedScores": {},
         "prompt": {
           "raw": "I want percentile values for utilisation_rate",
@@ -1890,8 +1890,8 @@
             }
           ]
         },
-        "id": "7908ddb1-959c-434d-bd44-436be5c91209",
-        "latencyMs": 168,
+        "id": "4f90f0d5-6ca7-473b-8951-10216e8e5ca3",
+        "latencyMs": 240,
         "namedScores": {},
         "prompt": {
           "raw": "Can we get Percentile Values for these KPIs",
@@ -1985,8 +1985,8 @@
             }
           ]
         },
-        "id": "f4eb61ba-96b6-4524-a246-46480d791445",
-        "latencyMs": 336,
+        "id": "82af16e6-d8c3-41e0-9941-f8cbd4c858a2",
+        "latencyMs": 510,
         "namedScores": {},
         "prompt": {
           "raw": "What are the best levels - top 5%, 10% (or other quartile) levels for utilisation_rate",
@@ -2081,8 +2081,8 @@
             }
           ]
         },
-        "id": "bf63fe5f-225a-4930-ad0b-05abc5571639",
-        "latencyMs": 337,
+        "id": "5a05d87f-3c53-4d75-b365-e6ba095680c1",
+        "latencyMs": 555,
         "namedScores": {},
         "prompt": {
           "raw": "run a mixed model on my dataset",
@@ -2176,8 +2176,8 @@
             }
           ]
         },
-        "id": "952f5b29-51f3-44ef-9602-1a73378a52b1",
-        "latencyMs": 337,
+        "id": "80fb0077-6498-4377-b970-f44afe765d9e",
+        "latencyMs": 292,
         "namedScores": {},
         "prompt": {
           "raw": "GEE for clustered pass fail",
@@ -2278,8 +2278,8 @@
           }
         }
       },
-      "durationMs": 3982,
-      "evaluationDurationMs": 3982
+      "durationMs": 5617,
+      "evaluationDurationMs": 5617
     }
   },
   "config": {
@@ -2561,8 +2561,8 @@
     "nodeVersion": "v26.9.0",
     "platform": "darwin",
     "arch": "arm64",
-    "exportedAt": "2026-10-01T23:44:53.265Z",
-    "evaluationCreatedAt": "2026-10-01T23:44:49.261Z"
+    "exportedAt": "2026-10-03T02:26:13.174Z",
+    "evaluationCreatedAt": "2026-10-03T02:26:07.531Z"
   },
   "vars": ["prompt"],
   "runtimeOptions": {

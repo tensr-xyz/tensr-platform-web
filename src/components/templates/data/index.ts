@@ -1,6 +1,7 @@
 export * from './export-data';
 export * from './merge-datasets';
 export { HandleMissingDataDialog } from './handle-missing-data';
+export { VariableSetsDialog } from './variable-sets';
 export { default as FindDuplicatesDialog } from './find-duplicates';
 export { FindOutliersDialog } from './find-outliers';
 export { HandleOutliersDialog } from './handle-outliers';

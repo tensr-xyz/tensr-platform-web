@@ -410,6 +410,31 @@ export function fuseWaveDatasets(
   );
 }
 
+export async function datasetRequest<T>(
+  path: string,
+  token?: string | null,
+  init: { method?: string; body?: unknown } = {}
+): Promise<T> {
+  const method = init.method || 'GET';
+  const res = await fetch(tensrApiUrl(path), {
+    method,
+    headers: {
+      ...(init.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(
+      formatApiErrorMessage(
+        new ApiRequestError(res.status, text || `Request failed (${res.status})`)
+      )
+    );
+  }
+  return res.json() as Promise<T>;
+}
+
 export function fuseSurveyDatasets(
   payload: { dataset_ids: string[]; key_columns?: string[] },
   token?: string | null

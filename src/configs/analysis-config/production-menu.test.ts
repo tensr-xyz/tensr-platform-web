@@ -77,7 +77,10 @@ describe('production menu false-door sweep', () => {
   });
 
   it('puts Custom Tables under Analyze → Tables as a dialog, not Chi-square', () => {
-    expect(PRODUCTION_MENU_ITEMS.analyze.sections['Tables']).toEqual(['Custom Tables']);
+    expect(PRODUCTION_MENU_ITEMS.analyze.sections['Tables']).toEqual([
+      'Custom Tables',
+      'Banner Book',
+    ]);
     expect(PRODUCTION_MENU_ITEMS.analyze.sections['Descriptive Statistics']).toEqual([
       'Descriptives',
       'Batch Tables',

@@ -5,6 +5,8 @@ export type BannerBookCell = {
   stub_row_id?: string;
   percent?: number | null;
   row_percent?: number | null;
+  total_percent?: number | null;
+  count?: number | null;
   mean?: number | null;
   sd?: number | null;
   unweighted_n?: number | null;
@@ -30,11 +32,14 @@ export type BannerBook = {
   provenance?: CellProvenance & {
     weight_vector?: { identity?: string; explicit_null?: boolean };
   };
+  spec?: { decimals?: Record<string, number>; statistics?: string[] };
 };
 
 export type DisplayCell = {
   columnPercent: string;
   rowPercent: string;
+  totalPercent: string;
+  countText: string;
   letters: string;
   bases: string;
   lowBase: boolean;
@@ -57,9 +62,14 @@ export type DisplayTable = {
   rows: DisplayRow[];
 };
 
-function fmtPct(value: number | null | undefined): string {
+function fmtPct(value: number | null | undefined, places = 1): string {
   if (value == null || Number.isNaN(Number(value))) return '—';
-  return `${Number(value).toFixed(1)}%`;
+  return `${Number(value).toFixed(places)}%`;
+}
+
+function places(book: BannerBook, key: string, fallback: number): number {
+  const value = book.spec?.decimals?.[key];
+  return typeof value === 'number' ? value : fallback;
 }
 
 function fmtNum(value: number | null | undefined): string {
@@ -95,11 +105,16 @@ export function displayBannerTable(book: BannerBook): DisplayTable {
     cells: (row.cells || []).map(cell => {
       const suppressed = Boolean(cell.low_base_suppressed);
       const lowBase = Boolean(cell.low_base || cell.low_base_suppressed);
-      const columnValue = fmtMean(cell) ?? fmtPct(cell.percent);
-      const rowValue = fmtPct(cell.row_percent);
+      const columnValue =
+        fmtMean(cell) ?? fmtPct(cell.percent, places(book, 'column_proportion', 1));
+      const rowValue = fmtPct(cell.row_percent, places(book, 'row_proportion', 1));
+      const totalValue = fmtPct(cell.total_percent, places(book, 'total_proportion', 1));
+      const countValue = fmtNum(cell.count ?? cell.weighted_n);
       return {
         columnPercent: suppressed ? '*' : lowBase && columnValue ? `${columnValue} *` : columnValue,
         rowPercent: suppressed ? '*' : lowBase && rowValue ? `${rowValue} *` : rowValue,
+        totalPercent: suppressed ? '*' : totalValue,
+        countText: suppressed ? '*' : countValue,
         letters: letterMap.get(`${cell.stub_row_id}::${cell.banner_id}`) || '',
         bases: `n=${fmtNum(cell.unweighted_n)} · wn=${fmtNum(cell.weighted_n)} · ESS=${fmtNum(cell.kish_ess)}`,
         lowBase,

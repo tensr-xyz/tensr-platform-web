@@ -31,6 +31,26 @@ describe('custom table spec builder', () => {
     expect(body.significance_display).toBe('column_letters');
     expect(body.statistics).toEqual(['column_proportion']);
     expect(body.nest_banners).toBe(true);
+    expect(body.significance_alpha).toBe(0.05);
+    expect(body.letter_levels).toBe(2);
+    expect(body.letter_upper_alpha).toBe(0.01);
+    expect(body.decimals.count).toBe(0);
+    expect(body.decimals.column_proportion).toBe(1);
+  });
+
+  it('restores an older spec without a letter cutoff at the previous 0.001 default', () => {
+    const restored = canvasFromStoredSpec({
+      statistics: ['count', 'column_proportion', 'total_proportion'],
+      significance_alpha: 0.1,
+      letter_levels: 1,
+      letter_case: 'upper',
+    });
+    expect(restored.showCount).toBe(true);
+    expect(restored.totalPercent).toBe(true);
+    expect(restored.significanceAlpha).toBe(0.1);
+    expect(restored.letterLevels).toBe(1);
+    expect(restored.letterCase).toBe('upper');
+    expect(restored.letterUpperAlpha).toBe(0.001);
   });
 
   it('pins unique values when a question is dropped without an order', () => {

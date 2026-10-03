@@ -12,12 +12,29 @@ export type StubQuestion = {
   nets: CustomTableNet[];
 };
 
+export type SignificanceAlpha = 0.1 | 0.05 | 0.01;
+
+export type TableDecimals = {
+  count: number;
+  column_proportion: number;
+  row_proportion: number;
+  total_proportion: number;
+  column_mean: number;
+};
+
 export type CustomTableCanvas = {
   stubs: StubQuestion[];
   banners: BannerQuestion[];
   nestBanners: boolean;
+  showCount: boolean;
   columnPercent: boolean;
   rowPercent: boolean;
+  totalPercent: boolean;
+  decimals: TableDecimals;
+  significanceAlpha: SignificanceAlpha;
+  letterLevels: 1 | 2;
+  letterCase: 'upper' | 'lower';
+  letterUpperAlpha: number;
   significanceDisplay: 'column_letters' | 'cell_comparisons';
   lowBaseThreshold: number;
   suppressLowBase: boolean;
@@ -34,11 +51,33 @@ export type TableRequestBody = {
   }>;
   statistics: string[];
   significance_display: 'column_letters' | 'cell_comparisons';
+  significance_alpha: SignificanceAlpha;
+  letter_levels: 1 | 2;
+  letter_case: 'upper' | 'lower';
+  letter_upper_alpha: number;
+  decimals: TableDecimals;
   nest_banners: boolean;
   low_base_threshold: number;
   suppress_low_base: boolean;
   banner_id?: string;
 };
+
+export function defaultDecimals(): TableDecimals {
+  return {
+    count: 0,
+    column_proportion: 1,
+    row_proportion: 1,
+    total_proportion: 1,
+    column_mean: 2,
+  };
+}
+
+/** Uppercase cutoff for a two-level letter display at the chosen significance. */
+export function stricterLetterAlpha(alpha: SignificanceAlpha): number {
+  if (alpha === 0.1) return 0.05;
+  if (alpha === 0.01) return 0.001;
+  return 0.01;
+}
 
 export function resetBuilderSurface(): {
   canvas: CustomTableCanvas;
@@ -63,8 +102,15 @@ export function defaultCanvas(): CustomTableCanvas {
     stubs: [],
     banners: [],
     nestBanners: true,
+    showCount: false,
     columnPercent: true,
     rowPercent: false,
+    totalPercent: false,
+    decimals: defaultDecimals(),
+    significanceAlpha: 0.05,
+    letterLevels: 2,
+    letterCase: 'lower',
+    letterUpperAlpha: 0.01,
     significanceDisplay: 'column_letters',
     lowBaseThreshold: 30,
     suppressLowBase: false,
@@ -183,8 +229,13 @@ export function bannerColumnProduct(banners: BannerQuestion[], nestBanners: bool
 
 export function buildTableRequest(canvas: CustomTableCanvas): TableRequestBody {
   const statistics: string[] = [];
-  if (canvas.columnPercent || !canvas.rowPercent) statistics.push('column_proportion');
+  if (canvas.showCount) statistics.push('count');
+  if (canvas.columnPercent || (!canvas.rowPercent && !canvas.showCount && !canvas.totalPercent)) {
+    statistics.push('column_proportion');
+  }
   if (canvas.rowPercent) statistics.push('row_proportion');
+  if (canvas.totalPercent) statistics.push('total_proportion');
+  if (!statistics.length) statistics.push('column_proportion');
   return {
     stubs: canvas.stubs.map(s => ({
       column: s.column,
@@ -200,6 +251,11 @@ export function buildTableRequest(canvas: CustomTableCanvas): TableRequestBody {
     })),
     statistics,
     significance_display: canvas.significanceDisplay,
+    significance_alpha: canvas.significanceAlpha,
+    letter_levels: canvas.letterLevels,
+    letter_case: canvas.letterCase,
+    letter_upper_alpha: canvas.letterUpperAlpha,
+    decimals: canvas.decimals,
     nest_banners: canvas.nestBanners,
     low_base_threshold: canvas.lowBaseThreshold,
     suppress_low_base: canvas.suppressLowBase,
@@ -236,6 +292,11 @@ export type StoredTableSpec = {
   statistics?: string[];
   nest_banners?: boolean;
   significance_display?: string;
+  significance_alpha?: number;
+  letter_levels?: number;
+  letter_case?: string;
+  letter_upper_alpha?: number;
+  decimals?: Partial<TableDecimals>;
   low_base_threshold?: number;
   suppress_low_base?: boolean;
   banner_id?: string;
@@ -279,8 +340,22 @@ export function canvasFromStoredSpec(
       })),
     banners: bannerSource.map(bannerFromStored).filter((b): b is BannerQuestion => b != null),
     nestBanners: spec.nest_banners !== false,
-    columnPercent: stats.includes('column_proportion') || !stats.includes('row_proportion'),
+    showCount: stats.includes('count'),
+    columnPercent:
+      stats.includes('column_proportion') ||
+      (!stats.includes('row_proportion') &&
+        !stats.includes('count') &&
+        !stats.includes('total_proportion')),
     rowPercent: stats.includes('row_proportion'),
+    totalPercent: stats.includes('total_proportion'),
+    decimals: { ...defaultDecimals(), ...(spec.decimals || {}) },
+    significanceAlpha:
+      spec.significance_alpha === 0.1 || spec.significance_alpha === 0.01
+        ? spec.significance_alpha
+        : 0.05,
+    letterLevels: spec.letter_levels === 1 ? 1 : 2,
+    letterCase: spec.letter_case === 'upper' ? 'upper' : 'lower',
+    letterUpperAlpha: typeof spec.letter_upper_alpha === 'number' ? spec.letter_upper_alpha : 0.001,
     significanceDisplay:
       spec.significance_display === 'cell_comparisons' ? 'cell_comparisons' : 'column_letters',
     lowBaseThreshold:

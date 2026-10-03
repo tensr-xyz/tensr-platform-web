@@ -1,8 +1,8 @@
 {
-  "evalId": "eval-3sG-2026-10-01T23:44:55",
+  "evalId": "eval-Z2O-2026-10-03T02:26:15",
   "results": {
     "version": 3,
-    "timestamp": "2026-10-01T23:44:55.425Z",
+    "timestamp": "2026-10-03T02:26:15.825Z",
     "prompts": [
       {
         "id": "effa18501e44aafd9bc42a2f64ffc9b6350f94025520ca2ed382f9bdc4b6e982",
@@ -79,7 +79,7 @@
             }
           ]
         },
-        "id": "89eecd40-10a2-4656-b2f3-498aa6c06891",
+        "id": "80a62988-3bfe-49cf-b56f-3fb634505cef",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -176,7 +176,7 @@
             }
           ]
         },
-        "id": "d83893b8-1714-40bf-9143-64144dc42957",
+        "id": "56fc50ae-fdf9-48b9-9926-cb9fe5650fc6",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -273,7 +273,7 @@
             }
           ]
         },
-        "id": "4406ac50-2b73-4565-b937-bf15503f2d4f",
+        "id": "ffd93a56-a8e9-4305-ae26-2e999ed7a1e1",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -370,8 +370,8 @@
             }
           ]
         },
-        "id": "3d256b79-c6b3-47bc-a5f8-022cfbfdfa05",
-        "latencyMs": 1,
+        "id": "c2ac8bc8-d1dd-4844-b49f-36e042adb0b4",
+        "latencyMs": 0,
         "namedScores": {},
         "prompt": {
           "raw": "run one for me",
@@ -467,8 +467,8 @@
             }
           ]
         },
-        "id": "18fcecef-11c2-4d0c-b897-9ed970c5926c",
-        "latencyMs": 1,
+        "id": "c9516e6c-6576-4d38-a915-68d19bd47a17",
+        "latencyMs": 2,
         "namedScores": {},
         "prompt": {
           "raw": "why is that significant?",
@@ -564,7 +564,7 @@
             }
           ]
         },
-        "id": "cc2a018d-2240-4f12-a553-6ccf40f63964",
+        "id": "bb44d492-2d4f-4b4c-9a86-7c5dda03e293",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -661,8 +661,8 @@
             }
           ]
         },
-        "id": "4b5ebdff-aefe-4b67-bca6-21fda60672bd",
-        "latencyMs": 1,
+        "id": "bd44a6cf-0999-4107-96f9-b142713e951b",
+        "latencyMs": 0,
         "namedScores": {},
         "prompt": {
           "raw": "sorry it should be age and Tm",
@@ -758,7 +758,7 @@
             }
           ]
         },
-        "id": "62a40ec7-c149-4afc-bf94-7107db1713dc",
+        "id": "917043ab-eaf8-4bfd-9cf4-d94282954ef1",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -855,7 +855,7 @@
             }
           ]
         },
-        "id": "9ab8b5d6-1ae5-45e6-8518-2a72df7a6f65",
+        "id": "9e06756c-013d-40e7-b822-de6b695406c7",
         "latencyMs": 2,
         "namedScores": {},
         "prompt": {
@@ -952,8 +952,8 @@
             }
           ]
         },
-        "id": "2f121320-b35f-4ab3-8ffe-1ef11ca635b6",
-        "latencyMs": 1,
+        "id": "cb1ddeee-48fa-47c1-a408-1718ef91364e",
+        "latencyMs": 2,
         "namedScores": {},
         "prompt": {
           "raw": "one-way ANOVA",
@@ -1049,7 +1049,7 @@
             }
           ]
         },
-        "id": "0fb4f10b-991d-4950-8488-9cc0475731c0",
+        "id": "06f2e92b-d17d-42d4-a6ee-afb7e5dcc02f",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -1146,8 +1146,8 @@
             }
           ]
         },
-        "id": "7b208fe8-9ae8-4a98-8480-68fed95af371",
-        "latencyMs": 1,
+        "id": "fe192cfe-8ccd-456a-98f5-229220dce4b3",
+        "latencyMs": 0,
         "namedScores": {},
         "prompt": {
           "raw": "Could you provide a boxplot for utilisation_rate",
@@ -1243,7 +1243,7 @@
             }
           ]
         },
-        "id": "af069252-1845-4964-97a8-3b4cbc538aae",
+        "id": "917bbf71-6e45-4945-8ece-187e04d1f8b2",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -1340,8 +1340,8 @@
             }
           ]
         },
-        "id": "4d9c78c3-a4de-4378-9ad6-89a15335b125",
-        "latencyMs": 1,
+        "id": "0e618b1b-b5a1-4d76-92e5-e01cc7b111bb",
+        "latencyMs": 2,
         "namedScores": {},
         "prompt": {
           "raw": "How many members joined after 2024?",
@@ -1437,7 +1437,7 @@
             }
           ]
         },
-        "id": "b163b1f5-f6a7-48be-8663-1d3367770af6",
+        "id": "162ea14e-01fb-462c-ba73-81b245a31c32",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -1534,7 +1534,7 @@
             }
           ]
         },
-        "id": "10038d04-6ca8-478e-aac9-9a10cb2c571f",
+        "id": "61115de5-5e8d-4121-9fb1-56883b1e3f1a",
         "latencyMs": 0,
         "namedScores": {},
         "prompt": {
@@ -1631,7 +1631,7 @@
             }
           ]
         },
-        "id": "d4c6d4d1-86f6-4dcc-a300-9d2337b7a4e4",
+        "id": "30aa56a7-6e68-407c-ab8b-21a5133b2166",
         "latencyMs": 2,
         "namedScores": {},
         "prompt": {
@@ -1728,8 +1728,8 @@
             }
           ]
         },
-        "id": "9f71bf38-4f59-4cda-aadb-ba78a15ca25a",
-        "latencyMs": 1,
+        "id": "f53c8bfb-4b4b-43ee-a443-3a3d185a15ae",
+        "latencyMs": 2,
         "namedScores": {},
         "prompt": {
           "raw": "Where do I start?",
@@ -1825,8 +1825,8 @@
             }
           ]
         },
-        "id": "57263c87-ca6f-4312-984f-d5cf84e6abb5",
-        "latencyMs": 0,
+        "id": "33e66163-97ab-4706-afc4-f5e1c3590cac",
+        "latencyMs": 1,
         "namedScores": {},
         "prompt": {
           "raw": "Clean this dataset",
@@ -1922,8 +1922,8 @@
             }
           ]
         },
-        "id": "321d152d-531e-42d1-80ba-a4156aaea0a1",
-        "latencyMs": 1,
+        "id": "ad97dfa7-3197-491c-8040-8b151d0ebb25",
+        "latencyMs": 0,
         "namedScores": {},
         "prompt": {
           "raw": "I want percentile values for utilisation_rate",
@@ -2019,7 +2019,7 @@
             }
           ]
         },
-        "id": "315fdf71-d993-4430-8103-ad18bc03f7d8",
+        "id": "a8fc999c-4eaa-42a6-8e46-4270c73d1677",
         "latencyMs": 2,
         "namedScores": {},
         "prompt": {
@@ -2116,7 +2116,7 @@
             }
           ]
         },
-        "id": "048f2dbb-575b-4025-a2a6-3982e7a8c75e",
+        "id": "355ee5da-fbf4-4573-8cb1-8f52906cfdf0",
         "latencyMs": 2,
         "namedScores": {},
         "prompt": {
@@ -2213,7 +2213,7 @@
             }
           ]
         },
-        "id": "904c40c5-7f86-4bae-a83e-a59d44f533c9",
+        "id": "73178641-99de-4a5b-ab63-305880db686e",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -2310,7 +2310,7 @@
             }
           ]
         },
-        "id": "9fd32b70-4a1b-48b7-8e6d-3591cb73aa53",
+        "id": "a349f135-22d8-4d45-a4c3-667f33266a6d",
         "latencyMs": 0,
         "namedScores": {},
         "prompt": {
@@ -2407,7 +2407,7 @@
             }
           ]
         },
-        "id": "a2ec418f-fab3-49c4-a721-ede82d2ca4e4",
+        "id": "f264b4ca-41a6-4fc1-9f6c-229d5292f65b",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -2504,7 +2504,7 @@
             }
           ]
         },
-        "id": "98bd4e79-1e60-4b15-ba40-f37b34101570",
+        "id": "80ce2d4f-eb01-4a73-aa27-a1dc59d9bd5f",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -2601,7 +2601,7 @@
             }
           ]
         },
-        "id": "d73fa879-f636-4b3f-be65-504776778d78",
+        "id": "a9ea8a3c-84e0-45d3-a657-e31a39d184d9",
         "latencyMs": 1,
         "namedScores": {},
         "prompt": {
@@ -2698,8 +2698,8 @@
             }
           ]
         },
-        "id": "5af824ee-0f14-4ff0-8a94-47b1788f5d6d",
-        "latencyMs": 0,
+        "id": "f41e04fb-c532-40fc-8c60-c5ff7a1e92f0",
+        "latencyMs": 1,
         "namedScores": {},
         "prompt": {
           "raw": "run a mixed model on my dataset",
@@ -2795,8 +2795,8 @@
             }
           ]
         },
-        "id": "c739223d-479e-4a69-a1db-ef1c966d45da",
-        "latencyMs": 2,
+        "id": "d7015cb7-9de1-4722-90ea-453e7dac824b",
+        "latencyMs": 0,
         "namedScores": {},
         "prompt": {
           "raw": "GEE for clustered pass fail",
@@ -2899,8 +2899,8 @@
           }
         }
       },
-      "durationMs": 51,
-      "evaluationDurationMs": 51
+      "durationMs": 76,
+      "evaluationDurationMs": 76
     }
   },
   "config": {
@@ -3270,8 +3270,8 @@
     "nodeVersion": "v26.9.0",
     "platform": "darwin",
     "arch": "arm64",
-    "exportedAt": "2026-10-01T23:44:55.497Z",
-    "evaluationCreatedAt": "2026-10-01T23:44:55.425Z"
+    "exportedAt": "2026-10-03T02:26:15.928Z",
+    "evaluationCreatedAt": "2026-10-03T02:26:15.825Z"
   },
   "vars": ["prompt", "mode"],
   "runtimeOptions": {

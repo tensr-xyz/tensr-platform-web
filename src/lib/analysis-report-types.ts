@@ -110,7 +110,7 @@ export type AnalysisReportChart =
       x_label: string;
       y_label: string;
       categories: string[];
-      series: { name: string; values: number[] }[];
+      series: { name: string; values: number[]; errors?: number[]; error_kind?: 'se' | 'ci' }[];
     } & ChartAxisHints)
   | ({
       kind: 'line' | 'bar' | 'area';
@@ -118,7 +118,37 @@ export type AnalysisReportChart =
       x_label: string;
       y_label: string;
       categories: string[];
-      series: { name: string; values: number[] }[];
+      series: { name: string; values: number[]; errors?: number[]; error_kind?: 'se' | 'ci' }[];
+    } & ChartAxisHints)
+  | ({
+      kind: 'roc' | 'qq' | 'pp';
+      title: string;
+      x_label: string;
+      y_label: string;
+      points: { x: number; y: number }[];
+      line?: { x0: number; y0: number; x1: number; y1: number };
+      auc?: number | null;
+    } & ChartAxisHints)
+  | ({
+      kind: 'density';
+      title: string;
+      x_label: string;
+      y_label: string;
+      series: { name: string; points: { x: number; y: number }[] }[];
+    } & ChartAxisHints)
+  | ({
+      kind: 'violin';
+      title: string;
+      y_label: string;
+      groups: {
+        label: string;
+        min: number;
+        q1: number;
+        median: number;
+        q3: number;
+        max: number;
+        density: { y: number; width: number }[];
+      }[];
     } & ChartAxisHints)
   | ({
       kind: 'pie';

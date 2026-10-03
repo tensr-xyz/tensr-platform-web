@@ -19,6 +19,7 @@ const LazyFilePickerWrapper: AnalysisComponent = ({ children }) => {
 import { ExportDialog } from '@/components/templates/data';
 import { MergeDatasetDialog } from '@/components/templates/data/merge-datasets';
 import { HandleMissingDataDialog } from '@/components/templates/data/handle-missing-data';
+import { VariableSetsDialog } from '@/components/templates/data/variable-sets';
 import FindDuplicatesDialog from '@/components/templates/data/find-duplicates';
 import { StandardizeVariablesDialog } from '@/components/templates/transform/standardize-variables';
 import { BinVariablesDialog } from '@/components/templates/transform/bin-variables';
@@ -27,6 +28,7 @@ import { RankCasesDialog } from '@/components/templates/transform/rank-cases';
 import ComputeVariablesDialog from '@/components/templates/transform/compute-variable';
 import ShiftValuesDialog from '@/components/templates/transform/shift-values';
 import { CustomTablesDialog } from '@/components/templates/analysis/custom-tables';
+import { BannerBookDialog } from '@/components/templates/analysis/banner-book';
 import { RakeWeightsDialog } from '@/components/templates/data/rake-weights';
 import { CellWeightsDialog } from '@/components/templates/data/cell-weights';
 import { PipelineScriptDialog } from '@/components/templates/data/pipeline-script';
@@ -92,6 +94,7 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Fuse Waves': FuseWavesDialog,
   'Fuse Datasets': FuseDatasetsDialog,
   'Handle Missing Data': HandleMissingDataDialog,
+  'Variable Sets': VariableSetsDialog,
   'Find Duplicates': FindDuplicatesDialog,
   'Find Outliers': FindOutliersDialog,
   'Handle Outliers': HandleOutliersDialog,
@@ -103,6 +106,7 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Compute Variable': ComputeVariablesDialog,
   'Shift Values': ShiftValuesDialog,
   'Custom Tables': CustomTablesDialog,
+  'Banner Book': BannerBookDialog,
   'Rake Weights': RakeWeightsDialog,
   'Cell weighting': CellWeightsDialog,
   'Export R script': PipelineScriptDialog,
@@ -135,6 +139,8 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   Boxplot: chartMenuItem('Boxplot'),
   'Pie Chart': chartMenuItem('Pie Chart'),
   'Area Chart': chartMenuItem('Area Chart'),
+  'Violin Plot': chartMenuItem('Violin Plot'),
+  'Density Plot': chartMenuItem('Density Plot'),
 };
 
 const ML_MENU_INITIAL_BODY: Record<string, Record<string, unknown>> = {

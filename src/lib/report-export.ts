@@ -183,7 +183,40 @@ function chartToHtmlSnippet(chart: NonNullable<AnalysisReport['chart']>): string
       <div style="display:flex;align-items:flex-end;gap:4px;height:140px;border-bottom:1px solid #e2e8f0;padding:0 4px">${bars}</div>
       <p style="font-size:12px;color:#64748b;margin-top:0.35rem">${escHtml(chart.x_label)}</p></figure>`;
   }
-  if (chart.kind === 'bar_grouped' || chart.kind === 'line') {
+  if (chart.kind === 'roc' || chart.kind === 'qq' || chart.kind === 'pp') {
+    const pts = (chart.points || [])
+      .map(point => {
+        const x = Math.max(0, Math.min(1, point.x)) * 100;
+        const y = 100 - Math.max(0, Math.min(1, point.y)) * 100;
+        return `${x},${y}`;
+      })
+      .join(' ');
+    const auc =
+      chart.kind === 'roc' && chart.auc != null ? ` AUC ${Number(chart.auc).toFixed(3)}` : '';
+    return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600;margin-bottom:0.5rem">${title}${escHtml(auc)}</figcaption>
+      <svg viewBox="0 0 100 100" style="width:100%;height:160px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+        <polyline fill="none" stroke="#2563eb" stroke-width="1.5" points="${pts}" />
+      </svg></figure>`;
+  }
+  if (chart.kind === 'density') {
+    const points = chart.series?.[0]?.points ?? [];
+    const maxY = Math.max(...points.map(point => point.y), 1);
+    const minX = Math.min(...points.map(point => point.x));
+    const maxX = Math.max(...points.map(point => point.x), minX + 1);
+    const pts = points
+      .map(point => `${((point.x - minX) / (maxX - minX)) * 100},${100 - (point.y / maxY) * 90}`)
+      .join(' ');
+    return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600;margin-bottom:0.5rem">${title}</figcaption>
+      <svg viewBox="0 0 100 100" style="width:100%;height:140px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
+        <polyline fill="none" stroke="#2563eb" stroke-width="1.5" points="${pts}" />
+      </svg></figure>`;
+  }
+  if (chart.kind === 'violin') {
+    const labels = (chart.groups || []).map(group => escHtml(group.label)).join(', ');
+    return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600">${title}</figcaption>
+      <p style="font-size:13px;color:#334155">Violin groups: ${labels || 'none'}.</p></figure>`;
+  }
+  if (chart.kind === 'bar_grouped' || chart.kind === 'bar' || chart.kind === 'line') {
     const series = chart.series?.[0];
     const values = series?.values ?? [];
     const max = Math.max(...values.map(v => Math.abs(Number(v) || 0)), 1);

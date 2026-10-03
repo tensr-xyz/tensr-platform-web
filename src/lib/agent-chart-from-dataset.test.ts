@@ -138,6 +138,8 @@ describe('agent chart from dataset', () => {
       'boxplot',
       'pie',
       'area',
+      'violin',
+      'density',
     ]);
   });
 

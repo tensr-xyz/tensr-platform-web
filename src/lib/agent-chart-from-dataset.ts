@@ -87,7 +87,11 @@ export type PaletteChartKind =
   | 'histogram'
   | 'boxplot'
   | 'pie'
-  | 'area';
+  | 'area'
+  | 'violin'
+  | 'density';
+
+export type ErrorBarKind = 'none' | 'se' | 'ci';
 
 /** Palette entries that have a real chart kind. Heatmap stays off until one exists. */
 export const PALETTE_MENU_TO_KIND: Record<string, PaletteChartKind> = {
@@ -98,6 +102,8 @@ export const PALETTE_MENU_TO_KIND: Record<string, PaletteChartKind> = {
   Boxplot: 'boxplot',
   'Pie Chart': 'pie',
   'Area Chart': 'area',
+  'Violin Plot': 'violin',
+  'Density Plot': 'density',
 };
 
 const PALETTE_KIND_WORDS: Record<string, PaletteChartKind> = {
@@ -145,11 +151,22 @@ function categorySeries(
   yId: string,
   weightColumn: string | null | undefined,
   mode: 'mean' | 'sum',
-  cap: number
-): { categories: string[]; values: number[]; weighted: boolean; totalGroups: number } {
+  cap: number,
+  errorBars: ErrorBarKind = 'none'
+): {
+  categories: string[];
+  values: number[];
+  errors?: number[];
+  errorKind?: 'se' | 'ci';
+  weighted: boolean;
+  totalGroups: number;
+} {
   const numericY = columnIsNumeric(rows, yId);
   const order: string[] = [];
-  const groups = new Map<string, { sum: number; weight: number }>();
+  const groups = new Map<
+    string,
+    { sum: number; weight: number; sumSq: number; sumW2: number; count: number }
+  >();
   let weighted = false;
   for (const row of rows) {
     const label = String(row[xId] ?? '').trim();
@@ -160,16 +177,20 @@ function categorySeries(
     const y = parseNumericCellValue(row[yId]);
     let group = groups.get(label);
     if (!group) {
-      group = { sum: 0, weight: 0 };
+      group = { sum: 0, weight: 0, sumSq: 0, sumW2: 0, count: 0 };
       groups.set(label, group);
       order.push(label);
     }
     if (numericY && y !== null) {
-      group.sum += mode === 'mean' ? y * weight : y * weight;
+      group.sum += y * weight;
+      group.sumSq += weight * y * y;
+      group.sumW2 += weight * weight;
       group.weight += weight;
+      group.count += 1;
     } else if (!numericY) {
       group.sum += weight;
       group.weight += weight;
+      group.count += 1;
     }
   }
   const shown = order.slice(0, cap);
@@ -178,7 +199,26 @@ function categorySeries(
     if (!group || group.weight === 0) return 0;
     return mode === 'mean' && numericY ? group.sum / group.weight : group.sum;
   });
-  return { categories: shown, values, weighted, totalGroups: order.length };
+  const errors =
+    errorBars === 'none' || !numericY
+      ? undefined
+      : shown.map(label => {
+          const group = groups.get(label);
+          if (!group || group.count < 2 || group.weight <= 0) return 0;
+          const mean = group.sum / group.weight;
+          const variance = Math.max(0, group.sumSq / group.weight - mean * mean);
+          const neff = group.sumW2 > 0 ? (group.weight * group.weight) / group.sumW2 : group.count;
+          const se = Math.sqrt(variance / Math.max(neff, 1));
+          return errorBars === 'ci' ? 1.96 * se : se;
+        });
+  return {
+    categories: shown,
+    values,
+    errors,
+    errorKind: errors && errorBars !== 'none' ? errorBars : undefined,
+    weighted,
+    totalGroups: order.length,
+  };
 }
 
 function quantile(sorted: number[], p: number): number {
@@ -189,13 +229,38 @@ function quantile(sorted: number[], p: number): number {
   return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (idx - lo);
 }
 
+function densityCurve(values: number[]): { x: number; y: number }[] {
+  if (values.length < 2) return [];
+  const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
+  const variance =
+    values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(1, values.length - 1);
+  const sd = Math.sqrt(variance) || 1;
+  const bandwidth = 1.06 * sd * values.length ** -0.2 || 1;
+  const min = Math.min(...values) - 2 * bandwidth;
+  const max = Math.max(...values) + 2 * bandwidth;
+  const steps = 40;
+  const points: { x: number; y: number }[] = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const x = min + ((max - min) * i) / steps;
+    let density = 0;
+    for (const value of values) {
+      const z = (x - value) / bandwidth;
+      density += Math.exp(-0.5 * z * z);
+    }
+    density /= values.length * bandwidth * Math.sqrt(2 * Math.PI);
+    points.push({ x, y: density });
+  }
+  return points;
+}
+
 function buildExplicitPaletteChart(
   kind: PaletteChartKind,
   columns: ColumnLike[],
   rows: Record<string, unknown>[],
   xId: string,
   yId: string,
-  weightColumn?: string | null
+  weightColumn?: string | null,
+  errorBars: ErrorBarKind = 'none'
 ): AnalysisReportChart {
   const xLabel = headerFor(columns, xId);
   const yLabel = headerFor(columns, yId);
@@ -334,7 +399,69 @@ function buildExplicitPaletteChart(
     };
   }
 
-  const series = categorySeries(rows, xId, yId, weightColumn, 'mean', 40);
+  if (kind === 'density') {
+    const values: number[] = [];
+    for (const row of rows) {
+      const n = parseNumericCellValue(row[yId] ?? row[xId]);
+      if (n === null || observationWeight(row, weightColumn) === null) continue;
+      values.push(n);
+    }
+    const label = columnIsNumeric(rows, yId) ? yLabel : xLabel;
+    return {
+      kind: 'density',
+      title: values.length ? `Density of ${label}` : `No rows for ${label}`,
+      x_label: label,
+      y_label: 'Density',
+      series: [{ name: label, points: densityCurve(values) }],
+      weighting: weighted ? 'unweighted' : 'none',
+    };
+  }
+
+  if (kind === 'violin') {
+    const byGroup = new Map<string, number[]>();
+    for (const row of rows) {
+      const label = String(row[xId] ?? '').trim() || yLabel;
+      const n = parseNumericCellValue(row[yId]);
+      if (n === null || observationWeight(row, weightColumn) === null) continue;
+      const list = byGroup.get(label) ?? [];
+      list.push(n);
+      byGroup.set(label, list);
+    }
+    const groups = [...byGroup.entries()].slice(0, 12).flatMap(([label, list]) => {
+      if (list.length < 2) return [];
+      const sorted = [...list].sort((a, b) => a - b);
+      const curve = densityCurve(list);
+      const maxDensity = Math.max(...curve.map(point => point.y), 1);
+      return [
+        {
+          label,
+          min: sorted[0]!,
+          q1: quantile(sorted, 0.25),
+          median: quantile(sorted, 0.5),
+          q3: quantile(sorted, 0.75),
+          max: sorted[sorted.length - 1]!,
+          density: curve.map(point => ({ y: point.x, width: point.y / maxDensity })),
+        },
+      ];
+    });
+    return {
+      kind: 'violin',
+      title: groups.length ? `${yLabel} by ${xLabel}` : `No rows for ${yLabel} by ${xLabel}`,
+      y_label: yLabel,
+      groups,
+      weighting: weighted ? 'unweighted' : 'none',
+    };
+  }
+
+  const series = categorySeries(
+    rows,
+    xId,
+    yId,
+    weightColumn,
+    'mean',
+    40,
+    kind === 'bar' || kind === 'line' ? errorBars : 'none'
+  );
   const numericY = columnIsNumeric(rows, yId);
   const measure = numericY ? `Mean ${yLabel}` : `Count of ${xLabel}`;
   const base = `${measure} by ${xLabel}`;
@@ -350,7 +477,13 @@ function buildExplicitPaletteChart(
     x_label: xLabel,
     y_label: series.weighted && numericY ? `Weighted ${measure}` : measure,
     categories: series.categories,
-    series: [{ name: yLabel, values: series.values }],
+    series: [
+      {
+        name: yLabel,
+        values: series.values,
+        ...(series.errors ? { errors: series.errors, error_kind: series.errorKind } : {}),
+      },
+    ],
     weighting: series.weighted ? 'weighted' : 'none',
     x_scale: 'category',
   };
@@ -361,12 +494,20 @@ export function buildChartFromDataset(
   columns: ColumnLike[],
   rows: Record<string, unknown>[],
   weightColumn?: string | null,
-  palette?: { kind: PaletteChartKind; xId: string; yId: string }
+  palette?: { kind: PaletteChartKind; xId: string; yId: string; errorBars?: ErrorBarKind }
 ): AnalysisReportChart | null {
   const named = palette?.kind ?? leadingPaletteKind(message);
   if (named) {
     const axes = palette ?? axesFromMessage(message, columns);
-    return buildExplicitPaletteChart(named, columns, rows, axes.xId, axes.yId, weightColumn);
+    return buildExplicitPaletteChart(
+      named,
+      columns,
+      rows,
+      axes.xId,
+      axes.yId,
+      weightColumn,
+      palette?.errorBars ?? 'none'
+    );
   }
   if (!columns.length || !rows.length) return null;
   const weighted = Boolean(weightColumn);

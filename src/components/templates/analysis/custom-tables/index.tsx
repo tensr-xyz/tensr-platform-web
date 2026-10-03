@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
-import { replayOperations, setActiveWeight } from '@/lib/dataset-data-ops';
+import { datasetRequest, replayOperations, setActiveWeight } from '@/lib/dataset-data-ops';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
 import {
   getDatasetIdFromTab,
@@ -58,6 +58,7 @@ import {
   canvasFromStoredSpec,
   defaultCanvas,
   resetBuilderSurface,
+  stricterLetterAlpha,
   moveCategory,
   namedBannerPayload,
   nestUnderBanner,
@@ -98,6 +99,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [cellClick, setCellClick] = useState<string | null>(null);
   const [namedBanners, setNamedBanners] = useState<Array<{ id: string; label?: string }>>([]);
   const [bannerIdDraft, setBannerIdDraft] = useState('');
+  const [bookName, setBookName] = useState('');
 
   const columns = useMemo(() => {
     if (!sheetTab?.data?.initialColumns) return [];
@@ -223,6 +225,38 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       await refreshSavedSpecs(runId);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Table failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveBook = async () => {
+    if (!datasetId) {
+      setError(WORKSPACE_DATASET_REQUIRED);
+      return;
+    }
+    if (!bookName.trim()) {
+      setError('Name the banner book.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const specs = [buildTableRequest(canvas) as unknown as Record<string, unknown>];
+      for (const row of savedSpecs) {
+        const id = row.spec_id || row.id;
+        if (!id) continue;
+        const stored = await getSavedTable(datasetId, id, token);
+        const spec = (stored as { spec?: Record<string, unknown> }).spec || stored;
+        if (spec && typeof spec === 'object') specs.push(spec as Record<string, unknown>);
+      }
+      await datasetRequest(`/datasets/${datasetId}/banner-books`, token, {
+        method: 'POST',
+        body: { name: bookName.trim(), specs },
+      });
+      setBookName('');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save the banner book');
     } finally {
       setBusy(false);
     }
@@ -421,6 +455,14 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
+                checked={canvas.showCount}
+                onChange={e => setCanvas(c => ({ ...c, showCount: e.target.checked }))}
+              />
+              Counts
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
                 checked={canvas.columnPercent}
                 onChange={e => setCanvas(c => ({ ...c, columnPercent: e.target.checked }))}
               />
@@ -434,6 +476,119 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               />
               Row %
             </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={canvas.totalPercent}
+                onChange={e => setCanvas(c => ({ ...c, totalPercent: e.target.checked }))}
+              />
+              Total %
+            </label>
+            <label className="flex items-center gap-2">
+              Count decimals
+              <input
+                type="number"
+                min={0}
+                max={6}
+                className="h-7 w-14 rounded-md border border-input bg-background px-2"
+                value={canvas.decimals.count}
+                onChange={e =>
+                  setCanvas(c => ({
+                    ...c,
+                    decimals: {
+                      ...c.decimals,
+                      count: Math.max(0, Math.min(6, Number(e.target.value) || 0)),
+                    },
+                  }))
+                }
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              Percent decimals
+              <input
+                type="number"
+                min={0}
+                max={6}
+                className="h-7 w-14 rounded-md border border-input bg-background px-2"
+                value={canvas.decimals.column_proportion}
+                onChange={e => {
+                  const places = Math.max(0, Math.min(6, Number(e.target.value) || 0));
+                  setCanvas(c => ({
+                    ...c,
+                    decimals: {
+                      ...c.decimals,
+                      column_proportion: places,
+                      row_proportion: places,
+                      total_proportion: places,
+                    },
+                  }));
+                }}
+              />
+            </label>
+            <label className="flex items-center gap-2">
+              Significance
+              <select
+                className="h-7 rounded-md border border-input bg-background px-2"
+                value={String(canvas.significanceAlpha)}
+                onChange={e => {
+                  const alpha = Number(e.target.value) as 0.1 | 0.05 | 0.01;
+                  setCanvas(c => ({
+                    ...c,
+                    significanceAlpha: alpha,
+                    letterUpperAlpha:
+                      c.letterLevels === 2 ? stricterLetterAlpha(alpha) : c.letterUpperAlpha,
+                  }));
+                }}
+              >
+                <option value="0.1">90%</option>
+                <option value="0.05">95%</option>
+                <option value="0.01">99%</option>
+              </select>
+            </label>
+            <label className="flex items-center gap-2">
+              Letter levels
+              <select
+                className="h-7 rounded-md border border-input bg-background px-2"
+                value={String(canvas.letterLevels)}
+                onChange={e =>
+                  setCanvas(c => ({
+                    ...c,
+                    letterLevels: e.target.value === '1' ? 1 : 2,
+                  }))
+                }
+              >
+                <option value="2">Two (upper and lower)</option>
+                <option value="1">One</option>
+              </select>
+            </label>
+            {canvas.letterLevels === 1 ? (
+              <label className="flex items-center gap-2">
+                Letter case
+                <select
+                  className="h-7 rounded-md border border-input bg-background px-2"
+                  value={canvas.letterCase}
+                  onChange={e =>
+                    setCanvas(c => ({
+                      ...c,
+                      letterCase: e.target.value === 'upper' ? 'upper' : 'lower',
+                    }))
+                  }
+                >
+                  <option value="lower">Lower case</option>
+                  <option value="upper">Upper case</option>
+                </select>
+              </label>
+            ) : (
+              <p className="text-[11px] text-muted-foreground">
+                Upper case marks the stricter level (
+                {canvas.significanceAlpha === 0.1
+                  ? '95%'
+                  : canvas.significanceAlpha === 0.01
+                    ? '99.9%'
+                    : '99%'}
+                ). Lower case marks the selected level.
+              </p>
+            )}
             <label className="flex items-center gap-2">
               <input
                 type="checkbox"
@@ -624,8 +779,27 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               Saved tables
             </p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Run stores the spec. Reopen regenerates cells from the parquet.
+              Run stores the spec. Reopen regenerates cells from the parquet. Save a book to run
+              this set on another wave.
             </p>
+            <div className="mt-2 flex gap-2">
+              <input
+                className="h-7 flex-1 rounded-md border border-input bg-background px-2 text-xs"
+                placeholder="Book name"
+                value={bookName}
+                onChange={e => setBookName(e.target.value)}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-[10px]"
+                disabled={busy}
+                onClick={() => void saveBook()}
+              >
+                Save book
+              </Button>
+            </div>
             {savedSpecs.length ? (
               <ul className="mt-2 space-y-1">
                 {savedSpecs.map(row => {
@@ -685,10 +859,18 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                             onClick={() => void clickCell(cell, row.label)}
                           >
                             <div>
+                              {canvas.showCount ? (
+                                <span className="mr-1">{cell.countText}</span>
+                              ) : null}
                               {canvas.columnPercent ? cell.columnPercent : null}
                               {canvas.rowPercent ? (
                                 <span className="ml-1 text-muted-foreground">
                                   {cell.rowPercent} row
+                                </span>
+                              ) : null}
+                              {canvas.totalPercent ? (
+                                <span className="ml-1 text-muted-foreground">
+                                  {cell.totalPercent} total
                                 </span>
                               ) : null}
                               {cell.letters ? (

@@ -362,7 +362,13 @@ function ChartBody({
     );
   }
 
-  if (chart.kind === 'scatter' || chart.kind === 'scatter_line') {
+  if (
+    chart.kind === 'scatter' ||
+    chart.kind === 'scatter_line' ||
+    chart.kind === 'roc' ||
+    chart.kind === 'qq' ||
+    chart.kind === 'pp'
+  ) {
     const pts = chart.points;
     if (!pts.length) {
       return (
@@ -396,7 +402,7 @@ function ChartBody({
     const { padL, padT, plotW, plotH } = layout;
     const sx = scaleLinear(x0, x1, padL, padL + plotW);
     const sy = scaleLinear(y0, y1, padT + plotH, padT);
-    const line = chart.kind === 'scatter_line' ? chart.line : null;
+    const line = chart.kind === 'scatter' ? null : chart.line;
     const xTicks = niceTicks(x0, x1, layout.maxTicksX).map(v => ({ value: v, x: sx(v) }));
     const yTicks = niceTicks(y0, y1, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
 
@@ -427,7 +433,7 @@ function ChartBody({
               r={layout.density === 'comfortable' ? 3 : 2.2}
               className="fill-zinc-600/80"
             />
-            {p.label ? (
+            {'label' in p && p.label ? (
               <text
                 x={sx(p.x) + 6}
                 y={sy(p.y) - 4}
@@ -566,7 +572,12 @@ function ChartBody({
     chart.kind === 'area'
   ) {
     const { categories, series } = chart;
-    const ySamples = series.flatMap(s => s.values);
+    const ySamples = series.flatMap(s =>
+      s.values.flatMap((value, index) => {
+        const error = s.errors?.[index];
+        return error ? [value - error, value, value + error] : [value];
+      })
+    );
     const dataMin = ySamples.length ? Math.min(...ySamples) : 0;
     const dataMax = ySamples.length ? Math.max(...ySamples) : 1;
     const minV = Math.min(0, dataMin);
@@ -645,14 +656,26 @@ function ChartBody({
                   <polyline points={pts} fill="none" stroke={color} strokeWidth={2} />
                   {categories.map((_, gi) => {
                     const v = ser.values[gi] ?? 0;
+                    const error = ser.errors?.[gi];
                     return (
-                      <circle
-                        key={`${ser.name}-${gi}`}
-                        cx={xs[gi]}
-                        cy={sy(v)}
-                        r={layout.density === 'comfortable' ? 3.2 : 2.5}
-                        fill={SERIES_FILL[si % SERIES_FILL.length]}
-                      />
+                      <g key={`${ser.name}-${gi}`}>
+                        {error ? (
+                          <line
+                            x1={xs[gi]}
+                            x2={xs[gi]}
+                            y1={sy(v - error)}
+                            y2={sy(v + error)}
+                            stroke={color}
+                            strokeWidth={1.2}
+                          />
+                        ) : null}
+                        <circle
+                          cx={xs[gi]}
+                          cy={sy(v)}
+                          r={layout.density === 'comfortable' ? 3.2 : 2.5}
+                          fill={SERIES_FILL[si % SERIES_FILL.length]}
+                        />
+                      </g>
                     );
                   })}
                 </g>
@@ -664,16 +687,29 @@ function ChartBody({
                 const x = padL + gi * groupW + gap + si * barW;
                 const yVal = sy(v);
                 const y = Math.min(yZero, yVal);
+                const error = ser.errors?.[gi];
+                const xMid = x + barW / 2;
                 return (
-                  <rect
-                    key={`${gi}-${si}`}
-                    x={x}
-                    y={y}
-                    width={Math.max(1, barW - 1)}
-                    height={Math.max(0, Math.abs(yZero - yVal))}
-                    fill={SERIES_FILL[si % SERIES_FILL.length]}
-                    rx={1}
-                  />
+                  <g key={`${gi}-${si}`}>
+                    {error ? (
+                      <line
+                        x1={xMid}
+                        x2={xMid}
+                        y1={sy(v - error)}
+                        y2={sy(v + error)}
+                        stroke="#27272a"
+                        strokeWidth={1.2}
+                      />
+                    ) : null}
+                    <rect
+                      x={x}
+                      y={y}
+                      width={Math.max(1, barW - 1)}
+                      height={Math.max(0, Math.abs(yZero - yVal))}
+                      fill={SERIES_FILL[si % SERIES_FILL.length]}
+                      rx={1}
+                    />
+                  </g>
                 );
               })
             )}
@@ -859,6 +895,89 @@ function ChartBody({
         {slices.map((slice, i) =>
           slice.d ? <path key={`${slice.label}-${i}`} d={slice.d} fill={slice.fill} /> : null
         )}
+      </svg>
+    );
+  }
+
+  if (chart.kind === 'density') {
+    const series = chart.series || [];
+    const xs = series.flatMap(item => item.points.map(point => point.x));
+    const ys = series.flatMap(item => item.points.map(point => point.y));
+    const x0 = xs.length ? Math.min(...xs) : 0;
+    const x1 = xs.length ? Math.max(...xs) : 1;
+    const y1 = ys.length ? Math.max(...ys) : 1;
+    const layout = baseLayout;
+    const sx = scaleLinear(x0, x1 || 1, layout.padL, layout.padL + layout.plotW);
+    const sy = scaleLinear(0, y1 || 1, layout.padT + layout.plotH, layout.padT);
+    return (
+      <svg
+        data-chart-kind="density"
+        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        className="h-auto w-full max-w-full"
+        aria-hidden
+      >
+        <ChartTitle layout={layout} title={chart.title} />
+        {series.map((item, index) => (
+          <polyline
+            key={item.name}
+            fill="none"
+            stroke={SERIES_FILL[index % SERIES_FILL.length]}
+            strokeWidth={2}
+            points={item.points.map(point => `${sx(point.x)},${sy(point.y)}`).join(' ')}
+          />
+        ))}
+      </svg>
+    );
+  }
+
+  if (chart.kind === 'violin') {
+    const groups = chart.groups || [];
+    const ys = groups.flatMap(group => [
+      group.min,
+      group.max,
+      ...group.density.map(point => point.y),
+    ]);
+    const y0 = ys.length ? Math.min(...ys) : 0;
+    const y1 = ys.length ? Math.max(...ys) : 1;
+    const layout = baseLayout;
+    const sy = scaleLinear(y0, y1 || 1, layout.padT + layout.plotH, layout.padT);
+    const slot = layout.plotW / Math.max(1, groups.length);
+    return (
+      <svg
+        data-chart-kind="violin"
+        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        className="h-auto w-full max-w-full"
+        aria-hidden
+      >
+        <ChartTitle layout={layout} title={chart.title} />
+        {groups.map((group, index) => {
+          const cx = layout.padL + index * slot + slot / 2;
+          const maxWidth = group.density.reduce((max, point) => Math.max(max, point.width), 0) || 1;
+          const half = slot * 0.35;
+          const right = group.density.map(
+            point => `${cx + (point.width / maxWidth) * half},${sy(point.y)}`
+          );
+          const left = [...group.density]
+            .reverse()
+            .map(point => `${cx - (point.width / maxWidth) * half},${sy(point.y)}`);
+          return (
+            <g key={group.label}>
+              <polygon
+                points={[...right, ...left].join(' ')}
+                fill={SERIES_FILL[index % SERIES_FILL.length]}
+                fillOpacity={0.35}
+              />
+              <line
+                x1={cx - 8}
+                x2={cx + 8}
+                y1={sy(group.median)}
+                y2={sy(group.median)}
+                stroke="#18181b"
+                strokeWidth={1.5}
+              />
+            </g>
+          );
+        })}
       </svg>
     );
   }

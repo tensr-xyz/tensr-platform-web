@@ -43,6 +43,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Merge Datasets',
         'Fuse Waves',
         'Handle Missing Data',
+        'Variable Sets',
         'Find Duplicates',
         'Find Outliers',
         'Handle Outliers',
@@ -83,7 +84,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
     icon: <Calculator className="h-4 w-4" />,
     sections: {
       'Descriptive Statistics': ['Descriptives', 'Batch Tables'],
-      Tables: ['Custom Tables'],
+      Tables: ['Custom Tables', 'Banner Book'],
       'Compare Means': [
         'Independent-Samples T Test',
         'Paired-Samples T Test',
@@ -186,6 +187,8 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Boxplot',
         'Pie Chart',
         'Area Chart',
+        'Violin Plot',
+        'Density Plot',
       ],
     },
   },

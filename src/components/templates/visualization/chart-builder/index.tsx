@@ -25,6 +25,7 @@ import {
   buildChartFromDataset,
   loadFilteredChartRows,
   PALETTE_MENU_TO_KIND,
+  type ErrorBarKind,
 } from '@/lib/agent-chart-from-dataset';
 import { apiClient } from '@/lib/api-client';
 
@@ -44,6 +45,7 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
   );
   const [xCol, setXCol] = useState('');
   const [yCol, setYCol] = useState('');
+  const [errorBars, setErrorBars] = useState<ErrorBarKind>('none');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -90,7 +92,7 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
         columns.map(c => ({ id: c.id, header: c.header })),
         rows,
         weightColumn,
-        { kind, xId: x, yId: y }
+        { kind, xId: x, yId: y, errorBars }
       );
       if (!built || built.kind !== kind) {
         setError('Could not build chart from selected columns');
@@ -172,6 +174,24 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
               </SelectContent>
             </Select>
           </div>
+          {kind === 'bar' || kind === 'line' ? (
+            <div>
+              <Label>Error bars</Label>
+              <Select
+                value={errorBars}
+                onValueChange={value => setErrorBars(value as ErrorBarKind)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="se">Standard error</SelectItem>
+                  <SelectItem value="ci">95% confidence interval</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
           {error ? (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>
