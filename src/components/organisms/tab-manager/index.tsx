@@ -63,6 +63,15 @@ type SpreadsheetTab = StoreTab & {
   data: import('@/stores/tabs-store').TabData;
 };
 
+// tensr-api has no route that writes edited rows back to a dataset, so useFileHandler.saveFile
+// cannot succeed yet.
+const SAVE_EDITS_UNAVAILABLE_TOAST = {
+  title: 'Changes not saved',
+  description:
+    "Saving edits to a dataset isn't available yet, so these changes haven't been saved.",
+  variant: 'destructive' as const,
+};
+
 function isSpreadsheetTab(tab: StoreTab | undefined | null): tab is SpreadsheetTab {
   return !!tab && tab.type === TabViewType.SPREADSHEET && !!tab.data;
 }
@@ -147,7 +156,8 @@ const TabManager: React.FC<TabManagerProps> = ({
     };
   }, []);
   const [savingStatus, setSavingStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  // Off until tensr-api can write edited rows back; every auto-save would fail.
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
 
   const activeHistory = useTabHistoryStore(s =>
     activeTab?.id ? s.byTab[activeTab.id] : undefined
@@ -303,31 +313,29 @@ const TabManager: React.FC<TabManagerProps> = ({
       }
       const success = await saveFile(currentFileId, data);
 
-      if (success) {
-        // Update tab to mark as no longer dirty
-        updateTab(activeTab.id, {
-          isDirty: false,
-        });
-
-        setSavingStatus('saved');
-        toast({
-          title: 'File saved',
-          description: 'Your changes have been saved successfully',
-        });
+      if (!success) {
+        setSavingStatus('error');
+        toast(SAVE_EDITS_UNAVAILABLE_TOAST);
+        return;
       }
+
+      // Update tab to mark as no longer dirty
+      updateTab(activeTab.id, {
+        isDirty: false,
+      });
+
+      setSavingStatus('saved');
+      toast({
+        title: 'File saved',
+        description: 'Your changes have been saved successfully',
+      });
     } catch (error) {
       console.error('Error saving file:', error);
       setSavingStatus('error');
-      toast({
-        title: 'Save failed',
-        description: 'There was an error saving your file. Please try again.',
-        variant: 'destructive',
-      });
+      toast(SAVE_EDITS_UNAVAILABLE_TOAST);
     } finally {
       setTimeout(() => {
-        if (savingStatus === 'saved' || savingStatus === 'error') {
-          setSavingStatus('idle');
-        }
+        setSavingStatus(status => (status === 'saved' || status === 'error' ? 'idle' : status));
       }, 3000);
     }
   };
