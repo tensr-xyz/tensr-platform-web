@@ -26,12 +26,11 @@ export interface Feedback {
   updatedAt: string;
 }
 
+/** Body of POST /feedback. The API reads `message`; unknown fields are dropped. */
 export interface CreateFeedbackInput {
-  userId: string;
   topic: FeedbackTopic;
   rating: number;
-  text?: string;
-  status?: FeedbackStatus;
+  message?: string;
 }
 
 export interface UpdateFeedbackInput {
