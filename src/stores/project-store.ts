@@ -682,7 +682,7 @@ export const useProjectStore = create<ProjectStore>()(
             let schemaJson: {
               n_rows?: number;
               n_cols?: number;
-              schema?: { name: string }[];
+              schema?: { name: string; type?: string }[];
             };
             try {
               schemaRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/schema`), {
@@ -701,7 +701,7 @@ export const useProjectStore = create<ProjectStore>()(
               schemaJson = (await schemaRes.json()) as {
                 n_rows?: number;
                 n_cols?: number;
-                schema?: { name: string }[];
+                schema?: { name: string; type?: string }[];
               };
             } catch (fetchError) {
               throw new Error(
@@ -721,7 +721,19 @@ export const useProjectStore = create<ProjectStore>()(
               columnNames,
               totalRows: schemaJson.n_rows ?? columnNames.length,
               totalColumns: schemaJson.n_cols ?? columnNames.length,
-              columnSummaries: {} as Record<string, unknown>,
+              columnSummaries: Object.fromEntries(
+                (schemaJson.schema || [])
+                  .filter(col => col.name && col.type)
+                  .map(col => [
+                    col.name,
+                    {
+                      name: col.name,
+                      data_type: String(col.type),
+                      numeric_stats: null,
+                      categorical_stats: null,
+                    },
+                  ])
+              ) as Record<string, unknown>,
             };
 
             set({

@@ -928,10 +928,7 @@ class ApiClient {
         operation_list?: { schema_version?: number; ops?: unknown[] } | null;
       }>(`/datasets/${datasetId}/metadata`),
 
-    listRecipes: (projectId: string) =>
-      this.request<{ recipes: SavedRecipe[] }>(
-        `/datasets/recipes?project_id=${encodeURIComponent(projectId)}`
-      ),
+    listRecipes: () => this.request<{ recipes: SavedRecipe[] }>('/datasets/recipes'),
 
     saveRecipe: (body: {
       project_id: string;

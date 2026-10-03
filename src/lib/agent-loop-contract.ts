@@ -188,6 +188,20 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
   { prompt: 't test for me on my dataset', mode: 'ask', expected: 'ask-no-write' },
   { prompt: 'Clean this dataset', mode: 'ask', expected: 'ask-no-write' },
   {
+    prompt: 'bar chart of mean PTS by Pos',
+    mode: 'ask',
+    expected: 'run_analysis',
+    description:
+      'A chart is read-only: Ask runs analysis_type chart, never run_data_quality_scan as a fallback',
+  },
+  {
+    prompt: 'bar chart of mean PTS by Pos',
+    mode: 'plan',
+    expected: 'run_analysis',
+    description:
+      'The named column PTS is the y column; never ask which numeric column, never chart mean_PTS as a count',
+  },
+  {
     prompt: 't test for me on my dataset',
     mode: 'plan',
     expected: 'plan-awaiting-approval',

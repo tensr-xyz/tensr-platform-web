@@ -39,6 +39,13 @@ function classifyHeuristic(prompt, mode) {
     return 'ask_clarifying_question';
   }
 
+  const readOnlyChart =
+    /\b(chart|graph|plot|histogram)\b/i.test(text) &&
+    !/\b(t[\s-]?test|anova|regression|logistic|chi[\s-]?square|mixed model|gee)\b/i.test(text) &&
+    !wantsPrep &&
+    !wantsQuality;
+
+  if ((m === 'ask' || m === 'plan') && readOnlyChart) return 'run_analysis';
   if (m === 'ask') {
     if (wantsPrep || wantsAnalysis || wantsQuality) return 'ask-no-write';
     return 'direct_text';

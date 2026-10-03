@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { ACCEPTED_UPLOAD_EXTENSIONS, ACCEPTED_UPLOAD_HELP } from '@/lib/accepted-upload-types';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import { uploadDatasetFile, type UploadScope } from '@/lib/upload-dataset';
 
 const ALLOWED = new Set<string>(ACCEPTED_UPLOAD_EXTENSIONS);
@@ -43,8 +44,7 @@ export function useDatasetUpload(
         cbRef.current?.(result.dataset_id, file.name);
         return result.dataset_id;
       } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Upload failed';
-        setError(msg);
+        setError(e instanceof Error ? formatApiErrorMessage(e) : 'Upload failed');
         return null;
       } finally {
         setIsLoading(false);

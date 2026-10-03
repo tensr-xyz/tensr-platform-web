@@ -13,6 +13,13 @@ describe('formatApiErrorMessage', () => {
     expect(formatApiErrorMessage(err)).toBe('Bad request');
   });
 
+  it('reads the trial cap message from a raw upload response body', () => {
+    const err = new Error(
+      '{"detail":{"error":"trial_volume_cap_exhausted","message":"This trial allows 5 datasets. Upgrade to continue.","key":"datasets","used":5,"cap":5,"plan_code":"trial"}}'
+    );
+    expect(formatApiErrorMessage(err)).toBe('This trial allows 5 datasets. Upgrade to continue.');
+  });
+
   it('handles plain errors', () => {
     expect(formatApiErrorMessage(new Error('Network failed'))).toBe('Network failed');
   });

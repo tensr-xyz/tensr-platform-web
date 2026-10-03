@@ -57,6 +57,10 @@ tests:
     assert: [{ type: equals, value: "ask-no-write" }]
   - vars: { prompt: "Clean this dataset", mode: ask }
     assert: [{ type: equals, value: "ask-no-write" }]
+  - vars: { prompt: "bar chart of mean PTS by Pos", mode: ask }
+    assert: [{ type: equals, value: "run_analysis" }]
+  - vars: { prompt: "bar chart of mean PTS by Pos", mode: plan }
+    assert: [{ type: equals, value: "run_analysis" }]
   - vars: { prompt: "t test for me on my dataset", mode: plan }
     assert: [{ type: equals, value: "plan-awaiting-approval" }]
   - vars: { prompt: "geometric mean of Revenue", mode: agent }

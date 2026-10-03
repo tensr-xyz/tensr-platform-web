@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Download, Play, Save } from 'lucide-react';
 
 import { Button } from '@/components/atoms/button';
@@ -82,27 +82,27 @@ export function SaveAsRecipeButton() {
 }
 
 export function RecipeList() {
-  const { projectId, datasetId } = useRecipeScope();
+  const { datasetId } = useRecipeScope();
   const [recipes, setRecipes] = useState<SavedRecipe[]>([]);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!projectId) {
-      setMessage('Open a project first.');
-      return;
-    }
     setBusy(true);
     setMessage(null);
     try {
-      const res = await apiClient.datasets.listRecipes(projectId);
+      const res = await apiClient.datasets.listRecipes();
       setRecipes(res.recipes || []);
     } catch (err) {
       setMessage(formatApiErrorMessage(err));
     } finally {
       setBusy(false);
     }
-  }, [projectId]);
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const run = useCallback(
     async (recipe: SavedRecipe) => {
@@ -160,7 +160,7 @@ export function RecipeList() {
         </Button>
       </div>
       {recipes.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No recipes in this project yet.</p>
+        <p className="text-xs text-muted-foreground">No saved recipes yet.</p>
       ) : (
         <ul className="space-y-2">
           {recipes.map(recipe => (

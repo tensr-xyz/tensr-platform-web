@@ -72,6 +72,9 @@ export function AnalysisSetupModal({
   );
 
   const bodyKey = React.useMemo(() => JSON.stringify(initialBody ?? null), [initialBody]);
+  // The tab schema renders first and the API schema replaces it with the same names
+  // and better types; only a different column set may clear the user's picks.
+  const schemaKey = React.useMemo(() => schema.map(c => c.name).join('\u0000'), [schema]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -85,8 +88,8 @@ export function AnalysisSetupModal({
     } else {
       setForm({ analysis: initialOp, ...defaultFormFieldsFromSchema(schema) });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody encoded in bodyKey
-  }, [open, initialOp, bodyKey, schema]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody in bodyKey, schema in schemaKey
+  }, [open, initialOp, bodyKey, schemaKey]);
 
   const allNames = schema.map(c => c.name);
   const analysis = form.analysis;
