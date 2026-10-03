@@ -179,4 +179,39 @@ describe('agent chart from dataset', () => {
       global.fetch = previous;
     }
   });
+
+  it('keeps the first preview page when the server ignores offset', async () => {
+    const fetchMock = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          variable_names: ['Pos', 'PTS'],
+          headers: ['Pos', 'PTS'],
+          rows: [['G', 10]],
+          truncated: true,
+        }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          variable_names: ['Pos', 'PTS'],
+          headers: ['Pos', 'PTS'],
+          rows: [
+            ['G', 10],
+            ['F', 99],
+          ],
+          truncated: true,
+        }),
+      });
+    const previous = global.fetch;
+    global.fetch = fetchMock as unknown as typeof fetch;
+    try {
+      const rows = await loadFilteredChartRows('dataset-1');
+      expect(rows).toEqual([{ Pos: 'G', PTS: 10 }]);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    } finally {
+      global.fetch = previous;
+    }
+  });
 });

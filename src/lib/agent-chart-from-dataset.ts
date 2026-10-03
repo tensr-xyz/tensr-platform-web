@@ -618,11 +618,9 @@ export async function loadFilteredChartRows(
       truncated?: boolean;
       offset?: number;
     };
-    if (offset > 0 && preview.offset == null) {
-      throw new Error(
-        'This dataset is larger than one preview page, and the preview did not return the next page.'
-      );
-    }
+    // A deploy that predates offset ignores the query and omits the field.
+    // Keep the first page so the chart still draws.
+    if (offset > 0 && preview.offset !== offset) break;
     const names = preview.variable_names?.length ? preview.variable_names : (preview.headers ?? []);
     const headers = preview.headers ?? [];
     const page = (preview.rows ?? []).map(rowArr => {
