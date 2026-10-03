@@ -37,26 +37,12 @@ export default function OrganizationSettings() {
     setIsEdited(true);
   };
 
-  const handleSlugChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!editedOrg) return;
-    const normalizedSlug = e.target.value
-      .toLowerCase()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-z0-9-]/g, '');
-
-    setEditedOrg({ ...editedOrg, slug: normalizedSlug });
-    setIsEdited(true);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editedOrg || !isEdited) return;
 
     try {
-      await updateOrganization(editedOrg.id, {
-        name: editedOrg.name,
-        ...(editedOrg.slug && { settings: { ...editedOrg.settings, slug: editedOrg.slug } }),
-      });
+      await updateOrganization(editedOrg.id, { name: editedOrg.name });
 
       toast({
         title: 'Organization updated',
@@ -80,8 +66,8 @@ export default function OrganizationSettings() {
     try {
       await deleteOrganization(activeOrganization.id);
       toast({
-        title: 'Organization deleted',
-        description: 'Your organization has been deleted successfully.',
+        title: 'Organisation deleted',
+        description: 'Its datasets are being removed.',
       });
 
       router.push('/dashboard');
@@ -152,27 +138,6 @@ export default function OrganizationSettings() {
                 onChange={handleNameChange}
                 disabled={isLoading}
               />
-            </div>
-
-            <div className="mb-6">
-              <label
-                htmlFor="orgSlug"
-                className="mb-1 block text-sm font-medium text-muted-foreground"
-              >
-                URL Slug
-              </label>
-              <div className="flex">
-                <span className="inline-flex items-center rounded-l-md border border-r-0 border-input bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-                  yourapp.com/
-                </span>
-                <Input
-                  id="orgSlug"
-                  value={editedOrg.slug || ''}
-                  onChange={handleSlugChange}
-                  className="rounded-l-none"
-                  disabled={isLoading}
-                />
-              </div>
             </div>
           </div>
 
