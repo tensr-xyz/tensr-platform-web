@@ -57,7 +57,7 @@ export function getSavedTable(datasetId: string, specId: string, token?: string 
 export function downloadTableExport(
   datasetId: string,
   specId: string,
-  kind: 'xlsx' | 'pptx',
+  kind: 'xlsx' | 'pptx' | 'docx',
   token?: string | null
 ) {
   return fetch(tensrApiUrl(`/datasets/${datasetId}/tables/${specId}/export.${kind}`), {
@@ -72,7 +72,8 @@ export function downloadTableExport(
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = kind === 'xlsx' ? 'banner.xlsx' : 'banner.pptx';
+    link.download =
+      kind === 'xlsx' ? 'banner.xlsx' : kind === 'pptx' ? 'banner.pptx' : 'methodology.docx';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

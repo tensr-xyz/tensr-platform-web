@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
 import { PLUGIN_UNVERIFIED_STATEMENT } from '@/lib/analysis-runs';
+import { ReportExportMenu } from './export-menu';
 import { AnalysisReportView } from './index';
 
 function sampleReport(overrides: Partial<AnalysisReport> = {}): AnalysisReport {
@@ -118,5 +119,53 @@ describe('AnalysisReportView provenance banner', () => {
     expect(screen.getAllByText(/plugin output is unverified/i).length).toBeGreaterThan(0);
     expect(screen.getByText('Unverified')).toBeInTheDocument();
     expect(screen.getByText('Heads up')).toBeInTheDocument();
+  });
+
+  it('puts Export after Print', () => {
+    render(<AnalysisReportView report={sampleReport()} />);
+    const print = screen.getByRole('button', { name: 'Print' });
+    const exportButton = screen.getByTestId('report-export-menu');
+    expect(
+      print.compareDocumentPosition(exportButton) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+});
+
+describe('ReportExportMenu', () => {
+  it('lists Word, PDF, Excel, and the R script', () => {
+    render(
+      <ReportExportMenu
+        defaultOpen
+        report={sampleReport({
+          reproducibility: { r_script: 'lm(points ~ age, data = d)' },
+        })}
+      />
+    );
+    expect(screen.getByRole('menuitem', { name: 'Word' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'PDF' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Excel' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'R script' })).toBeEnabled();
+  });
+
+  it('surfaces banner PowerPoint, Excel, and Word when a spec is saved', () => {
+    render(
+      <ReportExportMenu
+        defaultOpen
+        datasetId="ds-1"
+        rawResult={{ spec_id: 'spec-1' }}
+        report={sampleReport({
+          meta: {
+            analysis_key: 'banner_table',
+            title: 'Brand by gender',
+            subtitle: '',
+            generated_at: '2026-01-01T00:00:00.000Z',
+            rows_dataset: 40,
+          },
+        })}
+      />
+    );
+    expect(screen.getByRole('menuitem', { name: 'Banner Word' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Banner PowerPoint' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Banner Excel' })).toBeInTheDocument();
   });
 });

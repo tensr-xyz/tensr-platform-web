@@ -1,5 +1,12 @@
 import type { AnalysisReport } from '@/lib/analysis-report-types';
-import { reportTablesToCsv, reportToHtml, reportToMarkdown } from '@/lib/report-export';
+import {
+  bannerSpecId,
+  pipelineExportRequest,
+  reportTablesToCsv,
+  reportToHtml,
+  reportToMarkdown,
+  toolTraceFromReport,
+} from '@/lib/report-export';
 import { provenanceBannerText } from '@/lib/analysis-runs';
 
 function sampleReport(overrides: Partial<AnalysisReport> = {}): AnalysisReport {
@@ -138,5 +145,43 @@ describe('reportToMarkdown', () => {
       expect(body).toContain('Traceability unknown');
       expect(body).toContain('Numbers cannot be traced to the rows they came from');
     }
+  });
+});
+
+describe('pipeline export request', () => {
+  it('sends one run id for a single analysis', () => {
+    expect(
+      pipelineExportRequest({ runId: 'run-1', toolTrace: [{ name: 'run_analysis' }] })
+    ).toEqual({
+      run_id: 'run-1',
+    });
+  });
+
+  it('sends every related run for a pipeline', () => {
+    expect(pipelineExportRequest({ runId: 'run-1', relatedRunIds: ['run-2', 'run-1'] })).toEqual({
+      run_ids: ['run-1', 'run-2'],
+    });
+  });
+
+  it('sends the on-screen report when nothing was saved', () => {
+    const trace = toolTraceFromReport(sampleReport());
+    expect(pipelineExportRequest({ toolTrace: trace })).toEqual({ tool_trace: trace });
+    expect(String((trace[0].result as { answer_markdown: string }).answer_markdown)).toContain(
+      'London revenue is higher'
+    );
+  });
+
+  it('reads a banner spec id only for a banner table', () => {
+    const banner = sampleReport({
+      meta: {
+        analysis_key: 'banner_table',
+        title: 'Brand by gender',
+        subtitle: '',
+        generated_at: '2026-07-16T12:00:00.000Z',
+        rows_dataset: 40,
+      },
+    });
+    expect(bannerSpecId(banner, { spec_id: 'spec-1' })).toBe('spec-1');
+    expect(bannerSpecId(sampleReport(), { spec_id: 'spec-1' })).toBeNull();
   });
 });

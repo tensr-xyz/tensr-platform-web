@@ -379,6 +379,85 @@ export async function downloadReportXlsx(
   URL.revokeObjectURL(url);
 }
 
+export function pipelineExportRequest(args: {
+  runId?: string;
+  relatedRunIds?: string[];
+  toolTrace?: Array<Record<string, unknown>>;
+}): { run_id?: string; run_ids?: string[]; tool_trace?: Array<Record<string, unknown>> } {
+  const ids = [args.runId, ...(args.relatedRunIds ?? [])].filter((id): id is string => Boolean(id));
+  const unique = [...new Set(ids)];
+  if (unique.length > 1) return { run_ids: unique };
+  if (unique.length === 1) return { run_id: unique[0] };
+  if (args.toolTrace?.length) return { tool_trace: args.toolTrace };
+  throw new Error('Nothing saved to export');
+}
+
+/** One saved step so a report that was never stored as a run can still be exported. */
+export function toolTraceFromReport(report: AnalysisReport): Array<Record<string, unknown>> {
+  const tables = report.tables.map(table =>
+    [table.title, table.columns.join('\t'), ...table.rows.map(row => row.join('\t'))]
+      .filter(Boolean)
+      .join('\n')
+  );
+  const markdown = [report.summary, ...tables].filter(Boolean).join('\n\n');
+  return [
+    {
+      name: 'run_analysis',
+      args: {
+        analysis_type: report.meta.analysis_key,
+        why_this_test: report.meta.title,
+        request_body: {},
+      },
+      result: { answer_markdown: markdown || report.meta.title },
+    },
+  ];
+}
+
+export function bannerSpecId(
+  report: AnalysisReport,
+  raw?: Record<string, unknown> | null
+): string | null {
+  if (report.meta.analysis_key !== 'banner_table') return null;
+  const piles: unknown[] = [raw, raw?.result, raw?.spec];
+  for (const pile of piles) {
+    if (!pile || typeof pile !== 'object') continue;
+    const specId = (pile as { spec_id?: unknown }).spec_id;
+    if (typeof specId === 'string' && specId) return specId;
+  }
+  return null;
+}
+
+export async function downloadPipelineReport(
+  format: 'docx' | 'pdf' | 'html',
+  body: { run_id?: string; run_ids?: string[]; tool_trace?: Array<Record<string, unknown>> }
+): Promise<void> {
+  const { tensrApiUrl } = await import('@/lib/tensr-api-url');
+  const { getStytchBearerForTensrApi } = await import('@/utils/auth');
+  const token = getStytchBearerForTensrApi();
+  const res = await fetch(tensrApiUrl(`/datasets/reports/pipeline/export?format=${format}`), {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    throw new Error(`Report export failed (${res.status})`);
+  }
+  const blob = await res.blob();
+  const filename =
+    format === 'pdf' ? 'report.pdf' : format === 'html' ? 'report.html' : 'report.docx';
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 export function downloadTextFile(
   content: string,
   filename: string,

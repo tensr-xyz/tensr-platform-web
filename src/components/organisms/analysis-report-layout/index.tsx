@@ -289,6 +289,8 @@ export function AnalysisReportLayout({
               onRevealConsumedRows={
                 analysisRunId && sourceDatasetId ? handleRevealConsumedRows : undefined
               }
+              datasetId={sourceDatasetId}
+              analysisRunId={analysisRunId}
             />
           </div>
         </div>

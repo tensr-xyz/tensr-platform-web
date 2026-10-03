@@ -25,6 +25,7 @@ import {
 import { copyTableRich } from '@/utils/apa-clipboard';
 import { ReportChartCard } from '@/components/molecules/report-chart-card';
 import { Button } from '@/components/atoms/button';
+import { ReportExportMenu } from '@/components/organisms/analysis-report-view/export-menu';
 import { cn } from '@/utils';
 
 function tableToTsv(t: AnalysisReportTable): string {
@@ -438,6 +439,8 @@ type Props = {
   relatedAnalyses?: AnalysisRelatedLink[] | null;
   provenance?: Record<string, unknown> | null;
   onRevealConsumedRows?: (group?: string) => void;
+  datasetId?: string;
+  analysisRunId?: string;
 };
 
 export function AnalysisReportView({
@@ -447,6 +450,8 @@ export function AnalysisReportView({
   relatedAnalyses,
   provenance,
   onRevealConsumedRows,
+  datasetId,
+  analysisRunId,
 }: Props) {
   const [copyState, setCopyState] = React.useState<string | null>(null);
   const [rawOpen, setRawOpen] = React.useState(false);
@@ -911,6 +916,15 @@ export function AnalysisReportView({
             <Printer className="mr-1.5 size-3.5" aria-hidden />
             Print
           </Button>
+          <ReportExportMenu
+            report={report}
+            rawResult={rawResult}
+            provenance={provenance}
+            datasetId={datasetId}
+            analysisRunId={analysisRunId}
+            related={related}
+            onStatus={flash}
+          />
           {copyState ? (
             <span className="text-xs text-emerald-600 dark:text-emerald-400">{copyState}</span>
           ) : null}
