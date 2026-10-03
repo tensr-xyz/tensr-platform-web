@@ -14,6 +14,8 @@ import {
   type AnalysisRelatedLink,
 } from '@/lib/analysis-chain-links';
 import { resolveReportBlocks } from '@/lib/report-blocks';
+import { reportApproachCopy } from '@/lib/report-approach-copy';
+import { ApproachText } from './approach-text';
 import {
   PLUGIN_UNVERIFIED_STATEMENT,
   canRevealConsumedRows,
@@ -526,8 +528,8 @@ export function AnalysisReportView({
   const blockSubtitle = [canReveal ? null : nSubtitle].filter(Boolean).join(' · ') || undefined;
   const metaTestLabel =
     isBannerTable && report.meta.subtitle ? report.meta.subtitle : report.meta.title;
-  const approachExploration =
-    report.approach?.exploration?.trim() || report.session_trace?.trim() || '';
+  const approachCopy = reportApproachCopy(report);
+  const approachExploration = approachCopy.exploration;
   const assumptionInterpretations = (report.assumption_checks?.interpretations ?? []).filter(
     line =>
       !reportTrust(report).warnings.includes(line) &&
@@ -626,39 +628,42 @@ export function AnalysisReportView({
           </div>
         ) : null}
 
-        {report.approach?.plan ||
-        report.approach?.why_this_test ||
-        report.approach?.rejected_alternative ||
+        {approachCopy.plan ||
+        approachCopy.whyThisTest ||
+        approachCopy.alternative ||
         approachExploration ||
+        approachCopy.technicalDetails ||
         related.length > 0 ? (
           <ReportSection sectionId="approach" label="Approach" hint="Why this analysis was chosen">
             <div className="space-y-3 text-[13px] leading-relaxed text-foreground">
-              {report.approach?.plan ? (
+              {approachCopy.plan ? (
                 <div>
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Plan
                   </p>
-                  <p className="whitespace-pre-wrap">{report.approach.plan}</p>
+                  <ApproachText className="text-[13px]" text={approachCopy.plan} />
                 </div>
               ) : null}
-              {report.approach?.why_this_test ? (
+              {approachCopy.whyThisTest ? (
                 <div>
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Why this test
                   </p>
-                  <p className="whitespace-pre-wrap text-muted-foreground">
-                    {report.approach.why_this_test}
-                  </p>
+                  <ApproachText
+                    className="text-[13px] text-muted-foreground"
+                    text={approachCopy.whyThisTest}
+                  />
                 </div>
               ) : null}
-              {report.approach?.rejected_alternative ? (
+              {approachCopy.alternative ? (
                 <div>
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Considered alternative
                   </p>
-                  <p className="whitespace-pre-wrap text-muted-foreground">
-                    {report.approach.rejected_alternative}
-                  </p>
+                  <ApproachText
+                    className="text-[13px] text-muted-foreground"
+                    text={approachCopy.alternative}
+                  />
                 </div>
               ) : null}
               {approachExploration ? (
@@ -666,10 +671,21 @@ export function AnalysisReportView({
                   <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                     Exploration
                   </p>
-                  <pre className="whitespace-pre-wrap font-sans text-muted-foreground">
-                    {approachExploration}
-                  </pre>
+                  <ApproachText
+                    className="text-[13px] text-muted-foreground"
+                    text={approachExploration}
+                  />
                 </div>
+              ) : null}
+              {approachCopy.technicalDetails ? (
+                <details data-testid="report-technical-details" className="print:hidden">
+                  <summary className="cursor-pointer text-[12px] text-muted-foreground hover:text-foreground">
+                    Show technical details
+                  </summary>
+                  <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border/60 bg-muted/20 p-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
+                    {approachCopy.technicalDetails}
+                  </pre>
+                </details>
               ) : null}
               {related.length > 0 ? (
                 <div>
