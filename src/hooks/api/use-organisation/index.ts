@@ -10,6 +10,12 @@ import {
 } from '@/lib/active-organisation';
 import { devLog } from '@/lib/dev-log';
 import { mapApiInvitation, type OrganizationInvitation } from '@/lib/organization-invitations';
+import {
+  apiErrorDetail,
+  mapApiMember,
+  toApiRole,
+  type OrganizationMember,
+} from '@/lib/organization-members';
 
 const API_BASE_URL = getTensrApiBaseUrl();
 
@@ -51,19 +57,7 @@ export interface Organization {
   isPersonal?: boolean;
 }
 
-export interface OrganizationMember {
-  organizationId: string;
-  userId: string;
-  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
-  joinedAt: string;
-  user?: {
-    id: string;
-    email: string;
-    firstName?: string;
-    lastName?: string;
-    profilePicture?: string;
-  };
-}
+export type { OrganizationMember };
 
 // Team types
 export interface Team {
@@ -121,7 +115,7 @@ interface UseOrganizationReturn {
     orgId: string,
     userId: string,
     role: 'ADMIN' | 'MEMBER' | 'VIEWER'
-  ) => Promise<OrganizationMember>;
+  ) => Promise<OrganizationMember | null>;
   removeMember: (orgId: string, userId: string) => Promise<boolean>;
   updateMemberRole: (
     orgId: string,
@@ -433,49 +427,54 @@ export const useOrganization = (): UseOrganizationReturn => {
   };
 
   // Function to fetch organization members
-  const fetchMembers = async (orgId: string): Promise<OrganizationMember[]> => {
-    try {
-      setIsLoading(true);
-      setError(null);
+  const fetchMembers = useCallback(
+    async (orgId: string): Promise<OrganizationMember[]> => {
+      try {
+        setIsLoading(true);
+        setError(null);
 
-      const token = getToken();
-      if (!token) {
-        setError('No authentication token available. Please log in again.');
+        const token = getToken();
+        if (!token) {
+          setError('No authentication token available. Please log in again.');
+          return [];
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/members`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            `Failed to get members: ${apiErrorDetail(errorData, response.statusText)}`
+          );
+        }
+
+        const data = await response.json();
+        const orgMembers = (data.members || []).map(mapApiMember);
+        setMembers(orgMembers);
+        setSeatUsage(data.seats || null);
+        return orgMembers;
+      } catch (err: any) {
+        console.error('Error fetching members:', err);
+        setError(err.message || 'Failed to fetch members');
         return [];
+      } finally {
+        setIsLoading(false);
       }
-
-      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/members`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(`Failed to get members: ${errorData.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      const orgMembers = data.members || [];
-      setMembers(orgMembers);
-      setSeatUsage(data.seats || null);
-      return orgMembers;
-    } catch (err: any) {
-      console.error('Error fetching members:', err);
-      setError(err.message || 'Failed to fetch members');
-      return [];
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    [getToken]
+  );
 
   // Function to add a member
   const addMember = async (
     orgId: string,
     userId: string,
     role: 'ADMIN' | 'MEMBER' | 'VIEWER'
-  ): Promise<OrganizationMember> => {
+  ): Promise<OrganizationMember | null> => {
     try {
       setIsLoading(true);
       setError(null);
@@ -497,20 +496,20 @@ export const useOrganization = (): UseOrganizationReturn => {
         },
         body: JSON.stringify({
           email: userId.trim(),
-          role: role === 'ADMIN' ? 'owner' : 'member',
+          role: toApiRole(role),
         }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(`Failed to add member: ${errorData.message || response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(`Failed to add member: ${apiErrorDetail(errorData, response.statusText)}`);
       }
 
       const memberPayload = await response.json();
-      const newMember = memberPayload.member ?? memberPayload;
-
-      // Update local state
-      setMembers(prev => [...prev, newMember]);
+      // An unknown email gets an invitation, not a membership.
+      if (!memberPayload.member) return null;
+      const newMember = mapApiMember(memberPayload.member);
+      setMembers(prev => [...prev.filter(m => m.userId !== newMember.userId), newMember]);
 
       return newMember;
     } catch (err: any) {
@@ -541,8 +540,10 @@ export const useOrganization = (): UseOrganizationReturn => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(`Failed to remove member: ${errorData.message || response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          `Failed to remove member: ${apiErrorDetail(errorData, response.statusText)}`
+        );
       }
 
       // Update local state
@@ -581,20 +582,19 @@ export const useOrganization = (): UseOrganizationReturn => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ role }),
+          body: JSON.stringify({ role: toApiRole(role) }),
         }
       );
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+        const errorData = await response.json().catch(() => ({}));
         throw new Error(
-          `Failed to update member role: ${errorData.message || response.statusText}`
+          `Failed to update member role: ${apiErrorDetail(errorData, response.statusText)}`
         );
       }
 
-      const updatedMember = await response.json();
-
-      // Update local state
+      const payload = await response.json();
+      const updatedMember = mapApiMember(payload.member ?? payload);
       setMembers(prev => prev.map(member => (member.userId === userId ? updatedMember : member)));
 
       return updatedMember;
@@ -1023,8 +1023,10 @@ export const useOrganization = (): UseOrganizationReturn => {
         });
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-          throw new Error(`Failed to get invitations: ${errorData.message || response.statusText}`);
+          const errorData = await response.json().catch(() => ({}));
+          throw new Error(
+            `Failed to get invitations: ${apiErrorDetail(errorData, response.statusText)}`
+          );
         }
 
         const data = await response.json();
@@ -1083,8 +1085,10 @@ export const useOrganization = (): UseOrganizationReturn => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(`Failed to delete invitation: ${errorData.message || response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(
+          `Failed to delete invitation: ${apiErrorDetail(errorData, response.statusText)}`
+        );
       }
 
       // Update local state
