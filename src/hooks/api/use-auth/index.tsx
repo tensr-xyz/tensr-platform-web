@@ -4,12 +4,24 @@ import { useState } from 'react';
 import { useStytch, useStytchUser, useStytchSession } from '@stytch/nextjs';
 import { useAuthStore } from '@/stores/auth-store';
 import { clearAuthData, getStoredSession, storeSession } from '@/utils/auth';
-import { fetchMeProfile, redeemStoredInvitation } from '@/lib/business-api';
+import { fetchMeProfile, redeemStoredInvitation, type MeProfile } from '@/lib/business-api';
 import { hasActiveSubscription } from '@/lib/subscription';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
 import { stytchErrorMessage } from '@/lib/stytch-error-message';
 import { devLog } from '@/lib/dev-log';
 import posthog from 'posthog-js';
+
+const PROFILE_LOAD_FAILED_MESSAGE = "We couldn't load your account. Please try again.";
+
+async function fetchMeProfileWithRetry(): Promise<MeProfile> {
+  try {
+    return await fetchMeProfile();
+  } catch (error) {
+    // A 401 has already been handled by fetchMeProfile and will not succeed on retry.
+    if (error instanceof Error && error.message === 'Session expired') throw error;
+    return fetchMeProfile();
+  }
+}
 
 export const useAuth = () => {
   const stytch = useStytch();
@@ -117,40 +129,36 @@ export const useAuth = () => {
         });
       }
 
+      let profile: MeProfile;
       try {
-        const profile = await fetchMeProfile();
-        setUser(profile.user);
-        setEntitlements(profile.entitlements);
-        await redeemStoredInvitation();
-
-        // Identify the user in PostHog so all future events are linked to their profile
-        posthog.identify(profile.user.userId, {
-          email: profile.user.email,
-          firstName: profile.user.firstName,
-          lastName: profile.user.lastName,
-          plan: profile.entitlements?.plan_code,
-        });
-        posthog.capture('user_signed_in', { method: 'email_otp' });
-      } catch (syncError) {
-        console.warn('Failed to sync user from tensr-api:', syncError);
-        if (response.user) {
-          const stytchUserData = response.user as any;
-          const fallbackEmail = stytchUserData.emails?.[0]?.email || email;
-          setUser({
-            userId: stytchUserData.user_id,
-            email: fallbackEmail,
-            firstName: stytchUserData.name?.first_name,
-            lastName: stytchUserData.name?.last_name,
-            username: stytchUserData.name?.first_name,
-            status: 'ACTIVE',
-            createdAt: stytchUserData.created_at || new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          });
-
-          posthog.identify(stytchUserData.user_id, { email: fallbackEmail });
-          posthog.capture('user_signed_in', { method: 'email_otp' });
-        }
+        profile = await fetchMeProfileWithRetry();
+      } catch (profileError) {
+        console.warn('Failed to load user from tensr-api:', profileError);
+        setError(PROFILE_LOAD_FAILED_MESSAGE);
+        setLoading(false);
+        return {
+          success: false,
+          code: 'PROFILE_LOAD_FAILED',
+          message: PROFILE_LOAD_FAILED_MESSAGE,
+        };
       }
+
+      setUser(profile.user);
+      setEntitlements(profile.entitlements);
+      try {
+        await redeemStoredInvitation();
+      } catch (inviteError) {
+        console.warn('Failed to redeem stored invitation:', inviteError);
+      }
+
+      // Identify the user in PostHog so all future events are linked to their profile
+      posthog.identify(profile.user.userId, {
+        email: profile.user.email,
+        firstName: profile.user.firstName,
+        lastName: profile.user.lastName,
+        plan: profile.entitlements?.plan_code,
+      });
+      posthog.capture('user_signed_in', { method: 'email_otp' });
 
       setMethodId(null);
       setLoading(false);

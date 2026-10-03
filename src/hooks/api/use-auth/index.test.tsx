@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { useAuth } from './index';
 import { useAuthStore } from '@/stores/auth-store';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
+import posthog from 'posthog-js';
 
 const mockLoginOrCreate = jest.fn();
 const mockOtpAuthenticate = jest.fn();
@@ -146,8 +147,8 @@ describe('useAuth', () => {
       expect(mockOtpAuthenticate).not.toHaveBeenCalled();
     });
 
-    it('still signs in with Stytch user data when tensr-api /me is down', async () => {
-      mockOtpAuthenticate.mockResolvedValue({
+    describe('when tensr-api /me fails', () => {
+      const stytchResponse = {
         status_code: 200,
         session_token: 'sess-token',
         user: {
@@ -155,19 +156,62 @@ describe('useAuth', () => {
           emails: [{ email: 'ada@example.com' }],
           name: { first_name: 'Ada' },
         },
-      });
-      mockFetchMeProfile.mockRejectedValue(new Error('Internal Server Error'));
-      const { result } = renderHook(() => useAuth());
+      };
 
-      let out: { success: boolean } | undefined;
-      await act(async () => {
-        out = await result.current.verifyAuth('ada@example.com', '123456', 'email-123');
+      it('retries /me once and signs in when the retry succeeds', async () => {
+        mockOtpAuthenticate.mockResolvedValue(stytchResponse);
+        mockFetchMeProfile
+          .mockRejectedValueOnce(new Error('Internal Server Error'))
+          .mockResolvedValueOnce(profile);
+        const { result } = renderHook(() => useAuth());
+
+        let out: { success: boolean } | undefined;
+        await act(async () => {
+          out = await result.current.verifyAuth('ada@example.com', '123456', 'email-123');
+        });
+
+        expect(out?.success).toBe(true);
+        expect(mockFetchMeProfile).toHaveBeenCalledTimes(2);
+        expect(useAuthStore.getState().user?.userId).toBe('u1');
+        expect(useAuthStore.getState().entitlements?.plan_code).toBe('pro');
       });
 
-      expect(out?.success).toBe(true);
-      expect(useAuthStore.getState().user).toMatchObject({
-        userId: 'stytch-user-1',
-        email: 'ada@example.com',
+      it('fails sign-in without a Stytch fallback user when the retry also fails', async () => {
+        mockOtpAuthenticate.mockResolvedValue(stytchResponse);
+        mockFetchMeProfile.mockRejectedValue(new Error('Internal Server Error'));
+        const { result } = renderHook(() => useAuth());
+
+        let out: { success: boolean; code?: string; message?: string } | undefined;
+        await act(async () => {
+          out = await result.current.verifyAuth('ada@example.com', '123456', 'email-123');
+        });
+
+        expect(out).toEqual({
+          success: false,
+          code: 'PROFILE_LOAD_FAILED',
+          message: "We couldn't load your account. Please try again.",
+        });
+        expect(mockFetchMeProfile).toHaveBeenCalledTimes(2);
+        expect(useAuthStore.getState().user).toBeNull();
+        expect(useAuthStore.getState().error).toBe(
+          "We couldn't load your account. Please try again."
+        );
+        expect(posthog.capture).not.toHaveBeenCalledWith('user_signed_in', expect.anything());
+      });
+
+      it('does not retry when /me reports the session expired', async () => {
+        mockOtpAuthenticate.mockResolvedValue(stytchResponse);
+        mockFetchMeProfile.mockRejectedValue(new Error('Session expired'));
+        const { result } = renderHook(() => useAuth());
+
+        let out: { success: boolean; code?: string } | undefined;
+        await act(async () => {
+          out = await result.current.verifyAuth('ada@example.com', '123456', 'email-123');
+        });
+
+        expect(out).toMatchObject({ success: false, code: 'PROFILE_LOAD_FAILED' });
+        expect(mockFetchMeProfile).toHaveBeenCalledTimes(1);
+        expect(useAuthStore.getState().user).toBeNull();
       });
     });
 
