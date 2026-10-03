@@ -11,11 +11,12 @@ export type AgentLoopStreamProgress = {
 };
 
 export type AgentLoopStreamHandlers = {
-  onProgress?: (progress: AgentLoopStreamProgress) => void | Promise<void>;
+  /** Called synchronously per event and never awaited, so a slow render cannot hold the reader. */
+  onProgress?: (progress: AgentLoopStreamProgress) => void;
   signal?: AbortSignal;
 };
 
-async function processSseLine(
+function processSseLine(
   line: string,
   onProgress: AgentLoopStreamHandlers['onProgress'],
   acc: { result: AgentLoopResponse | null; timeout: AgentLoopResponse | null }
@@ -43,7 +44,7 @@ async function processSseLine(
     payload.type === 'tool_result'
   ) {
     if (payload.message) {
-      await onProgress?.({
+      onProgress?.({
         type: payload.type,
         step: payload.step ?? 'progress',
         message: payload.message,
@@ -122,7 +123,7 @@ export async function streamAgentLoop(
   };
 
   try {
-    while (true) {
+    while (!acc.result) {
       const { done, value } = await reader.read();
       if (done) break;
       buffer += decoder.decode(value, { stream: true });
@@ -131,14 +132,22 @@ export async function streamAgentLoop(
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        await processSseLine(line, handlers.onProgress, acc);
+        processSseLine(line, handlers.onProgress, acc);
+        if (acc.result) break;
       }
     }
 
-    if (buffer.trim()) {
-      await processSseLine(buffer, handlers.onProgress, acc);
+    if (!acc.result && buffer.trim()) {
+      processSseLine(buffer, handlers.onProgress, acc);
     }
   } finally {
+    if (acc.result) {
+      try {
+        void reader.cancel().catch(() => undefined);
+      } catch {
+        // Some readers do not implement cancel; releasing the lock is enough.
+      }
+    }
     reader.releaseLock();
   }
 
