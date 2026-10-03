@@ -466,6 +466,9 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
   return <OrganizationContext.Provider value={value}>{children}</OrganizationContext.Provider>;
 };
 
+/** Null outside the provider, for hooks that also render standalone. */
+export const useOptionalOrganizationContext = () => useContext(OrganizationContext);
+
 export const useOrganizationContext = () => {
   const context = useContext(OrganizationContext);
   if (!context) {
