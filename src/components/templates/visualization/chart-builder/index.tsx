@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -45,8 +45,28 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
   );
   const [xCol, setXCol] = useState('');
   const [yCol, setYCol] = useState('');
+  const [weightCol, setWeightCol] = useState('__none__');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const datasetId = activeTab?.data?.datasetId ?? activeTab?.data?.filePath;
+
+  useEffect(() => {
+    if (!datasetId) return;
+    let cancelled = false;
+    void apiClient.datasets
+      .getMetadata(datasetId)
+      .then(meta => {
+        if (cancelled) return;
+        const active = meta.active_weight_column;
+        if (active && columns.some(column => column.id === active)) {
+          setWeightCol(active);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [columns, datasetId]);
 
   const kind = PALETTE_MENU_TO_KIND[chartMenuName];
 
@@ -65,7 +85,6 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
       setError('Select an X axis column');
       return;
     }
-    const datasetId = activeTab?.data?.datasetId ?? activeTab?.data?.filePath;
     if (!datasetId) {
       setError('Dataset id not available');
       return;
@@ -91,6 +110,7 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
           y_label: yHeader,
           filters,
           row_uids: activeTab?.data?.rowUidFilter,
+          weight_column: weightCol === '__none__' ? null : weightCol,
         });
         built = remote.chart;
         rowsDataset = remote.n_rows_filtered;
@@ -101,13 +121,7 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
           activeTab?.data?.columnFilters ?? [],
           activeTab?.data?.rowUidFilter
         );
-        let weightColumn: string | null = null;
-        try {
-          const meta = await apiClient.datasets.getMetadata(datasetId);
-          weightColumn = meta.active_weight_column ?? null;
-        } catch {
-          weightColumn = null;
-        }
+        const weightColumn = weightCol === '__none__' ? null : weightCol;
         const prompt = `${kind} chart of ${y} by ${x}`;
         built = buildChartFromDataset(
           prompt,
@@ -192,6 +206,22 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
               <SelectContent>
                 {columns.map(c => (
                   <SelectItem key={c.id} value={c.id}>
+                    {c.header}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Weight</Label>
+            <Select value={weightCol} onValueChange={setWeightCol}>
+              <SelectTrigger aria-label="Weight">
+                <SelectValue placeholder="No weight" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No weight</SelectItem>
+                {columns.map(c => (
+                  <SelectItem key={`w-${c.id}`} value={c.id}>
                     {c.header}
                   </SelectItem>
                 ))}
