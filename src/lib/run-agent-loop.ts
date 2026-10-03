@@ -60,8 +60,10 @@ export type AgentLoopResponse = {
   step_limit_reached?: boolean;
   approved_execution?: boolean;
   provenance?: Record<string, unknown>;
-  /** LAMBDA-style multi-step summary built from tool_trace. */
+  /** Plain-English list of the steps that ran and what each found. */
   execution_summary?: string;
+  /** Raw tool trace behind execution_summary (role, call ids); technical details only. */
+  execution_trace?: string;
 };
 
 export type AgentLoopAttachment = {

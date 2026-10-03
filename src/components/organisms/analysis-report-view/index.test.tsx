@@ -169,3 +169,57 @@ describe('ReportExportMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Banner Excel' })).toBeInTheDocument();
   });
 });
+
+describe('AnalysisReportView approach copy', () => {
+  const trace =
+    'Step 1: `run_analysis` | type=linear_regression | role=primary | ok\n' +
+    '  rejected_alternative: Regress PTS on Age, MP.\n' +
+    '  prior_result_id: call_abc123';
+
+  it('renders the Plan as Markdown and keeps the trace behind Show technical details', () => {
+    const { container } = render(
+      <AnalysisReportView
+        report={sampleReport({
+          approach: {
+            plan: 'Regress **PTS** on `Age` and `MP`.',
+            why_this_test: 'Points are continuous.',
+            rejected_alternative: 'Regress PTS on Age and MP.',
+            exploration:
+              '1. Linear Regression of `PTS` on `Age` and `MP`. The model explains 62% of the variation in `PTS`.',
+          },
+          session_trace: trace,
+        })}
+      />
+    );
+    const approach = container.querySelector('#report-section-approach') ?? container;
+    expect(approach.textContent).not.toContain('**');
+    expect(approach.querySelector('strong')?.textContent).toBe('PTS');
+    expect(screen.getByText(/The model explains 62% of the variation/)).toBeInTheDocument();
+    expect(screen.queryByText('Considered alternative')).not.toBeInTheDocument();
+
+    const details = screen.getByTestId('report-technical-details');
+    expect(details).not.toHaveAttribute('open');
+    expect(details).toHaveTextContent('Show technical details');
+    expect(details).toHaveTextContent('role=primary');
+    const outsideDetails = Array.from(approach.childNodes)
+      .map(n => (n.contains(details) ? '' : n.textContent))
+      .join(' ');
+    expect(outsideDetails).not.toMatch(/role=|call_abc123|rejected_alternative/);
+  });
+
+  it('shows a genuinely different alternative', () => {
+    render(
+      <AnalysisReportView
+        report={sampleReport({
+          approach: {
+            plan: 'Regress PTS on Age and MP.',
+            rejected_alternative:
+              'Considered keeping the columns for shot volume as predictors. Not used, because you asked for the effect independent of shot volume.',
+          },
+        })}
+      />
+    );
+    expect(screen.getByText('Considered alternative')).toBeInTheDocument();
+    expect(screen.getByText(/Considered keeping the columns for shot volume/)).toBeInTheDocument();
+  });
+});
