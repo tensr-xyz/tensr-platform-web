@@ -17,6 +17,7 @@ import useAuth from '@/hooks/api/use-auth';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { cn } from '@/utils';
 import { apiClient } from '@/lib/api-client';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 
@@ -160,14 +161,14 @@ type HomeDatasetRow = Pick<
   | 'size'
   | 'status'
   | 'files'
-> & { id: string; name: string };
+> & { id: string; name: string; ownerType: 'user' | 'organization'; ownerId: string };
 
 const HomeTemplate: React.FC = () => {
   const { toast } = useToast();
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const { activeOrganization, isPersonalAccount } = useOrganizationContext();
+  const { activeOrganization, isPersonalAccount, userOrganizations } = useOrganizationContext();
   const [searchQ, setSearchQ] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [uploadPickerOpen, setUploadPickerOpen] = useState(false);
@@ -234,7 +235,7 @@ const HomeTemplate: React.FC = () => {
       } catch (err) {
         toast({
           title: 'Could not delete dataset',
-          description: err instanceof Error ? err.message : 'Unknown error',
+          description: formatApiErrorMessage(err),
           variant: 'destructive',
         });
       } finally {
@@ -282,12 +283,16 @@ const HomeTemplate: React.FC = () => {
       const row = projectsArray.find(p => p.projectId === projectId);
       const name = row?.projectName || row?.name || 'Dataset';
       const url = `${window.location.origin}/workspace/dataset/${projectId}?name=${encodeURIComponent(name)}`;
+      let audience = 'Only you can open this dataset.';
+      if (row?.ownerType === 'organization') {
+        const orgName =
+          [activeOrganization, ...userOrganizations].find(org => org?.id === row.ownerId)?.name ??
+          'your organisation';
+        audience = `Members of ${orgName} can open this dataset.`;
+      }
       try {
         await navigator.clipboard.writeText(url);
-        toast({
-          title: 'Link copied',
-          description: 'Anyone on your team can open this dataset from the copied link.',
-        });
+        toast({ title: 'Link copied', description: audience });
       } catch {
         toast({
           title: 'Could not copy share link',
@@ -296,7 +301,7 @@ const HomeTemplate: React.FC = () => {
         });
       }
     },
-    [projectsArray, toast]
+    [projectsArray, activeOrganization, userOrganizations, toast]
   );
 
   const handleRenameDataset = useCallback(
