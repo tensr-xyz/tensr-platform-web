@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/hooks/api/use-auth';
-import { getIdToken } from '@/utils/auth';
+import { getIdToken, getTensrApiHeaders } from '@/utils/auth';
+import { useOptionalOrganizationContext } from '@/contexts/organisation-context';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import {
   PERSONAL_ACCOUNT_KEY,
@@ -178,7 +179,16 @@ interface UseOrganizationReturn {
 
 export const useOrganization = (): UseOrganizationReturn => {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [activeOrganization, setActiveOrganization] = useState<Organization | null>(null);
+  const orgContext = useOptionalOrganizationContext();
+  const [localOrganization, setActiveOrganization] = useState<Organization | null>(null);
+  // The provider owns the switched-to organisation; local state only keeps edits made here.
+  const contextOrganization = orgContext?.isPersonalAccount
+    ? null
+    : (orgContext?.activeOrganization ?? null);
+  const activeOrganization =
+    !contextOrganization || localOrganization?.id === contextOrganization.id
+      ? (localOrganization ?? contextOrganization)
+      : contextOrganization;
   const [members, setMembers] = useState<OrganizationMember[]>([]);
   const [seatUsage, setSeatUsage] = useState<{
     used: number;
@@ -1077,11 +1087,10 @@ export const useOrganization = (): UseOrganizationReturn => {
         throw new Error('No authentication token available. Please log in again.');
       }
 
+      // The API cancels within the active organisation, so it needs X-Organization-Id.
       const response = await fetch(`${API_BASE_URL}/api/invitations/${invitationToken}`, {
         method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: getTensrApiHeaders({ Authorization: `Bearer ${token}` }),
       });
 
       if (!response.ok) {
