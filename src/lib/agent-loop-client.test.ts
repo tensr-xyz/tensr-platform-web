@@ -263,6 +263,15 @@ describe('run-agent-loop client helpers', () => {
     expect(approvedRunFailureMessage({ status: 'llm_unavailable', mode: 'plan' })).toBe(
       'The run did not complete.'
     );
+    expect(
+      approvedRunFailureMessage({
+        status: 'clarification',
+        mode: 'plan',
+        pipeline_halted: true,
+        failed_step_index: 2,
+        answer_markdown: 'Step 3 of 5 (`run_analysis`) failed: secondary_dataset_id is required.',
+      })
+    ).toBe('Step 3 of 5 (`run_analysis`) failed: secondary_dataset_id is required.');
   });
 
   it('chartsFromToolResults collects chart payloads', () => {
