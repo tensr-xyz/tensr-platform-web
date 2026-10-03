@@ -623,6 +623,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               whyThisTest,
               exploration: execSummary || null,
               rejectedAlternative: isEnrichment ? null : rejectedAlternative,
+              trace: String(response.execution_trace || '').trim() || null,
             }
           );
           let report = reportWithApproach as AnalysisReport | undefined;
