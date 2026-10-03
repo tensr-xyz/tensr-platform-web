@@ -73,3 +73,17 @@ tests:
     assert: [{ type: equals, value: "run_analysis" }]
   - vars: { prompt: "What predicts scoring output, independent of how much a player shoots?", mode: plan }
     assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "merge these on participant_id and weight to these targets, exclude missing categories", mode: plan }
+    assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "Merge the files by participant_id and weight to the targets, excluding missing categories.", mode: plan }
+    assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "Combine the survey with the profile using participant_id, then rake to the population targets and drop the missing categories.", mode: plan }
+    assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "join these files on participant_id and weight them to the targets; leave missing categories out", mode: plan }
+    assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "Can you link the profile to the survey via participant_id and weight to these targets? Give rows with missing categories zero weight.", mode: plan }
+    assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "merge everything and weight it to the targets, excluding missing categories", mode: plan }
+    assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "Please merge these and rake them to the attached targets, option (a)", mode: plan }
+    assert: [{ type: equals, value: "plan-awaiting-approval" }]
