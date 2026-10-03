@@ -30,6 +30,8 @@ import { Loader2 as Loader } from 'lucide-react';
 type MissingDataMethod =
   | 'series_mean'
   | 'linear_interpolation'
+  | 'locf'
+  | 'nocb'
   | 'linear_trend'
   | 'median_nearby'
   | 'custom_value'
@@ -38,11 +40,15 @@ type MissingDataMethod =
 const MISSING_DATA_METHODS: Record<MissingDataMethod, string> = {
   series_mean: 'Series Mean',
   linear_interpolation: 'Linear Interpolation',
+  locf: 'Carry forward (LOCF)',
+  nocb: 'Next observation backward',
   linear_trend: 'Linear Trend',
   median_nearby: 'Median of Nearby Points',
   custom_value: 'Custom Value',
   multiple_imputation: 'Multiple Imputation',
 };
+
+const CARRY_METHODS = new Set<MissingDataMethod>(['locf', 'nocb']);
 
 interface HandleMissingDataProps {
   children: ReactNode;
@@ -56,6 +62,8 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
   const [method, setMethod] = useState<MissingDataMethod>('series_mean');
   const [selectedColumns, setSelectedColumns] = useState<string[]>([]);
   const [customValue, setCustomValue] = useState<string>('');
+  const [sortColumn, setSortColumn] = useState<string>('');
+  const [groupColumn, setGroupColumn] = useState<string>('');
   const { tabs, activeTabId } = useTabsStore();
   const fileSystem = useProjectStore(s => s.fileSystem);
   const currentProject = useProjectStore(s => s.currentProject);
@@ -117,6 +125,8 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
           columns: selectedColumns,
           method,
           custom_value: method === 'custom_value' ? customValue : null,
+          sort_column: CARRY_METHODS.has(method) && sortColumn ? sortColumn : null,
+          group_column: CARRY_METHODS.has(method) && groupColumn ? groupColumn : null,
         },
         token
       );
@@ -189,6 +199,49 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
               </SelectContent>
             </Select>
           </div>
+
+          {CARRY_METHODS.has(method) ? (
+            <div className="space-y-2">
+              <Label>Sort column (optional)</Label>
+              <Select
+                value={sortColumn || '__none__'}
+                onValueChange={value => setSortColumn(value === '__none__' ? '' : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Row order" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Current row order</SelectItem>
+                  {columnNames.map(column => (
+                    <SelectItem key={column} value={column}>
+                      {column}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Label>Group column (optional)</Label>
+              <Select
+                value={groupColumn || '__none__'}
+                onValueChange={value => setGroupColumn(value === '__none__' ? '' : value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Do not group" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Do not group</SelectItem>
+                  {columnNames.map(column => (
+                    <SelectItem key={`group-${column}`} value={column}>
+                      {column}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Carry stays inside each group. Use respondent as the group and wave as the sort so a
+                later wave does not fill an earlier respondent.
+              </p>
+            </div>
+          ) : null}
 
           {method === 'custom_value' && (
             <div className="space-y-2">
