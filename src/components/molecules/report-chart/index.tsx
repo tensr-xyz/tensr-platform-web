@@ -926,6 +926,15 @@ function ChartBody({
             points={item.points.map(point => `${sx(point.x)},${sy(point.y)}`).join(' ')}
           />
         ))}
+        <AxisFrame
+          layout={layout}
+          xTicks={niceTicks(x0, x1 || 1, layout.maxTicksX).map(value => ({ value, x: sx(value) }))}
+          yTicks={niceTicks(0, y1 || 1, layout.maxTicksY).map(value => ({ value, y: sy(value) }))}
+          xFormatter={value => formatNumberTick(value, xs.length ? xs : [0, 1])}
+          yFormatter={value => formatNumberTick(value, ys.length ? ys : [0, 1])}
+          xAxisLabel={chart.x_label}
+          yAxisLabel={chart.y_label}
+        />
       </svg>
     );
   }
@@ -939,9 +948,18 @@ function ChartBody({
     ]);
     const y0 = ys.length ? Math.min(...ys) : 0;
     const y1 = ys.length ? Math.max(...ys) : 1;
-    const layout = baseLayout;
+    const labels = groups.map(group => group.label);
+    const slot = baseLayout.plotW / Math.max(1, groups.length);
+    const xs = groups.map((_, index) => baseLayout.padL + index * slot + slot / 2);
+    const plan = planCategoryLabels(
+      labels,
+      slot,
+      baseLayout.fontSize,
+      baseLayout.density,
+      baseLayout.padB
+    );
+    const layout = withExtraPadB(baseLayout, plan.padB);
     const sy = scaleLinear(y0, y1 || 1, layout.padT + layout.plotH, layout.padT);
-    const slot = layout.plotW / Math.max(1, groups.length);
     return (
       <svg
         data-chart-kind="violin"
@@ -978,6 +996,13 @@ function ChartBody({
             </g>
           );
         })}
+        <AxisFrame
+          layout={layout}
+          yTicks={niceTicks(y0, y1 || 1, layout.maxTicksY).map(value => ({ value, y: sy(value) }))}
+          yFormatter={value => formatNumberTick(value, ys.length ? ys : [0, 1])}
+          yAxisLabel={chart.y_label}
+          categoryLabels={{ labels, xs, plan }}
+        />
       </svg>
     );
   }

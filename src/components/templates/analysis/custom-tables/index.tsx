@@ -555,10 +555,17 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                 className="h-7 rounded-md border border-input bg-background px-2"
                 value={String(canvas.letterLevels)}
                 onChange={e =>
-                  setCanvas(c => ({
-                    ...c,
-                    letterLevels: e.target.value === '1' ? 1 : 2,
-                  }))
+                  setCanvas(c => {
+                    const letterLevels = e.target.value === '1' ? 1 : 2;
+                    return {
+                      ...c,
+                      letterLevels,
+                      letterUpperAlpha:
+                        letterLevels === 2
+                          ? stricterLetterAlpha(c.significanceAlpha)
+                          : c.letterUpperAlpha,
+                    };
+                  })
                 }
               >
                 <option value="2">Two (upper and lower)</option>
@@ -639,9 +646,13 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               Suppress low bases (hide the number)
             </label>
             <p className="text-[10px] text-muted-foreground sm:col-span-2">
-              A letter is shown only when the corrected pairwise test passes (adjusted p &lt; .05).
-              Lowercase is .001 &lt; p &lt; .05. Uppercase is p ≤ .001. Letters in one cell are
-              concatenated, so BD means that cell differs from columns B and D.
+              A letter is shown when the corrected pairwise test passes (adjusted p &lt;{' '}
+              {canvas.significanceAlpha}).{' '}
+              {canvas.letterLevels === 2
+                ? `Upper case is p ≤ ${canvas.letterUpperAlpha}. Lower case is between that cutoff and the selected level.`
+                : `Every significant letter is ${canvas.letterCase} case.`}{' '}
+              Letters in one cell are concatenated, so BD means that cell differs from columns B and
+              D.
             </p>
             <div className="sm:col-span-2">
               <Label className="text-[10px] uppercase text-muted-foreground">Weight</Label>

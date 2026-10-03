@@ -72,8 +72,9 @@ function places(book: BannerBook, key: string, fallback: number): number {
   return typeof value === 'number' ? value : fallback;
 }
 
-function fmtNum(value: number | null | undefined): string {
+function fmtNum(value: number | null | undefined, places?: number): string {
   if (value == null || Number.isNaN(Number(value))) return '—';
+  if (typeof places === 'number') return Number(value).toFixed(places);
   return Number.isInteger(value) ? String(value) : Number(value).toFixed(1);
 }
 
@@ -109,12 +110,13 @@ export function displayBannerTable(book: BannerBook): DisplayTable {
         fmtMean(cell) ?? fmtPct(cell.percent, places(book, 'column_proportion', 1));
       const rowValue = fmtPct(cell.row_percent, places(book, 'row_proportion', 1));
       const totalValue = fmtPct(cell.total_percent, places(book, 'total_proportion', 1));
-      const countValue = fmtNum(cell.count ?? cell.weighted_n);
+      const countValue = fmtNum(cell.count ?? cell.weighted_n, places(book, 'count', 0));
+      const caution = (text: string) => (lowBase && text && text !== '—' ? `${text} *` : text);
       return {
-        columnPercent: suppressed ? '*' : lowBase && columnValue ? `${columnValue} *` : columnValue,
-        rowPercent: suppressed ? '*' : lowBase && rowValue ? `${rowValue} *` : rowValue,
-        totalPercent: suppressed ? '*' : totalValue,
-        countText: suppressed ? '*' : countValue,
+        columnPercent: suppressed ? '*' : caution(columnValue),
+        rowPercent: suppressed ? '*' : caution(rowValue),
+        totalPercent: suppressed ? '*' : caution(totalValue),
+        countText: suppressed ? '*' : caution(countValue),
         letters: letterMap.get(`${cell.stub_row_id}::${cell.banner_id}`) || '',
         bases: `n=${fmtNum(cell.unweighted_n)} · wn=${fmtNum(cell.weighted_n)} · ESS=${fmtNum(cell.kish_ess)}`,
         lowBase,

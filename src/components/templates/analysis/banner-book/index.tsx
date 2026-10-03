@@ -42,6 +42,7 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
   const [books, setBooks] = useState<BookRow[]>([]);
   const [bookId, setBookId] = useState('');
   const [targetId, setTargetId] = useState('');
+  const [pastedId, setPastedId] = useState('');
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [result, setResult] = useState<RunResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -66,7 +67,8 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
       setError(WORKSPACE_DATASET_REQUIRED);
       return;
     }
-    if (!bookId || !targetId) {
+    const resolvedTarget = pastedId.trim() || targetId;
+    if (!bookId || !resolvedTarget) {
       setError('Choose a book and the dataset to run it on.');
       return;
     }
@@ -76,7 +78,7 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
       const payload = await datasetRequest<RunResult>(
         `/datasets/${datasetId}/banner-books/${bookId}/run`,
         token,
-        { method: 'POST', body: { target_dataset_id: targetId, mapping } }
+        { method: 'POST', body: { target_dataset_id: resolvedTarget, mapping } }
       );
       setResult(payload);
     } catch (err) {
@@ -87,7 +89,8 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
   };
 
   const download = async () => {
-    if (!datasetId || !bookId || !targetId) return;
+    const resolvedTarget = pastedId.trim() || targetId;
+    if (!datasetId || !bookId || !resolvedTarget) return;
     setBusy(true);
     setError(null);
     try {
@@ -99,7 +102,7 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
             'Content-Type': 'application/json',
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
-          body: JSON.stringify({ target_dataset_id: targetId, mapping }),
+          body: JSON.stringify({ target_dataset_id: resolvedTarget, mapping }),
         }
       );
       if (!res.ok) {
@@ -135,8 +138,9 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
           variable moved, then export the whole book.
         </p>
         <div className="space-y-2 text-sm">
-          <Label>Book</Label>
+          <Label htmlFor="banner-book-id">Book</Label>
           <select
+            id="banner-book-id"
             className="h-8 w-full rounded-md border bg-background px-2"
             value={bookId}
             onChange={e => setBookId(e.target.value)}
@@ -148,11 +152,15 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
               </option>
             ))}
           </select>
-          <Label>Target dataset</Label>
+          <Label htmlFor="banner-book-target">Target dataset</Label>
           <select
+            id="banner-book-target"
             className="h-8 w-full rounded-md border bg-background px-2"
-            value={targetId}
-            onChange={e => setTargetId(e.target.value)}
+            value={pastedId.trim() ? '' : targetId}
+            onChange={e => {
+              setTargetId(e.target.value);
+              setPastedId('');
+            }}
           >
             <option value="">Select a dataset</option>
             {otherDatasets.map(item => (
@@ -161,11 +169,15 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
               </option>
             ))}
           </select>
+          <label htmlFor="banner-book-pasted" className="sr-only">
+            Dataset id
+          </label>
           <input
+            id="banner-book-pasted"
             className="h-8 w-full rounded-md border px-2"
             placeholder="Or paste a dataset id"
-            value={targetId}
-            onChange={e => setTargetId(e.target.value)}
+            value={pastedId}
+            onChange={e => setPastedId(e.target.value)}
           />
         </div>
         {missing.length ? (

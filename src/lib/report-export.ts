@@ -209,6 +209,9 @@ function chartToHtmlSnippet(chart: NonNullable<AnalysisReport['chart']>): string
   }
   if (chart.kind === 'density') {
     const points = chart.series?.[0]?.points ?? [];
+    if (!points.length) {
+      return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600;margin-bottom:0.5rem">${title}</figcaption></figure>`;
+    }
     const maxY = Math.max(...points.map(point => point.y), 1);
     const minX = Math.min(...points.map(point => point.x));
     const maxX = Math.max(...points.map(point => point.x), minX + 1);
