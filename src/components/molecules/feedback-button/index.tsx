@@ -37,7 +37,10 @@ async function submitFeedbackRequest(feedbackData: CreateFeedbackInput) {
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    throw new Error(
+      (typeof errorData.detail === 'string' && errorData.detail) ||
+        `HTTP error! status: ${response.status}`
+    );
   }
 
   return response.json();
@@ -88,10 +91,9 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
 
     try {
       const feedbackData: CreateFeedbackInput = {
-        userId: user.userId,
         topic: topic as FeedbackTopic,
         rating,
-        text: feedback.trim(),
+        message: feedback.trim(),
       };
 
       await submitFeedbackRequest(feedbackData);
@@ -173,6 +175,8 @@ export function FeedbackDialog({ open, onOpenChange }: FeedbackDialogProps) {
                       }`}
                       onClick={() => setRating(value)}
                       disabled={isSubmitting}
+                      aria-label={`Rate ${value} out of 5`}
+                      aria-pressed={rating === value}
                     >
                       <Icon className={`h-4 w-4 ${rating === value ? 'text-foreground' : color}`} />
                     </Button>
