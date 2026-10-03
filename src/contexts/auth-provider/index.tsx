@@ -6,7 +6,12 @@ import posthog from 'posthog-js';
 import { useAuthStore } from '@/stores/auth-store';
 import { fetchMeProfile, redeemStoredInvitation } from '@/lib/business-api';
 import { redirectToLogin } from '@/lib/session-expired';
-import { clearAuthData, getStoredSession, persistStytchTokensFromSdk } from '@/utils/auth';
+import {
+  clearAuthData,
+  getStoredSession,
+  getStytchBearerForTensrApi,
+  persistStytchTokensFromSdk,
+} from '@/utils/auth';
 import { authTrace } from '@/lib/auth-trace';
 import { devLog } from '@/lib/dev-log';
 
@@ -98,12 +103,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     let cancelled = false;
 
+    // A failed sign-in clears the session while a /me call or retry may still be pending.
+    const sessionCleared = (source: string) => {
+      if (getStytchBearerForTensrApi()) return false;
+      authTrace('AuthProvider:session-cleared-during-profile-load', { source });
+      setLoading(false);
+      return true;
+    };
+
     const loadProfile = (source: 'stytch-session' | 'stored-tokens', attempt = 0) => {
+      if (attempt > 0 && sessionCleared(source)) return;
       setLoading(true);
 
       void fetchMeProfile()
         .then(profile => {
-          if (cancelled) return;
+          if (cancelled || sessionCleared(source)) return;
           setError(null);
           setUser(profile.user);
           setEntitlements(profile.entitlements);
@@ -134,6 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           devLog('Failed to load user profile:', err);
 
           if (!isAuthFetchFailure(err)) {
+            if (sessionCleared(source)) return;
             // Transient /me failures must not leave entitlements null forever —
             // that looks like unpaid and traps users on /subscription.
             if (attempt < 2) {
