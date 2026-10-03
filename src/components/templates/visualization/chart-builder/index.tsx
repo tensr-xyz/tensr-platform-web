@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -28,6 +28,7 @@ import {
   type ErrorBarKind,
 } from '@/lib/agent-chart-from-dataset';
 import { apiClient } from '@/lib/api-client';
+import { ApiRequestError } from '@/lib/api-error';
 
 type Props = { children: ReactNode; chartMenuName?: string };
 
@@ -46,8 +47,28 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
   const [xCol, setXCol] = useState('');
   const [yCol, setYCol] = useState('');
   const [errorBars, setErrorBars] = useState<ErrorBarKind>('none');
+  const [weightCol, setWeightCol] = useState('__none__');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const datasetId = activeTab?.data?.datasetId ?? activeTab?.data?.filePath;
+
+  useEffect(() => {
+    if (!datasetId) return;
+    let cancelled = false;
+    void apiClient.datasets
+      .getMetadata(datasetId)
+      .then(meta => {
+        if (cancelled) return;
+        const active = meta.active_weight_column;
+        if (active && columns.some(column => column.id === active)) {
+          setWeightCol(active);
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [columns, datasetId]);
 
   const kind = PALETTE_MENU_TO_KIND[chartMenuName];
 
@@ -66,7 +87,6 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
       setError('Select an X axis column');
       return;
     }
-    const datasetId = activeTab?.data?.datasetId ?? activeTab?.data?.filePath;
     if (!datasetId) {
       setError('Dataset id not available');
       return;
@@ -74,26 +94,46 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
     setBusy(true);
     setError(null);
     try {
-      const rows = await loadFilteredChartRows(
-        datasetId,
-        activeTab?.data?.columnFilters ?? [],
-        activeTab?.data?.rowUidFilter
-      );
-      let weightColumn: string | null = null;
+      const xHeader = columns.find(column => column.id === x)?.header ?? x;
+      const yHeader = columns.find(column => column.id === y)?.header ?? y;
+      const filters = (activeTab?.data?.columnFilters ?? []).map(filter => ({
+        id: filter.id,
+        operator: filter.value.operator,
+        value: filter.value.value,
+      }));
+      let built;
+      let rowsDataset = 0;
       try {
-        const meta = await apiClient.datasets.getMetadata(datasetId);
-        weightColumn = meta.active_weight_column ?? null;
-      } catch {
-        weightColumn = null;
+        const remote = await apiClient.datasets.chartData(datasetId, {
+          kind,
+          x,
+          y,
+          x_label: xHeader,
+          y_label: yHeader,
+          filters,
+          row_uids: activeTab?.data?.rowUidFilter,
+          weight_column: weightCol === '__none__' ? null : weightCol,
+        });
+        built = remote.chart;
+        rowsDataset = remote.n_rows_filtered;
+      } catch (err) {
+        if (!(err instanceof ApiRequestError) || err.status !== 404) throw err;
+        const rows = await loadFilteredChartRows(
+          datasetId,
+          activeTab?.data?.columnFilters ?? [],
+          activeTab?.data?.rowUidFilter
+        );
+        const weightColumn = weightCol === '__none__' ? null : weightCol;
+        const prompt = `${kind} chart of ${y} by ${x}`;
+        built = buildChartFromDataset(
+          prompt,
+          columns.map(c => ({ id: c.id, header: c.header })),
+          rows,
+          weightColumn,
+          { kind, xId: x, yId: y, errorBars }
+        );
+        rowsDataset = rows.length;
       }
-      const prompt = `${kind} chart of ${y} by ${x}`;
-      const built = buildChartFromDataset(
-        prompt,
-        columns.map(c => ({ id: c.id, header: c.header })),
-        rows,
-        weightColumn,
-        { kind, xId: x, yId: y, errorBars }
-      );
       if (!built || built.kind !== kind) {
         setError('Could not build chart from selected columns');
         return;
@@ -108,7 +148,7 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
               title: chartMenuName,
               subtitle: `${y} vs ${x}`,
               generated_at: new Date().toISOString(),
-              rows_dataset: rows.length,
+              rows_dataset: rowsDataset,
             },
             summary: `Standalone ${chartMenuName.toLowerCase()} from dataset columns.`,
             metrics: [],
@@ -192,6 +232,22 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
               </Select>
             </div>
           ) : null}
+          <div>
+            <Label>Weight</Label>
+            <Select value={weightCol} onValueChange={setWeightCol}>
+              <SelectTrigger aria-label="Weight">
+                <SelectValue placeholder="No weight" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No weight</SelectItem>
+                {columns.map(c => (
+                  <SelectItem key={`w-${c.id}`} value={c.id}>
+                    {c.header}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {error ? (
             <Alert variant="destructive">
               <AlertDescription>{error}</AlertDescription>

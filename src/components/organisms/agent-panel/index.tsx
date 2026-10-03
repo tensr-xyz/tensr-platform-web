@@ -33,6 +33,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { ColumnFiltersState } from '@tanstack/react-table';
 import { v4 as uuidv4 } from 'uuid';
 import { apiClient } from '@/lib/api-client';
+import { RecipeList, SaveAsRecipeButton } from '@/components/templates/data/recipes';
 import { getIdToken } from '@/utils/auth';
 import { useChatStore } from '@/stores/chat-store';
 import { useAgentModeStore, type AgentMode } from '@/stores/agent-mode-store';
@@ -1619,7 +1620,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               Open a run in the active chat.
             </p>
             <div className="min-h-0 flex-1 overflow-auto">
+              <SaveAsRecipeButton />
               <AnalysisRunsList entries={analysisRuns} onSelect={restoreAnalysisRun} />
+              <RecipeList />
             </div>
           </div>
         ) : (

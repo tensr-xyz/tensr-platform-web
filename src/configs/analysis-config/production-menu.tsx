@@ -53,6 +53,8 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Rake Weights',
         'Cell weighting',
         'Export R script',
+        'Save as recipe',
+        'Recipes',
       ],
       'Legacy import': [
         'WinCross Job Import',
