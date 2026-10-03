@@ -184,10 +184,19 @@ function chartToHtmlSnippet(chart: NonNullable<AnalysisReport['chart']>): string
       <p style="font-size:12px;color:#64748b;margin-top:0.35rem">${escHtml(chart.x_label)}</p></figure>`;
   }
   if (chart.kind === 'roc' || chart.kind === 'qq' || chart.kind === 'pp') {
-    const pts = (chart.points || [])
+    const raw = chart.points || [];
+    if (!raw.length) {
+      return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600">${title}</figcaption></figure>`;
+    }
+    const unit = chart.kind !== 'qq';
+    const minX = unit ? 0 : Math.min(...raw.map(point => point.x));
+    const maxX = unit ? 1 : Math.max(...raw.map(point => point.x), minX + 1);
+    const minY = unit ? 0 : Math.min(...raw.map(point => point.y));
+    const maxY = unit ? 1 : Math.max(...raw.map(point => point.y), minY + 1);
+    const pts = raw
       .map(point => {
-        const x = Math.max(0, Math.min(1, point.x)) * 100;
-        const y = 100 - Math.max(0, Math.min(1, point.y)) * 100;
+        const x = ((point.x - minX) / (maxX - minX)) * 100;
+        const y = 100 - ((point.y - minY) / (maxY - minY)) * 100;
         return `${x},${y}`;
       })
       .join(' ');

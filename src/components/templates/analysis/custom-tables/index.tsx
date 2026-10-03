@@ -239,6 +239,10 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       setError('Name the banner book.');
       return;
     }
+    if (!canvas.stubs.length || !canvas.banners.length) {
+      setError('Drop a stub and a banner before saving the book.');
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
