@@ -3,6 +3,9 @@ import path from 'node:path';
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Next blocks dev HMR for 127.0.0.1 unless it is listed. The login form then
+  // never hydrates and Continue submits the page to /login?.
+  allowedDevOrigins: ['127.0.0.1'],
 
   // React Compiler + unstable object deps caused hard freezes; keep deps primitive.
   reactCompiler: false,
