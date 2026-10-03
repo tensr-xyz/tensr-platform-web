@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/api/use-auth';
 import { getIdToken } from '@/utils/auth';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
@@ -140,6 +141,7 @@ export const useBilling = () => {
   const [error, setError] = useState<string | null>(null);
 
   const auth = useAuth();
+  const router = useRouter();
 
   // Use a ref to track if initial fetch has happened
   const initialFetchDoneRef = useRef(false);
@@ -696,6 +698,12 @@ export const useBilling = () => {
 
       const data = await response.json();
 
+      // With no Stripe customer the API echoes returnUrl, which is this page.
+      if (data.mode === 'local_dev') {
+        router.push('/subscription');
+        return;
+      }
+
       // Open portal in new window
       if (data.url) {
         window.open(data.url, '_blank', 'noopener,noreferrer');
@@ -715,7 +723,7 @@ export const useBilling = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [getToken]);
+  }, [getToken, router]);
 
   return {
     // Data
