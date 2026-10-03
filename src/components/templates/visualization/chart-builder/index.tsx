@@ -22,6 +22,7 @@ import {
 import { useTabsStore } from '@/stores/tabs-store';
 import { resolveSpreadsheetContextTab } from '@/lib/workspace-dataset';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
+import { chartBuilderParameters } from '@/lib/chart-builder-parameters';
 import {
   buildChartFromDataset,
   loadFilteredChartRows,
@@ -171,7 +172,14 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
           },
           provenance,
         },
-        parameters: { x_column: x, y_column: y, chart_type: kind },
+        parameters: chartBuilderParameters({
+          kind,
+          x,
+          y,
+          weightColumn: weightCol === '__none__' ? null : weightCol,
+          errorBars,
+          filters,
+        }),
         sourceDatasetId: datasetId,
         sourceTabName: activeTab?.name,
       });
