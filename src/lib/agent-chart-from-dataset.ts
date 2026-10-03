@@ -229,6 +229,29 @@ function quantile(sorted: number[], p: number): number {
   return sorted[lo]! + (sorted[hi]! - sorted[lo]!) * (idx - lo);
 }
 
+/** survey::svyquantile(qrule = "hf7"): equal weights give type 7; the scale of the weights does not matter. */
+export function weightedQuantile(pairs: { value: number; weight: number }[], p: number): number {
+  const sorted = pairs.filter(pair => pair.weight > 0).sort((a, b) => a.value - b.value);
+  if (!sorted.length) return Number.NaN;
+  if (sorted.length === 1) return sorted[0]!.value;
+  const positions = [0];
+  let cumulative = 0;
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    cumulative += sorted[i]!.weight;
+    positions.push(cumulative);
+  }
+  const total = cumulative;
+  for (let k = 1; k < sorted.length; k += 1) {
+    const hi = positions[k]! / total;
+    if (p <= hi) {
+      const lo = positions[k - 1]! / total;
+      const share = hi > lo ? (p - lo) / (hi - lo) : 1;
+      return sorted[k - 1]!.value + (sorted[k]!.value - sorted[k - 1]!.value) * share;
+    }
+  }
+  return sorted[sorted.length - 1]!.value;
+}
+
 function densityCurve(values: number[]): { x: number; y: number }[] {
   if (values.length < 2) return [];
   const mean = values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -267,31 +290,32 @@ function buildExplicitPaletteChart(
   const weighted = Boolean(weightColumn);
 
   if (kind === 'scatter') {
-    const points: { x: number; y: number }[] = [];
+    const points: { x: number; y: number; weight?: number }[] = [];
     let numericPairs = 0;
     for (const row of rows) {
       const x = parseNumericCellValue(row[xId]);
       const y = parseNumericCellValue(row[yId]);
-      if (x === null || y === null) continue;
+      const weight = observationWeight(row, weightColumn);
+      if (x === null || y === null || weight === null) continue;
       numericPairs += 1;
-      if (points.length < 5000) points.push({ x, y });
+      if (points.length < 5000) points.push(weighted ? { x, y, weight } : { x, y });
     }
     const base = `${yLabel} vs ${xLabel}`;
+    const prefix = weighted ? 'Weighted ' : '';
     const title =
       numericPairs > points.length
-        ? `${weighted ? 'Unweighted scatter of ' : ''}${base} (5,000 of ${numericPairs.toLocaleString()} points)`
-        : weighted
-          ? `Unweighted scatter of ${base}`
-          : points.length
-            ? base
-            : `No rows for ${base}`;
+        ? `${prefix}${base} (5,000 of ${numericPairs.toLocaleString()} points)`
+        : points.length
+          ? `${prefix}${base}`
+          : `No rows for ${base}`;
     return {
       kind: 'scatter',
       title,
       x_label: xLabel,
       y_label: yLabel,
       points,
-      weighting: weighted ? 'unweighted' : 'none',
+      weighting: weighted ? 'weighted' : 'none',
+      ...(weighted ? { point_size: 'weight' as const } : {}),
     };
   }
 
@@ -347,34 +371,35 @@ function buildExplicitPaletteChart(
       q3: number;
       max: number;
     }[] = [];
-    const byGroup = new Map<string, number[]>();
+    const byGroup = new Map<string, { value: number; weight: number }[]>();
     for (const row of rows) {
       const label = String(row[xId] ?? '').trim() || yLabel;
       const n = parseNumericCellValue(row[yId]);
-      if (n === null || observationWeight(row, weightColumn) === null) continue;
+      const weight = observationWeight(row, weightColumn);
+      if (n === null || weight === null) continue;
       const list = byGroup.get(label) ?? [];
-      list.push(n);
+      list.push({ value: n, weight });
       byGroup.set(label, list);
     }
     for (const [label, list] of byGroup) {
       if (list.length < 2 || groups.length >= 12) continue;
-      const sorted = [...list].sort((a, b) => a - b);
+      const values = list.map(pair => pair.value);
       groups.push({
         label,
-        min: sorted[0]!,
-        q1: quantile(sorted, 0.25),
-        median: quantile(sorted, 0.5),
-        q3: quantile(sorted, 0.75),
-        max: sorted[sorted.length - 1]!,
+        min: Math.min(...values),
+        q1: weightedQuantile(list, 0.25),
+        median: weightedQuantile(list, 0.5),
+        q3: weightedQuantile(list, 0.75),
+        max: Math.max(...values),
       });
     }
     const title = `${yLabel} by ${xLabel}`;
     return {
       kind: 'boxplot',
-      title: groups.length ? (weighted ? `Unweighted ${title}` : title) : `No rows for ${title}`,
+      title: groups.length ? (weighted ? `Weighted ${title}` : title) : `No rows for ${title}`,
       y_label: yLabel,
       groups,
-      weighting: weighted ? 'unweighted' : 'none',
+      weighting: weighted ? 'weighted' : 'none',
     };
   }
 
@@ -649,23 +674,25 @@ export function buildChartFromDataset(
   const xCol = resolved[0] ?? nums[0];
   const yCol = resolved[1] ?? nums.find(c => c.id !== xCol?.id);
   if (xCol && yCol && xCol.id !== yCol.id) {
-    const points: { x: number; y: number }[] = [];
+    const points: { x: number; y: number; weight?: number }[] = [];
     for (const row of rows) {
       const x = parseNumericCellValue(row[xCol.id]);
       const y = parseNumericCellValue(row[yCol.id]);
-      if (x === null || y === null || observationWeight(row, weightColumn) === null) continue;
-      points.push({ x, y });
+      const weight = observationWeight(row, weightColumn);
+      if (x === null || y === null || weight === null) continue;
+      points.push(weighted ? { x, y, weight } : { x, y });
       if (points.length >= 400) break;
     }
     if (points.length >= 2) {
       const title = `${yCol.header} vs ${xCol.header}`;
       return {
         kind: 'scatter',
-        title: weighted ? `Unweighted scatter of ${title}` : title,
+        title: weighted ? `Weighted ${title}` : title,
         x_label: xCol.header,
         y_label: yCol.header,
         points,
-        weighting: weighted ? 'unweighted' : 'none',
+        weighting: weighted ? 'weighted' : 'none',
+        ...(weighted ? { point_size: 'weight' as const } : {}),
       };
     }
   }
