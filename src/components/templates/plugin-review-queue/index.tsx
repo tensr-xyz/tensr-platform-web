@@ -33,12 +33,14 @@ export default function PluginReviewQueue() {
     load();
   }, [load]);
 
-  const review = async (pluginId: string, status: 'APPROVED' | 'REJECTED') => {
+  const review = async (plugin: PluginRecord, status: 'APPROVED' | 'REJECTED') => {
+    const { pluginId, version } = plugin;
     setBusyId(pluginId);
     try {
       await apiClient.plugins.review(pluginId, {
         status,
         notes: notes[pluginId],
+        version,
       });
       await load();
     } catch (err) {
@@ -173,13 +175,13 @@ export default function PluginReviewQueue() {
             <Button
               variant="destructive"
               disabled={busyId === plugin.pluginId}
-              onClick={() => review(plugin.pluginId, 'REJECTED')}
+              onClick={() => review(plugin, 'REJECTED')}
             >
               Reject
             </Button>
             <Button
               disabled={busyId === plugin.pluginId}
-              onClick={() => review(plugin.pluginId, 'APPROVED')}
+              onClick={() => review(plugin, 'APPROVED')}
             >
               Approve
             </Button>
