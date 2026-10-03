@@ -1,5 +1,6 @@
 import { ViewType, useTabsStore } from '@/stores/tabs-store';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
+import { chartBuilderParameters } from '@/lib/chart-builder-parameters';
 
 describe('openAnalysisResultTab', () => {
   beforeEach(() => {
@@ -67,5 +68,29 @@ describe('openAnalysisResultTab', () => {
       dependent: 'PTS',
       independents: ['Age'],
     });
+  });
+
+  it('gives a chart drawn without the weight its own tab instead of re-showing the weighted one', () => {
+    const open = (weightColumn: string | null, title: string) =>
+      openAnalysisResultTab({
+        op: 'chart_builder',
+        sourceDatasetId: 'ds1',
+        parameters: chartBuilderParameters({
+          kind: 'scatter',
+          x: 'MP',
+          y: 'PTS',
+          weightColumn,
+          errorBars: 'none',
+          filters: [],
+        }),
+        envelope: { result: {}, report: { summary: title } as never },
+      });
+
+    const reports = () => useTabsStore.getState().tabs.map(t => t.data?.analysisReport);
+    open('w', 'Weighted PTS vs MP');
+    open(null, 'PTS vs MP');
+    expect(reports()).toEqual([{ summary: 'Weighted PTS vs MP' }, { summary: 'PTS vs MP' }]);
+    open('w', 'Weighted PTS vs MP again');
+    expect(reports()).toHaveLength(2);
   });
 });
