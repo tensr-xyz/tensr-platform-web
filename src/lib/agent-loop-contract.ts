@@ -210,6 +210,13 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     expected: 'run_analysis',
     baselineGate: 'menu-analysis',
   },
+  {
+    prompt: 'What predicts scoring output, independent of how much a player shoots?',
+    mode: 'plan',
+    expected: 'plan-awaiting-approval',
+    description:
+      'Control phrase: the word player inside "a player shoots" is shot volume, not the Player column',
+  },
 ];
 
 /**
