@@ -227,6 +227,20 @@ export type DeriveLoopMessageContext = {
 };
 
 /** Map an agent-loop API response to chat message fields + optional pending action. */
+const COMPLETED_LOOP_STATUSES = new Set(['ok', 'clarification', 'awaiting_approval']);
+
+/**
+ * Error text when an approved run comes back without completing, else null.
+ * The approval card shows it; the Plan text in the message stays as it was.
+ */
+export function approvedRunFailureMessage(response: AgentLoopResponse): string | null {
+  if (COMPLETED_LOOP_STATUSES.has(response.status)) return null;
+  return (
+    stripLastFittedModelMarker(response.answer_markdown?.trim() || '') ||
+    'The run did not complete.'
+  );
+}
+
 export function deriveMessageUpdateFromLoopResponse(
   response: AgentLoopResponse,
   context: DeriveLoopMessageContext

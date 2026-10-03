@@ -108,6 +108,7 @@ import {
   nextPlaybookStep,
 } from '@/lib/prep-playbook';
 import {
+  approvedRunFailureMessage,
   collectOpenDatasetsFromTabs,
   deriveMessageUpdateFromLoopResponse,
   runAgentLoop,
@@ -560,6 +561,11 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             ? priorMessage.pendingAction
             : null;
 
+        if (opts.assistantMessageId && priorPending) {
+          const failure = approvedRunFailureMessage(response);
+          if (failure) throw new Error(failure);
+        }
+
         const patch = deriveMessageUpdateFromLoopResponse(response, {
           triggerMessage,
           datasetId,
@@ -717,8 +723,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           });
         }
       } catch (err: unknown) {
+        // An approved run keeps its Plan text; the card shows the error.
         updateMessage(projectId, assistantMessageId, {
-          content: formatApiErrorMessage(err),
+          ...(opts.assistantMessageId ? {} : { content: formatApiErrorMessage(err) }),
           isStreaming: false,
           thinkingLines: undefined,
         });
