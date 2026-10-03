@@ -230,8 +230,6 @@ export default function TeamMembers() {
         return 'bg-red-100 text-red-800';
       case 'MEMBER':
         return 'bg-blue-100 text-blue-800';
-      case 'VIEWER':
-        return 'bg-muted text-muted-foreground';
       default:
         return 'bg-muted text-muted-foreground';
     }
@@ -473,7 +471,6 @@ export default function TeamMembers() {
                 <SelectContent>
                   <SelectItem value="ADMIN">Admin</SelectItem>
                   <SelectItem value="MEMBER">Member</SelectItem>
-                  <SelectItem value="VIEWER">Viewer</SelectItem>
                 </SelectContent>
               </Select>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -481,7 +478,6 @@ export default function TeamMembers() {
                   'Can manage team members and all organization settings.'}
                 {newMemberRole === 'MEMBER' &&
                   'Can create and edit content but cannot manage team.'}
-                {newMemberRole === 'VIEWER' && 'Can only view content, cannot make changes.'}
               </p>
             </div>
           </div>
@@ -529,13 +525,11 @@ export default function TeamMembers() {
                 <SelectContent>
                   <SelectItem value="ADMIN">Admin</SelectItem>
                   <SelectItem value="MEMBER">Member</SelectItem>
-                  <SelectItem value="VIEWER">Viewer</SelectItem>
                 </SelectContent>
               </Select>
               <p className="mt-1 text-xs text-muted-foreground">
                 {editRole === 'ADMIN' && 'Can manage team members and all organization settings.'}
                 {editRole === 'MEMBER' && 'Can create and edit content but cannot manage team.'}
-                {editRole === 'VIEWER' && 'Can only view content, cannot make changes.'}
               </p>
             </div>
           </div>
