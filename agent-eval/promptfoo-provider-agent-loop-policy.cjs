@@ -31,6 +31,14 @@ function classifyHeuristic(prompt, mode) {
     ) ||
       /one-way\s+anova/i.test(text));
   const exploratory = /what(?:'s| is) interesting|where do i start|explore/i.test(text);
+  // Mirrors is_merge_weight_request in tensr-api app/assistant/survey_pipeline.py.
+  const wantsMergeWeight =
+    /\b(?:merg(?:e|es|ed|ing)|combin(?:e|es|ed|ing)|join(?:s|ed|ing)?|link(?:s|ed|ing)?|append(?:s|ed|ing)?|match(?:es|ed|ing)?\s+up|(?:bring|brings|bringing|put|puts|putting)\s+(?:\w+\s+){0,3}together)\b/i.test(
+      text
+    ) &&
+    /\b(?:weight(?:s|ed|ing)?|rak(?:e|ed|es|ing)|post-?strat(?:ify|ified|ifying|ification)?|calibrat(?:e|ed|es|ing|ion))\b/i.test(
+      text
+    );
   const unsupportedStat = /geometric\s+mean|harmonic\s+mean/i.test(text);
 
   if (unsupportedStat) return 'refuse-or-clarify';
@@ -51,7 +59,9 @@ function classifyHeuristic(prompt, mode) {
     return 'direct_text';
   }
   if (m === 'plan') {
-    if (wantsPrep || wantsAnalysis || wantsQuality) return 'plan-awaiting-approval';
+    if (wantsMergeWeight || wantsPrep || wantsAnalysis || wantsQuality) {
+      return 'plan-awaiting-approval';
+    }
     return 'ask_clarifying_question';
   }
 

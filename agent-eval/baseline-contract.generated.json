@@ -193,6 +193,48 @@
       "mode": "plan",
       "expected": "plan-awaiting-approval",
       "description": "Control phrase: the word player inside \"a player shoots\" is shot volume, not the Player column"
+    },
+    {
+      "prompt": "merge these on participant_id and weight to these targets, exclude missing categories",
+      "mode": "plan",
+      "expected": "plan-awaiting-approval",
+      "description": "Prolific merge-and-weight: every phrasing plans the same pipeline (tensr-api test_natural_phrasings_plan_the_same_pipeline)"
+    },
+    {
+      "prompt": "Merge the files by participant_id and weight to the targets, excluding missing categories.",
+      "mode": "plan",
+      "expected": "plan-awaiting-approval",
+      "description": "Prolific merge-and-weight: every phrasing plans the same pipeline (tensr-api test_natural_phrasings_plan_the_same_pipeline)"
+    },
+    {
+      "prompt": "Combine the survey with the profile using participant_id, then rake to the population targets and drop the missing categories.",
+      "mode": "plan",
+      "expected": "plan-awaiting-approval",
+      "description": "Prolific merge-and-weight: every phrasing plans the same pipeline (tensr-api test_natural_phrasings_plan_the_same_pipeline)"
+    },
+    {
+      "prompt": "join these files on participant_id and weight them to the targets; leave missing categories out",
+      "mode": "plan",
+      "expected": "plan-awaiting-approval",
+      "description": "Prolific merge-and-weight: every phrasing plans the same pipeline (tensr-api test_natural_phrasings_plan_the_same_pipeline)"
+    },
+    {
+      "prompt": "Can you link the profile to the survey via participant_id and weight to these targets? Give rows with missing categories zero weight.",
+      "mode": "plan",
+      "expected": "plan-awaiting-approval",
+      "description": "Prolific merge-and-weight: every phrasing plans the same pipeline (tensr-api test_natural_phrasings_plan_the_same_pipeline)"
+    },
+    {
+      "prompt": "merge everything and weight it to the targets, excluding missing categories",
+      "mode": "plan",
+      "expected": "plan-awaiting-approval",
+      "description": "Prolific merge-and-weight: every phrasing plans the same pipeline (tensr-api test_natural_phrasings_plan_the_same_pipeline)"
+    },
+    {
+      "prompt": "Please merge these and rake them to the attached targets, option (a)",
+      "mode": "plan",
+      "expected": "plan-awaiting-approval",
+      "description": "Prolific merge-and-weight: every phrasing plans the same pipeline (tensr-api test_natural_phrasings_plan_the_same_pipeline)"
     }
   ]
 }
