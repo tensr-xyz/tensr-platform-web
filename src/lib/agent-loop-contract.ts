@@ -231,6 +231,23 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     description:
       'Control phrase: the word player inside "a player shoots" is shot volume, not the Player column',
   },
+  ...[
+    'merge these on participant_id and weight to these targets, exclude missing categories',
+    'Merge the files by participant_id and weight to the targets, excluding missing categories.',
+    'Combine the survey with the profile using participant_id, then rake to the population targets and drop the missing categories.',
+    'join these files on participant_id and weight them to the targets; leave missing categories out',
+    'Can you link the profile to the survey via participant_id and weight to these targets? Give rows with missing categories zero weight.',
+    'merge everything and weight it to the targets, excluding missing categories',
+    'Please merge these and rake them to the attached targets, option (a)',
+  ].map(
+    (prompt): BaselineContractCase => ({
+      prompt,
+      mode: 'plan',
+      expected: 'plan-awaiting-approval',
+      description:
+        'Prolific merge-and-weight: every phrasing plans the same pipeline (tensr-api test_natural_phrasings_plan_the_same_pipeline)',
+    })
+  ),
 ];
 
 /**
