@@ -1499,9 +1499,20 @@ export function Spreadsheet({
   );
 
   // Rows are filtered client-side in tableData; there is no server-side filter endpoint.
-  const fetchFilteredData = useCallback((newFilters: ColumnFiltersState) => {
-    setColumnFilters(newFilters);
-  }, []);
+  const fetchFilteredData = useCallback(
+    (newFilters: ColumnFiltersState) => {
+      setColumnFilters(newFilters);
+      if (activeTab) {
+        updateTab(activeTab.id, {
+          data: {
+            ...activeTab.data,
+            columnFilters: newFilters as any,
+          },
+        });
+      }
+    },
+    [activeTab, updateTab]
+  );
 
   const isDatasetWorkspace = useMemo(() => !!gridDatasetId, [gridDatasetId]);
   const rowUidFilter = (activeTab?.data as TabData | undefined)?.rowUidFilter;

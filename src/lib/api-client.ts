@@ -929,7 +929,9 @@ class ApiClient {
       }>(`/datasets/${datasetId}/metadata`),
 
     listRecipes: (projectId: string) =>
-      this.request<{ recipes: SavedRecipe[] }>(`/datasets/recipes?project_id=${encodeURIComponent(projectId)}`),
+      this.request<{ recipes: SavedRecipe[] }>(
+        `/datasets/recipes?project_id=${encodeURIComponent(projectId)}`
+      ),
 
     saveRecipe: (body: {
       project_id: string;
@@ -938,20 +940,33 @@ class ApiClient {
       created_from: 'history' | 'plan' | 'manual';
       column_map?: Record<string, string>;
       parent_recipe_id?: string | null;
-    }) => this.request<SavedRecipe>('/datasets/recipes', { method: 'POST', body: JSON.stringify(body) }),
-
-    runRecipe: (
-      recipeId: string,
-      version: number,
-      body: { dataset_id: string; column_map?: Record<string, string>; inputs?: Record<string, string> }
-    ) =>
-      this.request<{ dataset_id: string }>(`/datasets/recipes/${recipeId}/versions/${version}/run`, {
+    }) =>
+      this.request<SavedRecipe>('/datasets/recipes', {
         method: 'POST',
         body: JSON.stringify(body),
       }),
 
+    runRecipe: (
+      recipeId: string,
+      version: number,
+      body: {
+        dataset_id: string;
+        column_map?: Record<string, string>;
+        inputs?: Record<string, string>;
+      }
+    ) =>
+      this.request<{ dataset_id: string }>(
+        `/datasets/recipes/${recipeId}/versions/${version}/run`,
+        {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }
+      ),
+
     exportRecipeScript: (recipeId: string, version: number) =>
-      this.requestText(`/datasets/recipes/${recipeId}/versions/${version}/export.R`, { method: 'POST' }),
+      this.requestText(`/datasets/recipes/${recipeId}/versions/${version}/export.R`, {
+        method: 'POST',
+      }),
 
     chartData: (
       datasetId: string,

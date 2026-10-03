@@ -21,7 +21,10 @@ import { useTabsStore } from '@/stores/tabs-store';
 
 function useRecipeScope() {
   const projectId = useProjectStore(s => s.currentProject?.id) || '';
-  const datasetId = useTabsStore(s => getDatasetIdFromTab(s.getActiveTab()) || '');
+  const datasetId = useTabsStore(s => {
+    const tab = s.tabs.find(item => item.id === s.activeTabId);
+    return getDatasetIdFromTab(tab) || '';
+  });
   return { projectId: projectId || datasetId, datasetId };
 }
 
@@ -146,7 +149,13 @@ export function RecipeList() {
     <div className="flex flex-col gap-2 px-3 py-2">
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium">Recipes</p>
-        <Button type="button" size="sm" variant="outline" onClick={() => void refresh()} disabled={busy}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => void refresh()}
+          disabled={busy}
+        >
           Refresh
         </Button>
       </div>
@@ -155,12 +164,21 @@ export function RecipeList() {
       ) : (
         <ul className="space-y-2">
           {recipes.map(recipe => (
-            <li key={`${recipe.recipe_id}-${recipe.version}`} className="rounded border border-border p-2">
+            <li
+              key={`${recipe.recipe_id}-${recipe.version}`}
+              className="rounded border border-border p-2"
+            >
               <p className="text-xs font-medium">
                 {recipe.name} <span className="text-muted-foreground">v{recipe.version}</span>
               </p>
               <div className="mt-1 flex gap-2">
-                <Button type="button" size="sm" variant="secondary" disabled={busy} onClick={() => void run(recipe)}>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  disabled={busy}
+                  onClick={() => void run(recipe)}
+                >
                   <Play className="mr-1 size-3.5" />
                   Run on this dataset
                 </Button>
@@ -195,7 +213,9 @@ export function SaveAsRecipeDialog({ children }: { children: ReactNode }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Save as recipe</DialogTitle>
-          <DialogDescription>Save this dataset’s analysis history so it can run on another file.</DialogDescription>
+          <DialogDescription>
+            Save this dataset’s analysis history so it can run on another file.
+          </DialogDescription>
         </DialogHeader>
         <SaveAsRecipeButton />
       </DialogContent>
@@ -210,7 +230,9 @@ export function RecipesDialog({ children }: { children: ReactNode }) {
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Recipes</DialogTitle>
-          <DialogDescription>Run a saved recipe on the open dataset, or export its R script.</DialogDescription>
+          <DialogDescription>
+            Run a saved recipe on the open dataset, or export its R script.
+          </DialogDescription>
         </DialogHeader>
         <RecipeList />
       </DialogContent>
