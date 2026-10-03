@@ -79,6 +79,8 @@ export function attachApproachToReport(
     whyThisTest?: string | null;
     exploration?: string | null;
     rejectedAlternative?: string | null;
+    /** Raw tool trace; shown only under "Show technical details". */
+    trace?: string | null;
   }
 ): AnalysisReport | null | undefined {
   if (!report) return report;
@@ -87,9 +89,11 @@ export function attachApproachToReport(
   const why = (opts.whyThisTest || existing.why_this_test || '').trim();
   const exploration = (opts.exploration || existing.exploration || '').trim();
   const rejected = (opts.rejectedAlternative || existing.rejected_alternative || '').trim();
-  if (!plan && !why && !exploration && !rejected) return report;
+  const trace = (report.session_trace || opts.trace || '').trim();
+  if (!plan && !why && !exploration && !rejected && !trace) return report;
   return {
     ...report,
+    ...(trace ? { session_trace: trace } : {}),
     approach: {
       ...existing,
       ...(plan ? { plan } : {}),

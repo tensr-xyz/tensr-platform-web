@@ -60,8 +60,10 @@ export type AgentLoopResponse = {
   step_limit_reached?: boolean;
   approved_execution?: boolean;
   provenance?: Record<string, unknown>;
-  /** LAMBDA-style multi-step summary built from tool_trace. */
+  /** Plain-English list of the steps that ran and what each found. */
   execution_summary?: string;
+  /** Raw tool trace behind execution_summary (role, call ids); technical details only. */
+  execution_trace?: string;
 };
 
 export type AgentLoopAttachment = {
@@ -234,7 +236,8 @@ const COMPLETED_LOOP_STATUSES = new Set(['ok', 'clarification', 'awaiting_approv
  * The approval card shows it; the Plan text in the message stays as it was.
  */
 export function approvedRunFailureMessage(response: AgentLoopResponse): string | null {
-  if (COMPLETED_LOOP_STATUSES.has(response.status)) return null;
+  // A halted pipeline arrives as status "clarification" but the approved run failed.
+  if (COMPLETED_LOOP_STATUSES.has(response.status) && !response.pipeline_halted) return null;
   return (
     stripLastFittedModelMarker(response.answer_markdown?.trim() || '') ||
     'The run did not complete.'
