@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
-import { buildTensrProxyTargetUrl } from '@/lib/tensr-proxy-target-url';
+import {
+  buildAssistantStreamTargetUrl,
+  buildTensrProxyTargetUrl,
+} from '@/lib/tensr-proxy-target-url';
 import { ACTIVE_ORGANISATION_COOKIE, resolveProxyOrganisationId } from '@/lib/active-organisation';
 
 const HOP_BY_HOP_HEADERS = new Set([
@@ -15,7 +18,10 @@ const HOP_BY_HOP_HEADERS = new Set([
 ]);
 
 function buildTargetUrl(pathSegments: string[], search: string): string {
-  return buildTensrProxyTargetUrl(pathSegments, search, getTensrApiBaseUrl());
+  return (
+    buildAssistantStreamTargetUrl(pathSegments, search) ??
+    buildTensrProxyTargetUrl(pathSegments, search, getTensrApiBaseUrl())
+  );
 }
 
 function isStreamingProxyPath(pathSegments: string[]): boolean {

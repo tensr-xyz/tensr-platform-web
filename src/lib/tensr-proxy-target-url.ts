@@ -16,3 +16,21 @@ export function buildTensrProxyTargetUrl(
   const target = isRemoteTensrApi(base) ? `${base}/api/${joined}` : `${base}/${joined}`;
   return search ? `${target}${search}` : target;
 }
+
+const AGENT_LOOP_STREAM = 'assistant/agent-loop/stream';
+
+/**
+ * Upstream for the agent-loop SSE when `TENSR_ASSISTANT_STREAM_URL` (the API's
+ * `AssistantStreamUrl` Function URL) is set. API Gateway HTTP APIs invoke Lambda
+ * buffered, so on that path every progress event arrives at the end of the turn.
+ */
+export function buildAssistantStreamTargetUrl(
+  pathSegments: string[],
+  search: string,
+  streamBaseUrl: string | undefined = process.env.TENSR_ASSISTANT_STREAM_URL
+): string | null {
+  const base = (streamBaseUrl || '').trim().replace(/\/+$/, '');
+  if (!base) return null;
+  if (pathSegments.filter(Boolean).join('/') !== AGENT_LOOP_STREAM) return null;
+  return `${base}/api/${AGENT_LOOP_STREAM}${search}`;
+}
