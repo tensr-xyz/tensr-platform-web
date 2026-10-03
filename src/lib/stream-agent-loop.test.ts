@@ -57,6 +57,60 @@ describe('streamAgentLoop', () => {
     });
   });
 
+  it('returns the result even when a progress handler never settles', async () => {
+    const onProgress = jest.fn(() => new Promise<void>(() => undefined));
+    const burst =
+      Array.from(
+        { length: 35 },
+        (_, i) =>
+          `data: {"type":"tool_start","step":"tool","message":"Running step (${i + 1}/35)…"}\n\n`
+      ).join('') +
+      'data: {"type":"result","response":{"status":"ok","mode":"agent","answer_markdown":"Done."}}\n\n';
+    (global.fetch as jest.Mock).mockResolvedValue(sseFetchResponse(burst));
+
+    const result = await streamAgentLoop(
+      { message: 'approve', mode: 'plan' },
+      { onProgress: onProgress as unknown as (p: unknown) => void }
+    );
+
+    expect(result.answer_markdown).toBe('Done.');
+    expect(onProgress).toHaveBeenCalledTimes(35);
+  });
+
+  it('resolves on the result event without waiting for the stream to close', async () => {
+    const encoded = new TextEncoder().encode(
+      'data: {"type":"progress","step":"tool","message":"Running merge datasets (3/5)…"}\n\n' +
+        'data: {"type":"result","response":{"status":"ok","mode":"plan","answer_markdown":"Merged."}}\n\n'
+    );
+    const cancel = jest.fn(async () => undefined);
+    let reads = 0;
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '',
+      body: {
+        getReader() {
+          return {
+            read() {
+              reads += 1;
+              return reads === 1
+                ? Promise.resolve({ done: false, value: encoded })
+                : new Promise(() => undefined);
+            },
+            cancel,
+            releaseLock() {},
+          };
+        },
+      },
+    });
+
+    const result = await streamAgentLoop({ message: 'approve', mode: 'plan' });
+
+    expect(result.answer_markdown).toBe('Merged.');
+    expect(reads).toBe(1);
+    expect(cancel).toHaveBeenCalled();
+  });
+
   it('maps a timeout event to ApiRequestError 504', async () => {
     (global.fetch as jest.Mock).mockResolvedValue(
       sseFetchResponse(
