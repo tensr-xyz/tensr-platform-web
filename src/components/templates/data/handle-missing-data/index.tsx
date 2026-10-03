@@ -25,6 +25,7 @@ import { formatApiErrorMessage } from '@/lib/api-error';
 import { resolveWorkspaceDatasetId, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { Loader2 as Loader } from 'lucide-react';
 
 type MissingDataMethod =
@@ -57,6 +58,7 @@ interface HandleMissingDataProps {
 export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) => {
   const router = useRouter();
   const token = getStytchBearerForTensrApi();
+  const [open, setOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [method, setMethod] = useState<MissingDataMethod>('series_mean');
@@ -64,6 +66,7 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
   const [customValue, setCustomValue] = useState<string>('');
   const [sortColumn, setSortColumn] = useState<string>('');
   const [groupColumn, setGroupColumn] = useState<string>('');
+  const closeDialog = useAnalysisSetupStore(s => s.closeDialog);
   const { tabs, activeTabId } = useTabsStore();
   const fileSystem = useProjectStore(s => s.fileSystem);
   const currentProject = useProjectStore(s => s.currentProject);
@@ -131,6 +134,8 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
         token
       );
 
+      setOpen(false);
+      closeDialog();
       router.push(
         `/workspace/dataset/${response.dataset_id}?name=${encodeURIComponent(response.original_filename)}`
       );
@@ -147,7 +152,7 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
   };
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>

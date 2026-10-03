@@ -5,7 +5,11 @@ import {
   slotTypeMatchesExpected,
   type ColumnSlotType,
 } from '@/lib/analysis-column-types';
-import type { AnalysisFormState, AnalysisKey } from '@/lib/analysis-definitions';
+import {
+  buildBodyFromForm,
+  type AnalysisFormState,
+  type AnalysisKey,
+} from '@/lib/analysis-definitions';
 import type { SchemaColumn } from '@/lib/analysis-report-types';
 
 /** Field ids for inline warnings and errors in the analysis setup dialog. */
@@ -1285,8 +1289,24 @@ export function analysisRequiredFieldsSatisfied(
     case 'structural_equation_modelling':
       return !!form.semModelSpec.trim();
     default:
-      return false;
+      try {
+        return columnSlotsFilled(buildBodyFromForm({ ...form, analysis: op }));
+      } catch {
+        return false;
+      }
   }
+}
+
+const COLUMN_SLOT_KEY =
+  /^(column|columns|column_[ab]|dependent|independents|set_[ab]|between_factor|within_measures|factor_[abc])$|_columns?$/;
+
+/** True when the request body names at least one column and leaves no column slot empty. */
+function columnSlotsFilled(body: Record<string, unknown>): boolean {
+  const slots = Object.entries(body).filter(([key]) => COLUMN_SLOT_KEY.test(key));
+  if (!slots.length) return false;
+  return slots.every(([, value]) =>
+    Array.isArray(value) ? value.length > 0 : typeof value === 'string' && value.trim() !== ''
+  );
 }
 
 export function getAnalysisRunBlockers(

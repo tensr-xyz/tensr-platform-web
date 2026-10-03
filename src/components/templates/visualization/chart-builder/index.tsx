@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { useTabsStore } from '@/stores/tabs-store';
+import { resolveSpreadsheetContextTab } from '@/lib/workspace-dataset';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import {
   buildChartFromDataset,
@@ -35,14 +36,18 @@ type Props = { children: ReactNode; chartMenuName?: string };
 export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Props) {
   const { tabs, activeTabId } = useTabsStore();
   const activeTab = useMemo(() => tabs.find(t => t.id === activeTabId), [tabs, activeTabId]);
+  const sheetTab = useMemo(
+    () => resolveSpreadsheetContextTab(tabs, activeTab) ?? activeTab,
+    [tabs, activeTab]
+  );
   const columns = useMemo(
     () =>
-      activeTab?.data?.initialColumns?.map(c => ({
+      sheetTab?.data?.initialColumns?.map(c => ({
         id: c.id,
         header: c.header ?? c.id,
         type: c.type,
       })) ?? [],
-    [activeTab?.data?.initialColumns]
+    [sheetTab?.data?.initialColumns]
   );
   const [xCol, setXCol] = useState('');
   const [yCol, setYCol] = useState('');
@@ -50,7 +55,7 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
   const [weightCol, setWeightCol] = useState('__none__');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const datasetId = activeTab?.data?.datasetId ?? activeTab?.data?.filePath;
+  const datasetId = sheetTab?.data?.datasetId ?? sheetTab?.data?.filePath;
 
   useEffect(() => {
     if (!datasetId) return;
@@ -96,13 +101,14 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
     try {
       const xHeader = columns.find(column => column.id === x)?.header ?? x;
       const yHeader = columns.find(column => column.id === y)?.header ?? y;
-      const filters = (activeTab?.data?.columnFilters ?? []).map(filter => ({
+      const filters = (sheetTab?.data?.columnFilters ?? []).map(filter => ({
         id: filter.id,
         operator: filter.value.operator,
         value: filter.value.value,
       }));
       let built;
       let rowsDataset = 0;
+      let provenance: Record<string, unknown> | undefined;
       try {
         const remote = await apiClient.datasets.chartData(datasetId, {
           kind,
@@ -111,17 +117,19 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
           x_label: xHeader,
           y_label: yHeader,
           filters,
-          row_uids: activeTab?.data?.rowUidFilter,
+          row_uids: sheetTab?.data?.rowUidFilter,
           weight_column: weightCol === '__none__' ? null : weightCol,
+          error_bars: errorBars,
         });
         built = remote.chart;
         rowsDataset = remote.n_rows_filtered;
+        provenance = remote.provenance;
       } catch (err) {
         if (!(err instanceof ApiRequestError) || err.status !== 404) throw err;
         const rows = await loadFilteredChartRows(
           datasetId,
-          activeTab?.data?.columnFilters ?? [],
-          activeTab?.data?.rowUidFilter
+          sheetTab?.data?.columnFilters ?? [],
+          sheetTab?.data?.rowUidFilter
         );
         const weightColumn = weightCol === '__none__' ? null : weightCol;
         const prompt = `${kind} chart of ${y} by ${x}`;
@@ -161,6 +169,7 @@ export function ChartBuilderDialog({ children, chartMenuName = 'Bar Chart' }: Pr
             tables: [],
             trust: { notes: [], warnings: [] },
           },
+          provenance,
         },
         parameters: { x_column: x, y_column: y, chart_type: kind },
         sourceDatasetId: datasetId,

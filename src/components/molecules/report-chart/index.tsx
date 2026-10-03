@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { AnalysisReportChart, ChartAxisScale } from '@/lib/analysis-report-types';
+import { errorBarFootnoteLines } from '@/lib/chart-error-bars';
 import {
   type ChartDensity,
   type ChartLayout,
@@ -9,7 +10,7 @@ import {
   formatDateTick,
   formatNumberTick,
   inferDateResolution,
-  niceTicks,
+  ticksInDomain,
   parseAxisDate,
   planCategoryLabels,
   scaleLinear,
@@ -94,7 +95,6 @@ function AxisFrame({
 }) {
   const { padL, padT, plotW, plotH, fontSize, height } = layout;
   const axisY = padT + plotH;
-
   return (
     <g className="chart-axes">
       <line
@@ -251,11 +251,11 @@ function ChartBody({
     const gap = Math.max(1, plotW / n > 20 ? 2 : 1);
     const barW = Math.max(1, (plotW - gap * (n - 1)) / n);
     const yS = scaleLinear(0, maxC, padT + plotH, padT);
-    const xTicks = niceTicks(xMin, xMax, layout.maxTicksX).map(v => ({
+    const xTicks = ticksInDomain(xMin, xMax, layout.maxTicksX).map(v => ({
       value: v,
       x: padL + ((v - xMin) / (xMax - xMin || 1)) * plotW,
     }));
-    const yTicks = niceTicks(0, maxC, layout.maxTicksY).map(v => ({
+    const yTicks = ticksInDomain(0, maxC, layout.maxTicksY).map(v => ({
       value: v,
       y: yS(v),
     }));
@@ -318,8 +318,8 @@ function ChartBody({
     const { padL, padT, plotW, plotH } = layout;
     const sx = scaleLinear(x0, x1, padL, padL + plotW);
     const sy = scaleLinear(y0, y1, padT + plotH, padT);
-    const xTicks = niceTicks(x0, x1, layout.maxTicksX).map(v => ({ value: v, x: sx(v) }));
-    const yTicks = niceTicks(y0, y1, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
+    const xTicks = ticksInDomain(x0, x1, layout.maxTicksX).map(v => ({ value: v, x: sx(v) }));
+    const yTicks = ticksInDomain(y0, y1, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
     const tickH = layout.density === 'comfortable' ? 8 : 6;
     const censored = chart.censored ?? [];
 
@@ -388,12 +388,19 @@ function ChartBody({
     let x1 = Math.max(...xs);
     let y0 = Math.min(...ys);
     let y1 = Math.max(...ys);
-    const padX = (x1 - x0) * 0.06 || 0.5;
-    const padY = (y1 - y0) * 0.06 || 0.5;
-    x0 -= padX;
-    x1 += padX;
-    y0 -= padY;
-    y1 += padY;
+    if (chart.kind === 'roc' || chart.kind === 'pp') {
+      x0 = 0;
+      x1 = 1;
+      y0 = 0;
+      y1 = 1;
+    } else {
+      const padX = (x1 - x0) * 0.06 || 0.5;
+      const padY = (y1 - y0) * 0.06 || 0.5;
+      x0 -= padX;
+      x1 += padX;
+      y0 -= padY;
+      y1 += padY;
+    }
     const xScale = resolveNumericScale(chart.x_scale, xs);
     const yScale = resolveNumericScale(chart.y_scale, ys);
     const xDates = xs.map(parseAxisDate).filter((d): d is Date => d != null);
@@ -403,8 +410,8 @@ function ChartBody({
     const sx = scaleLinear(x0, x1, padL, padL + plotW);
     const sy = scaleLinear(y0, y1, padT + plotH, padT);
     const line = chart.kind === 'scatter' ? null : chart.line;
-    const xTicks = niceTicks(x0, x1, layout.maxTicksX).map(v => ({ value: v, x: sx(v) }));
-    const yTicks = niceTicks(y0, y1, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
+    const xTicks = ticksInDomain(x0, x1, layout.maxTicksX).map(v => ({ value: v, x: sx(v) }));
+    const yTicks = ticksInDomain(y0, y1, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
 
     return (
       <svg
@@ -494,7 +501,7 @@ function ChartBody({
       layout.density === 'comfortable' ? 36 : 28,
       (plotW / Math.max(1, n)) * 0.55
     );
-    const yTicks = niceTicks(d0, d1, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
+    const yTicks = ticksInDomain(d0, d1, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
     const xs = gs.map((_, i) => padL + i * (plotW / n) + plotW / n / 2);
     const ySamples = gs.flatMap(g => [g.min, g.q1, g.median, g.q3, g.max]);
 
@@ -624,13 +631,18 @@ function ChartBody({
     const gap = groupW * 0.06;
     const isArea = chart.kind === 'area';
     const isLine = chart.kind === 'line' || isArea;
-    const yTicks = niceTicks(minV, maxV, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
+    const yTicks = ticksInDomain(minV, maxV, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
     const xs = categories.map((_, i) => padL + i * groupW + groupW / 2);
+    const footnoteLines = errorBarFootnoteLines(chart);
+    const footnoteLineH = layout.fontSize + 4;
+    const footnoteH = footnoteLines.length ? footnoteLines.length * footnoteLineH + 6 : 0;
+    const capHalf = Math.max(2, Math.min(6, barW * 0.2));
 
     return (
       <svg
         data-chart-kind={chart.kind}
-        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        data-error-bars={footnoteLines.length ? 'on' : undefined}
+        viewBox={`0 0 ${layout.width} ${layout.height + footnoteH}`}
         className="h-auto w-full max-w-full"
         aria-hidden
       >
@@ -660,14 +672,21 @@ function ChartBody({
                     return (
                       <g key={`${ser.name}-${gi}`}>
                         {error ? (
-                          <line
-                            x1={xs[gi]}
-                            x2={xs[gi]}
-                            y1={sy(v - error)}
-                            y2={sy(v + error)}
-                            stroke={color}
-                            strokeWidth={1.2}
-                          />
+                          <g stroke={color} strokeWidth={1.2}>
+                            <line x1={xs[gi]} x2={xs[gi]} y1={sy(v - error)} y2={sy(v + error)} />
+                            <line
+                              x1={xs[gi] - 4}
+                              x2={xs[gi] + 4}
+                              y1={sy(v - error)}
+                              y2={sy(v - error)}
+                            />
+                            <line
+                              x1={xs[gi] - 4}
+                              x2={xs[gi] + 4}
+                              y1={sy(v + error)}
+                              y2={sy(v + error)}
+                            />
+                          </g>
                         ) : null}
                         <circle
                           cx={xs[gi]}
@@ -691,16 +710,6 @@ function ChartBody({
                 const xMid = x + barW / 2;
                 return (
                   <g key={`${gi}-${si}`}>
-                    {error ? (
-                      <line
-                        x1={xMid}
-                        x2={xMid}
-                        y1={sy(v - error)}
-                        y2={sy(v + error)}
-                        stroke="#27272a"
-                        strokeWidth={1.2}
-                      />
-                    ) : null}
                     <rect
                       x={x}
                       y={y}
@@ -709,6 +718,23 @@ function ChartBody({
                       fill={SERIES_FILL[si % SERIES_FILL.length]}
                       rx={1}
                     />
+                    {error ? (
+                      <g stroke="#27272a" strokeWidth={1.2}>
+                        <line x1={xMid} x2={xMid} y1={sy(v - error)} y2={sy(v + error)} />
+                        <line
+                          x1={xMid - capHalf}
+                          x2={xMid + capHalf}
+                          y1={sy(v - error)}
+                          y2={sy(v - error)}
+                        />
+                        <line
+                          x1={xMid - capHalf}
+                          x2={xMid + capHalf}
+                          y1={sy(v + error)}
+                          y2={sy(v + error)}
+                        />
+                      </g>
+                    ) : null}
                   </g>
                 );
               })
@@ -741,6 +767,18 @@ function ChartBody({
             </g>
           ))}
         </g>
+        {footnoteLines.map((line, index) => (
+          <text
+            key={line}
+            data-chart-footnote
+            x={padL}
+            y={layout.height + 2 + (index + 1) * footnoteLineH}
+            fill="#71717a"
+            style={{ fontSize: layout.fontSize }}
+          >
+            {line}
+          </text>
+        ))}
       </svg>
     );
   }
@@ -928,8 +966,14 @@ function ChartBody({
         ))}
         <AxisFrame
           layout={layout}
-          xTicks={niceTicks(x0, x1 || 1, layout.maxTicksX).map(value => ({ value, x: sx(value) }))}
-          yTicks={niceTicks(0, y1 || 1, layout.maxTicksY).map(value => ({ value, y: sy(value) }))}
+          xTicks={ticksInDomain(x0, x1 || 1, layout.maxTicksX).map(value => ({
+            value,
+            x: sx(value),
+          }))}
+          yTicks={ticksInDomain(0, y1 || 1, layout.maxTicksY).map(value => ({
+            value,
+            y: sy(value),
+          }))}
           xFormatter={value => formatNumberTick(value, xs.length ? xs : [0, 1])}
           yFormatter={value => formatNumberTick(value, ys.length ? ys : [0, 1])}
           xAxisLabel={chart.x_label}
@@ -998,7 +1042,10 @@ function ChartBody({
         })}
         <AxisFrame
           layout={layout}
-          yTicks={niceTicks(y0, y1 || 1, layout.maxTicksY).map(value => ({ value, y: sy(value) }))}
+          yTicks={ticksInDomain(y0, y1 || 1, layout.maxTicksY).map(value => ({
+            value,
+            y: sy(value),
+          }))}
           yFormatter={value => formatNumberTick(value, ys.length ? ys : [0, 1])}
           yAxisLabel={chart.y_label}
           categoryLabels={{ labels, xs, plan }}

@@ -979,6 +979,7 @@ class ApiClient {
         filters?: { id: string; operator: string; value: unknown }[];
         row_uids?: string[];
         weight_column?: string | null;
+        error_bars?: 'none' | 'se' | 'ci';
       }
     ) =>
       this.request<{
@@ -986,6 +987,7 @@ class ApiClient {
         n_rows: number;
         n_rows_filtered: number;
         chart: import('@/lib/analysis-report-types').AnalysisReportChart;
+        provenance?: Record<string, unknown>;
       }>(`/datasets/${datasetId}/chart-data`, {
         method: 'POST',
         body: JSON.stringify(body),

@@ -1,5 +1,6 @@
 import type { AnalysisReport, AnalysisReportTable } from '@/lib/analysis-report-types';
 import { provenanceBannerText, provenanceTraceState } from '@/lib/analysis-runs';
+import { errorBarFootnote } from '@/lib/chart-error-bars';
 
 export type ReportExportIdentity = {
   runId?: string;
@@ -245,7 +246,9 @@ function chartToHtmlSnippet(chart: NonNullable<AnalysisReport['chart']>): string
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="width:100%;height:140px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px">
           <polyline fill="none" stroke="#2563eb" stroke-width="1.5" points="${pts}" />
         </svg>
-        <p style="font-size:12px;color:#64748b;margin-top:0.35rem">${escHtml(chart.x_label)} → ${escHtml(chart.y_label)}</p></figure>`;
+        <p style="font-size:12px;color:#64748b;margin-top:0.35rem">${escHtml(chart.x_label)} → ${escHtml(chart.y_label)}</p>
+        ${errorBarFootnote(chart) ? `<p style="font-size:12px;color:#64748b">${escHtml(errorBarFootnote(chart) || '')}</p>` : ''}
+        </figure>`;
     }
     const bars = (chart.categories ?? [])
       .map((cat, i) => {
@@ -259,7 +262,9 @@ function chartToHtmlSnippet(chart: NonNullable<AnalysisReport['chart']>): string
       .join('');
     return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600;margin-bottom:0.5rem">${title}</figcaption>
       <div style="display:flex;align-items:flex-end;gap:6px;height:140px;border-bottom:1px solid #e2e8f0;padding:0 4px">${bars}</div>
-      <p style="font-size:12px;color:#64748b;margin-top:0.35rem">${escHtml(chart.x_label)} → ${escHtml(chart.y_label)}</p></figure>`;
+      <p style="font-size:12px;color:#64748b;margin-top:0.35rem">${escHtml(chart.x_label)} → ${escHtml(chart.y_label)}</p>
+      ${errorBarFootnote(chart) ? `<p style="font-size:12px;color:#64748b">${escHtml(errorBarFootnote(chart) || '')}</p>` : ''}
+      </figure>`;
   }
   return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600">${title}</figcaption>
     <p style="color:#64748b;font-size:13px">Chart available in the Tensr app (export PNG/SVG from the report view).</p></figure>`;

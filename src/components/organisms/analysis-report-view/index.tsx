@@ -38,8 +38,13 @@ function tableToTsv(t: AnalysisReportTable): string {
   return lines.join('\n');
 }
 
+function reportTrust(report: AnalysisReport): { notes: string[]; warnings: string[] } {
+  return report.trust ?? { notes: [], warnings: [] };
+}
+
 function buildSummaryText(report: AnalysisReport): string {
-  const { meta, summary, metrics, trust } = report;
+  const { meta, summary, metrics } = report;
+  const trust = reportTrust(report);
   const lines = [
     meta.title,
     meta.subtitle ? `Variables: ${meta.subtitle}` : '',
@@ -504,7 +509,8 @@ export function AnalysisReportView({
       : null;
   const statusBanner = pluginBanner ?? provenanceBanner;
   const rBadge = rSyntaxBadgeText(report.r_syntax_verification);
-  const showRBadge = !report.meta.analysis_key.startsWith('plugin:');
+  const showRBadge =
+    !report.meta.analysis_key.startsWith('plugin:') && report.meta.analysis_key !== 'chart_builder';
   const rBadgeTitle =
     rBadge.kind === 'verified'
       ? 'Verified against R ✓'
@@ -524,8 +530,8 @@ export function AnalysisReportView({
     report.approach?.exploration?.trim() || report.session_trace?.trim() || '';
   const assumptionInterpretations = (report.assumption_checks?.interpretations ?? []).filter(
     line =>
-      !report.trust.warnings.includes(line) &&
-      !report.trust.notes.includes(line) &&
+      !reportTrust(report).warnings.includes(line) &&
+      !reportTrust(report).notes.includes(line) &&
       line.trim() !== approachExploration
   );
 
@@ -706,12 +712,12 @@ export function AnalysisReportView({
           </ReportSection>
         ) : null}
 
-        {(report.trust.warnings.length > 0 || report.trust.notes.length > 0) && (
+        {(reportTrust(report).warnings.length > 0 || reportTrust(report).notes.length > 0) && (
           <div
             id="report-section-warnings"
             className="scroll-mt-24 space-y-2 border-b border-border/60 px-[22px] py-3"
           >
-            {report.trust.warnings.map((w, i) => (
+            {reportTrust(report).warnings.map((w, i) => (
               <div
                 key={`w-${i}`}
                 role="status"
@@ -721,7 +727,7 @@ export function AnalysisReportView({
                 <p className="mt-1 leading-relaxed text-muted-foreground">{w}</p>
               </div>
             ))}
-            {report.trust.notes.map((n, i) => (
+            {reportTrust(report).notes.map((n, i) => (
               <div
                 key={`n-${i}`}
                 className="rounded-md border border-border bg-muted/30 px-3.5 py-2.5 text-[13px] text-muted-foreground"

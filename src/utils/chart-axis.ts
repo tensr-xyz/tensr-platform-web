@@ -80,6 +80,18 @@ export function niceTicks(min: number, max: number, maxTicks = 5): number[] {
   return ticks.length ? ticks : [lo, hi];
 }
 
+/** Nice ticks that fall inside [min, max]; scales clamp, so an outside tick would pile onto the edge. */
+export function ticksInDomain(min: number, max: number, maxTicks = 5): number[] {
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  const eps = (hi - lo) * 1e-9;
+  let inside: number[] = [];
+  for (let count = maxTicks; count <= maxTicks + 4 && inside.length < 2; count += 1) {
+    inside = niceTicks(lo, hi, count).filter(v => v >= lo - eps && v <= hi + eps);
+  }
+  return inside.length ? inside : [lo, hi];
+}
+
 /** Format a numeric tick based on the data range / integer-ness. */
 export function formatNumberTick(value: number, sampleValues: number[]): string {
   if (!Number.isFinite(value)) return '';

@@ -263,6 +263,13 @@ export function buildTableRequest(canvas: CustomTableCanvas): TableRequestBody {
   };
 }
 
+/** Identity of the table the canvas would run; the saved banner id does not change the table. */
+export function tableRequestKey(canvas: CustomTableCanvas): string {
+  const request: Partial<TableRequestBody> = { ...buildTableRequest(canvas) };
+  delete request.banner_id;
+  return JSON.stringify(request);
+}
+
 export function namedBannerPayload(
   canvas: CustomTableCanvas,
   id: string,

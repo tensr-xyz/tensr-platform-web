@@ -14,7 +14,6 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/molecules/dialog';
 import { exportSvgElementAsPng, exportSvgElementAsSvg } from '@/utils/chart-export';
 import type { ChartStylePreset } from '@/lib/chart-theme';
-
 type Props = {
   chart: AnalysisReportChart;
   onAnnotate?: () => void;
@@ -28,7 +27,6 @@ export function ReportChartCard({ chart, onAnnotate, onExportError }: Props) {
   const [fullscreenOpen, setFullscreenOpen] = useState(false);
   const [preset, setPreset] = useState<ChartStylePreset>('default');
   const title = chart.title || 'chart';
-
   const getSvg = (scope: 'inline' | 'fullscreen' | 'export') => {
     const root =
       scope === 'fullscreen'

@@ -9,6 +9,7 @@ import {
   resetBuilderSurface,
   nestUnderBanner,
   savedSpecLabel,
+  tableRequestKey,
   uniqueColumnValues,
   namedBannerPayload,
   type CustomTableCanvas,
@@ -19,6 +20,18 @@ const ROWS = [
   { gender: 'Female', age_band: '18-34', nps: 8 },
   { gender: 'Male', age_band: '35-54', nps: 6 },
 ];
+
+describe('tableRequestKey', () => {
+  it('ignores the saved banner id but tracks cell contents', () => {
+    const canvas = addBannerQuestion(
+      addStubQuestion(defaultCanvas(), 'gender', ROWS),
+      'age_band',
+      ROWS
+    );
+    expect(tableRequestKey({ ...canvas, bannerId: 'b1' })).toBe(tableRequestKey(canvas));
+    expect(tableRequestKey({ ...canvas, showCount: true })).not.toBe(tableRequestKey(canvas));
+  });
+});
 
 describe('custom table spec builder', () => {
   it('defaults letters, column %, nested banners, and no row %', () => {

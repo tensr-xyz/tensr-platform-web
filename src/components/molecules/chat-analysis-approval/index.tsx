@@ -19,11 +19,7 @@ type Props = {
 };
 
 function plainCardText(text: string): string {
-  return text
-    .replace(/\*\*/g, '')
-    .replace(/`/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return text.replace(/\*\*/g, '').replace(/`/g, '').replace(/\s+/g, ' ').trim();
 }
 
 function actionTitle(action: ChatPendingAction): string {

@@ -6,9 +6,25 @@ import {
   niceTicks,
   parseAxisDate,
   planCategoryLabels,
+  ticksInDomain,
   truncateLabel,
   valuesLookLikeDatetime,
 } from './chart-axis';
+
+describe('ticksInDomain', () => {
+  it('drops nice ticks that fall outside a padded domain', () => {
+    expect(ticksInDomain(-0.06, 1.06, 5)).toEqual([0, 0.5, 1]);
+    expect(ticksInDomain(0, 7.3, 5)).toEqual([0, 2, 4, 6]);
+  });
+
+  it('asks for finer ticks before settling for one label', () => {
+    expect(ticksInDomain(-12, 48, 2).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('keeps the domain ends when no nice tick fits inside', () => {
+    expect(ticksInDomain(0.31, 0.32, 2)).toEqual([0.31, 0.32]);
+  });
+});
 
 describe('niceTicks', () => {
   it('returns readable intervals covering the range', () => {

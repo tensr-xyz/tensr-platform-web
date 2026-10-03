@@ -63,6 +63,7 @@ import {
   namedBannerPayload,
   nestUnderBanner,
   savedSpecLabel,
+  tableRequestKey,
   type CustomTableCanvas,
   type SavedTableSpecRow,
   type StoredTableSpec,
@@ -96,17 +97,21 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [previewWarning, setPreviewWarning] = useState<string | null>(null);
   const [savedSpecs, setSavedSpecs] = useState<SavedTableSpecRow[]>([]);
   const [activeSpecId, setActiveSpecId] = useState<string | null>(null);
+  const [savedRequestKey, setSavedRequestKey] = useState<string | null>(null);
   const [cellClick, setCellClick] = useState<string | null>(null);
   const [namedBanners, setNamedBanners] = useState<Array<{ id: string; label?: string }>>([]);
   const [bannerIdDraft, setBannerIdDraft] = useState('');
   const [bookName, setBookName] = useState('');
+  const [variableSets, setVariableSets] = useState<Array<{ id: string; label: string }>>([]);
 
   const columns = useMemo(() => {
-    if (!sheetTab?.data?.initialColumns) return [];
-    return sheetTab.data.initialColumns
+    if (!sheetTab?.data?.initialColumns) return variableSets;
+    const fromSheet = sheetTab.data.initialColumns
       .map(c => ({ id: c.id, label: c.header || c.id }))
       .filter(c => !LINEAGE_HIDDEN_COLUMNS.has(c.id));
-  }, [sheetTab?.data?.initialColumns]);
+    const known = new Set(fromSheet.map(column => column.id));
+    return [...fromSheet, ...variableSets.filter(set => !known.has(set.id))];
+  }, [sheetTab?.data?.initialColumns, variableSets]);
 
   const rows = useMemo(() => sheetTab?.data?.initialData || [], [sheetTab?.data?.initialData]);
 
@@ -144,6 +149,24 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!open || !datasetId) return;
     let cancelled = false;
+    void datasetRequest<{ sets?: Array<{ name?: string; kind?: string }> }>(
+      `/datasets/${datasetId}/variable-sets`,
+      token
+    )
+      .then(res => {
+        if (cancelled) return;
+        setVariableSets(
+          (res.sets || [])
+            .filter(set => set.name)
+            .map(set => ({
+              id: String(set.name),
+              label: String(set.name),
+            }))
+        );
+      })
+      .catch(() => {
+        if (!cancelled) setVariableSets([]);
+      });
     void listDatasetVersions(datasetId, token)
       .then(res => {
         if (cancelled) return;
@@ -218,6 +241,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       };
       setBook(result);
       setActiveSpecId(String(result.spec?.id || '') || null);
+      setSavedRequestKey(tableRequestKey(canvas));
       setCellClick(null);
       if (result.spec?.banner_id) {
         setCanvas(c => ({ ...c, bannerId: String(result.spec?.banner_id) }));
@@ -246,7 +270,10 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     setBusy(true);
     setError(null);
     try {
-      const specs = [buildTableRequest(canvas) as unknown as Record<string, unknown>];
+      const specs: Record<string, unknown>[] =
+        tableRequestKey(canvas) === savedRequestKey
+          ? []
+          : [buildTableRequest(canvas) as unknown as Record<string, unknown>];
       for (const row of savedSpecs) {
         const id = row.spec_id || row.id;
         if (!id) continue;

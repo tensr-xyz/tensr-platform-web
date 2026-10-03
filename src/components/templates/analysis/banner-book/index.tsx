@@ -22,6 +22,7 @@ type MatchRow = { from?: string; to?: string; reason?: string };
 type RunResult = {
   tables_run?: number;
   tables_skipped?: number;
+  tables?: Array<{ ok?: boolean; label?: string; missing?: string[]; error?: string }>;
   match?: { matched?: MatchRow[]; renamed?: MatchRow[]; missing?: MatchRow[] };
 };
 
@@ -207,6 +208,22 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
             {result.match?.renamed?.length ?? 0}, missing {result.match?.missing?.length ?? 0}.
             Weights, filters, and nets stay on each spec.
           </p>
+        ) : null}
+        {result?.tables?.length ? (
+          <ul className="max-h-40 space-y-1 overflow-y-auto text-xs" aria-label="Book tables">
+            {result.tables.map((table, index) => (
+              <li key={`${table.label}-${index}`} className="flex justify-between gap-2">
+                <span className="truncate">{table.label || `Table ${index + 1}`}</span>
+                <span className={table.ok ? 'text-muted-foreground' : 'text-destructive'}>
+                  {table.ok
+                    ? 'Ran'
+                    : table.missing?.length
+                      ? `Skipped: ${table.missing.join(', ')} not on the new file`
+                      : `Skipped: ${table.error || 'could not run'}`}
+                </span>
+              </li>
+            ))}
+          </ul>
         ) : null}
         {error ? (
           <Alert variant="destructive">

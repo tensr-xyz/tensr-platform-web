@@ -147,8 +147,7 @@ function toast({ ...props }: Toast) {
     });
   const dismiss = () => dispatch({ type: 'DISMISS_TOAST', toastId: id });
 
-  const duration =
-    typeof props.duration === 'number' ? props.duration : DEFAULT_TOAST_DURATION_MS;
+  const duration = typeof props.duration === 'number' ? props.duration : DEFAULT_TOAST_DURATION_MS;
 
   dispatch({
     type: 'ADD_TOAST',
