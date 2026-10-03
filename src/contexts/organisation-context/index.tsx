@@ -293,6 +293,12 @@ export const OrganizationProvider: React.FC<OrganizationProviderProps> = ({ chil
       if (!organization) {
         throw new Error('User is not a member of this organization');
       }
+      // The API answers with the personal org when this membership no longer exists.
+      const me = await apiCall('/api/me', {}, organization.id);
+      if (me?.active_organization?.id !== organization.id) {
+        void refreshOrganizations();
+        throw new Error(`Couldn't switch to ${organization.name}. You may no longer be a member.`);
+      }
       openOrganisation(organization);
       devLog('Switched to organization', organization.id);
     } catch (err: any) {
