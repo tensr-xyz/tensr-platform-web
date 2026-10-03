@@ -4,6 +4,7 @@ import {
   loadFilteredChartRows,
   PALETTE_MENU_TO_KIND,
   shouldRouteToInlineChart,
+  weightedQuantile,
 } from './agent-chart-from-dataset';
 
 jest.mock('@/utils/auth', () => ({
@@ -63,7 +64,7 @@ describe('agent chart from dataset', () => {
     expect(chart?.points?.length).toBeGreaterThan(1);
   });
 
-  it('weights a histogram and labels a scatter as unweighted', () => {
+  it('weights a histogram and sizes a weighted scatter by weight', () => {
     const weightedRows = [
       { score: 1, w: 1 },
       { score: 1, w: 0 },
@@ -91,8 +92,77 @@ describe('agent chart from dataset', () => {
       'w'
     );
     expect(scatter?.kind).toBe('scatter');
-    expect(scatter?.title.toLowerCase()).toContain('unweighted');
-    expect(scatter?.points?.length).toBe(2);
+    expect(scatter?.title).toBe('Weighted w vs score');
+    expect(scatter && scatter.kind === 'scatter' ? scatter.points.map(p => p.weight) : []).toEqual([
+      1, 3,
+    ]);
+  });
+
+  it('matches survey hf7 weighted quartiles on a hand-checked example', () => {
+    const pairs = [10, 1, 3, 2, 4].map((value, i) => ({ value, weight: [5, 1, 2, 1, 1][i]! }));
+    expect(weightedQuantile(pairs, 0.25)).toBeCloseTo(2.25, 10);
+    expect(weightedQuantile(pairs, 0.5)).toBeCloseTo(3.25, 10);
+    expect(weightedQuantile(pairs, 0.75)).toBeCloseTo(3.875, 10);
+    const equal = [3, 9, 6].map(value => ({ value, weight: 2 }));
+    expect(weightedQuantile(equal, 0.25)).toBeCloseTo(4.5, 10);
+  });
+
+  it('titles and weights palette boxplots and scatters only when a weight is active', () => {
+    const nbaRows = [
+      { Pos: 'C', PTS: 7, AST: 1, w: 2 },
+      { Pos: 'C', PTS: 8, AST: 2, w: 1 },
+      { Pos: 'C', PTS: 9, AST: 2.5, w: 1.5 },
+      { Pos: 'C', PTS: 10, AST: 3, w: 3 },
+    ];
+    const nbaColumns = [
+      { id: 'Pos', header: 'Pos' },
+      { id: 'PTS', header: 'PTS' },
+      { id: 'AST', header: 'AST' },
+      { id: 'w', header: 'w' },
+    ];
+    const box = buildChartFromDataset('boxplot', nbaColumns, nbaRows, 'w', {
+      kind: 'boxplot',
+      xId: 'Pos',
+      yId: 'PTS',
+    });
+    expect(box?.title).toBe('Weighted PTS by Pos');
+    expect(box?.weighting).toBe('weighted');
+    const group = box && 'groups' in box ? box.groups[0]! : null;
+    expect(group?.q1).toBeCloseTo(7.5625, 10);
+    expect(group?.median).toBeCloseTo(8.25, 10);
+    expect(group?.q3).toBeCloseTo(9.25, 10);
+
+    const plainBox = buildChartFromDataset('boxplot', nbaColumns, nbaRows, null, {
+      kind: 'boxplot',
+      xId: 'Pos',
+      yId: 'PTS',
+    });
+    expect(plainBox?.title).toBe('PTS by Pos');
+    expect(plainBox && 'groups' in plainBox ? plainBox.groups[0]!.median : null).toBeCloseTo(
+      8.5,
+      10
+    );
+
+    const scatter = buildChartFromDataset('scatter', nbaColumns, nbaRows, 'w', {
+      kind: 'scatter',
+      xId: 'AST',
+      yId: 'PTS',
+    });
+    expect(scatter?.title).toBe('Weighted PTS vs AST');
+    expect(scatter && scatter.kind === 'scatter' ? scatter.point_size : null).toBe('weight');
+    expect(scatter && scatter.kind === 'scatter' ? scatter.points.map(p => p.weight) : []).toEqual([
+      2, 1, 1.5, 3,
+    ]);
+
+    const plainScatter = buildChartFromDataset('scatter', nbaColumns, nbaRows, null, {
+      kind: 'scatter',
+      xId: 'AST',
+      yId: 'PTS',
+    });
+    expect(plainScatter?.title).toBe('PTS vs AST');
+    expect(
+      plainScatter && plainScatter.kind === 'scatter' ? plainScatter.point_size : 'x'
+    ).toBeUndefined();
   });
 
   const paletteColumns = [

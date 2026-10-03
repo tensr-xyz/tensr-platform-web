@@ -129,6 +129,51 @@ describe('ReportChart palette kinds', () => {
     expect(container.querySelector('path')).toBeTruthy();
   });
 
+  it('sizes weighted scatter points by weight and leaves unweighted points equal', () => {
+    const weighted = render(
+      <ReportChart
+        chart={{
+          kind: 'scatter',
+          title: 'Weighted PTS vs AST',
+          x_label: 'AST',
+          y_label: 'PTS',
+          point_size: 'weight',
+          points: [
+            { x: 1, y: 7, weight: 1 },
+            { x: 2, y: 8, weight: 4 },
+          ],
+        }}
+      />
+    );
+    const svg = weighted.container.querySelector('[data-chart-kind="scatter"]');
+    expect(svg?.getAttribute('data-point-size')).toBe('weight');
+    const radii = Array.from(weighted.container.querySelectorAll('circle')).map(c =>
+      Number(c.getAttribute('r'))
+    );
+    expect(radii[1]! / radii[0]!).toBeCloseTo(2, 5);
+    weighted.unmount();
+
+    const plain = render(
+      <ReportChart
+        chart={{
+          kind: 'scatter',
+          title: 'PTS vs AST',
+          x_label: 'AST',
+          y_label: 'PTS',
+          points: [
+            { x: 1, y: 7 },
+            { x: 2, y: 8 },
+          ],
+        }}
+      />
+    );
+    expect(plain.container.querySelector('[data-point-size]')).toBeNull();
+    const plainRadii = Array.from(plain.container.querySelectorAll('circle')).map(c =>
+      c.getAttribute('r')
+    );
+    expect(new Set(plainRadii).size).toBe(1);
+  });
+
   it('draws a scatter, a histogram, and a boxplot', () => {
     const scatter = render(
       <ReportChart

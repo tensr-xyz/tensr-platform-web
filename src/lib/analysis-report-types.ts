@@ -72,7 +72,8 @@ export type AnalysisReportChart =
       title: string;
       x_label: string;
       y_label: string;
-      points: { x: number; y: number; row_index?: number; label?: string }[];
+      points: { x: number; y: number; row_index?: number; label?: string; weight?: number }[];
+      point_size?: 'weight';
     } & ChartAxisHints)
   | ({
       kind: 'scatter_line';
