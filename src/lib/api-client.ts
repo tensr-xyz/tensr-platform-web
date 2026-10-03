@@ -901,6 +901,29 @@ class ApiClient {
         active_weight_column?: string | null;
       }>(`/datasets/${datasetId}/metadata`),
 
+    chartData: (
+      datasetId: string,
+      body: {
+        kind: string;
+        x: string;
+        y: string;
+        x_label?: string;
+        y_label?: string;
+        filters?: { id: string; operator: string; value: unknown }[];
+        row_uids?: string[];
+        weight_column?: string | null;
+      }
+    ) =>
+      this.request<{
+        dataset_id: string;
+        n_rows: number;
+        n_rows_filtered: number;
+        chart: import('@/lib/analysis-report-types').AnalysisReportChart;
+      }>(`/datasets/${datasetId}/chart-data`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
     getSchema: (datasetId: string) =>
       this.request<{
         dataset_id: string;
