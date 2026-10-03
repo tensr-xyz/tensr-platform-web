@@ -32,6 +32,8 @@ function mapDatasetListRow(d: Record<string, unknown>) {
     size,
     status: 'ready' as const,
     files: [{ path: filename, type: ext, size }],
+    ownerType: d.owner_type === 'organization' ? ('organization' as const) : ('user' as const),
+    ownerId: String(d.owner_id ?? ''),
   };
 }
 
