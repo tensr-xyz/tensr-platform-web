@@ -1,14 +1,8 @@
 'use client';
 
 import React from 'react';
-import { Download, FolderOpen, Lock, PanelRight, Plus } from 'lucide-react';
+import { FolderOpen, Lock, PanelRight, Plus } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/molecules/dropdown';
 import { useProjectStore } from '@/stores/project-store';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
 import { cn } from '@/utils';
@@ -35,13 +29,6 @@ export function AnalysisReportToolbar({
   railOpen,
   onToggleRail,
   onAnnotate,
-  onExport,
-  onExportCsv,
-  onExportExcel,
-  onExportMarkdown,
-  onExportHtml,
-  onExportNarrative,
-  synthesizing,
   onNewAnalysis,
 }: Props) {
   const { currentProject } = useProjectStore();
@@ -85,40 +72,6 @@ export function AnalysisReportToolbar({
             <Plus className="size-3" aria-hidden />
             Annotate
           </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 text-xs">
-                <Download className="size-3" aria-hidden />
-                Export
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={onExport}>Copy summary</DropdownMenuItem>
-              <DropdownMenuItem onClick={onExportCsv} disabled={!onExportCsv}>
-                CSV (all tables)
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                data-testid="export-excel"
-                onClick={onExportExcel}
-                disabled={!onExportExcel}
-              >
-                Excel
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onExportMarkdown} disabled={!onExportMarkdown}>
-                Markdown
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onExportHtml} disabled={!onExportHtml}>
-                HTML report
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={onExportNarrative}
-                disabled={!onExportNarrative || synthesizing}
-              >
-                {synthesizing ? 'Writing narrative…' : 'Narrative report (AI)'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => window.print()}>Print / PDF</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
           <Button type="button" size="sm" className="h-7 gap-1.5 text-xs" onClick={onNewAnalysis}>
             <Plus className="size-3" aria-hidden />
             New analysis
