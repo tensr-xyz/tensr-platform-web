@@ -1,0 +1,15 @@
+---
+description: Follow AGENTS.md at the repo root. Worktree per task, PRs only, no pushes to main or development.
+alwaysApply: true
+---
+
+# AGENTS.md
+
+`AGENTS.md` at the root of `tensr-api` and of `tensr-platform-web` is the source for how agents work in these repos. Read it before changing anything.
+
+The parts that must not slip:
+
+- Start in a new worktree: `git fetch origin`, then `git worktree add ../<repo>-<task> -b agent/<task> origin/<base>`. The base is `main` for `tensr-api` and `development` for `tensr-platform-web`. Never work in the main checkout.
+- Never push to `main` or `development`. Push `agent/<task>`, then `gh pr create` and `gh pr merge --auto --squash`.
+- Never `git stash pop` or `apply` a stash you did not create. Never touch another worktree, another agent's branch, or someone else's dev server.
+- Never force-push `main` or `development`, never skip hooks, never dispatch `deploy-prod`.
