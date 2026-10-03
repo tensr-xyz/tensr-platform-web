@@ -1,4 +1,5 @@
 import {
+  approvedRunFailureMessage,
   chartsFromToolResults,
   collectOpenDatasetsFromTabs,
   deriveMessageUpdateFromLoopResponse,
@@ -238,6 +239,30 @@ describe('run-agent-loop client helpers', () => {
     expect(patch.lastFittedModel).toEqual(spec);
     expect(patch.content).toBe('Fitted.');
     expect(patch.thinkingLines).toBeUndefined();
+  });
+
+  it('approvedRunFailureMessage flags an approved run that did not complete', () => {
+    expect(
+      approvedRunFailureMessage({ status: 'ok', mode: 'plan', answer_markdown: 'Done.' })
+    ).toBe(null);
+    expect(
+      approvedRunFailureMessage({
+        status: 'clarification',
+        mode: 'plan',
+        answer_markdown: 'Which?',
+      })
+    ).toBe(null);
+    expect(approvedRunFailureMessage({ status: 'awaiting_approval', mode: 'plan' })).toBe(null);
+    expect(
+      approvedRunFailureMessage({
+        status: 'error',
+        mode: 'plan',
+        answer_markdown: 'Regression failed: PTS has no variance.',
+      })
+    ).toBe('Regression failed: PTS has no variance.');
+    expect(approvedRunFailureMessage({ status: 'llm_unavailable', mode: 'plan' })).toBe(
+      'The run did not complete.'
+    );
   });
 
   it('chartsFromToolResults collects chart payloads', () => {
