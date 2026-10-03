@@ -412,10 +412,21 @@ function ChartBody({
     const line = chart.kind === 'scatter' ? null : chart.line;
     const xTicks = ticksInDomain(x0, x1, layout.maxTicksX).map(v => ({ value: v, x: sx(v) }));
     const yTicks = ticksInDomain(y0, y1, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
+    const baseRadius = layout.density === 'comfortable' ? 3 : 2.2;
+    const sizedByWeight = chart.kind === 'scatter' && chart.point_size === 'weight';
+    const maxWeight = sizedByWeight
+      ? Math.max(0, ...pts.map(p => ('weight' in p && typeof p.weight === 'number' ? p.weight : 0)))
+      : 0;
+    const maxRadius = layout.density === 'comfortable' ? 9 : 7;
+    const pointRadius = (weight: number | undefined) =>
+      sizedByWeight && maxWeight > 0 && typeof weight === 'number'
+        ? Math.max(1.5, maxRadius * Math.sqrt(weight / maxWeight))
+        : baseRadius;
 
     return (
       <svg
         data-chart-kind={chart.kind}
+        data-point-size={sizedByWeight ? 'weight' : undefined}
         viewBox={`0 0 ${layout.width} ${layout.height}`}
         className="h-auto w-full max-w-full"
         aria-hidden
@@ -437,8 +448,9 @@ function ChartBody({
             <circle
               cx={sx(p.x)}
               cy={sy(p.y)}
-              r={layout.density === 'comfortable' ? 3 : 2.2}
-              className="fill-zinc-600/80"
+              r={pointRadius('weight' in p ? p.weight : undefined)}
+              className={sizedByWeight ? 'fill-zinc-600/45 stroke-zinc-700/60' : 'fill-zinc-600/80'}
+              strokeWidth={sizedByWeight ? 0.5 : undefined}
             />
             {'label' in p && p.label ? (
               <text
