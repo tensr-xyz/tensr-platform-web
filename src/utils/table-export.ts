@@ -17,32 +17,34 @@ export async function exportTableAsImage(
 ): Promise<void> {
   const { filename = 'table' } = options;
 
+  let canvas: HTMLCanvasElement;
   try {
     // Dynamic import to avoid loading if not needed
     const html2canvas = (await import('html2canvas')).default;
 
-    const canvas = await html2canvas(tableElement, {
+    canvas = await html2canvas(tableElement, {
       backgroundColor: '#ffffff',
       scale: 2, // Higher quality
       logging: false,
     });
-
-    canvas.toBlob(blob => {
-      if (!blob) return;
-
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${filename}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    }, 'image/png');
   } catch (error) {
     console.error('Error exporting table as image:', error);
     throw new Error('Failed to export table as image. Please ensure html2canvas is installed.');
   }
+
+  const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/png'));
+  if (!blob) {
+    throw new Error('Could not render the table as a PNG image.');
+  }
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${filename}.png`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
 }
 
 /**
