@@ -5,7 +5,8 @@ import * as React from 'react';
 import type { ToastActionElement, ToastProps } from '@/components/molecules/toast/toast';
 
 const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+const TOAST_REMOVE_DELAY = 1000;
+const DEFAULT_TOAST_DURATION_MS = 5000;
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -146,17 +147,25 @@ function toast({ ...props }: Toast) {
     });
   const dismiss = () => dispatch({ type: 'DISMISS_TOAST', toastId: id });
 
+  const duration =
+    typeof props.duration === 'number' ? props.duration : DEFAULT_TOAST_DURATION_MS;
+
   dispatch({
     type: 'ADD_TOAST',
     toast: {
       ...props,
       id,
+      duration,
       open: true,
       onOpenChange: open => {
         if (!open) dismiss();
       },
     },
   });
+
+  if (duration > 0 && duration < 60_000) {
+    window.setTimeout(() => dismiss(), duration);
+  }
 
   return {
     id: id,
