@@ -2,7 +2,23 @@ import { act, renderHook } from '@testing-library/react';
 import { useOrganization } from './index';
 
 jest.mock('@/hooks/api/use-auth', () => ({ useAuth: () => ({}) }));
-jest.mock('@/utils/auth', () => ({ getIdToken: () => 'test-token' }));
+jest.mock('@/utils/auth', () => ({
+  ...jest.requireActual('@/utils/auth'),
+  getIdToken: () => 'test-token',
+}));
+
+let orgContext: { activeOrganization: unknown; isPersonalAccount: boolean } | null = null;
+jest.mock('@/contexts/organisation-context', () => ({
+  useOptionalOrganizationContext: () => orgContext,
+}));
+
+const prolific = {
+  id: 'org-1',
+  name: 'Prolific',
+  role: 'ADMIN',
+  createdAt: '2026-09-01T10:00:00+00:00',
+  updatedAt: '2026-09-01T10:00:00+00:00',
+};
 
 const apiMember = {
   organization_id: 'org-1',
@@ -27,6 +43,35 @@ describe('useOrganization members', () => {
   beforeEach(() => {
     fetchMock.mockReset();
     global.fetch = fetchMock as unknown as typeof fetch;
+    orgContext = null;
+    localStorage.clear();
+  });
+
+  it('uses the organisation the provider switched to', () => {
+    orgContext = { activeOrganization: prolific, isPersonalAccount: false };
+    const { result } = renderHook(() => useOrganization());
+    expect(result.current.activeOrganization).toBe(prolific);
+  });
+
+  it('has no organisation on the personal account', () => {
+    orgContext = { activeOrganization: prolific, isPersonalAccount: true };
+    const { result } = renderHook(() => useOrganization());
+    expect(result.current.activeOrganization).toBeNull();
+  });
+
+  it('cancels an invitation inside the active organisation', async () => {
+    localStorage.setItem('activeOrganizationId', 'org-1');
+    fetchMock.mockReturnValueOnce(respond(200, { cancelled: true }));
+    const { result } = renderHook(() => useOrganization());
+
+    await act(async () => {
+      await result.current.deleteInvitation('tok-1');
+    });
+    expect(fetchMock.mock.calls[0][0]).toMatch(/\/api\/invitations\/tok-1$/);
+    expect(fetchMock.mock.calls[0][1].headers).toMatchObject({
+      Authorization: 'Bearer test-token',
+      'X-Organization-Id': 'org-1',
+    });
   });
 
   it('maps fetched members so remove uses the real user id', async () => {
