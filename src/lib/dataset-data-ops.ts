@@ -101,8 +101,6 @@ export function imputeDatasetMissing(
     columns: string[];
     method: string;
     custom_value?: string | null;
-    sort_column?: string | null;
-    group_column?: string | null;
   },
   token?: string | null
 ) {
