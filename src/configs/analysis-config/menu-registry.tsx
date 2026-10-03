@@ -30,6 +30,7 @@ import { CustomTablesDialog } from '@/components/templates/analysis/custom-table
 import { RakeWeightsDialog } from '@/components/templates/data/rake-weights';
 import { CellWeightsDialog } from '@/components/templates/data/cell-weights';
 import { PipelineScriptDialog } from '@/components/templates/data/pipeline-script';
+import { RecipesDialog, SaveAsRecipeDialog } from '@/components/templates/data/recipes';
 import {
   LagCasesDialog,
   LeadCasesDialog,
@@ -106,6 +107,8 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Rake Weights': RakeWeightsDialog,
   'Cell weighting': CellWeightsDialog,
   'Export R script': PipelineScriptDialog,
+  'Save as recipe': SaveAsRecipeDialog,
+  Recipes: RecipesDialog,
   'Batch Tables': BatchTablesDialog,
   'Open-text coding': OpenTextCodingDialog,
   TURF: TurfDialog,

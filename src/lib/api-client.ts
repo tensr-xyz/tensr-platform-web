@@ -5,6 +5,15 @@ import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import type { PlaybookProposedAction, PrepPlaybookStep } from '@/lib/chat-pending-action';
 
+export type SavedRecipe = {
+  recipe_id: string;
+  version: number;
+  name: string;
+  project_id: string;
+  ops: unknown[];
+  created_from: string;
+};
+
 function mapDatasetListRow(d: Record<string, unknown>) {
   const filename = String(d.original_filename || 'Dataset');
   const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : 'csv';
@@ -131,6 +140,23 @@ class ApiClient {
 
       throw error;
     }
+  }
+
+  private async requestText(endpoint: string, options: RequestInit = {}): Promise<string> {
+    const token = getStytchBearerForTensrApi();
+    const response = await fetch(tensrApiUrl(endpoint), {
+      ...options,
+      cache: 'no-store',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...options.headers,
+      },
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      throw new ApiRequestError(response.status, text);
+    }
+    return text;
   }
 
   // Projects API
@@ -899,7 +925,33 @@ class ApiClient {
       this.request<{
         dataset_id: string;
         active_weight_column?: string | null;
+        operation_list?: { schema_version?: number; ops?: unknown[] } | null;
       }>(`/datasets/${datasetId}/metadata`),
+
+    listRecipes: (projectId: string) =>
+      this.request<{ recipes: SavedRecipe[] }>(`/datasets/recipes?project_id=${encodeURIComponent(projectId)}`),
+
+    saveRecipe: (body: {
+      project_id: string;
+      name: string;
+      ops: unknown[];
+      created_from: 'history' | 'plan' | 'manual';
+      column_map?: Record<string, string>;
+      parent_recipe_id?: string | null;
+    }) => this.request<SavedRecipe>('/datasets/recipes', { method: 'POST', body: JSON.stringify(body) }),
+
+    runRecipe: (
+      recipeId: string,
+      version: number,
+      body: { dataset_id: string; column_map?: Record<string, string>; inputs?: Record<string, string> }
+    ) =>
+      this.request<{ dataset_id: string }>(`/datasets/recipes/${recipeId}/versions/${version}/run`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    exportRecipeScript: (recipeId: string, version: number) =>
+      this.requestText(`/datasets/recipes/${recipeId}/versions/${version}/export.R`, { method: 'POST' }),
 
     chartData: (
       datasetId: string,

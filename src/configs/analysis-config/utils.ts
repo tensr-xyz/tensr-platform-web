@@ -173,7 +173,11 @@ export function getAllAnalysisItems(): AnalysisItem[] {
                   ? 'poststratify cell weighting post-stratification'
                   : menuName === 'Export R script'
                     ? 'r script haven sav pipeline export'
-                    : undefined,
+                    : menuName === 'Save as recipe'
+                      ? 'save recipe analysis history'
+                      : menuName === 'Recipes'
+                        ? 'recipes run on this dataset export r script'
+                        : undefined,
         });
       }
     }
