@@ -103,3 +103,22 @@ test('An error status on approve keeps the Plan text and the card', async ({ pag
   });
   await expectPlanKeptAndRunFailed(page, 'The datasets service could not run this regression.');
 });
+
+test('A pipeline that halts on a step keeps the Plan text and the card', async ({ page }) => {
+  const halted =
+    'Step 3 of 5 (merge_datasets) failed: secondary_dataset_id is required for merge_datasets.';
+  await planThenApprove(page, {
+    status: 200,
+    body: {
+      status: 'clarification',
+      mode: 'plan',
+      answer_markdown: halted,
+      clarification_questions: [halted],
+      pipeline_halted: true,
+      failed_step_index: 2,
+      approved_execution: true,
+      reapprove_pipeline: false,
+    },
+  });
+  await expectPlanKeptAndRunFailed(page, halted);
+});
