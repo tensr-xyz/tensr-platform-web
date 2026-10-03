@@ -9,6 +9,7 @@ import {
   saveActiveOrganisationId,
 } from '@/lib/active-organisation';
 import { devLog } from '@/lib/dev-log';
+import { mapApiInvitation, type OrganizationInvitation } from '@/lib/organization-invitations';
 
 const API_BASE_URL = getTensrApiBaseUrl();
 
@@ -89,19 +90,7 @@ export interface TeamMember {
   };
 }
 
-// Invitation types
-export interface OrganizationInvitation {
-  id: string;
-  organizationId: string;
-  email: string;
-  role: 'ADMIN' | 'MEMBER' | 'VIEWER';
-  invitedBy: string;
-  status: 'PENDING' | 'ACCEPTED' | 'EXPIRED' | 'CANCELLED';
-  token: string;
-  expiresAt: string;
-  createdAt: string;
-  updatedAt: string;
-}
+export type { OrganizationInvitation };
 
 interface UseOrganizationReturn {
   organizations: Organization[];
@@ -185,6 +174,7 @@ interface UseOrganizationReturn {
     }
   ) => Promise<OrganizationInvitation>;
   listInvitations: (orgId: string) => Promise<OrganizationInvitation[]>;
+  resendInvitation: (orgId: string, token: string) => Promise<OrganizationInvitation>;
   deleteInvitation: (token: string) => Promise<boolean>;
   isLoading: boolean;
   error: string | null;
@@ -1001,8 +991,7 @@ export const useOrganization = (): UseOrganizationReturn => {
       }
 
       const payload = await response.json();
-      const newInvitation = payload.invitation ?? payload;
-      // Update local state
+      const newInvitation = mapApiInvitation(payload.invitation ?? payload);
       setInvitations(prev => [...prev, newInvitation]);
       return newInvitation;
     } catch (err: any) {
@@ -1014,41 +1003,66 @@ export const useOrganization = (): UseOrganizationReturn => {
     }
   };
 
-  const listInvitations = async (orgId: string): Promise<OrganizationInvitation[]> => {
-    try {
-      setIsLoading(true);
-      setError(null);
+  const listInvitations = useCallback(
+    async (orgId: string): Promise<OrganizationInvitation[]> => {
+      try {
+        setIsLoading(true);
+        setError(null);
 
-      const token = getToken();
-      if (!token) {
-        setError('No authentication token available. Please log in again.');
+        const token = getToken();
+        if (!token) {
+          setError('No authentication token available. Please log in again.');
+          return [];
+        }
+
+        const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/invitations`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
+          throw new Error(`Failed to get invitations: ${errorData.message || response.statusText}`);
+        }
+
+        const data = await response.json();
+        const orgInvitations = (data.invitations || []).map(mapApiInvitation);
+        setInvitations(orgInvitations);
+        return orgInvitations;
+      } catch (err: any) {
+        console.error('Error fetching invitations:', err);
+        setError(err.message || 'Failed to fetch invitations');
         return [];
+      } finally {
+        setIsLoading(false);
       }
+    },
+    [getToken]
+  );
 
-      const response = await fetch(`${API_BASE_URL}/api/organizations/${orgId}/invitations`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
-        throw new Error(`Failed to get invitations: ${errorData.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      const orgInvitations = data.invitations || [];
-      // Update local state
-      setInvitations(orgInvitations);
-      return orgInvitations;
-    } catch (err: any) {
-      console.error('Error fetching invitations:', err);
-      setError(err.message || 'Failed to fetch invitations');
-      return [];
-    } finally {
-      setIsLoading(false);
+  const resendInvitation = async (
+    orgId: string,
+    invitationToken: string
+  ): Promise<OrganizationInvitation> => {
+    const token = getToken();
+    if (!token) {
+      throw new Error('No authentication token available. Please log in again.');
     }
+    const response = await fetch(
+      `${API_BASE_URL}/api/organizations/${orgId}/invitations/${invitationToken}/resend`,
+      { method: 'POST', headers: { Authorization: `Bearer ${token}` } }
+    );
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const detail = typeof errorData.detail === 'string' ? errorData.detail : response.statusText;
+      throw new Error(`Failed to resend invitation: ${detail}`);
+    }
+    const payload = await response.json();
+    const updated = mapApiInvitation(payload.invitation ?? payload);
+    setInvitations(prev => prev.map(inv => (inv.token === invitationToken ? updated : inv)));
+    return updated;
   };
 
   const deleteInvitation = async (invitationToken: string): Promise<boolean> => {
@@ -1112,6 +1126,7 @@ export const useOrganization = (): UseOrganizationReturn => {
     invitations,
     createInvitation,
     listInvitations,
+    resendInvitation,
     deleteInvitation,
     isLoading,
     error,

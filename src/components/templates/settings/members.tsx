@@ -29,8 +29,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
-import { Mail, UserPlus, Trash, Settings } from 'lucide-react';
+import { Mail, UserPlus, Trash, Settings, Send, X } from 'lucide-react';
 import posthog from 'posthog-js';
+import {
+  inviteCreatedToast,
+  inviteEmailLabel,
+  isInvitationExpired,
+  type OrganizationInvitation,
+} from '@/lib/organization-invitations';
+
+const EMAIL_BADGE: Record<OrganizationInvitation['emailStatus'], string> = {
+  sent: 'bg-green-100 text-green-800',
+  failed: 'bg-red-100 text-red-800',
+  not_configured: 'bg-amber-100 text-amber-800',
+  unknown: 'bg-muted text-muted-foreground',
+};
 
 export default function TeamMembers() {
   const {
@@ -41,7 +54,13 @@ export default function TeamMembers() {
     createInvitation,
     removeMember,
     updateMemberRole,
+    invitations,
+    listInvitations,
+    resendInvitation,
+    deleteInvitation,
   } = useOrganization();
+  const [busyInviteToken, setBusyInviteToken] = useState<string | null>(null);
+  const pendingInvitations = invitations.filter(inv => inv.status === 'PENDING');
 
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [newMemberEmail, setNewMemberEmail] = useState('');
@@ -60,6 +79,55 @@ export default function TeamMembers() {
     }
   }, [activeOrganization, fetchMembers]);
 
+  useEffect(() => {
+    if (activeOrganization) {
+      listInvitations(activeOrganization.id);
+    }
+  }, [activeOrganization, listInvitations]);
+
+  const handleResendInvitation = async (invitation: OrganizationInvitation) => {
+    if (!activeOrganization) return;
+    setBusyInviteToken(invitation.token);
+    try {
+      const updated = await resendInvitation(activeOrganization.id, invitation.token);
+      toast(
+        updated.emailStatus === 'sent'
+          ? { title: 'Invitation emailed', description: `Sent to ${updated.email}.` }
+          : {
+              title: 'Email not sent',
+              description: updated.emailError || `We couldn't email ${updated.email}.`,
+              variant: 'destructive',
+            }
+      );
+    } catch (err: any) {
+      toast({
+        title: 'Failed to resend invitation',
+        description: err.message || 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusyInviteToken(null);
+    }
+  };
+
+  const handleCancelInvitation = async (invitation: OrganizationInvitation) => {
+    if (!activeOrganization) return;
+    setBusyInviteToken(invitation.token);
+    try {
+      await deleteInvitation(invitation.token);
+      await listInvitations(activeOrganization.id);
+      fetchMembers(activeOrganization.id);
+    } catch (err: any) {
+      toast({
+        title: 'Failed to cancel invitation',
+        description: err.message || 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setBusyInviteToken(null);
+    }
+  };
+
   const handleAddButtonClick = () => {
     setShowAddDialog(true);
   };
@@ -69,23 +137,24 @@ export default function TeamMembers() {
 
     setIsAdding(true);
     try {
-      await createInvitation(activeOrganization.id, {
+      const invitation = await createInvitation(activeOrganization.id, {
         email: newMemberEmail.trim(),
         role: newMemberRole,
       });
 
-      posthog.capture('team_member_invited', { role: newMemberRole });
-
-      toast({
-        title: 'Invitation sent',
-        description: `${newMemberEmail} can join once they sign up with this email.`,
+      posthog.capture('team_member_invited', {
+        role: newMemberRole,
+        email_status: invitation.emailStatus,
       });
+
+      toast(inviteCreatedToast(invitation));
 
       setShowAddDialog(false);
       setNewMemberEmail('');
       setNewMemberRole('MEMBER');
 
       fetchMembers(activeOrganization.id);
+      listInvitations(activeOrganization.id);
     } catch (err: any) {
       toast({
         title: 'Failed to add team member',
@@ -287,6 +356,89 @@ export default function TeamMembers() {
           </Table>
         </div>
       </section>
+
+      {pendingInvitations.length > 0 && (
+        <section
+          aria-labelledby="pending-invitations-heading"
+          className="overflow-hidden rounded-lg border border-border bg-background"
+        >
+          <div className="border-b border-border px-6 py-4">
+            <h3 id="pending-invitations-heading" className="text-base font-medium">
+              Pending invitations
+            </h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              People join when they sign in with the invited email.
+            </p>
+          </div>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="pl-6">Email</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Email status</TableHead>
+                <TableHead>Expires</TableHead>
+                <TableHead className="pr-6 text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {pendingInvitations.map(invitation => {
+                const expired = isInvitationExpired(invitation);
+                const busy = busyInviteToken === invitation.token;
+                return (
+                  <TableRow key={invitation.id}>
+                    <TableCell className="pl-6 font-medium">{invitation.email}</TableCell>
+                    <TableCell>
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-medium ${getRoleBadgeClass(invitation.role)}`}
+                      >
+                        {invitation.role}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <span
+                        className={`rounded-full px-2 py-1 text-xs font-medium ${EMAIL_BADGE[invitation.emailStatus]}`}
+                      >
+                        {inviteEmailLabel(invitation)}
+                      </span>
+                      {invitation.emailStatus === 'failed' && invitation.emailError && (
+                        <div
+                          className="mt-1 max-w-xs truncate text-xs text-muted-foreground"
+                          title={invitation.emailError}
+                        >
+                          {invitation.emailError}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {expired ? 'Expired' : new Date(invitation.expiresAt).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="pr-6 text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy || expired}
+                        onClick={() => handleResendInvitation(invitation)}
+                        aria-label={`Resend invitation to ${invitation.email}`}
+                      >
+                        <Send className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={busy}
+                        onClick={() => handleCancelInvitation(invitation)}
+                        aria-label={`Cancel invitation to ${invitation.email}`}
+                      >
+                        <X className="h-4 w-4 text-red-500" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </section>
+      )}
 
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent>
