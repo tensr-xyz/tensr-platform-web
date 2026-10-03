@@ -1,8 +1,8 @@
 name: Live e2e
 
 # Against the development preview alias and the dev API. Not part of pull-request CI.
-# Sign-in needs STYTCH_TEST_EMAIL plus STYTCH_TEST_PASSWORD or STYTCH_TEST_OTP
-# in the repository secrets. Until those are set, the suite records a skip.
+# Sign-in uses the Stytch test secret (sandbox@stytch.com / 000000) server-side.
+# The preview is behind Vercel deployment protection; the bypass header is required.
 on:
   workflow_dispatch:
 
@@ -25,6 +25,6 @@ jobs:
         env:
           PLAYWRIGHT_LIVE_BASE_URL: https://tensr-platform-web-git-development-tensr.vercel.app
           PLAYWRIGHT_LIVE_API_URL: https://5qv9lg3s55.execute-api.us-east-1.amazonaws.com
-          STYTCH_TEST_EMAIL: ${{ secrets.STYTCH_TEST_EMAIL }}
-          STYTCH_TEST_PASSWORD: ${{ secrets.STYTCH_TEST_PASSWORD }}
-          STYTCH_TEST_OTP: ${{ secrets.STYTCH_TEST_OTP }}
+          STYTCH_PROJECT_ID: ${{ secrets.STYTCH_PROJECT_ID }}
+          STYTCH_SECRET: ${{ secrets.STYTCH_SECRET }}
+          VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}

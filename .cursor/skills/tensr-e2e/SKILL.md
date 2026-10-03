@@ -17,7 +17,7 @@ Use this for browser tests. Do not install a separate browser CLI.
 ## Live Stytch suite
 
 - Config: `tensr-platform-web/playwright.live.config.ts`. `testDir` `./tests/live`, `globalSetup` `./tests/live/global-setup.ts`, `baseURL` from `PLAYWRIGHT_LIVE_BASE_URL` (default the development Vercel preview).
-- Sign-in: `tests/live/global-setup.ts` needs `STYTCH_TEST_EMAIL` and either `STYTCH_TEST_PASSWORD` or `STYTCH_TEST_OTP`. If those are missing it writes `skipped` into `tests/live/.auth/state.json` and the suite skips.
+- Sign-in: `tests/live/global-setup.ts` calls the Stytch test API as `sandbox@stytch.com` with code `000000`. It needs `STYTCH_PROJECT_ID` and `STYTCH_SECRET`. It does not open the login page. If those are missing it writes `skipped` into `tests/live/.auth/state.json` and the signed-in specs skip. The preview also needs `VERCEL_AUTOMATION_BYPASS_SECRET` (`x-vercel-protection-bypass`).
 - CI: `.github/workflows/live-e2e.yml` is `workflow_dispatch` only. It is not part of pull-request CI. It points `PLAYWRIGHT_LIVE_API_URL` at the dev API Gateway.
 
 ## Add a spec
@@ -28,4 +28,4 @@ Use this for browser tests. Do not install a separate browser CLI.
 
 ## Pitfall
 
-`playwright.config.ts` starts `npm run dev`. That is the app server, not a reason to wrap the command in tmux. Live specs fail closed when the Stytch test user env is unset; that skip is the setup file, not a pass.
+`playwright.config.ts` starts `npm run dev`. That is the app server, not a reason to wrap the command in tmux. Live signed-in specs skip when `STYTCH_PROJECT_ID` or `STYTCH_SECRET` is unset; that skip is the setup file, not a pass.
