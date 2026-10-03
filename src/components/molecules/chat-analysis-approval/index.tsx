@@ -18,6 +18,14 @@ type Props = {
   disabled?: boolean;
 };
 
+function plainCardText(text: string): string {
+  return text
+    .replace(/\*\*/g, '')
+    .replace(/`/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function actionTitle(action: ChatPendingAction): string {
   if (action.kind === 'analysis_plan') {
     return analysisLabelForPlan(action.plan);
@@ -99,7 +107,7 @@ export function ChatAnalysisApproval({
     return null;
   }
 
-  const title = actionTitle(action);
+  const title = plainCardText(actionTitle(action));
 
   if (action.status === 'expired' || isStale) {
     return (
@@ -153,6 +161,7 @@ export function ChatAnalysisApproval({
   const isBusy = isPlanning;
   const isFailed = action.status === 'failed';
   const subtitle = actionSubtitle(action);
+  const headerSubtitle = subtitle ? plainCardText(subtitle) : null;
   const buttonsLocked = disabled || isBusy;
 
   return (
@@ -171,30 +180,34 @@ export function ChatAnalysisApproval({
             : action.kind === 'prep_playbook'
               ? 'Data prep playbook'
               : action.kind === 'agent_tool_approval'
-                ? 'Awaiting approval'
+                ? isFailed
+                  ? 'Run failed'
+                  : 'Awaiting approval'
                 : action.kind === 'proposed_action'
                   ? 'Confirm change'
                   : 'Run analysis'}
         </p>
         <p className="mt-0.5 text-[12px] text-foreground">
           <span className="font-medium">{title}</span>
-          {subtitle ? <span className="text-muted-foreground"> · {subtitle}</span> : null}
+          {headerSubtitle ? (
+            <span className="text-muted-foreground"> · {headerSubtitle}</span>
+          ) : null}
         </p>
         {action.kind === 'analysis_plan' && action.plan.rationale ? (
           <p className="mt-1.5 line-clamp-4 text-[11px] leading-snug text-muted-foreground">
-            {action.plan.rationale}
+            {plainCardText(action.plan.rationale)}
           </p>
         ) : null}
         {action.kind === 'agent_tool_approval' && action.rationale ? (
           <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
             <span className="font-medium text-foreground">Plan: </span>
-            {action.rationale}
+            {plainCardText(action.rationale)}
           </p>
         ) : null}
         {action.kind === 'agent_tool_approval' && action.whyThisTest ? (
           <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
             <span className="font-medium text-foreground">Why this test: </span>
-            {action.whyThisTest}
+            {plainCardText(action.whyThisTest)}
           </p>
         ) : null}
         {actionCoverageLines(action).map(line => (

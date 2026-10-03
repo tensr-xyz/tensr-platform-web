@@ -102,7 +102,7 @@ import { SPREADSHEET_EVENTS, type TabColumnFilterPayload } from '@/lib/spreadshe
 
 const INITIAL_EMPTY_ROWS = 200;
 const ROWS_PER_BATCH = 250;
-const EXTRA_COLUMNS = 10;
+const EXTRA_COLUMN_BATCH = 10;
 const DEFAULT_COLUMN_WIDTH = 150;
 const ROW_HEIGHT_PX = 36;
 const SCROLL_PERCENTAGE_THRESHOLD = 0.7;
@@ -1052,7 +1052,7 @@ export function Spreadsheet({
   }, [isFileMode, initialData, data.length, columnFilters.length, sorting.length]);
 
   const [columnSizing, setColumnSizing] = useState({});
-  const [extraColumnsCount, setExtraColumnsCount] = useState(EXTRA_COLUMNS);
+  const [extraColumnsCount, setExtraColumnsCount] = useState(0);
   const [rowSelection, setRowSelection] = useState({});
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() => {
     const vis: VisibilityState = {};
@@ -1975,7 +1975,7 @@ export function Spreadsheet({
   }, []);
 
   const addExtraColumns = useCallback(() => {
-    setExtraColumnsCount(prev => prev + EXTRA_COLUMNS);
+    setExtraColumnsCount(prev => prev + EXTRA_COLUMN_BATCH);
   }, []);
 
   // Debounced scroll handler to prevent excessive fetch triggers
@@ -2273,7 +2273,7 @@ export function Spreadsheet({
 
   // Reset extra columns when initial columns change
   useEffect(() => {
-    setExtraColumnsCount(EXTRA_COLUMNS);
+    setExtraColumnsCount(0);
   }, [initialColumns]);
 
   // Only measure virtualization when data length actually changes, not on every render
