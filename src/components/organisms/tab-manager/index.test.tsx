@@ -20,7 +20,14 @@ jest.mock('@/hooks/api/use-file', () => ({
 }));
 jest.mock('@/lib/workspace-dataset', () => ({ getDatasetIdFromTab: () => 'ds-1' }));
 jest.mock('@/lib/adopt-derived-dataset', () => ({ adoptDerivedDataset: jest.fn() }));
-jest.mock('@/components/templates/spreadsheet', () => ({ __esModule: true, default: () => null }));
+let spreadsheetOnChange: ((rows: Record<string, unknown>[]) => void) | undefined;
+jest.mock('@/components/templates/spreadsheet', () => ({
+  __esModule: true,
+  default: ({ onChange }: { onChange?: (rows: Record<string, unknown>[]) => void }) => {
+    spreadsheetOnChange = onChange;
+    return null;
+  },
+}));
 jest.mock('@/components/templates/notebook', () => ({ Notebook: () => null }));
 jest.mock('@/components/organisms/markdown-viewer', () => ({
   __esModule: true,
@@ -102,5 +109,17 @@ describe('TabManager save', () => {
       jest.advanceTimersByTime(3000);
     });
     expect(screen.queryByText('Save failed')).not.toBeInTheDocument();
+  });
+
+  it('does not auto-save edits, since every save would fail', () => {
+    jest.useFakeTimers();
+    renderSheet();
+
+    act(() => {
+      spreadsheetOnChange?.([{ q1: 'edited again' }]);
+      jest.advanceTimersByTime(31_000);
+    });
+    expect(saveFile).not.toHaveBeenCalled();
+    expect(toast).not.toHaveBeenCalled();
   });
 });

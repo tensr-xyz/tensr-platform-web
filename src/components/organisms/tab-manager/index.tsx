@@ -156,7 +156,8 @@ const TabManager: React.FC<TabManagerProps> = ({
     };
   }, []);
   const [savingStatus, setSavingStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true);
+  // Off until tensr-api can write edited rows back; every auto-save would fail.
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
 
   const activeHistory = useTabHistoryStore(s =>
     activeTab?.id ? s.byTab[activeTab.id] : undefined
