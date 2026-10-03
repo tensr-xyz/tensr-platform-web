@@ -1,11 +1,7 @@
-import Loading from '@/components/molecules/loading';
-import { Suspense } from 'react';
-import Teams from '@/components/templates/settings/teams';
+import { redirect } from 'next/navigation';
 
-export default function OrganisationPage() {
-  return (
-    <Suspense fallback={<Loading centered />}>
-      <Teams />
-    </Suspense>
-  );
+// The old Teams screen called /api/teams, which the API maps onto whole organisations
+// (deleting a "team" deleted the organisation and its datasets).
+export default function TeamsPage() {
+  redirect('/settings/members');
 }
