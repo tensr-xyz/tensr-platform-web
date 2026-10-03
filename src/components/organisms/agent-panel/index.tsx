@@ -16,7 +16,6 @@ import {
 } from '@/components/molecules/message-scroller';
 import { Send, AlertCircle, Trash2, History, Plus, Paperclip } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { flushSync } from 'react-dom';
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import {
   Command,
@@ -531,19 +530,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           approvedToolCall: opts.approvedToolCall ?? null,
           approvedToolCalls: opts.approvedToolCalls ?? null,
           attachments: turnAttachments,
-          onProgress: async progress => {
+          onProgress: progress => {
             const prev = useChatStore
               .getState()
               .getMessages(projectId)
               .find(m => m.id === assistantMessageId)?.thinkingLines;
-            flushSync(() => {
-              updateMessage(projectId, assistantMessageId, {
-                thinkingLines: accumulateInterpretedLoopProgress(prev, progress),
-                isStreaming: true,
-              });
-            });
-            await new Promise<void>(resolve => {
-              requestAnimationFrame(() => resolve());
+            updateMessage(projectId, assistantMessageId, {
+              thinkingLines: accumulateInterpretedLoopProgress(prev, progress),
+              isStreaming: true,
             });
           },
         });
@@ -886,14 +880,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       if (!trimmed || seenProgress.has(trimmed)) return;
       seenProgress.add(trimmed);
       progressLines.push(trimmed);
-      flushSync(() => {
-        updateMessage(projectId, messageId, {
-          thinkingLines: [...progressLines],
-          isStreaming: true,
-          pendingAction: current
-            ? patchPendingAction(current, { status: 'running', plan })
-            : undefined,
-        });
+      updateMessage(projectId, messageId, {
+        thinkingLines: [...progressLines],
+        isStreaming: true,
+        pendingAction: current
+          ? patchPendingAction(current, { status: 'running', plan })
+          : undefined,
       });
     };
 
