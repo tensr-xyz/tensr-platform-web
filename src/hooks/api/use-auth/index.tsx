@@ -134,8 +134,15 @@ export const useAuth = () => {
         profile = await fetchMeProfileWithRetry();
       } catch (profileError) {
         console.warn('Failed to load user from tensr-api:', profileError);
+        try {
+          // forceClear drops the SDK's local session even if Stytch is unreachable.
+          await stytch.session.revoke({ forceClear: true });
+        } catch (revokeError) {
+          console.warn('Failed to revoke Stytch session:', revokeError);
+        }
+        clearAuthData();
+        logout();
         setError(PROFILE_LOAD_FAILED_MESSAGE);
-        setLoading(false);
         return {
           success: false,
           code: 'PROFILE_LOAD_FAILED',

@@ -199,6 +199,43 @@ describe('useAuth', () => {
         expect(posthog.capture).not.toHaveBeenCalledWith('user_signed_in', expect.anything());
       });
 
+      it('revokes the Stytch session and clears stored auth when the retry also fails', async () => {
+        mockOtpAuthenticate.mockResolvedValue(stytchResponse);
+        mockFetchMeProfile.mockRejectedValue(new Error('Internal Server Error'));
+        mockSessionRevoke.mockResolvedValue(undefined);
+        const { result } = renderHook(() => useAuth());
+
+        await act(async () => {
+          await result.current.verifyAuth('ada@example.com', '123456', 'email-123');
+        });
+
+        expect(mockSessionRevoke).toHaveBeenCalledWith({ forceClear: true });
+        expect(localStorage.getItem('stytch_session_token')).toBeNull();
+        expect(document.cookie).not.toContain('stytch_session_token=sess-token');
+        const state = useAuthStore.getState();
+        expect(state.session).toBeNull();
+        expect(state.user).toBeNull();
+        expect(state.entitlements).toBeNull();
+        expect(state.isLoading).toBe(false);
+        expect(state.error).toBe("We couldn't load your account. Please try again.");
+      });
+
+      it('still clears stored auth when revoking the Stytch session throws', async () => {
+        mockOtpAuthenticate.mockResolvedValue(stytchResponse);
+        mockFetchMeProfile.mockRejectedValue(new Error('Internal Server Error'));
+        mockSessionRevoke.mockRejectedValue(new Error('network'));
+        const { result } = renderHook(() => useAuth());
+
+        let out: { success: boolean; code?: string } | undefined;
+        await act(async () => {
+          out = await result.current.verifyAuth('ada@example.com', '123456', 'email-123');
+        });
+
+        expect(out).toMatchObject({ success: false, code: 'PROFILE_LOAD_FAILED' });
+        expect(localStorage.getItem('stytch_session_token')).toBeNull();
+        expect(useAuthStore.getState().session).toBeNull();
+      });
+
       it('does not retry when /me reports the session expired', async () => {
         mockOtpAuthenticate.mockResolvedValue(stytchResponse);
         mockFetchMeProfile.mockRejectedValue(new Error('Session expired'));
