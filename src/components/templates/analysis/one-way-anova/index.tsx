@@ -300,11 +300,7 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
         '_'
       );
 
-      if (format === 'png') {
-        await exportTable(tableRef.current, { filename, format: 'png' });
-      } else {
-        exportTable(tableRef.current, { filename, format });
-      }
+      await exportTable(tableRef.current, { filename, format });
 
       toast({
         title: 'Export successful',
