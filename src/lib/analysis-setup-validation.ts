@@ -489,17 +489,6 @@ function appendPreviewBlockingErrors(
     }
   }
 
-  if (op === 'chi_square' && form.chiA?.trim() && form.chiB?.trim()) {
-    const minE = minExpectedChiSquare(preview, form.chiA, form.chiB);
-    if (minE != null && minE < 1) {
-      pushError(
-        errors,
-        WIZARD_FIELD.chiB,
-        `Contingency table is too sparse for chi-square (smallest expected count ≈ ${minE.toFixed(1)} in the preview).`
-      );
-    }
-  }
-
   if (op === 'mcnemar') {
     for (const field of [WIZARD_FIELD.chiA, WIZARD_FIELD.chiB] as const) {
       const col = field === WIZARD_FIELD.chiA ? form.chiA : form.chiB;
