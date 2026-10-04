@@ -72,6 +72,44 @@ export function preferRicherPlan(a?: string | null, b?: string | null): string {
   return score(x) >= score(y) ? x : y;
 }
 
+type PriorApprovalPlan = {
+  rationale?: string;
+  whyThisTest?: string;
+  pipelineSteps?: Array<{
+    name: string;
+    args: Record<string, unknown>;
+    rationale?: string;
+    why_this_test?: string;
+  }>;
+};
+
+/**
+ * The approved plan text for one run_analysis result. A multi-step approval
+ * keeps step 1's rationale on the pending action, so each result takes the
+ * text of its own pipeline step (nth step of the same analysis_type).
+ */
+export function priorPlanForResult(
+  prior: PriorApprovalPlan | null | undefined,
+  analysisType: string,
+  occurrence = 0
+): { plan: string | null; whyThisTest: string | null } {
+  if (!prior) return { plan: null, whyThisTest: null };
+  const steps = prior.pipelineSteps ?? [];
+  if (steps.length > 0) {
+    const step = steps.filter(
+      s => s.name === 'run_analysis' && String(s.args?.analysis_type ?? '') === analysisType
+    )[occurrence];
+    return {
+      plan: step?.rationale?.trim() || null,
+      whyThisTest: step?.why_this_test?.trim() || null,
+    };
+  }
+  return {
+    plan: prior.rationale?.trim() || null,
+    whyThisTest: prior.whyThisTest?.trim() || null,
+  };
+}
+
 export function attachApproachToReport(
   report: AnalysisReport | null | undefined,
   opts: {
