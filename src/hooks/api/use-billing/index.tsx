@@ -17,6 +17,9 @@ export interface Subscription {
   billingType: 'monthly' | 'annual';
   startDate: string;
   renewalDate: string;
+  /** Stripe will end the plan at cancelAt; access continues until then. */
+  cancelAtPeriodEnd?: boolean;
+  cancelAt?: string | null;
   paymentMethodId?: string;
   createdAt: string;
   updatedAt: string;
@@ -361,43 +364,46 @@ export const useBilling = () => {
     }
   }, []);
 
-  // Function to cancel subscription
-  const cancelSubscription = useCallback(async (): Promise<boolean> => {
-    try {
-      setIsLoading(true);
-      setError(null);
-
+  // Throws the API's message; the caller shows it next to the action.
+  const postSubscriptionChange = useCallback(
+    async (path: 'cancel-subscription' | 'resume-subscription'): Promise<Subscription> => {
       const token = getToken();
-      if (!token) {
-        setError('No authentication token available. Please log in again.');
-        return false;
-      }
-
-      const response = await fetch(`${API_BASE_URL}/api/billing/cancel-subscription`, {
+      if (!token) throw new Error('No authentication token available. Please log in again.');
+      const response = await fetch(`${API_BASE_URL}/api/billing/${path}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({}), // Empty body or can include reason if needed
+        body: JSON.stringify({}),
       });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Failed to cancel subscription: ${response.statusText} - ${errorText}`);
+      const text = await response.text();
+      let body: any = null;
+      try {
+        body = text ? JSON.parse(text) : null;
+      } catch {
+        body = null;
       }
+      if (!response.ok) {
+        const detail = typeof body?.detail === 'string' ? body.detail : text || response.statusText;
+        throw new Error(detail);
+      }
+      const updated = normalizeSubscriptionData(body?.subscription ?? {});
+      setSubscription(updated);
+      return updated;
+    },
+    [getToken]
+  );
 
-      // Refresh subscription data
-      await fetchSubscription();
-      return true;
-    } catch (err: any) {
-      console.error('Error cancelling subscription:', err);
-      setError(err.message || 'Failed to cancel subscription');
-      return false;
-    } finally {
-      setIsLoading(false);
-    }
-  }, [getToken, fetchSubscription]);
+  const cancelSubscription = useCallback(
+    () => postSubscriptionChange('cancel-subscription'),
+    [postSubscriptionChange]
+  );
+
+  const resumeSubscription = useCallback(
+    () => postSubscriptionChange('resume-subscription'),
+    [postSubscriptionChange]
+  );
 
   // Function to create payment intent (for upgrading plan or initial subscription)
   const createPaymentIntent = useCallback(
@@ -745,6 +751,7 @@ export const useBilling = () => {
     fetchPaymentMethods,
     fetchPlans,
     cancelSubscription,
+    resumeSubscription,
     createPaymentIntent,
     addPaymentMethod,
     deletePaymentMethod,
