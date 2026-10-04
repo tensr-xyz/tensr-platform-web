@@ -40,6 +40,9 @@ function PageHeader() {
 export default function BillingSettings() {
   const [isCancelDialogOpen, setIsCancelDialogOpen] = useState(false);
   const [cancelInProgress, setCancelInProgress] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+  const [resumeInProgress, setResumeInProgress] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
 
   const {
     subscription,
@@ -51,28 +54,47 @@ export default function BillingSettings() {
     formatDate,
     formatCurrency,
     cancelSubscription,
+    resumeSubscription,
     loadAllBillingData,
     openCustomerPortal,
   } = useBilling();
 
+  const rawStatus = subscription?.status?.toLowerCase();
+  const status = rawStatus === 'trialing' ? 'trial' : rawStatus;
+  const isEnded = status === 'canceled' || status === 'cancelled';
+  const cancelScheduled = status === 'active' && Boolean(subscription?.cancelAtPeriodEnd);
+  const isStripePlan = Boolean(subscription?.stripeSubscriptionId?.startsWith('sub_'));
+  const endDate = subscription?.cancelAt || subscription?.renewalDate;
+
   const handleCancelSubscription = async () => {
     setCancelInProgress(true);
-    setError(null);
+    setCancelError(null);
 
     try {
-      const success = await cancelSubscription();
-      if (success) {
-        posthog.capture('subscription_cancelled', {
-          plan: subscription?.tier,
-          billing_type: subscription?.billingType,
-        });
-        setIsCancelDialogOpen(false);
-      }
+      await cancelSubscription();
+      posthog.capture('subscription_cancelled', {
+        plan: subscription?.tier,
+        billing_type: subscription?.billingType,
+        at_period_end: isStripePlan,
+      });
+      setIsCancelDialogOpen(false);
     } catch (err: unknown) {
-      console.error('Error cancelling subscription:', err);
-      setError(err instanceof Error ? err.message : 'Failed to cancel subscription');
+      setCancelError(err instanceof Error ? err.message : 'Failed to cancel subscription');
     } finally {
       setCancelInProgress(false);
+    }
+  };
+
+  const handleResumeSubscription = async () => {
+    setResumeInProgress(true);
+    setResumeError(null);
+    try {
+      await resumeSubscription();
+      posthog.capture('subscription_resumed', { plan: subscription?.tier });
+    } catch (err: unknown) {
+      setResumeError(err instanceof Error ? err.message : 'Failed to keep your subscription');
+    } finally {
+      setResumeInProgress(false);
     }
   };
 
@@ -81,10 +103,12 @@ export default function BillingSettings() {
     loadAllBillingData();
   };
 
-  const getStatusBadgeClass = (status: string | undefined) => {
-    switch (status?.toUpperCase()) {
+  const getStatusBadgeClass = (value: string | undefined) => {
+    switch (value?.toUpperCase()) {
       case 'ACTIVE':
-        return 'bg-green-50 text-green-700 border border-green-200';
+        return cancelScheduled
+          ? 'bg-yellow-50 text-yellow-700 border border-yellow-200'
+          : 'bg-green-50 text-green-700 border border-green-200';
       case 'PAST_DUE':
         return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
       case 'CANCELED':
@@ -225,18 +249,37 @@ export default function BillingSettings() {
                 </span>
               </div>
             </div>
-            {subscription?.status === 'active' && subscription?.renewalDate && (
+            {status === 'active' && !cancelScheduled && subscription?.renewalDate && (
               <p className="mt-2 text-sm text-muted-foreground">
                 Your subscription will renew on {formatDate(subscription.renewalDate)}
               </p>
             )}
-            {(subscription?.status === 'canceled' || subscription?.status === 'cancelled') &&
-              subscription?.renewalDate && (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Your subscription will end on {formatDate(subscription.renewalDate)}
+            {cancelScheduled && (
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <p className="text-sm font-medium text-yellow-700">
+                  Cancels on {formatDate(endDate)}. You keep access until then.
                 </p>
-              )}
-            {subscription?.status === 'trial' && subscription?.renewalDate && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleResumeSubscription}
+                  disabled={resumeInProgress}
+                >
+                  {resumeInProgress ? 'Keeping subscription...' : 'Keep subscription'}
+                </Button>
+              </div>
+            )}
+            {resumeError && (
+              <p role="alert" className="mt-2 text-sm text-red-700">
+                {resumeError}
+              </p>
+            )}
+            {isEnded && subscription?.renewalDate && (
+              <p className="mt-2 text-sm text-muted-foreground">
+                Your subscription ended on {formatDate(subscription.renewalDate)}
+              </p>
+            )}
+            {status === 'trial' && subscription?.renewalDate && (
               <p className="mt-2 text-sm text-muted-foreground">
                 Your trial will end on {formatDate(subscription.renewalDate)}
               </p>
@@ -268,7 +311,7 @@ export default function BillingSettings() {
                   : subscription?.billingType === 'annual'
                     ? 'Annual'
                     : 'Unknown'}
-                {subscription?.status === 'trial' ? ' Trial' : ''}
+                {status === 'trial' ? ' Trial' : ''}
               </p>
             </div>
             {subscription?.startDate && (
@@ -280,12 +323,11 @@ export default function BillingSettings() {
             {subscription?.renewalDate && (
               <div className="rounded-md border border-border bg-muted/30 p-4">
                 <p className="text-xs font-medium text-muted-foreground">
-                  {subscription?.status === 'canceled' || subscription?.status === 'cancelled'
-                    ? 'End'
-                    : 'Renewal'}{' '}
-                  Date
+                  {isEnded ? 'End Date' : cancelScheduled ? 'Cancels On' : 'Renewal Date'}
                 </p>
-                <p className="mt-1 text-sm font-medium">{formatDate(subscription.renewalDate)}</p>
+                <p className="mt-1 text-sm font-medium">
+                  {formatDate(cancelScheduled ? endDate : subscription.renewalDate)}
+                </p>
               </div>
             )}
           </div>
@@ -339,16 +381,19 @@ export default function BillingSettings() {
             <CreditCard className="mr-2 h-4 w-4" />
             {subscription?.stripeCustomerId
               ? 'Manage Billing'
-              : subscription?.status === 'active'
+              : status === 'active'
                 ? 'Change Plan'
                 : 'Upgrade Plan'}
           </Button>
 
-          {subscription?.status === 'active' && !subscription?.stripeCustomerId && (
+          {status === 'active' && !cancelScheduled && (
             <Button
               variant="outline"
               className="border-red-600 text-red-600 hover:bg-red-50"
-              onClick={() => setIsCancelDialogOpen(true)}
+              onClick={() => {
+                setCancelError(null);
+                setIsCancelDialogOpen(true);
+              }}
             >
               Cancel Subscription
             </Button>
@@ -437,28 +482,37 @@ export default function BillingSettings() {
           <DialogHeader>
             <DialogTitle>Cancel Subscription</DialogTitle>
             <DialogDescription>
-              Are you sure you want to cancel your subscription? You&apos;ll lose access to premium
-              features at the end of your current billing period.
+              {isStripePlan
+                ? 'Are you sure you want to cancel your subscription? You keep access until the end of your current billing period.'
+                : 'Are you sure you want to cancel your subscription? Your plan ends now.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="rounded-md border border-yellow-100 bg-yellow-50 p-4">
-            <div className="flex gap-3">
-              <Clock className="h-5 w-5 flex-shrink-0 text-yellow-500" />
-              <p className="text-sm text-yellow-700">
-                {subscription?.renewalDate ? (
-                  <>
-                    Your subscription will remain active until{' '}
-                    {formatDate(subscription.renewalDate)}, and you will not be charged again.
-                  </>
-                ) : (
-                  <>
-                    Your subscription will remain active until the end of your current billing
-                    period, and you will not be charged again.
-                  </>
-                )}
-              </p>
+          {isStripePlan && (
+            <div className="rounded-md border border-yellow-100 bg-yellow-50 p-4">
+              <div className="flex gap-3">
+                <Clock className="h-5 w-5 flex-shrink-0 text-yellow-500" />
+                <p className="text-sm text-yellow-700">
+                  {subscription?.renewalDate ? (
+                    <>
+                      Your subscription will remain active until{' '}
+                      {formatDate(subscription.renewalDate)}, and you will not be charged again.
+                    </>
+                  ) : (
+                    <>
+                      Your subscription will remain active until the end of your current billing
+                      period, and you will not be charged again.
+                    </>
+                  )}{' '}
+                  You can undo this until then.
+                </p>
+              </div>
             </div>
-          </div>
+          )}
+          {cancelError && (
+            <p role="alert" className="text-sm text-red-700">
+              {cancelError}
+            </p>
+          )}
           <DialogFooter>
             <Button
               variant="outline"
