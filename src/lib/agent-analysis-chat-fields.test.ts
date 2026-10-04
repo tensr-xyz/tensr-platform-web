@@ -2,6 +2,7 @@ import {
   attachApproachToReport,
   chatFieldsAfterRunAnalysis,
   preferRicherPlan,
+  priorPlanForResult,
   reportCardForOpenedTab,
 } from '@/lib/agent-analysis-chat-fields';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
@@ -91,6 +92,61 @@ describe('reportCardForOpenedTab', () => {
 
   it('returns null when no tab opened so chat can keep the full markdown', () => {
     expect(reportCardForOpenedTab({ tabId: null, title: 'Linear Regression' })).toBeNull();
+  });
+});
+
+describe('priorPlanForResult', () => {
+  const pipeline = {
+    rationale: 'Import prolific_profile.csv as the profile file.',
+    whyThisTest: 'Attach the uploaded profile.',
+    pipelineSteps: [
+      {
+        name: 'import_file',
+        args: { role: 'profile' },
+        rationale: 'Import prolific_profile.csv as the profile file.',
+        why_this_test: 'Attach the uploaded profile.',
+      },
+      {
+        name: 'run_analysis',
+        args: { analysis_type: 'merge_datasets' },
+        rationale: 'Merge on participant_id.',
+      },
+      {
+        name: 'run_analysis',
+        args: { analysis_type: 'banner_table' },
+        rationale: 'Banner table of Q5 by gender, age_band.',
+        why_this_test: 'Column percentages with letters.',
+      },
+      {
+        name: 'run_analysis',
+        args: { analysis_type: 'banner_table' },
+        rationale: 'Banner table of Q6 by gender, age_band.',
+      },
+    ],
+  };
+
+  it("takes the banner step's text, not step 1's import text", () => {
+    expect(priorPlanForResult(pipeline, 'banner_table')).toEqual({
+      plan: 'Banner table of Q5 by gender, age_band.',
+      whyThisTest: 'Column percentages with letters.',
+    });
+    expect(priorPlanForResult(pipeline, 'banner_table', 1).plan).toBe(
+      'Banner table of Q6 by gender, age_band.'
+    );
+  });
+
+  it('returns nothing for a type the pipeline did not plan', () => {
+    expect(priorPlanForResult(pipeline, 'linear_regression')).toEqual({
+      plan: null,
+      whyThisTest: null,
+    });
+  });
+
+  it('keeps the single-step pending rationale', () => {
+    expect(
+      priorPlanForResult({ rationale: 'Predict PTS.', whyThisTest: 'OLS.' }, 'linear_regression')
+    ).toEqual({ plan: 'Predict PTS.', whyThisTest: 'OLS.' });
+    expect(priorPlanForResult(null, 'banner_table')).toEqual({ plan: null, whyThisTest: null });
   });
 });
 

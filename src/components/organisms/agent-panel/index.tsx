@@ -76,6 +76,7 @@ import {
   chatFieldsAfterRunAnalysis,
   logAgentChatRenderPayload,
   preferRicherPlan,
+  priorPlanForResult,
   reportCardForOpenedTab,
   type AnalysisReportChatCard,
 } from '@/lib/agent-analysis-chat-fields';
@@ -575,6 +576,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         const enrichmentNotes: string[] = [];
         let primaryChatFields: { content: string; resultMarkdown: string } | null = null;
         let primaryReportCard: AnalysisReportChatCard | null = null;
+        const resultsSeenByType = new Map<string, number>();
 
         for (const entry of response.tool_results ?? []) {
           // Need the full tool envelope ({ result, report, run_id }), not nested
@@ -590,11 +592,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           const requestBody = entry.result.request_body as Record<string, unknown> | undefined;
           if (!analysisType || !requestBody || !datasetId) continue;
 
+          const occurrence = resultsSeenByType.get(analysisType) ?? 0;
+          resultsSeenByType.set(analysisType, occurrence + 1);
+          const priorStep = priorPlanForResult(priorPending, analysisType, occurrence);
           // Prefer the pre-Approve Plan (includes Exploration step / Rejected…)
           // over a rematerialized args.rationale that may have dropped it.
           const planSummary =
             preferRicherPlan(
-              priorPending?.rationale,
+              priorStep.plan,
               String(
                 (entry.args as { rationale?: string } | undefined)?.rationale ||
                   entry.result.rationale ||
@@ -605,7 +610,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             String(
               entry.result.why_this_test ||
                 (entry.args as { why_this_test?: string } | undefined)?.why_this_test ||
-                priorPending?.whyThisTest ||
+                priorStep.whyThisTest ||
                 ''
             ).trim() || null;
           const rejectedAlternative =
