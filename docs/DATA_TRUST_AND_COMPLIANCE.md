@@ -70,11 +70,13 @@ SSE-S3 claim above.
 
 ## Deletion
 
-Deleting a dataset also deletes datasets derived from it, incoming upload objects, stored exports for that dataset, collaboration sessions owned by the dataset owner, report comments on that dataset's reports, and every stored version of its S3 objects.
+Deleting a dataset also deletes datasets derived from it, incoming upload objects, stored exports made from that dataset (each export's file and metadata, and its row in every user's export list), collaboration sessions owned by the dataset owner, report comments on that dataset's reports, and every stored version of those S3 objects. If any S3 delete fails, the dataset is kept and the request returns an error. Exports created before 4 October 2026 are found through the export lists of the dataset's creator, its owner, or its organisation's current members.
 
 `DELETE /organizations/{id}` and `DELETE /me` do not delete S3 from the auth Lambda. That Lambda records a purge job (no `ttl`) and queues it. The datasets worker deletes every S3 version for the dataset parquet, metadata, incoming upload, stored exports, and, for an account deletion, that user's notebook-run cache. The job status is `pending`, `running`, `succeeded`, or `failed`. A failed job stays in DynamoDB and the queue retries it, then moves the message to a dead-letter queue. Personal organisations cannot be deleted with `DELETE /organizations/{id}`.
 
 `DELETE /me` removes the signed-in user's own datasets, organisation memberships, and user record. It does not delete datasets owned by an organisation.
+
+Both deletes cancel a live Stripe subscription first: the organisation's for `DELETE /organizations/{id}`, the user's own for `DELETE /me`. The cancel is immediate. If Stripe is not configured or the cancel fails, the request returns 409 and nothing is deleted. Manual comps have no Stripe subscription and are cancelled locally. After `DELETE /me` the user's subscription record is kept, marked cancelled.
 
 ## What the agent may send to the LLM
 
