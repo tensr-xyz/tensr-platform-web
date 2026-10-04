@@ -15,7 +15,9 @@ const apiBase =
   process.env.PLAYWRIGHT_LIVE_API_URL || 'https://5qv9lg3s55.execute-api.us-east-1.amazonaws.com';
 const fixtures = path.join(__dirname, 'fixtures');
 const MESSAGE =
-  'merge these on participant_id and weight to these targets, exclude missing categories';
+  'Merge the survey with the Prolific profile on participant_id, weight it to the targets file, ' +
+  'then give me a banner table of the product rating by gender and age band.';
+const CLARIFICATION_REPLY = '(a) exclude them';
 
 function bearer(): string {
   const cookie = (name: string) => state.cookies?.find(c => c.name === name)?.value || '';
@@ -26,11 +28,11 @@ test.beforeEach(() => {
   test.skip(Boolean(state.skipped), state.skipped || 'Stytch test login is not configured');
 });
 
-test('Prolific approve merges the attached profile onto the open survey', async ({
+test('Prolific merge, weight and banner runs after the missing-category reply', async ({
   page,
   request,
 }) => {
-  test.setTimeout(240_000);
+  test.setTimeout(300_000);
   const auth = { Authorization: `Bearer ${bearer()}` };
   const uploaded = await request.post(`${apiBase}/api/datasets/upload?scope=personal`, {
     headers: auth,
@@ -70,12 +72,28 @@ test('Prolific approve merges the attached profile onto the open survey', async 
     await composer.fill(MESSAGE);
     await composer.press('Enter');
 
+    await expect(page.getByText(/\(a\) exclude them/).first()).toBeVisible({ timeout: 90_000 });
+    await composer.fill(CLARIFICATION_REPLY);
+    await composer.press('Enter');
+
     const approve = page.getByRole('button', { name: 'Approve' });
     await expect(approve).toBeVisible({ timeout: 90_000 });
     await expect(page.getByText(/Attach the survey/)).toHaveCount(0);
+    await expect(page.getByText(/Could you specify the analysis/)).toHaveCount(0);
     await approve.click();
 
-    await expect(page.getByText(/ESS/).first()).toBeVisible({ timeout: 120_000 });
+    await expect(page.getByText('Effective base (Kish)').first()).toBeVisible({
+      timeout: 180_000,
+    });
+    for (const base of ['Weighted base', 'Unweighted base', 'DEFF']) {
+      await expect(page.getByText(base, { exact: true }).first()).toBeVisible();
+    }
+    for (const band of ['18-34', '35-54', '55+']) {
+      await expect(
+        page.getByText(new RegExp(`age_band=${band.replace('+', '\\+')}`)).first()
+      ).toBeVisible();
+    }
+    await expect(page.getByText(/Provenance unavailable/)).toHaveCount(0);
     await expect(page.getByText(/secondary_dataset_id/)).toHaveCount(0);
     await expect(page.getByText('Run failed')).toHaveCount(0);
   } finally {
