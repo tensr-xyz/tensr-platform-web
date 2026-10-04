@@ -7,6 +7,8 @@ import { fetchSnapshotRows } from '@/lib/collab-snapshot';
 interface UseSheetStateOptions {
   sheetId: string;
   enabled?: boolean;
+  /** The server refused one of this client's ops; local state is being resynced. */
+  onOpRejected?: (reason: string) => void;
 }
 
 interface UseSheetStateReturn {
@@ -35,7 +37,12 @@ interface UseSheetStateReturn {
 export function useSheetState({
   sheetId,
   enabled = true,
+  onOpRejected,
 }: UseSheetStateOptions): UseSheetStateReturn {
+  const onOpRejectedRef = useRef(onOpRejected);
+  onOpRejectedRef.current = onOpRejected;
+  // Ops broadcast while the snapshot is still downloading; replayed once it lands.
+  const pendingOpsRef = useRef<{ version: number; op: SheetOp }[] | null>(null);
   const [state, setState] = useState<SheetState | null>(null);
   const [version, setVersion] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -56,6 +63,7 @@ export function useSheetState({
 
   // Reset local state whenever the sheet identity changes (e.g. session ends).
   useEffect(() => {
+    pendingOpsRef.current = null;
     setState(null);
     setVersion(0);
     setIsLoading(true);
@@ -167,6 +175,7 @@ export function useSheetState({
       } as SheetOp;
 
       const optimisticState = applyOpToState(fullOp, current);
+      stateRef.current = optimisticState;
       setState(optimisticState);
 
       wsService.sendSheetOp(sheetId, current.version, fullOp);
@@ -219,6 +228,7 @@ export function useSheetState({
             const snapshotUrl = serverMessage.snapshotUrl;
             const ops = serverMessage.ops || [];
             setIsLoading(true);
+            pendingOpsRef.current = [];
             void (async () => {
               try {
                 const rows = await fetchSnapshotRows(snapshotUrl);
@@ -234,11 +244,20 @@ export function useSheetState({
                   hydrated = applyOpToState(op, hydrated);
                 }
                 hydrated.version = serverMessage.version;
+                for (const pending of pendingOpsRef.current ?? []) {
+                  if (pending.version > hydrated.version) {
+                    hydrated = applyOpToState(pending.op, hydrated);
+                    hydrated.version = pending.version;
+                  }
+                }
+                pendingOpsRef.current = null;
+                stateRef.current = hydrated;
                 setState(hydrated);
-                setVersion(serverMessage.version);
+                setVersion(hydrated.version);
                 setIsLoading(false);
                 setError(null);
               } catch (err) {
+                pendingOpsRef.current = null;
                 console.error('Failed to hydrate collaboration snapshot:', err);
                 setError(err instanceof Error ? err.message : 'Failed to load collaboration sheet');
                 setIsLoading(false);
@@ -263,9 +282,12 @@ export function useSheetState({
         }
 
         case 'op_applied': {
-          if (stateRef.current) {
+          if (pendingOpsRef.current) {
+            pendingOpsRef.current.push({ version: serverMessage.version, op: serverMessage.op });
+          } else if (stateRef.current) {
             const newState = applyOpToState(serverMessage.op, stateRef.current);
             newState.version = serverMessage.version;
+            stateRef.current = newState;
             setState(newState);
             setVersion(serverMessage.version);
           }
@@ -273,8 +295,14 @@ export function useSheetState({
         }
 
         case 'op_rejected': {
+          // The optimistic edit never reached the server copy. Dropping local state makes
+          // the auto-subscribe effect fetch what the server actually holds.
           setError(serverMessage.reason);
           console.warn('Operation rejected:', serverMessage.reason);
+          stateRef.current = null;
+          setState(null);
+          setIsLoading(true);
+          onOpRejectedRef.current?.(serverMessage.reason);
           break;
         }
 

@@ -91,6 +91,11 @@ import UserCursors from '@/components/molecules/cursor';
 import { applyClientColumnFilters, filterRowsByRowUids } from '@/utils/column-filters';
 import { toast } from '@/hooks/ui/use-toast';
 import {
+  COLLAB_EDIT_REFUSED,
+  collabOpRejectedToast,
+  sendCollabCellEdit,
+} from '@/lib/collab-cell-edit';
+import {
   fetchDatasetColumnMetadata,
   patchColumnMetadata,
   type ColumnMetadataMap,
@@ -617,6 +622,7 @@ export function Spreadsheet({
   } = useSheetState({
     sheetId: sheetId || '',
     enabled: !!sheetId,
+    onOpRejected: reason => toast({ ...collabOpRejectedToast(reason), variant: 'destructive' }),
   });
 
   // Memoize the decoded file path
@@ -689,11 +695,13 @@ export function Spreadsheet({
   // Sync live-sheet state into the grid whenever the server version advances.
   // Previously required versionDiff > 1, which dropped every single remote cell op.
   useEffect(() => {
-    if (
-      !sheetState ||
-      !Array.isArray(sheetState.data) ||
-      sheetState.version <= lastSheetStateVersionRef.current
-    ) {
+    if (!sheetState) {
+      // A resync after a rejected op re-sends the current version; it must still
+      // replace the rejected optimistic value in the grid.
+      if (sheetStateInitializedRef.current) lastSheetStateVersionRef.current = -1;
+      return;
+    }
+    if (!Array.isArray(sheetState.data) || sheetState.version <= lastSheetStateVersionRef.current) {
       return;
     }
     if (sheetState.data.length === 0 && sheetStateInitializedRef.current) {
@@ -2337,62 +2345,63 @@ export function Spreadsheet({
         ? columnId.replace(/\[object Object\](_duplicated_)?/, '')
         : columnId;
 
-      // If sheetId is available, use sheet operations for real-time collaboration
-      if (sheetId && applySheetOperation && sheetState) {
-        try {
-          const currentValue = data[rowIndex]?.[useColumnId];
-          const op = {
+      // In a collaboration session the edit must reach the server copy (save-back
+      // writes that copy), so an edit that cannot be sent is refused, not kept locally.
+      if (sheetId) {
+        const outcome = await sendCollabCellEdit({
+          sheetId,
+          sheetReady: !!sheetState,
+          applyOperation: applySheetOperation,
+          op: {
             kind: 'update_cell' as const,
             row: rowIndex,
             column: useColumnId,
-            oldValue: currentValue,
+            oldValue: data[rowIndex]?.[useColumnId],
             newValue: value,
-          };
-          const success = await applySheetOperation(op);
-          // If operation succeeded, still update local state for immediate UI feedback
-          // The sheet state will sync back via WebSocket, but we want immediate updates
-          if (success) {
-            // Update local state for immediate feedback
-            setData(prevData => {
-              const newData = [...prevData];
-              if (!newData[rowIndex]) {
-                newData[rowIndex] = { id: `row-${rowIndex}` };
-              }
-              newData[rowIndex] = {
-                ...newData[rowIndex],
-                [useColumnId]: value,
-              };
-              return newData;
-            });
-            // Still update tab data
-            if (tabId && activeTab?.data) {
-              if (tabUpdateTimeoutRef.current) {
-                clearTimeout(tabUpdateTimeoutRef.current);
-              }
-              tabUpdateTimeoutRef.current = setTimeout(() => {
-                const currentData = dataRef.current;
-                const rowToUpdate = currentData[rowIndex];
-                if (rowToUpdate && activeTab?.data) {
-                  const updatedRow = { ...rowToUpdate, [useColumnId]: value };
-                  updateTab(tabId, {
-                    data: {
-                      ...activeTab.data,
-                      initialData: activeTab.data.initialData
-                        ? activeTab.data.initialData.map((row, idx) =>
-                            idx === rowIndex ? updatedRow : row
-                          )
-                        : [updatedRow],
-                    },
-                    isDirty: true,
-                  });
-                }
-              }, 300);
+          },
+        });
+        if (outcome === 'loading' || outcome === 'failed') {
+          toast({ ...COLLAB_EDIT_REFUSED[outcome], variant: 'destructive' });
+          return;
+        }
+        // Update local state for immediate feedback; the server echo follows over WebSocket.
+        if (outcome === 'sent') {
+          setData(prevData => {
+            const newData = [...prevData];
+            if (!newData[rowIndex]) {
+              newData[rowIndex] = { id: `row-${rowIndex}` };
             }
-            return;
+            newData[rowIndex] = {
+              ...newData[rowIndex],
+              [useColumnId]: value,
+            };
+            return newData;
+          });
+          // Still update tab data
+          if (tabId && activeTab?.data) {
+            if (tabUpdateTimeoutRef.current) {
+              clearTimeout(tabUpdateTimeoutRef.current);
+            }
+            tabUpdateTimeoutRef.current = setTimeout(() => {
+              const currentData = dataRef.current;
+              const rowToUpdate = currentData[rowIndex];
+              if (rowToUpdate && activeTab?.data) {
+                const updatedRow = { ...rowToUpdate, [useColumnId]: value };
+                updateTab(tabId, {
+                  data: {
+                    ...activeTab.data,
+                    initialData: activeTab.data.initialData
+                      ? activeTab.data.initialData.map((row, idx) =>
+                          idx === rowIndex ? updatedRow : row
+                        )
+                      : [updatedRow],
+                  },
+                  isDirty: true,
+                });
+              }
+            }, 300);
           }
-        } catch (error) {
-          console.error('Failed to apply sheet operation:', error);
-          // Fall through to local update as fallback
+          return;
         }
       }
 
