@@ -11,6 +11,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
 import { useSession } from '@/hooks/ui/use-session';
 import { useAuth } from '@/hooks/api/use-auth';
+import { isSessionUser } from '@/lib/session-identity';
 import { useProjectStore } from '@/stores/project-store';
 import { buildCollaborateUrl } from '@/lib/collaboration-url';
 
@@ -154,7 +155,7 @@ const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationP
 
   const isSessionActive = !!currentSession;
   const collaborators: SessionParticipant[] = currentSession?.participants ?? [];
-  const isHost = !!user && !!currentSession && currentSession.ownerId === user.userId;
+  const isHost = isSessionUser(user, currentSession?.ownerId);
 
   const handleRoleChange = async (userId: string, role: 'Editor' | 'Viewer') => {
     try {
@@ -353,7 +354,7 @@ const CollaborationPanel = ({ projectId: _projectId, activeTab }: CollaborationP
                     <CollaboratorItem
                       key={participant.userId}
                       user={participant}
-                      currentUser={participant.userId === user?.userId}
+                      currentUser={isSessionUser(user, participant.userId)}
                       canManageRole={isHost}
                       onRoleChange={handleRoleChange}
                     />
