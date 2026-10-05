@@ -326,7 +326,7 @@ const MemoizedTableCell = React.memo<{
   columnSize: number;
   pinnedLeft?: number | null;
   cellRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
-  handleCellEdit: (rowIndex: number, columnId: string, value: any) => void | Promise<void>;
+  handleCellEdit: (rowIndex: number, columnId: string, value: any) => Promise<boolean>;
   setFocusedCell: (position: { rowIndex: number; columnId: string }) => void;
   onMouseDown?: (e: React.MouseEvent, rowIndex: number, columnId: string) => void;
   onMouseEnter?: (e: React.MouseEvent, rowIndex: number, columnId: string) => void;
@@ -366,9 +366,7 @@ const MemoizedTableCell = React.memo<{
   }) => {
     // Memoize callbacks to prevent recreation on every render
     const onEdit = useCallback(
-      (value: any) => {
-        handleCellEdit(rowIndex, columnId, value);
-      },
+      (value: any) => handleCellEdit(rowIndex, columnId, value),
       [rowIndex, columnId, handleCellEdit]
     );
 
@@ -2339,7 +2337,7 @@ export function Spreadsheet({
 
   // Update the handleCellEdit function - optimized to avoid expensive operations
   const handleCellEdit = useCallback(
-    async (rowIndex: number, columnId: string, value: any) => {
+    async (rowIndex: number, columnId: string, value: any): Promise<boolean> => {
       // If the columnId has [object Object] in it, use the numeric part instead
       const useColumnId = /object Object/.test(columnId)
         ? columnId.replace(/\[object Object\](_duplicated_)?/, '')
@@ -2362,7 +2360,7 @@ export function Spreadsheet({
         });
         if (outcome === 'loading' || outcome === 'failed') {
           toast({ ...COLLAB_EDIT_REFUSED[outcome], variant: 'destructive' });
-          return;
+          return false;
         }
         // Update local state for immediate feedback; the server echo follows over WebSocket.
         if (outcome === 'sent') {
@@ -2401,7 +2399,7 @@ export function Spreadsheet({
               }
             }, 300);
           }
-          return;
+          return true;
         }
       }
 
@@ -2453,8 +2451,18 @@ export function Spreadsheet({
       // The old ephemeral `cell_update` broadcast (no persistence, no conflict
       // resolution) has been removed; the persisted `sheet_live` op-log path
       // above is now the single mechanism for syncing edits during a session.
+      return true;
     },
     [tabId, activeTab, updateTab, sheetId, applySheetOperation, sheetState, data]
+  );
+
+  // MemoizedTableCell's compare ignores handleCellEdit, so cells get a stable wrapper that
+  // always calls the latest one (it reads sheetState, which hydrates after the first render).
+  const handleCellEditRef = useRef(handleCellEdit);
+  handleCellEditRef.current = handleCellEdit;
+  const editCell = useCallback<typeof handleCellEdit>(
+    (rowIndex, columnId, value) => handleCellEditRef.current(rowIndex, columnId, value),
+    []
   );
 
   // Clipboard handlers
@@ -3495,7 +3503,7 @@ export function Spreadsheet({
                             isNumericColumn={isNumericColumn}
                             heatmapBackgroundColor={heatmapBackgroundColor}
                             cellRefs={cellRefs}
-                            handleCellEdit={handleCellEdit}
+                            handleCellEdit={editCell}
                             setFocusedCell={setFocusedCell}
                             onMouseDown={handleCellMouseDown}
                             onMouseEnter={handleCellMouseEnter}
