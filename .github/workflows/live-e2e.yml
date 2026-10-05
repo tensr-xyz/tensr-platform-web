@@ -28,3 +28,11 @@ jobs:
           STYTCH_PROJECT_ID: ${{ secrets.STYTCH_PROJECT_ID }}
           STYTCH_SECRET: ${{ secrets.STYTCH_SECRET }}
           VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+      # Screenshots only. Traces and the HTML report carry the bypass header and session tokens.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-e2e-screenshots
+          path: test-results/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
