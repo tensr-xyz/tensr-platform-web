@@ -102,7 +102,8 @@ export interface EditableCellRef {
 
 interface EditableCellProps {
   value: string | number | null;
-  onEdit: (value: string) => void;
+  /** Resolve to `false` when the edit was refused; the cell then shows the stored value again. */
+  onEdit: (value: string) => void | boolean | Promise<void | boolean>;
   className?: string;
   inputClassName?: string;
   isFocused?: boolean;
@@ -140,6 +141,13 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
     React.useEffect(() => {
       setValue(initialValue?.toString() ?? '');
     }, [initialValue]);
+
+    const commit = () => {
+      if (value === initialValue?.toString()) return;
+      void Promise.resolve(onEdit(value)).then(accepted => {
+        if (accepted === false) setValue(initialValue?.toString() ?? '');
+      });
+    };
 
     React.useImperativeHandle(ref, () => ({
       focus: () => {
@@ -181,9 +189,7 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
         if (e.key === 'Enter' && !e.altKey) {
           // Enter: Save and move down (unless Alt is held for new line)
           setIsEditing(false);
-          if (value !== initialValue?.toString()) {
-            onEdit(value);
-          }
+          commit();
           onBlur?.();
           // Trigger navigation down after a brief delay to allow state to update
           if (onNavigate) {
@@ -264,9 +270,7 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
                 onBlur={() => {
                   setIsEditing(false);
                   setIsMultiline(false);
-                  if (value !== initialValue?.toString()) {
-                    onEdit(value);
-                  }
+                  commit();
                   onBlur?.();
                 }}
                 onKeyDown={handleKeyDown}
@@ -289,9 +293,7 @@ const EditableCell = React.forwardRef<EditableCellRef, EditableCellProps>(
                 onBlur={() => {
                   setIsEditing(false);
                   setIsMultiline(false);
-                  if (value !== initialValue?.toString()) {
-                    onEdit(value);
-                  }
+                  commit();
                   onBlur?.();
                 }}
                 onKeyDown={handleKeyDown}

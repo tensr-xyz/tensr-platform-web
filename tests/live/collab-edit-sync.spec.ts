@@ -71,15 +71,22 @@ async function meanOfGroupA(request: APIRequestContext, datasetId: string): Prom
 /** Records the session sheet's websocket traffic so steps can wait on the server. */
 function watchSheet(page: Page) {
   const frames: string[] = [];
+  const sent: string[] = [];
   page.on('websocket', ws => {
     ws.on('framereceived', f => {
       if (typeof f.payload === 'string' && f.payload.includes('"sheetId": "session:'))
         frames.push(f.payload);
     });
+    ws.on('framesent', f => {
+      if (typeof f.payload === 'string' && f.payload.includes('"type":"op"')) sent.push(f.payload);
+    });
   });
   return {
     async waitFor(pattern: RegExp, timeout = 60_000) {
       await expect.poll(() => frames.some(f => pattern.test(f)), { timeout }).toBe(true);
+    },
+    sentOp(newValue: string) {
+      return sent.some(f => f.includes(`"newValue":"${newValue}"`));
     },
   };
 }
@@ -88,8 +95,13 @@ async function openCollaboration(page: Page) {
   await page.getByRole('button', { name: /Start collaboration|Collaboration session/ }).click();
 }
 
-/** An edit made before the shared copy has loaded is refused with a toast; retry until it is sent. */
-async function editScore(page: Page, from: string, to: string) {
+type Sheet = ReturnType<typeof watchSheet>;
+
+/**
+ * An edit made before the shared copy has loaded is refused with a toast and the cell
+ * shows the stored value again; retry until the op is actually sent.
+ */
+async function editScore(page: Page, sheet: Sheet, from: string, to: string) {
   for (let attempt = 0; attempt < 15; attempt += 1) {
     await page.keyboard.press('Escape');
     const cell = page
@@ -102,11 +114,16 @@ async function editScore(page: Page, from: string, to: string) {
     await editor.fill(to);
     await page.keyboard.press('Enter');
     const refused = page.getByText('The shared copy is still loading', { exact: false });
-    const done = page
-      .locator('[data-column-id="score"]')
-      .filter({ hasText: new RegExp(`^${to}$`) });
-    await expect(refused.or(done).first()).toBeVisible({ timeout: 10_000 });
-    if (await done.count()) return;
+    await expect
+      .poll(async () => sheet.sentOp(to) || (await refused.count()) > 0, { timeout: 10_000 })
+      .toBe(true);
+    if (sheet.sentOp(to)) return;
+    await expect(
+      page
+        .locator('[data-column-id="score"]')
+        .filter({ hasText: new RegExp(`^${from}$`) })
+        .first()
+    ).toBeVisible();
     await page.waitForTimeout(2_000);
   }
   throw new Error(`edit ${from} -> ${to} was never sent`);
@@ -145,7 +162,7 @@ test('a session edit saves back, survives a reload, and every analysis sees it',
     expect(await meanOfGroupA(request, datasetId)).toEqual(Array(6).fill(4));
     const sheet = await startSession(page, datasetId, name);
 
-    await editScore(page, '1', '1000');
+    await editScore(page, sheet, '1', '1000');
     await sheet.waitFor(/"type": "op_applied".*"newValue": "1000"/);
     await shot(page, '1-edited-in-session');
 
@@ -181,7 +198,7 @@ test('discarding a session leaves the source dataset unchanged', async ({ page, 
   const datasetId = await upload(request, name);
   try {
     const sheet = await startSession(page, datasetId, name);
-    await editScore(page, '1', '1000');
+    await editScore(page, sheet, '1', '1000');
     await sheet.waitFor(/"type": "op_applied".*"newValue": "1000"/);
 
     await openCollaboration(page);
@@ -228,7 +245,10 @@ test('two clients editing different cells both reach the saved dataset', async (
     await expect(guest.getByTestId('column-menu-score')).toBeVisible({ timeout: 90_000 });
     await guestSheet.waitFor(/"type": "initial_state"/);
 
-    await Promise.all([editScore(page, '1', '100'), editScore(guest, '8', '800')]);
+    await Promise.all([
+      editScore(page, hostSheet, '1', '100'),
+      editScore(guest, guestSheet, '8', '800'),
+    ]);
     await hostSheet.waitFor(/"type": "op_applied".*"newValue": "800"/);
     await guestSheet.waitFor(/"type": "op_applied".*"newValue": "100"/);
     await expect(

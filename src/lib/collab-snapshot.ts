@@ -9,12 +9,24 @@
  */
 import { parquetReadObjects } from 'hyparquet';
 
+/**
+ * hyparquet reads INT64 columns as BigInt, which JSON.stringify cannot encode, so any op
+ * carrying such a cell (e.g. `oldValue`) would never be sent.
+ */
+export function jsonSafeCell(value: unknown): unknown {
+  if (typeof value !== 'bigint') return value;
+  const asNumber = Number(value);
+  return Number.isSafeInteger(asNumber) ? asNumber : value.toString();
+}
+
 export async function fetchSnapshotRows(snapshotUrl: string): Promise<Record<string, unknown>[]> {
   const res = await fetch(snapshotUrl);
   if (!res.ok) {
     throw new Error(`Failed to fetch collaboration snapshot (${res.status})`);
   }
   const arrayBuffer = await res.arrayBuffer();
-  const rows = await parquetReadObjects({ file: arrayBuffer });
-  return rows as Record<string, unknown>[];
+  const rows = (await parquetReadObjects({ file: arrayBuffer })) as Record<string, unknown>[];
+  return rows.map(row =>
+    Object.fromEntries(Object.entries(row).map(([key, value]) => [key, jsonSafeCell(value)]))
+  );
 }
