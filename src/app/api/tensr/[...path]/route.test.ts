@@ -64,6 +64,7 @@ describe('/api/tensr proxy: agent-loop stream', () => {
     const sent = fetchMock.mock.calls[0][1] as RequestInit;
     expect(new Headers(sent.headers).get('Authorization')).toBe('Bearer t');
     expect(res.headers.get('Content-Type')).toContain('text/event-stream');
+    expect(res.headers.get('X-Tensr-Upstream')).toBe('function-url');
 
     const reader = res.body!.getReader();
     const dec = new TextDecoder();
@@ -86,7 +87,8 @@ describe('/api/tensr proxy: agent-loop stream', () => {
 
   it('uses API Gateway for the stream when no Function URL is set', async () => {
     delete process.env.TENSR_ASSISTANT_STREAM_URL;
-    await post(['assistant', 'agent-loop', 'stream']);
+    const res = await post(['assistant', 'agent-loop', 'stream']);
     expect(fetchMock.mock.calls[0][0]).toBe(`${API}/api/assistant/agent-loop/stream`);
+    expect(res.headers.get('X-Tensr-Upstream')).toBe('api-gateway');
   });
 });

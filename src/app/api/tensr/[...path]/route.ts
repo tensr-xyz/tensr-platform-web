@@ -17,11 +17,16 @@ const HOP_BY_HOP_HEADERS = new Set([
   'upgrade',
 ]);
 
-function buildTargetUrl(pathSegments: string[], search: string): string {
-  return (
-    buildAssistantStreamTargetUrl(pathSegments, search) ??
-    buildTensrProxyTargetUrl(pathSegments, search, getTensrApiBaseUrl())
-  );
+function buildTarget(
+  pathSegments: string[],
+  search: string
+): { url: string; upstream: 'function-url' | 'api-gateway' } {
+  const streamUrl = buildAssistantStreamTargetUrl(pathSegments, search);
+  if (streamUrl) return { url: streamUrl, upstream: 'function-url' };
+  return {
+    url: buildTensrProxyTargetUrl(pathSegments, search, getTensrApiBaseUrl()),
+    upstream: 'api-gateway',
+  };
 }
 
 function isStreamingProxyPath(pathSegments: string[]): boolean {
@@ -41,7 +46,7 @@ function forwardResponseHeaders(from: Headers): Headers {
 }
 
 async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<NextResponse> {
-  const targetUrl = buildTargetUrl(pathSegments, req.nextUrl.search);
+  const { url: targetUrl, upstream } = buildTarget(pathSegments, req.nextUrl.search);
   const streamPath = isStreamingProxyPath(pathSegments);
 
   const headers = new Headers();
@@ -83,6 +88,8 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
       outHeaders.set('Cache-Control', `${noStore}, no-transform`);
       outHeaders.set('Pragma', 'no-cache');
       outHeaders.set('X-Accel-Buffering', 'no');
+      // API Gateway caps a turn at 30s; only the Function URL streams past it.
+      outHeaders.set('X-Tensr-Upstream', upstream);
       return new NextResponse(res.body, {
         status: res.status,
         headers: outHeaders,
