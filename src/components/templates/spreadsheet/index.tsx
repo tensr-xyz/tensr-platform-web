@@ -104,6 +104,7 @@ import type { MeasurementLevel } from '@/lib/measurement-level';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { recordTabSnapshot } from '@/lib/tab-history';
 import { SPREADSHEET_EVENTS, type TabColumnFilterPayload } from '@/lib/spreadsheet-commands';
+import { gridRowsForColumns } from '@/lib/sheet-grid-align';
 
 const INITIAL_EMPTY_ROWS = 200;
 const ROWS_PER_BATCH = 250;
@@ -124,18 +125,15 @@ const VIRTUAL_OVERSCAN_LOADING = 80;
 function rowsFromColumnMajorPage(
   processedData: unknown[][],
   columns: Column[],
-  startRow: number
+  startRow: number,
+  sourceColumnIds?: string[]
 ): RowType[] {
-  if (!processedData[0]) return [];
-  return processedData[0].map((_: unknown, rowIndex: number) => {
-    const row: RowType = { id: `row-${startRow + rowIndex}` };
-    columns.forEach((col, colIndex) => {
-      if (col.id) {
-        row[col.id] = processedData[colIndex][rowIndex];
-      }
-    });
-    return row;
-  });
+  return gridRowsForColumns(
+    processedData,
+    sourceColumnIds && sourceColumnIds.length ? sourceColumnIds : columns.map(col => col.id),
+    columns,
+    startRow
+  );
 }
 
 function formatCellDisplayValue(value: unknown): string {
@@ -276,7 +274,7 @@ async function fetchDatasetGridSliceForSpreadsheet(
   endRow: number,
   cache: UuidDatasetGridCache,
   sortConfig?: SortConfig[]
-): Promise<{ data: unknown[][] } | null> {
+): Promise<{ data: unknown[][]; variableNames: string[] } | null> {
   if (!token) return null;
   const headers = { Authorization: `Bearer ${token}` };
 
@@ -308,10 +306,10 @@ async function fetchDatasetGridSliceForSpreadsheet(
     sortConfig ?? []
   );
   const slice = sortedRows.slice(startRow, endRow);
-  const processedData = entry.headers.map((_, colIdx) =>
+  const processedData = entry.variableNames.map((_, colIdx) =>
     slice.map(row => (row as unknown[])[colIdx])
   );
-  return { data: processedData };
+  return { data: processedData, variableNames: entry.variableNames };
 }
 
 // Memoized cell component to prevent unnecessary re-renders
@@ -1221,7 +1219,8 @@ export function Spreadsheet({
           const newRows = rowsFromColumnMajorPage(
             processedData as unknown[][],
             initialColumns as any,
-            startRow
+            startRow,
+            data.variableNames
           );
 
           if (fetchGeneration !== loadGenerationRef.current) return;
@@ -1330,7 +1329,8 @@ export function Spreadsheet({
         const newRows = rowsFromColumnMajorPage(
           processedData as unknown[][],
           initialColumns as any,
-          nextStartRow
+          nextStartRow,
+          data?.variableNames
         );
 
         setPrefetchedData(newRows);
@@ -1436,7 +1436,12 @@ export function Spreadsheet({
           return;
         }
 
-        const allRows = rowsFromColumnMajorPage(page.data as unknown[][], initialColumns as any, 0);
+        const allRows = rowsFromColumnMajorPage(
+          page.data as unknown[][],
+          initialColumns as any,
+          0,
+          page.variableNames
+        );
         if (allRows.length === 0) {
           if (hydrateGeneration === loadGenerationRef.current) {
             fullHydrateStartedRef.current = false;

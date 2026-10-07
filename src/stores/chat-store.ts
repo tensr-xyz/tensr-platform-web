@@ -21,6 +21,8 @@ export interface ChatMessage {
   thinkingLines?: string[];
   /** Last fitted inferential spec so follow-ups can inherit it. */
   lastFittedModel?: { analysis_type: string; request_body: Record<string, unknown> };
+  /** Compact memory of the last tool-using turn, sent back as [prior_turn_state]. */
+  turnState?: Record<string, unknown>;
   /** Result markdown appended after thinking lines (typewriter + final render). */
   resultMarkdown?: string;
   /** Short summary once the full report lives on its own tab. */

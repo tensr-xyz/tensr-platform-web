@@ -33,11 +33,16 @@ export function lastFittedModelFromToolResults(
   return undefined;
 }
 
+export function priorTurnStateBlock(state: unknown): string {
+  return '```[prior_turn_state]\n' + JSON.stringify(state) + '\n```';
+}
+
 export function buildAgentConversationHistory(
   messages: Array<{
     role: string;
     content: string;
     lastFittedModel?: unknown;
+    turnState?: unknown;
   }>,
   limit = 8
 ): AgentConversationTurn[] {
@@ -47,9 +52,11 @@ export function buildAgentConversationHistory(
       const base = (m.content ?? '').trim();
       const marker =
         m.role === 'assistant' && m.lastFittedModel ? lastFittedModelMarker(m.lastFittedModel) : '';
+      const turnState =
+        m.role === 'assistant' && m.turnState ? priorTurnStateBlock(m.turnState) : '';
       return {
         role: m.role === 'assistant' ? ('assistant' as const) : ('user' as const),
-        content: [base, marker].filter(Boolean).join('\n'),
+        content: [base, marker, turnState].filter(Boolean).join('\n'),
       };
     })
     .filter(m => m.content.length > 0);

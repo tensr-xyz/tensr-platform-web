@@ -64,6 +64,8 @@ export type AgentLoopResponse = {
   execution_summary?: string;
   /** Raw tool trace behind execution_summary (role, call ids); technical details only. */
   execution_trace?: string;
+  /** Compact memory of this turn when tools ran. */
+  turn_state?: Record<string, unknown>;
 };
 
 export type AgentLoopAttachment = {
@@ -269,6 +271,7 @@ export function deriveMessageUpdateFromLoopResponse(
       isStreaming: false,
       thinkingLines: undefined,
       lastFittedModel,
+      turnState: response.turn_state,
     };
   }
 
@@ -281,6 +284,7 @@ export function deriveMessageUpdateFromLoopResponse(
         isStreaming: false,
         thinkingLines: undefined,
         lastFittedModel,
+        turnState: response.turn_state,
         pendingAction: {
           kind: 'agent_tool_approval',
           status: 'pending',
@@ -322,6 +326,7 @@ export function deriveMessageUpdateFromLoopResponse(
     isStreaming: false,
     thinkingLines: undefined,
     lastFittedModel,
+    turnState: response.turn_state,
     pendingAction,
   };
 }
