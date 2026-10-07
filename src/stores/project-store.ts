@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { columnNamesFromSchemaResponse } from '@/lib/dataset-schema';
+import { fetchWithColdStartRetry } from '@/lib/cold-start-fetch';
+import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 import { getTensrApiHeaders } from '@/utils/auth';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { devLog } from '@/lib/dev-log';
@@ -72,7 +74,7 @@ async function fetchDatasetWorkspacePayload(
   label: string;
 } | null> {
   const authHeaders = datasetAuthHeaders(token);
-  const schemaRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/schema`), {
+  const schemaRes = await fetchWithColdStartRetry(tensrApiUrl(`/datasets/${datasetId}/schema`), {
     headers: authHeaders,
   });
   if (
@@ -92,7 +94,7 @@ async function fetchDatasetWorkspacePayload(
         throw new Error('Dataset not found.');
       }
       const detail = await schemaRes.text().catch(() => '');
-      throw new Error(detail || `Could not load dataset schema (${schemaRes.status})`);
+      throw new Error(formatApiErrorMessage(new ApiRequestError(schemaRes.status, detail || '')));
     }
     return null;
   }
@@ -462,9 +464,10 @@ export const useProjectStore = create<ProjectStore>()(
 
             const base = getTensrApiBaseUrl();
             const authHeaders = datasetAuthHeaders(token);
-            const dsSchema = await fetch(tensrApiUrl(`/datasets/${projectId}/schema`), {
-              headers: authHeaders,
-            });
+            const dsSchema = await fetchWithColdStartRetry(
+              tensrApiUrl(`/datasets/${projectId}/schema`),
+              { headers: authHeaders }
+            );
             if (
               handleUnauthorizedResponse(dsSchema, `project-store:getProjectDetails:${projectId}`)
             ) {
@@ -685,9 +688,10 @@ export const useProjectStore = create<ProjectStore>()(
               schema?: { name: string; type?: string }[];
             };
             try {
-              schemaRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/schema`), {
-                headers: authHeaders,
-              });
+              schemaRes = await fetchWithColdStartRetry(
+                tensrApiUrl(`/datasets/${datasetId}/schema`),
+                { headers: authHeaders }
+              );
               if (
                 handleUnauthorizedResponse(schemaRes, `project-store:fetchImportGrid:${datasetId}`)
               ) {
@@ -696,7 +700,9 @@ export const useProjectStore = create<ProjectStore>()(
               }
               if (!schemaRes.ok) {
                 const detail = await schemaRes.text().catch(() => '');
-                throw new Error(detail || `Could not load dataset schema (${schemaRes.status})`);
+                throw new Error(
+                  formatApiErrorMessage(new ApiRequestError(schemaRes.status, detail || ''))
+                );
               }
               schemaJson = (await schemaRes.json()) as {
                 n_rows?: number;
