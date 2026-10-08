@@ -104,7 +104,8 @@ import type { MeasurementLevel } from '@/lib/measurement-level';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { recordTabSnapshot } from '@/lib/tab-history';
 import { SPREADSHEET_EVENTS, type TabColumnFilterPayload } from '@/lib/spreadsheet-commands';
-import { gridRowsForColumns } from '@/lib/sheet-grid-align';
+import { gridRowsForColumns, gridRowsFromStoredRecords } from '@/lib/sheet-grid-align';
+import { fetchWithColdStartRetry } from '@/lib/cold-start-fetch';
 
 const INITIAL_EMPTY_ROWS = 200;
 const ROWS_PER_BATCH = 250;
@@ -280,11 +281,14 @@ async function fetchDatasetGridSliceForSpreadsheet(
 
   let entry = cache.get(datasetId);
   if (!entry) {
-    const schemaRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/schema`), { headers });
-    if (!schemaRes.ok) return null;
-    const previewRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/preview?limit=5000`), {
+    const schemaRes = await fetchWithColdStartRetry(tensrApiUrl(`/datasets/${datasetId}/schema`), {
       headers,
     });
+    if (!schemaRes.ok) return null;
+    const previewRes = await fetchWithColdStartRetry(
+      tensrApiUrl(`/datasets/${datasetId}/preview?limit=5000`),
+      { headers }
+    );
     if (!previewRes.ok) return null;
     const preview = (await previewRes.json()) as {
       headers?: string[];
@@ -306,10 +310,14 @@ async function fetchDatasetGridSliceForSpreadsheet(
     sortConfig ?? []
   );
   const slice = sortedRows.slice(startRow, endRow);
-  const processedData = entry.variableNames.map((_, colIdx) =>
-    slice.map(row => (row as unknown[])[colIdx])
+  const rowWidth = Array.isArray(slice[0])
+    ? (slice[0] as unknown[]).length
+    : entry.variableNames.length;
+  const sourceIds = entry.variableNames.length === rowWidth ? entry.variableNames : entry.headers;
+  const processedData = sourceIds.map((_, colIdx) =>
+    slice.map(row => (Array.isArray(row) ? row[colIdx] : undefined))
   );
-  return { data: processedData, variableNames: entry.variableNames };
+  return { data: processedData, variableNames: sourceIds };
 }
 
 // Memoized cell component to prevent unnecessary re-renders
@@ -662,15 +670,13 @@ export function Spreadsheet({
   const [data, setData] = useState<RowType[]>(() => {
     if (isFileMode && initialData.length > 0) {
       // File mode with data: Initialize with provided data
-      return initialData.map((row, index) => ({
-        id: `row-${index}`,
-        ...Object.fromEntries(
-          Object.entries(row).map(([key, value]) => [
-            key,
-            typeof value === 'string' ? value.replace(/^"|"$/g, '').trim() : value,
-          ])
-        ),
-      }));
+      return gridRowsFromStoredRecords(initialData, initialColumns).map(row => {
+        const next: RowType = { ...row };
+        for (const [key, value] of Object.entries(next)) {
+          if (typeof value === 'string') next[key] = value.replace(/^"|"$/g, '').trim();
+        }
+        return next;
+      });
     }
     if (waitingForDatasetRows) {
       // Dataset-backed tab: wait for fetch/hydrate instead of showing blank placeholder rows
@@ -1042,18 +1048,16 @@ export function Spreadsheet({
     if (columnFilters.length > 0 || sorting.length > 0 || loadingRef.current) return;
 
     setData(
-      initialData.map((row, index) => ({
-        id: `row-${index}`,
-        ...Object.fromEntries(
-          Object.entries(row).map(([key, value]) => [
-            key,
-            typeof value === 'string' ? value.replace(/^"|"$/g, '').trim() : value,
-          ])
-        ),
-      }))
+      gridRowsFromStoredRecords(initialData, initialColumns).map(row => {
+        const next: RowType = { ...row };
+        for (const [key, value] of Object.entries(next)) {
+          if (typeof value === 'string') next[key] = value.replace(/^"|"$/g, '').trim();
+        }
+        return next;
+      })
     );
     lastLoadedRowRef.current = initialData.length;
-  }, [isFileMode, initialData, data.length, columnFilters.length, sorting.length]);
+  }, [isFileMode, initialData, initialColumns, data.length, columnFilters.length, sorting.length]);
 
   const [columnSizing, setColumnSizing] = useState({});
   const [extraColumnsCount, setExtraColumnsCount] = useState(0);

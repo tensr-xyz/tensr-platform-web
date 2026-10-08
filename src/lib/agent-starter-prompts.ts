@@ -6,6 +6,7 @@ export type StarterColumn = {
   id?: string;
   header?: string;
   type?: string;
+  uniqueCount?: number;
 };
 
 function label(column: StarterColumn): string {
@@ -16,13 +17,39 @@ function isNumeric(column: StarterColumn): boolean {
   return /number|numeric|float|int|decimal/i.test(column.type || '');
 }
 
+function isIdColumn(column: StarterColumn): boolean {
+  const name = `${column.id || ''} ${column.header || ''}`.toLowerCase();
+  return /(^|[\s_])(id|uid|uuid)($|[\s_])/.test(` ${name} `) || name.includes('participant_id');
+}
+
+function isDateColumn(column: StarterColumn): boolean {
+  const blob = `${column.type || ''} ${column.id || ''} ${column.header || ''}`.toLowerCase();
+  return /date|datetime|timestamp/.test(blob);
+}
+
+function crosstabColumns(columns: StarterColumn[]): StarterColumn[] {
+  const eligible = columns.filter(
+    column =>
+      column.id &&
+      !HIDDEN.has(column.id) &&
+      !isNumeric(column) &&
+      !isIdColumn(column) &&
+      !isDateColumn(column)
+  );
+  const counted = eligible.filter(column => typeof column.uniqueCount === 'number');
+  if (counted.length) {
+    return [...eligible].sort((a, b) => (a.uniqueCount ?? 99) - (b.uniqueCount ?? 99));
+  }
+  return eligible;
+}
+
 export function starterPromptsForColumns(
   columns: StarterColumn[],
   options?: { notebook?: boolean }
 ): string[] {
   const usable = columns.filter(column => column.id && !HIDDEN.has(column.id));
   const numeric = usable.filter(isNumeric);
-  const categorical = usable.filter(column => !isNumeric(column));
+  const categorical = crosstabColumns(columns);
   const prompts: string[] = [];
   if (options?.notebook) {
     if (numeric.length >= 2) {

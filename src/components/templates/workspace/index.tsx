@@ -13,6 +13,9 @@ import useAuth from '@/hooks/api/use-auth';
 import { Tab } from '@/stores/tabs-store';
 import PluginsLayout from '@/components/templates/plugins-layout';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { gridRowsForColumns, gridRowsFromPreview } from '@/lib/sheet-grid-align';
+import { fetchWithColdStartRetry, subscribeDatasetColdStart } from '@/lib/cold-start-fetch';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import { buildDefaultImportSettings, type ImportSettings } from '@/lib/import-settings';
 import { MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
 import { warmAssistantBackend } from '@/lib/warm-assistant';
@@ -44,20 +47,27 @@ async function fetchDatasetImportGrid(
   datasetId: string,
   token: string,
   rowLimit: number
-): Promise<{ data: unknown[][] }> {
+): Promise<{ data: unknown[][]; variableNames: string[]; rows: unknown[][] }> {
   const headers = { Authorization: `Bearer ${token}` };
-  const previewRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/preview?limit=${rowLimit}`), {
-    headers,
-  });
+  const previewRes = await fetchWithColdStartRetry(
+    tensrApiUrl(`/datasets/${datasetId}/preview?limit=${rowLimit}`),
+    { headers }
+  );
   if (!previewRes.ok) {
     const text = await previewRes.text();
-    throw new Error(`Dataset preview failed: ${previewRes.status} ${text}`);
+    throw new Error(
+      formatApiErrorMessage(new Error(text || `Dataset preview failed (${previewRes.status})`))
+    );
   }
-  const preview = (await previewRes.json()) as { headers?: string[]; rows?: unknown[][] };
-  const hdrs = preview.headers || [];
+  const preview = (await previewRes.json()) as {
+    headers?: string[];
+    variable_names?: string[];
+    rows?: unknown[][];
+  };
+  const names = preview.variable_names?.length ? preview.variable_names : preview.headers || [];
   const rows = preview.rows || [];
-  const processedData = hdrs.map((_, colIdx) => rows.map(row => (row as unknown[])[colIdx]));
-  return { data: processedData };
+  const processedData = names.map((_, colIdx) => rows.map(row => (row as unknown[])[colIdx]));
+  return { data: processedData, variableNames: names, rows };
 }
 
 /** If `filePath` is a tensr-api dataset id, return grid data; if not found (404), return null */
@@ -65,15 +75,17 @@ async function tryDatasetImportGridFromUuidPath(
   filePath: string,
   token: string,
   rowLimit: number
-): Promise<{ data: unknown[][] } | null> {
+): Promise<{ data: unknown[][]; variableNames: string[]; rows: unknown[][] } | null> {
   if (!UUID_PATH_REGEX.test(filePath)) return null;
-  const schemaRes = await fetch(tensrApiUrl(`/datasets/${filePath}/schema`), {
+  const schemaRes = await fetchWithColdStartRetry(tensrApiUrl(`/datasets/${filePath}/schema`), {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (schemaRes.status === 404) return null;
   if (!schemaRes.ok) {
     const text = await schemaRes.text();
-    throw new Error(`Dataset error: ${schemaRes.status} ${text}`);
+    throw new Error(
+      formatApiErrorMessage(new Error(text || `Dataset error (${schemaRes.status})`))
+    );
   }
   return fetchDatasetImportGrid(filePath, token, rowLimit);
 }
@@ -84,6 +96,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([]);
   const [projectName, setProjectName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
+  const [startingUp, setStartingUp] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [currentResource, setCurrentResource] = useState<WorkspaceResource>(resource);
@@ -177,6 +190,8 @@ export default function Workspace({ resource }: WorkspaceProps) {
   }, [isAuthReady, resourceId]);
 
   // Load workspace data only after Stytch + AuthProvider have finished bootstrapping.
+  useEffect(() => subscribeDatasetColdStart(() => setStartingUp(true)), []);
+
   useEffect(() => {
     mountedRef.current = true;
 
@@ -238,7 +253,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
           }
         } catch (err) {
           if (mountedRef.current) {
-            setError(err instanceof Error ? err.message : 'Unknown error');
+            setError(formatApiErrorMessage(err));
             setIsLoading(false);
           }
         }
@@ -316,65 +331,21 @@ export default function Workspace({ resource }: WorkspaceProps) {
           throw new Error(`Dataset not found: ${datasetId}`);
         }
 
-        // Define types for data processing
-        type ColumnDefinition = {
-          id: string;
-          accessor: string;
-          header: string;
-          width: number;
-          type: string;
-        };
+        const sourceIds = data.variableNames?.length
+          ? data.variableNames
+          : columns.map(column => column.id);
 
-        // IMPORTANT: Instead of using the existing processDataChunk function,
-        // we need to handle column-oriented data correctly
-        const processColumnOrientedData = (
-          columnData: any[],
-          columns: ColumnDefinition[]
-        ): Record<string, any>[] => {
-          // Check if data is in expected format
-          if (!Array.isArray(columnData) || columnData.length === 0) {
-            console.error('Invalid data format');
-            return [];
-          }
+        const rowsForColumns = (previewRows: unknown[][], startRow = 0): Record<string, any>[] =>
+          gridRowsFromPreview(sourceIds, previewRows, columns, startRow).map(row => {
+            const { id: _rowId, ...rest } = row;
+            return rest;
+          });
 
-          // Convert column-oriented data to row-oriented
-          const rowCount = columnData[0].length;
-          const processedData: Record<string, any>[] = [];
-
-          for (let rowIdx = 0; rowIdx < rowCount; rowIdx++) {
-            const rowObj: Record<string, any> = {};
-
-            // For each column definition, get the corresponding value
-            columns.forEach((column, colIdx) => {
-              if (colIdx < columnData.length && rowIdx < columnData[colIdx].length) {
-                // Get value for this cell
-                let value = columnData[colIdx][rowIdx];
-
-                // Process value based on column type
-                if (column.type === 'number' && value !== '') {
-                  value = parseFloat(value) || 0;
-                } else if (column.type === 'boolean') {
-                  value = Boolean(value);
-                }
-
-                rowObj[column.id] = value;
-              } else {
-                rowObj[column.id] = ''; // Default for missing data
-              }
-            });
-
-            processedData.push(rowObj);
-          }
-
-          return processedData;
-        };
-
-        if (!data?.data || !Array.isArray(data.data)) {
+        if (!data?.rows || !Array.isArray(data.rows)) {
           throw new Error('No tabular data returned for import');
         }
 
-        // Process the column-oriented data
-        const fullData = processColumnOrientedData(data.data, columns);
+        const fullData = rowsForColumns(data.rows);
 
         // Add a fallback/default ID for the tab
         const tabId = dataToImport.fileId || resourceId || `tab-${Date.now()}`;
@@ -401,8 +372,11 @@ export default function Workspace({ resource }: WorkspaceProps) {
             // isProjectFile - removed as it's not in TabData type: false, // Always allow fetchMoreRows to be called
             cleanValue: (value: any) => cleanValue(value, 'string'), // Create wrapper function
             // Pass the custom processing function for future data chunks
-            processDataChunk: (data: any[], startRow: number) =>
-              processColumnOrientedData(data, columns),
+            processDataChunk: (columnData: unknown[][], startRow: number) =>
+              gridRowsForColumns(columnData, sourceIds, columns, startRow).map(row => {
+                const { id: _rowId, ...rest } = row;
+                return rest;
+              }),
           },
         };
 
@@ -495,7 +469,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
         }
       } catch (err) {
         if (mountedRef.current) {
-          setError(err instanceof Error ? err.message : 'Unknown error');
+          setError(formatApiErrorMessage(err));
           setIsLoading(false);
         }
       }
@@ -522,7 +496,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
   }, [projectImportData, tabs]);
 
   if (isLoading || awaitingDatasetTab) {
-    return <Loading fullScreen />;
+    return <Loading fullScreen message={startingUp ? 'Starting up…' : undefined} />;
   }
 
   if (error) {
