@@ -17,6 +17,7 @@ import {
   heatmapBackgroundForValue,
   parseNumericCellValue,
 } from '@/lib/column-heatmap';
+import { formatSheetCellDisplay } from '@/lib/sheet-cell-format';
 import {
   EditableCell,
   TableBody,
@@ -137,9 +138,8 @@ function rowsFromColumnMajorPage(
   );
 }
 
-function formatCellDisplayValue(value: unknown): string {
-  if (value === null || value === undefined) return '';
-  return String(value);
+function formatCellDisplayValue(value: unknown, columnId?: string): string {
+  return formatSheetCellDisplay(value, columnId);
 }
 
 /** Merge a fetched page without duplicating rows when hydrate and pagination race. */
@@ -461,7 +461,7 @@ const MemoizedTableCell = React.memo<{
               isNumericColumn && 'justify-end font-mono'
             )}
           >
-            {formatCellDisplayValue(cellValue)}
+            {formatCellDisplayValue(cellValue, columnId)}
           </div>
         )}
       </TableCell>
