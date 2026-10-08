@@ -672,6 +672,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             planSummary,
             whyThisTest,
             reportMarkdown: markdown,
+            answerMarkdown: response.answer_markdown,
           });
         }
 

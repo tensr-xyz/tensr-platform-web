@@ -24,12 +24,21 @@ export function reportCardForOpenedTab(opts: {
 }
 
 /** Build chat fields after a successful run_analysis so Plan and report don't double-render. */
+function sameText(left: string, right: string): boolean {
+  return (
+    left.replace(/\s+/g, ' ').trim().toLowerCase() ===
+    right.replace(/\s+/g, ' ').trim().toLowerCase()
+  );
+}
+
 export function chatFieldsAfterRunAnalysis(opts: {
   /** Pre-Approve message body (Plan / Why markdown). */
   priorContent: string;
   planSummary?: string | null;
   whyThisTest?: string | null;
   reportMarkdown: string;
+  /** Grounded answer. Kept under the plan when it is not the plan sentence itself. */
+  answerMarkdown?: string | null;
 }): { content: string; resultMarkdown: string } {
   const reportMarkdown = opts.reportMarkdown.trim();
   const prior = opts.priorContent.trim();
@@ -42,21 +51,28 @@ export function chatFieldsAfterRunAnalysis(opts: {
   // or answer_markdown that is only why_this_test.
   const priorIsApprovalStub = /^paused for approval:/i.test(prior);
   const priorIsWhyOnly =
-    Boolean(opts.whyThisTest?.trim()) &&
-    prior.replace(/\s+/g, ' ').trim().toLowerCase() ===
-      opts.whyThisTest!.trim().replace(/\s+/g, ' ').toLowerCase();
+    Boolean(opts.whyThisTest?.trim()) && sameText(prior, opts.whyThisTest!.trim());
   const planContent =
     rebuiltPlan && (priorIsApprovalStub || priorIsWhyOnly || !prior)
       ? rebuiltPlan
       : prior || rebuiltPlan;
 
+  const answer = opts.answerMarkdown?.trim() || '';
+  const answerIsPlan =
+    !answer ||
+    sameText(answer, planContent) ||
+    (Boolean(opts.whyThisTest?.trim()) && sameText(answer, opts.whyThisTest!.trim())) ||
+    (Boolean(opts.planSummary?.trim()) && sameText(answer, opts.planSummary!.trim())) ||
+    planContent.includes(answer);
+  const content = answer && !answerIsPlan ? `${planContent}\n\n${answer}`.trim() : planContent;
+
   // ChatMessageBody renders BOTH content and resultMarkdown. If they match, the
   // full report appears twice. Keep plan in content; report only in resultMarkdown.
-  if (planContent && planContent === reportMarkdown) {
+  if (content && content === reportMarkdown) {
     return { content: '', resultMarkdown: reportMarkdown };
   }
   return {
-    content: planContent,
+    content,
     resultMarkdown: reportMarkdown,
   };
 }
