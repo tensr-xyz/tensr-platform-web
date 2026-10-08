@@ -20,6 +20,34 @@ export function alignColumnMajorToColumns(
   });
 }
 
+/** Row-major preview.rows, aligned to visible columns by variable name. */
+export function gridRowsFromPreview(
+  sourceColumnIds: string[],
+  rows: unknown[][],
+  columns: SheetColumnRef[],
+  startRow = 0
+): Array<Record<string, unknown> & { id: string }> {
+  const columnMajor = sourceColumnIds.map((_, colIdx) =>
+    rows.map(row => (Array.isArray(row) ? row[colIdx] : undefined))
+  );
+  return gridRowsForColumns(columnMajor, sourceColumnIds, columns, startRow);
+}
+
+/** Records already keyed by column id, still passed through the same alignment. */
+export function gridRowsFromStoredRecords(
+  records: Array<Record<string, unknown>>,
+  columns: SheetColumnRef[],
+  startRow = 0
+): Array<Record<string, unknown> & { id: string }> {
+  const visible = columns.map(col => col.id || '').filter(Boolean);
+  const extras = records[0]
+    ? Object.keys(records[0]).filter(key => key !== 'id' && !visible.includes(key))
+    : [];
+  const sourceIds = [...extras, ...visible];
+  const columnMajor = sourceIds.map(id => records.map(row => row[id]));
+  return gridRowsForColumns(columnMajor, sourceIds, columns, startRow);
+}
+
 export function gridRowsForColumns(
   columnMajor: unknown[][],
   sourceColumnIds: string[],
