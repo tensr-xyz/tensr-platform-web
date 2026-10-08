@@ -104,6 +104,8 @@ import type { MeasurementLevel } from '@/lib/measurement-level';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { recordTabSnapshot } from '@/lib/tab-history';
 import { SPREADSHEET_EVENTS, type TabColumnFilterPayload } from '@/lib/spreadsheet-commands';
+import { gridRowsForColumns, gridRowsFromStoredRecords } from '@/lib/sheet-grid-align';
+import { fetchWithColdStartRetry } from '@/lib/cold-start-fetch';
 
 const INITIAL_EMPTY_ROWS = 200;
 const ROWS_PER_BATCH = 250;
@@ -124,18 +126,15 @@ const VIRTUAL_OVERSCAN_LOADING = 80;
 function rowsFromColumnMajorPage(
   processedData: unknown[][],
   columns: Column[],
-  startRow: number
+  startRow: number,
+  sourceColumnIds?: string[]
 ): RowType[] {
-  if (!processedData[0]) return [];
-  return processedData[0].map((_: unknown, rowIndex: number) => {
-    const row: RowType = { id: `row-${startRow + rowIndex}` };
-    columns.forEach((col, colIndex) => {
-      if (col.id) {
-        row[col.id] = processedData[colIndex][rowIndex];
-      }
-    });
-    return row;
-  });
+  return gridRowsForColumns(
+    processedData,
+    sourceColumnIds && sourceColumnIds.length ? sourceColumnIds : columns.map(col => col.id),
+    columns,
+    startRow
+  );
 }
 
 function formatCellDisplayValue(value: unknown): string {
@@ -276,17 +275,20 @@ async function fetchDatasetGridSliceForSpreadsheet(
   endRow: number,
   cache: UuidDatasetGridCache,
   sortConfig?: SortConfig[]
-): Promise<{ data: unknown[][] } | null> {
+): Promise<{ data: unknown[][]; variableNames: string[] } | null> {
   if (!token) return null;
   const headers = { Authorization: `Bearer ${token}` };
 
   let entry = cache.get(datasetId);
   if (!entry) {
-    const schemaRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/schema`), { headers });
-    if (!schemaRes.ok) return null;
-    const previewRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/preview?limit=5000`), {
+    const schemaRes = await fetchWithColdStartRetry(tensrApiUrl(`/datasets/${datasetId}/schema`), {
       headers,
     });
+    if (!schemaRes.ok) return null;
+    const previewRes = await fetchWithColdStartRetry(
+      tensrApiUrl(`/datasets/${datasetId}/preview?limit=5000`),
+      { headers }
+    );
     if (!previewRes.ok) return null;
     const preview = (await previewRes.json()) as {
       headers?: string[];
@@ -308,10 +310,14 @@ async function fetchDatasetGridSliceForSpreadsheet(
     sortConfig ?? []
   );
   const slice = sortedRows.slice(startRow, endRow);
-  const processedData = entry.headers.map((_, colIdx) =>
-    slice.map(row => (row as unknown[])[colIdx])
+  const rowWidth = Array.isArray(slice[0])
+    ? (slice[0] as unknown[]).length
+    : entry.variableNames.length;
+  const sourceIds = entry.variableNames.length === rowWidth ? entry.variableNames : entry.headers;
+  const processedData = sourceIds.map((_, colIdx) =>
+    slice.map(row => (Array.isArray(row) ? row[colIdx] : undefined))
   );
-  return { data: processedData };
+  return { data: processedData, variableNames: sourceIds };
 }
 
 // Memoized cell component to prevent unnecessary re-renders
@@ -664,15 +670,13 @@ export function Spreadsheet({
   const [data, setData] = useState<RowType[]>(() => {
     if (isFileMode && initialData.length > 0) {
       // File mode with data: Initialize with provided data
-      return initialData.map((row, index) => ({
-        id: `row-${index}`,
-        ...Object.fromEntries(
-          Object.entries(row).map(([key, value]) => [
-            key,
-            typeof value === 'string' ? value.replace(/^"|"$/g, '').trim() : value,
-          ])
-        ),
-      }));
+      return gridRowsFromStoredRecords(initialData, initialColumns).map(row => {
+        const next: RowType = { ...row };
+        for (const [key, value] of Object.entries(next)) {
+          if (typeof value === 'string') next[key] = value.replace(/^"|"$/g, '').trim();
+        }
+        return next;
+      });
     }
     if (waitingForDatasetRows) {
       // Dataset-backed tab: wait for fetch/hydrate instead of showing blank placeholder rows
@@ -1044,18 +1048,16 @@ export function Spreadsheet({
     if (columnFilters.length > 0 || sorting.length > 0 || loadingRef.current) return;
 
     setData(
-      initialData.map((row, index) => ({
-        id: `row-${index}`,
-        ...Object.fromEntries(
-          Object.entries(row).map(([key, value]) => [
-            key,
-            typeof value === 'string' ? value.replace(/^"|"$/g, '').trim() : value,
-          ])
-        ),
-      }))
+      gridRowsFromStoredRecords(initialData, initialColumns).map(row => {
+        const next: RowType = { ...row };
+        for (const [key, value] of Object.entries(next)) {
+          if (typeof value === 'string') next[key] = value.replace(/^"|"$/g, '').trim();
+        }
+        return next;
+      })
     );
     lastLoadedRowRef.current = initialData.length;
-  }, [isFileMode, initialData, data.length, columnFilters.length, sorting.length]);
+  }, [isFileMode, initialData, initialColumns, data.length, columnFilters.length, sorting.length]);
 
   const [columnSizing, setColumnSizing] = useState({});
   const [extraColumnsCount, setExtraColumnsCount] = useState(0);
@@ -1221,7 +1223,8 @@ export function Spreadsheet({
           const newRows = rowsFromColumnMajorPage(
             processedData as unknown[][],
             initialColumns as any,
-            startRow
+            startRow,
+            data.variableNames
           );
 
           if (fetchGeneration !== loadGenerationRef.current) return;
@@ -1330,7 +1333,8 @@ export function Spreadsheet({
         const newRows = rowsFromColumnMajorPage(
           processedData as unknown[][],
           initialColumns as any,
-          nextStartRow
+          nextStartRow,
+          data?.variableNames
         );
 
         setPrefetchedData(newRows);
@@ -1436,7 +1440,12 @@ export function Spreadsheet({
           return;
         }
 
-        const allRows = rowsFromColumnMajorPage(page.data as unknown[][], initialColumns as any, 0);
+        const allRows = rowsFromColumnMajorPage(
+          page.data as unknown[][],
+          initialColumns as any,
+          0,
+          page.variableNames
+        );
         if (allRows.length === 0) {
           if (hydrateGeneration === loadGenerationRef.current) {
             fullHydrateStartedRef.current = false;

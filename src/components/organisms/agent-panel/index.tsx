@@ -120,23 +120,9 @@ import {
   ChatThreadCloseButton,
   visibleThinkingLines,
 } from './agent-chat-chrome';
+import { starterPromptsForColumns } from '@/lib/agent-starter-prompts';
 
 const ANALYSIS_HISTORY_LIMIT = 20;
-
-const SUGGESTED_PROMPTS = [
-  "What's the correlation between two numeric columns?",
-  'Filter rows where a column meets a condition',
-  'Run a t-test comparing two groups',
-  'Summarise this dataset and flag outliers',
-  'Plot the correlation between minutes and points',
-];
-
-const NOTEBOOK_SUGGESTED_PROMPTS = [
-  'Plot points vs minutes played',
-  'Run a correlation matrix on numeric columns',
-  'Flag outliers in the PTS column',
-  'Group by team and summarise mean stats',
-];
 
 const ANALYSIS_TYPE_LABELS: Record<string, string> = {
   regression: 'Regression',
@@ -1509,7 +1495,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const colCount = activeTab?.data?.initialColumns?.length ?? 0;
   const rowCount = activeTab?.data?.totalRows ?? activeTab?.data?.initialData?.length ?? 0;
   const isNotebook = variant === 'notebook';
-  const suggestedPrompts = isNotebook ? NOTEBOOK_SUGGESTED_PROMPTS : SUGGESTED_PROMPTS;
+  const suggestedPrompts = starterPromptsForColumns(activeTab?.data?.initialColumns ?? [], {
+    notebook: isNotebook,
+  });
 
   return (
     <TooltipProvider delayDuration={300}>
