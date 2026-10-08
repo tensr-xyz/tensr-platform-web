@@ -60,6 +60,31 @@ describe('chatFieldsAfterRunAnalysis', () => {
     expect(fields.resultMarkdown).toBe(reportMd);
   });
 
+  it('keeps a grounded answer under the plan line', () => {
+    const fields = chatFieldsAfterRunAnalysis({
+      priorContent: '**Plan:** Chi-square on the same stub and banner, with the same weight.',
+      planSummary: 'Chi-square on the same stub and banner, with the same weight.',
+      whyThisTest: 'Chi-square on the same stub and banner, with the same weight.',
+      reportMarkdown: reportMd,
+      answerMarkdown:
+        'Rao-Scott chi-square: F = 1.200, df = 3.0, p = 0.310. This is not significant at 0.05.',
+    });
+    expect(fields.content).toContain('**Plan:**');
+    expect(fields.content).toContain('not significant at 0.05');
+    expect(fields.resultMarkdown).toBe(reportMd);
+  });
+
+  it('does not repeat the plan sentence when it is also the answer', () => {
+    const plan = 'Chi-square on the same stub and banner, with the same weight.';
+    const fields = chatFieldsAfterRunAnalysis({
+      priorContent: `**Plan:** ${plan}`,
+      whyThisTest: plan,
+      reportMarkdown: reportMd,
+      answerMarkdown: plan,
+    });
+    expect(fields.content.match(/Chi-square on the same stub/g)).toHaveLength(1);
+  });
+
   it('replaces awaiting-approval stub with Plan/Why (not report twice)', () => {
     const fields = chatFieldsAfterRunAnalysis({
       priorContent: 'Paused for approval: Predict PTS from Age, MP',
