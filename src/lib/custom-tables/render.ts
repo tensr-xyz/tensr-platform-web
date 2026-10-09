@@ -33,6 +33,8 @@ export type BannerBook = {
     weight_vector?: { identity?: string; explicit_null?: boolean };
   };
   spec?: { decimals?: Record<string, number>; statistics?: string[] };
+  base_label?: string | null;
+  weight?: { column?: string | null; weight_aware?: boolean; unweighted_n?: number | null };
 };
 
 export type DisplayCell = {

@@ -886,6 +886,11 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           </div>
           {table ? (
             <div className="overflow-x-auto rounded-md border border-border">
+              {book?.base_label ? (
+                <p className="border-b border-border px-2 py-1 text-left text-[11px] font-medium">
+                  {book.base_label}
+                </p>
+              ) : null}
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b bg-muted/40">
