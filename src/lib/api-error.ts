@@ -35,6 +35,9 @@ export function formatApiErrorMessage(error: unknown): string {
   }
 
   const raw = error.message || '';
+  if (/internal server error/i.test(raw)) {
+    return 'The request failed. Check that the columns exist on this file and try again.';
+  }
   const status = error instanceof ApiRequestError ? error.status : undefined;
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (jsonMatch) {

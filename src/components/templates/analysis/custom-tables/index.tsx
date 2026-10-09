@@ -116,8 +116,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const rows = useMemo(() => sheetTab?.data?.initialData || [], [sheetTab?.data?.initialData]);
 
   const runDatasetId = useMemo(() => {
-    const selected = weightOptions.find(o => o.datasetId === weightChoice);
-    return selected ? pickRunDatasetId(selected) : weightChoice || datasetId || '';
+    const selected = weightOptions.find(o => o.optionId === weightChoice);
+    return selected ? pickRunDatasetId(selected) : datasetId || '';
   }, [weightOptions, weightChoice, datasetId]);
 
   const refreshNamedBanners = async (targetId: string) => {
@@ -172,13 +172,16 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
         if (cancelled) return;
         const opts = weightPickerOptions(res.versions || [], datasetId);
         setWeightOptions(opts);
-        const current = opts.find(o => o.datasetId === datasetId) || opts[0];
-        setWeightChoice(current?.datasetId || datasetId);
+        const current =
+          opts.find(o => o.kind === 'this_file') ||
+          opts.find(o => o.kind === 'this_file_unweighted') ||
+          opts[0];
+        setWeightChoice(current?.optionId || '');
       })
       .catch(() => {
         if (cancelled) return;
         setWeightOptions([]);
-        setWeightChoice(datasetId);
+        setWeightChoice('');
       });
     return () => {
       cancelled = true;
@@ -228,6 +231,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     setError(null);
     setPreviewWarning(null);
     const body = buildTableRequest(canvas);
+    const selectedWeight = weightOptions.find(o => o.optionId === weightChoice);
+    if (selectedWeight?.weight === 'none') body.weight = 'none';
     const runId = runDatasetId;
     try {
       const preview = await previewCustomTable(runId, body, token);
@@ -689,7 +694,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                 </SelectTrigger>
                 <SelectContent>
                   {weightOptions.map(opt => (
-                    <SelectItem key={`${opt.kind}-${opt.datasetId}`} value={opt.datasetId}>
+                    <SelectItem key={opt.optionId} value={opt.optionId}>
                       {opt.label}
                     </SelectItem>
                   ))}
@@ -1102,24 +1107,28 @@ function QuestionCard({
       ) : null}
       {onNet ? (
         <div className="mt-2 flex flex-wrap gap-1">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-6 text-[10px]"
-            onClick={() => onNet('agree')}
-          >
-            NET Agree
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-6 text-[10px]"
-            onClick={() => onNet('yes')}
-          >
-            NET Yes
-          </Button>
+          {netPreset('agree', values) ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px]"
+              onClick={() => onNet('agree')}
+            >
+              NET Agree
+            </Button>
+          ) : null}
+          {netPreset('yes', values) ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px]"
+              onClick={() => onNet('yes')}
+            >
+              NET Yes
+            </Button>
+          ) : null}
           <Button
             type="button"
             size="sm"

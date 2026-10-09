@@ -35,7 +35,10 @@ export function PipelineScriptDialog({ children }: { children: ReactNode }) {
     setError(null);
     try {
       const res = await exportPipelineScript(datasetId, token);
-      setScript(res.r_script);
+      const blocks = [`# R\n${res.r_script || ''}`];
+      if (res.spss_syntax) blocks.push(`* SPSS\n${res.spss_syntax}`);
+      if (res.python_script) blocks.push(`# Python\n${res.python_script}`);
+      setScript(blocks.join('\n\n'));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not build the R script');
     } finally {

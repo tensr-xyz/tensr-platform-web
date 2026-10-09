@@ -432,6 +432,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
+  const attachmentThreadRef = useRef(activeThreadId);
+  useEffect(() => {
+    if (attachmentThreadRef.current === activeThreadId) return;
+    attachmentThreadRef.current = activeThreadId;
+    setAttachments([]);
+  }, [activeThreadId]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busyMessageId, setBusyMessageId] = useState<string | null>(null);
   const [showRuns, setShowRuns] = useState(false);

@@ -28,7 +28,15 @@ const versions = [
 describe('weight version picker', () => {
   it('offers unweighted origin, this file, and other raked children', () => {
     const opts = weightPickerOptions(versions, RAKED);
-    expect(opts.map(o => o.kind)).toEqual(['unweighted', 'this_file', 'raked']);
+    expect(opts.map(o => o.kind)).toEqual([
+      'this_file_unweighted',
+      'unweighted',
+      'this_file',
+      'raked',
+    ]);
+    expect(opts.find(o => o.kind === 'unweighted')?.label).toBe('Unweighted (pre-merge upload)');
+    expect(opts.find(o => o.kind === 'this_file_unweighted')?.datasetId).toBe(RAKED);
+    expect(opts.find(o => o.kind === 'this_file_unweighted')?.weight).toBe('none');
     expect(opts.find(o => o.kind === 'unweighted')?.datasetId).toBe(ORIGIN);
     expect(opts.find(o => o.kind === 'this_file')?.datasetId).toBe(RAKED);
     expect(opts.find(o => o.kind === 'raked')?.datasetId).toBe(OTHER);

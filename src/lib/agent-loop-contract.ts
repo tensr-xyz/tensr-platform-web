@@ -248,6 +248,23 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
         'Prolific merge-and-weight: every phrasing plans the same pipeline (tensr-api test_natural_phrasings_plan_the_same_pipeline)',
     })
   ),
+  ...[
+    'Do men and women rate the product differently?',
+    'Which age group are we doing worst with?',
+    'Give me the headline findings',
+    'Is our sample representative?',
+    'Can I trust these results?',
+    'Did anything change between wave 1 and wave 2?',
+    'What do the open-ended comments say about price?',
+  ].map(
+    (prompt): BaselineContractCase => ({
+      prompt,
+      mode: 'agent',
+      expected: 'tool_or_clarify',
+      description:
+        'Ordinary business questions reach the model. The pre-model gate does not force low_clarity.',
+    })
+  ),
 ];
 
 /**
