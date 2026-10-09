@@ -187,10 +187,12 @@ const HomeTemplate: React.FC = () => {
     [router, toast]
   );
 
-  const { uploadFile, isLoading: uploadBusy } = useDatasetUpload(
-    'workspace',
-    handleDatasetUploaded
-  );
+  const {
+    uploadFile,
+    isLoading: uploadBusy,
+    workbook,
+    clearWorkbook,
+  } = useDatasetUpload('workspace', handleDatasetUploaded);
 
   const projectsArray: HomeDatasetRow[] = Array.isArray(projects)
     ? (projects as HomeDatasetRow[])
@@ -391,6 +393,28 @@ const HomeTemplate: React.FC = () => {
               <p className="text-xs text-muted-foreground">
                 Drop a CSV, Excel, or JSON file — or pick a template below
               </p>
+              {workbook && workbook.sheets.length > 1 ? (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {workbook.sheets.map(name => (
+                    <button
+                      key={name}
+                      type="button"
+                      disabled={uploadBusy}
+                      className="rounded-md border border-border px-2 py-1 text-xs hover:border-primary disabled:opacity-50"
+                      onClick={() => {
+                        if (name === workbook.selected) {
+                          clearWorkbook();
+                          handleDatasetUploaded(workbook.datasetId, workbook.file.name);
+                          return;
+                        }
+                        void uploadFile(workbook.file, name);
+                      }}
+                    >
+                      {name === workbook.selected ? `${name} (opened)` : name}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           </div>
 

@@ -14,6 +14,18 @@ const SERVICE_UNAVAILABLE = 'The dataset service is starting up. Wait a few seco
 
 const ASSISTANT_ROUTE_NOT_FOUND = 'The AI assistant could not be reached. Refresh and try again.';
 
+function plainApiFailure(text: string): string {
+  const trimmed = text.trim();
+  if (/traceback|keyerror/i.test(trimmed)) {
+    console.error(trimmed);
+    return 'That request failed. Retry.';
+  }
+  if (/^this trial allows \d+ datasets/i.test(trimmed)) {
+    return `${trimmed} [Upgrade](/settings/billing)`;
+  }
+  return trimmed;
+}
+
 function isGenericHttpNotFound(text: string): boolean {
   return /^not found$/i.test(text.trim());
 }
@@ -48,7 +60,7 @@ export function formatApiErrorMessage(error: unknown): string {
         if ((status === 404 || status === undefined) && isGenericHttpNotFound(detail)) {
           return ASSISTANT_ROUTE_NOT_FOUND;
         }
-        return detail;
+        return plainApiFailure(detail);
       }
       if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
         const d = detail as { error?: string; message?: string };
@@ -59,7 +71,7 @@ export function formatApiErrorMessage(error: unknown): string {
           return d.message;
         }
         if (typeof d.message === 'string' && d.message.trim()) {
-          return d.message;
+          return plainApiFailure(d.message);
         }
       }
       if (typeof outer.message === 'string' && outer.message.trim()) {
@@ -97,6 +109,11 @@ export function formatApiErrorMessage(error: unknown): string {
   }
   if (status === 404 || raw.startsWith('API Error: 404')) {
     return ASSISTANT_ROUTE_NOT_FOUND;
+  }
+
+  if (/failed to fetch|networkerror|network request failed/i.test(raw)) {
+    console.error(raw);
+    return 'The connection failed. Retry.';
   }
 
   if (raw.startsWith('API Error:')) {

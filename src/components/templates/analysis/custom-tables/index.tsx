@@ -243,7 +243,15 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       if (warn) setPreviewWarning(warn);
       const result = (await runCustomTable(runId, body, token)) as BannerBook & {
         spec?: StoredTableSpec;
+        weight?: { column?: string | null; weight_aware?: boolean };
       };
+      const askedUnweighted = selectedWeight?.weight === 'none';
+      if (askedUnweighted && result.weight?.column && result.weight.weight_aware !== false) {
+        setError(
+          'Unweighted is not available on this server yet. The table was not updated, so these numbers stay weighted.'
+        );
+        return;
+      }
       setBook(result);
       setActiveSpecId(String(result.spec?.id || '') || null);
       setSavedRequestKey(tableRequestKey(canvas));

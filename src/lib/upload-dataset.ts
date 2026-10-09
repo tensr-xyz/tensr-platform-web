@@ -37,7 +37,8 @@ export async function uploadDatasetFile(
   file: File,
   token: string,
   requestedScope: UploadScope,
-  onProgress?: (pct: number) => void
+  onProgress?: (pct: number) => void,
+  sheet?: string
 ): Promise<DatasetUploadResult> {
   const fileName = file.name;
   const contentType = contentTypeForDatasetUpload(file.type);
@@ -100,8 +101,9 @@ export async function uploadDatasetFile(
     });
 
     onProgress?.(92);
+    const sheetQuery = sheet ? `&sheet=${encodeURIComponent(sheet)}` : '';
     const completeRes = await fetch(
-      tensrApiUrl(`/datasets/${presign.dataset_id}/complete-upload?scope=${scope}`),
+      tensrApiUrl(`/datasets/${presign.dataset_id}/complete-upload?scope=${scope}${sheetQuery}`),
       {
         method: 'POST',
         headers: {
@@ -161,7 +163,8 @@ export async function uploadDatasetFile(
         new Error('Could not reach Tensr to upload the file. Check your connection and try again.')
       )
     );
-    xhr.open('POST', tensrApiUrl(`/datasets/upload?scope=${scope}`));
+    const sheetQuery = sheet ? `&sheet=${encodeURIComponent(sheet)}` : '';
+    xhr.open('POST', tensrApiUrl(`/datasets/upload?scope=${scope}${sheetQuery}`));
     xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     if (orgId) xhr.setRequestHeader('X-Organization-Id', orgId);
     xhr.send(formData);

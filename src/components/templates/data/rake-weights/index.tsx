@@ -141,8 +141,8 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
               className="text-xs"
             />
             <p className="text-[11px] text-muted-foreground">
-              Leave blank for no cap. A cap replaces the previous weight and keeps every weight at
-              or below this value.
+              Leave blank for no cap. A cap is applied on every raking step, and the saved weights
+              stay at or below this value. Margins can move slightly so the cap holds.
             </p>
             <Label htmlFor="rake-targets-file">Targets file (CSV)</Label>
             <Input
