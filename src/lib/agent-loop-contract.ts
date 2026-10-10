@@ -231,6 +231,13 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     description:
       'Control phrase: the word player inside "a player shoots" is shot volume, not the Player column',
   },
+  {
+    prompt: 'What predicts points, independent of shot volume?',
+    mode: 'plan',
+    expected: 'plan-awaiting-approval',
+    description:
+      'Renamed scoring columns: made, taken, and percentage variants are components of shot volume',
+  },
   ...[
     'merge these on participant_id and weight to these targets, exclude missing categories',
     'Merge the files by participant_id and weight to the targets, excluding missing categories.',
