@@ -73,6 +73,8 @@ tests:
     assert: [{ type: equals, value: "run_analysis" }]
   - vars: { prompt: "What predicts scoring output, independent of how much a player shoots?", mode: plan }
     assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "What predicts points, independent of shot volume?", mode: plan }
+    assert: [{ type: equals, value: "plan-awaiting-approval" }]
   - vars: { prompt: "merge these on participant_id and weight to these targets, exclude missing categories", mode: plan }
     assert: [{ type: equals, value: "plan-awaiting-approval" }]
   - vars: { prompt: "Merge the files by participant_id and weight to the targets, excluding missing categories.", mode: plan }
@@ -87,3 +89,17 @@ tests:
     assert: [{ type: equals, value: "plan-awaiting-approval" }]
   - vars: { prompt: "Please merge these and rake them to the attached targets, option (a)", mode: plan }
     assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "Do men and women rate the product differently?", mode: agent }
+    assert: [{ type: equals, value: "tool_or_clarify" }]
+  - vars: { prompt: "Which age group are we doing worst with?", mode: agent }
+    assert: [{ type: equals, value: "tool_or_clarify" }]
+  - vars: { prompt: "Give me the headline findings", mode: agent }
+    assert: [{ type: equals, value: "tool_or_clarify" }]
+  - vars: { prompt: "Is our sample representative?", mode: agent }
+    assert: [{ type: equals, value: "tool_or_clarify" }]
+  - vars: { prompt: "Can I trust these results?", mode: agent }
+    assert: [{ type: equals, value: "tool_or_clarify" }]
+  - vars: { prompt: "Did anything change between wave 1 and wave 2?", mode: agent }
+    assert: [{ type: equals, value: "tool_or_clarify" }]
+  - vars: { prompt: "What do the open-ended comments say about price?", mode: agent }
+    assert: [{ type: equals, value: "tool_or_clarify" }]

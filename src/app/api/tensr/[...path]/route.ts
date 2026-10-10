@@ -35,6 +35,15 @@ function isStreamingProxyPath(pathSegments: string[]): boolean {
   return joined.endsWith('assistant/agent-loop/stream') || joined.endsWith('agent-loop/stream');
 }
 
+/** Text and JSON stay decoded. Everything else, including xlsx, pptx, and pdf, is streamed as bytes. */
+export function shouldDecodeBodyAsText(contentType: string): boolean {
+  const type = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (!type) return false;
+  if (type.startsWith('text/')) return true;
+  if (type === 'application/json' || type.endsWith('+json')) return true;
+  return false;
+}
+
 function forwardResponseHeaders(from: Headers): Headers {
   const headers = new Headers();
   from.forEach((value, key) => {
@@ -96,14 +105,8 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
       });
     }
 
-    // Binary responses (plugin zips, etc.) must not go through res.text() —
-    // UTF-8 decoding corrupts the archive (JSZip: "missing N bytes").
-    const joined = pathSegments.join('/').toLowerCase();
-    const looksBinary =
-      /application\/(zip|octet-stream|x-zip)/i.test(upstreamType) ||
-      /\/download$/i.test(joined) ||
-      /\.(zip|parquet|bin)$/i.test(joined);
-    if (looksBinary && res.body) {
+    // res.text() UTF-8-decodes the body and inserts EF BF BD into xlsx, pptx, and pdf.
+    if (!shouldDecodeBodyAsText(upstreamType) && res.body) {
       const outHeaders = forwardResponseHeaders(res.headers);
       outHeaders.set('Cache-Control', noStore);
       outHeaders.set('Pragma', 'no-cache');

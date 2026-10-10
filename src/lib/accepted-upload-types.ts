@@ -7,6 +7,7 @@ export const ACCEPTED_UPLOAD_EXTENSIONS = [
   'dta',
   'sss',
   'parquet',
+  'json',
 ] as const;
 
 export const ACCEPTED_UPLOAD_DOT_EXTENSIONS = ACCEPTED_UPLOAD_EXTENSIONS.map(ext => `.${ext}`);
@@ -14,7 +15,7 @@ export const ACCEPTED_UPLOAD_DOT_EXTENSIONS = ACCEPTED_UPLOAD_EXTENSIONS.map(ext
 export const ACCEPTED_UPLOAD_ACCEPT = ACCEPTED_UPLOAD_DOT_EXTENSIONS.join(',');
 
 export const ACCEPTED_UPLOAD_HELP =
-  'CSV, Excel (.xlsx, .xls), SPSS (.sav), Stata (.dta), Triple-S (.sss), or Parquet.';
+  'CSV, Excel (.xlsx, .xls), JSON records, SPSS (.sav), Stata (.dta), Triple-S (.sss), or Parquet.';
 
 export function isAcceptedUploadExtension(name: string): boolean {
   const ext = name.split('.').pop()?.toLowerCase();

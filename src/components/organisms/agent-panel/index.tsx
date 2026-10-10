@@ -432,6 +432,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
+  const attachmentThreadRef = useRef(activeThreadId);
+  const lastFailedMessage = useRef<string | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
+  useEffect(() => {
+    if (attachmentThreadRef.current === activeThreadId) return;
+    attachmentThreadRef.current = activeThreadId;
+    setAttachments([]);
+  }, [activeThreadId]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busyMessageId, setBusyMessageId] = useState<string | null>(null);
   const [showRuns, setShowRuns] = useState(false);
@@ -773,6 +781,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     expirePendingSuggestionCards(projectId);
 
     const currentMessage = inputMessage;
+    lastFailedMessage.current = currentMessage;
     setInputMessage('');
     setLoading(projectId, true);
     setError(projectId, null);
@@ -784,7 +793,32 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         conversationHistory: buildAgentConversationHistory([...messages, userMessage]),
         attachments,
       });
+      lastFailedMessage.current = null;
+      setCanRetry(false);
     } catch (err: unknown) {
+      setCanRetry(true);
+      setError(projectId, formatApiErrorMessage(err));
+    } finally {
+      setLoading(projectId, false);
+    }
+  };
+
+  const retryLastMessage = async () => {
+    const again = lastFailedMessage.current;
+    if (!again || isLoading) return;
+    setLoading(projectId, true);
+    setError(projectId, null);
+    try {
+      await invokeAgentLoop({
+        message: again,
+        triggerMessage: again,
+        conversationHistory: buildAgentConversationHistory(messages),
+        attachments,
+      });
+      lastFailedMessage.current = null;
+      setCanRetry(false);
+    } catch (err: unknown) {
+      setCanRetry(true);
       setError(projectId, formatApiErrorMessage(err));
     } finally {
       setLoading(projectId, false);
@@ -2007,7 +2041,19 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               <div className="shrink-0 border-t border-border bg-background p-4 min-w-0">
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription className="flex items-center justify-between gap-3">
+                    <span>{error}</span>
+                    {canRetry ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void retryLastMessage()}
+                      >
+                        Retry
+                      </Button>
+                    ) : null}
+                  </AlertDescription>
                 </Alert>
               </div>
             ) : null}

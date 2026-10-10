@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 import { NextRequest } from 'next/server';
-import { POST } from './route';
+import { GET, POST, shouldDecodeBodyAsText } from './route';
 
 const FN_URL = 'https://abc123.lambda-url.us-east-1.on.aws/';
 const API = 'https://5qv9lg3s55.execute-api.us-east-1.amazonaws.com';
@@ -90,5 +90,40 @@ describe('/api/tensr proxy: agent-loop stream', () => {
     const res = await post(['assistant', 'agent-loop', 'stream']);
     expect(fetchMock.mock.calls[0][0]).toBe(`${API}/api/assistant/agent-loop/stream`);
     expect(res.headers.get('X-Tensr-Upstream')).toBe('api-gateway');
+  });
+});
+
+describe('tensr proxy body', () => {
+  it('decodes only text and json', () => {
+    expect(shouldDecodeBodyAsText('application/json; charset=utf-8')).toBe(true);
+    expect(shouldDecodeBodyAsText('text/csv')).toBe(true);
+    expect(shouldDecodeBodyAsText('text/event-stream')).toBe(true);
+    expect(
+      shouldDecodeBodyAsText('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    ).toBe(false);
+    expect(shouldDecodeBodyAsText('application/pdf')).toBe(false);
+    expect(
+      shouldDecodeBodyAsText(
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      )
+    ).toBe(false);
+  });
+
+  it.each([
+    ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'banner.xlsx'],
+    ['application/pdf', 'report.pdf'],
+  ])('passes %s through byte-identical', async (contentType, filename) => {
+    const payload = new Uint8Array([0xff, 0xfe, 0x00, 0x50, 0x4b, 0x03, 0x04, 0x80]);
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(payload, {
+        status: 200,
+        headers: { 'Content-Type': contentType },
+      })
+    );
+    const req = new NextRequest(`http://localhost/api/tensr/reports/${filename}`);
+    const res = await GET(req, { params: Promise.resolve({ path: ['reports', filename] }) });
+    const got = new Uint8Array(await res.arrayBuffer());
+    expect(Array.from(got)).toEqual(Array.from(payload));
+    fetchMock.mockRestore();
   });
 });

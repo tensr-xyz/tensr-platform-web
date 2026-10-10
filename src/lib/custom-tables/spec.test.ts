@@ -124,13 +124,20 @@ describe('custom table spec builder', () => {
     expect(bannerColumnProduct(banners, false)).toBe(9);
   });
 
-  it('uniqueColumnValues skips blanks and keeps first-seen order', () => {
+  it('uniqueColumnValues skips blanks, keeps text order, and sorts numeric codes', () => {
     expect(
       uniqueColumnValues(
         [{ colour: 'red' }, { colour: '' }, { colour: 'blue' }, { colour: 'red' }],
         'colour'
       )
     ).toEqual(['red', 'blue']);
+    expect(uniqueColumnValues([{ q: 4 }, { q: 1 }, { q: 5 }, { q: 2 }, { q: 3 }], 'q')).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+    ]);
   });
 
   it('restores the canvas from a persisted spec so reopen matches save', () => {

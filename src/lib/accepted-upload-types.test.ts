@@ -13,9 +13,9 @@ describe('accepted upload types', () => {
     expect(ACCEPTED_UPLOAD_ACCEPT).toContain('.sss');
     expect(isAcceptedUploadExtension('wave.parquet')).toBe(true);
     expect(ACCEPTED_UPLOAD_ACCEPT).toContain('.parquet');
-    expect(isAcceptedUploadExtension('wave.json')).toBe(false);
+    expect(isAcceptedUploadExtension('wave.json')).toBe(true);
+    expect(ACCEPTED_UPLOAD_ACCEPT).toContain('.json');
     expect(isAcceptedUploadExtension('wave.mdd')).toBe(false);
-    expect(ACCEPTED_UPLOAD_ACCEPT).not.toContain('.json');
     expect(ACCEPTED_UPLOAD_ACCEPT).not.toContain('.mdd');
   });
 });

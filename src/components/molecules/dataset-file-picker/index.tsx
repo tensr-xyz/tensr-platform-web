@@ -39,7 +39,7 @@ export function DatasetFilePicker({
     onOpenChange?.(next);
   };
 
-  const { uploadFile, isLoading, error, clearError, uploadProgress } = useDatasetUpload(
+  const { uploadFile, isLoading, error, clearError, uploadProgress, workbook } = useDatasetUpload(
     scope,
     (datasetId, fileName) => {
       setOpen(false);
@@ -66,6 +66,34 @@ export function DatasetFilePicker({
           acceptedFileTypes={ACCEPTED_UPLOAD_ACCEPT}
           onFileSelect={file => uploadFile(file)}
         />
+        {workbook && workbook.sheets.length > 1 ? (
+          <div className="space-y-2 text-sm">
+            <p>
+              Opened <span className="font-medium">{workbook.selected}</span>. This workbook has
+              more than one sheet.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {workbook.sheets.map(name => (
+                <button
+                  key={name}
+                  type="button"
+                  className="rounded-md border border-border px-2 py-1 text-xs hover:border-primary"
+                  disabled={isLoading}
+                  onClick={() => {
+                    if (name === workbook.selected) {
+                      setOpen(false);
+                      onUploaded?.(workbook.datasetId, workbook.file.name);
+                      return;
+                    }
+                    void uploadFile(workbook.file, name);
+                  }}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </DialogContent>
     </Dialog>
   );

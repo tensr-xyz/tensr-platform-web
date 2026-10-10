@@ -208,13 +208,21 @@ export function AnalysisReportLayout({
     downloadTextFile(csv, `${slug}_tables.csv`, 'text/csv;charset=utf-8');
   }, [exportIdentity, report]);
 
+  const [exportError, setExportError] = useState<string | null>(null);
+  useEffect(() => {
+    setExportError(null);
+  }, [report.meta.title, sourceDatasetId]);
+
   const handleExportExcel = useCallback(() => {
+    setExportError(null);
     void downloadReportXlsx(report, {
       provenance,
       datasetId: sourceDatasetId,
       raw: rawResult,
     }).catch(err => {
       console.error('Excel export failed', err);
+      const message = err instanceof Error ? err.message : 'Excel export failed';
+      setExportError(message || 'Excel export failed');
     });
   }, [provenance, rawResult, report, sourceDatasetId]);
 
@@ -278,6 +286,14 @@ export function AnalysisReportLayout({
           synthesizing={synthesizing}
           onNewAnalysis={handleNewAnalysis}
         />
+        {exportError ? (
+          <p
+            role="alert"
+            className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+          >
+            {exportError}
+          </p>
+        ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-[1080px] px-7 py-6 pb-20">
             <AnalysisReportView

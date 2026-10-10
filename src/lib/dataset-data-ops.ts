@@ -260,7 +260,12 @@ export function poststratifyDatasetWeights(
 }
 
 export function exportPipelineScript(datasetId: string, token?: string | null) {
-  return authedJson<{ ok: boolean; r_script: string }>(`/datasets/${datasetId}/script`, {}, token);
+  return authedJson<{
+    ok: boolean;
+    r_script: string;
+    python_script?: string;
+    spss_syntax?: string;
+  }>(`/datasets/${datasetId}/script`, {}, token);
 }
 
 export function rakeDatasetWeights(
@@ -270,6 +275,8 @@ export function rakeDatasetWeights(
     missing_handling?: 'exclude' | 'impute' | 'missing_target';
     targets_filename?: string;
     weight_label?: string;
+    upper?: number;
+    use_existing_weight?: boolean;
   },
   token?: string | null
 ) {

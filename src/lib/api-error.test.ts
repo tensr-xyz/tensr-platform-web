@@ -17,7 +17,9 @@ describe('formatApiErrorMessage', () => {
     const err = new Error(
       '{"detail":{"error":"trial_volume_cap_exhausted","message":"This trial allows 5 datasets. Upgrade to continue.","key":"datasets","used":5,"cap":5,"plan_code":"trial"}}'
     );
-    expect(formatApiErrorMessage(err)).toBe('This trial allows 5 datasets. Upgrade to continue.');
+    expect(formatApiErrorMessage(err)).toBe(
+      'This trial allows 5 datasets. Upgrade to continue. [Upgrade](/settings/billing)'
+    );
   });
 
   it('handles plain errors', () => {
@@ -66,6 +68,20 @@ describe('formatApiErrorMessage', () => {
     const shown = formatApiErrorMessage(new ApiRequestError(404, '{"detail":"Not Found"}'));
     expect(shown.toLowerCase()).not.toBe('not found');
     expect(shown.toLowerCase()).toMatch(/assistant|try again|refresh/);
+  });
+
+  it('hides a traceback and a dropped connection behind a retry sentence', () => {
+    const crashed = formatApiErrorMessage(
+      new ApiRequestError(
+        500,
+        '{"detail":"Traceback (most recent call last): KeyError \'gender\'"}'
+      )
+    );
+    expect(crashed).toBe('That request failed. Retry.');
+    expect(crashed).not.toMatch(/Traceback|KeyError/);
+    expect(formatApiErrorMessage(new TypeError('Failed to fetch'))).toBe(
+      'The connection failed. Retry.'
+    );
   });
 
   it('keeps a real dataset 404', () => {
