@@ -13,12 +13,13 @@ export type AgentLoopStreamProgress = {
 export type AgentLoopStreamHandlers = {
   /** Called synchronously per event and never awaited, so a slow render cannot hold the reader. */
   onProgress?: (progress: AgentLoopStreamProgress) => void;
+  onDelta?: (text: string) => void;
   signal?: AbortSignal;
 };
 
 function processSseLine(
   line: string,
-  onProgress: AgentLoopStreamHandlers['onProgress'],
+  handlers: AgentLoopStreamHandlers,
   acc: { result: AgentLoopResponse | null; timeout: AgentLoopResponse | null }
 ) {
   const trimmed = line.trim();
@@ -30,11 +31,17 @@ function processSseLine(
     type?: string;
     step?: string;
     message?: string;
+    text?: string;
     response?: AgentLoopResponse;
   };
   try {
     payload = JSON.parse(jsonStr);
   } catch {
+    return;
+  }
+
+  if (payload.type === 'delta' && payload.text) {
+    handlers.onDelta?.(payload.text);
     return;
   }
 
@@ -44,7 +51,7 @@ function processSseLine(
     payload.type === 'tool_result'
   ) {
     if (payload.message) {
-      onProgress?.({
+      handlers.onProgress?.({
         type: payload.type,
         step: payload.step ?? 'progress',
         message: payload.message,
@@ -79,7 +86,10 @@ export async function streamAgentLoop(
     throw new Error('No authentication token found');
   }
 
-  const response = await fetch(tensrApiUrl('/assistant/agent-loop/stream'), {
+  const v2 = params.agentVersion === 'v2';
+  const response = await fetch(
+    tensrApiUrl(v2 ? '/assistant/agent-loop-v2/stream' : '/assistant/agent-loop/stream'),
+    {
     method: 'POST',
     cache: 'no-store',
     headers: {
@@ -88,17 +98,28 @@ export async function streamAgentLoop(
       Accept: 'text/event-stream',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({
-      message: params.message,
-      mode: params.mode,
-      dataset_id: params.datasetId ?? null,
-      open_datasets: params.openDatasets ?? [],
-      conversation_history: params.conversationHistory ?? null,
-      glossary: params.glossary ?? null,
-      approved_tool_call: params.approvedToolCall ?? null,
-      approved_tool_calls: params.approvedToolCalls ?? null,
-      attachments: params.attachments ?? null,
-    }),
+    body: JSON.stringify(
+      v2
+        ? {
+            message: params.resume ? '' : params.message,
+            mode: params.mode,
+            dataset_id: params.datasetId ?? null,
+            session_id: params.sessionId ?? null,
+            resume: Boolean(params.resume || params.approvedBatch),
+            approved_batch: params.approvedBatch ?? null,
+          }
+        : {
+            message: params.message,
+            mode: params.mode,
+            dataset_id: params.datasetId ?? null,
+            open_datasets: params.openDatasets ?? [],
+            conversation_history: params.conversationHistory ?? null,
+            glossary: params.glossary ?? null,
+            approved_tool_call: params.approvedToolCall ?? null,
+            approved_tool_calls: params.approvedToolCalls ?? null,
+            attachments: params.attachments ?? null,
+          }
+    ),
     signal: handlers.signal,
   });
 
@@ -132,13 +153,13 @@ export async function streamAgentLoop(
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        processSseLine(line, handlers.onProgress, acc);
+        processSseLine(line, handlers, acc);
         if (acc.result) break;
       }
     }
 
     if (!acc.result && buffer.trim()) {
-      processSseLine(buffer, handlers.onProgress, acc);
+      processSseLine(buffer, handlers, acc);
     }
   } finally {
     if (acc.result) {
@@ -179,6 +200,24 @@ export async function streamAgentLoop(
 
   if (!acc.result) {
     throw new Error('Agent loop stream ended without a result');
+  }
+
+  if (params.agentVersion === 'v2' && acc.result.status === 'continuing') {
+    const hops = (params.resumeHops ?? 0) + 1;
+    if (hops > 8) {
+      throw new Error('Agent loop did not finish');
+    }
+    return streamAgentLoop(
+      {
+        ...params,
+        message: '',
+        resume: true,
+        approvedBatch: null,
+        sessionId: acc.result.session_id ?? params.sessionId,
+        resumeHops: hops,
+      },
+      handlers
+    );
   }
 
   return acc.result;

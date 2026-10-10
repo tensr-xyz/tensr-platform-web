@@ -35,6 +35,7 @@ import { apiClient } from '@/lib/api-client';
 import { RecipeList, SaveAsRecipeButton } from '@/components/templates/data/recipes';
 import { getIdToken } from '@/utils/auth';
 import { useChatStore } from '@/stores/chat-store';
+import { useOptionalOrganizationContext } from '@/contexts/organisation-context';
 import { useAgentModeStore, type AgentMode } from '@/stores/agent-mode-store';
 import { ChatAnalysisApproval } from '@/components/molecules/chat-analysis-approval';
 import {
@@ -432,6 +433,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
+  const v2SessionRef = useRef<string | null>(null);
+  const organisation = useOptionalOrganizationContext();
+  const agentVersion = organisation?.activeOrganization?.agentVersion === 'v2' ? 'v2' : 'v1';
   const attachmentThreadRef = useRef(activeThreadId);
   const lastFailedMessage = useRef<string | null>(null);
   const [canRetry, setCanRetry] = useState(false);
@@ -492,6 +496,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       assistantMessageId?: string;
       approvedToolCall?: AgentLoopApprovedToolCall;
       approvedToolCalls?: AgentLoopApprovedToolCall[];
+      approvedBatch?: { batch: unknown; mac: string } | null;
       triggerMessage?: string;
       conversationHistory?: ReturnType<typeof buildAgentConversationHistory>;
       attachments?: AgentLoopAttachment[];
@@ -525,6 +530,21 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           approvedToolCall: opts.approvedToolCall ?? null,
           approvedToolCalls: opts.approvedToolCalls ?? null,
           attachments: turnAttachments,
+          agentVersion,
+          sessionId: v2SessionRef.current,
+          resume: Boolean(opts.approvedBatch),
+          approvedBatch: opts.approvedBatch ?? null,
+          onDelta: text => {
+            const current =
+              useChatStore
+                .getState()
+                .getMessages(projectId)
+                .find(m => m.id === assistantMessageId)?.content ?? '';
+            updateMessage(projectId, assistantMessageId, {
+              content: `${current}${text}`,
+              isStreaming: true,
+            });
+          },
           onProgress: progress => {
             const prev = useChatStore
               .getState()
@@ -536,6 +556,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             });
           },
         });
+
+        if (response.session_id) v2SessionRef.current = response.session_id;
 
         const triggerMessage = opts.triggerMessage ?? opts.message;
         // Capture Plan/Why BEFORE the response patch overwrites chat content with
@@ -733,6 +755,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       messages,
       projectGlossary,
       projectId,
+      agentVersion,
       setLoading,
       tabs,
       updateMessage,
@@ -1309,7 +1332,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           message: action.triggerMessage,
           assistantMessageId: messageId,
           attachments: action.attachments?.length ? action.attachments : attachmentsRef.current,
-          approvedToolCall: pipeline?.length
+          approvedBatch: action.approvedBatch ?? null,
+          approvedToolCall: pipeline?.length || action.approvedBatch
             ? undefined
             : {
                 tool_call_id: action.toolCallId,

@@ -111,6 +111,8 @@ export type ChatPendingAction =
         coverage_line?: string;
       }>;
       coverageLine?: string;
+      /** Signed v2 batch. Approval posts this back unchanged. */
+      approvedBatch?: { batch: unknown; mac: string };
     }
   | {
       kind: 'proposed_action';
