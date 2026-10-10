@@ -261,6 +261,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       }
       await refreshSavedSpecs(runId);
     } catch (e) {
+      setBook(null);
       setError(e instanceof Error ? e.message : 'Table failed');
     } finally {
       setBusy(false);

@@ -73,6 +73,8 @@ tests:
     assert: [{ type: equals, value: "run_analysis" }]
   - vars: { prompt: "What predicts scoring output, independent of how much a player shoots?", mode: plan }
     assert: [{ type: equals, value: "plan-awaiting-approval" }]
+  - vars: { prompt: "What predicts points, independent of shot volume?", mode: plan }
+    assert: [{ type: equals, value: "plan-awaiting-approval" }]
   - vars: { prompt: "merge these on participant_id and weight to these targets, exclude missing categories", mode: plan }
     assert: [{ type: equals, value: "plan-awaiting-approval" }]
   - vars: { prompt: "Merge the files by participant_id and weight to the targets, excluding missing categories.", mode: plan }
