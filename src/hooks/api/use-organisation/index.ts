@@ -39,6 +39,7 @@ function mapApiOrganization(raw: Record<string, unknown>): Organization {
     slug: raw.slug as string | undefined,
     logoUrl: raw.logo_url as string | undefined,
     privacyMode: raw.privacy_mode === 'schema_only' ? 'schema_only' : 'full',
+    agentVersion: raw.agent_version === 'v2' ? 'v2' : 'v1',
     isPersonal: readIsPersonal(raw),
   };
 }
@@ -55,6 +56,7 @@ export interface Organization {
   slug?: string;
   logoUrl?: string;
   privacyMode?: 'full' | 'schema_only';
+  agentVersion?: 'v1' | 'v2';
   isPersonal?: boolean;
 }
 
