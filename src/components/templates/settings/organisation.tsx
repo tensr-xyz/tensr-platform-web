@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useOrganization, Organization } from '@/hooks/api/use-organisation';
+import { useOptionalOrganizationContext } from '@/contexts/organisation-context';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { toast } from '@/hooks/ui/use-toast';
@@ -19,6 +20,7 @@ export default function OrganizationSettings() {
   const router = useRouter();
   const { activeOrganization, updateOrganization, deleteOrganization, isLoading } =
     useOrganization();
+  const organisationContext = useOptionalOrganizationContext();
 
   const [editedOrg, setEditedOrg] = useState<Organization | null>(null);
   const [isEdited, setIsEdited] = useState(false);
@@ -193,6 +195,51 @@ export default function OrganizationSettings() {
           />
         </div>
       </section>
+
+      {editedOrg.role === 'ADMIN' ? (
+        <section className="overflow-hidden rounded-lg border border-border bg-background">
+          <div className="border-b border-border px-6 py-4">
+            <h3 className="text-base font-medium">Agent version</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Which assistant loop this organisation uses. New organisations stay on v1 until an
+              admin switches them.
+            </p>
+          </div>
+          <div className="flex items-center justify-between p-6">
+            <label htmlFor="agent-version" className="text-sm font-medium">
+              Agent version
+            </label>
+            <select
+              id="agent-version"
+              className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+              value={editedOrg.agentVersion ?? 'v1'}
+              disabled={isLoading || !activeOrganization}
+              onChange={async event => {
+                if (!activeOrganization) return;
+                const agent_version = event.target.value === 'v2' ? 'v2' : 'v1';
+                try {
+                  const updated = await updateOrganization(activeOrganization.id, { agent_version });
+                  setEditedOrg(updated);
+                  await organisationContext?.refreshCurrentOrganization();
+                  toast({
+                    title: agent_version === 'v2' ? 'Agent version is v2' : 'Agent version is v1',
+                    description: 'The next assistant turn uses this version.',
+                  });
+                } catch (err: any) {
+                  toast({
+                    title: 'Failed to update agent version',
+                    description: err.message || 'An error occurred while updating the organization',
+                    variant: 'destructive',
+                  });
+                }
+              }}
+            >
+              <option value="v1">v1</option>
+              <option value="v2">v2</option>
+            </select>
+          </div>
+        </section>
+      ) : null}
 
       <section className="overflow-hidden rounded-lg border border-border bg-background">
         <div className="border-b border-border px-6 py-4">

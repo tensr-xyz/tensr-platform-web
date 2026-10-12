@@ -5,13 +5,20 @@ const toast = jest.fn();
 const push = jest.fn();
 const updateOrganization = jest.fn();
 const deleteOrganization = jest.fn();
-const activeOrganization = { id: 'org-1', name: 'Prolific', slug: 'prolific', settings: {} };
+const mockOrg = {
+  id: 'org-1',
+  name: 'Prolific',
+  slug: 'prolific',
+  settings: {},
+  role: 'MEMBER' as 'ADMIN' | 'MEMBER',
+  agentVersion: undefined as 'v1' | 'v2' | undefined,
+};
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 jest.mock('@/hooks/ui/use-toast', () => ({ toast: (...a: unknown[]) => toast(...a) }));
 jest.mock('@/hooks/api/use-organisation', () => ({
   useOrganization: () => ({
-    activeOrganization,
+    activeOrganization: mockOrg,
     updateOrganization,
     deleteOrganization,
     isLoading: false,
@@ -21,6 +28,9 @@ jest.mock('@/hooks/api/use-organisation', () => ({
 describe('OrganizationSettings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockOrg.role = 'MEMBER';
+    mockOrg.agentVersion = undefined;
+    mockOrg.name = 'Prolific';
   });
 
   it('does not offer a URL slug field the API cannot save', () => {
@@ -59,5 +69,26 @@ describe('OrganizationSettings', () => {
     );
     expect(deleteOrganization).toHaveBeenCalledWith('org-1');
     expect(push).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('hides the agent version from members', () => {
+    render(<OrganizationSettings />);
+    expect(screen.queryByLabelText('Agent version')).not.toBeInTheDocument();
+  });
+
+  it('lets an admin set the agent version through the organisation update', async () => {
+    mockOrg.role = 'ADMIN';
+    updateOrganization.mockResolvedValue({
+      ...mockOrg,
+      agentVersion: 'v2',
+    });
+    render(<OrganizationSettings />);
+
+    expect(screen.getByLabelText('Agent version')).toHaveValue('v1');
+    fireEvent.change(screen.getByLabelText('Agent version'), { target: { value: 'v2' } });
+
+    await waitFor(() =>
+      expect(updateOrganization).toHaveBeenCalledWith('org-1', { agent_version: 'v2' })
+    );
   });
 });

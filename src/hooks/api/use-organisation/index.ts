@@ -105,6 +105,7 @@ interface UseOrganizationReturn {
       description?: string;
       settings?: any;
       privacy_mode?: 'full' | 'schema_only';
+      agent_version?: 'v1' | 'v2';
     }
   ) => Promise<Organization>;
   deleteOrganization: (orgId: string) => Promise<boolean>;
@@ -328,6 +329,7 @@ export const useOrganization = (): UseOrganizationReturn => {
       description?: string;
       settings?: any;
       privacy_mode?: 'full' | 'schema_only';
+      agent_version?: 'v1' | 'v2';
     }
   ): Promise<Organization> => {
     try {
