@@ -45,7 +45,9 @@ export type AgentLoopResponse = {
   mode: AgentMode;
   answer_markdown?: string;
   clarification_questions?: string[];
-  pending_approvals?: AgentLoopApprovedToolCall[];
+  pending_approvals?:
+    | AgentLoopApprovedToolCall[]
+    | { batch: unknown; mac: string };
   pipeline?: boolean;
   approval_batch?: boolean;
   /** Imports created when the plan was proposed. Skip deletes these; approval reuses them. */
@@ -66,6 +68,7 @@ export type AgentLoopResponse = {
   execution_trace?: string;
   /** Compact memory of this turn when tools ran. */
   turn_state?: Record<string, unknown>;
+  session_id?: string;
 };
 
 export type AgentLoopAttachment = {
@@ -85,7 +88,14 @@ export type RunAgentLoopParams = {
   /** Full Plan-mode pipeline from a single approval. */
   approvedToolCalls?: AgentLoopApprovedToolCall[] | null;
   attachments?: AgentLoopAttachment[] | null;
+  agentVersion?: 'v1' | 'v2';
+  sessionId?: string | null;
+  resume?: boolean;
+  approvedBatch?: { batch: unknown; mac: string } | null;
+  /** Internal hop count while a v2 turn returns status continuing. */
+  resumeHops?: number;
   onProgress?: (progress: { type: string; step: string; message: string }) => void;
+  onDelta?: (text: string) => void;
 };
 
 export function collectOpenDatasetsFromTabs(tabs: Tab[]): AgentLoopOpenDataset[] {
@@ -123,8 +133,13 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           approvedToolCall: params.approvedToolCall ?? null,
           approvedToolCalls: params.approvedToolCalls ?? null,
           attachments: params.attachments ?? null,
+          agentVersion: params.agentVersion,
+          sessionId: params.sessionId,
+          resume: params.resume,
+          approvedBatch: params.approvedBatch,
+          resumeHops: params.resumeHops,
         },
-        { onProgress: params.onProgress }
+        { onProgress: params.onProgress, onDelta: params.onDelta }
       );
     } catch (error) {
       lastError = error;
@@ -246,6 +261,14 @@ export function approvedRunFailureMessage(response: AgentLoopResponse): string |
   );
 }
 
+function signedV2Batch(
+  pending: AgentLoopResponse['pending_approvals']
+): { batch: unknown; mac: string } | null {
+  if (!pending || Array.isArray(pending)) return null;
+  if (typeof pending.mac !== 'string' || !pending.batch) return null;
+  return { batch: pending.batch, mac: pending.mac };
+}
+
 export function deriveMessageUpdateFromLoopResponse(
   response: AgentLoopResponse,
   context: DeriveLoopMessageContext
@@ -276,7 +299,28 @@ export function deriveMessageUpdateFromLoopResponse(
   }
 
   if (response.status === 'awaiting_approval') {
-    const approvals = response.pending_approvals ?? [];
+    const signed = signedV2Batch(response.pending_approvals);
+    if (signed) {
+      return {
+        content: answer,
+        isStreaming: false,
+        thinkingLines: undefined,
+        lastFittedModel,
+        turnState: response.turn_state,
+        pendingAction: {
+          kind: 'agent_tool_approval',
+          status: 'pending',
+          toolCallId: 'v2-batch',
+          name: 'run_operations',
+          args: {},
+          rationale: answer,
+          triggerMessage: context.triggerMessage,
+          attachments: context.attachments ?? undefined,
+          approvedBatch: signed,
+        },
+      };
+    }
+    const approvals = Array.isArray(response.pending_approvals) ? response.pending_approvals : [];
     const primary = approvals[0];
     if (primary) {
       return {

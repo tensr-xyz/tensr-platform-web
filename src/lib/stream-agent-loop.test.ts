@@ -126,4 +126,35 @@ describe('streamAgentLoop', () => {
       ApiRequestError
     );
   });
+
+  it('posts the v2 route, streams text, and resumes a continuing turn', async () => {
+    const onDelta = jest.fn();
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(
+        sseFetchResponse(
+          'data: {"type":"delta","text":"Partial "}\n\n' +
+            'data: {"type":"result","response":{"status":"continuing","mode":"agent","session_id":"sess-1","answer_markdown":""}}\n\n'
+        )
+      )
+      .mockResolvedValueOnce(
+        sseFetchResponse(
+          'data: {"type":"delta","text":"answer."}\n\n' +
+            'data: {"type":"final","text":"Checked answer.","status":"ok"}\n\n' +
+            'data: {"type":"result","response":{"status":"ok","mode":"agent","session_id":"sess-1","answer_markdown":"Checked answer."}}\n\n'
+        )
+      );
+
+    const result = await streamAgentLoop(
+      { message: 'crosstab', mode: 'agent', agentVersion: 'v2', sessionId: 'sess-1' },
+      { onDelta }
+    );
+
+    expect(result.answer_markdown).toBe('Checked answer.');
+    expect(onDelta).toHaveBeenNthCalledWith(1, 'Partial ');
+    expect(onDelta).toHaveBeenNthCalledWith(2, 'answer.');
+    const firstUrl = String((global.fetch as jest.Mock).mock.calls[0][0]);
+    const secondBody = JSON.parse(String((global.fetch as jest.Mock).mock.calls[1][1].body));
+    expect(firstUrl).toContain('/assistant/agent-loop-v2/stream');
+    expect(secondBody).toMatchObject({ resume: true, session_id: 'sess-1', message: '' });
+  });
 });
