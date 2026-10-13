@@ -1,6 +1,5 @@
-import posthog from 'posthog-js';
-
 import { formatApiErrorMessage } from '@/lib/api-error';
+import { captureProductException } from '@/lib/product-analytics';
 import { inspectUploadFile } from '@/lib/spreadsheet-probe';
 
 /** Record a caught upload failure and return the sentence to show. */
@@ -8,7 +7,7 @@ export async function reportUploadFailure(file: File, error: unknown): Promise<s
   const facts = await inspectUploadFile(file);
   const parserError = error instanceof Error ? error.message : String(error);
   console.error('Dataset upload failed', error);
-  posthog.captureException(error instanceof Error ? error : new Error(parserError), {
+  captureProductException(error, {
     file_type: facts.fileType,
     sheet_count: facts.sheetCount,
     row_count: facts.rowCount,

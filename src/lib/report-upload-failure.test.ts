@@ -1,9 +1,8 @@
-import posthog from 'posthog-js';
-
 import { reportUploadFailure } from './report-upload-failure';
+import { captureProductException } from '@/lib/product-analytics';
 
-jest.mock('posthog-js', () => ({
-  captureException: jest.fn(),
+jest.mock('@/lib/product-analytics', () => ({
+  captureProductException: jest.fn(),
 }));
 
 jest.mock('./spreadsheet-probe', () => ({
@@ -27,7 +26,7 @@ describe('reportUploadFailure', () => {
     const shown = await reportUploadFailure(file, error);
     expect(shown).toBe("Couldn't find a header row. The first 3 rows look like a title.");
     expect(shown).not.toMatch(/columns exist/i);
-    expect(posthog.captureException).toHaveBeenCalledWith(error, {
+    expect(captureProductException).toHaveBeenCalledWith(error, {
       file_type: 'xlsx',
       sheet_count: 1,
       row_count: 304,

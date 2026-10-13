@@ -33,15 +33,19 @@ function VarPicker({
   label,
   value,
   columnType,
+  onActivate,
 }: {
   label: string;
   value: string;
   columnType?: string;
+  onActivate?: () => void;
 }) {
   const isNumeric = isNumericDataType(columnType) || columnType === 'number';
   return (
     <button
       type="button"
+      onClick={onActivate}
+      title={onActivate ? `Change ${value} ${label}` : undefined}
       className="flex w-full items-center gap-2 rounded-md border border-border bg-card px-2.5 py-2 text-left text-[12.5px] text-foreground transition-colors hover:bg-muted/30"
     >
       <ColumnTypeBadge isNumeric={isNumeric} className="size-4 border-0 opacity-100" />
@@ -97,6 +101,7 @@ type Props = {
   activeSection?: string;
   onSectionSelect?: (id: string) => void;
   onRerun?: () => void;
+  rerunNotice?: string | null;
   onExport?: () => void;
   onExportCsv?: () => void;
   onExportExcel?: () => void;
@@ -123,6 +128,7 @@ export function AnalysisReportRail({
   activeSection,
   onSectionSelect,
   onRerun,
+  rerunNotice,
   onExport,
   onExportCsv,
   onExportExcel,
@@ -187,7 +193,13 @@ export function AnalysisReportRail({
         <div className="flex flex-col gap-2">
           {variables.length > 0 ? (
             variables.map((v, i) => (
-              <VarPicker key={i} label={v.label} value={v.value} columnType={v.type} />
+              <VarPicker
+                key={i}
+                label={v.label}
+                value={v.value}
+                columnType={v.type}
+                onActivate={onRerun}
+              />
             ))
           ) : (
             <p className="text-[11px] leading-relaxed text-muted-foreground">
@@ -196,7 +208,16 @@ export function AnalysisReportRail({
           )}
         </div>
         <div className="mt-2.5 flex gap-2">
-          <Button type="button" size="sm" className="h-8 flex-1 gap-1.5 text-xs" onClick={onRerun}>
+          <Button
+            type="button"
+            size="sm"
+            className="h-8 flex-1 gap-1.5 text-xs"
+            onClick={onRerun}
+            disabled={!onRerun}
+            title={
+              onRerun ? 'Open setup and run this analysis again' : 'This report cannot be re-run'
+            }
+          >
             <Redo2 className="size-3.5" aria-hidden />
             Re-run
           </Button>
@@ -211,6 +232,11 @@ export function AnalysisReportRail({
             <Command className="size-3.5" aria-hidden />
           </Button>
         </div>
+        {rerunNotice ? (
+          <p role="alert" className="mt-2 text-[11px] leading-snug text-destructive">
+            {rerunNotice}
+          </p>
+        ) : null}
       </RailSection>
 
       {otherRuns.length > 0 ? (

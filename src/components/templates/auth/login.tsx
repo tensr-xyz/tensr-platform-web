@@ -13,6 +13,7 @@ import { safeReturnTo } from '@/lib/safe-return-to';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
 import { stytchErrorMessage } from '@/lib/stytch-error-message';
 import { dumpAuthTrace, authTrace } from '@/lib/auth-trace';
+import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
 import { storeSession } from '@/utils/auth';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -41,6 +42,7 @@ const LoginTemplate = () => {
   const [error, setError] = useState('');
   const [methodId, setMethodId] = useState('');
   const [isSendingCode, setIsSendingCode] = useState(false);
+  const [codeNotice, setCodeNotice] = useState('');
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isGitHubLoading, setIsGitHubLoading] = useState(false);
@@ -187,13 +189,20 @@ const LoginTemplate = () => {
         setMethodId(result.methodId);
         setIsVerifying(true);
         setError('');
+        setCodeNotice(
+          'Code sent. Check your inbox and spam — it can take up to a minute to arrive.'
+        );
         posthog.capture('login_initiated', { method: 'email_otp' });
+        captureProductEvent('otp_sent', { resend: false });
       } else {
         setError('Failed to initialize authentication. Please try again.');
+        captureProductEvent('otp_send_failed', { resend: false, error_class: 'missing_method_id' });
         console.error('No methodId returned from initiateAuth', result);
       }
     } catch (err) {
       console.error('Failed to initiate auth:', err);
+      captureProductException(err, { where: 'otp_send' });
+      captureProductEvent('otp_send_failed', { resend: false, error_class: errorClass(err) });
       const errorMessage =
         err instanceof Error ? err.message : 'Failed to send verification email. Please try again.';
       setError(errorMessage);
@@ -241,6 +250,7 @@ const LoginTemplate = () => {
     setIsVerifying(false);
     setVerificationCode('');
     setError('');
+    setCodeNotice('');
     setMethodId('');
   };
 
@@ -253,12 +263,21 @@ const LoginTemplate = () => {
 
     try {
       setIsSendingCode(true);
-      const result = await resendVerificationCode(email);
+      setError('');
+      captureProductEvent('otp_resend_clicked', {});
+      const result = await resendVerificationCode(email.trim().toLowerCase());
       if (result && result.methodId) {
         setMethodId(result.methodId);
+        setCodeNotice('Sent again. Check your inbox and spam — it can take up to a minute.');
+        captureProductEvent('otp_sent', { resend: true });
+      } else {
+        setError('Could not resend the code. Please try again.');
+        captureProductEvent('otp_send_failed', { resend: true, error_class: 'missing_method_id' });
       }
     } catch (err) {
       console.error('Failed to resend code:', err);
+      captureProductException(err, { where: 'otp_resend' });
+      captureProductEvent('otp_send_failed', { resend: true, error_class: errorClass(err) });
       setError(stytchErrorMessage(err, 'Failed to resend verification email. Please try again.'));
     } finally {
       setIsSendingCode(false);
@@ -432,6 +451,12 @@ const LoginTemplate = () => {
                       className="h-10 bg-muted"
                     />
                   </div>
+
+                  {codeNotice ? (
+                    <p className="text-sm text-muted-foreground" role="status">
+                      {codeNotice}
+                    </p>
+                  ) : null}
 
                   <div className="flex flex-col gap-2">
                     <div className="flex items-center justify-between">
