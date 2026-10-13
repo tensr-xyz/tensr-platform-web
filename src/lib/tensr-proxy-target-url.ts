@@ -17,7 +17,10 @@ export function buildTensrProxyTargetUrl(
   return search ? `${target}${search}` : target;
 }
 
-const AGENT_LOOP_STREAM = 'assistant/agent-loop/stream';
+const AGENT_LOOP_STREAMS = new Set([
+  'assistant/agent-loop/stream',
+  'assistant/agent-loop-v2/stream',
+]);
 
 /**
  * Upstream for the agent-loop SSE when `TENSR_ASSISTANT_STREAM_URL` (the API's
@@ -31,6 +34,7 @@ export function buildAssistantStreamTargetUrl(
 ): string | null {
   const base = (streamBaseUrl || '').trim().replace(/\/+$/, '');
   if (!base) return null;
-  if (pathSegments.filter(Boolean).join('/') !== AGENT_LOOP_STREAM) return null;
-  return `${base}/api/${AGENT_LOOP_STREAM}${search}`;
+  const joined = pathSegments.filter(Boolean).join('/');
+  if (!AGENT_LOOP_STREAMS.has(joined)) return null;
+  return `${base}/api/${joined}${search}`;
 }

@@ -90,38 +90,39 @@ export async function streamAgentLoop(
   const response = await fetch(
     tensrApiUrl(v2 ? '/assistant/agent-loop-v2/stream' : '/assistant/agent-loop/stream'),
     {
-    method: 'POST',
-    cache: 'no-store',
-    headers: {
-      ...getTensrApiHeaders(),
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(
-      v2
-        ? {
-            message: params.resume ? '' : params.message,
-            mode: params.mode,
-            dataset_id: params.datasetId ?? null,
-            session_id: params.sessionId ?? null,
-            resume: Boolean(params.resume || params.approvedBatch),
-            approved_batch: params.approvedBatch ?? null,
-          }
-        : {
-            message: params.message,
-            mode: params.mode,
-            dataset_id: params.datasetId ?? null,
-            open_datasets: params.openDatasets ?? [],
-            conversation_history: params.conversationHistory ?? null,
-            glossary: params.glossary ?? null,
-            approved_tool_call: params.approvedToolCall ?? null,
-            approved_tool_calls: params.approvedToolCalls ?? null,
-            attachments: params.attachments ?? null,
-          }
-    ),
-    signal: handlers.signal,
-  });
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        ...getTensrApiHeaders(),
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(
+        v2
+          ? {
+              message: params.resume ? '' : params.message,
+              mode: params.mode,
+              dataset_id: params.datasetId ?? null,
+              session_id: params.sessionId ?? null,
+              resume: Boolean(params.resume || params.approvedBatch),
+              approved_batch: params.approvedBatch ?? null,
+            }
+          : {
+              message: params.message,
+              mode: params.mode,
+              dataset_id: params.datasetId ?? null,
+              open_datasets: params.openDatasets ?? [],
+              conversation_history: params.conversationHistory ?? null,
+              glossary: params.glossary ?? null,
+              approved_tool_call: params.approvedToolCall ?? null,
+              approved_tool_calls: params.approvedToolCalls ?? null,
+              attachments: params.attachments ?? null,
+            }
+      ),
+      signal: handlers.signal,
+    }
+  );
 
   if (!response.ok) {
     const errorText = await response.text();

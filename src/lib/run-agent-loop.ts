@@ -45,9 +45,7 @@ export type AgentLoopResponse = {
   mode: AgentMode;
   answer_markdown?: string;
   clarification_questions?: string[];
-  pending_approvals?:
-    | AgentLoopApprovedToolCall[]
-    | { batch: unknown; mac: string };
+  pending_approvals?: AgentLoopApprovedToolCall[] | { batch: unknown; mac: string };
   pipeline?: boolean;
   approval_batch?: boolean;
   /** Imports created when the plan was proposed. Skip deletes these; approval reuses them. */
