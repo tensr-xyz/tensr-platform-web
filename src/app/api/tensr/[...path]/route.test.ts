@@ -2,7 +2,13 @@
  * @jest-environment node
  */
 import { NextRequest } from 'next/server';
+import { getPostHogClient } from '@/lib/posthog-server';
 import { GET, POST, shouldDecodeBodyAsText } from './route';
+
+jest.mock('@/lib/posthog-server', () => {
+  const captureException = jest.fn();
+  return { getPostHogClient: () => ({ captureException }) };
+});
 
 const FN_URL = 'https://abc123.lambda-url.us-east-1.on.aws/';
 const API = 'https://5qv9lg3s55.execute-api.us-east-1.amazonaws.com';
@@ -100,6 +106,39 @@ describe('/api/tensr proxy: agent-loop stream', () => {
     const res = await post(['assistant', 'agent-loop', 'stream']);
     expect(fetchMock.mock.calls[0][0]).toBe(`${API}/api/assistant/agent-loop/stream`);
     expect(res.headers.get('X-Tensr-Upstream')).toBe('api-gateway');
+  });
+
+  it('forwards a 503 event-stream as 200 and records the original status', async () => {
+    process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN = 'phc_test';
+    const capture = getPostHogClient().captureException as jest.Mock;
+    capture.mockClear();
+    fetchMock.mockImplementation(
+      async () =>
+        new Response('data: {"type":"result","response":{"status":"ok"}}\n\n', {
+          status: 503,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+    );
+    const req = new NextRequest('http://localhost/api/tensr/assistant/agent-loop-v2/stream', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer t',
+        'content-type': 'application/json',
+        'x-tensr-distinct-id': 'user-1',
+      },
+      body: JSON.stringify({ message: 'hi', session_id: 'sess-9' }),
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ path: ['assistant', 'agent-loop-v2', 'stream'] }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Tensr-Upstream-Status')).toBe('503');
+    expect(capture).toHaveBeenCalledWith(
+      expect.any(Error),
+      'user-1',
+      expect.objectContaining({ status: 503, session_id: 'sess-9', distinct_id: 'user-1' })
+    );
+    await res.body?.cancel();
   });
 });
 

@@ -5,6 +5,7 @@ import {
   buildTensrProxyTargetUrl,
 } from '@/lib/tensr-proxy-target-url';
 import { ACTIVE_ORGANISATION_COOKIE, resolveProxyOrganisationId } from '@/lib/active-organisation';
+import { getPostHogClient } from '@/lib/posthog-server';
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -49,6 +50,40 @@ export function shouldDecodeBodyAsText(contentType: string): boolean {
   return false;
 }
 
+function sessionIdFromBody(raw: string): string | null {
+  try {
+    const parsed = JSON.parse(raw) as { session_id?: unknown };
+    return typeof parsed.session_id === 'string' && parsed.session_id ? parsed.session_id : null;
+  } catch {
+    return null;
+  }
+}
+
+function captureStreamStatus(input: {
+  status: number;
+  sessionId: string | null;
+  distinctId: string | null;
+  path: string;
+  upstream: string;
+}) {
+  if (input.status < 400 || !process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) return;
+  try {
+    getPostHogClient().captureException(
+      new Error(`agent stream upstream ${input.status}`),
+      input.distinctId || 'tensr-web',
+      {
+        status: input.status,
+        session_id: input.sessionId,
+        distinct_id: input.distinctId,
+        path: input.path,
+        upstream: input.upstream,
+      }
+    );
+  } catch {
+    // Analytics must not change the stream the user is reading.
+  }
+}
+
 function forwardResponseHeaders(from: Headers): Headers {
   const headers = new Headers();
   from.forEach((value, key) => {
@@ -73,6 +108,7 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
   if (orgId) headers.set('X-Organization-Id', orgId);
   const contentType = req.headers.get('content-type');
   if (contentType) headers.set('Content-Type', contentType);
+  const distinctId = req.headers.get('x-tensr-distinct-id');
   if (streamPath) {
     headers.set('Accept', 'text/event-stream');
   }
@@ -83,14 +119,26 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
     cache: 'no-store',
   };
 
+  let requestBody = '';
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    init.body = await req.text();
+    requestBody = await req.text();
+    init.body = requestBody;
   }
 
   try {
     const res = await fetch(targetUrl, init);
     const upstreamType = res.headers.get('Content-Type') ?? '';
-    const isEventStream = streamPath || upstreamType.includes('text/event-stream');
+    const eventStreamBody = upstreamType.includes('text/event-stream');
+    const isEventStream = streamPath || eventStreamBody;
+    if (streamPath && res.status >= 400) {
+      captureStreamStatus({
+        status: res.status,
+        sessionId: sessionIdFromBody(requestBody),
+        distinctId,
+        path: pathSegments.join('/'),
+        upstream,
+      });
+    }
 
     // Auth-scoped proxy: never let browsers/CDNs reuse a previous user's session
     // or an expired /me payload (see next.config /api Cache-Control).
@@ -104,8 +152,13 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
       outHeaders.set('X-Accel-Buffering', 'no');
       // API Gateway caps a turn at 30s; only the Function URL streams past it.
       outHeaders.set('X-Tensr-Upstream', upstream);
+      // A 5xx on a real event-stream is the status arriving late. The body is the turn.
+      const status = eventStreamBody && res.status >= 400 ? 200 : res.status;
+      if (status !== res.status) {
+        outHeaders.set('X-Tensr-Upstream-Status', String(res.status));
+      }
       return new NextResponse(res.body, {
-        status: res.status,
+        status,
         headers: outHeaders,
       });
     }
@@ -136,6 +189,15 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Upstream request failed';
+    if (streamPath) {
+      captureStreamStatus({
+        status: 502,
+        sessionId: sessionIdFromBody(requestBody),
+        distinctId,
+        path: pathSegments.join('/'),
+        upstream,
+      });
+    }
     return NextResponse.json(
       {
         detail: `Could not reach tensr-api at ${targetUrl}: ${message}`,
