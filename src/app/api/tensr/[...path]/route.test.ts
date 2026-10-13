@@ -98,6 +98,7 @@ describe('tensr proxy body', () => {
     expect(shouldDecodeBodyAsText('application/json; charset=utf-8')).toBe(true);
     expect(shouldDecodeBodyAsText('text/csv')).toBe(true);
     expect(shouldDecodeBodyAsText('text/event-stream')).toBe(true);
+    expect(shouldDecodeBodyAsText('multipart/form-data; boundary=abc')).toBe(false);
     expect(
       shouldDecodeBodyAsText('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     ).toBe(false);

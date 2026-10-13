@@ -1,9 +1,6 @@
-import fs from 'fs';
-import path from 'path';
+import JSZip from 'jszip';
 
 import { countsFromDimension, inspectUploadFile } from './spreadsheet-probe';
-
-const FIXTURE = path.resolve(__dirname, '__fixtures__/agency_survey_raw.xlsx');
 
 describe('countsFromDimension', () => {
   it('reads an A1:M304 range', () => {
@@ -12,16 +9,25 @@ describe('countsFromDimension', () => {
 });
 
 describe('inspectUploadFile', () => {
-  it('reads sheet, row, and column counts from the agency workbook', async () => {
-    const bytes = fs.readFileSync(FIXTURE);
-    const file = new File([new Uint8Array(bytes)], 'agency_survey_raw.xlsx');
+  it('reads sheet, row, and column counts from workbook XML', async () => {
+    const zip = new JSZip();
+    zip.file(
+      'xl/workbook.xml',
+      '<?xml version="1.0"?><workbook><sheets><sheet name="Raw Data"/></sheets></workbook>'
+    );
+    zip.file(
+      'xl/worksheets/sheet1.xml',
+      '<?xml version="1.0"?><worksheet><dimension ref="A1:M304"/></worksheet>'
+    );
+    const bytes = await zip.generateAsync({ type: 'uint8array' });
+    const file = new File([bytes], 'Raw Data 300426.xlsx');
     const facts = await inspectUploadFile(file);
     expect(facts).toMatchObject({
       fileType: 'xlsx',
-      sheetCount: 2,
+      sheetCount: 1,
+      rowCount: 304,
+      colCount: 13,
       parserError: null,
     });
-    expect(facts.rowCount).toBeGreaterThan(0);
-    expect(facts.colCount).toBeGreaterThan(0);
   });
 });

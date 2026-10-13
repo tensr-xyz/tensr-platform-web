@@ -36,7 +36,7 @@ function isStreamingProxyPath(pathSegments: string[]): boolean {
   return joined.endsWith('assistant/agent-loop/stream') || joined.endsWith('agent-loop/stream');
 }
 
-/** Text and JSON stay decoded. Everything else, including xlsx, pptx, and pdf, is streamed as bytes. */
+/** Text and JSON stay decoded. Multipart uploads and other bytes, including xlsx, stay bytes. */
 export function shouldDecodeBodyAsText(contentType: string): boolean {
   const type = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
   if (!type) return false;

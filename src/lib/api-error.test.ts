@@ -98,4 +98,19 @@ describe('formatApiErrorMessage', () => {
       'Dataset not found'
     );
   });
+
+  it('shows a header-row error instead of a column check', () => {
+    const detail = "Couldn't find a header row. The first 3 rows look like a title.";
+    const shown = formatApiErrorMessage(new ApiRequestError(400, JSON.stringify({ detail })));
+    expect(shown).toBe(detail);
+    expect(shown).not.toMatch(/columns exist/i);
+  });
+
+  it('does not tell the user to check columns for an internal server error', () => {
+    const shown = formatApiErrorMessage(
+      new ApiRequestError(500, '{"detail":"Internal server error"}')
+    );
+    expect(shown).toBe('The request failed. Try again.');
+    expect(shown).not.toMatch(/columns exist/i);
+  });
 });
