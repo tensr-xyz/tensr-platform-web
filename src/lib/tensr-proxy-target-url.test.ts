@@ -39,6 +39,12 @@ describe('buildAssistantStreamTargetUrl', () => {
     );
   });
 
+  it('sends the v2 agent-loop stream to the Function URL', () => {
+    expect(
+      buildAssistantStreamTargetUrl(['assistant', 'agent-loop-v2', 'stream'], '', FN_URL)
+    ).toBe('https://abc123.lambda-url.us-east-1.on.aws/api/assistant/agent-loop-v2/stream');
+  });
+
   it('keeps every other path on API Gateway', () => {
     expect(buildAssistantStreamTargetUrl(['assistant', 'agent-loop'], '', FN_URL)).toBeNull();
     expect(

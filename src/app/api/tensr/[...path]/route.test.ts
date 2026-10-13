@@ -79,6 +79,16 @@ describe('/api/tensr proxy: agent-loop stream', () => {
     expect(arrivals[2] - arrivals[0]).toBeGreaterThanOrEqual(250);
   });
 
+  it('sends the v2 stream to the Function URL without buffering', async () => {
+    const res = await post(['assistant', 'agent-loop-v2', 'stream']);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://abc123.lambda-url.us-east-1.on.aws/api/assistant/agent-loop-v2/stream'
+    );
+    expect(res.headers.get('Content-Type')).toContain('text/event-stream');
+    expect(res.headers.get('X-Tensr-Upstream')).toBe('function-url');
+    await res.body?.cancel();
+  });
+
   it('keeps the JSON agent-loop on API Gateway', async () => {
     fetchMock.mockImplementation(async () => Response.json({ status: 'ok' }));
     await post(['assistant', 'agent-loop']);

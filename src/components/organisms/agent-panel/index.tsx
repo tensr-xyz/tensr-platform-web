@@ -36,6 +36,8 @@ import { RecipeList, SaveAsRecipeButton } from '@/components/templates/data/reci
 import { getIdToken } from '@/utils/auth';
 import { useChatStore } from '@/stores/chat-store';
 import { useOptionalOrganizationContext } from '@/contexts/organisation-context';
+import { resolveAgentVersion } from '@/lib/agent-version';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAgentModeStore, type AgentMode } from '@/stores/agent-mode-store';
 import { ChatAnalysisApproval } from '@/components/molecules/chat-analysis-approval';
 import {
@@ -435,7 +437,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   attachmentsRef.current = attachments;
   const v2SessionRef = useRef<string | null>(null);
   const organisation = useOptionalOrganizationContext();
-  const agentVersion = organisation?.activeOrganization?.agentVersion === 'v2' ? 'v2' : 'v1';
+  const userAgentVersion = useAuthStore(state => state.user?.agentVersion);
+  const agentVersion = resolveAgentVersion({
+    isPersonalAccount: Boolean(organisation?.isPersonalAccount),
+    userAgentVersion,
+    organizationAgentVersion: organisation?.activeOrganization?.agentVersion,
+  });
   const attachmentThreadRef = useRef(activeThreadId);
   const lastFailedMessage = useRef<string | null>(null);
   const [canRetry, setCanRetry] = useState(false);
@@ -1333,15 +1340,16 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           assistantMessageId: messageId,
           attachments: action.attachments?.length ? action.attachments : attachmentsRef.current,
           approvedBatch: action.approvedBatch ?? null,
-          approvedToolCall: pipeline?.length || action.approvedBatch
-            ? undefined
-            : {
-                tool_call_id: action.toolCallId,
-                name: action.name,
-                args: action.args,
-                rationale: action.rationale,
-                why_this_test: action.whyThisTest,
-              },
+          approvedToolCall:
+            pipeline?.length || action.approvedBatch
+              ? undefined
+              : {
+                  tool_call_id: action.toolCallId,
+                  name: action.name,
+                  args: action.args,
+                  rationale: action.rationale,
+                  why_this_test: action.whyThisTest,
+                },
           approvedToolCalls: pipeline?.length ? pipeline : undefined,
           triggerMessage: action.triggerMessage,
         });

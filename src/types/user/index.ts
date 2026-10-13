@@ -5,6 +5,7 @@ export interface User {
   firstName?: string;
   lastName?: string;
   username?: string;
+  agentVersion?: 'v1' | 'v2';
   subscriptionTier?: string;
   subscriptionStatus?: string;
   subscriptionEndsAt?: string;

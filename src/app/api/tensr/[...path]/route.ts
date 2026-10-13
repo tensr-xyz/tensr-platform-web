@@ -32,7 +32,12 @@ function buildTarget(
 function isStreamingProxyPath(pathSegments: string[]): boolean {
   const joined = pathSegments.join('/').toLowerCase();
   if (joined.includes('/analyze/') && joined.endsWith('/stream')) return true;
-  return joined.endsWith('assistant/agent-loop/stream') || joined.endsWith('agent-loop/stream');
+  return (
+    joined.endsWith('assistant/agent-loop/stream') ||
+    joined.endsWith('assistant/agent-loop-v2/stream') ||
+    joined.endsWith('agent-loop/stream') ||
+    joined.endsWith('agent-loop-v2/stream')
+  );
 }
 
 /** Text and JSON stay decoded. Everything else, including xlsx, pptx, and pdf, is streamed as bytes. */

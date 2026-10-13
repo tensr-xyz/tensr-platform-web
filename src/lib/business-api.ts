@@ -95,6 +95,7 @@ export async function updateProfile(updates: Partial<User>): Promise<User> {
       lastName: updates.lastName,
       username: updates.username,
       preferences: updates.preferences,
+      ...(updates.agentVersion ? { agentVersion: updates.agentVersion } : {}),
     }),
   });
   if (handleUnauthorizedResponse(r)) throw new Error('Session expired');
