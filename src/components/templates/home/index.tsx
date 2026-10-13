@@ -172,6 +172,7 @@ const HomeTemplate: React.FC = () => {
   const [searchQ, setSearchQ] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [uploadPickerOpen, setUploadPickerOpen] = useState(false);
+  const [templateId, setTemplateId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const { data: projects, isLoading: projectsLoading, error: projectsError } = useProjects();
@@ -182,9 +183,12 @@ const HomeTemplate: React.FC = () => {
         title: 'File ready',
         description: `${fileName} uploaded. Opening workspace…`,
       });
-      router.push(`/workspace/dataset/${datasetId}?name=${encodeURIComponent(fileName)}`);
+      const template = templateId ? `&template=${encodeURIComponent(templateId)}` : '';
+      router.push(
+        `/workspace/dataset/${datasetId}?name=${encodeURIComponent(fileName)}${template}`
+      );
     },
-    [router, toast]
+    [router, templateId, toast]
   );
 
   const { uploadFile, isLoading: uploadBusy } = useDatasetUpload(
@@ -209,7 +213,8 @@ const HomeTemplate: React.FC = () => {
   };
 
   /** Templates start a fresh upload — never reopen the most recent dataset. */
-  const handleStartNewAnalysis = useCallback(() => {
+  const handleStartNewAnalysis = useCallback((id: string) => {
+    setTemplateId(id);
     setUploadPickerOpen(true);
   }, []);
 
@@ -399,8 +404,11 @@ const HomeTemplate: React.FC = () => {
               <button
                 key={t.id}
                 type="button"
-                onClick={handleStartNewAnalysis}
-                className="rounded-xl border border-border bg-background p-3.5 text-left transition-colors hover:border-primary"
+                onClick={() => handleStartNewAnalysis(t.id)}
+                aria-pressed={uploadPickerOpen && templateId === t.id}
+                className={`rounded-xl border bg-background p-3.5 text-left transition-colors hover:border-primary ${
+                  uploadPickerOpen && templateId === t.id ? 'border-primary' : 'border-border'
+                }`}
               >
                 <div className="mb-3 text-primary">
                   <TemplateIcon kind={t.icon} />
@@ -417,7 +425,11 @@ const HomeTemplate: React.FC = () => {
           <div className="relative mt-5 flex flex-wrap items-center gap-2">
             <DatasetFilePicker
               open={uploadPickerOpen}
-              onOpenChange={setUploadPickerOpen}
+              title={TEMPLATES.find(t => t.id === templateId)?.name}
+              onOpenChange={open => {
+                setUploadPickerOpen(open);
+                if (!open) setTemplateId(null);
+              }}
               onUploaded={handleDatasetUploaded}
             >
               <Button className="h-9 gap-2 rounded-full px-4" disabled={uploadBusy}>

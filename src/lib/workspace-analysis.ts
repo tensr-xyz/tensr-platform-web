@@ -1,5 +1,6 @@
 import { apiClient } from '@/lib/api-client';
 import type { AnalysisReport, AnalyzeResponse } from '@/lib/analysis-report-types';
+import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
 
 export type AnalysisEnvelope = AnalyzeResponse;
 
@@ -8,7 +9,32 @@ export async function runDatasetAnalysis(
   op: string,
   body: Record<string, unknown>
 ): Promise<AnalysisEnvelope> {
-  return apiClient.datasets.analyze.run(datasetId, op, body);
+  const started = performance.now();
+  captureProductEvent('analysis_started', {
+    dataset_id: datasetId,
+    analysis_type: op,
+    where: 'setup',
+  });
+  try {
+    const envelope = await apiClient.datasets.analyze.run(datasetId, op, body);
+    captureProductEvent('analysis_completed', {
+      dataset_id: datasetId,
+      analysis_type: op,
+      where: 'setup',
+      duration_ms: Math.round(performance.now() - started),
+      output_type: envelope.report ? 'report' : 'result',
+    });
+    return envelope;
+  } catch (error) {
+    captureProductException(error, { where: 'setup', dataset_id: datasetId });
+    captureProductEvent('analysis_failed', {
+      dataset_id: datasetId,
+      analysis_type: op,
+      where: 'setup',
+      error_class: errorClass(error),
+    });
+    throw error;
+  }
 }
 
 /** Map tensr-api correlation result to legacy dialog shape. */

@@ -21,6 +21,8 @@ interface DatasetFilePickerProps {
   /** Controlled open state — use to open the picker from template buttons, etc. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Template the user clicked, shown as the dialog title. */
+  title?: string;
 }
 
 export function DatasetFilePicker({
@@ -29,6 +31,7 @@ export function DatasetFilePicker({
   scope = 'workspace',
   open: controlledOpen,
   onOpenChange,
+  title,
 }: DatasetFilePickerProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
   const isControlled = controlledOpen !== undefined;
@@ -56,7 +59,7 @@ export function DatasetFilePicker({
       ) : null}
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Upload a file</DialogTitle>
+          <DialogTitle>{title ? `Upload a file for ${title}` : 'Upload a file'}</DialogTitle>
         </DialogHeader>
         <FilePicker
           isLoading={isLoading}
