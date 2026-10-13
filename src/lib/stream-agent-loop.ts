@@ -1,3 +1,4 @@
+import posthog from 'posthog-js';
 import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
@@ -16,6 +17,32 @@ export type AgentLoopStreamHandlers = {
   onDelta?: (text: string) => void;
   signal?: AbortSignal;
 };
+
+function readDistinctId(): string | undefined {
+  try {
+    const id = posthog.get_distinct_id?.();
+    return typeof id === 'string' && id ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function captureStreamStatus(
+  status: number,
+  sessionId: string | null | undefined,
+  distinctId: string | undefined
+) {
+  if (status < 400) return;
+  try {
+    posthog.captureException(new Error(`agent stream ${status}`), {
+      status,
+      session_id: sessionId ?? null,
+      distinct_id: distinctId ?? null,
+    });
+  } catch {
+    // A failed capture must not hide the stream error.
+  }
+}
 
 function processSseLine(
   line: string,
@@ -99,6 +126,7 @@ export async function streamAgentLoop(
   }
 
   const v2 = params.agentVersion === 'v2';
+  const distinctId = readDistinctId();
   const response = await fetch(
     tensrApiUrl(v2 ? '/assistant/agent-loop-v2/stream' : '/assistant/agent-loop/stream'),
     {
@@ -109,6 +137,7 @@ export async function streamAgentLoop(
         'Content-Type': 'application/json',
         Accept: 'text/event-stream',
         Authorization: `Bearer ${token}`,
+        ...(distinctId ? { 'X-Tensr-Distinct-Id': distinctId } : {}),
       },
       body: JSON.stringify(
         v2
@@ -138,6 +167,7 @@ export async function streamAgentLoop(
 
   if (!response.ok) {
     const errorText = await response.text();
+    captureStreamStatus(response.status, params.sessionId, distinctId);
     if (handleUnauthorizedResponse(response)) {
       throw new ApiRequestError(401, errorText);
     }

@@ -1,8 +1,14 @@
 import { TextDecoder, TextEncoder } from 'util';
+import posthog from 'posthog-js';
 import { ApiRequestError } from '@/lib/api-error';
 import { streamAgentLoop } from '@/lib/stream-agent-loop';
 
 Object.assign(global, { TextDecoder, TextEncoder });
+
+jest.mock('posthog-js', () => ({
+  get_distinct_id: () => 'distinct-1',
+  captureException: jest.fn(),
+}));
 
 jest.mock('@/utils/auth', () => ({
   getStytchBearerForTensrApi: () => 'test-token',
@@ -184,5 +190,18 @@ describe('streamAgentLoop', () => {
     const secondBody = JSON.parse(String((global.fetch as jest.Mock).mock.calls[1][1].body));
     expect(firstUrl).toContain('/assistant/agent-loop-v2/stream');
     expect(secondBody).toMatchObject({ resume: true, session_id: 'sess-1', message: '' });
+  });
+
+  it('captures a non-2xx stream with the session and distinct id', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(sseFetchResponse('nope', 503));
+    await expect(
+      streamAgentLoop({ message: 'crosstab', mode: 'agent', agentVersion: 'v2', sessionId: 'sess-9' })
+    ).rejects.toBeInstanceOf(ApiRequestError);
+    expect(posthog.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ status: 503, session_id: 'sess-9', distinct_id: 'distinct-1' })
+    );
+    const headers = new Headers((global.fetch as jest.Mock).mock.calls[0][1].headers);
+    expect(headers.get('X-Tensr-Distinct-Id')).toBe('distinct-1');
   });
 });
