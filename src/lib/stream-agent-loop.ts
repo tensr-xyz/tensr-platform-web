@@ -30,6 +30,7 @@ function processSseLine(
   let payload: {
     type?: string;
     step?: string;
+    name?: string;
     message?: string;
     text?: string;
     response?: AgentLoopResponse;
@@ -42,6 +43,17 @@ function processSseLine(
 
   if (payload.type === 'delta' && payload.text) {
     handlers.onDelta?.(payload.text);
+    return;
+  }
+
+  if (payload.type === 'tool') {
+    const step = payload.name || payload.step || 'tool';
+    const message = payload.message || `Running ${step.replace(/_/g, ' ')}`;
+    handlers.onProgress?.({
+      type: 'tool',
+      step,
+      message,
+    });
     return;
   }
 

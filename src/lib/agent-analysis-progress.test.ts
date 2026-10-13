@@ -95,6 +95,23 @@ describe('interpretAgentLoopProgressMessage', () => {
     ).toEqual([]);
   });
 
+  it('shows a v2 tool line instead of the pulse placeholder', () => {
+    expect(
+      interpretAgentLoopProgressMessage({
+        type: 'tool',
+        step: 'run_operations',
+        message: 'Running banner table',
+      })
+    ).toBe('Running banner table');
+    expect(
+      accumulateInterpretedLoopProgress(undefined, {
+        type: 'tool',
+        step: 'run_operations',
+        message: 'Running banner table',
+      })
+    ).toEqual(['Running banner table']);
+  });
+
   it('maps run_analysis tool start to Working through copy', () => {
     expect(
       interpretAgentLoopProgressMessage({
