@@ -827,43 +827,6 @@ export function NetworkForm({ form, setForm, schema, allNames, notices, errors }
   );
 }
 
-export function BannerTableForm({
-  form,
-  setForm,
-  schema,
-  allNames,
-  notices,
-  errors,
-}: FormSliceProps) {
-  return (
-    <section className="space-y-3">
-      <FormSectionLabel>Variables</FormSectionLabel>
-      <ColumnSelect
-        label="Stub column"
-        value={form.chiA}
-        onChange={chiA => setForm(f => ({ ...f, chiA }))}
-        schema={schema}
-        names={allNames}
-        expectedType="categorical"
-        errors={errors[WIZARD_FIELD.chiA]}
-      />
-      <ColumnSelect
-        label="Banner column"
-        value={form.chiB}
-        onChange={chiB => setForm(f => ({ ...f, chiB }))}
-        schema={schema}
-        names={allNames}
-        expectedType="categorical"
-        notices={notices[WIZARD_FIELD.chiB]}
-        errors={errors[WIZARD_FIELD.chiB]}
-      />
-      <p className="text-[11px] leading-snug text-muted-foreground">
-        Column percentages use the banner. APA formatting, charts, and decimal places are below.
-      </p>
-    </section>
-  );
-}
-
 export function ChiSquareForm({
   form,
   setForm,
@@ -2187,8 +2150,6 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'chi_square':
     case 'mcnemar':
       return <ChiSquareForm {...props} />;
-    case 'banner_table':
-      return <BannerTableForm {...props} />;
     case 'mann_whitney_u':
       return (
         <GroupNumericForm

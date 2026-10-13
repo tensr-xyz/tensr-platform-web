@@ -1,24 +1,20 @@
 'use client';
 
 import React from 'react';
-import { BarChart2 } from 'lucide-react';
-import { Button } from '@/components/atoms/button';
+import { BarChart2, Loader2 } from 'lucide-react';
 
 type Props = {
   title: string;
   analysisOp?: string;
   parameters?: Record<string, unknown>;
   sourceDatasetId?: string;
-  onRetry?: () => void;
 };
 
-/** A finished run that never stored a report. This is not a loading state. */
 export function AnalysisResultPlaceholder({
   title,
   analysisOp,
   parameters = {},
   sourceDatasetId,
-  onRetry,
 }: Props) {
   const paramEntries = Object.entries(parameters).filter(
     ([, v]) => v !== undefined && v !== null && v !== ''
@@ -44,18 +40,15 @@ export function AnalysisResultPlaceholder({
         ) : null}
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 px-8 py-12">
-        <p role="status" className="text-sm font-medium text-foreground">
-          This run did not return a report
-        </p>
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-6 px-8 py-12">
+        <div className="flex items-center gap-3 text-muted-foreground">
+          <Loader2 className="size-5 animate-spin text-primary" aria-hidden />
+          <span className="text-sm font-medium text-foreground">Results loading</span>
+        </div>
         <p className="max-w-md text-center text-xs leading-relaxed text-muted-foreground">
-          The analysis finished without a report to open. Re-run it to try again.
+          The full analysis report view will render here. This tab is pinned to your run so you can
+          return when results are ready.
         </p>
-        {onRetry ? (
-          <Button type="button" size="sm" onClick={onRetry}>
-            Re-run
-          </Button>
-        ) : null}
 
         {paramEntries.length > 0 ? (
           <div className="w-full max-w-lg rounded-lg border border-border bg-card p-4">

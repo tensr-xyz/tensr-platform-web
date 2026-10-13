@@ -12,16 +12,8 @@ import { apiClient } from '@/lib/api-client';
 import { ApiRequestError } from '@/lib/api-error';
 import { adoptDerivedDataset } from '@/lib/adopt-derived-dataset';
 import type { DerivedDatasetPayload } from '@/lib/adopt-derived-dataset';
-import { captureProductException } from '@/lib/product-analytics';
 
 export const CODE_EXECUTION_UNAVAILABLE = 'Code execution temporarily unavailable';
-
-function cellHasRunnableCode(content: string): boolean {
-  return content.split('\n').some(line => {
-    const trimmed = line.trim();
-    return trimmed.length > 0 && !trimmed.startsWith('#');
-  });
-}
 
 function detailFromApiBody(message: string): string | null {
   const jsonMatch = message.match(/\{[\s\S]*\}/);
@@ -542,24 +534,6 @@ names(df) <- make.names(names(df))`;
         return;
       }
 
-      if (!cellHasRunnableCode(cell.content)) {
-        setCells(prevCells =>
-          prevCells.map(c =>
-            c.id === cellId
-              ? {
-                  ...c,
-                  error: 'This cell has no code to run.',
-                  stdout: null,
-                  output: null,
-                  runId: null,
-                }
-              : c
-          )
-        );
-        setIsExecuting(false);
-        return;
-      }
-
       const setupCode = generateSetupCode(language);
       const fullCode = setupCode + '\n' + cell.content;
 
@@ -600,7 +574,7 @@ names(df) <- make.names(names(df))`;
                 ...c,
                 stdout: result.stdout || null,
                 output: output,
-                error: result.error || (!result.stdout && !output ? 'Ran. No output.' : null),
+                error: result.error || null,
                 executionCount: (c.executionCount || 0) + 1,
                 runId: result.run_id || null,
               }
@@ -608,7 +582,6 @@ names(df) <- make.names(names(df))`;
         )
       );
     } catch (err) {
-      captureProductException(err, { where: 'notebook_cell' });
       setCells(prevCells =>
         prevCells.map(c =>
           c.id === cellId
@@ -632,23 +605,6 @@ names(df) <- make.names(names(df))`;
       // Skip markdown cells
       if (cell.type === 'markdown') continue;
 
-      if (!cellHasRunnableCode(cell.content)) {
-        setCells(prevCells =>
-          prevCells.map(c =>
-            c.id === cell.id
-              ? {
-                  ...c,
-                  error: 'This cell has no code to run.',
-                  stdout: null,
-                  output: null,
-                  runId: null,
-                }
-              : c
-          )
-        );
-        continue;
-      }
-
       setIsExecuting(true);
       try {
         const setupCode = generateSetupCode(language);
@@ -656,7 +612,6 @@ names(df) <- make.names(names(df))`;
 
         // Use real API call
         const result = await executeCode(fullCode, language);
-        const output = result.output;
 
         setCells(prevCells =>
           prevCells.map(c =>
@@ -664,8 +619,8 @@ names(df) <- make.names(names(df))`;
               ? {
                   ...c,
                   stdout: result.stdout,
-                  output,
-                  error: result.error || (!result.stdout && !output ? 'Ran. No output.' : null),
+                  output: result.output,
+                  error: result.error,
                   executionCount: (c.executionCount || 0) + 1,
                   runId: result.run_id || null,
                 }
@@ -673,7 +628,6 @@ names(df) <- make.names(names(df))`;
           )
         );
       } catch (err) {
-        captureProductException(err, { where: 'notebook_cell' });
         setCells(prevCells =>
           prevCells.map(c =>
             c.id === cell.id

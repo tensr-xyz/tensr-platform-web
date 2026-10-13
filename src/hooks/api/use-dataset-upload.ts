@@ -1,9 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { ACCEPTED_UPLOAD_EXTENSIONS, ACCEPTED_UPLOAD_HELP } from '@/lib/accepted-upload-types';
-import { reportUploadFailure } from '@/lib/report-upload-failure';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import { uploadDatasetFile, type UploadScope } from '@/lib/upload-dataset';
-import { captureProductEvent, errorClass } from '@/lib/product-analytics';
 
 export type WorkbookSheets = {
   file: File;
@@ -48,23 +47,15 @@ export function useDatasetUpload(
         return null;
       }
 
-      const started = performance.now();
       try {
         const result = await uploadDatasetFile(file, token, scope, setUploadProgress, sheet);
-        const sheets = Array.isArray(result.sheets) ? result.sheets : [];
-        captureProductEvent('file_uploaded', {
-          dataset_id: result.dataset_id,
-          type: ext,
-          rows: typeof result.n_rows === 'number' ? result.n_rows : null,
-          cols: typeof result.n_cols === 'number' ? result.n_cols : null,
-          sheet_count: sheets.length,
-          parse_duration_ms: Math.round(performance.now() - started),
-        });
-        const namedSheets = sheets.filter((name): name is string => typeof name === 'string');
-        if (namedSheets.length > 1 && !sheet) {
+        const sheets = Array.isArray(result.sheets)
+          ? result.sheets.filter((name): name is string => typeof name === 'string')
+          : [];
+        if (sheets.length > 1 && !sheet) {
           setWorkbook({
             file,
-            sheets: namedSheets,
+            sheets,
             selected: String(result.selected_sheet || sheets[0]),
             datasetId: result.dataset_id,
           });
@@ -74,12 +65,7 @@ export function useDatasetUpload(
         cbRef.current?.(result.dataset_id, file.name);
         return result.dataset_id;
       } catch (e) {
-        captureProductEvent('file_upload_failed', {
-          type: ext,
-          error_class: errorClass(e),
-          parse_duration_ms: Math.round(performance.now() - started),
-        });
-        setError(await reportUploadFailure(file, e));
+        setError(e instanceof Error ? formatApiErrorMessage(e) : 'Upload failed');
         return null;
       } finally {
         setIsLoading(false);

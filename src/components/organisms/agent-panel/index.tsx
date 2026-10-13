@@ -66,8 +66,6 @@ import type {
 } from '@/lib/chat-pending-action';
 import { plannerSpecToSetupBody, plannerTypeToOp } from '@/lib/chat-pending-action';
 import { isAnalysisKey } from '@/lib/analysis-definitions';
-import { openReportTab } from '@/lib/open-report-tab';
-import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
 import {
   analysisResultMarkdown,
   openResultTabForPlan,
@@ -159,7 +157,7 @@ function ChatMessageBody({
   thinkingLines?: string[];
   resultMarkdown?: string;
   reportCard?: AnalysisReportChatCard;
-  onOpenReport?: (tabId: string) => string | void;
+  onOpenReport?: (tabId: string) => void;
   charts?: AnalysisReportChart[];
   isStreaming?: boolean;
   repairSuggestions?: string[];
@@ -345,36 +343,6 @@ function AnalysisRunsList({
       ))}
     </ul>
   );
-}
-
-function datasetTemplateFromLocation(): string | null {
-  if (typeof window === 'undefined') return null;
-  const value = new URLSearchParams(window.location.search).get('template');
-  const trimmed = value?.trim();
-  return trimmed || null;
-}
-
-function openReportFromChat(tabId: string, datasetId: string | null): string | void {
-  const outcome = openReportTab(tabId);
-  if (!outcome.ok) {
-    captureProductEvent('report_open_failed', { reason: 'missing_tab', dataset_id: datasetId });
-    return 'This report is no longer open. Run the analysis again.';
-  }
-  if (outcome.reportMissing) {
-    captureProductEvent('report_open_failed', {
-      reason: 'report_missing',
-      dataset_id: datasetId,
-    });
-    return 'The report tab is open, but this run did not return a report.';
-  }
-  captureProductEvent('report_opened', {
-    dataset_id: datasetId,
-    already_open: outcome.alreadyOpen,
-  });
-  if (outcome.alreadyOpen) {
-    document.getElementById('tensr-report-print-root')?.scrollIntoView({ block: 'start' });
-    return 'This report is already open.';
-  }
 }
 
 type AgentPanelProps = {
@@ -779,12 +747,6 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           });
         }
       } catch (err: unknown) {
-        captureProductException(err, { where: 'approved_run' });
-        captureProductEvent('analysis_failed', {
-          error_class: errorClass(err),
-          where: 'approved_run',
-          dataset_id: datasetId,
-        });
         // An approved run keeps its Plan text; the card shows the error.
         updateMessage(projectId, assistantMessageId, {
           ...(opts.assistantMessageId ? {} : { content: formatApiErrorMessage(err) }),
@@ -853,11 +815,6 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     setInputMessage('');
     setLoading(projectId, true);
     setError(projectId, null);
-    captureProductEvent('prompt_submitted', {
-      dataset_id: workspaceDatasetId ?? getDatasetIdFromTab(activeTab) ?? null,
-      prompt_length: currentMessage.trim().length,
-      template: datasetTemplateFromLocation(),
-    });
 
     try {
       await invokeAgentLoop({
@@ -869,7 +826,6 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       lastFailedMessage.current = null;
       setCanRetry(false);
     } catch (err: unknown) {
-      captureProductException(err, { where: 'prompt' });
       setCanRetry(true);
       setError(projectId, formatApiErrorMessage(err));
     } finally {
@@ -1123,12 +1079,6 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         }
       }
     } catch (err: unknown) {
-      captureProductException(err, { where: 'analysis_plan' });
-      captureProductEvent('analysis_failed', {
-        error_class: errorClass(err),
-        where: 'analysis_plan',
-        dataset_id: workspaceDatasetId ?? getDatasetIdFromTab(activeTab),
-      });
       const latestAction = getMessagePendingAction(messageId);
       updateMessage(projectId, messageId, {
         isStreaming: false,
@@ -1826,10 +1776,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                                       resultMarkdown={message.resultMarkdown}
                                       reportCard={message.reportCard}
                                       onOpenReport={tabId =>
-                                        openReportFromChat(
-                                          tabId,
-                                          workspaceDatasetId ?? getDatasetIdFromTab(activeTab)
-                                        )
+                                        useTabsStore.getState().setActiveTab(tabId)
                                       }
                                       charts={message.charts}
                                       isStreaming={message.isStreaming}
@@ -1850,36 +1797,25 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                                                   y_column: column,
                                                   x_column: column,
                                                 };
-                                                try {
-                                                  const result = await executeDataActionForDataset(
-                                                    dsId,
-                                                    {
-                                                      actionType: base.actionType,
-                                                      spec,
-                                                      rationale: `Retry with ${column}`,
-                                                      autoExecute: true,
-                                                    }
-                                                  );
-                                                  const charts: AnalysisReportChart[] = [];
-                                                  if (result.chart) {
-                                                    charts.push(
-                                                      result.chart as AnalysisReportChart
-                                                    );
+                                                const result = await executeDataActionForDataset(
+                                                  dsId,
+                                                  {
+                                                    actionType: base.actionType,
+                                                    spec,
+                                                    rationale: `Retry with ${column}`,
+                                                    autoExecute: true,
                                                   }
-                                                  updateMessage(projectId, message.id, {
-                                                    content: result.answer_markdown,
-                                                    charts: charts.length ? charts : undefined,
-                                                    repairSuggestions: undefined,
-                                                    repairBase: undefined,
-                                                  });
-                                                } catch (err) {
-                                                  captureProductException(err, {
-                                                    where: 'repair_pick',
-                                                  });
-                                                  updateMessage(projectId, message.id, {
-                                                    content: formatApiErrorMessage(err),
-                                                  });
+                                                );
+                                                const charts: AnalysisReportChart[] = [];
+                                                if (result.chart) {
+                                                  charts.push(result.chart as AnalysisReportChart);
                                                 }
+                                                updateMessage(projectId, message.id, {
+                                                  content: result.answer_markdown,
+                                                  charts: charts.length ? charts : undefined,
+                                                  repairSuggestions: undefined,
+                                                  repairBase: undefined,
+                                                });
                                               })();
                                             }
                                           : undefined

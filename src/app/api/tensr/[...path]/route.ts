@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getPostHogClient } from '@/lib/posthog-server';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import {
   buildAssistantStreamTargetUrl,
@@ -60,27 +59,6 @@ function forwardResponseHeaders(from: Headers): Headers {
   return headers;
 }
 
-function reportProxyException(error: unknown, pathSegments: string[]): void {
-  const path = pathSegments.join('/');
-  if (!path.includes('upload') || !process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) return;
-  try {
-    getPostHogClient().captureException(
-      error instanceof Error ? error : new Error(String(error)),
-      undefined,
-      {
-        path,
-        file_type: null,
-        sheet_count: null,
-        row_count: null,
-        col_count: null,
-        parser_error: error instanceof Error ? error.message : String(error),
-      }
-    );
-  } catch {
-    // A failed report must not replace the 502 the browser is waiting on.
-  }
-}
-
 async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<NextResponse> {
   const { url: targetUrl, upstream } = buildTarget(pathSegments, req.nextUrl.search);
   const streamPath = isStreamingProxyPath(pathSegments);
@@ -106,9 +84,7 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
   };
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    const requestType = req.headers.get('content-type') ?? '';
-    // req.text() UTF-8-decodes the body and corrupts an xlsx inside multipart.
-    init.body = shouldDecodeBodyAsText(requestType) ? await req.text() : await req.arrayBuffer();
+    init.body = await req.text();
   }
 
   try {
@@ -160,7 +136,6 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Upstream request failed';
-    reportProxyException(error, pathSegments);
     return NextResponse.json(
       {
         detail: `Could not reach tensr-api at ${targetUrl}: ${message}`,

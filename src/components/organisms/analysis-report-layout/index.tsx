@@ -17,9 +17,7 @@ import {
 } from '@/lib/report-export';
 import { apiClient } from '@/lib/api-client';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
-import { isAnalysisKey } from '@/lib/analysis-definitions';
-import { loadOutputPreferences } from '@/lib/output-preferences';
-import { captureProductEvent, captureProductException } from '@/lib/product-analytics';
+import type { AnalysisKey } from '@/lib/analysis-definitions';
 import { revealConsumedRowsFromRun } from '@/lib/provenance-click-through';
 
 import type { ReportAnnotation } from '@/lib/report-annotations';
@@ -29,7 +27,6 @@ type Props = {
   rawResult?: Record<string, unknown> | null;
   sourceDatasetId?: string;
   analysisOp?: string;
-  analysisParameters?: Record<string, unknown> | null;
   analysisRunId?: string;
   relatedAnalyses?: AnalysisRelatedLink[] | null;
   provenance?: Record<string, unknown> | null;
@@ -40,7 +37,6 @@ export function AnalysisReportLayout({
   rawResult,
   sourceDatasetId,
   analysisOp,
-  analysisParameters,
   analysisRunId,
   relatedAnalyses,
   provenance,
@@ -51,7 +47,6 @@ export function AnalysisReportLayout({
   const [annotationTarget, setAnnotationTarget] = useState<string | undefined>();
   const [annotationComposerOpen, setAnnotationComposerOpen] = useState(false);
   const [synthesizing, setSynthesizing] = useState(false);
-  const [rerunNotice, setRerunNotice] = useState<string | null>(null);
   const annotationInputRef = useRef<HTMLTextAreaElement>(null);
   const openSetup = useAnalysisSetupStore(s => s.openSetup);
 
@@ -179,30 +174,9 @@ export function AnalysisReportLayout({
   );
 
   const handleRerun = useCallback(() => {
-    const key = analysisOp ?? report.meta.analysis_key;
-    const prefs = loadOutputPreferences();
-    captureProductEvent('rerun_clicked', {
-      dataset_id: sourceDatasetId ?? null,
-      analysis_type: key || null,
-      stub_column:
-        typeof analysisParameters?.stub_column === 'string' ? analysisParameters.stub_column : null,
-      banner_column:
-        typeof analysisParameters?.banner_column === 'string'
-          ? analysisParameters.banner_column
-          : null,
-      apa_format: prefs.apaFormat,
-      include_charts: prefs.includeCharts,
-      decimal_places: prefs.decimalPlaces,
-    });
-    if (!key || !isAnalysisKey(key)) {
-      const message = 'This report cannot be re-run from here.';
-      setRerunNotice(message);
-      captureProductException(new Error(message), { where: 'report_rerun' });
-      return;
-    }
-    setRerunNotice(null);
-    openSetup(key, analysisParameters ?? null);
-  }, [analysisOp, analysisParameters, openSetup, report.meta.analysis_key, sourceDatasetId]);
+    const key = (analysisOp ?? report.meta.analysis_key) as AnalysisKey;
+    if (key) openSetup(key);
+  }, [analysisOp, report.meta.analysis_key, openSetup]);
 
   const handleRevealConsumedRows = useCallback(
     (group?: string) => {
@@ -346,7 +320,6 @@ export function AnalysisReportLayout({
           activeSection={activeSection}
           onSectionSelect={setActiveSection}
           onRerun={handleRerun}
-          rerunNotice={rerunNotice}
           onExport={handleExportSummary}
           onExportCsv={handleExportCsv}
           onExportExcel={handleExportExcel}

@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { ACCEPTED_UPLOAD_DOT_EXTENSIONS, ACCEPTED_UPLOAD_HELP } from '@/lib/accepted-upload-types';
-import { reportUploadFailure } from '@/lib/report-upload-failure';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
 import { devLog } from '@/lib/dev-log';
 
@@ -49,8 +48,9 @@ export const useProjectFileUpload = ({
 
         onUploadComplete?.(result.dataset_id);
         return result.dataset_id;
-      } catch (error: unknown) {
-        setError(await reportUploadFailure(file, error));
+      } catch (error: any) {
+        console.error('Error uploading file:', error);
+        setError(error.message || 'Failed to upload file');
         return null;
       } finally {
         setIsLoading(false);

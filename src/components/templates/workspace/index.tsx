@@ -19,7 +19,6 @@ import { formatApiErrorMessage } from '@/lib/api-error';
 import { buildDefaultImportSettings, type ImportSettings } from '@/lib/import-settings';
 import { MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
 import { warmAssistantBackend } from '@/lib/warm-assistant';
-import { captureProductException } from '@/lib/product-analytics';
 import { SpssWorkspaceWalkthrough } from '@/components/templates/auth/spss-switcher-flow';
 
 export interface WorkspaceResource {
@@ -98,8 +97,6 @@ export default function Workspace({ resource }: WorkspaceProps) {
   const [projectName, setProjectName] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [startingUp, setStartingUp] = useState(false);
-  const [importSlow, setImportSlow] = useState(false);
-  const [loadAttempt, setLoadAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [currentResource, setCurrentResource] = useState<WorkspaceResource>(resource);
@@ -144,13 +141,9 @@ export default function Workspace({ resource }: WorkspaceProps) {
     useTabsStore.getState().closeAllTabs();
     useProjectStore.getState().clearProject();
     useProjectStore.getState().clearImportData();
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem(`tensr:autoImport:${resourceId}`);
-    }
     setCurrentResource(resource);
     setIsLoading(true);
     setError(null);
-    setImportSlow(false);
     hasLoadedRef.current = false;
     // Only re-run when the dataset id changes; `resource` object identity is unstable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -277,7 +270,6 @@ export default function Workspace({ resource }: WorkspaceProps) {
     getProjectDetails,
     isProjectLoaded,
     resource.type,
-    loadAttempt,
   ]);
 
   // Cleanup on unmount
@@ -321,11 +313,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
         // Get the auth token
         const token = getIdToken();
         if (!token) {
-          if (typeof window !== 'undefined') {
-            sessionStorage.removeItem(`tensr:autoImport:${dataToImport.fileId}`);
-          }
-          clearImportData();
-          setError('Authentication required. Please log in again.');
+          console.error('No access token available');
           return;
         }
 
@@ -399,12 +387,10 @@ export default function Workspace({ resource }: WorkspaceProps) {
         clearImportData();
       } catch (err) {
         console.error('Import failed:', err);
-        captureProductException(err, { where: 'dataset_import', dataset_id: dataToImport.fileId });
         if (typeof window !== 'undefined' && dataToImport.fileId) {
           sessionStorage.removeItem(`tensr:autoImport:${dataToImport.fileId}`);
         }
         clearImportData();
-        setError(formatApiErrorMessage(err));
       }
     },
     [projectImportData, resourceId, addTab, clearImportData]
@@ -509,43 +495,8 @@ export default function Workspace({ resource }: WorkspaceProps) {
     );
   }, [projectImportData, tabs]);
 
-  useEffect(() => {
-    if (!awaitingDatasetTab) {
-      setImportSlow(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setImportSlow(true), 20000);
-    return () => window.clearTimeout(timer);
-  }, [awaitingDatasetTab]);
-
   if (isLoading || awaitingDatasetTab) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <Loading
-          message={
-            importSlow ? 'Still opening this dataset…' : startingUp ? 'Starting up…' : undefined
-          }
-        />
-        {importSlow ? (
-          <button
-            type="button"
-            className="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary"
-            onClick={() => {
-              if (typeof window !== 'undefined' && resourceId) {
-                sessionStorage.removeItem(`tensr:autoImport:${resourceId}`);
-              }
-              useProjectStore.getState().clearImportData();
-              hasLoadedRef.current = false;
-              setImportSlow(false);
-              setIsLoading(true);
-              setLoadAttempt(attempt => attempt + 1);
-            }}
-          >
-            Try again
-          </button>
-        ) : null}
-      </div>
-    );
+    return <Loading fullScreen message={startingUp ? 'Starting up…' : undefined} />;
   }
 
   if (error) {
