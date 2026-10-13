@@ -95,6 +95,10 @@ describe('production menu false-door sweep', () => {
     expect(
       filterAnalysisItems(getAllAnalysisItems(), 'banner').some(i => i.name === 'Custom Tables')
     ).toBe(true);
+    for (const query of ['crosstab', 'cross-tab', 'xtab']) {
+      const names = filterAnalysisItems(getAllAnalysisItems(), query).map(item => item.name);
+      expect(names).toEqual(expect.arrayContaining(['Custom Tables', 'Banner Book']));
+    }
   });
 
   it('wires Legacy import dialogs under Data', () => {

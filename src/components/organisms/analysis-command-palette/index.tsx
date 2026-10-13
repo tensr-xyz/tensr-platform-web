@@ -95,7 +95,13 @@ function sortPluginsByName(plugins: PluginRecord[]): PluginRecord[] {
 function pluginMatchesQuery(plugin: PluginRecord, raw: string): boolean {
   const q = raw.trim().toLowerCase();
   if (!q) return true;
-  const blob = [plugin.name, plugin.description, plugin.pluginId, ...(plugin.tags || [])]
+  const blob = [
+    plugin.name,
+    plugin.description,
+    plugin.pluginId,
+    ...(plugin.tags || []),
+    ...(plugin.keywords || []),
+  ]
     .join(' ')
     .toLowerCase();
   return blob.includes(q);
