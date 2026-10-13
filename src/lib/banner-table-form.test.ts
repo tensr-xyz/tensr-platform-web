@@ -1,0 +1,37 @@
+import {
+  buildBodyFromForm,
+  defaultFormFieldsFromSchema,
+  formStateFromBody,
+} from './analysis-definitions';
+
+const schema = [
+  { name: 'Gender', type: 'categorical' as const, missing_count: 0 },
+  { name: 'Group', type: 'categorical' as const, missing_count: 0 },
+  { name: 'Q1_satisfaction', type: 'numeric' as const, missing_count: 1 },
+];
+
+describe('banner_table setup', () => {
+  it('keeps the stub and banner from the last run', () => {
+    const form = formStateFromBody(
+      'banner_table',
+      { stub_column: 'Gender', banner_column: 'Group', column_percent: true },
+      schema
+    );
+    expect(buildBodyFromForm(form)).toEqual({
+      stub_column: 'Gender',
+      banner_column: 'Group',
+      column_percent: true,
+      column_letters: true,
+    });
+  });
+
+  it('does not submit an empty crosstab body', () => {
+    const form = {
+      analysis: 'banner_table' as const,
+      ...defaultFormFieldsFromSchema(schema),
+      chiA: '',
+      chiB: '',
+    };
+    expect(() => buildBodyFromForm(form)).toThrow(/stub column/i);
+  });
+});

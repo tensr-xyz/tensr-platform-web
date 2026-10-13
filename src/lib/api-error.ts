@@ -16,6 +16,9 @@ const ASSISTANT_ROUTE_NOT_FOUND = 'The AI assistant could not be reached. Refres
 
 function plainApiFailure(text: string): string {
   const trimmed = text.trim();
+  if (/^internal server error$/i.test(trimmed)) {
+    return 'The request failed. Try again.';
+  }
   if (/traceback|keyerror/i.test(trimmed)) {
     console.error(trimmed);
     return 'That request failed. Retry.';
@@ -47,9 +50,6 @@ export function formatApiErrorMessage(error: unknown): string {
   }
 
   const raw = error.message || '';
-  if (/internal server error/i.test(raw)) {
-    return 'The request failed. Check that the columns exist on this file and try again.';
-  }
   const status = error instanceof ApiRequestError ? error.status : undefined;
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (jsonMatch) {
@@ -119,8 +119,12 @@ export function formatApiErrorMessage(error: unknown): string {
   if (raw.startsWith('API Error:')) {
     const withoutPrefix = raw.replace(/^API Error:\s*\d+\s*-?\s*/, '').trim();
     if (withoutPrefix && !withoutPrefix.startsWith('{')) {
-      return withoutPrefix;
+      return plainApiFailure(withoutPrefix);
     }
+  }
+
+  if (/^internal server error$/i.test(raw.trim())) {
+    return 'The request failed. Try again.';
   }
 
   return raw || 'Something went wrong. Please try again.';

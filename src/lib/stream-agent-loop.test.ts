@@ -37,6 +37,34 @@ describe('streamAgentLoop', () => {
     (global.fetch as jest.Mock).mockReset();
   });
 
+  it('surfaces a v2 tool event as panel progress', async () => {
+    const onProgress = jest.fn();
+    (global.fetch as jest.Mock).mockResolvedValue(
+      sseFetchResponse(
+        'data: {"type":"tool_start","step":"run_operations","message":"Running banner table"}\n\n' +
+          'data: {"type":"tool","name":"run_operations","message":"Running banner table"}\n\n' +
+          'data: {"type":"result","response":{"status":"ok","mode":"agent","answer_markdown":"Done."}}\n\n'
+      )
+    );
+
+    const result = await streamAgentLoop(
+      { message: 'crosstab', mode: 'agent', agentVersion: 'v2' },
+      { onProgress }
+    );
+
+    expect(result.answer_markdown).toBe('Done.');
+    expect(onProgress).toHaveBeenCalledWith({
+      type: 'tool_start',
+      step: 'run_operations',
+      message: 'Running banner table',
+    });
+    expect(onProgress).toHaveBeenCalledWith({
+      type: 'tool',
+      step: 'run_operations',
+      message: 'Running banner table',
+    });
+  });
+
   it('surfaces progress then returns the result payload', async () => {
     const onProgress = jest.fn();
     (global.fetch as jest.Mock).mockResolvedValue(

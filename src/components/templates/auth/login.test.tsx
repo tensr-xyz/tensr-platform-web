@@ -78,7 +78,10 @@ jest.mock('@/lib/auth-trace', () => ({ authTrace: jest.fn(), dumpAuthTrace: jest
 
 jest.mock('posthog-js', () => ({
   __esModule: true,
-  default: { capture: (...a: unknown[]) => mockCapture(...a) },
+  default: {
+    capture: (...a: unknown[]) => mockCapture(...a),
+    captureException: jest.fn(),
+  },
 }));
 
 function stytchApiError(error_type: string, error_message: string, status_code = 400) {
@@ -241,6 +244,7 @@ describe('LoginTemplate', () => {
       fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'ada@example.com' } });
       fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
       await screen.findByLabelText(/verification code/i);
+      expect(screen.getByText(/check your inbox and spam/i)).toBeInTheDocument();
     }
 
     it('verifies the code with the methodId from the send step', async () => {

@@ -119,6 +119,30 @@ describe('tensr proxy body', () => {
     ).toBe(false);
   });
 
+  it('forwards a multipart upload without decoding the bytes as text', async () => {
+    process.env.NEXT_PUBLIC_TENSR_API_URL = API;
+    const payload = new Uint8Array([0xff, 0xfe, 0x00, 0x50, 0x4b, 0x03, 0x04]);
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(
+        new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    const req = new NextRequest('http://localhost/api/tensr/datasets/upload?scope=personal', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer t',
+        'content-type': 'multipart/form-data; boundary=abc',
+      },
+      body: payload,
+    });
+    await POST(req, { params: Promise.resolve({ path: ['datasets', 'upload'] }) });
+    const sent = fetchMock.mock.calls[0][1] as RequestInit;
+    const raw = sent.body;
+    const bytes = raw instanceof ArrayBuffer ? new Uint8Array(raw) : new Uint8Array(raw as Buffer);
+    expect(Array.from(bytes)).toEqual(Array.from(payload));
+    fetchMock.mockRestore();
+  });
+
   it.each([
     ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'banner.xlsx'],
     ['application/pdf', 'report.pdf'],

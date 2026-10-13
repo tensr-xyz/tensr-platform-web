@@ -548,6 +548,12 @@ export function applyBodyToForm(
     if (typeof body.column_a === 'string') setChiA(body.column_a);
     if (typeof body.column_b === 'string') setChiB(body.column_b);
   }
+  if (op === 'banner_table') {
+    const stub = body.stub_column ?? body.column_a;
+    const banner = body.banner_column ?? body.column_b;
+    if (typeof stub === 'string') setChiA(stub);
+    if (typeof banner === 'string') setChiB(banner);
+  }
   if (op === 'cohens_kappa' || op === 'mcnemar') {
     if (typeof body.column_a === 'string') setChiA(body.column_a);
     if (typeof body.column_b === 'string') setChiB(body.column_b);
@@ -1047,6 +1053,18 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       include_phi: chiIncludePhi,
       include_cramers_v: chiIncludeCramersV,
       use_fishers_exact: false,
+    };
+  }
+  if (analysis === 'banner_table') {
+    if (!chiA.trim() || !chiB.trim()) {
+      throw new Error('Select a stub column and a banner column');
+    }
+    if (chiA === chiB) throw new Error('Stub and banner must be different columns');
+    return {
+      stub_column: chiA,
+      banner_column: chiB,
+      column_percent: true,
+      column_letters: true,
     };
   }
   if (analysis === 'fishers_exact' || analysis === 'odds_ratio' || analysis === 'relative_risk') {

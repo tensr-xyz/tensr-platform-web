@@ -84,6 +84,17 @@ describe('formatApiErrorMessage', () => {
     );
   });
 
+  it('does not blame missing columns for an internal server error', () => {
+    const shown = formatApiErrorMessage(new Error('{"detail":"Internal server error"}'));
+    expect(shown).not.toMatch(/columns exist/i);
+    expect(shown.toLowerCase()).toMatch(/try again/);
+  });
+
+  it('shows the header-row reason from an upload response', () => {
+    const detail = "Couldn't find a header row. The first 3 rows look like a title.";
+    expect(formatApiErrorMessage(new Error(JSON.stringify({ detail })))).toBe(detail);
+  });
+
   it('keeps a real dataset 404', () => {
     expect(formatApiErrorMessage(new ApiRequestError(404, '{"detail":"Dataset not found"}'))).toBe(
       'Dataset not found'

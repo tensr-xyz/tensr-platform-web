@@ -32,6 +32,12 @@ export function interpretAgentLoopProgressMessage(
   const step = progress.step.toLowerCase();
   const rawLower = raw.toLowerCase();
 
+  if (progress.type === 'tool') {
+    if (raw && !isPulseOnlyWorkingLine(raw)) return raw;
+    const readable = step.replace(/_/g, ' ');
+    return readable ? `Running ${readable}` : '';
+  }
+
   if (step === 'run_analysis' || rawLower.includes('run_analysis')) {
     const workingMatch = raw.match(/Working through the (.+?)…/i);
     if (workingMatch?.[1]) {

@@ -21,6 +21,8 @@ import {
   CircleStop,
 } from 'lucide-react';
 import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
+import { isAnalysisKey } from '@/lib/analysis-definitions';
+import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { AnalysisResultPlaceholder } from '@/components/organisms/analysis-result-placeholder';
 import { cn } from '@/utils';
 import { useNotebookWorkspaceStore } from '@/stores/notebook-workspace-store';
@@ -603,6 +605,7 @@ const TabManager: React.FC<TabManagerProps> = ({
           rawResult={reportTab.data.analysisResult ?? null}
           sourceDatasetId={reportTab.data.sourceDatasetId}
           analysisOp={reportTab.data.analysisOp}
+          analysisParameters={reportTab.data.analysisParameters}
           analysisRunId={reportTab.data.analysisRunId}
           relatedAnalyses={reportTab.data.analysisRelated}
           provenance={reportTab.data.analysisProvenance}
@@ -619,6 +622,7 @@ const TabManager: React.FC<TabManagerProps> = ({
             rawResult={resultTab.data.analysisResult ?? null}
             sourceDatasetId={resultTab.data.sourceDatasetId}
             analysisOp={resultTab.data.analysisOp}
+            analysisParameters={resultTab.data.analysisParameters}
             analysisRunId={resultTab.data.analysisRunId}
             relatedAnalyses={resultTab.data.analysisRelated}
             provenance={resultTab.data.analysisProvenance}
@@ -631,6 +635,18 @@ const TabManager: React.FC<TabManagerProps> = ({
           analysisOp={resultTab.data?.analysisOp}
           parameters={resultTab.data?.analysisParameters}
           sourceDatasetId={resultTab.data?.sourceDatasetId}
+          onRetry={
+            resultTab.data?.analysisOp && isAnalysisKey(resultTab.data.analysisOp)
+              ? () =>
+                  useAnalysisSetupStore
+                    .getState()
+                    .openSetup(
+                      resultTab.data!
+                        .analysisOp as import('@/lib/analysis-definitions').AnalysisKey,
+                      resultTab.data?.analysisParameters ?? null
+                    )
+              : undefined
+          }
         />
       );
     }
@@ -757,6 +773,11 @@ const TabManager: React.FC<TabManagerProps> = ({
                       className="h-8 gap-1 px-2 text-xs"
                       onClick={notebookControls.runAll}
                       disabled={notebookControls.isExecuting || !notebookControls.canRun}
+                      title={
+                        notebookControls.canRun
+                          ? 'Run every code cell'
+                          : 'Open a dataset with rows before running cells'
+                      }
                     >
                       Run all
                     </Button>
@@ -766,7 +787,11 @@ const TabManager: React.FC<TabManagerProps> = ({
                       className="h-8 w-8"
                       onClick={notebookControls.runSelected}
                       disabled={notebookControls.isExecuting || !notebookControls.canRun}
-                      title="Run selected cell"
+                      title={
+                        notebookControls.canRun
+                          ? 'Run selected cell'
+                          : 'Open a dataset with rows before running a cell'
+                      }
                     >
                       {notebookControls.isExecuting ? (
                         <CircleStop className="size-3.5" />
