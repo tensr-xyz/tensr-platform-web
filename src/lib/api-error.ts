@@ -18,6 +18,14 @@ function isGenericHttpNotFound(text: string): boolean {
   return /^not found$/i.test(text.trim());
 }
 
+/** A bare 500 is not a column check. A parser sentence is shown as written. */
+function plainUploadFailure(text: string): string {
+  if (/^internal server error$/i.test(text.trim())) {
+    return 'The request failed. Try again.';
+  }
+  return text;
+}
+
 const ASSISTANT_ERROR_MESSAGES: Record<string, string> = {
   subscription_required:
     'An active subscription is required to use Tensr. Choose a plan to continue.',
@@ -45,7 +53,7 @@ export function formatApiErrorMessage(error: unknown): string {
         if ((status === 404 || status === undefined) && isGenericHttpNotFound(detail)) {
           return ASSISTANT_ROUTE_NOT_FOUND;
         }
-        return detail;
+        return plainUploadFailure(detail);
       }
       if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
         const d = detail as { error?: string; message?: string };
@@ -99,7 +107,7 @@ export function formatApiErrorMessage(error: unknown): string {
   if (raw.startsWith('API Error:')) {
     const withoutPrefix = raw.replace(/^API Error:\s*\d+\s*-?\s*/, '').trim();
     if (withoutPrefix && !withoutPrefix.startsWith('{')) {
-      return withoutPrefix;
+      return plainUploadFailure(withoutPrefix);
     }
   }
 

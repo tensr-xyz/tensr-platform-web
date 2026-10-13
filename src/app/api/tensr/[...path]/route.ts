@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPostHogClient } from '@/lib/posthog-server';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import {
   buildAssistantStreamTargetUrl,
@@ -33,6 +34,36 @@ function isStreamingProxyPath(pathSegments: string[]): boolean {
   const joined = pathSegments.join('/').toLowerCase();
   if (joined.includes('/analyze/') && joined.endsWith('/stream')) return true;
   return joined.endsWith('assistant/agent-loop/stream') || joined.endsWith('agent-loop/stream');
+}
+
+/** Text and JSON stay decoded. Multipart uploads, including xlsx, stay bytes. */
+export function shouldDecodeBodyAsText(contentType: string): boolean {
+  const type = contentType.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (!type) return false;
+  if (type.startsWith('text/')) return true;
+  if (type === 'application/json' || type.endsWith('+json')) return true;
+  return false;
+}
+
+function reportProxyException(error: unknown, pathSegments: string[]): void {
+  const path = pathSegments.join('/');
+  if (!path.includes('upload') || !process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) return;
+  try {
+    getPostHogClient().captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      undefined,
+      {
+        path,
+        file_type: null,
+        sheet_count: null,
+        row_count: null,
+        col_count: null,
+        parser_error: error instanceof Error ? error.message : String(error),
+      }
+    );
+  } catch {
+    // A failed report must not replace the 502 the browser is waiting on.
+  }
 }
 
 function forwardResponseHeaders(from: Headers): Headers {
@@ -70,7 +101,9 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
   };
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    init.body = await req.text();
+    const requestType = req.headers.get('content-type') ?? '';
+    // req.text() UTF-8-decodes the body and corrupts an xlsx inside multipart.
+    init.body = shouldDecodeBodyAsText(requestType) ? await req.text() : await req.arrayBuffer();
   }
 
   try {
@@ -128,6 +161,7 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Upstream request failed';
+    reportProxyException(error, pathSegments);
     return NextResponse.json(
       {
         detail: `Could not reach tensr-api at ${targetUrl}: ${message}`,
