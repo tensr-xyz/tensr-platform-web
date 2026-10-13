@@ -166,7 +166,9 @@ export function getAllAnalysisItems(): AnalysisItem[] {
           component,
           searchBlob:
             menuName === 'Custom Tables'
-              ? 'banner custom tables stub nested banner'
+              ? 'banner custom tables stub nested banner crosstab cross-tab cross tab xtab'
+              : menuName === 'Banner Book'
+                ? 'banner book crosstab cross-tab cross tab xtab'
               : menuName === 'Rake Weights'
                 ? 'rake raking ipf weight cases rim'
                 : menuName === 'Cell weighting'

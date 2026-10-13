@@ -72,6 +72,8 @@ export interface PluginMetadata extends BasePluginMetadata {
 
 // Complete record including S3 and scanning information
 export interface PluginRecord extends PluginMetadata {
+  /** Extra ⌘K phrases, for example crosstab / cross-tab / xtab on a tables plugin. */
+  keywords?: string[];
   s3Key: string;
   scanResults?: {
     passed: boolean;

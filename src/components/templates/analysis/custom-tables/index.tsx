@@ -103,6 +103,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [bannerIdDraft, setBannerIdDraft] = useState('');
   const [bookName, setBookName] = useState('');
   const [variableSets, setVariableSets] = useState<Array<{ id: string; label: string }>>([]);
+  const [targetZone, setTargetZone] = useState<'stub' | 'banner'>('stub');
+  const [activeVariable, setActiveVariable] = useState(0);
 
   const columns = useMemo(() => {
     if (!sheetTab?.data?.initialColumns) return variableSets;
@@ -224,7 +226,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       return;
     }
     if (!canvas.stubs.length || !canvas.banners.length) {
-      setError('Drop at least one Stub (rows) question and one Banner (columns) question.');
+      setError('Add at least one Stub (rows) question and one Banner (columns) question.');
       return;
     }
     setBusy(true);
@@ -438,13 +440,41 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               <p className="border-b border-border px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Variables
               </p>
-              <ul className="max-h-[360px] overflow-y-auto p-1 text-xs">
-                {columns.map(col => (
+              <ul
+                className="max-h-[360px] overflow-y-auto p-1 text-xs"
+                role="listbox"
+                aria-label="Variables"
+                tabIndex={0}
+                onKeyDown={event => {
+                  if (!columns.length) return;
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setActiveVariable(index => Math.min(columns.length - 1, index + 1));
+                  } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setActiveVariable(index => Math.max(0, index - 1));
+                  } else if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    const column = columns[activeVariable];
+                    if (column) dropColumn(targetZone, column.id);
+                  }
+                }}
+              >
+                {columns.map((col, index) => (
                   <li
                     key={col.id}
                     draggable
+                    role="option"
+                    aria-selected={index === activeVariable}
+                    tabIndex={-1}
                     onDragStart={e => e.dataTransfer.setData('text/plain', col.id)}
-                    className="cursor-grab rounded px-2 py-1 hover:bg-muted/60"
+                    onClick={() => {
+                      setActiveVariable(index);
+                      dropColumn(targetZone, col.id);
+                    }}
+                    className={`cursor-pointer rounded px-2 py-1 hover:bg-muted/60 ${
+                      index === activeVariable ? 'bg-muted/80' : ''
+                    }`}
                   >
                     <span className="font-medium">{col.label}</span>
                     {col.label !== col.id ? (
@@ -455,7 +485,16 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               </ul>
             </aside>
             <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <DropZone label="Stub (rows)" onDropColumn={column => dropColumn('stub', column)}>
+              <DropZone
+                label="Stub (rows)"
+                active={targetZone === 'stub'}
+                empty={canvas.stubs.length === 0}
+                onActivate={() => setTargetZone('stub')}
+                onDropColumn={column => {
+                  setTargetZone('stub');
+                  dropColumn('stub', column);
+                }}
+              >
                 {canvas.stubs.map((stub, i) => (
                   <QuestionCard
                     key={stub.column}
@@ -469,7 +508,13 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               </DropZone>
               <DropZone
                 label="Banner (columns)"
-                onDropColumn={column => dropColumn('banner', column)}
+                active={targetZone === 'banner'}
+                empty={canvas.banners.length === 0}
+                onActivate={() => setTargetZone('banner')}
+                onDropColumn={column => {
+                  setTargetZone('banner');
+                  dropColumn('banner', column);
+                }}
               >
                 {canvas.banners.map((banner, i) => (
                   <div key={banner.column} className="space-y-1">
@@ -1055,15 +1100,35 @@ function DropZone({
   onDropColumn,
   children,
   compact,
+  empty,
+  active,
+  onActivate,
 }: {
   label: string;
   onDropColumn: (column: string) => void;
   children: ReactNode;
   compact?: boolean;
+  empty?: boolean;
+  active?: boolean;
+  onActivate?: () => void;
 }) {
+  const showHint = empty === true;
   return (
     <div
-      className={`rounded-md border border-dashed border-border p-3 ${compact ? 'ml-4 bg-muted/10 p-2' : ''}`}
+      className={`rounded-md border border-dashed p-3 ${
+        active ? 'border-foreground/40 bg-muted/30' : 'border-border'
+      } ${compact ? 'ml-4 bg-muted/10 p-2' : ''}`}
+      tabIndex={onActivate ? 0 : undefined}
+      aria-label={onActivate ? `${label}. ${active ? 'Selected.' : ''} Drag or click a variable.` : undefined}
+      onClick={onActivate}
+      onFocus={onActivate}
+      onKeyDown={event => {
+        if (!onActivate) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onActivate();
+        }
+      }}
       onDragOver={e => e.preventDefault()}
       onDrop={e => {
         e.preventDefault();
@@ -1074,6 +1139,9 @@ function DropZone({
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
+      {showHint ? (
+        <p className="text-xs text-muted-foreground">Drag or click a variable</p>
+      ) : null}
       {children}
     </div>
   );
