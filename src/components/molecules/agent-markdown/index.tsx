@@ -2,6 +2,7 @@
 
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { liftInlineTables } from '@/lib/lift-inline-tables';
 import { cn } from '@/utils';
 
 /** Compact GFM rendering for the agent panel (tables, lists, code). */
@@ -63,7 +64,7 @@ export function AgentMarkdown({ children, className }: { children: string; class
   return (
     <div className={cn('max-w-none text-sm text-foreground', className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={agentMarkdownComponents}>
-        {children}
+        {liftInlineTables(children)}
       </ReactMarkdown>
     </div>
   );
