@@ -1,4 +1,5 @@
 import posthog from 'posthog-js';
+import { captureProductEvent } from '@/lib/product-analytics';
 import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
@@ -34,12 +35,16 @@ function captureStreamStatus(
   distinctId: string | undefined
 ) {
   if (status < 400) return;
+  const properties = {
+    where: 'agent_stream',
+    status,
+    session_id: sessionId ?? null,
+    distinct_id: distinctId ?? null,
+  };
+  captureProductEvent('analysis_failed', properties);
+  captureProductEvent('stream_error', properties);
   try {
-    posthog.captureException(new Error(`agent stream ${status}`), {
-      status,
-      session_id: sessionId ?? null,
-      distinct_id: distinctId ?? null,
-    });
+    posthog.captureException(new Error(`agent stream ${status}`), properties);
   } catch {
     // A failed capture must not hide the stream error.
   }
@@ -103,6 +108,15 @@ function processSseLine(
   }
 
   if (payload.type === 'error') {
+    captureProductEvent('analysis_failed', {
+      where: 'agent_stream',
+      status: 'error',
+      message: payload.message || 'Agent loop stream failed',
+    });
+    captureProductEvent('stream_error', {
+      where: 'agent_stream',
+      message: payload.message || 'Agent loop stream failed',
+    });
     throw new Error(payload.message || 'Agent loop stream failed');
   }
 
@@ -253,6 +267,7 @@ export async function streamAgentLoop(
     if (hops > 8) {
       throw new Error('Agent loop did not finish');
     }
+    handlers.onDelta?.('\n\n');
     handlers.onProgress?.({
       type: 'progress',
       step: 'resume',

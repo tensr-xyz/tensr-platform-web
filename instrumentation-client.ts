@@ -8,6 +8,11 @@ if (posthogToken) {
     ui_host: 'https://us.posthog.com',
     defaults: '2026-01-30',
     capture_exceptions: true,
+    before_send: event => {
+      const blob = JSON.stringify(event ?? {});
+      if (blob.includes('Object Not Found Matching Id')) return null;
+      return event;
+    },
     session_recording: {
       maskAllInputs: true,
     },

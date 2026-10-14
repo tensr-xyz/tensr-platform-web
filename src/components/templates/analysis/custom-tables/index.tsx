@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
+import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
 import { datasetRequest, replayOperations, setActiveWeight } from '@/lib/dataset-data-ops';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
 import {
@@ -39,7 +40,12 @@ import {
   runCustomTable,
   saveNamedBanner,
 } from '@/lib/custom-tables/api';
-import { netPreset, NET_HELPER_COPY, type NetPresetId } from '@/lib/custom-tables/nets';
+import {
+  netPreset,
+  NET_HELPER_COPY,
+  offersTop2Box,
+  type NetPresetId,
+} from '@/lib/custom-tables/nets';
 import {
   drillClickCopy,
   drillRequest,
@@ -232,6 +238,11 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     setBusy(true);
     setError(null);
     setPreviewWarning(null);
+    captureProductEvent('analysis_started', {
+      where: 'custom_tables',
+      analysis_type: 'banner_table',
+      dataset_id: datasetId,
+    });
     const body = buildTableRequest(canvas);
     const selectedWeight = weightOptions.find(o => o.optionId === weightChoice);
     if (selectedWeight?.weight === 'none') body.weight = 'none';
@@ -252,6 +263,12 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
         setError(
           'Unweighted is not available on this server yet. The table was not updated, so these numbers stay weighted.'
         );
+        captureProductEvent('analysis_failed', {
+          where: 'custom_tables',
+          analysis_type: 'banner_table',
+          dataset_id: datasetId,
+          error_class: 'unweighted_unavailable',
+        });
         return;
       }
       setBook(result);
@@ -262,8 +279,20 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
         setCanvas(c => ({ ...c, bannerId: String(result.spec?.banner_id) }));
       }
       await refreshSavedSpecs(runId);
+      captureProductEvent('analysis_completed', {
+        where: 'custom_tables',
+        analysis_type: 'banner_table',
+        dataset_id: datasetId,
+      });
     } catch (e) {
       setBook(null);
+      captureProductEvent('analysis_failed', {
+        where: 'custom_tables',
+        analysis_type: 'banner_table',
+        dataset_id: datasetId,
+        error_class: errorClass(e),
+      });
+      captureProductException(e, { where: 'custom_tables' });
       setError(e instanceof Error ? e.message : 'Table failed');
     } finally {
       setBusy(false);
@@ -500,6 +529,10 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                     key={stub.column}
                     title={stub.column}
                     values={stub.values}
+                    columnType={
+                      sheetTab?.data?.initialColumns?.find(column => column.id === stub.column)
+                        ?.type
+                    }
                     nets={stub.nets.map(n => n.label)}
                     onMove={(from, to) => setCanvas(c => moveCategory(c, 'stub', i, from, to))}
                     onNet={kind => addNet(i, kind)}
@@ -1119,7 +1152,9 @@ function DropZone({
         active ? 'border-foreground/40 bg-muted/30' : 'border-border'
       } ${compact ? 'ml-4 bg-muted/10 p-2' : ''}`}
       tabIndex={onActivate ? 0 : undefined}
-      aria-label={onActivate ? `${label}. ${active ? 'Selected.' : ''} Drag or click a variable.` : undefined}
+      aria-label={
+        onActivate ? `${label}. ${active ? 'Selected.' : ''} Drag or click a variable.` : undefined
+      }
       onClick={onActivate}
       onFocus={onActivate}
       onKeyDown={event => {
@@ -1139,9 +1174,7 @@ function DropZone({
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      {showHint ? (
-        <p className="text-xs text-muted-foreground">Drag or click a variable</p>
-      ) : null}
+      {showHint ? <p className="text-xs text-muted-foreground">Drag or click a variable</p> : null}
       {children}
     </div>
   );
@@ -1150,12 +1183,14 @@ function DropZone({
 function QuestionCard({
   title,
   values,
+  columnType,
   nets,
   onMove,
   onNet,
 }: {
   title: string;
   values: string[];
+  columnType?: string;
   nets?: string[];
   onMove: (from: number, to: number) => void;
   onNet?: (kind: NetPresetId) => void;
@@ -1211,15 +1246,17 @@ function QuestionCard({
               NET Yes
             </Button>
           ) : null}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-6 text-[10px]"
-            onClick={() => onNet('top2')}
-          >
-            Top-2-box
-          </Button>
+          {offersTop2Box(values, columnType) ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px]"
+              onClick={() => onNet('top2')}
+            >
+              Top-2-box
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {onNet ? <p className="mt-1 text-[10px] text-muted-foreground">{NET_HELPER_COPY}</p> : null}

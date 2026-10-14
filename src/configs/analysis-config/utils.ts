@@ -169,17 +169,17 @@ export function getAllAnalysisItems(): AnalysisItem[] {
               ? 'banner custom tables stub nested banner crosstab cross-tab cross tab xtab'
               : menuName === 'Banner Book'
                 ? 'banner book crosstab cross-tab cross tab xtab'
-              : menuName === 'Rake Weights'
-                ? 'rake raking ipf weight cases rim'
-                : menuName === 'Cell weighting'
-                  ? 'poststratify cell weighting post-stratification'
-                  : menuName === 'Export R script'
-                    ? 'r script haven sav pipeline export'
-                    : menuName === 'Save as recipe'
-                      ? 'save recipe analysis history'
-                      : menuName === 'Recipes'
-                        ? 'recipes run on this dataset export r script'
-                        : undefined,
+                : menuName === 'Rake Weights'
+                  ? 'rake raking ipf weight cases rim'
+                  : menuName === 'Cell weighting'
+                    ? 'poststratify cell weighting post-stratification'
+                    : menuName === 'Export R script'
+                      ? 'r script haven sav pipeline export'
+                      : menuName === 'Save as recipe'
+                        ? 'save recipe analysis history'
+                        : menuName === 'Recipes'
+                          ? 'recipes run on this dataset export r script'
+                          : undefined,
         });
       }
     }

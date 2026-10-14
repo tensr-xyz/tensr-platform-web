@@ -219,3 +219,63 @@ describe('tensr proxy body', () => {
     fetchMock.mockRestore();
   });
 });
+
+describe('tensr proxy body', () => {
+  it('decodes only text and json', () => {
+    expect(shouldDecodeBodyAsText('application/json; charset=utf-8')).toBe(true);
+    expect(shouldDecodeBodyAsText('text/csv')).toBe(true);
+    expect(shouldDecodeBodyAsText('text/event-stream')).toBe(true);
+    expect(shouldDecodeBodyAsText('multipart/form-data; boundary=abc')).toBe(false);
+    expect(
+      shouldDecodeBodyAsText('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    ).toBe(false);
+    expect(shouldDecodeBodyAsText('application/pdf')).toBe(false);
+    expect(
+      shouldDecodeBodyAsText(
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      )
+    ).toBe(false);
+  });
+
+  it('forwards a multipart upload without decoding the bytes as text', async () => {
+    process.env.NEXT_PUBLIC_TENSR_API_URL = API;
+    const payload = new Uint8Array([0xff, 0xfe, 0x00, 0x50, 0x4b, 0x03, 0x04]);
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValue(
+        new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    const req = new NextRequest('http://localhost/api/tensr/datasets/upload?scope=personal', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer t',
+        'content-type': 'multipart/form-data; boundary=abc',
+      },
+      body: payload,
+    });
+    await POST(req, { params: Promise.resolve({ path: ['datasets', 'upload'] }) });
+    const sent = fetchMock.mock.calls[0][1] as RequestInit;
+    const raw = sent.body;
+    const bytes = raw instanceof ArrayBuffer ? new Uint8Array(raw) : new Uint8Array(raw as Buffer);
+    expect(Array.from(bytes)).toEqual(Array.from(payload));
+    fetchMock.mockRestore();
+  });
+
+  it.each([
+    ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'banner.xlsx'],
+    ['application/pdf', 'report.pdf'],
+  ])('passes %s through byte-identical', async (contentType, filename) => {
+    const payload = new Uint8Array([0xff, 0xfe, 0x00, 0x50, 0x4b, 0x03, 0x04, 0x80]);
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(payload, {
+        status: 200,
+        headers: { 'Content-Type': contentType },
+      })
+    );
+    const req = new NextRequest(`http://localhost/api/tensr/reports/${filename}`);
+    const res = await GET(req, { params: Promise.resolve({ path: ['reports', filename] }) });
+    const got = new Uint8Array(await res.arrayBuffer());
+    expect(Array.from(got)).toEqual(Array.from(payload));
+    fetchMock.mockRestore();
+  });
+});

@@ -17,7 +17,9 @@ import {
 } from '@/lib/report-export';
 import { apiClient } from '@/lib/api-client';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
-import type { AnalysisKey } from '@/lib/analysis-definitions';
+import { isAnalysisKey } from '@/lib/analysis-definitions';
+import { loadOutputPreferences } from '@/lib/output-preferences';
+import { captureProductEvent, captureProductException } from '@/lib/product-analytics';
 import { revealConsumedRowsFromRun } from '@/lib/provenance-click-through';
 
 import type { ReportAnnotation } from '@/lib/report-annotations';
@@ -27,10 +29,10 @@ type Props = {
   rawResult?: Record<string, unknown> | null;
   sourceDatasetId?: string;
   analysisOp?: string;
+  analysisParameters?: Record<string, unknown> | null;
   analysisRunId?: string;
   relatedAnalyses?: AnalysisRelatedLink[] | null;
   provenance?: Record<string, unknown> | null;
-  analysisParameters?: Record<string, unknown> | null;
 };
 
 export function AnalysisReportLayout({
@@ -38,10 +40,10 @@ export function AnalysisReportLayout({
   rawResult,
   sourceDatasetId,
   analysisOp,
+  analysisParameters,
   analysisRunId,
   relatedAnalyses,
   provenance,
-  analysisParameters,
 }: Props) {
   const [railOpen, setRailOpen] = useState(true);
   const [activeSection, setActiveSection] = useState<string | undefined>();
@@ -49,6 +51,7 @@ export function AnalysisReportLayout({
   const [annotationTarget, setAnnotationTarget] = useState<string | undefined>();
   const [annotationComposerOpen, setAnnotationComposerOpen] = useState(false);
   const [synthesizing, setSynthesizing] = useState(false);
+  const [rerunNotice, setRerunNotice] = useState<string | null>(null);
   const annotationInputRef = useRef<HTMLTextAreaElement>(null);
   const openSetup = useAnalysisSetupStore(s => s.openSetup);
 
@@ -176,8 +179,8 @@ export function AnalysisReportLayout({
   );
 
   const handleRerun = useCallback(() => {
-    const key = (analysisOp ?? report.meta.analysis_key) as AnalysisKey;
-    if (!key) return;
+    const key = analysisOp ?? report.meta.analysis_key;
+    const prefs = loadOutputPreferences();
     const stored =
       analysisParameters && Object.keys(analysisParameters).some(name => name !== 'run_id')
         ? analysisParameters
@@ -185,8 +188,32 @@ export function AnalysisReportLayout({
     const request = rawResult?.request_body;
     const fromResult =
       request && typeof request === 'object' ? (request as Record<string, unknown>) : null;
-    openSetup(key, { ...(fromResult ?? {}), ...(stored ?? {}) });
-  }, [analysisOp, analysisParameters, openSetup, rawResult, report.meta.analysis_key]);
+    const prefill = { ...(fromResult ?? {}), ...(stored ?? {}) };
+    captureProductEvent('rerun_clicked', {
+      dataset_id: sourceDatasetId ?? null,
+      analysis_type: key || null,
+      stub_column: typeof prefill.stub_column === 'string' ? prefill.stub_column : null,
+      banner_column: typeof prefill.banner_column === 'string' ? prefill.banner_column : null,
+      apa_format: prefs.apaFormat,
+      include_charts: prefs.includeCharts,
+      decimal_places: prefs.decimalPlaces,
+    });
+    if (!key || !isAnalysisKey(key)) {
+      const message = 'This report cannot be re-run from here.';
+      setRerunNotice(message);
+      captureProductException(new Error(message), { where: 'report_rerun' });
+      return;
+    }
+    setRerunNotice(null);
+    openSetup(key, prefill);
+  }, [
+    analysisOp,
+    analysisParameters,
+    openSetup,
+    rawResult,
+    report.meta.analysis_key,
+    sourceDatasetId,
+  ]);
 
   const handleRevealConsumedRows = useCallback(
     (group?: string) => {
@@ -330,6 +357,7 @@ export function AnalysisReportLayout({
           activeSection={activeSection}
           onSectionSelect={setActiveSection}
           onRerun={handleRerun}
+          rerunNotice={rerunNotice}
           onExport={handleExportSummary}
           onExportCsv={handleExportCsv}
           onExportExcel={handleExportExcel}

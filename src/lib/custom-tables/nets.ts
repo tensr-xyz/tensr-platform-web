@@ -16,6 +16,21 @@ function looksYes(value: string): boolean {
   return /^(yes|definitely yes)$/i.test(lower) || (/\byes\b/.test(lower) && !/\bno\b/.test(lower));
 }
 
+const LIKERT_WORD =
+  /agree|disagree|satisfied|dissatisfied|likely|unlikely|never|always|poor|fair|good|excellent|strongly/i;
+
+/** Top-2-box is a scale net. Gender and other nominal columns do not get the button. */
+export function offersTop2Box(values: string[], columnType?: string | null): boolean {
+  const kind = (columnType || '').toLowerCase();
+  if (['id', 'date', 'datetime', 'text', 'open', 'categorical'].includes(kind)) return false;
+  if (values.length < 2) return false;
+  if (['ordinal', 'numeric', 'integer', 'float'].includes(kind)) return true;
+  const likert = values.filter(value => LIKERT_WORD.test(value)).length;
+  if (likert >= 2) return true;
+  const codes = values.every(value => /^-?\d+$/.test(value.trim()));
+  return codes && values.length >= 3;
+}
+
 export function netPreset(kind: NetPresetId, values: string[]): CustomTableNet | null {
   if (kind === 'top2') {
     if (values.length < 2) return null;
