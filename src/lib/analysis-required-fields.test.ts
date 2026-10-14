@@ -96,11 +96,23 @@ describe('analysisRequiredFieldsSatisfied for analyses without a dedicated rule'
     expect(analysisRequiredFieldsSatisfied(analysis, form, SCHEMA)).toBe(false);
   });
 
-  it('runs a banner table once the stub and banner are set', () => {
+  it('runs a banner table once the stub and banner are different columns', () => {
     expect(
       analysisRequiredFieldsSatisfied('banner_table', filledForm('banner_table'), SCHEMA)
     ).toBe(true);
-    const missing = { ...filledForm('banner_table'), chiA: '', chiB: '' };
-    expect(analysisRequiredFieldsSatisfied('banner_table', missing, SCHEMA)).toBe(false);
+    expect(
+      analysisRequiredFieldsSatisfied(
+        'banner_table',
+        { ...filledForm('banner_table'), chiB: 'g' },
+        SCHEMA
+      )
+    ).toBe(false);
+    expect(
+      analysisRequiredFieldsSatisfied(
+        'banner_table',
+        { ...filledForm('banner_table'), chiA: '', chiB: '' },
+        SCHEMA
+      )
+    ).toBe(false);
   });
 });

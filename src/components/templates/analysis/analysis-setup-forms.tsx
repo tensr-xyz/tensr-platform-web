@@ -827,7 +827,14 @@ export function NetworkForm({ form, setForm, schema, allNames, notices, errors }
   );
 }
 
-export function BannerTableForm({ form, setForm, schema, allNames, errors }: FormSliceProps) {
+export function BannerTableForm({
+  form,
+  setForm,
+  schema,
+  allNames,
+  notices,
+  errors,
+}: FormSliceProps) {
   return (
     <section className="space-y-3">
       <FormSectionLabel>Stub and banner</FormSectionLabel>
@@ -837,6 +844,7 @@ export function BannerTableForm({ form, setForm, schema, allNames, errors }: For
         onChange={chiA => setForm(f => ({ ...f, chiA }))}
         schema={schema}
         names={allNames}
+        expectedType="categorical"
         errors={errors[WIZARD_FIELD.chiA]}
       />
       <ColumnSelect
@@ -845,6 +853,8 @@ export function BannerTableForm({ form, setForm, schema, allNames, errors }: For
         onChange={chiB => setForm(f => ({ ...f, chiB }))}
         schema={schema}
         names={allNames}
+        expectedType="categorical"
+        notices={notices[WIZARD_FIELD.chiB]}
         errors={errors[WIZARD_FIELD.chiB]}
       />
       <label className="block space-y-1 text-[11px]">
@@ -2224,6 +2234,8 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'chi_square':
     case 'mcnemar':
       return <ChiSquareForm {...props} />;
+    case 'banner_table':
+      return <BannerTableForm {...props} />;
     case 'mann_whitney_u':
       return (
         <GroupNumericForm

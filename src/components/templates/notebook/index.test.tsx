@@ -524,7 +524,8 @@ describe('Notebook component', () => {
         await useNotebookWorkspaceStore.getState().controls.runAll();
       });
 
-      expect(mockApiClient.execute.python).toHaveBeenCalledTimes(2);
+      expect(mockApiClient.execute.python).toHaveBeenCalledTimes(1);
+      expect(screen.getByText('This cell has no code to run.')).toBeInTheDocument();
     });
   });
 

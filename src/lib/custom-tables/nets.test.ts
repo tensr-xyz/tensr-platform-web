@@ -1,4 +1,4 @@
-import { netPreset, NET_HELPER_COPY } from './nets';
+import { netPreset, NET_HELPER_COPY, offersTop2Box } from './nets';
 
 const LIKERT = ['1 Strongly disagree', '2 Disagree', '3 Neither', '4 Agree', '5 Strongly agree'];
 
@@ -21,6 +21,13 @@ describe('net presets', () => {
     const net = netPreset('top2', ['Low', 'Med', 'High', 'Very high']);
     expect(net?.label).toBe('Top-2-box');
     expect(net?.values).toEqual(['High', 'Very high']);
+  });
+
+  it('does not offer Top-2-box on a nominal column such as gender', () => {
+    expect(offersTop2Box(['Male', 'Female'], 'categorical')).toBe(false);
+    expect(offersTop2Box(['Male', 'Female'])).toBe(false);
+    expect(offersTop2Box(['1', '2', '3', '4', '5'])).toBe(true);
+    expect(offersTop2Box(['1', '2', '3', '4', '5'], 'ordinal')).toBe(true);
   });
 
   it('returns null when the preset cannot find categories', () => {

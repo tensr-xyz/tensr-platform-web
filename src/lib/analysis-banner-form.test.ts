@@ -45,9 +45,9 @@ describe('banner table rerun form', () => {
     expect(form.includeCharts).toBe(false);
     expect(form.bannerNets).toContain('NET Agree');
     expect(form.bannerFilter).toContain('Female');
-    expect(
-      getAnalysisRunBlockers('banner_table', form, SCHEMA, 'ds-1')
-    ).not.toContain('Complete the required fields above.');
+    expect(getAnalysisRunBlockers('banner_table', form, SCHEMA, 'ds-1')).not.toContain(
+      'Complete the required fields above.'
+    );
     expect(buildBodyFromForm(form)).toMatchObject({
       stub_column: 'Q5',
       banner_column: 'Q3',

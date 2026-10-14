@@ -1,8 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { ACCEPTED_UPLOAD_EXTENSIONS, ACCEPTED_UPLOAD_HELP } from '@/lib/accepted-upload-types';
-import { formatApiErrorMessage } from '@/lib/api-error';
+import { reportUploadFailure } from '@/lib/report-upload-failure';
 import { uploadDatasetFile, type UploadScope } from '@/lib/upload-dataset';
+import { captureProductEvent, errorClass } from '@/lib/product-analytics';
 
 export type WorkbookSheets = {
   file: File;
@@ -47,11 +48,20 @@ export function useDatasetUpload(
         return null;
       }
 
+      const started = performance.now();
       try {
         const result = await uploadDatasetFile(file, token, scope, setUploadProgress, sheet);
         const sheets = Array.isArray(result.sheets)
           ? result.sheets.filter((name): name is string => typeof name === 'string')
           : [];
+        captureProductEvent('file_uploaded', {
+          dataset_id: result.dataset_id,
+          type: ext,
+          rows: typeof result.n_rows === 'number' ? result.n_rows : null,
+          cols: typeof result.n_cols === 'number' ? result.n_cols : null,
+          sheet_count: sheets.length || null,
+          parse_duration_ms: Math.round(performance.now() - started),
+        });
         if (sheets.length > 1 && !sheet) {
           setWorkbook({
             file,
@@ -65,7 +75,12 @@ export function useDatasetUpload(
         cbRef.current?.(result.dataset_id, file.name);
         return result.dataset_id;
       } catch (e) {
-        setError(e instanceof Error ? formatApiErrorMessage(e) : 'Upload failed');
+        captureProductEvent('file_upload_failed', {
+          type: ext,
+          error_class: errorClass(e),
+          parse_duration_ms: Math.round(performance.now() - started),
+        });
+        setError(await reportUploadFailure(file, e));
         return null;
       } finally {
         setIsLoading(false);

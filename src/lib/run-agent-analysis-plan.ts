@@ -14,6 +14,7 @@ import { streamAgentAnalysisRun } from '@/lib/stream-agent-analysis';
 import { resolveChatAction } from '@/lib/chat-actions';
 import { formatUnsupportedWithClosest } from '@/lib/agent-capabilities';
 import { isRetiredFromUi, retiredFromUiUserMessage } from '@/lib/retired-from-ui';
+import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
 
 export type ParseIntentResult = {
   status: string;
@@ -251,27 +252,53 @@ export async function runAgentAnalysisPlan(
     handlers?.onProgress?.(step, message);
   };
 
+  const started = performance.now();
+  captureProductEvent('analysis_started', {
+    dataset_id: datasetId,
+    analysis_type: String(resolvedOp),
+    where: 'agent',
+  });
+  const finish = (envelope: AnalyzeResponse | undefined) => {
+    captureProductEvent('analysis_completed', {
+      dataset_id: datasetId,
+      analysis_type: String(resolvedOp),
+      where: 'agent',
+      duration_ms: Math.round(performance.now() - started),
+      output_type: envelope?.report ? 'report' : envelope ? 'result' : 'empty',
+    });
+    return envelope;
+  };
   try {
     emit('validating', interpretProgressMessage(plan, 'validating'));
+    try {
+      return finish(
+        await streamAgentAnalysisRun(datasetId, resolvedOp, resolvedSpec, {
+          onProgress: ({ step, message }) => {
+            emit(step, interpretProgressMessage(plan, step, message));
+          },
+          signal: handlers?.signal,
+        })
+      );
+    } catch (streamError) {
+      const status = streamError instanceof ApiRequestError ? streamError.status : 0;
+      const streamUnavailable = status === 404 || status === 405;
+      if (!streamUnavailable) throw streamError;
 
-    return await streamAgentAnalysisRun(datasetId, resolvedOp, resolvedSpec, {
-      onProgress: ({ step, message }) => {
-        emit(step, interpretProgressMessage(plan, step, message));
-      },
-      signal: handlers?.signal,
-    });
-  } catch (streamError) {
-    const status = streamError instanceof ApiRequestError ? streamError.status : 0;
-    const streamUnavailable = status === 404 || status === 405;
-    if (!streamUnavailable) {
-      throw streamError;
+      emit('validating', interpretProgressMessage(plan, 'validating'));
+      emit('running', interpretProgressMessage(plan, 'running'));
+      const envelope = await apiClient.datasets.analyze.run(datasetId, resolvedOp, resolvedSpec);
+      emit('building', interpretProgressMessage(plan, 'building'));
+      return finish(envelope);
     }
-
-    emit('validating', interpretProgressMessage(plan, 'validating'));
-    emit('running', interpretProgressMessage(plan, 'running'));
-    const envelope = await apiClient.datasets.analyze.run(datasetId, resolvedOp, resolvedSpec);
-    emit('building', interpretProgressMessage(plan, 'building'));
-    return envelope;
+  } catch (error) {
+    captureProductException(error, { where: 'agent', dataset_id: datasetId });
+    captureProductEvent('analysis_failed', {
+      dataset_id: datasetId,
+      analysis_type: String(resolvedOp),
+      where: 'agent',
+      error_class: errorClass(error),
+    });
+    throw error;
   }
 }
 

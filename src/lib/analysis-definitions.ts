@@ -511,7 +511,9 @@ export function applyBodyToForm(
     const stub =
       body.stub_column ??
       body.column_a ??
-      (stubList && typeof stubList === 'object' ? (stubList as { column?: unknown }).column : undefined);
+      (stubList && typeof stubList === 'object'
+        ? (stubList as { column?: unknown }).column
+        : undefined);
     const banner =
       body.banner_column ??
       body.column_b ??
@@ -563,6 +565,12 @@ export function applyBodyToForm(
   if (op === 'chi_square') {
     if (typeof body.column_a === 'string') setChiA(body.column_a);
     if (typeof body.column_b === 'string') setChiB(body.column_b);
+  }
+  if (op === 'banner_table') {
+    const stub = body.stub_column ?? body.column_a;
+    const banner = body.banner_column ?? body.column_b;
+    if (typeof stub === 'string') setChiA(stub);
+    if (typeof banner === 'string') setChiB(banner);
   }
   if (op === 'cohens_kappa' || op === 'mcnemar') {
     if (typeof body.column_a === 'string') setChiA(body.column_a);
@@ -1054,9 +1062,15 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     };
   }
   if (analysis === 'banner_table') {
+    if (!form.chiA.trim() || !form.chiB.trim()) {
+      throw new Error('Select a stub column and a banner column');
+    }
+    if (form.chiA === form.chiB) throw new Error('Stub and banner must be different columns');
     const body: Record<string, unknown> = {
       stub_column: form.chiA,
       banner_column: form.chiB,
+      column_percent: true,
+      column_letters: true,
     };
     const weight = form.bannerWeight.trim();
     if (weight) body.weight = weight;
@@ -1857,7 +1871,11 @@ export function formStateFromBody(
           : JSON.stringify(body.decimals);
     state.bannerFilter = typeof body.filter === 'string' ? body.filter : '';
     state.bannerNets =
-      body.nets == null ? '' : typeof body.nets === 'string' ? body.nets : JSON.stringify(body.nets);
+      body.nets == null
+        ? ''
+        : typeof body.nets === 'string'
+          ? body.nets
+          : JSON.stringify(body.nets);
     state.apaFormat = body.apa_format === true;
     state.includeCharts = body.include_charts === true;
   }

@@ -1,13 +1,17 @@
 'use client';
 
+import { useState } from 'react';
+
 type Props = {
   title: string;
   summary: string;
-  onOpen: () => void;
+  /** Return a sentence when the click cannot open a new view. */
+  onOpen: () => string | void;
 };
 
 /** Chat stand-in for a report that already opened in its own tab. */
 export function AnalysisReportChatCard({ title, summary, onOpen }: Props) {
+  const [notice, setNotice] = useState<string | null>(null);
   return (
     <div
       data-testid="analysis-report-summary-card"
@@ -21,10 +25,15 @@ export function AnalysisReportChatCard({ title, summary, onOpen }: Props) {
         type="button"
         data-testid="analysis-report-open-tab"
         className="mt-2 text-sm font-medium text-primary hover:underline"
-        onClick={onOpen}
+        onClick={() => setNotice(onOpen() || null)}
       >
         Open report
       </button>
+      {notice ? (
+        <p role="status" className="mt-1 text-xs text-muted-foreground">
+          {notice}
+        </p>
+      ) : null}
     </div>
   );
 }

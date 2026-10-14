@@ -1283,6 +1283,8 @@ export function analysisRequiredFieldsSatisfied(
       );
     case 'structural_equation_modelling':
       return !!form.semModelSpec.trim();
+    case 'banner_table':
+      return !!(form.chiA?.trim() && form.chiB?.trim() && form.chiA !== form.chiB);
     default:
       try {
         return columnSlotsFilled(buildBodyFromForm({ ...form, analysis: op }));
@@ -1321,7 +1323,11 @@ export function getAnalysisRunBlockers(
   }
 
   if (!messages.length && !analysisRequiredFieldsSatisfied(op, form, schema)) {
-    messages.push('Complete the required fields above.');
+    messages.push(
+      op === 'banner_table' && form.chiA && form.chiA === form.chiB
+        ? 'Stub and banner must be different columns.'
+        : 'Complete the required fields above.'
+    );
   }
 
   return messages;

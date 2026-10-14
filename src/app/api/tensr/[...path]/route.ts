@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getPostHogClient } from '@/lib/posthog-server';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import {
   buildAssistantStreamTargetUrl,
   buildTensrProxyTargetUrl,
 } from '@/lib/tensr-proxy-target-url';
 import { ACTIVE_ORGANISATION_COOKIE, resolveProxyOrganisationId } from '@/lib/active-organisation';
-import { getPostHogClient } from '@/lib/posthog-server';
 
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
@@ -100,7 +100,10 @@ function looksLikeSse(bytes: Uint8Array | undefined): boolean {
   return /^\s*(:|data:|event:|id:)/.test(head);
 }
 
-function continueAfter(first: ReadableStreamReadResult<Uint8Array>, reader: ReadableStreamDefaultReader<Uint8Array>) {
+function continueAfter(
+  first: ReadableStreamReadResult<Uint8Array>,
+  reader: ReadableStreamDefaultReader<Uint8Array>
+) {
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       if (first.value) controller.enqueue(first.value);
@@ -118,6 +121,27 @@ function continueAfter(first: ReadableStreamReadResult<Uint8Array>, reader: Read
       }
     },
   });
+}
+
+function reportProxyException(error: unknown, pathSegments: string[]): void {
+  const path = pathSegments.join('/');
+  if (!path.includes('upload') || !process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN) return;
+  try {
+    getPostHogClient().captureException(
+      error instanceof Error ? error : new Error(String(error)),
+      undefined,
+      {
+        path,
+        file_type: null,
+        sheet_count: null,
+        row_count: null,
+        col_count: null,
+        parser_error: error instanceof Error ? error.message : String(error),
+      }
+    );
+  } catch {
+    // A failed report must not replace the 502 the browser is waiting on.
+  }
 }
 
 async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<NextResponse> {
@@ -147,8 +171,14 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
 
   let requestBody = '';
   if (req.method !== 'GET' && req.method !== 'HEAD') {
-    requestBody = await req.text();
-    init.body = requestBody;
+    const requestType = req.headers.get('content-type') ?? '';
+    // req.text() UTF-8-decodes the body and corrupts an xlsx inside multipart.
+    if (shouldDecodeBodyAsText(requestType)) {
+      requestBody = await req.text();
+      init.body = requestBody;
+    } else {
+      init.body = await req.arrayBuffer();
+    }
   }
 
   try {
@@ -242,6 +272,7 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
         upstream,
       });
     }
+    reportProxyException(error, pathSegments);
     return NextResponse.json(
       {
         detail: `Could not reach tensr-api at ${targetUrl}: ${message}`,

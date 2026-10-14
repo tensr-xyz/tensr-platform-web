@@ -185,7 +185,8 @@ describe('streamAgentLoop', () => {
 
     expect(result.answer_markdown).toBe('Checked answer.');
     expect(onDelta).toHaveBeenNthCalledWith(1, 'Partial ');
-    expect(onDelta).toHaveBeenNthCalledWith(2, 'answer.');
+    expect(onDelta).toHaveBeenNthCalledWith(2, '\n\n');
+    expect(onDelta).toHaveBeenNthCalledWith(3, 'answer.');
     const firstUrl = String((global.fetch as jest.Mock).mock.calls[0][0]);
     const secondBody = JSON.parse(String((global.fetch as jest.Mock).mock.calls[1][1].body));
     expect(firstUrl).toContain('/assistant/agent-loop-v2/stream');
@@ -211,7 +212,12 @@ describe('streamAgentLoop', () => {
   it('captures a non-2xx stream with the session and distinct id', async () => {
     (global.fetch as jest.Mock).mockResolvedValue(sseFetchResponse('nope', 503));
     await expect(
-      streamAgentLoop({ message: 'crosstab', mode: 'agent', agentVersion: 'v2', sessionId: 'sess-9' })
+      streamAgentLoop({
+        message: 'crosstab',
+        mode: 'agent',
+        agentVersion: 'v2',
+        sessionId: 'sess-9',
+      })
     ).rejects.toBeInstanceOf(ApiRequestError);
     expect(posthog.captureException).toHaveBeenCalledWith(
       expect.any(Error),
