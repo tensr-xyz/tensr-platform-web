@@ -1205,15 +1205,25 @@ function QuestionCard({
             <span className="flex-1">{value}</span>
             <button
               type="button"
-              className="text-muted-foreground"
-              onClick={() => onMove(i, i - 1)}
+              className="relative z-[80] px-1 text-muted-foreground"
+              aria-label={`Move ${value} up`}
+              onClick={event => {
+                event.preventDefault();
+                event.stopPropagation();
+                onMove(i, i - 1);
+              }}
             >
               ↑
             </button>
             <button
               type="button"
-              className="text-muted-foreground"
-              onClick={() => onMove(i, i + 1)}
+              className="relative z-[80] px-1 text-muted-foreground"
+              aria-label={`Move ${value} down`}
+              onClick={event => {
+                event.preventDefault();
+                event.stopPropagation();
+                onMove(i, i + 1);
+              }}
             >
               ↓
             </button>

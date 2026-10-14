@@ -7,8 +7,11 @@ export function liftInlineTables(text: string): string {
       if (!line.includes('| |') && !line.includes('||')) return line;
       const start = line.indexOf('|');
       const before = line.slice(0, start).trim();
-      const table = line.slice(start).replace(/\|\s*\|/g, '|\n|');
-      return before ? `${before}\n\n${table}` : table;
+      const raw = line.slice(start);
+      const end = raw.lastIndexOf('|');
+      const after = raw.slice(end + 1).trim();
+      const table = raw.slice(0, end + 1).replace(/\|\s*\|/g, '|\n|');
+      return [before, table, after].filter(Boolean).join('\n\n');
     })
     .join('\n');
 }

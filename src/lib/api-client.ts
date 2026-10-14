@@ -1151,10 +1151,10 @@ class ApiClient {
         }),
       }),
 
-    r: (data: { code: string }) =>
+    r: (data: { code: string; dataset_id?: string | null }) =>
       this.request<any>('/api/execute/r', {
         method: 'POST',
-        body: JSON.stringify({ code: data.code }),
+        body: JSON.stringify({ code: data.code, dataset_id: data.dataset_id ?? null }),
       }),
   };
 

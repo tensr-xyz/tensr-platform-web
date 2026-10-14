@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import { rakeDatasetWeights } from '@/lib/dataset-data-ops';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
 import { showDerivedResult } from '@/lib/show-derived-result';
@@ -112,7 +113,7 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
         setTargetsFilename(undefined);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Rake failed');
+      setError(formatApiErrorMessage(e));
     } finally {
       setBusy(false);
     }
