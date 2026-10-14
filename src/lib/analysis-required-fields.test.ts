@@ -96,9 +96,11 @@ describe('analysisRequiredFieldsSatisfied for analyses without a dedicated rule'
     expect(analysisRequiredFieldsSatisfied(analysis, form, SCHEMA)).toBe(false);
   });
 
-  it('keeps banner tables on their own dialog', () => {
+  it('runs a banner table once the stub and banner are set', () => {
     expect(
       analysisRequiredFieldsSatisfied('banner_table', filledForm('banner_table'), SCHEMA)
-    ).toBe(false);
+    ).toBe(true);
+    const missing = { ...filledForm('banner_table'), chiA: '', chiB: '' };
+    expect(analysisRequiredFieldsSatisfied('banner_table', missing, SCHEMA)).toBe(false);
   });
 });
