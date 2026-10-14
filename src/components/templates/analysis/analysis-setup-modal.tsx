@@ -19,6 +19,7 @@ import {
   countPreviewDistinctNonEmpty,
   getAnalysisRunBlockers,
 } from '@/lib/analysis-setup-validation';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import { AnalysisDialogShell } from '@/components/molecules/analysis-dialog';
 import { Checkbox } from '@/components/atoms/checkbox';
 import { Label } from '@/components/atoms/label';
@@ -140,7 +141,7 @@ export function AnalysisSetupModal({
       await onRun(effectiveOp, body);
       onOpenChange(false);
     } catch (e) {
-      setServerError(e instanceof Error ? e.message : 'Could not run analysis');
+      setServerError(formatApiErrorMessage(e));
     }
   };
 

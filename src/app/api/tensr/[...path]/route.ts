@@ -213,9 +213,41 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
       outHeaders.set('X-Accel-Buffering', 'no');
       outHeaders.set('X-Tensr-Upstream', upstream);
       if (sse) outHeaders.set('Content-Type', 'text/event-stream');
+      const gatewayBusy = res.status === 502 || res.status === 503 || res.status === 504;
+      if (gatewayBusy && !sse) {
+        outHeaders.set('Content-Type', 'text/event-stream');
+        outHeaders.set('X-Tensr-Upstream-Status', String(res.status));
+        const sessionId = sessionIdFromBody(requestBody);
+        const payload = `data: ${JSON.stringify({
+          type: 'result',
+          status: 'continuing',
+          session_id: sessionId,
+          answer_markdown: '',
+        })}\n\n`;
+        return new NextResponse(payload, { status: 200, headers: outHeaders });
+      }
       const status = sse ? 200 : res.status;
       if (status !== res.status) outHeaders.set('X-Tensr-Upstream-Status', String(res.status));
       return new NextResponse(continueAfter(first, reader), { status, headers: outHeaders });
+    }
+
+    if (
+      streamPath &&
+      !res.body &&
+      (res.status === 502 || res.status === 503 || res.status === 504)
+    ) {
+      const outHeaders = forwardResponseHeaders(res.headers);
+      outHeaders.set('Cache-Control', `${noStore}, no-transform`);
+      outHeaders.set('Content-Type', 'text/event-stream');
+      outHeaders.set('X-Tensr-Upstream', upstream);
+      outHeaders.set('X-Tensr-Upstream-Status', String(res.status));
+      const payload = `data: ${JSON.stringify({
+        type: 'result',
+        status: 'continuing',
+        session_id: sessionIdFromBody(requestBody),
+        answer_markdown: '',
+      })}\n\n`;
+      return new NextResponse(payload, { status: 200, headers: outHeaders });
     }
 
     // SSE must pass through without buffering or the client sees one blob at the end.

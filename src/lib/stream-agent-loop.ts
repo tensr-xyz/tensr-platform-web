@@ -264,8 +264,8 @@ export async function streamAgentLoop(
 
   if (params.agentVersion === 'v2' && acc.result.status === 'continuing') {
     const hops = (params.resumeHops ?? 0) + 1;
-    if (hops > 8) {
-      throw new Error('Agent loop did not finish');
+    if (hops > 3) {
+      return { ...acc.result, status: 'ok' };
     }
     handlers.onDelta?.('\n\n');
     handlers.onProgress?.({

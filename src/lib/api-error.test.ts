@@ -108,6 +108,30 @@ describe('formatApiErrorMessage', () => {
     expect(shown).not.toMatch(/columns exist/i);
   });
 
+  it('turns a validation list into a sentence', () => {
+    const shown = formatApiErrorMessage(
+      new ApiRequestError(
+        422,
+        JSON.stringify({
+          detail: [
+            {
+              type: 'extra_forbidden',
+              loc: ['body', 'apa_format'],
+              msg: 'Extra inputs are not permitted',
+            },
+            {
+              type: 'extra_forbidden',
+              loc: ['body', 'include_charts'],
+              msg: 'Extra inputs are not permitted',
+            },
+          ],
+        })
+      )
+    );
+    expect(shown).toBe('That analysis could not run. Check apa_format, include_charts.');
+    expect(shown).not.toContain('{');
+  });
+
   it('does not tell the user to check columns for an internal server error', () => {
     const shown = formatApiErrorMessage(
       new ApiRequestError(500, '{"detail":"Internal server error"}')

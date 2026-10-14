@@ -163,7 +163,7 @@ describe('/api/tensr proxy: agent-loop stream', () => {
     await res.body?.cancel();
   });
 
-  it('passes a non-SSE upstream status through after the first byte', async () => {
+  it('turns a non-SSE 503 on a stream into a continuing event', async () => {
     fetchMock.mockImplementation(
       async () =>
         new Response('{"detail":"unavailable"}', {
@@ -174,14 +174,16 @@ describe('/api/tensr proxy: agent-loop stream', () => {
     const req = new NextRequest('http://localhost/api/tensr/assistant/agent-loop-v2/stream', {
       method: 'POST',
       headers: { authorization: 'Bearer t', 'content-type': 'application/json' },
-      body: JSON.stringify({ message: 'hi' }),
+      body: JSON.stringify({ message: 'hi', session_id: 'sess-503' }),
     });
     const res = await POST(req, {
       params: Promise.resolve({ path: ['assistant', 'agent-loop-v2', 'stream'] }),
     });
-    expect(res.status).toBe(503);
-    expect(res.headers.get('X-Tensr-Upstream-Status')).toBeNull();
-    await res.body?.cancel();
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Tensr-Upstream-Status')).toBe('503');
+    const text = await res.text();
+    expect(text).toContain('"status":"continuing"');
+    expect(text).toContain('sess-503');
   });
 });
 
