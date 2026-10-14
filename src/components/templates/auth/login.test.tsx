@@ -5,6 +5,7 @@ import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
 
 const mockPush = jest.fn();
 const mockGoogleStart = jest.fn();
+const mockMicrosoftStart = jest.fn();
 const mockGitHubStart = jest.fn();
 const mockOAuthAuthenticate = jest.fn();
 const mockInitiateAuth = jest.fn();
@@ -22,6 +23,7 @@ let searchParams = new URLSearchParams();
 const fakeStytch = {
   oauth: {
     google: { start: (...a: unknown[]) => mockGoogleStart(...a) },
+    microsoft: { start: (...a: unknown[]) => mockMicrosoftStart(...a) },
     github: { start: (...a: unknown[]) => mockGitHubStart(...a) },
     authenticate: (...a: unknown[]) => mockOAuthAuthenticate(...a),
   },
@@ -111,9 +113,10 @@ describe('LoginTemplate', () => {
     mockRedeemStoredReferral.mockResolvedValue(null);
   });
 
-  it('offers Google, GitHub and email sign-in', () => {
+  it('offers Google, Microsoft, GitHub and email sign-in', () => {
     render(<LoginTemplate />);
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /continue with microsoft/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /continue with github/i })).toBeEnabled();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument();
@@ -122,6 +125,7 @@ describe('LoginTemplate', () => {
   describe('OAuth start', () => {
     it.each([
       ['Google', mockGoogleStart],
+      ['Microsoft', mockMicrosoftStart],
       ['GitHub', mockGitHubStart],
     ])('%s sends login and signup back to /login', async (provider, startMock) => {
       startMock.mockResolvedValue(undefined);
