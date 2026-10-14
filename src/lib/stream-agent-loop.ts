@@ -15,6 +15,7 @@ export type AgentLoopStreamHandlers = {
   /** Called synchronously per event and never awaited, so a slow render cannot hold the reader. */
   onProgress?: (progress: AgentLoopStreamProgress) => void;
   onDelta?: (text: string) => void;
+  onReplace?: (text: string) => void;
   signal?: AbortSignal;
 };
 
@@ -60,6 +61,7 @@ function processSseLine(
     name?: string;
     message?: string;
     text?: string;
+    replace?: boolean;
     response?: AgentLoopResponse;
   };
   try {
@@ -69,7 +71,8 @@ function processSseLine(
   }
 
   if (payload.type === 'delta' && payload.text) {
-    handlers.onDelta?.(payload.text);
+    if (payload.replace) handlers.onReplace?.(payload.text);
+    else handlers.onDelta?.(payload.text);
     return;
   }
 
@@ -250,6 +253,11 @@ export async function streamAgentLoop(
     if (hops > 8) {
       throw new Error('Agent loop did not finish');
     }
+    handlers.onProgress?.({
+      type: 'progress',
+      step: 'resume',
+      message: 'Continuing this turn',
+    });
     return streamAgentLoop(
       {
         ...params,

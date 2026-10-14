@@ -552,6 +552,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               isStreaming: true,
             });
           },
+          onReplace: text => {
+            updateMessage(projectId, assistantMessageId, {
+              content: text,
+              isStreaming: true,
+            });
+          },
           onProgress: progress => {
             const prev = useChatStore
               .getState()
@@ -705,7 +711,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           // content, report once in resultMarkdown.
           const { markdown } = analysisResultMarkdown(envelope);
           primaryChatFields = chatFieldsAfterRunAnalysis({
-            priorContent,
+            priorContent: agentVersion === 'v2' ? '' : priorContent,
             planSummary,
             whyThisTest,
             reportMarkdown: markdown,

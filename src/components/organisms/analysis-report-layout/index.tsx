@@ -30,6 +30,7 @@ type Props = {
   analysisRunId?: string;
   relatedAnalyses?: AnalysisRelatedLink[] | null;
   provenance?: Record<string, unknown> | null;
+  analysisParameters?: Record<string, unknown> | null;
 };
 
 export function AnalysisReportLayout({
@@ -40,6 +41,7 @@ export function AnalysisReportLayout({
   analysisRunId,
   relatedAnalyses,
   provenance,
+  analysisParameters,
 }: Props) {
   const [railOpen, setRailOpen] = useState(true);
   const [activeSection, setActiveSection] = useState<string | undefined>();
@@ -175,8 +177,16 @@ export function AnalysisReportLayout({
 
   const handleRerun = useCallback(() => {
     const key = (analysisOp ?? report.meta.analysis_key) as AnalysisKey;
-    if (key) openSetup(key);
-  }, [analysisOp, report.meta.analysis_key, openSetup]);
+    if (!key) return;
+    const stored =
+      analysisParameters && Object.keys(analysisParameters).some(name => name !== 'run_id')
+        ? analysisParameters
+        : null;
+    const request = rawResult?.request_body;
+    const fromResult =
+      request && typeof request === 'object' ? (request as Record<string, unknown>) : null;
+    openSetup(key, { ...(fromResult ?? {}), ...(stored ?? {}) });
+  }, [analysisOp, analysisParameters, openSetup, rawResult, report.meta.analysis_key]);
 
   const handleRevealConsumedRows = useCallback(
     (group?: string) => {

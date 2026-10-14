@@ -140,6 +140,49 @@ describe('/api/tensr proxy: agent-loop stream', () => {
     );
     await res.body?.cancel();
   });
+
+  it('treats an SSE first byte as 200 even when the upstream content type is not an event stream', async () => {
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(': ping\n\ndata: {"type":"result"}\n\n', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain' },
+        })
+    );
+    const req = new NextRequest('http://localhost/api/tensr/assistant/agent-loop-v2/stream', {
+      method: 'POST',
+      headers: { authorization: 'Bearer t', 'content-type': 'application/json' },
+      body: JSON.stringify({ message: 'hi' }),
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ path: ['assistant', 'agent-loop-v2', 'stream'] }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Tensr-Upstream-Status')).toBe('503');
+    expect(res.headers.get('Content-Type')).toContain('text/event-stream');
+    await res.body?.cancel();
+  });
+
+  it('passes a non-SSE upstream status through after the first byte', async () => {
+    fetchMock.mockImplementation(
+      async () =>
+        new Response('{"detail":"unavailable"}', {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        })
+    );
+    const req = new NextRequest('http://localhost/api/tensr/assistant/agent-loop-v2/stream', {
+      method: 'POST',
+      headers: { authorization: 'Bearer t', 'content-type': 'application/json' },
+      body: JSON.stringify({ message: 'hi' }),
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ path: ['assistant', 'agent-loop-v2', 'stream'] }),
+    });
+    expect(res.status).toBe(503);
+    expect(res.headers.get('X-Tensr-Upstream-Status')).toBeNull();
+    await res.body?.cancel();
+  });
 });
 
 describe('tensr proxy body', () => {

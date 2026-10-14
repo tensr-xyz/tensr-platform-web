@@ -192,6 +192,22 @@ describe('streamAgentLoop', () => {
     expect(secondBody).toMatchObject({ resume: true, session_id: 'sess-1', message: '' });
   });
 
+  it('replaces streamed text when a delta says the table block changed', async () => {
+    const onReplace = jest.fn();
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      sseFetchResponse(
+        'data: {"type":"delta","text":"The table follows.\\n\\n| group |\\n","replace":true}\n\n' +
+          'data: {"type":"result","response":{"status":"ok","mode":"agent","answer_markdown":"The table follows.\\n\\n| group |"}}\n\n'
+      )
+    );
+    const result = await streamAgentLoop(
+      { message: 'crosstab', mode: 'agent', agentVersion: 'v2' },
+      { onReplace }
+    );
+    expect(onReplace).toHaveBeenCalledWith('The table follows.\n\n| group |\n');
+    expect(result.answer_markdown).toContain('| group |');
+  });
+
   it('captures a non-2xx stream with the session and distinct id', async () => {
     (global.fetch as jest.Mock).mockResolvedValue(sseFetchResponse('nope', 503));
     await expect(

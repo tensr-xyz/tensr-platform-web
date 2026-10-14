@@ -134,6 +134,7 @@ export type StoredAnalysisRun = {
   report: AnalysisReport;
   result: Record<string, unknown>;
   provenance?: Record<string, unknown> | null;
+  body?: Record<string, unknown> | null;
 };
 
 export async function listDatasetAnalysisRuns(datasetId: string): Promise<StoredAnalysisRun[]> {
@@ -161,7 +162,7 @@ export async function openStoredAnalysisRun(run: StoredAnalysisRun): Promise<voi
   openAnalysisResultTab({
     op: run.op,
     envelope,
-    parameters: { run_id: run.id },
+    parameters: { ...(run.body ?? {}), run_id: run.id },
     sourceDatasetId: run.dataset_id,
   });
 }
@@ -250,6 +251,12 @@ export function normalizeStoredAnalysisRun(row: unknown): StoredAnalysisRun | nu
       r.provenance && typeof r.provenance === 'object'
         ? (r.provenance as Record<string, unknown>)
         : null,
+    body:
+      r.body && typeof r.body === 'object'
+        ? (r.body as Record<string, unknown>)
+        : r.request_body && typeof r.request_body === 'object'
+          ? (r.request_body as Record<string, unknown>)
+          : null,
   };
 }
 
