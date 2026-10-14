@@ -22,6 +22,8 @@ describe('banner_table setup', () => {
       banner_column: 'Group',
       column_percent: true,
       column_letters: true,
+      apa_format: false,
+      include_charts: false,
     });
   });
 

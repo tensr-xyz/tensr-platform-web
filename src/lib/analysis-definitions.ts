@@ -1093,8 +1093,8 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
         body.nets = nets;
       }
     }
-    if (form.apaFormat) body.apa_format = true;
-    if (form.includeCharts) body.include_charts = true;
+    body.apa_format = form.apaFormat;
+    body.include_charts = form.includeCharts;
     return body;
   }
   if (analysis === 'chi_square') {
