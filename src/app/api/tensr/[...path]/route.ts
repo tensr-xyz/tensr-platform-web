@@ -94,6 +94,32 @@ function forwardResponseHeaders(from: Headers): Headers {
   return headers;
 }
 
+function looksLikeSse(bytes: Uint8Array | undefined): boolean {
+  if (!bytes || bytes.length === 0) return false;
+  const head = new TextDecoder().decode(bytes.slice(0, 64));
+  return /^\s*(:|data:|event:|id:)/.test(head);
+}
+
+function continueAfter(first: ReadableStreamReadResult<Uint8Array>, reader: ReadableStreamDefaultReader<Uint8Array>) {
+  return new ReadableStream<Uint8Array>({
+    async start(controller) {
+      if (first.value) controller.enqueue(first.value);
+      try {
+        while (true) {
+          const next = await reader.read();
+          if (next.done) {
+            controller.close();
+            return;
+          }
+          if (next.value) controller.enqueue(next.value);
+        }
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+  });
+}
+
 async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<NextResponse> {
   const { url: targetUrl, upstream } = buildTarget(pathSegments, req.nextUrl.search);
   const streamPath = isStreamingProxyPath(pathSegments);
@@ -143,6 +169,24 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
     // Auth-scoped proxy: never let browsers/CDNs reuse a previous user's session
     // or an expired /me payload (see next.config /api Cache-Control).
     const noStore = 'private, no-store, no-cache, must-revalidate';
+
+    // Wait for the first byte on a stream route, then pass the upstream status.
+    // An SSE body is the turn, so the browser status is 200 and the real status
+    // stays on X-Tensr-Upstream-Status.
+    if (streamPath && res.body) {
+      const reader = res.body.getReader();
+      const first = await reader.read();
+      const sse = looksLikeSse(first.value);
+      const outHeaders = forwardResponseHeaders(res.headers);
+      outHeaders.set('Cache-Control', `${noStore}, no-transform`);
+      outHeaders.set('Pragma', 'no-cache');
+      outHeaders.set('X-Accel-Buffering', 'no');
+      outHeaders.set('X-Tensr-Upstream', upstream);
+      if (sse) outHeaders.set('Content-Type', 'text/event-stream');
+      const status = sse ? 200 : res.status;
+      if (status !== res.status) outHeaders.set('X-Tensr-Upstream-Status', String(res.status));
+      return new NextResponse(continueAfter(first, reader), { status, headers: outHeaders });
+    }
 
     // SSE must pass through without buffering or the client sees one blob at the end.
     if (isEventStream && res.body) {

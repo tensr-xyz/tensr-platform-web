@@ -94,6 +94,7 @@ export type RunAgentLoopParams = {
   resumeHops?: number;
   onProgress?: (progress: { type: string; step: string; message: string }) => void;
   onDelta?: (text: string) => void;
+  onReplace?: (text: string) => void;
 };
 
 export function collectOpenDatasetsFromTabs(tabs: Tab[]): AgentLoopOpenDataset[] {
@@ -137,7 +138,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           approvedBatch: params.approvedBatch,
           resumeHops: params.resumeHops,
         },
-        { onProgress: params.onProgress, onDelta: params.onDelta }
+        { onProgress: params.onProgress, onDelta: params.onDelta, onReplace: params.onReplace }
       );
     } catch (error) {
       lastError = error;

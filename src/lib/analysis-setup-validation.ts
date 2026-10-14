@@ -197,6 +197,10 @@ function appendRequiredFieldErrors(
       require(WIZARD_FIELD.independentCols, form.independentCols.length >
         0, 'Add at least one predictor.');
       break;
+    case 'banner_table':
+      require(WIZARD_FIELD.chiA, !!form.chiA?.trim(), 'Select the stub.');
+      require(WIZARD_FIELD.chiB, !!form.chiB?.trim(), 'Select the banner.');
+      break;
     case 'chi_square':
     case 'fishers_exact':
     case 'odds_ratio':
@@ -1165,6 +1169,8 @@ export function analysisRequiredFieldsSatisfied(
     case 'linear_regression':
     case 'logistic_regression':
       return !!(form.depCol?.trim() && form.independentCols.length > 0);
+    case 'banner_table':
+      return !!(form.chiA?.trim() && form.chiB?.trim() && form.chiA !== form.chiB);
     case 'chi_square':
     case 'cohens_kappa':
       return !!(form.chiA?.trim() && form.chiB?.trim() && form.chiA !== form.chiB);

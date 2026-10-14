@@ -606,6 +606,7 @@ const TabManager: React.FC<TabManagerProps> = ({
           analysisRunId={reportTab.data.analysisRunId}
           relatedAnalyses={reportTab.data.analysisRelated}
           provenance={reportTab.data.analysisProvenance}
+          analysisParameters={reportTab.data.analysisParameters}
         />
       );
     }
@@ -622,6 +623,7 @@ const TabManager: React.FC<TabManagerProps> = ({
             analysisRunId={resultTab.data.analysisRunId}
             relatedAnalyses={resultTab.data.analysisRelated}
             provenance={resultTab.data.analysisProvenance}
+            analysisParameters={resultTab.data.analysisParameters}
           />
         );
       }
