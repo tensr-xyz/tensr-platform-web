@@ -652,8 +652,8 @@ describe('Notebook component', () => {
       await waitFor(() => {
         const call = mockApiClient.execute.python.mock.calls[0][0];
         expect(call.code).not.toContain('data_dict =');
-        expect(call.code).toContain('import pandas as pd');
-        expect(call.code).toContain('pre-loaded by the backend');
+        expect(call.code).not.toContain('import pandas');
+        expect(call.dataset_id).toBe('11111111-1111-1111-8111-111111111111');
       });
     });
 
