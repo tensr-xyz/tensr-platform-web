@@ -14,6 +14,7 @@ import PluginsLayout from '@/components/templates/plugins-layout';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { gridRowsForColumns, gridRowsFromPreview } from '@/lib/sheet-grid-align';
 import { fetchWithColdStartRetry, subscribeDatasetColdStart } from '@/lib/cold-start-fetch';
+import { fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { buildDefaultImportSettings, type ImportSettings } from '@/lib/import-settings';
 import { MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
@@ -77,7 +78,7 @@ async function tryDatasetImportGridFromUuidPath(
   rowLimit: number
 ): Promise<{ data: unknown[][]; variableNames: string[]; rows: unknown[][] } | null> {
   if (!UUID_PATH_REGEX.test(filePath)) return null;
-  const schemaRes = await fetchWithColdStartRetry(tensrApiUrl(`/datasets/${filePath}/schema`), {
+  const schemaRes = await fetchDatasetSchema(filePath, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (schemaRes.status === 404) return null;

@@ -1666,12 +1666,23 @@ export type AnalysisFormState = {
 
 function bannerDecimalPlaces(value: unknown): string {
   if (typeof value === 'number' && Number.isFinite(value)) return String(Math.round(value));
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('{')) {
+      try {
+        return bannerDecimalPlaces(JSON.parse(trimmed) as unknown);
+      } catch {
+        return '';
+      }
+    }
+    const places = Number(trimmed);
+    return Number.isFinite(places) ? String(Math.round(places)) : '';
+  }
   if (value && typeof value === 'object') {
     const places = (value as { column_proportion?: unknown }).column_proportion;
     if (typeof places === 'number' && Number.isFinite(places)) return String(places);
   }
-  if (typeof value === 'string' && value.trim() && !value.trim().startsWith('{'))
-    return value.trim();
   return '';
 }
 

@@ -132,6 +132,14 @@ describe('formatApiErrorMessage', () => {
     expect(shown).not.toContain('{');
   });
 
+  it('never shows a raw JSON body when the payload cannot be read', () => {
+    const shown = formatApiErrorMessage(
+      new ApiRequestError(422, 'not-json {detail: extra_forbidden}')
+    );
+    expect(shown).not.toContain('{');
+    expect(shown).toMatch(/could not run|try again/i);
+  });
+
   it('does not tell the user to check columns for an internal server error', () => {
     const shown = formatApiErrorMessage(
       new ApiRequestError(500, '{"detail":"Internal server error"}')

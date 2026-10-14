@@ -1,3 +1,4 @@
+import { analyzeRunBody } from './output-preferences';
 import { getAnalysisRunBlockers } from './analysis-setup-validation';
 import {
   buildBodyFromForm,
@@ -85,6 +86,44 @@ describe('banner table rerun form', () => {
     expect(body.include_charts).toBe(false);
     expect(body.apa_format).toBe(false);
     expect(body.decimals).toEqual(saved.decimals);
+  });
+
+  it('posts one name for each output field', () => {
+    const form = formStateFromBody(
+      'banner_table',
+      {
+        stub_column: 'Q5',
+        banner_column: 'Q3',
+        apa_format: false,
+        include_charts: false,
+        decimals: {
+          column_proportion: 1,
+          row_proportion: 1,
+          total_proportion: 1,
+          column_mean: 1,
+        },
+      },
+      SCHEMA
+    );
+    const body = analyzeRunBody(buildBodyFromForm(form), {
+      apaFormat: true,
+      includeCharts: true,
+      decimalPlaces: 3,
+    });
+    expect(body).not.toHaveProperty('apaFormat');
+    expect(body).not.toHaveProperty('includeCharts');
+    expect(body).not.toHaveProperty('decimalPlaces');
+    expect(body.apa_format).toBe(false);
+    expect(body.include_charts).toBe(false);
+    expect(body.decimal_places).toBe(1);
+    expect(typeof body.decimal_places).toBe('number');
+    expect(body.decimals).toEqual({
+      column_proportion: 1,
+      row_proportion: 1,
+      total_proportion: 1,
+      column_mean: 1,
+    });
+    expect(form.bannerDecimals).toBe('1');
   });
 
   it('keeps run disabled until the stub and banner are set', () => {

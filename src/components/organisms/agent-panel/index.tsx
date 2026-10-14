@@ -467,7 +467,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
-  const v2SessionRef = useRef<string | null>(null);
+  const v2SessionsRef = useRef<Map<string, string>>(new Map());
   const organisation = useOptionalOrganizationContext();
   const userAgentVersion = useAuthStore(state => state.user?.agentVersion);
   const agentVersion = resolveAgentVersion({
@@ -570,7 +570,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           approvedToolCalls: opts.approvedToolCalls ?? null,
           attachments: turnAttachments,
           agentVersion,
-          sessionId: v2SessionRef.current,
+          sessionId: (() => {
+            const threadId = useChatStore.getState().projects[projectId]?.activeThreadId;
+            return threadId ? (v2SessionsRef.current.get(threadId) ?? null) : null;
+          })(),
           resume: Boolean(opts.approvedBatch),
           approvedBatch: opts.approvedBatch ?? null,
           onDelta: text => {
@@ -602,7 +605,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           },
         });
 
-        if (response.session_id) v2SessionRef.current = response.session_id;
+        if (response.session_id) {
+          const threadId = useChatStore.getState().projects[projectId]?.activeThreadId;
+          if (threadId) v2SessionsRef.current.set(threadId, response.session_id);
+        }
 
         const triggerMessage = opts.triggerMessage ?? opts.message;
         // Capture Plan/Why BEFORE the response patch overwrites chat content with
@@ -671,6 +677,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           const analysisType = String(entry.result.analysis_type ?? '');
           const requestBody = entry.result.request_body as Record<string, unknown> | undefined;
           if (!analysisType || !requestBody || !datasetId) continue;
+          captureProductEvent('analysis_completed', {
+            dataset_id: datasetId,
+            analysis_type: analysisType,
+            where: 'agent',
+            output_type: entry.result.report ? 'report' : 'result',
+          });
 
           const occurrence = resultsSeenByType.get(analysisType) ?? 0;
           resultsSeenByType.set(analysisType, occurrence + 1);
