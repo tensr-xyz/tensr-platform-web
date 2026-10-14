@@ -3,6 +3,7 @@ import type { AnalysisReport, AnalyzeResponse } from '@/lib/analysis-report-type
 import { ANALYSIS_LABELS, type AnalysisKey } from '@/lib/analysis-definitions';
 import { isRetiredFromUi, retiredFromUiUserMessage } from '@/lib/retired-from-ui';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
+import { captureProductEvent } from '@/lib/product-analytics';
 import { useTabsStore, ViewType, type AgentAnalysisHistoryEntry } from '@/stores/tabs-store';
 
 export type ProvenanceTraceState =
@@ -164,6 +165,11 @@ export async function openStoredAnalysisRun(run: StoredAnalysisRun): Promise<voi
     envelope,
     parameters: { ...(run.body ?? {}), run_id: run.id },
     sourceDatasetId: run.dataset_id,
+  });
+  captureProductEvent('report_opened', {
+    dataset_id: run.dataset_id,
+    analysis_type: run.op,
+    source: 'saved_report',
   });
 }
 

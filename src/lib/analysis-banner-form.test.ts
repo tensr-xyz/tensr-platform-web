@@ -52,9 +52,39 @@ describe('banner table rerun form', () => {
       stub_column: 'Q5',
       banner_column: 'Q3',
       weight: 'weight',
+      decimal_places: 3,
+      decimals: {
+        column_proportion: 3,
+        row_proportion: 3,
+        total_proportion: 3,
+        column_mean: 3,
+      },
       apa_format: true,
       include_charts: false,
     });
+    expect(form.bannerDecimals.startsWith('{')).toBe(false);
+  });
+
+  it('reopens a saved banner with charts off and a number of decimals', () => {
+    const saved = {
+      stub_column: 'Q5',
+      banner_column: 'Q3',
+      apa_format: false,
+      include_charts: false,
+      decimals: {
+        column_proportion: 1,
+        row_proportion: 1,
+        total_proportion: 1,
+        column_mean: 1,
+      },
+    };
+    const form = formStateFromBody('banner_table', saved, SCHEMA);
+    expect(form.bannerDecimals).toBe('1');
+    expect(form.includeCharts).toBe(false);
+    const body = buildBodyFromForm(form);
+    expect(body.include_charts).toBe(false);
+    expect(body.apa_format).toBe(false);
+    expect(body.decimals).toEqual(saved.decimals);
   });
 
   it('keeps run disabled until the stub and banner are set', () => {

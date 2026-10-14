@@ -62,6 +62,22 @@ export function formatApiErrorMessage(error: unknown): string {
         }
         return plainApiFailure(detail);
       }
+      if (Array.isArray(detail)) {
+        const fields = [
+          ...new Set(
+            detail
+              .map(item => {
+                if (!item || typeof item !== 'object') return '';
+                const loc = (item as { loc?: unknown }).loc;
+                return Array.isArray(loc) ? String(loc[loc.length - 1] || '') : '';
+              })
+              .filter(Boolean)
+          ),
+        ].slice(0, 4);
+        return fields.length
+          ? `That analysis could not run. Check ${fields.join(', ')}.`
+          : 'That analysis could not run. Check the settings and try again.';
+      }
       if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
         const d = detail as { error?: string; message?: string };
         if (d.error && ASSISTANT_ERROR_MESSAGES[d.error]) {

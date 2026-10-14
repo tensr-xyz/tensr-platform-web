@@ -868,6 +868,10 @@ export function BannerTableForm({
       <label className="block space-y-1 text-[11px]">
         <span className="text-muted-foreground">Decimals</span>
         <input
+          type="number"
+          min={0}
+          max={6}
+          step={1}
           className="w-full rounded border bg-background px-2 py-1"
           value={form.bannerDecimals}
           onChange={event => setForm(f => ({ ...f, bannerDecimals: event.target.value }))}

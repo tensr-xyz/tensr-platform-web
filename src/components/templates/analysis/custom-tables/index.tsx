@@ -10,6 +10,7 @@ import {
   DialogTrigger,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import { Button } from '@/components/atoms/button';
 import { Label } from '@/components/atoms/label';
 import {
@@ -293,7 +294,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
         error_class: errorClass(e),
       });
       captureProductException(e, { where: 'custom_tables' });
-      setError(e instanceof Error ? e.message : 'Table failed');
+      setError(formatApiErrorMessage(e));
     } finally {
       setBusy(false);
     }

@@ -1075,12 +1075,17 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     const weight = form.bannerWeight.trim();
     if (weight) body.weight = weight;
     const decimals = form.bannerDecimals.trim();
-    if (decimals) {
-      try {
-        body.decimals = JSON.parse(decimals);
-      } catch {
-        const places = Number(decimals);
-        if (!Number.isNaN(places)) body.decimals = places;
+    if (decimals && !decimals.startsWith('{')) {
+      const places = Number(decimals);
+      if (!Number.isNaN(places)) {
+        const n = Math.max(0, Math.min(6, Math.round(places)));
+        body.decimal_places = n;
+        body.decimals = {
+          column_proportion: n,
+          row_proportion: n,
+          total_proportion: n,
+          column_mean: n,
+        };
       }
     }
     const filter = form.bannerFilter.trim();
@@ -1659,6 +1664,17 @@ export type AnalysisFormState = {
   includeCharts: boolean;
 };
 
+function bannerDecimalPlaces(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(Math.round(value));
+  if (value && typeof value === 'object') {
+    const places = (value as { column_proportion?: unknown }).column_proportion;
+    if (typeof places === 'number' && Number.isFinite(places)) return String(places);
+  }
+  if (typeof value === 'string' && value.trim() && !value.trim().startsWith('{'))
+    return value.trim();
+  return '';
+}
+
 export function formStateFromBody(
   op: AnalysisKey,
   body: Record<string, unknown>,
@@ -1863,12 +1879,7 @@ export function formStateFromBody(
   }
   if (op === 'banner_table') {
     state.bannerWeight = typeof body.weight === 'string' ? body.weight : '';
-    state.bannerDecimals =
-      body.decimals == null
-        ? ''
-        : typeof body.decimals === 'string'
-          ? body.decimals
-          : JSON.stringify(body.decimals);
+    state.bannerDecimals = bannerDecimalPlaces(body.decimals ?? body.decimal_places);
     state.bannerFilter = typeof body.filter === 'string' ? body.filter : '';
     state.bannerNets =
       body.nets == null
