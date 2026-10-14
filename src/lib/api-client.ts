@@ -1,6 +1,7 @@
 import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { getUsageTracker } from '@/utils/usage-tracker';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { datasetIdFromSchemaPath, fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
 import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import type { PlaybookProposedAction, PrepPlaybookStep } from '@/lib/chat-pending-action';
@@ -75,15 +76,20 @@ class ApiClient {
     }
 
     try {
-      const response = await fetch(url, {
-        ...options,
-        cache: 'no-store',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          ...options.headers,
-        },
-      });
+      const method = (options.method || 'GET').toUpperCase();
+      const schemaId = method === 'GET' ? datasetIdFromSchemaPath(endpoint) : null;
+      const headers = {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+        ...options.headers,
+      };
+      const response = schemaId
+        ? await fetchDatasetSchema(schemaId, { headers, cache: 'no-store' })
+        : await fetch(url, {
+            ...options,
+            cache: 'no-store',
+            headers,
+          });
 
       // Calculate response size
       const responseClone = response.clone();
@@ -195,7 +201,7 @@ class ApiClient {
       }
       const headers = getTensrApiHeaders({ 'Content-Type': 'application/json' });
 
-      const dsRes = await fetch(tensrApiUrl(`/datasets/${id}/schema`), {
+      const dsRes = await fetchDatasetSchema(id, {
         headers,
         cache: 'no-store',
       });

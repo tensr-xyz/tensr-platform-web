@@ -134,13 +134,17 @@ export function formatApiErrorMessage(error: unknown): string {
 
   if (raw.startsWith('API Error:')) {
     const withoutPrefix = raw.replace(/^API Error:\s*\d+\s*-?\s*/, '').trim();
-    if (withoutPrefix && !withoutPrefix.startsWith('{')) {
+    if (withoutPrefix && !withoutPrefix.includes('{') && !withoutPrefix.includes('}')) {
       return plainApiFailure(withoutPrefix);
     }
   }
 
   if (/^internal server error$/i.test(raw.trim())) {
     return 'The request failed. Try again.';
+  }
+
+  if (raw.includes('{') || raw.includes('}')) {
+    return 'That analysis could not run. Check the settings and try again.';
   }
 
   return raw || 'Something went wrong. Please try again.';
