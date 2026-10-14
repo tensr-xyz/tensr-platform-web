@@ -5,12 +5,14 @@ export type AnalysisReportChatCard = {
   tabId: string;
   title: string;
   summary: string;
+  runId?: string | null;
 };
 
 export function reportCardForOpenedTab(opts: {
   tabId: string | null | undefined;
   title?: string | null;
   summary?: string | null;
+  runId?: string | null;
 }): AnalysisReportChatCard | null {
   const tabId = opts.tabId?.trim();
   if (!tabId) return null;
@@ -20,6 +22,7 @@ export function reportCardForOpenedTab(opts: {
     summary:
       (opts.summary || 'Open the report tab for the full table.').trim() ||
       'Open the report tab for the full table.',
+    runId: opts.runId || null,
   };
 }
 

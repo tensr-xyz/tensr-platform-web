@@ -74,6 +74,14 @@ describe('custom table spec builder', () => {
     expect(canvas.banners[0].values).toEqual(['18-34', '35-54']);
   });
 
+  it('reorders a stub while a collaboration session is open', () => {
+    let canvas = defaultCanvas();
+    canvas = addStubQuestion(canvas, 'gender', ROWS);
+    canvas = moveCategory(canvas, 'stub', 0, 1, 0);
+    expect(canvas.stubs[0].values).toEqual(['Female', 'Male']);
+    expect(buildTableRequest(canvas).stubs[0].values).toEqual(['Female', 'Male']);
+  });
+
   it('reorder writes values onto the request', () => {
     let canvas = defaultCanvas();
     canvas = addStubQuestion(canvas, 'gender', ROWS);

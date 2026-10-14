@@ -159,7 +159,7 @@ function ChatMessageBody({
   thinkingLines?: string[];
   resultMarkdown?: string;
   reportCard?: AnalysisReportChatCard;
-  onOpenReport?: (tabId: string) => string | void;
+  onOpenReport?: (tabId: string, runId?: string | null) => string | void | Promise<string | void>;
   charts?: AnalysisReportChart[];
   isStreaming?: boolean;
   repairSuggestions?: string[];
@@ -247,7 +247,7 @@ function ChatMessageBody({
             <AnalysisReportSummaryCard
               title={reportCard.title}
               summary={reportCard.summary}
-              onOpen={() => onOpenReport(reportCard.tabId)}
+              onOpen={() => onOpenReport(reportCard.tabId, reportCard.runId)}
             />
           ) : null}
 
@@ -354,9 +354,27 @@ function datasetTemplateFromLocation(): string | null {
   return trimmed || null;
 }
 
-function openReportFromChat(tabId: string, datasetId: string | null): string | void {
+async function openReportFromChat(
+  tabId: string,
+  datasetId: string | null,
+  runId?: string | null
+): Promise<string | void> {
   const outcome = openReportTab(tabId);
   if (!outcome.ok) {
+    if (runId) {
+      const { openAnalysisRunById } = await import('@/lib/analysis-runs');
+      const opened = await openAnalysisRunById(runId);
+      if (opened) {
+        captureProductEvent('report_opened', { dataset_id: datasetId, source: 'run_id' });
+        return;
+      }
+      captureProductEvent('report_open_failed', {
+        reason: 'dataset_deleted',
+        dataset_id: datasetId,
+        run_id: runId,
+      });
+      return 'This dataset was deleted, so that report cannot be opened.';
+    }
     captureProductEvent('report_open_failed', { reason: 'missing_tab', dataset_id: datasetId });
     return 'This report is no longer open. Run the analysis again.';
   }
@@ -767,6 +785,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             tabId,
             title: report?.meta.title,
             summary: report?.summary,
+            runId: typeof entry.result.run_id === 'string' ? entry.result.run_id : undefined,
           });
 
           // ChatMessageBody renders content AND resultMarkdown. Setting both to the
@@ -1081,6 +1100,13 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         tabId: openedTabId,
         title: reportWithApproach?.meta.title,
         summary: reportWithApproach?.summary,
+        runId:
+          analysisResult &&
+          typeof analysisResult === 'object' &&
+          'run_id' in analysisResult &&
+          typeof (analysisResult as { run_id?: unknown }).run_id === 'string'
+            ? (analysisResult as { run_id: string }).run_id
+            : undefined,
       });
       logAgentChatRenderPayload({
         content: chatFields.content,
@@ -1863,10 +1889,11 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                                       thinkingLines={message.thinkingLines}
                                       resultMarkdown={message.resultMarkdown}
                                       reportCard={message.reportCard}
-                                      onOpenReport={tabId =>
+                                      onOpenReport={(tabId, runId) =>
                                         openReportFromChat(
                                           tabId,
-                                          workspaceDatasetId ?? getDatasetIdFromTab(activeTab)
+                                          workspaceDatasetId ?? getDatasetIdFromTab(activeTab),
+                                          runId
                                         )
                                       }
                                       charts={message.charts}

@@ -112,6 +112,7 @@ describe('reportCardForOpenedTab', () => {
       tabId: 'tab-1',
       title: 'Linear Regression',
       summary: 'Age and minutes predict points.',
+      runId: null,
     });
   });
 

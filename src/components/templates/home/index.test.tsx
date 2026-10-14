@@ -87,7 +87,6 @@ describe('HomeTemplate dataset actions', () => {
       row('ds-team', 'team.csv', 'organization', 'org-1'),
     ];
     Object.assign(navigator, { clipboard: { writeText: jest.fn().mockResolvedValue(undefined) } });
-    jest.spyOn(window, 'confirm').mockReturnValue(true);
   });
 
   it('says only the owner can open a shared personal dataset', async () => {
@@ -120,6 +119,7 @@ describe('HomeTemplate dataset actions', () => {
     );
     render(<HomeTemplate />);
     fireEvent.click(screen.getByRole('button', { name: 'Delete mine.csv' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete dataset' }));
 
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith({
@@ -136,9 +136,28 @@ describe('HomeTemplate dataset actions', () => {
     deleteDataset.mockResolvedValue({ deleted: true, dataset_id: 'ds-personal' });
     render(<HomeTemplate />);
     fireEvent.click(screen.getByRole('button', { name: 'Delete mine.csv' }));
+    expect(screen.getByText(/permanently removes the dataset/i)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete dataset' }));
 
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Dataset deleted' }))
     );
+  });
+
+  it('keeps the template box when there are no datasets', () => {
+    rows = [];
+    render(<HomeTemplate />);
+    expect(screen.getByText('Start a new analysis')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Upload dataset/ })).toBeTruthy();
+    expect(screen.queryByText('Recent activity')).toBeNull();
+  });
+
+  it('puts upload next to the title and hides the template box when datasets exist', () => {
+    render(<HomeTemplate />);
+    expect(screen.queryByText('Start a new analysis')).toBeNull();
+    expect(screen.queryByText('Recent activity')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Datasets' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /Upload dataset/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /New dataset/ })).toBeTruthy();
   });
 });

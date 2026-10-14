@@ -28,6 +28,8 @@ describe('net presets', () => {
     expect(offersTop2Box(['Male', 'Female'])).toBe(false);
     expect(offersTop2Box(['1', '2', '3', '4', '5'])).toBe(true);
     expect(offersTop2Box(['1', '2', '3', '4', '5'], 'ordinal')).toBe(true);
+    expect(offersTop2Box(['1.0', '2.0', '3.0', '4.0', '5.0'], 'categorical')).toBe(true);
+    expect(offersTop2Box(['Male', 'Female'], 'nominal')).toBe(false);
   });
 
   it('returns null when the preset cannot find categories', () => {

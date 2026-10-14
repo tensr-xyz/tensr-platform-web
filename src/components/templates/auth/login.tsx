@@ -45,12 +45,28 @@ const LoginTemplate = () => {
   const [codeNotice, setCodeNotice] = useState('');
   const [isVerifyingCode, setIsVerifyingCode] = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [isMicrosoftLoading, setIsMicrosoftLoading] = useState(false);
   const [isGitHubLoading, setIsGitHubLoading] = useState(false);
+  const [resendReady, setResendReady] = useState(false);
+  const [resendEpoch, setResendEpoch] = useState(0);
+  const otpSentAt = useRef<number | null>(null);
+  const resendCount = useRef(0);
   const [showPassword, setShowPassword] = useState(false);
   const hasHandledOAuthRef = useRef(false);
   // Session bootstrap (`/me`, Stytch init) shares `isLoading` — never use that for
   // submit labels, or the form looks like it is sending before the user acts.
-  const formBusy = isSendingCode || isVerifyingCode || isGoogleLoading || isGitHubLoading;
+  const formBusy =
+    isSendingCode || isVerifyingCode || isGoogleLoading || isMicrosoftLoading || isGitHubLoading;
+
+  useEffect(() => {
+    if (!isVerifying) {
+      setResendReady(false);
+      return;
+    }
+    setResendReady(false);
+    const timer = window.setTimeout(() => setResendReady(true), 30_000);
+    return () => window.clearTimeout(timer);
+  }, [isVerifying, resendEpoch]);
 
   // Persist invite token from email links (?invite=...) for accept after sign-in.
   useEffect(() => {
@@ -163,6 +179,24 @@ const LoginTemplate = () => {
     }
   };
 
+  const handleMicrosoftOAuth = async () => {
+    if (!stytch) return;
+    try {
+      setIsMicrosoftLoading(true);
+      setError('');
+      posthog.capture('oauth_login_started', { provider: 'microsoft' });
+      const redirectUrl = new URL('/login', window.location.origin).toString();
+      await stytch.oauth.microsoft.start({
+        login_redirect_url: redirectUrl,
+        signup_redirect_url: redirectUrl,
+      });
+    } catch (err) {
+      console.error('Microsoft OAuth start error:', err);
+      setError(stytchErrorMessage(err, 'Failed to continue with Microsoft'));
+      setIsMicrosoftLoading(false);
+    }
+  };
+
   // Handle email submission (first step)
   const handleEmailSubmit = async () => {
     const trimmedEmail = email.trim();
@@ -189,9 +223,9 @@ const LoginTemplate = () => {
         setMethodId(result.methodId);
         setIsVerifying(true);
         setError('');
-        setCodeNotice(
-          'Code sent. Check your inbox and spam — it can take up to a minute to arrive.'
-        );
+        otpSentAt.current = Date.now();
+        resendCount.current = 0;
+        setCodeNotice('Codes can take a minute. Check spam or quarantine.');
         posthog.capture('login_initiated', { method: 'email_otp' });
         captureProductEvent('otp_sent', { resend: false });
       } else {
@@ -231,6 +265,11 @@ const LoginTemplate = () => {
       const result = await verifyAuth(email, verificationCode, methodId);
 
       if (result.success) {
+        const sentAt = otpSentAt.current;
+        captureProductEvent('otp_verified', {
+          elapsed_ms: sentAt == null ? null : Date.now() - sentAt,
+          resend_count: resendCount.current,
+        });
         // Do not push to /dashboard here — unpaid users must go to /subscription.
         // The authenticated redirect useEffect above routes once profile/entitlements sync.
         // Leave the button in a verifying state until that redirect runs.
@@ -252,6 +291,8 @@ const LoginTemplate = () => {
     setError('');
     setCodeNotice('');
     setMethodId('');
+    otpSentAt.current = null;
+    resendCount.current = 0;
   };
 
   // Handle resend email
@@ -268,8 +309,10 @@ const LoginTemplate = () => {
       const result = await resendVerificationCode(email.trim().toLowerCase());
       if (result && result.methodId) {
         setMethodId(result.methodId);
-        setCodeNotice('Sent again. Check your inbox and spam — it can take up to a minute.');
-        captureProductEvent('otp_sent', { resend: true });
+        resendCount.current += 1;
+        setResendEpoch(epoch => epoch + 1);
+        setCodeNotice('Codes can take a minute. Check spam or quarantine.');
+        captureProductEvent('otp_sent', { resend: true, resend_count: resendCount.current });
       } else {
         setError('Could not resend the code. Please try again.');
         captureProductEvent('otp_send_failed', { resend: true, error_class: 'missing_method_id' });
@@ -371,6 +414,23 @@ const LoginTemplate = () => {
                     type="button"
                     variant="outline"
                     className="w-full h-10 justify-start gap-3"
+                    onClick={handleMicrosoftOAuth}
+                    disabled={formBusy}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden>
+                      <path fill="#F35325" d="M1 1h6.5v6.5H1z" />
+                      <path fill="#81BC06" d="M8.5 1H15v6.5H8.5z" />
+                      <path fill="#05A6F0" d="M1 8.5h6.5V15H1z" />
+                      <path fill="#FFBA08" d="M8.5 8.5H15V15H8.5z" />
+                    </svg>
+                    <span className="text-sm">
+                      {isMicrosoftLoading ? 'Continuing...' : 'Continue with Microsoft'}
+                    </span>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-10 justify-start gap-3"
                     onClick={handleGitHubOAuth}
                     disabled={formBusy}
                   >
@@ -450,6 +510,10 @@ const LoginTemplate = () => {
                       readOnly
                       className="h-10 bg-muted"
                     />
+                    <p className="text-xs text-muted-foreground">
+                      Code sent to <span className="font-medium text-foreground">{email}</span>. If
+                      that is not your address, go back and correct it.
+                    </p>
                   </div>
 
                   {codeNotice ? (
@@ -466,10 +530,14 @@ const LoginTemplate = () => {
                       <button
                         type="button"
                         onClick={handleResendEmail}
-                        className="text-xs text-muted-foreground hover:text-foreground underline"
-                        disabled={formBusy}
+                        className="text-xs text-muted-foreground hover:text-foreground underline disabled:no-underline disabled:opacity-50"
+                        disabled={formBusy || !resendReady}
                       >
-                        {isSendingCode ? 'Sending...' : 'Resend code'}
+                        {isSendingCode
+                          ? 'Sending...'
+                          : resendReady
+                            ? 'Resend code'
+                            : 'Resend code in 30s'}
                       </button>
                     </div>
                     <div className="relative">
