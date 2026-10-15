@@ -72,12 +72,13 @@ function MenuDialogLauncher({
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (activeTabId) {
-      recordTabSnapshot(activeTabId, name);
-    }
+    if (activeTabId) recordTabSnapshot(activeTabId, name);
+  }, [activeTabId, name]);
+
+  useEffect(() => {
     const id = window.requestAnimationFrame(() => triggerRef.current?.click());
     return () => window.cancelAnimationFrame(id);
-  }, [nonce, name, activeTabId]);
+  }, [nonce, name]);
 
   return (
     <div key={nonce} className="sr-only" aria-hidden>

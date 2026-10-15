@@ -14,6 +14,7 @@ import {
   type WizardFieldNoticesMap,
 } from '@/lib/analysis-setup-validation';
 import type { SchemaColumn } from '@/lib/analysis-report-types';
+import { Button } from '@/components/atoms/button';
 import { Checkbox } from '@/components/atoms/checkbox';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
@@ -853,7 +854,6 @@ export function BannerTableForm({
         onChange={chiA => setForm(f => ({ ...f, chiA }))}
         schema={schema}
         names={allNames}
-        expectedType="categorical"
         errors={errors[WIZARD_FIELD.chiA]}
       />
       <ColumnSelect
@@ -862,7 +862,6 @@ export function BannerTableForm({
         onChange={chiB => setForm(f => ({ ...f, chiB }))}
         schema={schema}
         names={allNames}
-        expectedType="categorical"
         notices={notices[WIZARD_FIELD.chiB]}
         errors={errors[WIZARD_FIELD.chiB]}
       />
@@ -897,15 +896,68 @@ export function BannerTableForm({
           onChange={event => setForm(f => ({ ...f, bannerFilter: event.target.value }))}
         />
       </label>
-      <label className="block space-y-1 text-[11px]">
-        <span className="text-muted-foreground">Nets</span>
-        <Input
-          inputSize="sm"
-          className="w-full text-[11px]"
-          value={form.bannerNets}
-          onChange={event => setForm(f => ({ ...f, bannerNets: event.target.value }))}
-        />
-      </label>
+      <div className="space-y-2">
+        <span className="text-[11px] text-muted-foreground">Nets</span>
+        {form.bannerNetRows.map((row, index) => (
+          <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+            <Input
+              inputSize="sm"
+              className="w-full text-[11px]"
+              aria-label="Net label"
+              value={row.label}
+              onChange={event =>
+                setForm(f => ({
+                  ...f,
+                  bannerNetRows: f.bannerNetRows.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, label: event.target.value } : item
+                  ),
+                }))
+              }
+            />
+            <Input
+              inputSize="sm"
+              className="w-full text-[11px]"
+              aria-label="Net codes"
+              placeholder="4, 5"
+              value={row.codes}
+              onChange={event =>
+                setForm(f => ({
+                  ...f,
+                  bannerNetRows: f.bannerNetRows.map((item, itemIndex) =>
+                    itemIndex === index ? { ...item, codes: event.target.value } : item
+                  ),
+                }))
+              }
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() =>
+                setForm(f => ({
+                  ...f,
+                  bannerNetRows: f.bannerNetRows.filter((_, itemIndex) => itemIndex !== index),
+                }))
+              }
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() =>
+            setForm(f => ({
+              ...f,
+              bannerNetRows: [...f.bannerNetRows, { label: '', codes: '' }],
+            }))
+          }
+        >
+          Add net
+        </Button>
+      </div>
       <label className="flex items-center gap-2 text-[11px]">
         <Checkbox
           checked={form.apaFormat}

@@ -1,6 +1,7 @@
 import { analyzeRunBody } from './output-preferences';
 import { getAnalysisRunBlockers } from './analysis-setup-validation';
 import {
+  bannerRerunPrefill,
   buildBodyFromForm,
   defaultFormFieldsFromSchema,
   formStateFromBody,
@@ -44,7 +45,7 @@ describe('banner table rerun form', () => {
     expect(form.bannerDecimals).toBe('3');
     expect(form.apaFormat).toBe(true);
     expect(form.includeCharts).toBe(false);
-    expect(form.bannerNets).toContain('NET Agree');
+    expect(form.bannerNetRows).toEqual([{ label: 'NET Agree', codes: '4, 5' }]);
     expect(form.bannerFilter).toContain('Female');
     expect(getAnalysisRunBlockers('banner_table', form, SCHEMA, 'ds-1')).not.toContain(
       'Complete the required fields above.'
@@ -124,6 +125,40 @@ describe('banner table rerun form', () => {
       column_mean: 1,
     });
     expect(form.bannerDecimals).toBe('1');
+  });
+
+  it('reads camelCase output flags and report preferences the body left out', () => {
+    const fromAgent = formStateFromBody(
+      'banner_table',
+      {
+        stub_column: 'Q5',
+        banner_column: 'Q3',
+        apaFormat: true,
+        includeCharts: true,
+      },
+      SCHEMA
+    );
+    expect(fromAgent.apaFormat).toBe(true);
+    expect(fromAgent.includeCharts).toBe(true);
+
+    const prefill = bannerRerunPrefill(
+      { stub_column: 'Q5', banner_column: 'Q3' },
+      { run_id: 'run-1' },
+      { apaFormat: true, includeCharts: true }
+    );
+    expect(prefill).not.toHaveProperty('run_id');
+    const form = formStateFromBody('banner_table', prefill, SCHEMA);
+    expect(form.apaFormat).toBe(true);
+    expect(form.includeCharts).toBe(true);
+
+    const explicit = bannerRerunPrefill(
+      { stub_column: 'Q5', banner_column: 'Q3', apa_format: false, include_charts: false },
+      null,
+      { apaFormat: true, includeCharts: true }
+    );
+    const kept = formStateFromBody('banner_table', explicit, SCHEMA);
+    expect(kept.apaFormat).toBe(false);
+    expect(kept.includeCharts).toBe(false);
   });
 
   it('keeps run disabled until the stub and banner are set', () => {

@@ -51,7 +51,7 @@ describe('custom table spec builder', () => {
     expect(body.decimals.column_proportion).toBe(1);
   });
 
-  it('restores an older spec without a letter cutoff at the previous 0.001 default', () => {
+  it('restores an older spec without a letter cutoff at the dialog default of 0.01', () => {
     const restored = canvasFromStoredSpec({
       statistics: ['count', 'column_proportion', 'total_proportion'],
       significance_alpha: 0.1,
@@ -63,7 +63,7 @@ describe('custom table spec builder', () => {
     expect(restored.significanceAlpha).toBe(0.1);
     expect(restored.letterLevels).toBe(1);
     expect(restored.letterCase).toBe('upper');
-    expect(restored.letterUpperAlpha).toBe(0.001);
+    expect(restored.letterUpperAlpha).toBe(0.01);
   });
 
   it('pins unique values when a question is dropped without an order', () => {
