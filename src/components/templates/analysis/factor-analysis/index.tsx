@@ -4,6 +4,7 @@ import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { RadioGroup, RadioGroupItem } from '@/components/atoms/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
+import { gridDataKeys } from '@/lib/sheet-grid-align';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useAuth } from '@/hooks/api/use-auth';
 import { apiClient } from '@/lib/api-client';
@@ -75,7 +76,7 @@ export const FactorAnalysis = ({ children }: FactorAnalysisProps) => {
   const variables = useMemo(() => {
     if (!activeDataTab?.data?.initialData?.[0]) return [];
 
-    const columnNames = Object.keys(activeDataTab.data?.initialData[0]).filter(key => key !== 'id');
+    const columnNames = gridDataKeys(activeDataTab.data?.initialData[0]);
 
     return columnNames.map(colName => {
       const sampleValues = activeDataTab

@@ -352,10 +352,9 @@ export default function Workspace({ resource }: WorkspaceProps) {
           : columns.map(column => column.id);
 
         const rowsForColumns = (previewRows: unknown[][], startRow = 0): Record<string, any>[] =>
-          gridRowsFromPreview(sourceIds, previewRows, columns, startRow).map(row => {
-            const { id: _rowId, ...rest } = row;
-            return rest;
-          });
+          gridRowsFromPreview(sourceIds, previewRows, columns, startRow).map(row => ({
+            ...row,
+          }));
 
         if (!data?.rows || !Array.isArray(data.rows)) {
           throw new Error('No tabular data returned for import');
@@ -389,10 +388,9 @@ export default function Workspace({ resource }: WorkspaceProps) {
             cleanValue: (value: any) => cleanValue(value, 'string'), // Create wrapper function
             // Pass the custom processing function for future data chunks
             processDataChunk: (columnData: unknown[][], startRow: number) =>
-              gridRowsForColumns(columnData, sourceIds, columns, startRow).map(row => {
-                const { id: _rowId, ...rest } = row;
-                return rest;
-              }),
+              gridRowsForColumns(columnData, sourceIds, columns, startRow).map(row => ({
+                ...row,
+              })),
           },
         };
 

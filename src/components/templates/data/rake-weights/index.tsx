@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useMemo, useState } from 'react';
+import { ReactNode, useMemo, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -48,6 +48,7 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [upperCap, setUpperCap] = useState('');
   const [targetsFilename, setTargetsFilename] = useState<string | undefined>();
+  const targetsFileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
   const columns = useMemo(() => {
@@ -146,33 +147,46 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
               stay at or below this value. Margins can move slightly so the cap holds.
             </p>
             <Label htmlFor="rake-targets-file">Targets file (CSV)</Label>
-            <Input
-              id="rake-targets-file"
-              type="file"
-              accept=".csv,text/csv"
-              className="text-xs"
-              onChange={event => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                if (!file.name.toLowerCase().endsWith('.csv')) {
-                  setError('Save an Excel targets file as CSV, or attach it in chat.');
-                  return;
-                }
-                void file.text().then(text => {
-                  try {
-                    setMargins(marginsFromTargetsCsv(text));
-                    setTargetsFilename(file.name);
-                    setError(null);
-                  } catch (parseError) {
-                    setError(
-                      parseError instanceof Error
-                        ? parseError.message
-                        : 'Could not read the targets file.'
-                    );
+            <div className="flex items-center gap-2 text-xs">
+              <Input
+                ref={targetsFileRef}
+                id="rake-targets-file"
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={event => {
+                  const file = event.target.files?.[0];
+                  if (!file) return;
+                  if (!file.name.toLowerCase().endsWith('.csv')) {
+                    setError('Save an Excel targets file as CSV, or attach it in chat.');
+                    return;
                   }
-                });
-              }}
-            />
+                  setTargetsFilename(file.name);
+                  void file.text().then(text => {
+                    try {
+                      setMargins(marginsFromTargetsCsv(text));
+                      setError(null);
+                    } catch (parseError) {
+                      setError(
+                        parseError instanceof Error
+                          ? parseError.message
+                          : 'Could not read the targets file.'
+                      );
+                    }
+                  });
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs"
+                onClick={() => targetsFileRef.current?.click()}
+              >
+                Choose file
+              </Button>
+              <span className="text-muted-foreground">{targetsFilename ?? 'No file chosen'}</span>
+            </div>
           </div>
           <div className="flex items-end gap-2">
             <div className="min-w-0 flex-1 space-y-1">
