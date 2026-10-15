@@ -130,12 +130,14 @@ export default function GeneralSettings() {
           <p className="text-sm text-red-600 mt-1">
             Unable to load user information. Please try logging in again.
           </p>
-          <button
+          <Button
+            type="button"
+            variant="link"
             onClick={handleRetry}
-            className="mt-3 text-sm text-red-600 underline hover:text-red-800"
+            className="mt-3 h-auto px-0 text-sm text-red-600 hover:text-red-800"
           >
             Try Again
-          </button>
+          </Button>
         </div>
       </div>
     );

@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { parseWincrossJob } from '@/lib/custom-tables/api';
 import {
   canvasFromConvertedTable,
@@ -51,7 +52,7 @@ export function WincrossImport({
         not a crash.
       </p>
       <div className="mt-2 flex items-center gap-2 text-xs">
-        <input
+        <Input
           ref={fileRef}
           type="file"
           accept=".job,text/plain"

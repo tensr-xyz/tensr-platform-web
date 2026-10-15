@@ -185,14 +185,15 @@ function BlockHeader({
           <p className="mt-1 text-xs leading-snug text-muted-foreground">{subtitle}</p>
         ) : null}
         {nButton ? (
-          <button
+          <Button
             type="button"
-            className="mt-1 text-xs leading-snug text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+            variant="link"
+            className="mt-1 h-auto px-0 text-xs font-normal leading-snug text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
             aria-label={nButton.ariaLabel}
             onClick={nButton.onClick}
           >
             {nButton.label}
-          </button>
+          </Button>
         ) : null}
       </div>
     </div>
@@ -381,15 +382,16 @@ function BlockRenderer({
             );
             if (clickable) {
               return (
-                <button
+                <Button
                   key={i}
                   type="button"
-                  className="rounded-md border border-border bg-muted/20 px-3 py-2 text-left text-[12px] underline decoration-border underline-offset-2 hover:decoration-foreground"
+                  variant="ghost"
+                  className="h-auto justify-start rounded-md border border-border bg-muted/20 px-3 py-2 text-left text-[12px] font-normal underline decoration-border underline-offset-2 hover:decoration-foreground"
                   aria-label={`Show rows for ${m.label}`}
                   onClick={() => onRevealConsumedRows()}
                 >
                   {inner}
-                </button>
+                </Button>
               );
             }
             return (
@@ -695,13 +697,14 @@ export function AnalysisReportView({
                   <ul className="space-y-1">
                     {related.map(link => (
                       <li key={`${link.relation}-${link.tabId || link.label}`}>
-                        <button
+                        <Button
                           type="button"
-                          className="text-left text-[13px] text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+                          variant="link"
+                          className="h-auto justify-start px-0 text-left text-[13px] font-normal text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
                           onClick={() => activateRelatedAnalysisTab(link)}
                         >
                           {relatedLinkDisplayLabel(link)}
-                        </button>
+                        </Button>
                       </li>
                     ))}
                   </ul>
@@ -790,11 +793,12 @@ export function AnalysisReportView({
                     const clickable = canReveal && isConsumedRowsMetric(m.label);
                     if (clickable) {
                       return (
-                        <button
+                        <Button
                           key={i}
                           type="button"
+                          variant="ghost"
                           className={cn(
-                            'bg-card px-4 py-3 text-left',
+                            'h-auto justify-start rounded-none bg-card px-4 py-3 text-left font-normal',
                             m.emphasis && 'ring-1 ring-inset ring-primary/15'
                           )}
                           aria-label={`Show rows for ${m.label}`}
@@ -815,7 +819,7 @@ export function AnalysisReportView({
                           {m.hint ? (
                             <p className="mt-1 text-[10px] text-muted-foreground">{m.hint}</p>
                           ) : null}
-                        </button>
+                        </Button>
                       );
                     }
                     return (
@@ -955,14 +959,15 @@ export function AnalysisReportView({
 
       {rawResult && Object.keys(rawResult).length > 0 ? (
         <div className="mt-6 print:hidden">
-          <button
+          <Button
             type="button"
-            className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+            variant="ghost"
+            className="h-auto gap-1 px-1 text-xs font-medium text-muted-foreground hover:text-foreground"
             onClick={() => setRawOpen(o => !o)}
           >
             {rawOpen ? <ChevronUp className="size-3.5" /> : <ChevronDown className="size-3.5" />}
             {rawOpen ? 'Hide' : 'Show'} technical details
-          </button>
+          </Button>
           {rawOpen ? (
             <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-border bg-muted/30 p-3 font-mono text-[10px] leading-relaxed text-muted-foreground">
               {JSON.stringify(rawResult, null, 2)}

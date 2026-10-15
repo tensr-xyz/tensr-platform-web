@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
+import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import {
   Accordion,
@@ -30,12 +31,13 @@ const AnalysisItemComponent = ({ item }: AnalysisItemComponentProps) => {
 
   return (
     <AnalysisComponent>
-      <button
+      <Button
         type="button"
-        className="w-full px-2 py-1 text-left text-sm rounded-sm hover:bg-accent cursor-pointer"
+        variant="ghost"
+        className="h-auto w-full justify-start rounded-sm px-2 py-1 text-left text-sm"
       >
         {item.name}
-      </button>
+      </Button>
     </AnalysisComponent>
   );
 };

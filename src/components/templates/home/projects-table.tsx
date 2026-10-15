@@ -379,19 +379,20 @@ export const ProjectsTable = ({
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap items-center gap-0.5 rounded-full border border-border bg-muted/40 p-0.5">
               {STATUS_FILTERS.map(f => (
-                <button
+                <Button
                   key={f}
                   type="button"
+                  variant="ghost"
                   onClick={() => setStatusFilter(f)}
                   className={cn(
                     'h-7 shrink-0 whitespace-nowrap rounded-full px-2.5 text-xs font-medium capitalize transition-colors',
                     statusFilter === f
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
+                      ? 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground'
+                      : 'text-muted-foreground hover:bg-transparent hover:text-foreground'
                   )}
                 >
                   {f}
-                </button>
+                </Button>
               ))}
             </div>
             <DropdownMenu>

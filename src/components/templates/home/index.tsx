@@ -401,11 +401,12 @@ const HomeTemplate: React.FC = () => {
                 {workbook && workbook.sheets.length > 1 ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {workbook.sheets.map(name => (
-                      <button
+                      <Button
                         key={name}
                         type="button"
+                        variant="outline"
                         disabled={uploadBusy}
-                        className="rounded-md border border-border px-2 py-1 text-xs hover:border-primary disabled:opacity-50"
+                        className="h-auto rounded-md px-2 py-1 text-xs hover:border-primary"
                         onClick={() => {
                           if (name === workbook.selected) {
                             clearWorkbook();
@@ -416,7 +417,7 @@ const HomeTemplate: React.FC = () => {
                         }}
                       >
                         {name === workbook.selected ? `${name} (opened)` : name}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 ) : null}
@@ -425,12 +426,13 @@ const HomeTemplate: React.FC = () => {
 
             <div className="relative grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-4">
               {TEMPLATES.map(t => (
-                <button
+                <Button
                   key={t.id}
                   type="button"
+                  variant="ghost"
                   onClick={() => handleStartNewAnalysis(t.id)}
                   aria-pressed={uploadPickerOpen && templateId === t.id}
-                  className={`rounded-xl border bg-background p-3.5 text-left transition-colors hover:border-primary ${
+                  className={`h-auto items-start justify-start whitespace-normal rounded-xl border bg-background p-3.5 text-left font-normal hover:border-primary hover:bg-background ${
                     uploadPickerOpen && templateId === t.id ? 'border-primary' : 'border-border'
                   }`}
                 >
@@ -442,7 +444,7 @@ const HomeTemplate: React.FC = () => {
                   <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                     {t.tag}
                   </p>
-                </button>
+                </Button>
               ))}
             </div>
 

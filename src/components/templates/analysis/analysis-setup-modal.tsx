@@ -28,6 +28,7 @@ import {
 } from '@/lib/output-preferences';
 import { AnalysisDialogShell } from '@/components/molecules/analysis-dialog';
 import { Checkbox } from '@/components/atoms/checkbox';
+import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { renderAnalysisForm } from '@/components/templates/analysis/analysis-setup-forms';
 
@@ -196,13 +197,14 @@ export function AnalysisSetupModal({
               <Label htmlFor="decimal-places" className="text-sm">
                 Decimal places
               </Label>
-              <input
+              <Input
                 id="decimal-places"
                 type="number"
                 min={0}
                 max={6}
                 step={1}
-                className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm"
+                inputSize="sm"
+                className="h-8 w-24 rounded-md px-2 text-sm"
                 value={outputPrefs.decimalPlaces}
                 onChange={event => {
                   const places = Number(event.target.value);

@@ -3,6 +3,7 @@ import { useNotebookWorkspaceStore } from '@/stores/notebook-workspace-store';
 import { cn } from '@/utils';
 import Editor from '@monaco-editor/react';
 import { Play, StopCircle as CircleStop, FileText } from 'lucide-react';
+import { Button } from '@/components/atoms/button';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useTheme } from '@/contexts/theme-context';
 import MarkdownViewer from '@/components/organisms/markdown-viewer';
@@ -240,8 +241,11 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
 
         <div className="absolute right-0 top-0 h-full w-8 flex items-center justify-center invisible group-hover:visible">
           {onTypeChange && (
-            <button
-              className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded mb-8"
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="mb-8 size-6 rounded p-1 hover:bg-gray-200 dark:hover:bg-gray-700"
               onClick={e => {
                 e.stopPropagation();
                 onTypeChange(cell.id, 'code');
@@ -249,7 +253,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
               title="Convert to code cell"
             >
               <Play className="w-3 h-3" />
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -347,10 +351,11 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
 
         {language === 'python' && onSaveDataset && cell.runId && !cell.error ? (
           <div className="py-1 pl-2">
-            <button
+            <Button
               type="button"
+              variant="link"
               data-testid="notebook-save-dataset"
-              className="text-xs font-medium text-primary hover:underline"
+              className="h-auto px-0 text-xs font-medium text-primary"
               disabled={isExecuting}
               onClick={event => {
                 event.stopPropagation();
@@ -358,15 +363,18 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
               }}
             >
               Save as new dataset
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>
 
       <div className="absolute right-0 top-0 h-full w-8 flex items-center justify-center invisible group-hover:visible">
         {onTypeChange && (
-          <button
-            className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded mb-8"
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="mb-8 size-6 rounded p-1 hover:bg-gray-200 dark:hover:bg-gray-700"
             onClick={e => {
               e.stopPropagation();
               onTypeChange(cell.id, 'markdown');
@@ -374,10 +382,13 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
             title="Convert to markdown cell"
           >
             <FileText className="w-3 h-3" />
-          </button>
+          </Button>
         )}
-        <button
-          className="p-1 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="size-6 rounded p-1 hover:bg-gray-200 dark:hover:bg-gray-700"
           onClick={e => {
             e.stopPropagation();
             onExecute(cell.id);
@@ -385,7 +396,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
           disabled={isExecuting}
         >
           {isExecuting ? <CircleStop className="w-3 h-3" /> : <Play className="w-3 h-3" />}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ import {
   type StoredAnalysisRun,
 } from '@/lib/analysis-runs';
 import { useSession, wsService } from '@/hooks/ui/use-session';
+import { Button } from '@/components/atoms/button';
 import { cn } from '@/utils';
 
 type Props = {
@@ -114,13 +115,14 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
           Saved analyses
         </p>
         {datasetId ? (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => void load()}
-            className="text-[10px] text-muted-foreground hover:text-foreground"
+            className="h-auto px-1 text-[10px] text-muted-foreground hover:text-foreground"
           >
             Refresh
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -135,13 +137,14 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
 
       <div className="flex flex-col gap-0.5">
         {runs.map(run => (
-          <button
+          <Button
             key={run.id}
             type="button"
+            variant="ghost"
             disabled={openingId === run.id}
             onClick={() => openRun(run.id, run)}
             className={cn(
-              'flex w-full flex-col gap-0.5 rounded-sm px-2 py-1.5 text-left text-xs transition-colors',
+              'h-auto w-full flex-col items-start gap-0.5 rounded-sm px-2 py-1.5 text-left text-xs font-normal',
               'hover:bg-muted/50 text-foreground',
               openingId === run.id && 'opacity-60'
             )}
@@ -153,22 +156,23 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
             <span className="font-mono text-[10px] text-muted-foreground">
               {formatRunTime(run.created_at)}
             </span>
-          </button>
+          </Button>
         ))}
 
         {localOnly.map(entry => (
-          <button
+          <Button
             key={entry.id}
             type="button"
+            variant="ghost"
             disabled={openingId === entry.runId}
             onClick={() => entry.runId && openRun(entry.runId)}
-            className="flex w-full flex-col gap-0.5 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-muted/50"
+            className="h-auto w-full flex-col items-start gap-0.5 rounded-sm px-2 py-1.5 text-left text-xs font-normal hover:bg-muted/50"
           >
             <span className="truncate font-medium">{entry.analysisType.replace(/_/g, ' ')}</span>
             {entry.subtitle ? (
               <span className="truncate text-[10px] text-muted-foreground">{entry.subtitle}</span>
             ) : null}
-          </button>
+          </Button>
         ))}
 
         {!loading && runs.length === 0 && localOnly.length === 0 ? (

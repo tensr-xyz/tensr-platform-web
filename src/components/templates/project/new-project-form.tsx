@@ -2,9 +2,10 @@
 
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, Upload } from 'lucide-react';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { useDatasetUpload } from '@/hooks/api/use-dataset-upload';
 import { ACCEPTED_UPLOAD_ACCEPT, ACCEPTED_UPLOAD_HELP } from '@/lib/accepted-upload-types';
 import posthog from 'posthog-js';
@@ -13,6 +14,7 @@ import posthog from 'posthog-js';
 export default function NewProjectForm() {
   const router = useRouter();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const openDataset = useCallback(
     (datasetId: string, fileName: string) => {
@@ -47,19 +49,25 @@ export default function NewProjectForm() {
           <label htmlFor="new-dataset-file" className="text-sm font-medium">
             Data file
           </label>
-          <input
+          <Input
+            ref={fileRef}
             id="new-dataset-file"
             type="file"
             accept={ACCEPTED_UPLOAD_ACCEPT}
             onChange={event => setSelectedFile(event.target.files?.[0] ?? null)}
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            className="hidden"
           />
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="outline" onClick={() => fileRef.current?.click()}>
+              Choose file
+            </Button>
+            <span className="text-sm text-muted-foreground">
+              {selectedFile
+                ? `${selectedFile.name} (${(selectedFile.size / 1024 / 1024).toFixed(2)} MB)`
+                : 'No file chosen'}
+            </span>
+          </div>
           <p className="text-sm text-muted-foreground">{ACCEPTED_UPLOAD_HELP}</p>
-          {selectedFile && (
-            <p className="text-sm text-gray-600">
-              Selected: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-            </p>
-          )}
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
 
