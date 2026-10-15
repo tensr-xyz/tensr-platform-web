@@ -63,6 +63,13 @@ export function DataQualityReportDialog({ children }: { children: ReactNode }) {
             <p>
               <strong>Score:</strong> {report.overall_score}/100 — {report.summary}
             </p>
+            {report.script_findings?.length ? (
+              <ul className="list-disc pl-4 text-xs">
+                {report.script_findings.map((finding, i) => (
+                  <li key={i}>{finding.message}</li>
+                ))}
+              </ul>
+            ) : null}
             {report.columns.map(col => (
               <div key={col.name} className="rounded-md border p-2">
                 <p className="font-medium">{col.name}</p>

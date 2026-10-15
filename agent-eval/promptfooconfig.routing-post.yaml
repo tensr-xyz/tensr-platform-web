@@ -103,3 +103,5 @@ tests:
     assert: [{ type: equals, value: "tool_or_clarify" }]
   - vars: { prompt: "What do the open-ended comments say about price?", mode: agent }
     assert: [{ type: equals, value: "tool_or_clarify" }]
+  - vars: { prompt: "Stack the FR and EN markets, find the broken script, and use the right bases.", mode: agent }
+    assert: [{ type: equals, value: "tool_or_clarify" }]

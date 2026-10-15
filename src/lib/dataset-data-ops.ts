@@ -301,6 +301,13 @@ export type DataQualityReport = {
     /** Human-readable explanation of `suggested_cast`, for display only. */
     type_suggestion?: string | null;
   }>;
+  script_findings?: Array<{
+    market?: string;
+    variable?: string;
+    count?: number;
+    kind?: string;
+    message: string;
+  }>;
 };
 
 export async function fetchDataQualityReport(datasetId: string, token?: string | null) {
