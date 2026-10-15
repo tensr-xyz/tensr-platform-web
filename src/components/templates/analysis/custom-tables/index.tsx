@@ -12,6 +12,8 @@ import {
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { Button } from '@/components/atoms/button';
+import { Checkbox } from '@/components/atoms/checkbox';
+import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import {
   Select,
@@ -577,44 +579,47 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           </div>
           <div className="grid gap-3 border-t border-border pt-3 text-xs sm:grid-cols-2">
             <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={canvas.showCount}
-                onChange={e => setCanvas(c => ({ ...c, showCount: e.target.checked }))}
+                onCheckedChange={checked => setCanvas(c => ({ ...c, showCount: checked === true }))}
               />
               Counts
             </label>
             <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={canvas.columnPercent}
-                onChange={e => setCanvas(c => ({ ...c, columnPercent: e.target.checked }))}
+                onCheckedChange={checked =>
+                  setCanvas(c => ({ ...c, columnPercent: checked === true }))
+                }
               />
               Column %
             </label>
             <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={canvas.rowPercent}
-                onChange={e => setCanvas(c => ({ ...c, rowPercent: e.target.checked }))}
+                onCheckedChange={checked =>
+                  setCanvas(c => ({ ...c, rowPercent: checked === true }))
+                }
               />
               Row %
             </label>
             <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={canvas.totalPercent}
-                onChange={e => setCanvas(c => ({ ...c, totalPercent: e.target.checked }))}
+                onCheckedChange={checked =>
+                  setCanvas(c => ({ ...c, totalPercent: checked === true }))
+                }
               />
               Total %
             </label>
             <label className="flex items-center gap-2">
               Count decimals
-              <input
+              <Input
                 type="number"
                 min={0}
                 max={6}
-                className="h-7 w-14 rounded-md border border-input bg-background px-2"
+                inputSize="sm"
+                className="h-7 w-14"
                 value={canvas.decimals.count}
                 onChange={e =>
                   setCanvas(c => ({
@@ -629,11 +634,12 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
             </label>
             <label className="flex items-center gap-2">
               Percent decimals
-              <input
+              <Input
                 type="number"
                 min={0}
                 max={6}
-                className="h-7 w-14 rounded-md border border-input bg-background px-2"
+                inputSize="sm"
+                className="h-7 w-14"
                 value={canvas.decimals.column_proportion}
                 onChange={e => {
                   const places = Math.max(0, Math.min(6, Number(e.target.value) || 0));
@@ -651,11 +657,10 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
             </label>
             <label className="flex items-center gap-2">
               Significance
-              <select
-                className="h-7 rounded-md border border-input bg-background px-2"
+              <Select
                 value={String(canvas.significanceAlpha)}
-                onChange={e => {
-                  const alpha = Number(e.target.value) as 0.1 | 0.05 | 0.01;
+                onValueChange={value => {
+                  const alpha = Number(value) as 0.1 | 0.05 | 0.01;
                   setCanvas(c => ({
                     ...c,
                     significanceAlpha: alpha,
@@ -664,19 +669,23 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                   }));
                 }}
               >
-                <option value="0.1">90%</option>
-                <option value="0.05">95%</option>
-                <option value="0.01">99%</option>
-              </select>
+                <SelectTrigger className="h-7 w-[5.5rem] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0.1">90%</SelectItem>
+                  <SelectItem value="0.05">95%</SelectItem>
+                  <SelectItem value="0.01">99%</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             <label className="flex items-center gap-2">
               Letter levels
-              <select
-                className="h-7 rounded-md border border-input bg-background px-2"
+              <Select
                 value={String(canvas.letterLevels)}
-                onChange={e =>
+                onValueChange={value =>
                   setCanvas(c => {
-                    const letterLevels = e.target.value === '1' ? 1 : 2;
+                    const letterLevels = value === '1' ? 1 : 2;
                     return {
                       ...c,
                       letterLevels,
@@ -688,26 +697,35 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                   })
                 }
               >
-                <option value="2">Two (upper and lower)</option>
-                <option value="1">One</option>
-              </select>
+                <SelectTrigger className="h-7 w-[11rem] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2">Two (upper and lower)</SelectItem>
+                  <SelectItem value="1">One</SelectItem>
+                </SelectContent>
+              </Select>
             </label>
             {canvas.letterLevels === 1 ? (
               <label className="flex items-center gap-2">
                 Letter case
-                <select
-                  className="h-7 rounded-md border border-input bg-background px-2"
+                <Select
                   value={canvas.letterCase}
-                  onChange={e =>
+                  onValueChange={value =>
                     setCanvas(c => ({
                       ...c,
-                      letterCase: e.target.value === 'upper' ? 'upper' : 'lower',
+                      letterCase: value === 'upper' ? 'upper' : 'lower',
                     }))
                   }
                 >
-                  <option value="lower">Lower case</option>
-                  <option value="upper">Upper case</option>
-                </select>
+                  <SelectTrigger className="h-7 w-[8rem] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="lower">Lower case</SelectItem>
+                    <SelectItem value="upper">Upper case</SelectItem>
+                  </SelectContent>
+                </Select>
               </label>
             ) : (
               <p className="text-[11px] text-muted-foreground">
@@ -721,21 +739,21 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               </p>
             )}
             <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={canvas.nestBanners}
-                onChange={e => setCanvas(c => ({ ...c, nestBanners: e.target.checked }))}
+                onCheckedChange={checked =>
+                  setCanvas(c => ({ ...c, nestBanners: checked === true }))
+                }
               />
               Nest banners (uncheck for side by side / overlapping)
             </label>
             <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={canvas.significanceDisplay === 'column_letters'}
-                onChange={e =>
+                onCheckedChange={checked =>
                   setCanvas(c => ({
                     ...c,
-                    significanceDisplay: e.target.checked ? 'column_letters' : 'cell_comparisons',
+                    significanceDisplay: checked === true ? 'column_letters' : 'cell_comparisons',
                   }))
                 }
               />
@@ -743,11 +761,12 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
             </label>
             <label className="flex items-center gap-2">
               Low base below
-              <input
+              <Input
                 type="number"
                 min={1}
                 max={500}
-                className="h-7 w-16 rounded-md border border-input bg-background px-2"
+                inputSize="sm"
+                className="h-7 w-16"
                 value={canvas.lowBaseThreshold}
                 onChange={e =>
                   setCanvas(c => ({
@@ -758,10 +777,11 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               />
             </label>
             <label className="flex items-center gap-2">
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={canvas.suppressLowBase}
-                onChange={e => setCanvas(c => ({ ...c, suppressLowBase: e.target.checked }))}
+                onCheckedChange={checked =>
+                  setCanvas(c => ({ ...c, suppressLowBase: checked === true }))
+                }
               />
               Suppress low bases (hide the number)
             </label>
@@ -868,8 +888,9 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               Save the Banner questions as a reusable banner_id. Later tables can reuse it.
             </p>
             <div className="mt-2 flex flex-wrap items-center gap-2">
-              <input
-                className="h-7 min-w-[8rem] rounded-md border border-input bg-background px-2 text-xs"
+              <Input
+                inputSize="sm"
+                className="h-7 min-w-[8rem] text-xs"
                 placeholder="banner id"
                 value={bannerIdDraft || canvas.bannerId || ''}
                 onChange={e => {
@@ -918,8 +939,9 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               this set on another wave.
             </p>
             <div className="mt-2 flex gap-2">
-              <input
-                className="h-7 flex-1 rounded-md border border-input bg-background px-2 text-xs"
+              <Input
+                inputSize="sm"
+                className="h-7 flex-1 text-xs"
                 placeholder="Book name"
                 value={bookName}
                 onChange={e => setBookName(e.target.value)}
@@ -993,9 +1015,10 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                       <td className="px-2 py-1 font-medium">{row.label}</td>
                       {row.cells.map((cell, i) => (
                         <td key={`${row.label}-${i}`} className="px-2 py-1">
-                          <button
+                          <Button
                             type="button"
-                            className="w-full text-left"
+                            variant="ghost"
+                            className="h-auto w-full justify-start px-1 text-left font-normal"
                             onClick={() => void clickCell(cell, row.label)}
                           >
                             <div>
@@ -1018,7 +1041,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                               ) : null}
                             </div>
                             <div className="text-[10px] text-muted-foreground">{cell.bases}</div>
-                          </button>
+                          </Button>
                         </td>
                       ))}
                     </tr>
@@ -1218,9 +1241,11 @@ function QuestionCard({
         {values.map((value, i) => (
           <li key={value} className="flex items-center gap-1 text-[11px]">
             <span className="flex-1">{value}</span>
-            <button
+            <Button
               type="button"
-              className="relative z-[80] px-1 text-muted-foreground"
+              variant="ghost"
+              size="sm"
+              className="relative z-[80] h-6 px-1 text-muted-foreground"
               aria-label={`Move ${value} up`}
               onClick={event => {
                 event.preventDefault();
@@ -1229,10 +1254,12 @@ function QuestionCard({
               }}
             >
               ↑
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="relative z-[80] px-1 text-muted-foreground"
+              variant="ghost"
+              size="sm"
+              className="relative z-[80] h-6 px-1 text-muted-foreground"
               aria-label={`Move ${value} down`}
               onClick={event => {
                 event.preventDefault();
@@ -1241,7 +1268,7 @@ function QuestionCard({
               }}
             >
               ↓
-            </button>
+            </Button>
           </li>
         ))}
       </ol>

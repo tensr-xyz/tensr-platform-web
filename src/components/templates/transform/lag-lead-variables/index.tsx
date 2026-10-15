@@ -9,6 +9,7 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Checkbox } from '@/components/atoms/checkbox';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { useRouter } from 'next/navigation';
@@ -95,11 +96,7 @@ function LagLeadDialog({
         <div className="max-h-48 space-y-1 overflow-y-auto rounded-md border p-2">
           {columnNames.map(col => (
             <label key={col} className="flex cursor-pointer items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={selected.includes(col)}
-                onChange={() => toggle(col)}
-              />
+              <Checkbox checked={selected.includes(col)} onCheckedChange={() => toggle(col)} />
               {col}
             </label>
           ))}

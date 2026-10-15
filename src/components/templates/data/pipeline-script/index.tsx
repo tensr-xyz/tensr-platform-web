@@ -11,6 +11,7 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Textarea } from '@/components/atoms/text-area';
 import { getAccessToken } from '@/utils/auth';
 import { exportPipelineScript } from '@/lib/dataset-data-ops';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
@@ -74,9 +75,9 @@ export function PipelineScriptDialog({ children }: { children: ReactNode }) {
             One script for this dataset&apos;s pipeline: import (including .sav via haven), joins,
             stacks, raking, and the analyses already recorded.
           </p>
-          <textarea
+          <Textarea
             readOnly
-            className="h-48 w-full rounded border bg-muted p-2 font-mono text-xs"
+            className="h-48 w-full bg-muted font-mono text-xs"
             value={busy ? 'Building…' : script}
           />
           {error ? (
