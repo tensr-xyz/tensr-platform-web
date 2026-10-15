@@ -21,7 +21,11 @@ function isWeightedOp(producing: string): boolean {
   return p === 'rake' || p.startsWith('weight:');
 }
 
-export function weightPickerOptions(versions: LineageVersion[], currentId: string): WeightOption[] {
+export function weightPickerOptions(
+  versions: LineageVersion[],
+  currentId: string,
+  activeWeightColumn?: string | null,
+): WeightOption[] {
   const origin =
     versions.find(v => !v.parent_dataset_id) ||
     versions.find(v => v.producing_operation === 'upload') ||
@@ -44,7 +48,17 @@ export function weightPickerOptions(versions: LineageVersion[], currentId: strin
     });
   }
   const current = versions.find(v => v.dataset_id === currentId);
-  if (current && isWeightedOp(current.producing_operation)) {
+  const named = (activeWeightColumn || '').trim();
+  if (named) {
+    options.push({
+      optionId: `active:${named}`,
+      datasetId: currentId,
+      kind: 'this_file',
+      label: named,
+      weight: 'active',
+    });
+  }
+  if (current && isWeightedOp(current.producing_operation) && !named) {
     options.push({
       optionId: `weight:${current.dataset_id}`,
       datasetId: current.dataset_id,

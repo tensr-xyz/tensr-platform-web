@@ -133,6 +133,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [activeVariable, setActiveVariable] = useState(0);
   const [loopProposals, setLoopProposals] = useState<LoopDefinition[]>([]);
   const [confirmedLoops, setConfirmedLoops] = useState<LoopDefinition[]>([]);
+  const [importedWeightColumn, setImportedWeightColumn] = useState<string | null>(null);
 
   const columns = useMemo(() => {
     if (!sheetTab?.data?.initialColumns) return variableSets;
@@ -206,7 +207,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     void listDatasetVersions(datasetId, token)
       .then(res => {
         if (cancelled) return;
-        const opts = weightPickerOptions(res.versions || [], datasetId);
+        const opts = weightPickerOptions(res.versions || [], datasetId, importedWeightColumn);
         setWeightOptions(opts);
         const current =
           opts.find(o => o.kind === 'this_file') ||
@@ -222,7 +223,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [open, datasetId, token]);
+  }, [open, datasetId, token, importedWeightColumn]);
 
   useEffect(() => {
     if (!open || !datasetId) return;
@@ -232,6 +233,9 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setLoopProposals(res.loop_proposals || []);
         setConfirmedLoops(res.loops || []);
+        const named = (res.active_weight_column || '').trim();
+        setImportedWeightColumn(named || null);
+        if (named) setActiveWeightColumn(named);
       })
       .catch(() => {
         if (cancelled) return;

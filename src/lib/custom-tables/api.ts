@@ -147,7 +147,11 @@ export function drillTableCell(
 }
 
 export function fetchLoopMetadata(datasetId: string, token?: string | null) {
-  return authedJson<{ loop_proposals?: LoopDefinition[]; loops?: LoopDefinition[] }>(
+  return authedJson<{
+    loop_proposals?: LoopDefinition[];
+    loops?: LoopDefinition[];
+    active_weight_column?: string | null;
+  }>(
     `/datasets/${datasetId}/metadata`,
     { method: 'GET' },
     token
