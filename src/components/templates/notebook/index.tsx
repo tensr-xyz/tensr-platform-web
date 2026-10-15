@@ -150,7 +150,7 @@ interface NotebookCellProps {
   cell: Cell;
   language: 'python' | 'r';
   onContentChange: (cellId: number, content: string) => void;
-  onExecute: (cellId: number) => void;
+  onExecute: (cellId: number, source?: string) => void;
   isExecuting: boolean;
   isSelected: boolean;
   onSelect: (cellId: number) => void;
@@ -171,6 +171,8 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
 }) => {
   const { theme } = useTheme();
   const [isEditing, setIsEditing] = useState(cell.type === 'markdown' && !cell.content.trim());
+  const onExecuteRef = useRef(onExecute);
+  onExecuteRef.current = onExecute;
 
   const isDarkMode = theme === 'dark';
 
@@ -224,7 +226,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
                     if (!enter || !(event.shiftKey || event.metaKey || event.ctrlKey)) return;
                     event.preventDefault();
                     event.stopPropagation();
-                    onExecute(cell.id);
+                    onExecuteRef.current(cell.id, editor.getValue());
                   });
                 }}
               />
@@ -311,7 +313,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
                 if (!enter || !(event.shiftKey || event.metaKey || event.ctrlKey)) return;
                 event.preventDefault();
                 event.stopPropagation();
-                onExecute(cell.id);
+                onExecuteRef.current(cell.id, editor.getValue());
               });
             }}
           />
@@ -573,11 +575,12 @@ names(df) <- make.names(names(df))`;
     }
   };
 
-  const executeCell = async (cellId: number) => {
+  const executeCell = async (cellId: number, source?: string) => {
     setIsExecuting(true);
     try {
       const cell = cells.find(c => c.id === cellId);
       if (!cell) return;
+      const content = typeof source === 'string' ? source : cell.content;
 
       // Skip execution for markdown cells
       if (cell.type === 'markdown') {
@@ -585,7 +588,7 @@ names(df) <- make.names(names(df))`;
         return;
       }
 
-      if (!cellHasRunnableCode(cell.content)) {
+      if (!cellHasRunnableCode(content)) {
         setCells(prevCells =>
           prevCells.map(c =>
             c.id === cellId
@@ -604,7 +607,7 @@ names(df) <- make.names(names(df))`;
       }
 
       const setupCode = generateSetupCode(language);
-      const fullCode = setupCode ? `${setupCode}\n${cell.content}` : cell.content;
+      const fullCode = setupCode ? `${setupCode}\n${content}` : content;
 
       // Use real API call
       const result = await executeCode(fullCode, language);

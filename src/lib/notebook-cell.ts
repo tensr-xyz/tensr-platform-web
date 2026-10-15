@@ -13,11 +13,13 @@ export function presentCellError(
   suggestion?: string | null
 ): { error: string | null; errorDetail: string | null } {
   if (!error) return { error: null, errorDetail: null };
-  const lines = error
+  const lines = [error, traceback || '']
+    .join('\n')
     .split('\n')
     .map(line => line.trim())
-    .filter(Boolean);
-  let summary = lines[lines.length - 1] || 'That cell failed.';
+    .filter(line => line.length > 0 && !/^execution halted$/i.test(line));
+  const errorLine = [...lines].reverse().find(line => /^error\b/i.test(line));
+  let summary = errorLine || lines[lines.length - 1] || 'That cell failed.';
   if (suggestion && !summary.toLowerCase().includes('did you mean')) {
     summary = `${summary} ${suggestion}`;
   }

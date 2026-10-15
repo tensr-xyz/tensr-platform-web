@@ -1111,7 +1111,22 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                 },
                 token
               )
-                .then(() => setError(null))
+                .then(result => {
+                  const report = result.replay_report;
+                  const table =
+                    report && typeof report.table === 'object' && report.table
+                      ? (report.table as BannerBook)
+                      : null;
+                  if (!table?.rows?.length) {
+                    setBook(null);
+                    setError('The table ran, but there is nothing to show.');
+                    return;
+                  }
+                  setBook(table);
+                  setActiveSpecId(table.spec?.id ? String(table.spec.id) : null);
+                  setCellClick(null);
+                  setError(null);
+                })
                 .catch(err =>
                   setError(err instanceof Error ? err.message : 'Could not run these tables')
                 )
