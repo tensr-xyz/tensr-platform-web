@@ -1,0 +1,122 @@
+import React from 'react';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { CustomTablesDialog } from './index';
+import { useTabsStore, ViewType } from '@/stores/tabs-store';
+import { replayOperations } from '@/lib/dataset-data-ops';
+
+jest.mock('@/utils/auth', () => ({ getAccessToken: () => 'token' }));
+jest.mock('@/lib/dataset-data-ops', () => ({
+  datasetRequest: jest.fn(async () => ({ sets: [] })),
+  replayOperations: jest.fn(),
+  setActiveWeight: jest.fn(),
+}));
+jest.mock('@/lib/custom-tables/api', () => ({
+  previewCustomTable: jest.fn(),
+  runCustomTable: jest.fn(),
+  listSavedTables: jest.fn(async () => ({ specs: [] })),
+  listNamedBanners: jest.fn(async () => ({ banners: [] })),
+  listDatasetVersions: jest.fn(async () => ({ origin_dataset_id: 'ds', versions: [] })),
+  getSavedTable: jest.fn(),
+  downloadTableExport: jest.fn(),
+  drillTableCell: jest.fn(),
+  saveNamedBanner: jest.fn(),
+}));
+jest.mock('@/components/molecules/dialog', () => {
+  const Pass = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
+  return {
+    Dialog: Pass,
+    DialogContent: Pass,
+    DialogFooter: Pass,
+    DialogHeader: Pass,
+    DialogTitle: Pass,
+    DialogTrigger: Pass,
+  };
+});
+
+const replayMock = replayOperations as jest.Mock;
+
+const DATASET_ID = 'cf509f57-0000-4000-8000-000000000001';
+
+describe('Custom Tables dialog', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useTabsStore.setState({
+      tabs: [
+        {
+          id: 'sheet-1',
+          name: 'Raw Data 300426.xlsx',
+          type: ViewType.SPREADSHEET,
+          isDirty: false,
+          data: {
+            datasetId: DATASET_ID,
+            initialColumns: [
+              { id: 'Q1_Satisfaction', header: 'Q1_Satisfaction' },
+              { id: 'Group', header: 'Group' },
+            ],
+            initialData: [{ Q1_Satisfaction: 1, Group: 'Control' }],
+          },
+        },
+      ],
+      activeTabId: 'sheet-1',
+    } as never);
+  });
+
+  it('shows the table cells after Run these tables on this file', async () => {
+    replayMock.mockResolvedValue({
+      dataset_id: DATASET_ID,
+      derived_dataset_id: null,
+      replay_report: {
+        applied: ['import', 'table_spec'],
+        table: {
+          banner_columns: [
+            { id: 'total', label: 'Total' },
+            { id: 'Group=Control', label: 'Control' },
+          ],
+          rows: [
+            {
+              id: 'q:1',
+              label: '1',
+              kind: 'value',
+              cells: [
+                {
+                  banner_id: 'total',
+                  stub_row_id: 'q:1',
+                  count: 38,
+                  percent: 14.7,
+                  unweighted_n: 38,
+                  weighted_n: 38,
+                },
+                {
+                  banner_id: 'Group=Control',
+                  stub_row_id: 'q:1',
+                  count: 17,
+                  percent: 21.5,
+                  unweighted_n: 17,
+                  weighted_n: 17,
+                },
+              ],
+            },
+          ],
+          spec: { id: 'spec-1', statistics: ['column_proportion'] },
+        },
+      },
+    });
+
+    render(
+      <CustomTablesDialog>
+        <span>Open</span>
+      </CustomTablesDialog>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Run these tables on this file' }));
+    expect(await screen.findByText('1')).toBeInTheDocument();
+    expect(screen.getByText(/n=38/)).toBeInTheDocument();
+    expect(screen.getByText(/n=17/)).toBeInTheDocument();
+    expect(replayMock).toHaveBeenCalledWith(
+      DATASET_ID,
+      expect.objectContaining({
+        operation_list: expect.objectContaining({ schema_version: 1 }),
+      }),
+      'token'
+    );
+  });
+});

@@ -16,18 +16,36 @@ jest.mock('@monaco-editor/react', () => ({
   default: ({
     value,
     onChange,
+    onMount,
     defaultLanguage,
   }: {
     value: string;
     onChange: (v: string) => void;
+    onMount?: (editor: unknown, monaco: unknown) => void;
     defaultLanguage: string;
-  }) => (
-    <textarea
-      data-testid={`monaco-editor-${defaultLanguage}`}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-    />
-  ),
+  }) => {
+    if (onMount) {
+      onMount(
+        {
+          getValue: () =>
+            (globalThis as { __notebookEditorValue?: string | null }).__notebookEditorValue ??
+            value,
+          onKeyDown: (cb: (event: unknown) => void) => {
+            const holder = globalThis as { __notebookKeys?: Array<(event: unknown) => void> };
+            holder.__notebookKeys = [cb];
+          },
+        },
+        { KeyCode: { Enter: 3 } }
+      );
+    }
+    return (
+      <textarea
+        data-testid={`monaco-editor-${defaultLanguage}`}
+        value={value}
+        onChange={e => onChange(e.target.value)}
+      />
+    );
+  },
 }));
 
 jest.mock('@/contexts/theme-context', () => ({
@@ -108,6 +126,14 @@ describe('Notebook component', () => {
   beforeEach(() => {
     resetStores();
     jest.clearAllMocks();
+    const holder = globalThis as {
+      __notebookKeys?: Array<(event: unknown) => void>;
+      __notebookMounted?: boolean;
+      __notebookEditorValue?: string | null;
+    };
+    holder.__notebookKeys = [];
+    holder.__notebookMounted = false;
+    holder.__notebookEditorValue = null;
   });
 
   // -------------------------------------------------------------------------
@@ -675,6 +701,34 @@ describe('Notebook component', () => {
         );
       });
     });
+  });
+
+  it('Shift+Enter runs the current editor value after an edit', async () => {
+    (mockApiClient.execute.python as jest.Mock).mockResolvedValue({
+      stdout: '99',
+      output: null,
+      error: null,
+    });
+    render(<Notebook />);
+    (globalThis as { __notebookEditorValue?: string }).__notebookEditorValue = 'print(99)';
+    await act(async () => {
+      const handlers =
+        (globalThis as { __notebookKeys?: Array<(event: unknown) => void> }).__notebookKeys || [];
+      for (const handler of handlers) {
+        handler({
+          keyCode: 3,
+          shiftKey: true,
+          metaKey: false,
+          ctrlKey: false,
+          preventDefault() {},
+          stopPropagation() {},
+        });
+      }
+    });
+    await waitFor(() => expect(mockApiClient.execute.python).toHaveBeenCalled());
+    const code = (mockApiClient.execute.python as jest.Mock).mock.calls[0][0].code as string;
+    expect(code).toContain('print(99)');
+    expect(code).not.toContain('print(df.head())');
   });
 
   // -------------------------------------------------------------------------
