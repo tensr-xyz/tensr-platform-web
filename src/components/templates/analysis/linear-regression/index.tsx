@@ -267,7 +267,7 @@ export const LinearRegression = ({ children }: LinearRegressionProps) => {
                           <Button
                             type="button"
                             variant="ghost"
-                            size="icon"
+                            size="compact"
                             onClick={() => handleIndependentVariableSelect(variable)}
                             className="size-6 text-red-500 hover:text-red-700"
                             aria-label={`Remove ${variable}`}

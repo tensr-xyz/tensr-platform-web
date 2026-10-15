@@ -154,7 +154,7 @@ export const Mean = ({ children }: MeanProps) => {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
+                      size="compact"
                       onClick={e => {
                         e.stopPropagation();
                         handleVariableSelect(variable);

@@ -131,6 +131,7 @@ export default function GeneralSettings() {
             Unable to load user information. Please try logging in again.
           </p>
           <Button
+            size="compact"
             type="button"
             variant="link"
             onClick={handleRetry}

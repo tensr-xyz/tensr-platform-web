@@ -36,7 +36,7 @@ function isHighUniquenessInteger(column: StarterColumn): boolean {
   return isNumeric(column) || /int/i.test(column.type || '');
 }
 
-function isIdColumn(column: StarterColumn): boolean {
+export function isIdColumn(column: StarterColumn): boolean {
   const raw = `${column.id || ''} ${column.header || ''}`;
   return nameLooksLikeId(raw) || isHighUniquenessInteger(column);
 }

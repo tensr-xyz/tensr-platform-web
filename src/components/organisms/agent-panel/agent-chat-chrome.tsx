@@ -46,7 +46,7 @@ export function ChatThreadCloseButton({
     <Button
       type="button"
       variant="ghost"
-      size="icon"
+      size="compact"
       onClick={onClick}
       className={cn('size-5', CHAT_THREAD_CLOSE_BUTTON_CLASS)}
       aria-label={`Close ${title}`}

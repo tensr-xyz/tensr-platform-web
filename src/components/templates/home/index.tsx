@@ -399,6 +399,7 @@ const HomeTemplate: React.FC = () => {
                   <div className="mt-2 flex flex-wrap gap-2">
                     {workbook.sheets.map(name => (
                       <Button
+                        size="compact"
                         key={name}
                         type="button"
                         variant="outline"
@@ -424,6 +425,7 @@ const HomeTemplate: React.FC = () => {
             <div className="relative grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-4">
               {TEMPLATES.map(t => (
                 <Button
+                  size="compact"
                   key={t.id}
                   type="button"
                   variant="ghost"

@@ -293,6 +293,7 @@ export default function BillingSettings() {
                 <div className="mt-1 flex items-center">
                   <p className="font-mono text-xs">{subscription.stripeSubscriptionId}</p>
                   <Button
+                    size="compact"
                     type="button"
                     variant="ghost"
                     className="ml-2 h-auto px-1 text-xs text-muted-foreground hover:text-foreground"
