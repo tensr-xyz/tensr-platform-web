@@ -55,7 +55,7 @@ export function WincrossImport({
           ref={fileRef}
           type="file"
           accept=".job,text/plain"
-          className="sr-only"
+          className="hidden"
           disabled={busy}
           onChange={e => void onFile(e.target.files?.[0])}
         />
