@@ -51,6 +51,10 @@ export function mergeUnmatchedReportLines(report: MergeReport, keyed: boolean): 
       lines.push(
         `${clash.column} code ${clash.code} is "${clash.left_label}" here and "${clash.right_label}" in another file.`
       );
+    } else if (clash.kind === 'code_missing' && clash.code != null) {
+      lines.push(
+        `${clash.column} code ${clash.code} is in one file's labels and missing from another.`
+      );
     } else if (
       clash.kind === 'same_label_different_code' &&
       clash.label != null &&
