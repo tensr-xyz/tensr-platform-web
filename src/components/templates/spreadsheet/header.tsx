@@ -250,10 +250,11 @@ const HeaderCell = React.memo<HeaderCellProps>(
                       <DropdownMenuTrigger asChild onClick={handleDropdownTriggerClick}>
                         <Button
                           type="button"
-                          variant="ghost"
+                          variant="unstyled"
+                          size="compact"
                           data-testid={`column-menu-${column.id}`}
                           className={cn(
-                            'flex h-8 min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-sm px-1.5 text-left hover:bg-muted/60',
+                            'flex h-8 min-w-0 flex-1 items-center justify-start gap-1 overflow-hidden rounded-sm px-1.5 text-left text-[11px] font-normal hover:bg-muted/60',
                             dropdownOpen && 'bg-muted/60'
                           )}
                           onDoubleClick={e => {
@@ -443,9 +444,9 @@ const HeaderCell = React.memo<HeaderCellProps>(
 
             <Button
               type="button"
-              variant="ghost"
-              size="icon"
-              className="size-[18px] shrink-0 rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              variant="unstyled"
+              size="compact"
+              className="grid size-[18px] shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
               title={isNumeric ? 'Numeric column' : 'Text column'}
               onClick={handleSortClick}
             >
@@ -490,8 +491,9 @@ const HeaderCell = React.memo<HeaderCellProps>(
                   <div className="space-y-1.5">
                     <Button
                       type="button"
-                      variant="link"
-                      className="h-auto justify-start px-0 text-left text-[11px] font-medium text-[hsl(250,100%,63%)]"
+                      variant="unstyled"
+                      size="compact"
+                      className="h-auto justify-start px-0 text-left text-[11px] font-medium text-[hsl(250,100%,63%)] hover:underline"
                       onClick={() => onColumnAction?.('toggle-heatmap', column.id)}
                     >
                       {heatmapEnabled ? 'Hide heatmap' : 'Show heatmap'}

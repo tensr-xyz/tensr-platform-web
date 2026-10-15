@@ -28,6 +28,7 @@ class RootErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
         <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
           <h1 className="text-base font-medium">Something went wrong</h1>
           <Button
+            size="compact"
             type="button"
             variant="outline"
             className="h-auto px-3 py-1 text-sm"

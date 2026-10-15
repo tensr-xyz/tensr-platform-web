@@ -396,8 +396,8 @@ export function ModelBuilder() {
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className={`rounded-sm ${selectedTool === 'move' ? 'bg-blue-500 text-white hover:bg-blue-500 hover:text-white' : 'hover:bg-gray-100'}`}
+          size="compact"
+          className={`p-2 rounded-sm ${selectedTool === 'move' ? 'bg-blue-500 text-white hover:bg-blue-500 hover:text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('move')}
           title="Move Tool (V)"
         >
@@ -406,8 +406,8 @@ export function ModelBuilder() {
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className={`rounded-sm ${selectedTool === 'observed' ? 'bg-blue-500 text-white hover:bg-blue-500 hover:text-white' : 'hover:bg-gray-100'}`}
+          size="compact"
+          className={`p-2 rounded-sm ${selectedTool === 'observed' ? 'bg-blue-500 text-white hover:bg-blue-500 hover:text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('observed')}
           title="Observed Variable (O)"
         >
@@ -416,8 +416,8 @@ export function ModelBuilder() {
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className={`rounded-sm ${selectedTool === 'latent' ? 'bg-blue-500 text-white hover:bg-blue-500 hover:text-white' : 'hover:bg-gray-100'}`}
+          size="compact"
+          className={`p-2 rounded-sm ${selectedTool === 'latent' ? 'bg-blue-500 text-white hover:bg-blue-500 hover:text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('latent')}
           title="Latent Variable (L)"
         >
@@ -426,8 +426,8 @@ export function ModelBuilder() {
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className={`rounded-sm ${selectedTool === 'path' ? 'bg-blue-500 text-white hover:bg-blue-500 hover:text-white' : 'hover:bg-gray-100'}`}
+          size="compact"
+          className={`p-2 rounded-sm ${selectedTool === 'path' ? 'bg-blue-500 text-white hover:bg-blue-500 hover:text-white' : 'hover:bg-gray-100'}`}
           onClick={() => setSelectedTool('path')}
           title="Add Path (P)"
         >
@@ -439,8 +439,8 @@ export function ModelBuilder() {
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="rounded-sm hover:bg-gray-100"
+          size="compact"
+          className="p-2 rounded-sm hover:bg-gray-100"
           onClick={undo}
           disabled={historyIndex <= 0}
           title="Undo (Ctrl+Z)"
@@ -450,8 +450,8 @@ export function ModelBuilder() {
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="rounded-sm hover:bg-gray-100"
+          size="compact"
+          className="p-2 rounded-sm hover:bg-gray-100"
           onClick={redo}
           disabled={historyIndex >= history.length - 1}
           title="Redo (Ctrl+Shift+Z)"
@@ -464,8 +464,8 @@ export function ModelBuilder() {
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="rounded-sm hover:bg-gray-100"
+          size="compact"
+          className="p-2 rounded-sm hover:bg-gray-100"
           onClick={() => setZoom(z => Math.max(z - 0.1, MIN_ZOOM))}
           title="Zoom Out"
         >
@@ -475,8 +475,8 @@ export function ModelBuilder() {
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="rounded-sm hover:bg-gray-100"
+          size="compact"
+          className="p-2 rounded-sm hover:bg-gray-100"
           onClick={() => setZoom(z => Math.min(z + 0.1, MAX_ZOOM))}
           title="Zoom In"
         >

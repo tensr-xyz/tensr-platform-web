@@ -603,6 +603,7 @@ const LoginTemplate = () => {
                         Verification Code
                       </label>
                       <Button
+                        size="compact"
                         type="button"
                         variant="link"
                         onClick={handleResendEmail}

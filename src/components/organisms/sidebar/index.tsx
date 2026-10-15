@@ -268,6 +268,7 @@ function SidebarRail({ className, ...props }: React.ComponentProps<'button'>) {
 
   return (
     <Button
+      size="compact"
       type="button"
       variant="ghost"
       data-sidebar="rail"

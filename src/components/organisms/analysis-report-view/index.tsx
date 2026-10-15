@@ -186,6 +186,7 @@ function BlockHeader({
         ) : null}
         {nButton ? (
           <Button
+            size="compact"
             type="button"
             variant="link"
             className="mt-1 h-auto px-0 text-xs font-normal leading-snug text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
@@ -237,7 +238,7 @@ function ReportTable({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="compact"
           className="h-7 px-2 text-[11px] print:hidden"
           onClick={onCopy}
         >
@@ -383,6 +384,7 @@ function BlockRenderer({
             if (clickable) {
               return (
                 <Button
+                  size="compact"
                   key={i}
                   type="button"
                   variant="ghost"
@@ -698,6 +700,7 @@ export function AnalysisReportView({
                     {related.map(link => (
                       <li key={`${link.relation}-${link.tabId || link.label}`}>
                         <Button
+                          size="compact"
                           type="button"
                           variant="link"
                           className="h-auto justify-start px-0 text-left text-[13px] font-normal text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
@@ -794,6 +797,7 @@ export function AnalysisReportView({
                     if (clickable) {
                       return (
                         <Button
+                          size="compact"
                           key={i}
                           type="button"
                           variant="ghost"
@@ -960,6 +964,7 @@ export function AnalysisReportView({
       {rawResult && Object.keys(rawResult).length > 0 ? (
         <div className="mt-6 print:hidden">
           <Button
+            size="compact"
             type="button"
             variant="ghost"
             className="h-auto gap-1 px-1 text-xs font-medium text-muted-foreground hover:text-foreground"

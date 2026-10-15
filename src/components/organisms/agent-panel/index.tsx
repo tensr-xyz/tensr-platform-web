@@ -235,6 +235,7 @@ function ChatMessageBody({
             <div className="mt-2 flex flex-wrap gap-1.5">
               {repairSuggestions.map(col => (
                 <Button
+                  size="compact"
                   key={col}
                   type="button"
                   variant="outline"
@@ -330,6 +331,7 @@ function AnalysisRunsList({
       {entries.map(entry => (
         <li key={entry.id}>
           <Button
+            size="compact"
             type="button"
             variant="ghost"
             onClick={() => onSelect(entry)}
@@ -1714,6 +1716,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                   )}
                 >
                   <Button
+                    size="compact"
                     type="button"
                     variant="ghost"
                     onClick={() => {
@@ -1745,7 +1748,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon"
+                    size="compact"
                     className={cn('relative size-7', showRuns && 'bg-muted')}
                     onClick={() => setShowRuns(v => !v)}
                     aria-label="Analysis runs"
@@ -1767,7 +1770,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon"
+                  size="compact"
                   className="size-7"
                   onClick={() => {
                     createThread(projectId);
@@ -1786,7 +1789,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon"
+                    size="compact"
                     className="size-7"
                     onClick={() => clearMessages(projectId)}
                     aria-label="Clear chat"
@@ -1850,6 +1853,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                     <div className="flex flex-col gap-2">
                       {suggestedPrompts.map(label => (
                         <Button
+                          size="compact"
                           key={label}
                           type="button"
                           variant="outline"
@@ -2015,6 +2019,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                 <div className="mb-1.5 flex flex-wrap gap-1">
                   {attachments.map(file => (
                     <Button
+                      size="compact"
                       key={file.filename}
                       type="button"
                       variant="ghost"
@@ -2052,7 +2057,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                       <Button
                         type="button"
                         variant="ghost"
-                        size="icon"
+                        size="compact"
                         className="size-7 shrink-0 text-muted-foreground"
                         title="Choose mode"
                         aria-label="Choose Ask, Plan, or Agent mode"
@@ -2190,7 +2195,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                     type="button"
                     onClick={handleSendMessage}
                     disabled={isLoading || !inputMessage.trim()}
-                    size="icon"
+                    size="compact"
                     className={cn(
                       'size-7 shrink-0 rounded-md',
                       inputMessage.trim()

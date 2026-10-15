@@ -330,6 +330,7 @@ export default function SubscriptionCheckoutPage() {
           <div className="mt-8 flex justify-center">
             <div className="inline-flex items-center gap-1 rounded-full border border-border bg-muted p-1">
               <Button
+                size="compact"
                 type="button"
                 variant="ghost"
                 onClick={() => {
@@ -347,6 +348,7 @@ export default function SubscriptionCheckoutPage() {
                 Monthly
               </Button>
               <Button
+                size="compact"
                 type="button"
                 variant="ghost"
                 onClick={() => {
@@ -456,6 +458,7 @@ export default function SubscriptionCheckoutPage() {
                   )}
 
                   <Button
+                    size="compact"
                     type="button"
                     variant={plan.featured ? 'default' : 'outline'}
                     disabled={isCurrent || !!loadingTier}

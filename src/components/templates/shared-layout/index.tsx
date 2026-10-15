@@ -126,8 +126,9 @@ const UserMenu: React.FC = () => {
         <DropdownMenuTrigger asChild>
           <Button
             type="button"
-            variant="ghost"
-            className="group h-10 w-auto cursor-pointer select-none gap-1 rounded-full border border-border pr-3 pl-1.5 hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring/40 data-[state=open]:bg-accent sm:w-[164px] sm:pr-3 sm:pl-1.5"
+            variant="unstyled"
+            size="compact"
+            className="group flex h-10 w-auto min-w-0 cursor-pointer select-none items-center gap-1 overflow-hidden rounded-full border border-border pr-3 pl-1.5 transition-all duration-200 hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring/40 data-[state=open]:bg-accent sm:w-[164px] sm:max-w-[164px] sm:pr-3 sm:pl-1.5"
           >
             <div className="relative h-7 w-7 flex-shrink-0 overflow-hidden rounded-full bg-gradient-to-b from-white/60 via-white/30 to-white/10 p-[0.5px]">
               <div className="h-full w-full overflow-hidden rounded-full bg-background">
@@ -138,7 +139,7 @@ const UserMenu: React.FC = () => {
                 </Avatar>
               </div>
             </div>
-            <div className="hidden flex-1 flex-row items-center gap-0 sm:flex">
+            <div className="hidden min-w-0 flex-1 flex-row items-center gap-0 sm:flex">
               {label ? (
                 <span className="truncate font-normal text-foreground text-sm leading-5 tracking-[-0.02em]">
                   {label}
@@ -398,6 +399,7 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                               <Button
                                 type="button"
                                 variant="ghost"
+                                size="compact"
                                 className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex h-12 w-full items-center justify-start gap-2 overflow-hidden rounded-full p-4 px-3 text-left text-sm font-normal outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
                                 data-active={pathname === '/'}
                                 data-sidebar="menu-button"
@@ -417,6 +419,7 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                               <Button
                                 type="button"
                                 variant="ghost"
+                                size="compact"
                                 className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex h-12 w-full items-center justify-start gap-2 overflow-hidden rounded-full p-4 px-3 text-left text-sm font-normal outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
                                 data-active={
                                   pathname === '/plugins' || pathname?.startsWith('/plugins/')
@@ -442,6 +445,7 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                               <Button
                                 type="button"
                                 variant="ghost"
+                                size="compact"
                                 className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex h-12 w-full items-center justify-start gap-2 overflow-hidden rounded-full p-4 px-3 text-left text-sm font-normal outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
                                 data-active={pathname?.startsWith('/settings')}
                                 data-sidebar="menu-button"

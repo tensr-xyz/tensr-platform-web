@@ -244,7 +244,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
             <Button
               type="button"
               variant="ghost"
-              size="icon"
+              size="compact"
               className="mb-8 size-6 rounded p-1 hover:bg-gray-200 dark:hover:bg-gray-700"
               onClick={e => {
                 e.stopPropagation();
@@ -352,6 +352,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
         {language === 'python' && onSaveDataset && cell.runId && !cell.error ? (
           <div className="py-1 pl-2">
             <Button
+              size="compact"
               type="button"
               variant="link"
               data-testid="notebook-save-dataset"
@@ -373,7 +374,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
           <Button
             type="button"
             variant="ghost"
-            size="icon"
+            size="compact"
             className="mb-8 size-6 rounded p-1 hover:bg-gray-200 dark:hover:bg-gray-700"
             onClick={e => {
               e.stopPropagation();
@@ -387,7 +388,7 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
         <Button
           type="button"
           variant="ghost"
-          size="icon"
+          size="compact"
           className="size-6 rounded p-1 hover:bg-gray-200 dark:hover:bg-gray-700"
           onClick={e => {
             e.stopPropagation();

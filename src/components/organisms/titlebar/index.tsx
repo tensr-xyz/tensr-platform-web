@@ -252,6 +252,7 @@ const Titlebar = ({
 
                     return (
                       <Button
+                        size="compact"
                         key={tab.id}
                         type="button"
                         variant="ghost"
@@ -325,7 +326,7 @@ const Titlebar = ({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="compact"
           onClick={() => setAnalysisPaletteOpen(true)}
           className="h-11 shrink-0 gap-1.5 rounded-none border-l border-border px-3 font-normal text-muted-foreground hover:text-foreground"
           aria-label="Search analyses"
@@ -342,6 +343,7 @@ const Titlebar = ({
             <Popover>
               <PopoverTrigger asChild>
                 <Button
+                  size="compact"
                   variant="ghost"
                   className={cn(
                     'h-11 shrink-0 gap-2 rounded-none px-3 font-normal',

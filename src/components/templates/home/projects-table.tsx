@@ -163,6 +163,7 @@ export const ProjectsTable = ({
       accessorKey: 'projectName',
       header: ({ column }) => (
         <Button
+          size="compact"
           variant="ghost"
           className="-ml-3 h-8 gap-1 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
@@ -229,6 +230,7 @@ export const ProjectsTable = ({
       accessorKey: 'size',
       header: ({ column }) => (
         <Button
+          size="compact"
           variant="ghost"
           className="-ml-3 h-8 gap-1 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
@@ -263,6 +265,7 @@ export const ProjectsTable = ({
       accessorKey: 'updatedAt',
       header: ({ column }) => (
         <Button
+          size="compact"
           variant="ghost"
           className="-ml-3 h-8 gap-1 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground hover:text-foreground"
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}

@@ -566,6 +566,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
                     This dataset is taking longer than usual to open. You can wait, or try again.
                   </p>
                   <Button
+                    size="compact"
                     type="button"
                     variant="outline"
                     className="h-auto px-3 py-1.5 text-sm hover:border-primary"

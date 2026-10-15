@@ -39,6 +39,7 @@ const AnalysisItemComponent = ({ item }: AnalysisItemComponentProps) => {
   return (
     <AnalysisComponent>
       <Button
+        size="compact"
         type="button"
         variant="ghost"
         className="h-auto w-full justify-start rounded-sm px-2 py-1 text-left text-sm"

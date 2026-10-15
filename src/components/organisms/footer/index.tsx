@@ -83,6 +83,7 @@ const Footer = ({ isLoading, activeTab, rowCount }: FooterProps) => {
             ·
           </span>
           <Button
+            size="compact"
             type="button"
             variant="ghost"
             onClick={() => toggleTerminal(!terminalOpen)}
@@ -102,6 +103,7 @@ const Footer = ({ isLoading, activeTab, rowCount }: FooterProps) => {
           <span className="truncate">{activeTab.name}</span>
           <span className="flex-1" />
           <Button
+            size="compact"
             type="button"
             variant="ghost"
             onClick={() => toggleTerminal(!terminalOpen)}

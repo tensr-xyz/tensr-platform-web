@@ -1105,6 +1105,7 @@ const FilterPanel = ({
                   <div className="p-2">
                     <ErrorDisplay message={errors[columnName] || 'An error occurred'} />
                     <Button
+                      size="compact"
                       variant="link"
                       onClick={() => handleRetry(columnName)}
                       className="mt-2 h-auto px-0 text-xs text-primary"

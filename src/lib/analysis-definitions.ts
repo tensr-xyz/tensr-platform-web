@@ -1,4 +1,6 @@
-import type { AnalysisReport, SchemaColumn } from '@/lib/analysis-report-types';
+import type { AnalysisReport, DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
+import { schemaColumnSlotType } from '@/lib/analysis-column-types';
+import { isIdColumn, type StarterColumn } from '@/lib/agent-starter-prompts';
 
 export type AnalysisKey =
   | 'descriptives'
@@ -1496,18 +1498,79 @@ export function analysisSearchBlob(key: AnalysisKey): string {
   return `${key} ${ANALYSIS_LABELS[key]} ${cat}`.toLowerCase();
 }
 
+function observedUniqueCount(
+  column: SchemaColumn,
+  preview?: DatasetPreview | null
+): number | undefined {
+  if (typeof column.uniqueCount === 'number') return column.uniqueCount;
+  if (!preview) return undefined;
+  const index = preview.headers.indexOf(column.name);
+  if (index < 0) return undefined;
+  const seen = new Set<string>();
+  for (const row of preview.rows) {
+    const value = row[index];
+    if (value === null || value === undefined || value === '') continue;
+    seen.add(String(value));
+  }
+  return seen.size;
+}
+
+function asStarterColumn(column: SchemaColumn, preview?: DatasetPreview | null): StarterColumn {
+  return {
+    id: column.name,
+    header: column.label || column.name,
+    type: column.type,
+    uniqueCount: observedUniqueCount(column, preview),
+  };
+}
+
+/** Categorical or string columns that are not respondent ids or high-cardinality integers. */
+export function categoricalColumnNames(
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
+): string[] {
+  return schema
+    .filter(column => {
+      const slot = schemaColumnSlotType(column);
+      if (slot !== 'categorical' && slot !== 'string') return false;
+      return !isIdColumn(asStarterColumn(column, preview));
+    })
+    .map(column => column.name);
+}
+
+function numericColumnNames(schema: SchemaColumn[], preview?: DatasetPreview | null): string[] {
+  const usable = schema
+    .filter(column => column.type === 'numeric' && !isIdColumn(asStarterColumn(column, preview)))
+    .map(column => column.name);
+  if (usable.length) return usable;
+  return schema.filter(column => column.type === 'numeric').map(column => column.name);
+}
+
+const CATEGORICAL_OUTCOME_ANALYSES = new Set<AnalysisKey>([
+  'decision_tree',
+  'random_forest_classification',
+  'svm_classification',
+  'logistic_regression',
+  'probit_regression',
+  'gradient_boosting',
+  'neural_network_mlp',
+  'generalized_linear_mixed_model',
+]);
+
 export function defaultFormFieldsFromSchema(
-  schema: SchemaColumn[]
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
 ): Omit<AnalysisFormState, 'analysis'> {
-  const num = schema.filter(c => c.type === 'numeric').map(c => c.name);
+  const num = numericColumnNames(schema, preview);
+  const categorical = categoricalColumnNames(schema, preview);
   return {
     selectedCols: [],
-    groupCol: schema[0]?.name ?? '',
+    groupCol: categorical[0] ?? '',
     valueCol: num[0] ?? schema[0]?.name ?? '',
     depCol: num[0] ?? schema[0]?.name ?? '',
     independentCols: num.slice(1, 3),
-    chiA: schema[0]?.name ?? '',
-    chiB: schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
+    chiA: categorical[0] ?? '',
+    chiB: categorical[1] ?? '',
     anovaPostHoc: 'none',
     anovaEffectSize: 'eta_squared',
     anovaHomogeneity: 'levene',
@@ -1539,7 +1602,7 @@ export function defaultFormFieldsFromSchema(
     logisticDeriveMethod: 'none' as const,
     saveDerivedVariable: false,
     ksTestType: 'two_sample',
-    factorBCol: schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
+    factorBCol: categorical[1] ?? '',
     subjectCol: inferSubjectColumnFromSchema(schema),
     pcaNComponents: '',
     nClusters: '3',
@@ -1553,7 +1616,7 @@ export function defaultFormFieldsFromSchema(
     chiIncludeCramersV: true,
     chiUseFishersExact: false,
     kappaWeights: 'linear' as const,
-    factorCCol: schema[Math.min(2, Math.max(0, schema.length - 1))]?.name ?? '',
+    factorCCol: categorical[2] ?? '',
     runsTestCutoff: 'median',
     mlMode: 'classification' as const,
     dbscanEpsilon: '0.5',
@@ -1580,6 +1643,25 @@ export function defaultFormFieldsFromSchema(
     apaFormat: false,
     includeCharts: false,
   };
+}
+
+/** Fresh setup form. Categorical outcome slots start on the first real category, not an id. */
+export function defaultFormForAnalysis(
+  analysis: AnalysisKey,
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
+): AnalysisFormState {
+  const fields = defaultFormFieldsFromSchema(schema, preview);
+  if (analysis === 'network') {
+    fields.chiA = schema[0]?.name ?? '';
+    fields.chiB = schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '';
+  }
+  if (CATEGORICAL_OUTCOME_ANALYSES.has(analysis)) {
+    const categorical = categoricalColumnNames(schema, preview);
+    if (categorical[0]) fields.depCol = categorical[0];
+    if (categorical[1] && fields.groupCol === categorical[0]) fields.groupCol = categorical[1];
+  }
+  return { analysis, ...fields };
 }
 
 export type AnalysisFormState = {

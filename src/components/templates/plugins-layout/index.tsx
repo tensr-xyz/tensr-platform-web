@@ -84,6 +84,7 @@ function DiscoverPill({
 }) {
   return (
     <Button
+      size="compact"
       type="button"
       variant="ghost"
       onClick={onClick}
@@ -163,6 +164,7 @@ function PluginCard({
       <div className="flex flex-1 flex-col p-4">
         <div className="mb-1.5 flex items-start justify-between gap-2">
           <Button
+            size="compact"
             type="button"
             variant="link"
             onClick={() => onViewDetails(plugin)}
@@ -457,6 +459,7 @@ export default function PluginsLayout() {
                   </p>
                 </div>
                 <Button
+                  size="compact"
                   type="button"
                   variant="ghost"
                   className="h-auto shrink-0 gap-1 px-1 text-sm text-muted-foreground hover:text-foreground"

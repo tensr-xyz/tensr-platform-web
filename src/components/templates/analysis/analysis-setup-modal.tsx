@@ -9,6 +9,7 @@ import {
   type AnalysisKey,
   buildBodyFromForm,
   defaultFormFieldsFromSchema,
+  defaultFormForAnalysis,
   formStateFromBody,
   type AnalysisFormState,
 } from '@/lib/analysis-definitions';
@@ -81,7 +82,7 @@ export function AnalysisSetupModal({
     if (initialBody && Object.keys(initialBody).length > 0) {
       setForm(formStateFromBody(initialOp, initialBody, schema));
     } else {
-      setForm({ analysis: initialOp, ...defaultFormFieldsFromSchema(schema) });
+      setForm(defaultFormForAnalysis(initialOp, schema, preview));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody in bodyKey, schema in schemaKey
   }, [open, initialOp, bodyKey, schemaKey]);

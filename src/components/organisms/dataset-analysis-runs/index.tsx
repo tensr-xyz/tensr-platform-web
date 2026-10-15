@@ -123,6 +123,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
         </p>
         {datasetId ? (
           <Button
+            size="compact"
             type="button"
             variant="ghost"
             onClick={() => void load()}
@@ -145,6 +146,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
       <div className="flex flex-col gap-0.5">
         {runs.map(run => (
           <Button
+            size="compact"
             key={run.id}
             type="button"
             variant="ghost"
@@ -168,6 +170,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
 
         {localOnly.map(entry => (
           <Button
+            size="compact"
             key={entry.id}
             type="button"
             variant="ghost"
