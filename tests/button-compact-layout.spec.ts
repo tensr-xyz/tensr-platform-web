@@ -37,6 +37,15 @@ test.describe('compact buttons after the shadcn swap', () => {
     const scrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(1415);
 
+    const searchLabel = page
+      .getByRole('button', { name: 'Search analyses' })
+      .locator('span', { hasText: 'Search analyses' });
+    await expect(searchLabel).toBeVisible();
+    const searchFontSize = await searchLabel.evaluate(
+      element => getComputedStyle(element).fontSize
+    );
+    expect(searchFontSize).toBe('12px');
+
     await page.goto('/dashboard');
     const pill = page.getByRole('button', { name: /e2e@playwright\.test/ });
     await expect(pill).toBeVisible();
@@ -63,5 +72,69 @@ test.describe('compact buttons after the shadcn swap', () => {
     await expect(dialog.getByText('Row variable')).toBeVisible();
     await expect(dialog.getByText('group', { exact: true }).first()).toBeVisible();
     await expect(dialog.getByText('RespID')).toHaveCount(0);
+  });
+});
+
+test.describe('chi-square categorical slots', () => {
+  test('row and column variables are distinct categories, not Age', async ({ page }) => {
+    const columns = ['RespID', 'Gender', 'Age', 'Group'];
+    const rows = Array.from({ length: 60 }, (_, index) => [
+      index + 1,
+      index % 2 === 0 ? 'F' : 'M',
+      18 + index,
+      index % 3 === 0 ? 'Control' : 'Treat',
+    ]);
+
+    await page.setViewportSize({ width: 1415, height: 900 });
+    await seedE2eSession(page);
+    await installDatasetApiMocks(page);
+    await page.route('**/datasets/**', async route => {
+      const url = route.request().url();
+      const method = route.request().method();
+      if (method === 'GET' && url.includes(`/datasets/${E2E_DATASET_ID}/schema`)) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            n_rows: rows.length,
+            n_cols: columns.length,
+            schema: columns.map(name => ({
+              name,
+              type: 'categorical',
+              missing_count: 0,
+            })),
+            original_filename: 'Raw Data 300426.xlsx',
+          }),
+        });
+        return;
+      }
+      if (method === 'GET' && url.includes(`/datasets/${E2E_DATASET_ID}/preview`)) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            headers: columns,
+            variable_names: columns,
+            rows,
+            row_count: rows.length,
+            original_filename: 'Raw Data 300426.xlsx',
+          }),
+        });
+        return;
+      }
+      await route.fallback();
+    });
+
+    await page.goto(`/workspace/dataset/${E2E_DATASET_ID}?name=Raw%20Data%20300426.xlsx`);
+    await expect(page.getByTestId('column-menu-Gender')).toBeVisible({ timeout: 60_000 });
+
+    await openAnalysisPalette(page);
+    await selectPaletteTab(page, 'Analyze');
+    await paletteItem(page, 'Chi-square').click();
+    const dialog = page.getByRole('dialog').last();
+    const slot = (label: string) => dialog.getByText(label, { exact: true }).locator('xpath=..');
+    await expect(slot('Row variable').locator('span.truncate')).toHaveText('Gender');
+    await expect(slot('Column variable').locator('span.truncate')).toHaveText('Group');
+    await expect(slot('Column variable').getByText('Age', { exact: true })).toHaveCount(0);
   });
 });

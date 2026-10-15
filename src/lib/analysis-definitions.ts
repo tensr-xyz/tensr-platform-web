@@ -1524,13 +1524,52 @@ function asStarterColumn(column: SchemaColumn, preview?: DatasetPreview | null):
   };
 }
 
-/** Categorical or string columns that are not respondent ids or high-cardinality integers. */
+/** Same cutoff starter crosstab chips use to keep Age off a table. */
+const CONTINUOUS_LEVELS = 12;
+
+function declaredNumeric(column: SchemaColumn): boolean {
+  if (schemaColumnSlotType(column) === 'numeric') return true;
+  return /number|numeric|float|int|decimal|double/i.test(column.type || '');
+}
+
+function cellLooksNumeric(value: unknown): boolean {
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  return trimmed !== '' && Number.isFinite(Number(trimmed));
+}
+
+/** True when the loaded rows are numbers, even if the schema still says categorical. */
+function valuesLookNumeric(column: SchemaColumn, preview?: DatasetPreview | null): boolean {
+  if (!preview) return false;
+  const index = preview.headers.indexOf(column.name);
+  if (index < 0) return false;
+  let seen = 0;
+  let numeric = 0;
+  for (const row of preview.rows) {
+    const value = row[index];
+    if (value === null || value === undefined || value === '') continue;
+    seen += 1;
+    if (cellLooksNumeric(value)) numeric += 1;
+    if (seen >= 40) break;
+  }
+  return seen >= 4 && numeric / seen >= 0.9;
+}
+
+function isHighCardinalityNumeric(column: SchemaColumn, preview?: DatasetPreview | null): boolean {
+  const unique = observedUniqueCount(column, preview);
+  if (typeof unique !== 'number' || unique <= CONTINUOUS_LEVELS) return false;
+  return declaredNumeric(column) || valuesLookNumeric(column, preview);
+}
+
+/** Categorical columns for setup slots: distinct, not an id, not a high-cardinality numeric. */
 export function categoricalColumnNames(
   schema: SchemaColumn[],
   preview?: DatasetPreview | null
 ): string[] {
   return schema
     .filter(column => {
+      if (declaredNumeric(column) || isHighCardinalityNumeric(column, preview)) return false;
       const slot = schemaColumnSlotType(column);
       if (slot !== 'categorical' && slot !== 'string') return false;
       return !isIdColumn(asStarterColumn(column, preview));

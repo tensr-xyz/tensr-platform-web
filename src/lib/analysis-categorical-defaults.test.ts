@@ -50,6 +50,41 @@ describe('categorical setup defaults', () => {
     expect(fields.valueCol).not.toBe('rownum');
   });
 
+  it('fills every categorical slot with a distinct category, skipping a high-cardinality Age', () => {
+    const schema: SchemaColumn[] = [
+      { name: 'RespID', type: 'categorical', missing_count: 0 },
+      { name: 'Gender', type: 'categorical', missing_count: 0 },
+      { name: 'Age', type: 'categorical', missing_count: 0 },
+      { name: 'Group', type: 'categorical', missing_count: 0 },
+    ];
+    const preview: DatasetPreview = {
+      headers: ['RespID', 'Gender', 'Age', 'Group'],
+      rows: Array.from({ length: 60 }, (_, index) => [
+        index + 1,
+        index % 2 === 0 ? 'F' : 'M',
+        18 + index,
+        index % 2 === 0 ? 'A' : 'B',
+      ]),
+    };
+    const fields = defaultFormFieldsFromSchema(schema, preview);
+    expect(fields.chiA).toBe('Gender');
+    expect(fields.chiB).toBe('Group');
+    expect(fields.groupCol).toBe('Gender');
+    expect(fields.factorBCol).toBe('Group');
+    expect(fields.factorCCol).toBe('');
+    expect(new Set([fields.chiA, fields.chiB]).size).toBe(2);
+  });
+
+  it('does not use a double-typed Age as a categorical slot', () => {
+    const fields = defaultFormFieldsFromSchema([
+      col('Gender', 'categorical', 2),
+      col('Age', 'double', 60),
+      col('Group', 'categorical', 3),
+    ]);
+    expect(fields.chiA).toBe('Gender');
+    expect(fields.chiB).toBe('Group');
+  });
+
   it('uses the preview name check when RespID is stored as a category', () => {
     const schema: SchemaColumn[] = [
       { name: 'RespID', type: 'categorical', missing_count: 0 },
