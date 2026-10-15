@@ -40,6 +40,8 @@ export type CustomTableCanvas = {
   suppressLowBase: boolean;
   weightDatasetId: string | null;
   bannerId: string | null;
+  /** Loop id. Omitted when the table is one row per respondent. */
+  level?: string;
 };
 
 export type TableRequestBody = {
@@ -61,6 +63,8 @@ export type TableRequestBody = {
   suppress_low_base: boolean;
   banner_id?: string;
   weight?: 'none';
+  /** Loop id. Absent when the table is one row per respondent. */
+  level?: string;
 };
 
 export function defaultDecimals(): TableDecimals {
@@ -266,6 +270,7 @@ export function buildTableRequest(canvas: CustomTableCanvas): TableRequestBody {
     low_base_threshold: canvas.lowBaseThreshold,
     suppress_low_base: canvas.suppressLowBase,
     ...(canvas.bannerId ? { banner_id: canvas.bannerId } : {}),
+    ...(canvas.level && canvas.level !== 'respondent' ? { level: canvas.level } : {}),
   };
 }
 
@@ -313,6 +318,8 @@ export type StoredTableSpec = {
   low_base_threshold?: number;
   suppress_low_base?: boolean;
   banner_id?: string;
+  /** Loop id. Absent when the stored table is one row per respondent. */
+  level?: string;
 };
 
 function asStringValues(values: unknown[] | undefined): string[] {
@@ -367,6 +374,7 @@ export function canvasFromStoredSpec(
         ? spec.significance_alpha
         : 0.05,
     letterLevels: spec.letter_levels === 1 ? 1 : 2,
+    level: spec.level && spec.level !== 'respondent' ? spec.level : undefined,
     letterCase: spec.letter_case === 'upper' ? 'upper' : 'lower',
     letterUpperAlpha: typeof spec.letter_upper_alpha === 'number' ? spec.letter_upper_alpha : 0.001,
     significanceDisplay:
