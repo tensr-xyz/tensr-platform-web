@@ -9,6 +9,7 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Checkbox } from '@/components/atoms/checkbox';
 import { Label } from '@/components/atoms/label';
 import { useRouter } from 'next/navigation';
 import { getAccessToken } from '@/utils/auth';
@@ -74,11 +75,7 @@ export function StandardizeVariablesDialog({ children }: { children: ReactNode }
         <div className="max-h-48 space-y-1 overflow-y-auto border rounded-md p-2">
           {numericCols.map(col => (
             <label key={col} className="flex items-center gap-2 text-sm cursor-pointer">
-              <input
-                type="checkbox"
-                checked={selected.includes(col)}
-                onChange={() => toggle(col)}
-              />
+              <Checkbox checked={selected.includes(col)} onCheckedChange={() => toggle(col)} />
               {col}
             </label>
           ))}

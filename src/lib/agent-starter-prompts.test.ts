@@ -48,4 +48,27 @@ describe('starter prompts', () => {
     expect(text).toMatch(/Group/);
     expect(text).not.toMatch(/RespID|ResponseId|resp_id|case_no/);
   });
+
+  it('does not crosstab a continuous column such as Age', () => {
+    const prompts = starterPromptsForColumns([
+      { id: 'Age', header: 'Age', type: 'categorical', uniqueCount: 20 },
+      { id: 'Q1', header: 'Gender', type: 'categorical', uniqueCount: 2 },
+      { id: 'Group', header: 'Group', type: 'categorical', uniqueCount: 3 },
+    ]);
+    const crosstab = prompts.find(prompt => /crosstab/i.test(prompt)) || '';
+    expect(crosstab).toContain('Gender');
+    expect(crosstab).toContain('Group');
+    expect(crosstab).not.toMatch(/Age/);
+  });
+
+  it('bins a continuous column when the other column is categorical', () => {
+    const prompts = starterPromptsForColumns([
+      { id: 'Age', header: 'Age', type: 'categorical', uniqueCount: 48 },
+      { id: 'Group', header: 'Group', type: 'categorical', uniqueCount: 3 },
+    ]);
+    const crosstab = prompts.find(prompt => /crosstab/i.test(prompt)) || '';
+    expect(crosstab).toMatch(/Bin Age/);
+    expect(crosstab).toContain('Group');
+    expect(crosstab).not.toMatch(/crosstab of Age by Group|crosstab of Group by Age/);
+  });
 });

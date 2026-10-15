@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
 import { parseWincrossJob } from '@/lib/custom-tables/api';
@@ -22,12 +22,15 @@ export function WincrossImport({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<WincrossParseResult | null>(null);
+  const [fileName, setFileName] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const onFile = async (file: File | undefined) => {
     if (!file) return;
     setBusy(true);
     setError(null);
     try {
+      setFileName(file.name);
       const job = await file.text();
       const parsed = await parseWincrossJob(job, token);
       setResult(parsed);
@@ -47,16 +50,27 @@ export function WincrossImport({
         Import converts what Tensr can represent. Anything else is listed with what to do by hand —
         not a crash.
       </p>
-      <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-xs">
+      <div className="mt-2 flex items-center gap-2 text-xs">
         <input
+          ref={fileRef}
           type="file"
           accept=".job,text/plain"
-          className="text-xs"
+          className="sr-only"
           disabled={busy}
           onChange={e => void onFile(e.target.files?.[0])}
         />
-        {busy ? 'Reading…' : null}
-      </label>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs"
+          disabled={busy}
+          onClick={() => fileRef.current?.click()}
+        >
+          {busy ? 'Reading…' : 'Choose file'}
+        </Button>
+        <span className="text-muted-foreground">{fileName ?? 'No file chosen'}</span>
+      </div>
       {error ? (
         <Alert variant="destructive" className="mt-2">
           <AlertDescription>{error}</AlertDescription>

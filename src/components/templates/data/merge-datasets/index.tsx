@@ -9,6 +9,8 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Checkbox } from '@/components/atoms/checkbox';
+import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { RadioGroup, RadioGroupItem } from '@/components/atoms/radio-group';
 import {
@@ -290,11 +292,12 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
 
           <div className="space-y-2">
             <Label>Second dataset</Label>
-            <input
+            <Input
+              inputSize="sm"
               value={datasetQuery}
               onChange={event => setDatasetQuery(event.target.value)}
               placeholder="Search by name, date, or id"
-              className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+              className="w-full text-sm"
             />
             <Select
               value={secondaryDataset}
@@ -344,10 +347,9 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
                 )}
                 {keyOptions.map(option => (
                   <label key={option.name} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={keys.includes(option.name)}
-                      onChange={() => toggleKey(option.name)}
+                      onCheckedChange={() => toggleKey(option.name)}
                     />
                     {option.label}
                   </label>

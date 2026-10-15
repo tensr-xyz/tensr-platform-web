@@ -14,6 +14,7 @@ import { Button } from '@/components/atoms/button';
 import { Label } from '@/components/atoms/label';
 import { Input } from '@/components/atoms/input';
 import { Checkbox } from '@/components/atoms/checkbox';
+import { Textarea } from '@/components/atoms/text-area';
 import {
   Select,
   SelectContent,
@@ -435,8 +436,8 @@ export function TechniqueDialog({
               return (
                 <div key={field.key} className="space-y-2">
                   <Label>{field.label}</Label>
-                  <textarea
-                    className="min-h-[80px] w-full rounded-sm border p-2 text-sm font-mono"
+                  <Textarea
+                    className="min-h-[80px] w-full font-mono text-sm"
                     placeholder={field.placeholder}
                     value={String(values[field.key] ?? '')}
                     onChange={e => setValues(prev => ({ ...prev, [field.key]: e.target.value }))}

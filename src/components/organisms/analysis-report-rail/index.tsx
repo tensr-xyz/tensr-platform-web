@@ -8,6 +8,7 @@ import { scrollToReportSection } from '@/lib/build-report-outline';
 import type { ReportAnnotation } from '@/lib/report-annotations';
 import { ColumnTypeBadge, isNumericDataType } from '@/components/molecules/column-type-badge';
 import { Button } from '@/components/atoms/button';
+import { Textarea } from '@/components/atoms/text-area';
 import { cn } from '@/utils';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import {
@@ -42,17 +43,18 @@ function VarPicker({
 }) {
   const isNumeric = isNumericDataType(columnType) || columnType === 'number';
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       onClick={onActivate}
       title={onActivate ? `Change ${value} ${label}` : undefined}
-      className="flex w-full items-center gap-2 rounded-md border border-border bg-card px-2.5 py-2 text-left text-[12.5px] text-foreground transition-colors hover:bg-muted/30"
+      className="h-auto w-full justify-start gap-2 whitespace-normal bg-card px-2.5 py-2 text-left text-[12.5px] font-normal text-foreground hover:bg-muted/30"
     >
       <ColumnTypeBadge isNumeric={isNumeric} className="size-4 border-0 opacity-100" />
       <span className="min-w-0 flex-1 truncate font-medium">{value}</span>
       <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">{label}</span>
       <ChevronDown className="size-3 shrink-0 text-muted-foreground/60" aria-hidden />
-    </button>
+    </Button>
   );
 }
 
@@ -243,15 +245,16 @@ export function AnalysisReportRail({
         <RailSection label="Other saved runs">
           <div className="flex flex-col gap-0.5">
             {otherRuns.map(run => (
-              <button
+              <Button
                 key={run.id}
                 type="button"
+                variant="ghost"
                 onClick={() => openStoredAnalysisRun(run)}
-                className="flex flex-col gap-0.5 rounded-sm px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                className="h-auto w-full flex-col items-start gap-0.5 whitespace-normal rounded-sm px-2 py-1.5 text-left text-xs font-normal text-muted-foreground hover:bg-muted/50 hover:text-foreground"
               >
                 <span className="truncate font-medium text-foreground">{formatRunLabel(run)}</span>
                 <span className="font-mono text-[10px]">{formatRunTime(run.created_at)}</span>
-              </button>
+              </Button>
             ))}
           </div>
         </RailSection>
@@ -260,17 +263,18 @@ export function AnalysisReportRail({
       <RailSection label="In this report">
         <div className="flex flex-col gap-0.5">
           {outline.map((item, i) => (
-            <button
+            <Button
               key={item.id}
               type="button"
+              variant="ghost"
               onClick={() => {
                 onSectionSelect?.(item.id);
                 scrollToReportSection(item.id);
               }}
               className={cn(
-                'flex items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors',
+                'h-auto w-full justify-start gap-2 whitespace-normal rounded-sm px-2 py-1.5 text-left text-xs font-normal transition-colors',
                 activeSection === item.id
-                  ? 'bg-muted text-foreground'
+                  ? 'bg-muted text-foreground hover:bg-muted hover:text-foreground'
                   : 'text-muted-foreground hover:bg-muted/50 hover:text-foreground'
               )}
             >
@@ -288,7 +292,7 @@ export function AnalysisReportRail({
                   {item.badge}
                 </span>
               ) : null}
-            </button>
+            </Button>
           ))}
         </div>
       </RailSection>
@@ -312,13 +316,14 @@ export function AnalysisReportRail({
                     {note.resolved ? ' · resolved' : ''}
                   </p>
                   {onResolveAnnotation ? (
-                    <button
+                    <Button
                       type="button"
-                      className="mt-1 text-[10px] text-primary"
+                      variant="ghost"
+                      className="mt-1 h-auto px-0 text-[10px] font-normal text-primary hover:bg-transparent hover:text-primary"
                       onClick={() => onResolveAnnotation(note.id, !note.resolved)}
                     >
                       {note.resolved ? 'Reopen' : 'Resolve'}
-                    </button>
+                    </Button>
                   ) : null}
                 </div>
               ))}
@@ -334,22 +339,23 @@ export function AnalysisReportRail({
               {annotationTarget ? (
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-[10px] font-medium text-primary">On: {annotationTarget}</p>
-                  <button
+                  <Button
                     type="button"
-                    className="text-[10px] text-muted-foreground hover:text-foreground"
+                    variant="ghost"
+                    className="h-auto px-0 text-[10px] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground"
                     onClick={() => onAnnotationTargetChange?.(undefined)}
                   >
                     Clear
-                  </button>
+                  </Button>
                 </div>
               ) : null}
-              <textarea
+              <Textarea
                 ref={annotationInputRef}
                 value={draft}
                 onChange={e => setDraft(e.target.value)}
                 rows={3}
                 placeholder="Add a note about this report or chart…"
-                className="w-full resize-none rounded-sm border border-border bg-background px-2 py-1.5 text-[11px] text-foreground outline-none ring-primary/30 focus:ring-1"
+                className="w-full resize-none rounded-sm px-2 py-1.5 text-[11px] ring-primary/30 focus-visible:ring-1"
                 onKeyDown={e => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
                     e.preventDefault();
@@ -384,9 +390,10 @@ export function AnalysisReportRail({
             </div>
           ) : null}
 
-          <button
+          <Button
             type="button"
-            className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+            variant="ghost"
+            className="h-auto justify-start gap-1 whitespace-normal px-0 text-[11px] font-normal text-muted-foreground hover:bg-transparent hover:text-foreground"
             onClick={() => {
               onAnnotate?.();
               onAnnotationComposerOpenChange?.(true);
@@ -394,7 +401,7 @@ export function AnalysisReportRail({
           >
             <Plus className="size-3" aria-hidden />
             New annotation
-          </button>
+          </Button>
         </div>
       </RailSection>
 
@@ -428,25 +435,19 @@ export function AnalysisReportRail({
       <RailSection label="Export">
         <div className="flex flex-col gap-0.5">
           {exportItems.map((item, i) => (
-            <button
+            <Button
               key={i}
               type="button"
+              variant="ghost"
               data-testid={(item as { testId?: string }).testId}
               disabled={!item.onClick || Boolean((item as { disabled?: boolean }).disabled)}
               onClick={item.onClick}
-              className={cn(
-                'flex items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors',
-                item.onClick &&
-                  !(item as { disabled?: boolean }).disabled &&
-                  'hover:bg-muted/50 hover:text-foreground',
-                (!item.onClick || (item as { disabled?: boolean }).disabled) &&
-                  'cursor-not-allowed opacity-50'
-              )}
+              className="h-auto w-full justify-start gap-2 whitespace-normal rounded-sm px-2 py-1.5 text-left text-xs font-normal text-muted-foreground hover:bg-muted/50 hover:text-foreground disabled:cursor-not-allowed"
             >
               <item.icon className="size-3 shrink-0 opacity-60" aria-hidden />
               <span className="flex-1">{item.label}</span>
               <ArrowRight className="size-3 shrink-0 opacity-40" aria-hidden />
-            </button>
+            </Button>
           ))}
         </div>
       </RailSection>

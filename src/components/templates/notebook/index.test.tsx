@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { Textarea } from '@/components/atoms/text-area';
 import { Notebook } from './index';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useNotebookWorkspaceStore } from '@/stores/notebook-workspace-store';
@@ -39,7 +40,7 @@ jest.mock('@monaco-editor/react', () => ({
       );
     }
     return (
-      <textarea
+      <Textarea
         data-testid={`monaco-editor-${defaultLanguage}`}
         value={value}
         onChange={e => onChange(e.target.value)}

@@ -9,6 +9,7 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Checkbox } from '@/components/atoms/checkbox';
 import { Label } from '@/components/atoms/label';
 import { Input } from '@/components/atoms/input';
 import { useTabsStore } from '@/stores/tabs-store';
@@ -256,12 +257,10 @@ export const CountValuesDialog = ({ children }: CountValuesDialogProps) => {
             <div className="grid gap-2 max-h-40 overflow-y-auto p-2 border rounded-sm">
               {columnNames.map(variable => (
                 <div key={variable} className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
+                  <Checkbox
                     id={`var-${variable}`}
                     checked={sourceVariables.includes(variable)}
-                    onChange={() => handleVariableSelect(variable)}
-                    className="rounded-sm border-gray-300"
+                    onCheckedChange={() => handleVariableSelect(variable)}
                   />
                   <Label htmlFor={`var-${variable}`} className="cursor-pointer">
                     {variable}

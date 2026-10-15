@@ -9,7 +9,15 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
 import { datasetRequest } from '@/lib/dataset-data-ops';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
@@ -140,42 +148,49 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
         </p>
         <div className="space-y-2 text-sm">
           <Label htmlFor="banner-book-id">Book</Label>
-          <select
-            id="banner-book-id"
-            className="h-8 w-full rounded-md border bg-background px-2"
-            value={bookId}
-            onChange={e => setBookId(e.target.value)}
+          <Select
+            value={bookId || '__none__'}
+            onValueChange={value => setBookId(value === '__none__' ? '' : value)}
           >
-            <option value="">Select a book</option>
-            {books.map(book => (
-              <option key={book.id} value={book.id}>
-                {book.name} ({book.n_specs})
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="banner-book-id" className="h-8 w-full text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Select a book</SelectItem>
+              {books.map(book => (
+                <SelectItem key={book.id} value={book.id}>
+                  {book.name} ({book.n_specs})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Label htmlFor="banner-book-target">Target dataset</Label>
-          <select
-            id="banner-book-target"
-            className="h-8 w-full rounded-md border bg-background px-2"
-            value={pastedId.trim() ? '' : targetId}
-            onChange={e => {
-              setTargetId(e.target.value);
+          <Select
+            value={(pastedId.trim() ? '' : targetId) || '__none__'}
+            onValueChange={value => {
+              setTargetId(value === '__none__' ? '' : value);
               setPastedId('');
             }}
           >
-            <option value="">Select a dataset</option>
-            {otherDatasets.map(item => (
-              <option key={item.id} value={item.id}>
-                {item.name}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger id="banner-book-target" className="h-8 w-full text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__none__">Select a dataset</SelectItem>
+              {otherDatasets.map(item => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <label htmlFor="banner-book-pasted" className="sr-only">
             Dataset id
           </label>
-          <input
+          <Input
             id="banner-book-pasted"
-            className="h-8 w-full rounded-md border px-2"
+            inputSize="sm"
+            className="w-full"
             placeholder="Or paste a dataset id"
             value={pastedId}
             onChange={e => setPastedId(e.target.value)}
@@ -189,8 +204,9 @@ export function BannerBookDialog({ children }: { children: ReactNode }) {
             {missing.map(row => (
               <label key={row.from} className="flex items-center gap-2">
                 <span className="w-28 truncate">{row.from}</span>
-                <input
-                  className="h-7 flex-1 rounded-md border px-2"
+                <Input
+                  inputSize="sm"
+                  className="h-7 flex-1"
                   placeholder="Name on the new file"
                   value={mapping[row.from || ''] || ''}
                   onChange={e =>

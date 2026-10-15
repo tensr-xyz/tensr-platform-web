@@ -11,8 +11,17 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Checkbox } from '@/components/atoms/checkbox';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/atoms/select';
+import { Textarea } from '@/components/atoms/text-area';
 import { apiClient } from '@/lib/api-client';
 import {
   isTechniqueRun,
@@ -34,6 +43,37 @@ function useWorkspaceColumns() {
       .filter(id => !LINEAGE_HIDDEN_COLUMNS.has(id));
   }, [activeTab?.data?.initialColumns]);
   return { datasetId, columns };
+}
+
+function ColumnSelect({
+  value,
+  onValueChange,
+  columns,
+  emptyLabel = 'Select',
+}: {
+  value: string;
+  onValueChange: (value: string) => void;
+  columns: string[];
+  emptyLabel?: string;
+}) {
+  return (
+    <Select
+      value={value || '__none__'}
+      onValueChange={next => onValueChange(next === '__none__' ? '' : next)}
+    >
+      <SelectTrigger className="w-full text-sm">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value="__none__">{emptyLabel}</SelectItem>
+        {columns.map(column => (
+          <SelectItem key={column} value={column}>
+            {column}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 function AgencyDialog({
@@ -136,64 +176,33 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     >
       <div className="space-y-3">
         <Label>Stub</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={stub}
-          onChange={e => setStub(e.target.value)}
-        >
-          <option value="">Select</option>
-          {columns.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <ColumnSelect value={stub} onValueChange={setStub} columns={columns} />
         <Label>Banner</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={banner}
-          onChange={e => setBanner(e.target.value)}
-        >
-          <option value="">Select</option>
-          {columns.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <ColumnSelect value={banner} onValueChange={setBanner} columns={columns} />
         <Label>Nest (optional)</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={nest}
-          onChange={e => setNest(e.target.value)}
-        >
-          <option value="">None</option>
-          {columns.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <ColumnSelect value={nest} onValueChange={setNest} columns={columns} emptyLabel="None" />
         <Label>Statistic</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={stat}
-          onChange={e => setStat(e.target.value)}
-        >
-          <option value="column_proportion">Column %</option>
-          <option value="row_proportion">Row %</option>
-        </select>
+        <Select value={stat} onValueChange={setStat}>
+          <SelectTrigger className="w-full text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="column_proportion">Column %</SelectItem>
+            <SelectItem value="row_proportion">Row %</SelectItem>
+          </SelectContent>
+        </Select>
         <Label>Multiple response %</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={mr}
-          onChange={e => setMr(e.target.value)}
-        >
-          <option value="respondents">% respondents</option>
-          <option value="responses">% responses</option>
-        </select>
+        <Select value={mr} onValueChange={setMr}>
+          <SelectTrigger className="w-full text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="respondents">% respondents</SelectItem>
+            <SelectItem value="responses">% responses</SelectItem>
+          </SelectContent>
+        </Select>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={grids} onChange={e => setGrids(e.target.checked)} />
+          <Checkbox checked={grids} onCheckedChange={checked => setGrids(checked === true)} />
           Flatten grids
         </label>
         {specId && datasetId ? (
@@ -234,18 +243,7 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
     >
       <div className="space-y-3">
         <Label>Category column</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={column}
-          onChange={e => setColumn(e.target.value)}
-        >
-          <option value="">Select</option>
-          {columns.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <ColumnSelect value={column} onValueChange={setColumn} columns={columns} />
         <Label>Targets JSON</Label>
         <Input value={targets} onChange={e => setTargets(e.target.value)} />
       </div>
@@ -299,18 +297,7 @@ export function BatchTablesDialog({ children }: { children: ReactNode }) {
     >
       <div className="space-y-3">
         <Label>Banner</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={banner}
-          onChange={e => setBanner(e.target.value)}
-        >
-          <option value="">Select</option>
-          {columns.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <ColumnSelect value={banner} onValueChange={setBanner} columns={columns} />
         <p className="text-xs text-muted-foreground">
           One banner × every other question. Smart Tables is sort/cull by significance.
         </p>
@@ -354,35 +341,25 @@ export function OpenTextCodingDialog({ children }: { children: ReactNode }) {
       <div className="space-y-3">
         <p className="text-xs text-muted-foreground">{notice}</p>
         <Label>Text column</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={text}
-          onChange={e => setText(e.target.value)}
-        >
-          <option value="">Select</option>
-          {columns.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <ColumnSelect value={text} onValueChange={setText} columns={columns} />
         <label className="flex items-center gap-2 text-xs">
-          <input type="checkbox" checked={useModel} onChange={e => setUseModel(e.target.checked)} />
+          <Checkbox checked={useModel} onCheckedChange={checked => setUseModel(checked === true)} />
           Suggest codes with the model
         </label>
         {useModel ? (
           <label className="flex items-center gap-2 text-xs">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={confirmSend}
-              onChange={e => setConfirmSend(e.target.checked)}
+              onCheckedChange={checked => setConfirmSend(checked === true)}
             />
             Verbatims are sent to the model
           </label>
         ) : null}
-        <button
+        <Button
           type="button"
-          className="rounded border px-2 py-1 text-xs"
+          variant="outline"
+          size="sm"
+          className="h-auto px-2 py-1 text-xs"
           onClick={async () => {
             if (!datasetId || !text) return;
             const proposed = await apiClient.datasets.openEnd.propose(datasetId, {
@@ -395,10 +372,10 @@ export function OpenTextCodingDialog({ children }: { children: ReactNode }) {
           }}
         >
           Propose codeframe
-        </button>
+        </Button>
         <Label>Codes (edit, merge, or split before apply)</Label>
-        <textarea
-          className="min-h-28 w-full rounded border p-2 font-mono text-xs"
+        <Textarea
+          className="min-h-28 w-full font-mono text-xs"
           value={codes}
           onChange={e => setCodes(e.target.value)}
         />
@@ -452,18 +429,11 @@ function TechniqueColumnDialog({
                 onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
               />
             ) : (
-              <select
-                className="w-full rounded border p-2 text-sm"
+              <ColumnSelect
                 value={values[field.key] || ''}
-                onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
-              >
-                <option value="">Select</option>
-                {columns.map(c => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
+                onValueChange={next => setValues(v => ({ ...v, [field.key]: next }))}
+                columns={columns}
+              />
             )}
           </div>
         ))}
@@ -599,40 +569,19 @@ export function MaxDiffDialog({ children }: { children: ReactNode }) {
         <p className="text-xs text-muted-foreground">
           Hierarchical Bayes is not offered. Counting or MNL only.
         </p>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={mode}
-          onChange={e => setMode(e.target.value as 'count' | 'mnl')}
-        >
-          <option value="count">Counting</option>
-          <option value="mnl">MNL</option>
-        </select>
+        <Select value={mode} onValueChange={value => setMode(value as 'count' | 'mnl')}>
+          <SelectTrigger className="w-full text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="count">Counting</SelectItem>
+            <SelectItem value="mnl">MNL</SelectItem>
+          </SelectContent>
+        </Select>
         <Label>Best</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={best}
-          onChange={e => setBest(e.target.value)}
-        >
-          <option value="">Select</option>
-          {columns.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <ColumnSelect value={best} onValueChange={setBest} columns={columns} />
         <Label>Worst</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={worst}
-          onChange={e => setWorst(e.target.value)}
-        >
-          <option value="">Select</option>
-          {columns.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <ColumnSelect value={worst} onValueChange={setWorst} columns={columns} />
         {mode === 'mnl' ? (
           <>
             <Label>Items (comma-separated)</Label>
@@ -674,31 +623,9 @@ export function ConjointDialog({ children }: { children: ReactNode }) {
       <div className="space-y-3">
         <p className="text-xs text-muted-foreground">MNL only. HB is not offered.</p>
         <Label>Chosen</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={chosen}
-          onChange={e => setChosen(e.target.value)}
-        >
-          <option value="">Select</option>
-          {columns.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <ColumnSelect value={chosen} onValueChange={setChosen} columns={columns} />
         <Label>Profile id</Label>
-        <select
-          className="w-full rounded border p-2 text-sm"
-          value={profile}
-          onChange={e => setProfile(e.target.value)}
-        >
-          <option value="">Select</option>
-          {columns.map(c => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <ColumnSelect value={profile} onValueChange={setProfile} columns={columns} />
         <Label>Attributes (comma-separated)</Label>
         <Input value={attrs} onChange={e => setAttrs(e.target.value)} />
       </div>

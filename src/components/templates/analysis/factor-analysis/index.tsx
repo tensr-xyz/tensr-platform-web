@@ -2,14 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { getIdToken } from '@/utils/auth';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
-import { Label } from '@/components/atoms/label';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/atoms/select';
+import { RadioGroup, RadioGroupItem } from '@/components/atoms/radio-group';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useAuth } from '@/hooks/api/use-auth';
@@ -258,75 +251,55 @@ export const FactorAnalysis = ({ children }: FactorAnalysisProps) => {
                 <div className="space-y-4">
                   <div>
                     <label className="text-sm font-medium">Extraction Method:</label>
-                    <div className="space-y-2 mt-2">
+                    <RadioGroup
+                      value={extractionMethod}
+                      onValueChange={value => setExtractionMethod(value as 'pca' | 'efa')}
+                      className="mt-2"
+                    >
                       <label className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          value="pca"
-                          checked={extractionMethod === 'pca'}
-                          onChange={e => setExtractionMethod(e.target.value as 'pca')}
-                          className="mr-2"
-                        />
+                        <RadioGroupItem value="pca" />
                         <span>Principal Component Analysis (PCA)</span>
                       </label>
                       <label className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          value="efa"
-                          checked={extractionMethod === 'efa'}
-                          onChange={e => setExtractionMethod(e.target.value as 'efa')}
-                          className="mr-2"
-                        />
+                        <RadioGroupItem value="efa" />
                         <span>Exploratory Factor Analysis (EFA)</span>
                       </label>
-                    </div>
+                    </RadioGroup>
                   </div>
 
                   <div>
                     <label className="text-sm font-medium">Rotation Method:</label>
-                    <div className="space-y-2 mt-2">
+                    <RadioGroup
+                      value={rotationMethod}
+                      onValueChange={value =>
+                        setRotationMethod(value as 'varimax' | 'promax' | 'none')
+                      }
+                      className="mt-2"
+                    >
                       <label className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          value="varimax"
-                          checked={rotationMethod === 'varimax'}
-                          onChange={e => setRotationMethod(e.target.value as 'varimax')}
-                          className="mr-2"
-                        />
+                        <RadioGroupItem value="varimax" />
                         <span>Varimax</span>
                       </label>
                       <label className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          value="promax"
-                          checked={rotationMethod === 'promax'}
-                          onChange={e => setRotationMethod(e.target.value as 'promax')}
-                          className="mr-2"
-                        />
+                        <RadioGroupItem value="promax" />
                         <span>Promax</span>
                       </label>
                       <label className="flex items-center space-x-2">
-                        <input
-                          type="radio"
-                          value="none"
-                          checked={rotationMethod === 'none'}
-                          onChange={e => setRotationMethod(e.target.value as 'none')}
-                          className="mr-2"
-                        />
+                        <RadioGroupItem value="none" />
                         <span>None</span>
                       </label>
-                    </div>
+                    </RadioGroup>
                   </div>
 
                   <div>
                     <label className="text-sm font-medium">Number of Factors:</label>
-                    <input
+                    <Input
                       type="number"
-                      min="1"
+                      min={1}
                       max={selectedVariables.length}
                       value={numberOfFactors}
                       onChange={e => setNumberOfFactors(parseInt(e.target.value) || 3)}
-                      className="w-full mt-2 p-2 border border-border rounded"
+                      className="mt-2 w-full"
                     />
                   </div>
                 </div>
@@ -368,15 +341,18 @@ export const FactorAnalysis = ({ children }: FactorAnalysisProps) => {
                       className="flex items-center justify-between bg-gray-100 dark:bg-gray-800 p-2 rounded-sm"
                     >
                       <span>{variable}</span>
-                      <button
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-auto w-auto text-red-500 hover:bg-transparent hover:text-red-700"
                         onClick={e => {
                           e.stopPropagation();
                           handleVariableSelect(variable);
                         }}
-                        className="text-red-500 hover:text-red-700"
                       >
                         ×
-                      </button>
+                      </Button>
                     </div>
                   ))
                 )}
