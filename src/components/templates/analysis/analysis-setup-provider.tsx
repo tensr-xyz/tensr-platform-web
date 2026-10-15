@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
+import { isNumericDataType } from '@/components/molecules/column-type-badge';
 import { LINEAGE_HIDDEN_COLUMNS, userFacingSchemaColumns } from '@/lib/adopt-derived-dataset';
 
 function buildPreviewFromTab(tab: Tab | undefined): DatasetPreview | null {
@@ -49,7 +50,7 @@ function columnsFromTab(tab: Tab | undefined): SchemaColumn[] {
     .filter(col => !LINEAGE_HIDDEN_COLUMNS.has(col.id))
     .map(col => ({
       name: col.id,
-      type: col.type === 'number' || col.type === 'numeric' ? 'numeric' : 'categorical',
+      type: isNumericDataType(col.type) ? 'numeric' : 'categorical',
       missing_count: 0,
     }));
 }

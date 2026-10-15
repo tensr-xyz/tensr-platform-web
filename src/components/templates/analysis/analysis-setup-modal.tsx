@@ -68,9 +68,14 @@ export function AnalysisSetupModal({
   );
 
   const bodyKey = React.useMemo(() => JSON.stringify(initialBody ?? null), [initialBody]);
-  // The tab schema renders first and the API schema replaces it with the same names
-  // and better types; only a different column set may clear the user's picks.
-  const schemaKey = React.useMemo(() => schema.map(c => c.name).join('\u0000'), [schema]);
+  // The sheet schema arrives first, then the API schema (same names, sharper types)
+  // and the preview rows. A fresh form follows those, so Age does not stay in a
+  // categorical slot after its type or distinct values show up. A saved body still wins.
+  const schemaKey = React.useMemo(
+    () => schema.map(c => `${c.name}\u0001${c.type ?? ''}`).join('\u0000'),
+    [schema]
+  );
+  const previewKey = preview ? `${preview.headers.join('\u0001')}:${preview.rows.length}` : '';
 
   React.useEffect(() => {
     if (!open) return;
@@ -84,8 +89,8 @@ export function AnalysisSetupModal({
     } else {
       setForm(defaultFormForAnalysis(initialOp, schema, preview));
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody in bodyKey, schema in schemaKey
-  }, [open, initialOp, bodyKey, schemaKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody in bodyKey, schema in schemaKey, preview in previewKey
+  }, [open, initialOp, bodyKey, schemaKey, previewKey]);
 
   const allNames = schema.map(c => c.name);
   const analysis = form.analysis;

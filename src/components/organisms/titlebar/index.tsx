@@ -328,7 +328,7 @@ const Titlebar = ({
           variant="ghost"
           size="compact"
           onClick={() => setAnalysisPaletteOpen(true)}
-          className="h-11 shrink-0 gap-1.5 rounded-none border-l border-border px-3 font-normal text-muted-foreground hover:text-foreground"
+          className="h-11 shrink-0 gap-1.5 rounded-none border-l border-border px-3 text-xs font-normal text-muted-foreground hover:text-foreground"
           aria-label="Search analyses"
         >
           <Search className="size-3.5 shrink-0" aria-hidden />
