@@ -22,6 +22,12 @@ describe('banner_table setup', () => {
       banner_column: 'Group',
       column_percent: true,
       column_letters: true,
+      significance_display: 'column_letters',
+      significance_alpha: 0.05,
+      letter_levels: 2,
+      letter_case: 'lower',
+      letter_upper_alpha: 0.01,
+      multiple_comparison: 'fdr',
       apa_format: false,
       include_charts: false,
     });

@@ -17,7 +17,7 @@ import {
 } from '@/lib/report-export';
 import { apiClient } from '@/lib/api-client';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
-import { isAnalysisKey } from '@/lib/analysis-definitions';
+import { bannerRerunPrefill, isAnalysisKey } from '@/lib/analysis-definitions';
 import { loadOutputPreferences } from '@/lib/output-preferences';
 import { captureProductEvent, captureProductException } from '@/lib/product-analytics';
 import { revealConsumedRowsFromRun } from '@/lib/provenance-click-through';
@@ -188,7 +188,7 @@ export function AnalysisReportLayout({
     const request = rawResult?.request_body;
     const fromResult =
       request && typeof request === 'object' ? (request as Record<string, unknown>) : null;
-    const prefill = { ...(fromResult ?? {}), ...(stored ?? {}) };
+    const prefill = bannerRerunPrefill(fromResult, stored, report.meta.output_preferences);
     captureProductEvent('rerun_clicked', {
       dataset_id: sourceDatasetId ?? null,
       analysis_type: key || null,
@@ -212,6 +212,7 @@ export function AnalysisReportLayout({
     openSetup,
     rawResult,
     report.meta.analysis_key,
+    report.meta.output_preferences,
     sourceDatasetId,
   ]);
 

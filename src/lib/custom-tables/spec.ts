@@ -61,6 +61,7 @@ export type TableRequestBody = {
   suppress_low_base: boolean;
   banner_id?: string;
   weight?: 'none';
+  save?: boolean;
 };
 
 export function defaultDecimals(): TableDecimals {
@@ -368,7 +369,7 @@ export function canvasFromStoredSpec(
         : 0.05,
     letterLevels: spec.letter_levels === 1 ? 1 : 2,
     letterCase: spec.letter_case === 'upper' ? 'upper' : 'lower',
-    letterUpperAlpha: typeof spec.letter_upper_alpha === 'number' ? spec.letter_upper_alpha : 0.001,
+    letterUpperAlpha: typeof spec.letter_upper_alpha === 'number' ? spec.letter_upper_alpha : 0.01,
     significanceDisplay:
       spec.significance_display === 'cell_comparisons' ? 'cell_comparisons' : 'column_letters',
     lowBaseThreshold:

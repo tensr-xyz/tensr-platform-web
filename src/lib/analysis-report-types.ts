@@ -195,6 +195,11 @@ export type AnalysisReport = {
     generated_at: string;
     rows_dataset: number;
     spss_procedure?: string;
+    output_preferences?: {
+      apaFormat?: boolean;
+      includeCharts?: boolean;
+      decimalPlaces?: number;
+    };
   };
   summary: string;
   /** Combined narrative text (summary + follow-up paragraphs). */
