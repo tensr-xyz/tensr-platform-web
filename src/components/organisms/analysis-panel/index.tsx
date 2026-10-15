@@ -1,5 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { Search } from 'lucide-react';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import {
@@ -74,9 +81,21 @@ export const AnalysisPanel: React.FC = () => {
 
         <ScrollArea className="h-[calc(100vh-120px)]">
           {Object.keys(groupedItems).length === 0 ? (
-            <div className="p-4 text-center text-muted-foreground text-sm">
-              {searchTerm ? 'No results found' : 'No analyses available'}
-            </div>
+            <Empty className="min-h-0 border-0 p-4 md:p-4">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Search />
+                </EmptyMedia>
+                <EmptyTitle className="text-sm">
+                  {searchTerm ? 'No matching analyses' : 'No analyses available'}
+                </EmptyTitle>
+                <EmptyDescription className="text-xs">
+                  {searchTerm
+                    ? 'Try a different search.'
+                    : 'Analyses for this dataset will show up here.'}
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <div className="space-y-4">
               {Object.entries(groupedItems).map(([category, sections]) => (

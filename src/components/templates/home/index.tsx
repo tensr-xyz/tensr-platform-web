@@ -20,7 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/molecules/dialog';
-import useAuth from '@/hooks/api/use-auth';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { cn } from '@/utils';
 import { apiClient } from '@/lib/api-client';
@@ -153,8 +152,7 @@ const HomeTemplate: React.FC = () => {
   const { toast } = useToast();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const { activeOrganization, isPersonalAccount, userOrganizations } = useOrganizationContext();
+  const { activeOrganization, userOrganizations } = useOrganizationContext();
   const [searchQ, setSearchQ] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [uploadPickerOpen, setUploadPickerOpen] = useState(false);
@@ -331,17 +329,16 @@ const HomeTemplate: React.FC = () => {
 
   const hasDatasets = projectsArray.length > 0;
 
-  const workspaceLabel =
-    !isPersonalAccount && activeOrganization
-      ? activeOrganization.name
-      : (user?.email?.split('@')[0] ?? 'personal');
+  const workspaceName = activeOrganization?.name?.trim() || null;
 
   return (
     <div className="w-full pb-8 text-left">
       <header className="mb-6 pt-6 md:pt-8">
-        <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          Workspace · {workspaceLabel}
-        </p>
+        {workspaceName ? (
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            Workspace · {workspaceName}
+          </p>
+        ) : null}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-medium tracking-tight text-foreground md:text-3xl">
             Datasets
@@ -513,6 +510,17 @@ const HomeTemplate: React.FC = () => {
             statusFilterFn={statusFilterMatch}
             projectColor={projectColor}
             displayStatus={displayStatus}
+            isCatalogEmpty={!hasDatasets}
+            uploadAction={
+              <Button
+                type="button"
+                className="h-9 gap-2 rounded-full px-4"
+                onClick={() => setUploadPickerOpen(true)}
+              >
+                <Upload className="size-4" aria-hidden />
+                Upload dataset
+              </Button>
+            }
           />
         )}
       </section>

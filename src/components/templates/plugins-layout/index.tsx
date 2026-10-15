@@ -5,6 +5,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, Star, Download, Zap, Plus, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Input } from '@/components/atoms/input';
 import { PluginRecord } from '@/types/plugin';
 import usePlugins from '@/hooks/api/use-plugin';
@@ -392,35 +400,47 @@ export default function PluginsLayout() {
       </section>
 
       {isMarketplaceEmpty ? (
-        <div className="rounded-xl border border-border bg-card p-8 md:p-12">
-          <h3 className="text-lg font-medium text-foreground">No plugins in the marketplace yet</h3>
-          <p className="mt-2 max-w-md text-sm text-muted-foreground">
-            Be the first to publish a plugin, or check back soon as creators add new analysis tools.
-          </p>
-          <Button className="mt-6 rounded-full" asChild>
-            <Link href="/plugins/upload">Publish a plugin</Link>
-          </Button>
-        </div>
-      ) : isFilterEmpty ? (
-        <div className="rounded-xl border border-border bg-card p-8 md:p-12">
-          <Search className="mb-3 size-8 text-muted-foreground/50" aria-hidden />
-          <h3 className="text-lg font-medium text-foreground">No plugins match your filters</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Try adjusting your search or category filters.
-          </p>
-          {hasFilters ? (
-            <Button
-              variant="outline"
-              className="mt-4 rounded-full"
-              onClick={() => {
-                setSearch('');
-                setDiscoverFilter('all');
-              }}
-            >
-              Clear filters
+        <Empty className="rounded-xl border border-border bg-card">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Zap />
+            </EmptyMedia>
+            <EmptyTitle>No plugins in the marketplace yet</EmptyTitle>
+            <EmptyDescription>
+              Be the first to publish a plugin, or check back soon as creators add new analysis
+              tools.
+            </EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button className="rounded-full" asChild>
+              <Link href="/plugins/upload">Publish a plugin</Link>
             </Button>
+          </EmptyContent>
+        </Empty>
+      ) : isFilterEmpty ? (
+        <Empty className="rounded-xl border border-border bg-card">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Search />
+            </EmptyMedia>
+            <EmptyTitle>No plugins match your filters</EmptyTitle>
+            <EmptyDescription>Try adjusting your search or category filters.</EmptyDescription>
+          </EmptyHeader>
+          {hasFilters ? (
+            <EmptyContent>
+              <Button
+                variant="outline"
+                className="rounded-full"
+                onClick={() => {
+                  setSearch('');
+                  setDiscoverFilter('all');
+                }}
+              >
+                Clear filters
+              </Button>
+            </EmptyContent>
           ) : null}
-        </div>
+        </Empty>
       ) : (
         <>
           {featuredPlugin ? <FeaturedPlugin plugin={featuredPlugin} /> : null}

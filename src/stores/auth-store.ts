@@ -9,6 +9,11 @@ interface Session {
   sessionJwt?: string;
 }
 
+export type NeedsEmailPrompt = {
+  firstName: string | null;
+  lastName: string | null;
+};
+
 interface AuthState {
   isLoading: boolean;
   /** True once Stytch SDK has finished its first session check. */
@@ -19,6 +24,8 @@ interface AuthState {
   /** Runtime mirror of Stytch tokens — never persisted. */
   session: Session | null;
   sessionExpired: boolean;
+  /** Stytch session is valid, but Tensr will not create an account until an email is verified. */
+  needsEmail: NeedsEmailPrompt | null;
 }
 
 interface AuthActions {
@@ -29,6 +36,7 @@ interface AuthActions {
   setInitialized: (initialized: boolean) => void;
   setError: (error: string | null) => void;
   setSessionExpired: (expired: boolean) => void;
+  setNeedsEmail: (needsEmail: NeedsEmailPrompt | null) => void;
   login: (session: Session, user: User) => void;
   logout: () => void;
   refreshSession: (session: Session) => void;
@@ -45,6 +53,7 @@ const initialState: AuthState = {
   entitlements: null,
   session: null,
   sessionExpired: false,
+  needsEmail: null,
 };
 
 export const useAuthStore = create<AuthStore>()(
@@ -72,6 +81,8 @@ export const useAuthStore = create<AuthStore>()(
 
         setSessionExpired: expired => set({ sessionExpired: expired }),
 
+        setNeedsEmail: needsEmail => set({ needsEmail }),
+
         login: (session, user) => {
           storeSession(session.sessionToken, session.sessionJwt);
           set({
@@ -80,6 +91,7 @@ export const useAuthStore = create<AuthStore>()(
             isLoading: false,
             error: null,
             sessionExpired: false,
+            needsEmail: null,
           });
         },
 
@@ -92,6 +104,7 @@ export const useAuthStore = create<AuthStore>()(
             isLoading: false,
             error: null,
             sessionExpired: false,
+            needsEmail: null,
           });
         },
 

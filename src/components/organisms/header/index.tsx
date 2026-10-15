@@ -22,6 +22,7 @@ import { User as UserType } from '@/types/user';
 import { usePathname, useRouter } from 'next/navigation';
 import { toast } from '@/hooks/ui/use-toast';
 import { useOrganizationContext } from '@/contexts/organisation-context';
+import { accountInitials, accountLabel } from '@/lib/user-label';
 import { PermissionWrapper } from '@/wrappers/permission';
 
 interface MobileMenuProps {
@@ -31,21 +32,9 @@ interface MobileMenuProps {
   logout: () => void;
 }
 
-const getInitials = (email: string) => {
-  if (!email) return '??';
-  const localPart = email.split('@')[0];
-  const parts = localPart.split(/[._-]/).filter(part => part.length > 0);
-
-  if (parts.length > 1) {
-    return parts.map(part => part[0].toUpperCase()).join('');
-  }
-
-  return localPart.length > 1 ? localPart.slice(0, 2).toUpperCase() : localPart[0].toUpperCase();
-};
-
 export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) => {
   const isAuthenticated = !!user;
-  const initials = user ? getInitials(user.email) : '';
+  const initials = user ? accountInitials(user) : null;
   const {
     activeOrganization,
     currentUserRole,
@@ -104,10 +93,12 @@ export const MobileMenu = ({ isOpen, onClose, user, logout }: MobileMenuProps) =
           <div className="p-4 border-b border-border">
             <div className="flex items-center space-x-3">
               <Avatar className="h-12 w-12">
-                <AvatarFallback>{initials}</AvatarFallback>
+                <AvatarFallback>
+                  {initials ?? <User className="size-4" aria-hidden />}
+                </AvatarFallback>
               </Avatar>
               <div className="flex-1">
-                <p className="font-medium">{user.email}</p>
+                {accountLabel(user) ? <p className="font-medium">{accountLabel(user)}</p> : null}
                 <p className="text-sm text-gray-600">{user.subscriptionTier}</p>
 
                 {/* Organization Context */}
@@ -196,14 +187,18 @@ const UserProfileMenu: React.FC = () => {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-8 w-8 rounded-full">
           <Avatar className="h-8 w-8">
-            <AvatarFallback>{getInitials(user.email)}</AvatarFallback>
+            <AvatarFallback>
+              {accountInitials(user) ?? <User className="size-4" aria-hidden />}
+            </AvatarFallback>
           </Avatar>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.email}</p>
+            {accountLabel(user) ? (
+              <p className="text-sm font-medium leading-none">{accountLabel(user)}</p>
+            ) : null}
             <p className="text-xs leading-none text-muted-foreground">{user.subscriptionTier}</p>
           </div>
         </DropdownMenuLabel>
@@ -341,7 +336,9 @@ export const AccountSwitcher: React.FC = () => {
       >
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.email}</p>
+            {accountLabel(user) ? (
+              <p className="text-sm font-medium leading-none">{accountLabel(user)}</p>
+            ) : null}
             <p className="text-xs leading-none text-muted-foreground">
               {isPersonalAccount
                 ? 'Personal Account'

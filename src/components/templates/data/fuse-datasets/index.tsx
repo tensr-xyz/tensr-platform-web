@@ -1,6 +1,7 @@
 'use client';
 
 import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { Folder } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +12,13 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Label } from '@/components/atoms/label';
 import { Checkbox } from '@/components/atoms/checkbox';
 import {
@@ -167,7 +175,17 @@ function FuseDialog({
                   </div>
                 ))
               ) : (
-                <div className="text-sm text-muted-foreground">No datasets listed</div>
+                <Empty className="min-h-0 border-0 p-4 md:p-4">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <Folder />
+                    </EmptyMedia>
+                    <EmptyTitle className="text-sm">No datasets yet</EmptyTitle>
+                    <EmptyDescription className="text-xs">
+                      Upload a dataset before combining files.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               )}
             </div>
           </div>

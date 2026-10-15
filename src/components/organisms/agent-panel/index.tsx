@@ -1,7 +1,13 @@
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/atoms/empty';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Kbd } from '@/components/atoms/kbd';
 import { Spinner } from '@/components/atoms/spinner';
 import { ChatComposerInput } from '@/components/molecules/chat-composer-input';
@@ -307,6 +313,9 @@ function AnalysisRunsList({
     return (
       <Empty className="min-h-0 border-0 p-6 md:p-8">
         <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <History />
+          </EmptyMedia>
           <EmptyTitle className="text-sm">No runs yet</EmptyTitle>
           <EmptyDescription className="text-[11px]">
             Ask the agent to analyze your data.
