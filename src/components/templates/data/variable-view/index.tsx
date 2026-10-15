@@ -23,6 +23,7 @@ import { resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
 import type { ColumnMetadata } from '@/lib/analysis-report-types';
+import { formatEligibleIf, parseEligibleIf } from '@/lib/eligible-if';
 
 interface VariableViewProps {
   children: ReactNode;
@@ -110,7 +111,16 @@ export function VariableViewDialog({ children }: VariableViewProps) {
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 bg-muted/80">
                   <tr>
-                    {['Name', 'Label', 'Type', 'Width', 'Measure', 'Values', 'Missing'].map(h => (
+                    {[
+                      'Name',
+                      'Label',
+                      'Type',
+                      'Width',
+                      'Measure',
+                      'Values',
+                      'Missing',
+                      'Routing',
+                    ].map(h => (
                       <th key={h} className="px-2 py-2 font-semibold">
                         {h}
                       </th>
@@ -211,6 +221,18 @@ export function VariableViewDialog({ children }: VariableViewProps) {
                             updateCol(i, {
                               missing: vals.length ? { user_values: vals } : null,
                             });
+                          }}
+                        />
+                      </td>
+                      <td className="px-2 py-1">
+                        <Input
+                          className="h-7 text-xs font-mono"
+                          placeholder="owns_A=1"
+                          aria-label={`Routing for ${col.name}`}
+                          defaultValue={formatEligibleIf(col.eligible_if)}
+                          onBlur={e => {
+                            const clauses = parseEligibleIf(e.target.value);
+                            updateCol(i, { eligible_if: clauses.length ? clauses : null });
                           }}
                         />
                       </td>

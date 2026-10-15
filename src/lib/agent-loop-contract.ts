@@ -272,6 +272,13 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
         'Ordinary business questions reach the model. The pre-model gate does not force low_clarity.',
     })
   ),
+  {
+    prompt: 'Stack the FR and EN markets, find the broken script, and use the right bases.',
+    mode: 'agent',
+    expected: 'tool_or_clarify',
+    description:
+      'Market stack stays run_analysis merge_datasets. The script scan stays run_data_quality_scan. No new tool.',
+  },
 ];
 
 /**
