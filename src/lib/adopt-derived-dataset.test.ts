@@ -1,10 +1,43 @@
 import {
+  adoptDerivedDataset,
   derivedDatasetFromToolResults,
   derivedWorkspacePath,
   spreadsheetPatchFromDerivedDataset,
   userFacingSchemaColumns,
 } from './adopt-derived-dataset';
 import type { TabData } from '@/stores/tabs-store';
+
+const tabs: Array<Record<string, unknown>> = [];
+let activeTabId = '';
+
+jest.mock('@/stores/tabs-store', () => ({
+  ViewType: { SPREADSHEET: 'spreadsheet' },
+  useTabsStore: {
+    getState: () => ({
+      get tabs() {
+        return tabs;
+      },
+      get activeTabId() {
+        return activeTabId;
+      },
+      addTab(tab: Record<string, unknown>) {
+        const id = 'sheet-1';
+        tabs.push({ ...tab, id, type: 'spreadsheet' });
+        activeTabId = id;
+      },
+      updateTab(id: string, updates: Record<string, unknown>) {
+        const tab = tabs.find(item => item.id === id);
+        if (tab) Object.assign(tab, updates);
+      },
+    }),
+  },
+}));
+
+jest.mock('@/stores/project-store', () => ({
+  useProjectStore: {
+    getState: () => ({ importData: null, fileSystem: [] }),
+  },
+}));
 
 describe('spreadsheetPatchFromDerivedDataset', () => {
   const parentId = '11111111-1111-4111-8111-111111111111';
@@ -67,6 +100,29 @@ describe('userFacingSchemaColumns', () => {
       { name: 'Age', type: 'numeric', missing_count: 0 },
     ]);
     expect(cols.map(c => c.name)).toEqual(['Pos', 'Age']);
+  });
+});
+
+describe('adoptDerivedDataset', () => {
+  beforeEach(() => {
+    tabs.splice(0, tabs.length);
+    activeTabId = '';
+  });
+
+  it('opens a sheet on this page when none is open, instead of navigating away', () => {
+    const replace = jest.spyOn(window.history, 'replaceState').mockImplementation(() => undefined);
+    expect(
+      adoptDerivedDataset({
+        dataset_id: 'e5d1c555-9f80-497d-b0fb-2bfa07983d4c',
+        original_filename: 'cars_EN + FR',
+        n_rows: 20,
+      })
+    ).toBe(true);
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0].name).toBe('cars_EN + FR');
+    expect(replace).toHaveBeenCalled();
+    expect(String(replace.mock.calls[0][2])).toContain('/workspace/dataset/e5d1c555');
+    replace.mockRestore();
   });
 });
 

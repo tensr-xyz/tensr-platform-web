@@ -58,6 +58,7 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<MergeMode>('inner');
   const [secondaryDataset, setSecondaryDataset] = useState<string>('');
+  const [stackIds, setStackIds] = useState<string[]>([]);
   const [datasetOptions, setDatasetOptions] = useState<
     { id: string; name: string; updatedAt?: string }[]
   >([]);
@@ -74,8 +75,8 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   const addVariables = mode === 'add_variables';
   const radioKind = mode === 'stack' ? 'stack' : addVariables ? 'add_variables' : 'join';
   const stamp = useMemo(
-    () => JSON.stringify({ secondaryDataset, mode, keys, keyMap }),
-    [secondaryDataset, mode, keys, keyMap]
+    () => JSON.stringify({ secondaryDataset, stackIds, mode, keys, keyMap }),
+    [secondaryDataset, stackIds, mode, keys, keyMap]
   );
   const previewReady = report !== null && previewStamp === stamp;
 
@@ -161,8 +162,15 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
     };
   }, [primaryDatasetId, secondaryDataset, token]);
 
+  const stackSources = () =>
+    stackIds.map(id => ({
+      dataset_id: id,
+      label: datasetOptions.find(option => option.id === id)?.name || '',
+    }));
+
   const payload = () => ({
-    secondary_dataset_id: secondaryDataset,
+    secondary_dataset_id: mode === 'stack' ? undefined : secondaryDataset,
+    sources: mode === 'stack' ? stackSources() : undefined,
     merge_type: mode,
     keys: keyed ? keys : [],
     key_map: keyed
@@ -176,7 +184,13 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
       setError(null);
       setReport(null);
       if (!primaryDatasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
-      if (!secondaryDataset) throw new Error('Select a second dataset to merge');
+      if (mode === 'stack' ? stackIds.length === 0 : !secondaryDataset) {
+        throw new Error(
+          mode === 'stack'
+            ? 'Select at least one dataset to stack'
+            : 'Select a second dataset to merge'
+        );
+      }
       if (keyed && keys.length === 0) throw new Error('Select at least one key');
       const response = await mergeDatasets(
         primaryDatasetId,
@@ -221,6 +235,27 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   const toggleKey = (name: string) => {
     setKeys(prev => (prev.includes(name) ? prev.filter(key => key !== name) : [...prev, name]));
     setReport(null);
+  };
+
+  const toggleStack = (id: string) => {
+    setStackIds(prev => (prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]));
+    setReport(null);
+  };
+
+  const visibleDatasets = datasetOptions.filter(opt => {
+    const q = datasetQuery.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      opt.name.toLowerCase().includes(q) ||
+      opt.id.toLowerCase().includes(q) ||
+      (opt.updatedAt || '').toLowerCase().includes(q)
+    );
+  });
+
+  const datasetLabel = (opt: { id: string; name: string; updatedAt?: string }) => {
+    const shared = datasetOptions.filter(other => other.name === opt.name).length > 1;
+    const when = opt.updatedAt ? opt.updatedAt.slice(0, 10) : '';
+    return shared ? `${opt.name} · ${when || 'undated'} · ${opt.id.slice(0, 8)}` : opt.name;
   };
 
   return (
@@ -291,7 +326,7 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
           )}
 
           <div className="space-y-2">
-            <Label>Second dataset</Label>
+            <Label>{mode === 'stack' ? 'Datasets to stack' : 'Second dataset'}</Label>
             <Input
               inputSize="sm"
               value={datasetQuery}
@@ -299,43 +334,44 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
               placeholder="Search by name, date, or id"
               className="w-full text-sm"
             />
-            <Select
-              value={secondaryDataset}
-              onValueChange={value => {
-                setSecondaryDataset(value);
-                setKeys([]);
-                setReport(null);
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Choose dataset" />
-              </SelectTrigger>
-              <SelectContent position="popper" className="max-h-64">
-                {datasetOptions
-                  .filter(opt => {
-                    const q = datasetQuery.trim().toLowerCase();
-                    if (!q) return true;
-                    return (
-                      opt.name.toLowerCase().includes(q) ||
-                      opt.id.toLowerCase().includes(q) ||
-                      (opt.updatedAt || '').toLowerCase().includes(q)
-                    );
-                  })
-                  .map(opt => {
-                    const shared =
-                      datasetOptions.filter(other => other.name === opt.name).length > 1;
-                    const when = opt.updatedAt ? opt.updatedAt.slice(0, 10) : '';
-                    const label = shared
-                      ? `${opt.name} · ${when || 'undated'} · ${opt.id.slice(0, 8)}`
-                      : opt.name;
-                    return (
-                      <SelectItem key={opt.id} value={opt.id}>
-                        {label}
-                      </SelectItem>
-                    );
-                  })}
-              </SelectContent>
-            </Select>
+            {mode === 'stack' ? (
+              <div className="max-h-40 space-y-1 overflow-auto rounded border p-2">
+                {visibleDatasets.length === 0 && (
+                  <p className="text-sm text-muted-foreground">
+                    No other datasets in this workspace.
+                  </p>
+                )}
+                {visibleDatasets.map(opt => (
+                  <label key={opt.id} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={stackIds.includes(opt.id)}
+                      onCheckedChange={() => toggleStack(opt.id)}
+                    />
+                    {datasetLabel(opt)}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <Select
+                value={secondaryDataset}
+                onValueChange={value => {
+                  setSecondaryDataset(value);
+                  setKeys([]);
+                  setReport(null);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Choose dataset" />
+                </SelectTrigger>
+                <SelectContent position="popper" className="max-h-64">
+                  {visibleDatasets.map(opt => (
+                    <SelectItem key={opt.id} value={opt.id}>
+                      {datasetLabel(opt)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
 
           {keyed && (

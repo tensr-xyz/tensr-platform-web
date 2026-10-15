@@ -54,10 +54,21 @@ export type MergeReport = {
   duplicate_ids?: Array<{ column: string; count: number; ids: string[] }>;
   type_coercions?: Array<{ column: string; action: string; detail: string }>;
   key_map?: Array<{ left: string; right: string }>;
+  label_conflicts?: Array<{
+    column: string;
+    kind: string;
+    code?: string;
+    label?: string;
+    left_label?: string;
+    right_label?: string;
+    left_code?: string;
+    right_code?: string;
+  }>;
 };
 
 export type MergeDatasetsPayload = {
-  secondary_dataset_id: string;
+  secondary_dataset_id?: string;
+  sources?: Array<{ dataset_id: string; label?: string }>;
   merge_type: 'add_cases' | 'add_variables' | 'stack' | 'inner' | 'left' | 'right' | 'outer';
   keys?: string[];
   key_map?: Record<string, string>;

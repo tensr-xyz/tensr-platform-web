@@ -24,6 +24,31 @@ describe('mergeUnmatchedReportLines', () => {
     ]);
   });
 
+  it('shows a label clash on a stack preview', () => {
+    expect(
+      mergeUnmatchedReportLines(
+        {
+          row_count: 20,
+          source_wave_column: 'source_wave',
+          label_conflicts: [
+            {
+              column: 'Q7',
+              kind: 'same_code_different_label',
+              code: '1',
+              left_label: 'Disagree',
+              right_label: "Pas d'accord",
+            },
+          ],
+        },
+        false
+      )
+    ).toEqual([
+      '20 rows in the result.',
+      'Added source_wave so each row keeps its source file.',
+      'Q7 code 1 is "Disagree" here and "Pas d\'accord" in another file.',
+    ]);
+  });
+
   it('omits duplicate lines when both counts are zero', () => {
     expect(
       mergeUnmatchedReportLines(

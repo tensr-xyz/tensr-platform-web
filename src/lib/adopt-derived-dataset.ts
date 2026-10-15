@@ -113,10 +113,23 @@ export function adoptDerivedDataset(result: DerivedDatasetPayload): boolean {
 
   const tabsState = useTabsStore.getState();
   const active = tabsState.tabs.find(t => t.id === tabsState.activeTabId);
-  const sheet =
+  let sheet =
     active?.type === ViewType.SPREADSHEET
       ? active
       : tabsState.tabs.find(t => t.type === ViewType.SPREADSHEET);
+  if (!sheet) {
+    // A full navigation to the new dataset remounts the workspace and the login
+    // gate treats a missing Stytch cookie as signed out. Stay on this page.
+    tabsState.addTab({
+      name: result.original_filename || 'Dataset',
+      type: ViewType.SPREADSHEET,
+      content: '',
+      isDirty: false,
+      data: {},
+    });
+    const opened = useTabsStore.getState();
+    sheet = opened.tabs.find(t => t.id === opened.activeTabId && t.type === ViewType.SPREADSHEET);
+  }
   if (!sheet) return false;
 
   const data = spreadsheetPatchFromDerivedDataset(sheet.data, result);
