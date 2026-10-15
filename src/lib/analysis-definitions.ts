@@ -1840,6 +1840,14 @@ export function bannerRerunPrefill(
   return prefill;
 }
 
+/** Places a banner percent table used. One decimal when the spec did not set any. */
+export function bannerTableDecimalPlaces(body: Record<string, unknown>): number {
+  const fromTable = bannerDecimalPlaces(body.decimals);
+  const places = Number(fromTable);
+  if (fromTable && Number.isFinite(places)) return Math.max(0, Math.min(6, Math.round(places)));
+  return 1;
+}
+
 function bannerDecimalPlaces(value: unknown): string {
   if (typeof value === 'number' && Number.isFinite(value)) return String(Math.round(value));
   if (typeof value === 'string') {
@@ -2066,7 +2074,9 @@ export function formStateFromBody(
   }
   if (op === 'banner_table') {
     state.bannerWeight = typeof body.weight === 'string' ? body.weight : '';
-    state.bannerDecimals = bannerDecimalPlaces(body.decimals ?? body.decimal_places);
+    // A bare decimal_places of 3 is the analyze default. A percent table with
+    // no spec places is shown to 1 decimal (14.7%, not 14.729%).
+    state.bannerDecimals = String(bannerTableDecimalPlaces(body));
     state.bannerFilter = typeof body.filter === 'string' ? body.filter : '';
     state.bannerNetRows = bannerNetRowsFromBody(body);
     const apa = body.apa_format ?? body.apaFormat;
