@@ -57,22 +57,11 @@ import {
   useSidebar,
 } from '@/components/organisms/sidebar';
 import useAuth from '@/hooks/api/use-auth';
+import { accountLabel } from '@/lib/user-label';
 import { User as UserType } from '@/types/user';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { PermissionWrapper } from '@/wrappers/permission';
 import { toast } from '@/hooks/ui/use-toast';
-
-const getInitials = (email: string) => {
-  if (!email) return '??';
-  const localPart = email.split('@')[0];
-  const parts = localPart.split(/[._-]/).filter(part => part.length > 0);
-
-  if (parts.length > 1) {
-    return parts.map(part => part[0].toUpperCase()).join('');
-  }
-
-  return localPart.length > 1 ? localPart.slice(0, 2).toUpperCase() : localPart[0].toUpperCase();
-};
 
 // Navigation data based on the header content
 const navItems = [
@@ -169,7 +158,9 @@ function ControlCenter() {
                     ? 'Personal Account'
                     : activeOrganization?.name || 'Loading...'}
                 </span>
-                <span className="truncate text-xs">{user.email}</span>
+                {accountLabel(user) ? (
+                  <span className="truncate text-xs">{accountLabel(user)}</span>
+                ) : null}
               </div>
               <ChevronsUpDown className="ml-auto" />
             </SidebarMenuButton>
@@ -182,7 +173,9 @@ function ControlCenter() {
           >
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium leading-none">{user.email}</p>
+                {accountLabel(user) ? (
+                  <p className="text-sm font-medium leading-none">{accountLabel(user)}</p>
+                ) : null}
                 <p className="text-xs leading-none text-muted-foreground">
                   {isPersonalAccount
                     ? 'Personal Account'

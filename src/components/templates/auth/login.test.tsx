@@ -65,6 +65,8 @@ jest.mock('@/hooks/api/use-auth', () => ({
 jest.mock('@/lib/business-api', () => ({
   redeemStoredInvitation: (...a: unknown[]) => mockRedeemStoredInvitation(...a),
   storePendingInviteToken: (...a: unknown[]) => mockStorePendingInviteToken(...a),
+  sendSessionEmailCode: jest.fn(),
+  NeedsEmailError: class NeedsEmailError extends Error {},
 }));
 
 jest.mock('@/lib/referral', () => ({

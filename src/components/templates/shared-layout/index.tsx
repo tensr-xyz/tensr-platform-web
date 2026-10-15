@@ -26,6 +26,7 @@ import { ThemeToggle } from '@/components/molecules/theme-toggle';
 import { WhatsNewPopover } from '@/components/molecules/whats-new-popover';
 import { ReferButton } from '@/components/molecules/referral-panel';
 import useAuth from '@/hooks/api/use-auth';
+import { accountInitials, accountLabel } from '@/lib/user-label';
 import Titlebar from '@/components/organisms/titlebar';
 import { useTabsStore } from '@/stores/tabs-store';
 import {
@@ -53,15 +54,6 @@ function getMinimalShellTab(pathname: string): 'overview' | 'plugins' {
   if (pathname === '/plugins' || pathname.startsWith('/plugins/')) return 'plugins';
   return 'overview';
 }
-
-const getInitials = (value: string) => {
-  if (!value) return '??';
-  const [localPart] = value.split('@');
-  if (!localPart) {
-    return value.slice(0, 2).toUpperCase();
-  }
-  return localPart.slice(0, 2).toUpperCase();
-};
 
 function MinimalShellNavTabs({ pathname }: { pathname: string }) {
   const router = useRouter();
@@ -125,6 +117,9 @@ const UserMenu: React.FC = () => {
 
   if (!user) return null;
 
+  const label = accountLabel(user);
+  const initials = accountInitials(user);
+
   return (
     <>
       <DropdownMenu>
@@ -137,14 +132,18 @@ const UserMenu: React.FC = () => {
             <div className="relative h-7 w-7 flex-shrink-0 overflow-hidden rounded-full bg-gradient-to-b from-white/60 via-white/30 to-white/10 p-[0.5px]">
               <div className="h-full w-full overflow-hidden rounded-full bg-background">
                 <Avatar className="h-full w-full">
-                  <AvatarFallback className="text-xs">{getInitials(user.email)}</AvatarFallback>
+                  <AvatarFallback className="text-xs">
+                    {initials ?? <User className="size-3.5" aria-hidden />}
+                  </AvatarFallback>
                 </Avatar>
               </div>
             </div>
             <div className="hidden flex-1 flex-row items-center gap-0 sm:flex">
-              <span className="font-normal text-foreground text-sm leading-5 tracking-[-0.02em]">
-                {user.email.slice(0, 8)}...
-              </span>
+              {label ? (
+                <span className="truncate font-normal text-foreground text-sm leading-5 tracking-[-0.02em]">
+                  {label}
+                </span>
+              ) : null}
             </div>
             <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-background">
               <svg
@@ -164,7 +163,7 @@ const UserMenu: React.FC = () => {
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
-              <p className="text-sm leading-none">{user.email}</p>
+              {label ? <p className="text-sm leading-none">{label}</p> : null}
               <p className="text-xs leading-none text-muted-foreground">
                 {isPersonalAccount || !activeOrganization
                   ? user.subscriptionTier

@@ -12,6 +12,13 @@ import {
 } from '@/lib/analysis-runs';
 import { useSession, wsService } from '@/hooks/ui/use-session';
 import { Button } from '@/components/atoms/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { cn } from '@/utils';
 
 type Props = {
@@ -176,9 +183,17 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
         ))}
 
         {!loading && runs.length === 0 && localOnly.length === 0 ? (
-          <p className="py-1 text-[11px] leading-relaxed text-muted-foreground">
-            Run an analysis with ⌘K. Results are saved on the server and listed here.
-          </p>
+          <Empty className="min-h-0 border-0 p-4 md:p-4">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <BarChart3 />
+              </EmptyMedia>
+              <EmptyTitle className="text-sm">No saved analyses</EmptyTitle>
+              <EmptyDescription className="text-[11px]">
+                Run an analysis with ⌘K. Results are saved on the server and listed here.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : null}
       </div>
     </div>

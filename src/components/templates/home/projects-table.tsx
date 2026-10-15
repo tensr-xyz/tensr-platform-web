@@ -1,6 +1,14 @@
 'use client';
 
 import { Button } from '@/components/atoms/button';
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Checkbox } from '@/components/atoms/checkbox';
 import {
   DropdownMenu,
@@ -40,7 +48,7 @@ import {
   MoreHorizontal,
   Search,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Project, ProjectStatus } from '@/types/project';
 import { cn } from '@/utils';
 import { Input } from '@/components/atoms/input';
@@ -69,6 +77,9 @@ interface ProjectsTableProps {
   statusFilterFn: (project: Project, filter: string) => boolean;
   projectColor: (id: string) => string;
   displayStatus: (status: ProjectStatus) => DisplayStatus;
+  uploadAction?: ReactNode;
+  /** True when the workspace has no datasets, before search and status filters. */
+  isCatalogEmpty?: boolean;
 }
 
 function formatDate(dateString: string): string {
@@ -110,6 +121,8 @@ export const ProjectsTable = ({
   statusFilterFn,
   projectColor,
   displayStatus,
+  uploadAction,
+  isCatalogEmpty = data.length === 0,
 }: ProjectsTableProps) => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -454,13 +467,25 @@ export const ProjectsTable = ({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="py-12 text-left">
-                  <p className="text-sm font-medium text-foreground">No datasets to show</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {data.length === 0
-                      ? 'Upload a dataset using the actions above.'
-                      : 'Try a different status filter or clear your search.'}
-                  </p>
+                <TableCell colSpan={columns.length} className="p-0">
+                  <Empty className="border-0">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <Folder />
+                      </EmptyMedia>
+                      <EmptyTitle>
+                        {isCatalogEmpty ? 'No datasets yet' : 'No matching datasets'}
+                      </EmptyTitle>
+                      <EmptyDescription>
+                        {isCatalogEmpty
+                          ? 'Upload a dataset to start an analysis.'
+                          : 'Try a different status filter or clear your search.'}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                    {isCatalogEmpty && uploadAction ? (
+                      <EmptyContent>{uploadAction}</EmptyContent>
+                    ) : null}
+                  </Empty>
                 </TableCell>
               </TableRow>
             )}

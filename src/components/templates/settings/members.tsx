@@ -3,6 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useOrganization, OrganizationMember } from '@/hooks/api/use-organisation';
 import { Button } from '@/components/atoms/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { toast } from '@/hooks/ui/use-toast';
@@ -29,7 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
-import { Mail, UserPlus, Trash, Settings, Send, X } from 'lucide-react';
+import { Mail, UserPlus, Trash, Settings, Send, Users, X } from 'lucide-react';
 import posthog from 'posthog-js';
 import {
   inviteCreatedToast,
@@ -282,8 +289,16 @@ export default function TeamMembers() {
             <TableBody>
               {members.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-8 text-center text-muted-foreground">
-                    No team members found
+                  <TableCell colSpan={4} className="p-0">
+                    <Empty className="border-0">
+                      <EmptyHeader>
+                        <EmptyMedia variant="icon">
+                          <Users />
+                        </EmptyMedia>
+                        <EmptyTitle>No members yet</EmptyTitle>
+                        <EmptyDescription>Invite someone to share this workspace.</EmptyDescription>
+                      </EmptyHeader>
+                    </Empty>
                   </TableCell>
                 </TableRow>
               ) : (

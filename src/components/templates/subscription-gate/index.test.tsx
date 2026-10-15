@@ -25,6 +25,7 @@ jest.mock('@/hooks/api/use-auth', () => ({
 
 jest.mock('@/lib/business-api', () => ({
   fetchMeProfile: (...args: unknown[]) => mockFetchMeProfile(...args),
+  NeedsEmailError: class NeedsEmailError extends Error {},
 }));
 
 jest.mock('@/stores/auth-store', () => ({

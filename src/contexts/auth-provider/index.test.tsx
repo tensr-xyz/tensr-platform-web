@@ -49,6 +49,24 @@ jest.mock('@/lib/business-api', () => ({
   fetchMeProfile: (...a: unknown[]) => mockFetchMeProfile(...a),
   redeemStoredInvitation: async () => null,
   storePendingInviteToken: jest.fn(),
+  NeedsEmailError: class NeedsEmailError extends Error {
+    firstName: string | null = null;
+    lastName: string | null = null;
+    stytchUserId: string | null = null;
+    constructor(
+      detail: {
+        first_name?: string | null;
+        last_name?: string | null;
+        stytch_user_id?: string | null;
+      } = {}
+    ) {
+      super('Add an email to finish signing in');
+      this.name = 'NeedsEmailError';
+      this.firstName = detail.first_name ?? null;
+      this.lastName = detail.last_name ?? null;
+      this.stytchUserId = detail.stytch_user_id ?? null;
+    }
+  },
 }));
 
 jest.mock('@/lib/referral', () => ({

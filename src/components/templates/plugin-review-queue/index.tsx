@@ -2,8 +2,15 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Package } from 'lucide-react';
 import { Button } from '@/components/atoms/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Textarea } from '@/components/atoms/text-area';
 import { Loader } from '@/components/molecules/loading';
 import { apiClient } from '@/lib/api-client';
@@ -99,11 +106,17 @@ export default function PluginReviewQueue() {
       ) : null}
 
       {!error && items.length === 0 ? (
-        <section className="overflow-hidden rounded-lg border border-border bg-background">
-          <div className="px-6 py-10 text-center text-sm text-muted-foreground">
-            No plugins awaiting review.
-          </div>
-        </section>
+        <Empty className="rounded-lg border border-border bg-background">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Package />
+            </EmptyMedia>
+            <EmptyTitle>No plugins awaiting review</EmptyTitle>
+            <EmptyDescription>
+              Submitted plugins show up here before they are published.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : null}
 
       {items.map(plugin => (
