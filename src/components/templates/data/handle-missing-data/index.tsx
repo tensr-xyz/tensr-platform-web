@@ -9,6 +9,7 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import {
   Select,
@@ -251,11 +252,11 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
           {method === 'custom_value' && (
             <div className="space-y-2">
               <Label>Custom Value</Label>
-              <input
+              <Input
                 type="text"
                 value={customValue}
                 onChange={e => setCustomValue(e.target.value)}
-                className="w-full p-2 border rounded-sm"
+                className="w-full rounded-sm p-2"
                 placeholder="Enter custom value"
                 disabled={!!criticalError}
               />

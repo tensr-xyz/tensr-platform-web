@@ -52,6 +52,7 @@ jest.mock('@/stores/auth-store', () => ({
 }));
 jest.mock('@/lib/business-api', () => ({
   updateProfile: (...args: unknown[]) => mockUpdateProfile(...args),
+  NeedsEmailError: class NeedsEmailError extends Error {},
 }));
 
 function chooseAgentVersion(next: 'v1' | 'v2') {

@@ -1,4 +1,12 @@
 import { Button } from '@/components/atoms/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
+import { Input } from '@/components/atoms/input';
 import { Checkbox } from '@/components/atoms/checkbox';
 import {
   DropdownMenu,
@@ -21,7 +29,7 @@ import {
   useReactTable,
   VisibilityState,
 } from '@tanstack/react-table';
-import { ArrowUpDown, ChevronDown, FileText, MoreHorizontal, Upload } from 'lucide-react';
+import { ArrowUpDown, ChevronDown, FileText, MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import {
   Table,
@@ -289,31 +297,28 @@ export const FilesTable = ({
     return (
       <div className="px-6 py-10 text-center text-red-500">
         <p>Error loading files: {error}</p>
-        <button
+        <Button
+          type="button"
           onClick={onRefresh}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="mt-4 bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
         >
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
 
   if (data.length === 0) {
     return (
-      <div className="px-6 py-16 text-center text-gray-500">
-        <div className="max-w-sm mx-auto">
-          <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Upload className="h-8 w-8 text-gray-400" />
-          </div>
-          <p className="text-gray-700 text-lg font-medium mb-2">No files found</p>
-          <p className="text-gray-500 mb-6">Upload a file to get started with your analysis</p>
-          <Button className="flex items-center space-x-2 mx-auto">
-            <Upload className="h-4 w-4 mr-2" />
-            <span>Upload File</span>
-          </Button>
-        </div>
-      </div>
+      <Empty className="border-0">
+        <EmptyHeader>
+          <EmptyMedia variant="icon">
+            <FileText />
+          </EmptyMedia>
+          <EmptyTitle>No files yet</EmptyTitle>
+          <EmptyDescription>Upload a file to get started with your analysis.</EmptyDescription>
+        </EmptyHeader>
+      </Empty>
     );
   }
 
@@ -322,11 +327,11 @@ export const FilesTable = ({
       {/* Conditionally render the controls based on the hideControls prop */}
       {!hideControls && (
         <div className="flex items-center justify-between py-4">
-          <input
+          <Input
             placeholder="Filter files..."
             value={(table.getColumn('fileName')?.getFilterValue() as string) ?? ''}
             onChange={event => table.getColumn('fileName')?.setFilterValue(event.target.value)}
-            className="max-w-sm border border-border p-2 h-10 pl-4 bg-white"
+            className="h-10 max-w-sm border border-border bg-white p-2 pl-4"
           />
           <div className="flex gap-2">
             <Button variant="outline" onClick={onRefresh} className="flex items-center">
@@ -395,8 +400,16 @@ export const FilesTable = ({
               ))
             ) : (
               <TableRow>
-                <TableCell colSpan={columns.length} className="h-24 text-center">
-                  No results.
+                <TableCell colSpan={columns.length} className="p-0">
+                  <Empty className="border-0 py-8">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <FileText />
+                      </EmptyMedia>
+                      <EmptyTitle>No files match</EmptyTitle>
+                      <EmptyDescription>Try a different filter.</EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
                 </TableCell>
               </TableRow>
             )}

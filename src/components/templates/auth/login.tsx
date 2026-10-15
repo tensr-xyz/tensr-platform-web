@@ -6,7 +6,11 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import React, { FormEvent, useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Eye, EyeOff, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/api/use-auth';
-import { redeemStoredInvitation, storePendingInviteToken } from '@/lib/business-api';
+import {
+  redeemStoredInvitation,
+  sendSessionEmailCode,
+  storePendingInviteToken,
+} from '@/lib/business-api';
 import { redeemStoredReferral, storeReferralCode } from '@/lib/referral';
 import { entitlementsResolved, subscriptionRedirectPath } from '@/lib/subscription';
 import { safeReturnTo } from '@/lib/safe-return-to';
@@ -33,6 +37,7 @@ const LoginTemplate = () => {
     hasActiveSubscription,
     entitlements,
     error: authError,
+    needsEmail,
     stytch,
   } = useAuth();
 
@@ -47,6 +52,7 @@ const LoginTemplate = () => {
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
   const [isMicrosoftLoading, setIsMicrosoftLoading] = useState(false);
   const [isGitHubLoading, setIsGitHubLoading] = useState(false);
+  const [attachingEmail, setAttachingEmail] = useState(false);
   const [resendReady, setResendReady] = useState(false);
   const [resendEpoch, setResendEpoch] = useState(0);
   const otpSentAt = useRef<number | null>(null);
@@ -83,6 +89,7 @@ const LoginTemplate = () => {
 
   // Redirect if already logged in (AuthProvider owns session/user sync)
   useEffect(() => {
+    if (needsEmail) return;
     if (isLoading || !isAuthenticated || !isAuthReady) return;
     // Wait until /api/me has populated entitlements — null means unresolved, not unpaid.
     // Redirecting early sends entitled users (promo/manual comp) to /subscription and
@@ -101,6 +108,7 @@ const LoginTemplate = () => {
     isAuthReady,
     hasActiveSubscription,
     entitlements,
+    needsEmail,
     router,
     searchParams,
   ]);
@@ -194,6 +202,34 @@ const LoginTemplate = () => {
       console.error('Microsoft OAuth start error:', err);
       setError(stytchErrorMessage(err, 'Failed to continue with Microsoft'));
       setIsMicrosoftLoading(false);
+    }
+  };
+
+  const handleAttachEmail = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      setError('Please enter an email address');
+      return;
+    }
+    if (isSendingCode) return;
+    try {
+      setError('');
+      setIsSendingCode(true);
+      const result = await sendSessionEmailCode(trimmedEmail);
+      setEmail(trimmedEmail);
+      setMethodId(result.method_id);
+      setAttachingEmail(true);
+      setIsVerifying(true);
+      otpSentAt.current = Date.now();
+      resendCount.current = 0;
+      setCodeNotice('Codes can take a minute. Check spam or quarantine.');
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : 'Failed to send verification email. Please try again.'
+      );
+      setIsVerifying(false);
+    } finally {
+      setIsSendingCode(false);
     }
   };
 
@@ -306,6 +342,15 @@ const LoginTemplate = () => {
       setIsSendingCode(true);
       setError('');
       captureProductEvent('otp_resend_clicked', {});
+      if (attachingEmail) {
+        const sent = await sendSessionEmailCode(email.trim().toLowerCase());
+        setMethodId(sent.method_id);
+        resendCount.current += 1;
+        setResendEpoch(epoch => epoch + 1);
+        setCodeNotice('Codes can take a minute. Check spam or quarantine.');
+        captureProductEvent('otp_sent', { resend: true, resend_count: resendCount.current });
+        return;
+      }
       const result = await resendVerificationCode(email.trim().toLowerCase());
       if (result && result.methodId) {
         setMethodId(result.methodId);
@@ -362,7 +407,37 @@ const LoginTemplate = () => {
 
           {/* Card */}
           <Card className="p-6">
-            {!isVerifying ? (
+            {needsEmail && !isVerifying ? (
+              <form
+                onSubmit={event => {
+                  event.preventDefault();
+                  void handleAttachEmail();
+                }}
+                className="space-y-4"
+              >
+                <div className="space-y-1 text-left">
+                  <p className="text-sm font-medium text-foreground">
+                    Add an email to finish signing in
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    We will send a code to this address. If a Tensr account already uses it, you
+                    will sign into that account.
+                  </p>
+                </div>
+                <Input
+                  type="email"
+                  autoComplete="email"
+                  placeholder="Email address"
+                  value={email}
+                  onChange={event => setEmail(event.target.value)}
+                  required
+                />
+                {error ? <p className="text-sm text-destructive">{error}</p> : null}
+                <Button type="submit" className="w-full" disabled={formBusy}>
+                  {isSendingCode ? 'Sending code...' : 'Send code'}
+                </Button>
+              </form>
+            ) : !isVerifying ? (
               <form
                 onSubmit={e => {
                   e.preventDefault();
@@ -527,10 +602,12 @@ const LoginTemplate = () => {
                       <label htmlFor="code" className="text-sm font-semibold">
                         Verification Code
                       </label>
-                      <button
+                      <Button
+                        size="compact"
                         type="button"
+                        variant="link"
                         onClick={handleResendEmail}
-                        className="text-xs text-muted-foreground hover:text-foreground underline disabled:no-underline disabled:opacity-50"
+                        className="h-auto px-0 text-xs text-muted-foreground hover:text-foreground disabled:no-underline"
                         disabled={formBusy || !resendReady}
                       >
                         {isSendingCode
@@ -538,7 +615,7 @@ const LoginTemplate = () => {
                           : resendReady
                             ? 'Resend code'
                             : 'Resend code in 30s'}
-                      </button>
+                      </Button>
                     </div>
                     <div className="relative">
                       <Input

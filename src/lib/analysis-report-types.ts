@@ -19,6 +19,8 @@ export type SchemaColumn = {
   value_labels?: Record<string, string> | null;
   storage_type?: string;
   width?: number;
+  /** Distinct values, when known. Used to skip high-cardinality id columns. */
+  uniqueCount?: number;
 };
 
 export type DatasetPreview = {

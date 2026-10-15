@@ -28,6 +28,7 @@ import {
 import { Column, Header, Table } from '@tanstack/react-table';
 import { ColumnSummary } from '@/types/project';
 import type { Column as TabColumn } from '@/stores/tabs-store';
+import { Button } from '@/components/atoms/button';
 import { cn } from '@/utils';
 import {
   Tooltip,
@@ -247,11 +248,13 @@ const HeaderCell = React.memo<HeaderCellProps>(
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <DropdownMenuTrigger asChild onClick={handleDropdownTriggerClick}>
-                        <button
+                        <Button
                           type="button"
+                          variant="unstyled"
+                          size="compact"
                           data-testid={`column-menu-${column.id}`}
                           className={cn(
-                            'flex h-8 min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-sm px-1.5 text-left hover:bg-muted/60',
+                            'flex h-8 min-w-0 flex-1 items-center justify-start gap-1 overflow-hidden rounded-sm px-1.5 text-left text-[11px] font-normal hover:bg-muted/60',
                             dropdownOpen && 'bg-muted/60'
                           )}
                           onDoubleClick={e => {
@@ -274,7 +277,7 @@ const HeaderCell = React.memo<HeaderCellProps>(
                           >
                             {column.columnDef.header as string}
                           </span>
-                        </button>
+                        </Button>
                       </DropdownMenuTrigger>
                     </TooltipTrigger>
                     <TooltipContent side="bottom" className="max-w-xs">
@@ -439,8 +442,10 @@ const HeaderCell = React.memo<HeaderCellProps>(
               />
             ) : null}
 
-            <button
+            <Button
               type="button"
+              variant="unstyled"
+              size="compact"
               className="grid size-[18px] shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground"
               title={isNumeric ? 'Numeric column' : 'Text column'}
               onClick={handleSortClick}
@@ -452,7 +457,7 @@ const HeaderCell = React.memo<HeaderCellProps>(
               ) : (
                 <ArrowUpDown className="size-2.5" />
               )}
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -484,13 +489,15 @@ const HeaderCell = React.memo<HeaderCellProps>(
                 {/* Numeric Stats */}
                 {stats.numeric_stats && (
                   <div className="space-y-1.5">
-                    <button
+                    <Button
                       type="button"
-                      className="text-left text-[11px] font-medium text-[hsl(250,100%,63%)] hover:underline"
+                      variant="unstyled"
+                      size="compact"
+                      className="h-auto justify-start px-0 text-left text-[11px] font-medium text-[hsl(250,100%,63%)] hover:underline"
                       onClick={() => onColumnAction?.('toggle-heatmap', column.id)}
                     >
                       {heatmapEnabled ? 'Hide heatmap' : 'Show heatmap'}
-                    </button>
+                    </Button>
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Count:</span>
                       <span>{renderNumericValue(stats.numeric_stats.count)}</span>

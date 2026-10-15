@@ -1,5 +1,6 @@
 import type { MouseEvent } from 'react';
 import { X } from 'lucide-react';
+import { Button } from '@/components/atoms/button';
 import { isPulseOnlyWorkingLine } from '@/lib/agent-analysis-progress';
 import { cn } from '@/utils';
 
@@ -42,13 +43,15 @@ export function ChatThreadCloseButton({
   onClick: (event: MouseEvent<HTMLButtonElement>) => void;
 }) {
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
+      size="compact"
       onClick={onClick}
-      className={CHAT_THREAD_CLOSE_BUTTON_CLASS}
+      className={cn('size-5', CHAT_THREAD_CLOSE_BUTTON_CLASS)}
       aria-label={`Close ${title}`}
     >
       <X className="size-3" />
-    </button>
+    </Button>
   );
 }

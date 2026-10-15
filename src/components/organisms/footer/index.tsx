@@ -1,4 +1,5 @@
 import { Terminal } from 'lucide-react';
+import { Button } from '@/components/atoms/button';
 import { useProjectStore } from '@/stores/project-store';
 import { useWorkspaceSheetStatusStore } from '@/stores/workspace-sheet-status-store';
 import { cn } from '@/utils';
@@ -81,11 +82,13 @@ const Footer = ({ isLoading, activeTab, rowCount }: FooterProps) => {
           <span className="text-border/80" aria-hidden>
             ·
           </span>
-          <button
+          <Button
+            size="compact"
             type="button"
+            variant="ghost"
             onClick={() => toggleTerminal(!terminalOpen)}
             className={cn(
-              'inline-flex items-center gap-1 rounded px-1 transition-colors hover:text-foreground',
+              'h-auto gap-1 rounded px-1 text-[11px] hover:text-foreground',
               terminalOpen ? 'bg-muted text-foreground' : 'text-muted-foreground'
             )}
             title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
@@ -93,17 +96,19 @@ const Footer = ({ isLoading, activeTab, rowCount }: FooterProps) => {
             <Terminal className="size-2.5" aria-hidden />
             <span>Terminal</span>
             <span className="font-mono text-[9px] opacity-70">⌘`</span>
-          </button>
+          </Button>
         </>
       ) : activeTab ? (
         <>
           <span className="truncate">{activeTab.name}</span>
           <span className="flex-1" />
-          <button
+          <Button
+            size="compact"
             type="button"
+            variant="ghost"
             onClick={() => toggleTerminal(!terminalOpen)}
             className={cn(
-              'inline-flex items-center gap-1 rounded px-1 transition-colors hover:text-foreground',
+              'h-auto gap-1 rounded px-1 text-[11px] hover:text-foreground',
               terminalOpen ? 'bg-muted text-foreground' : 'text-muted-foreground'
             )}
             title={terminalOpen ? 'Hide terminal' : 'Show terminal'}
@@ -111,7 +116,7 @@ const Footer = ({ isLoading, activeTab, rowCount }: FooterProps) => {
             <Terminal className="size-2.5" aria-hidden />
             <span>Terminal</span>
             <span className="font-mono text-[9px] opacity-70">⌘`</span>
-          </button>
+          </Button>
         </>
       ) : (
         <span>Ready</span>

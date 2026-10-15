@@ -18,6 +18,7 @@ import { fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { buildDefaultImportSettings, type ImportSettings } from '@/lib/import-settings';
 import { MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
+import { Button } from '@/components/atoms/button';
 import { warmAssistantBackend } from '@/lib/warm-assistant';
 import { captureProductException } from '@/lib/product-analytics';
 import { SpssWorkspaceWalkthrough } from '@/components/templates/auth/spss-switcher-flow';
@@ -564,13 +565,15 @@ export default function Workspace({ resource }: WorkspaceProps) {
                   <p className="text-sm text-foreground">
                     This dataset is taking longer than usual to open. You can wait, or try again.
                   </p>
-                  <button
+                  <Button
+                    size="compact"
                     type="button"
-                    className="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary"
+                    variant="outline"
+                    className="h-auto px-3 py-1.5 text-sm hover:border-primary"
                     onClick={retryOpen}
                   >
                     Try again
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <>

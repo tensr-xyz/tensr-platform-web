@@ -1,6 +1,7 @@
 'use client';
 
 import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { FileText } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,13 @@ import {
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { Button } from '@/components/atoms/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Checkbox } from '@/components/atoms/checkbox';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
@@ -981,9 +989,17 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                 })}
               </ul>
             ) : (
-              <p className="mt-2 text-[11px] text-muted-foreground">
-                No saved specs on this file yet.
-              </p>
+              <Empty className="mt-2 min-h-0 border-0 p-4 md:p-4">
+                <EmptyHeader>
+                  <EmptyMedia variant="icon">
+                    <FileText />
+                  </EmptyMedia>
+                  <EmptyTitle className="text-sm">No saved analyses</EmptyTitle>
+                  <EmptyDescription className="text-[11px]">
+                    No saved specs on this file yet.
+                  </EmptyDescription>
+                </EmptyHeader>
+              </Empty>
             )}
           </div>
           {table ? (

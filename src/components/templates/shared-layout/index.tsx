@@ -19,12 +19,14 @@ import {
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { toast } from '@/hooks/ui/use-toast';
 import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { DatasetFilePicker } from '@/components/molecules/dataset-file-picker';
 import { FeedbackDialog } from '@/components/molecules/feedback-button';
 import { ThemeToggle } from '@/components/molecules/theme-toggle';
 import { WhatsNewPopover } from '@/components/molecules/whats-new-popover';
 import { ReferButton } from '@/components/molecules/referral-panel';
 import useAuth from '@/hooks/api/use-auth';
+import { accountInitials, accountLabel } from '@/lib/user-label';
 import Titlebar from '@/components/organisms/titlebar';
 import { useTabsStore } from '@/stores/tabs-store';
 import {
@@ -52,15 +54,6 @@ function getMinimalShellTab(pathname: string): 'overview' | 'plugins' {
   if (pathname === '/plugins' || pathname.startsWith('/plugins/')) return 'plugins';
   return 'overview';
 }
-
-const getInitials = (value: string) => {
-  if (!value) return '??';
-  const [localPart] = value.split('@');
-  if (!localPart) {
-    return value.slice(0, 2).toUpperCase();
-  }
-  return localPart.slice(0, 2).toUpperCase();
-};
 
 function MinimalShellNavTabs({ pathname }: { pathname: string }) {
   const router = useRouter();
@@ -124,25 +117,34 @@ const UserMenu: React.FC = () => {
 
   if (!user) return null;
 
+  const label = accountLabel(user);
+  const initials = accountInitials(user);
+
   return (
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button
+          <Button
             type="button"
-            className="group flex h-10 w-auto cursor-pointer select-none items-center gap-1 rounded-full border border-border pr-3 pl-1.5 transition-all duration-200 hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring/40 data-[state=open]:bg-accent sm:w-[164px] sm:pr-3 sm:pl-1.5"
+            variant="unstyled"
+            size="compact"
+            className="group flex h-10 w-auto min-w-0 cursor-pointer select-none items-center gap-1 overflow-hidden rounded-full border border-border pr-3 pl-1.5 transition-all duration-200 hover:bg-accent focus:outline-none focus:ring-2 focus:ring-ring/40 data-[state=open]:bg-accent sm:w-[164px] sm:max-w-[164px] sm:pr-3 sm:pl-1.5"
           >
             <div className="relative h-7 w-7 flex-shrink-0 overflow-hidden rounded-full bg-gradient-to-b from-white/60 via-white/30 to-white/10 p-[0.5px]">
               <div className="h-full w-full overflow-hidden rounded-full bg-background">
                 <Avatar className="h-full w-full">
-                  <AvatarFallback className="text-xs">{getInitials(user.email)}</AvatarFallback>
+                  <AvatarFallback className="text-xs">
+                    {initials ?? <User className="size-3.5" aria-hidden />}
+                  </AvatarFallback>
                 </Avatar>
               </div>
             </div>
-            <div className="hidden flex-1 flex-row items-center gap-0 sm:flex">
-              <span className="font-normal text-foreground text-sm leading-5 tracking-[-0.02em]">
-                {user.email.slice(0, 8)}...
-              </span>
+            <div className="hidden min-w-0 flex-1 flex-row items-center gap-0 sm:flex">
+              {label ? (
+                <span className="truncate font-normal text-foreground text-sm leading-5 tracking-[-0.02em]">
+                  {label}
+                </span>
+              ) : null}
             </div>
             <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-background">
               <svg
@@ -157,12 +159,12 @@ const UserMenu: React.FC = () => {
                 <circle cx="12.5" cy="8" fill="#909090" r="1.5" />
               </svg>
             </div>
-          </button>
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
-              <p className="text-sm leading-none">{user.email}</p>
+              {label ? <p className="text-sm leading-none">{label}</p> : null}
               <p className="text-xs leading-none text-muted-foreground">
                 {isPersonalAccount || !activeOrganization
                   ? user.subscriptionTier
@@ -254,10 +256,12 @@ const SharedHeader: React.FC = () => {
                   <div className="flex h-7 w-7 items-center justify-center">
                     <Search className="h-5 w-5" />
                   </div>
-                  <input
+                  <Input
                     value={searchTerm}
                     onChange={event => setSearchTerm(event.target.value)}
-                    className="text-sm leading-5 tracking-tight flex-1 bg-transparent border-none outline-none focus:outline-none"
+                    variant="ghost"
+                    inputSize="sm"
+                    className="h-auto flex-1 border-none bg-transparent p-0 text-sm leading-5 tracking-tight shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
                     placeholder="Search datasets..."
                     style={{ color: 'rgb(216, 216, 216)' }}
                   />
@@ -392,8 +396,11 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                         <div className="flex flex-col gap-1.5">
                           <li className="group/menu-item relative" data-sidebar="menu-item">
                             <Link href="/dashboard">
-                              <button
-                                className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="compact"
+                                className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex h-12 w-full items-center justify-start gap-2 overflow-hidden rounded-full p-4 px-3 text-left text-sm font-normal outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
                                 data-active={pathname === '/'}
                                 data-sidebar="menu-button"
                                 data-size="lg"
@@ -404,13 +411,16 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                                     Overview
                                   </span>
                                 </div>
-                              </button>
+                              </Button>
                             </Link>
                           </li>
                           <li className="group/menu-item relative" data-sidebar="menu-item">
                             <Link href="/plugins">
-                              <button
-                                className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="compact"
+                                className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex h-12 w-full items-center justify-start gap-2 overflow-hidden rounded-full p-4 px-3 text-left text-sm font-normal outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 border border-transparent stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
                                 data-active={
                                   pathname === '/plugins' || pathname?.startsWith('/plugins/')
                                 }
@@ -423,7 +433,7 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                                     Plugins
                                   </span>
                                 </div>
-                              </button>
+                              </Button>
                             </Link>
                           </li>
                         </div>
@@ -432,8 +442,11 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                         <ul className="w-full min-w-0 gap-1 flex flex-col" data-sidebar="menu">
                           <li className="group/menu-item relative" data-sidebar="menu-item">
                             <Link href="/settings/general">
-                              <button
-                                className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex w-full items-center gap-2 overflow-hidden rounded-full p-4 px-3 text-left outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 text-sm h-12 stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="compact"
+                                className="peer/menu-button group-data-[collapsible=icon]:!size-8 flex h-12 w-full items-center justify-start gap-2 overflow-hidden rounded-full p-4 px-3 text-left text-sm font-normal outline-none ring-sidebar-ring transition-[width,height,padding] focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50 group-has-[[data-sidebar=menu-action]]/menu-item:pr-8 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[state=open]:hover:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 group-data-[collapsible=icon]:!p-0 stroke-current text-muted-foreground hover:text-foreground data-[active=true]:text-foreground cursor-pointer"
                                 data-active={pathname?.startsWith('/settings')}
                                 data-sidebar="menu-button"
                                 data-size="lg"
@@ -444,7 +457,7 @@ export const SharedLayout: React.FC<SharedLayoutProps> = ({ children }) => {
                                     Settings
                                   </span>
                                 </div>
-                              </button>
+                              </Button>
                             </Link>
                           </li>
                           <li

@@ -5,6 +5,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/molecules/accordion';
+import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { ScrollArea } from '@/components/atoms/scroll-area';
 import { Eye, EyeOff } from 'lucide-react';
@@ -1103,12 +1104,14 @@ const FilterPanel = ({
                 {errors[columnName] && !loading[columnName] ? (
                   <div className="p-2">
                     <ErrorDisplay message={errors[columnName] || 'An error occurred'} />
-                    <button
+                    <Button
+                      size="compact"
+                      variant="link"
                       onClick={() => handleRetry(columnName)}
-                      className="mt-2 text-xs text-primary hover:underline"
+                      className="mt-2 h-auto px-0 text-xs text-primary"
                     >
                       Retry
-                    </button>
+                    </Button>
                   </div>
                 ) : (
                   <ColumnContent

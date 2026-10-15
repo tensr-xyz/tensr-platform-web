@@ -4,7 +4,12 @@ import { useState } from 'react';
 import { useStytch, useStytchUser, useStytchSession } from '@stytch/nextjs';
 import { useAuthStore } from '@/stores/auth-store';
 import { clearAuthData, getStoredSession, storeSession } from '@/utils/auth';
-import { fetchMeProfile, redeemStoredInvitation, type MeProfile } from '@/lib/business-api';
+import {
+  fetchMeProfile,
+  NeedsEmailError,
+  redeemStoredInvitation,
+  type MeProfile,
+} from '@/lib/business-api';
 import { hasActiveSubscription } from '@/lib/subscription';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
 import { stytchErrorMessage } from '@/lib/stytch-error-message';
@@ -18,6 +23,7 @@ async function fetchMeProfileWithRetry(): Promise<MeProfile> {
     return await fetchMeProfile();
   } catch (error) {
     // A 401 has already been handled by fetchMeProfile and will not succeed on retry.
+    if (error instanceof NeedsEmailError) throw error;
     if (error instanceof Error && error.message === 'Session expired') throw error;
     return fetchMeProfile();
   }
@@ -34,6 +40,7 @@ export const useAuth = () => {
     session,
     isLoading,
     error,
+    needsEmail,
     setUser,
     setEntitlements,
     setSession,
@@ -133,6 +140,18 @@ export const useAuth = () => {
       try {
         profile = await fetchMeProfileWithRetry();
       } catch (profileError) {
+        if (profileError instanceof NeedsEmailError) {
+          useAuthStore.getState().setNeedsEmail({
+            firstName: profileError.firstName,
+            lastName: profileError.lastName,
+          });
+          setLoading(false);
+          return {
+            success: false,
+            code: 'NEEDS_EMAIL',
+            message: profileError.message,
+          };
+        }
         console.warn('Failed to load user from tensr-api:', profileError);
         try {
           // forceClear drops the SDK's local session even if Stytch is unreachable.
@@ -150,6 +169,7 @@ export const useAuth = () => {
         };
       }
 
+      useAuthStore.getState().setNeedsEmail(null);
       setUser(profile.user);
       setEntitlements(profile.entitlements);
       try {
@@ -264,6 +284,7 @@ export const useAuth = () => {
     isInitialized,
     isAuthenticated,
     isAuthReady,
+    needsEmail,
     hasActiveSubscription: hasSubscription,
     methodId,
     initiateAuth,

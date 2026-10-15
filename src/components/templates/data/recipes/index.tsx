@@ -4,6 +4,13 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Download, Play, Save } from 'lucide-react';
 
 import { Button } from '@/components/atoms/button';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Input } from '@/components/atoms/input';
 import {
   Dialog,
@@ -160,7 +167,17 @@ export function RecipeList() {
         </Button>
       </div>
       {recipes.length === 0 ? (
-        <p className="text-xs text-muted-foreground">No saved recipes yet.</p>
+        <Empty className="min-h-0 border-0 p-4 md:p-4">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Save />
+            </EmptyMedia>
+            <EmptyTitle className="text-sm">No saved recipes yet</EmptyTitle>
+            <EmptyDescription className="text-xs">
+              Save a recipe to reuse this data preparation.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
         <ul className="space-y-2">
           {recipes.map(recipe => (

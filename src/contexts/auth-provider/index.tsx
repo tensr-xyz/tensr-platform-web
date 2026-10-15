@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useStytch, useStytchSession } from '@stytch/nextjs';
 import posthog from 'posthog-js';
 import { useAuthStore } from '@/stores/auth-store';
-import { fetchMeProfile, redeemStoredInvitation } from '@/lib/business-api';
+import { fetchMeProfile, NeedsEmailError, redeemStoredInvitation } from '@/lib/business-api';
 import { redirectToLogin } from '@/lib/session-expired';
 import {
   clearAuthData,
@@ -119,6 +119,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .then(profile => {
           if (cancelled || sessionCleared(source)) return;
           setError(null);
+          useAuthStore.getState().setNeedsEmail(null);
           setUser(profile.user);
           setEntitlements(profile.entitlements);
           // Tie anonymous PostHog sessions to this user on OAuth + hard refresh.
@@ -146,6 +147,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             message: err instanceof Error ? err.message : String(err),
           });
           devLog('Failed to load user profile:', err);
+
+          if (err instanceof NeedsEmailError) {
+            useAuthStore.getState().setNeedsEmail({
+              firstName: err.firstName,
+              lastName: err.lastName,
+            });
+            setUser(null);
+            setEntitlements(null);
+            setLoading(false);
+            if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+              redirectToLogin();
+            }
+            return;
+          }
 
           if (!isAuthFetchFailure(err)) {
             if (sessionCleared(source)) return;

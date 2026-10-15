@@ -15,6 +15,7 @@ import {
   type SubscriptionPlanCardMeta,
   type SubscriptionTier,
 } from '@/configs/pricing';
+import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { useAuth } from '@/hooks/api/use-auth';
 import Loading from '@/components/molecules/loading';
@@ -328,38 +329,42 @@ export default function SubscriptionCheckoutPage() {
 
           <div className="mt-8 flex justify-center">
             <div className="inline-flex items-center gap-1 rounded-full border border-border bg-muted p-1">
-              <button
+              <Button
+                size="compact"
                 type="button"
+                variant="ghost"
                 onClick={() => {
                   setBillingType('monthly');
                   if (billingType !== 'monthly') {
                     posthog.capture('billing_interval_toggled', { interval: 'monthly' });
                   }
                 }}
-                className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
+                className={`h-auto rounded-full px-4 py-1.5 text-sm font-normal ${
                   billingType === 'monthly'
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'bg-background text-foreground shadow-sm hover:bg-background'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Monthly
-              </button>
-              <button
+              </Button>
+              <Button
+                size="compact"
                 type="button"
+                variant="ghost"
                 onClick={() => {
                   setBillingType('annual');
                   if (billingType !== 'annual') {
                     posthog.capture('billing_interval_toggled', { interval: 'annual' });
                   }
                 }}
-                className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
+                className={`h-auto rounded-full px-4 py-1.5 text-sm font-normal ${
                   billingType === 'annual'
-                    ? 'bg-background text-foreground shadow-sm'
+                    ? 'bg-background text-foreground shadow-sm hover:bg-background'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Annual <span className="ml-1 text-xs text-emerald-600">−20%</span>
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -452,18 +457,20 @@ export default function SubscriptionCheckoutPage() {
                     </div>
                   )}
 
-                  <button
+                  <Button
+                    size="compact"
                     type="button"
+                    variant={plan.featured ? 'default' : 'outline'}
                     disabled={isCurrent || !!loadingTier}
                     onClick={() => startCheckout(plan.tier)}
-                    className={`mt-6 inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-medium transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50 ${
+                    className={`mt-6 h-auto rounded-full px-4 py-2.5 text-sm font-medium hover:opacity-90 disabled:cursor-not-allowed ${
                       plan.featured
-                        ? 'bg-foreground text-background'
-                        : 'border border-border bg-muted text-foreground'
+                        ? 'bg-foreground text-background hover:bg-foreground'
+                        : 'border-border bg-muted text-foreground hover:bg-muted'
                     }`}
                   >
                     {isLoading ? 'Redirecting to Stripe…' : label}
-                  </button>
+                  </Button>
 
                   <ul className="mt-8 space-y-3 border-t border-border pt-6">
                     {plan.features.map((feature, i) => (

@@ -221,14 +221,16 @@ const Titlebar = ({
     <>
       <AnalysisCommandPalette open={analysisPaletteOpen} onOpenChange={setAnalysisPaletteOpen} />
       <header className="relative flex h-11 min-h-11 w-full shrink-0 items-stretch border-b border-border bg-background">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={() => router.push('/dashboard')}
-          className="flex h-11 w-11 shrink-0 items-center justify-center border-r border-border text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+          className="h-11 w-11 shrink-0 rounded-none border-r border-border text-muted-foreground hover:bg-muted/40 hover:text-foreground"
           aria-label="Home"
         >
           <Home className="size-4" aria-hidden />
-        </button>
+        </Button>
 
         <div className="flex h-full shrink-0 items-stretch">
           <ProjectMenu />
@@ -249,16 +251,18 @@ const Titlebar = ({
                     const kind = tabKindLabel(tab.type);
 
                     return (
-                      <button
+                      <Button
+                        size="compact"
                         key={tab.id}
                         type="button"
+                        variant="ghost"
                         role="tab"
                         aria-selected={isActive}
                         onClick={() => handleTabChange(tab.id)}
                         className={cn(
                           'group relative flex h-11 min-w-[8.75rem] max-w-[13.75rem] shrink-0 items-center gap-2 border-r border-border px-3.5 text-[13px] font-medium transition-colors',
                           isActive
-                            ? 'bg-muted/40 text-foreground'
+                            ? 'bg-muted/40 text-foreground hover:bg-muted/40 hover:text-foreground'
                             : 'bg-transparent text-muted-foreground hover:bg-muted/30 hover:text-foreground'
                         )}
                       >
@@ -309,7 +313,7 @@ const Titlebar = ({
                         >
                           <X className="size-2.5" aria-hidden />
                         </span>
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>
@@ -322,9 +326,9 @@ const Titlebar = ({
         <Button
           type="button"
           variant="ghost"
-          size="sm"
+          size="compact"
           onClick={() => setAnalysisPaletteOpen(true)}
-          className="h-11 shrink-0 gap-1.5 rounded-none border-l border-border px-3 font-normal text-muted-foreground hover:text-foreground"
+          className="h-11 shrink-0 gap-1.5 rounded-none border-l border-border px-3 text-xs font-normal text-muted-foreground hover:text-foreground"
           aria-label="Search analyses"
         >
           <Search className="size-3.5 shrink-0" aria-hidden />
@@ -339,6 +343,7 @@ const Titlebar = ({
             <Popover>
               <PopoverTrigger asChild>
                 <Button
+                  size="compact"
                   variant="ghost"
                   className={cn(
                     'h-11 shrink-0 gap-2 rounded-none px-3 font-normal',

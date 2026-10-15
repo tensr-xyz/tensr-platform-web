@@ -20,7 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/molecules/dialog';
-import useAuth from '@/hooks/api/use-auth';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { cn } from '@/utils';
 import { apiClient } from '@/lib/api-client';
@@ -153,8 +152,7 @@ const HomeTemplate: React.FC = () => {
   const { toast } = useToast();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { user } = useAuth();
-  const { activeOrganization, isPersonalAccount, userOrganizations } = useOrganizationContext();
+  const { activeOrganization, userOrganizations } = useOrganizationContext();
   const [searchQ, setSearchQ] = useState('');
   const [dragOver, setDragOver] = useState(false);
   const [uploadPickerOpen, setUploadPickerOpen] = useState(false);
@@ -331,17 +329,16 @@ const HomeTemplate: React.FC = () => {
 
   const hasDatasets = projectsArray.length > 0;
 
-  const workspaceLabel =
-    !isPersonalAccount && activeOrganization
-      ? activeOrganization.name
-      : (user?.email?.split('@')[0] ?? 'personal');
+  const workspaceName = activeOrganization?.name?.trim() || null;
 
   return (
     <div className="w-full pb-8 text-left">
       <header className="mb-6 pt-6 md:pt-8">
-        <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-          Workspace · {workspaceLabel}
-        </p>
+        {workspaceName ? (
+          <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+            Workspace · {workspaceName}
+          </p>
+        ) : null}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-medium tracking-tight text-foreground md:text-3xl">
             Datasets
@@ -401,11 +398,13 @@ const HomeTemplate: React.FC = () => {
                 {workbook && workbook.sheets.length > 1 ? (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {workbook.sheets.map(name => (
-                      <button
+                      <Button
+                        size="compact"
                         key={name}
                         type="button"
+                        variant="outline"
                         disabled={uploadBusy}
-                        className="rounded-md border border-border px-2 py-1 text-xs hover:border-primary disabled:opacity-50"
+                        className="h-auto rounded-md px-2 py-1 text-xs hover:border-primary"
                         onClick={() => {
                           if (name === workbook.selected) {
                             clearWorkbook();
@@ -416,7 +415,7 @@ const HomeTemplate: React.FC = () => {
                         }}
                       >
                         {name === workbook.selected ? `${name} (opened)` : name}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 ) : null}
@@ -425,12 +424,14 @@ const HomeTemplate: React.FC = () => {
 
             <div className="relative grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-4">
               {TEMPLATES.map(t => (
-                <button
+                <Button
+                  size="compact"
                   key={t.id}
                   type="button"
+                  variant="ghost"
                   onClick={() => handleStartNewAnalysis(t.id)}
                   aria-pressed={uploadPickerOpen && templateId === t.id}
-                  className={`rounded-xl border bg-background p-3.5 text-left transition-colors hover:border-primary ${
+                  className={`h-auto items-start justify-start whitespace-normal rounded-xl border bg-background p-3.5 text-left font-normal hover:border-primary hover:bg-background ${
                     uploadPickerOpen && templateId === t.id ? 'border-primary' : 'border-border'
                   }`}
                 >
@@ -442,7 +443,7 @@ const HomeTemplate: React.FC = () => {
                   <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
                     {t.tag}
                   </p>
-                </button>
+                </Button>
               ))}
             </div>
 
@@ -511,6 +512,17 @@ const HomeTemplate: React.FC = () => {
             statusFilterFn={statusFilterMatch}
             projectColor={projectColor}
             displayStatus={displayStatus}
+            isCatalogEmpty={!hasDatasets}
+            uploadAction={
+              <Button
+                type="button"
+                className="h-9 gap-2 rounded-full px-4"
+                onClick={() => setUploadPickerOpen(true)}
+              >
+                <Upload className="size-4" aria-hidden />
+                Upload dataset
+              </Button>
+            }
           />
         )}
       </section>

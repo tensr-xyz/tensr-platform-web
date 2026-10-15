@@ -10,6 +10,42 @@ export type MeProfile = {
   subscription: Record<string, unknown> | null;
 };
 
+export class NeedsEmailError extends Error {
+  firstName: string | null;
+  lastName: string | null;
+  stytchUserId: string | null;
+
+  constructor(detail: {
+    first_name?: string | null;
+    last_name?: string | null;
+    stytch_user_id?: string | null;
+  }) {
+    super('Add an email to finish signing in');
+    this.name = 'NeedsEmailError';
+    this.firstName = detail.first_name ?? null;
+    this.lastName = detail.last_name ?? null;
+    this.stytchUserId = detail.stytch_user_id ?? null;
+  }
+}
+
+export function needsEmailFromResponse(status: number, text: string): NeedsEmailError | null {
+  if (status !== 409) return null;
+  try {
+    const body = JSON.parse(text) as {
+      detail?: {
+        code?: string;
+        first_name?: string | null;
+        last_name?: string | null;
+        stytch_user_id?: string | null;
+      };
+    };
+    if (body.detail?.code === 'needs_email') return new NeedsEmailError(body.detail);
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function authHeaders(extra?: HeadersInit): HeadersInit {
   const token = getStytchBearerForTensrApi();
   return {
@@ -77,8 +113,28 @@ export async function fetchMeProfile(): Promise<MeProfile> {
     cache: 'no-store',
   });
   if (handleUnauthorizedResponse(r)) throw new Error('Session expired');
-  if (!r.ok) throw new Error(formatApiError(await r.text()));
+  if (!r.ok) {
+    const text = await r.text();
+    const needsEmail = needsEmailFromResponse(r.status, text);
+    if (needsEmail) throw needsEmail;
+    throw new Error(formatApiError(text));
+  }
   return (await r.json()) as MeProfile;
+}
+
+export async function sendSessionEmailCode(
+  email: string
+): Promise<{ method_id: string; attached_to_session: boolean }> {
+  const r = await fetch(tensrApiUrl('/api/auth/email-code'), {
+    method: 'POST',
+    headers: authHeaders(),
+    body: JSON.stringify({ email }),
+  });
+  if (handleUnauthorizedResponse(r)) throw new Error('Session expired');
+  if (!r.ok) throw new Error(formatApiError(await r.text()));
+  const body = (await r.json()) as { method_id?: string; attached_to_session?: boolean };
+  if (!body.method_id) throw new Error('Could not send a code to that email');
+  return { method_id: body.method_id, attached_to_session: Boolean(body.attached_to_session) };
 }
 
 export async function fetchCurrentUser(): Promise<User> {

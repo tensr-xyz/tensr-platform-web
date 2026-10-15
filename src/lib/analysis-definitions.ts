@@ -1,4 +1,6 @@
-import type { AnalysisReport, SchemaColumn } from '@/lib/analysis-report-types';
+import type { AnalysisReport, DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
+import { schemaColumnSlotType } from '@/lib/analysis-column-types';
+import { isIdColumn, type StarterColumn } from '@/lib/agent-starter-prompts';
 
 export type AnalysisKey =
   | 'descriptives'
@@ -1496,18 +1498,118 @@ export function analysisSearchBlob(key: AnalysisKey): string {
   return `${key} ${ANALYSIS_LABELS[key]} ${cat}`.toLowerCase();
 }
 
+function observedUniqueCount(
+  column: SchemaColumn,
+  preview?: DatasetPreview | null
+): number | undefined {
+  if (typeof column.uniqueCount === 'number') return column.uniqueCount;
+  if (!preview) return undefined;
+  const index = preview.headers.indexOf(column.name);
+  if (index < 0) return undefined;
+  const seen = new Set<string>();
+  for (const row of preview.rows) {
+    const value = row[index];
+    if (value === null || value === undefined || value === '') continue;
+    seen.add(String(value));
+  }
+  return seen.size;
+}
+
+function asStarterColumn(column: SchemaColumn, preview?: DatasetPreview | null): StarterColumn {
+  return {
+    id: column.name,
+    header: column.label || column.name,
+    type: column.type,
+    uniqueCount: observedUniqueCount(column, preview),
+  };
+}
+
+/** Same cutoff starter crosstab chips use to keep Age off a table. */
+const CONTINUOUS_LEVELS = 12;
+
+function declaredNumeric(column: SchemaColumn): boolean {
+  if (schemaColumnSlotType(column) === 'numeric') return true;
+  return /number|numeric|float|int|decimal|double/i.test(column.type || '');
+}
+
+function cellLooksNumeric(value: unknown): boolean {
+  if (typeof value === 'number') return Number.isFinite(value);
+  if (typeof value !== 'string') return false;
+  const trimmed = value.trim();
+  return trimmed !== '' && Number.isFinite(Number(trimmed));
+}
+
+/** True when the loaded rows are numbers, even if the schema still says categorical. */
+function valuesLookNumeric(column: SchemaColumn, preview?: DatasetPreview | null): boolean {
+  if (!preview) return false;
+  const index = preview.headers.indexOf(column.name);
+  if (index < 0) return false;
+  let seen = 0;
+  let numeric = 0;
+  for (const row of preview.rows) {
+    const value = row[index];
+    if (value === null || value === undefined || value === '') continue;
+    seen += 1;
+    if (cellLooksNumeric(value)) numeric += 1;
+    if (seen >= 40) break;
+  }
+  return seen >= 4 && numeric / seen >= 0.9;
+}
+
+function isHighCardinalityNumeric(column: SchemaColumn, preview?: DatasetPreview | null): boolean {
+  const unique = observedUniqueCount(column, preview);
+  if (typeof unique !== 'number' || unique <= CONTINUOUS_LEVELS) return false;
+  return declaredNumeric(column) || valuesLookNumeric(column, preview);
+}
+
+/** Categorical columns for setup slots: distinct, not an id, not a high-cardinality numeric. */
+export function categoricalColumnNames(
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
+): string[] {
+  return schema
+    .filter(column => {
+      if (declaredNumeric(column) || isHighCardinalityNumeric(column, preview)) return false;
+      const slot = schemaColumnSlotType(column);
+      if (slot !== 'categorical' && slot !== 'string') return false;
+      return !isIdColumn(asStarterColumn(column, preview));
+    })
+    .map(column => column.name);
+}
+
+function numericColumnNames(schema: SchemaColumn[], preview?: DatasetPreview | null): string[] {
+  const usable = schema
+    .filter(column => column.type === 'numeric' && !isIdColumn(asStarterColumn(column, preview)))
+    .map(column => column.name);
+  if (usable.length) return usable;
+  return schema.filter(column => column.type === 'numeric').map(column => column.name);
+}
+
+const CATEGORICAL_OUTCOME_ANALYSES = new Set<AnalysisKey>([
+  'decision_tree',
+  'random_forest_classification',
+  'svm_classification',
+  'logistic_regression',
+  'probit_regression',
+  'gradient_boosting',
+  'neural_network_mlp',
+  'generalized_linear_mixed_model',
+]);
+
 export function defaultFormFieldsFromSchema(
-  schema: SchemaColumn[]
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
 ): Omit<AnalysisFormState, 'analysis'> {
-  const num = schema.filter(c => c.type === 'numeric').map(c => c.name);
+  const num = numericColumnNames(schema, preview);
+  const categorical = categoricalColumnNames(schema, preview);
   return {
     selectedCols: [],
-    groupCol: schema[0]?.name ?? '',
+    groupCol: categorical[0] ?? '',
     valueCol: num[0] ?? schema[0]?.name ?? '',
     depCol: num[0] ?? schema[0]?.name ?? '',
     independentCols: num.slice(1, 3),
-    chiA: schema[0]?.name ?? '',
-    chiB: schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
+    chiA: categorical[0] ?? '',
+    chiB: categorical[1] ?? '',
     anovaPostHoc: 'none',
     anovaEffectSize: 'eta_squared',
     anovaHomogeneity: 'levene',
@@ -1539,7 +1641,7 @@ export function defaultFormFieldsFromSchema(
     logisticDeriveMethod: 'none' as const,
     saveDerivedVariable: false,
     ksTestType: 'two_sample',
-    factorBCol: schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
+    factorBCol: categorical[1] ?? '',
     subjectCol: inferSubjectColumnFromSchema(schema),
     pcaNComponents: '',
     nClusters: '3',
@@ -1553,7 +1655,7 @@ export function defaultFormFieldsFromSchema(
     chiIncludeCramersV: true,
     chiUseFishersExact: false,
     kappaWeights: 'linear' as const,
-    factorCCol: schema[Math.min(2, Math.max(0, schema.length - 1))]?.name ?? '',
+    factorCCol: categorical[2] ?? '',
     runsTestCutoff: 'median',
     mlMode: 'classification' as const,
     dbscanEpsilon: '0.5',
@@ -1580,6 +1682,25 @@ export function defaultFormFieldsFromSchema(
     apaFormat: false,
     includeCharts: false,
   };
+}
+
+/** Fresh setup form. Categorical outcome slots start on the first real category, not an id. */
+export function defaultFormForAnalysis(
+  analysis: AnalysisKey,
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
+): AnalysisFormState {
+  const fields = defaultFormFieldsFromSchema(schema, preview);
+  if (analysis === 'network') {
+    fields.chiA = schema[0]?.name ?? '';
+    fields.chiB = schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '';
+  }
+  if (CATEGORICAL_OUTCOME_ANALYSES.has(analysis)) {
+    const categorical = categoricalColumnNames(schema, preview);
+    if (categorical[0]) fields.depCol = categorical[0];
+    if (categorical[1] && fields.groupCol === categorical[0]) fields.groupCol = categorical[1];
+  }
+  return { analysis, ...fields };
 }
 
 export type AnalysisFormState = {

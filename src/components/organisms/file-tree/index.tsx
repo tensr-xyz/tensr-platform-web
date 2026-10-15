@@ -27,6 +27,13 @@ import {
 } from 'lucide-react';
 import { devLog } from '@/lib/dev-log';
 import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
@@ -526,9 +533,17 @@ export const FolderComponent: React.FC = () => {
             <p className="text-sm">Loading files...</p>
           </div>
         ) : !projectFolder ? (
-          <div className="p-4 text-center text-muted-foreground">
-            <p className="text-sm">No files found</p>
-          </div>
+          <Empty className="min-h-0 border-0 p-4 md:p-4">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <File />
+              </EmptyMedia>
+              <EmptyTitle className="text-sm">No files yet</EmptyTitle>
+              <EmptyDescription className="text-xs">
+                Files in this dataset show up here.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
         ) : (
           <div className="space-y-1">
             <FileTree
