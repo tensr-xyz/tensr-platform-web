@@ -249,4 +249,16 @@ describe('custom table spec builder', () => {
     });
     expect(restored.bannerId).toBe('demo');
   });
+
+  it('omits respondent level and keeps a loop id', () => {
+    const canvas = defaultCanvas();
+    expect(buildTableRequest(canvas).level).toBeUndefined();
+    expect(buildTableRequest({ ...canvas, level: 'respondent' }).level).toBeUndefined();
+    expect(buildTableRequest({ ...canvas, level: 'aware+likes+owns' }).level).toBe(
+      'aware+likes+owns'
+    );
+    const restored = canvasFromStoredSpec({ level: 'aware+likes+owns', stubs: [] });
+    expect(restored.level).toBe('aware+likes+owns');
+    expect(canvasFromStoredSpec({ level: 'respondent', stubs: [] }).level).toBeUndefined();
+  });
 });
