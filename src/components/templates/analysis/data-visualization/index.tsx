@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { Loader, BarChart3, PieChart, TrendingUp, ScatterChart } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
@@ -302,31 +303,31 @@ export const DataVisualization = ({ children }: DataVisualizationProps) => {
                 <div className="space-y-3">
                   <div>
                     <label className="text-sm font-medium">Chart Title:</label>
-                    <input
+                    <Input
                       type="text"
                       value={chartTitle}
                       onChange={e => setChartTitle(e.target.value)}
-                      className="w-full mt-1 p-2 border border-border rounded text-sm"
+                      className="mt-1 w-full rounded p-2 text-sm"
                       placeholder="Enter chart title..."
                     />
                   </div>
                   <div>
                     <label className="text-sm font-medium">X-Axis Label:</label>
-                    <input
+                    <Input
                       type="text"
                       value={xLabel}
                       onChange={e => setXLabel(e.target.value)}
-                      className="w-full mt-1 p-2 border border-border rounded text-sm"
+                      className="mt-1 w-full rounded p-2 text-sm"
                       placeholder="Enter X-axis label..."
                     />
                   </div>
                   <div>
                     <label className="text-sm font-medium">Y-Axis Label:</label>
-                    <input
+                    <Input
                       type="text"
                       value={yLabel}
                       onChange={e => setYLabel(e.target.value)}
-                      className="w-full mt-1 p-2 border border-border rounded text-sm"
+                      className="mt-1 w-full rounded p-2 text-sm"
                       placeholder="Enter Y-axis label..."
                     />
                   </div>

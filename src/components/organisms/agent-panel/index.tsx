@@ -1,4 +1,5 @@
 import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '@/components/atoms/empty';
 import { Kbd } from '@/components/atoms/kbd';
@@ -227,14 +228,15 @@ function ChatMessageBody({
           {repairSuggestions?.length && onRepairPick ? (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {repairSuggestions.map(col => (
-                <button
+                <Button
                   key={col}
                   type="button"
-                  className="rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-muted"
+                  variant="outline"
+                  className="h-auto rounded-md px-2 py-1 text-xs"
                   onClick={() => onRepairPick(col)}
                 >
                   Try {col}
-                </button>
+                </Button>
               ))}
             </div>
           ) : null}
@@ -1702,17 +1704,18 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                       : 'text-muted-foreground hover:bg-muted/60'
                   )}
                 >
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     onClick={() => {
                       setActiveThread(projectId, thread.id);
                       setShowRuns(false);
                     }}
-                    className="min-w-0 flex-1 truncate px-2 py-1 text-left"
+                    className="h-auto min-w-0 flex-1 justify-start truncate rounded-md px-2 py-1 text-left text-[11px] font-normal"
                     title={thread.title}
                   >
                     {thread.title}
-                  </button>
+                  </Button>
                   {chatThreads.length > 1 ? (
                     <ChatThreadCloseButton
                       title={thread.title}
@@ -1837,16 +1840,17 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                     </p>
                     <div className="flex flex-col gap-2">
                       {suggestedPrompts.map(label => (
-                        <button
+                        <Button
                           key={label}
                           type="button"
+                          variant="outline"
                           onClick={() => {
                             setInputMessage(label);
                           }}
-                          className="rounded-lg border border-border bg-card px-3 py-2.5 text-left text-[12.5px] leading-snug text-foreground transition-colors hover:border-primary hover:bg-primary/5"
+                          className="h-auto justify-start whitespace-normal rounded-lg bg-card px-3 py-2.5 text-left text-[12.5px] font-normal leading-snug hover:border-primary hover:bg-primary/5"
                         >
                           {label}
-                        </button>
+                        </Button>
                       ))}
                     </div>
                   </div>
@@ -2001,10 +2005,11 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               {attachments.length ? (
                 <div className="mb-1.5 flex flex-wrap gap-1">
                   {attachments.map(file => (
-                    <button
+                    <Button
                       key={file.filename}
                       type="button"
-                      className="rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
+                      variant="ghost"
+                      className="h-auto rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-normal text-muted-foreground"
                       onClick={() =>
                         setAttachments(current =>
                           current.filter(item => item.filename !== file.filename)
@@ -2013,7 +2018,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                       title={`Remove ${file.filename}`}
                     >
                       {file.filename} ×
-                    </button>
+                    </Button>
                   ))}
                 </div>
               ) : null}
@@ -2094,7 +2099,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                       </Command>
                     </PopoverContent>
                   </Popover>
-                  <input
+                  <Input
                     ref={fileInputRef}
                     type="file"
                     accept={`${ACCEPTED_UPLOAD_ACCEPT},text/csv`}

@@ -1,4 +1,5 @@
 import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { Checkbox } from '@/components/atoms/checkbox';
 import {
   DropdownMenu,
@@ -289,12 +290,13 @@ export const FilesTable = ({
     return (
       <div className="px-6 py-10 text-center text-red-500">
         <p>Error loading files: {error}</p>
-        <button
+        <Button
+          type="button"
           onClick={onRefresh}
-          className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          className="mt-4 bg-blue-600 px-4 py-2 text-white hover:bg-blue-700"
         >
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
@@ -322,11 +324,11 @@ export const FilesTable = ({
       {/* Conditionally render the controls based on the hideControls prop */}
       {!hideControls && (
         <div className="flex items-center justify-between py-4">
-          <input
+          <Input
             placeholder="Filter files..."
             value={(table.getColumn('fileName')?.getFilterValue() as string) ?? ''}
             onChange={event => table.getColumn('fileName')?.setFilterValue(event.target.value)}
-            className="max-w-sm border border-border p-2 h-10 pl-4 bg-white"
+            className="h-10 max-w-sm border border-border bg-white p-2 pl-4"
           />
           <div className="flex gap-2">
             <Button variant="outline" onClick={onRefresh} className="flex items-center">

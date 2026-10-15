@@ -81,7 +81,7 @@ function MenuDialogLauncher({
   return (
     <div key={nonce} className="sr-only" aria-hidden>
       <Component>
-        <button ref={triggerRef} type="button" tabIndex={-1} className="sr-only" />
+        <Button ref={triggerRef} type="button" variant="ghost" tabIndex={-1} className="sr-only" />
       </Component>
     </div>
   );

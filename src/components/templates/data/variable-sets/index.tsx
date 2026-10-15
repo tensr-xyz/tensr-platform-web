@@ -9,6 +9,7 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { Checkbox } from '@/components/atoms/checkbox';
 import {
@@ -151,8 +152,9 @@ export function VariableSetsDialog({ children }: { children: ReactNode }) {
         </ul>
         <div className="space-y-2">
           <Label>Name</Label>
-          <input
-            className="w-full rounded-md border px-2 py-1 text-sm"
+          <Input
+            inputSize="sm"
+            className="w-full rounded-md px-2 py-1 text-sm"
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="Brands"

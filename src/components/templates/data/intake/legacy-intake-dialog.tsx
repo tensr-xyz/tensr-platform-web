@@ -11,6 +11,7 @@ import {
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
+import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { Textarea } from '@/components/atoms/text-area';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
@@ -183,7 +184,7 @@ export function LegacyIntakeDialog({
               />
             )}
             <div className="flex flex-wrap items-center gap-2">
-              <input
+              <Input
                 ref={fileRef}
                 type="file"
                 accept={

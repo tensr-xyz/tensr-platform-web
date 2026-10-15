@@ -264,12 +264,16 @@ export const LinearRegression = ({ children }: LinearRegressionProps) => {
                           className="flex items-center justify-between bg-gray-100 dark:bg-gray-800 p-2 rounded-sm"
                         >
                           <span>{variable}</span>
-                          <button
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
                             onClick={() => handleIndependentVariableSelect(variable)}
-                            className="text-red-500 hover:text-red-700"
+                            className="size-6 text-red-500 hover:text-red-700"
+                            aria-label={`Remove ${variable}`}
                           >
                             ×
-                          </button>
+                          </Button>
                         </div>
                       ))}
                     </div>

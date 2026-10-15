@@ -527,10 +527,11 @@ const LoginTemplate = () => {
                       <label htmlFor="code" className="text-sm font-semibold">
                         Verification Code
                       </label>
-                      <button
+                      <Button
                         type="button"
+                        variant="link"
                         onClick={handleResendEmail}
-                        className="text-xs text-muted-foreground hover:text-foreground underline disabled:no-underline disabled:opacity-50"
+                        className="h-auto px-0 text-xs text-muted-foreground hover:text-foreground disabled:no-underline"
                         disabled={formBusy || !resendReady}
                       >
                         {isSendingCode
@@ -538,7 +539,7 @@ const LoginTemplate = () => {
                           : resendReady
                             ? 'Resend code'
                             : 'Resend code in 30s'}
-                      </button>
+                      </Button>
                     </div>
                     <div className="relative">
                       <Input

@@ -2,6 +2,7 @@
 
 import posthog from 'posthog-js';
 import { Component, useEffect, type ReactNode } from 'react';
+import { Button } from '@/components/atoms/button';
 
 function capture(error: unknown) {
   const token = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
@@ -26,13 +27,14 @@ class RootErrorBoundary extends Component<{ children: ReactNode }, { error: Erro
       return (
         <div className="flex min-h-screen flex-col items-center justify-center gap-3 px-6 text-center">
           <h1 className="text-base font-medium">Something went wrong</h1>
-          <button
+          <Button
             type="button"
-            className="rounded border px-3 py-1 text-sm"
+            variant="outline"
+            className="h-auto px-3 py-1 text-sm"
             onClick={() => window.location.reload()}
           >
             Reload
-          </button>
+          </Button>
         </div>
       );
     }
