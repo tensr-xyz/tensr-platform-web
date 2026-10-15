@@ -56,7 +56,10 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<MergeMode>('inner');
   const [secondaryDataset, setSecondaryDataset] = useState<string>('');
-  const [datasetOptions, setDatasetOptions] = useState<{ id: string; name: string }[]>([]);
+  const [datasetOptions, setDatasetOptions] = useState<
+    { id: string; name: string; updatedAt?: string }[]
+  >([]);
+  const [datasetQuery, setDatasetQuery] = useState('');
   const [keyOptions, setKeyOptions] = useState<{ name: string; label: string }[]>([]);
   const [keyMap, setKeyMap] = useState<Record<string, string>>({});
   const [keys, setKeys] = useState<string[]>([]);
@@ -83,7 +86,11 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
         setDatasetOptions(
           rows
             .filter(r => r.id && r.id !== primaryDatasetId)
-            .map(r => ({ id: String(r.id), name: String(r.name || r.id) }))
+            .map(r => ({
+              id: String(r.id),
+              name: String(r.name || r.id),
+              updatedAt: String((r as { updatedAt?: string }).updatedAt || ''),
+            }))
         );
       } catch {
         if (!cancelled) setDatasetOptions([]);
@@ -283,6 +290,12 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
 
           <div className="space-y-2">
             <Label>Second dataset</Label>
+            <input
+              value={datasetQuery}
+              onChange={event => setDatasetQuery(event.target.value)}
+              placeholder="Search by name, date, or id"
+              className="flex h-8 w-full rounded-md border border-input bg-background px-2 text-sm"
+            />
             <Select
               value={secondaryDataset}
               onValueChange={value => {
@@ -294,12 +307,30 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
               <SelectTrigger>
                 <SelectValue placeholder="Choose dataset" />
               </SelectTrigger>
-              <SelectContent>
-                {datasetOptions.map(opt => (
-                  <SelectItem key={opt.id} value={opt.id}>
-                    {opt.name}
-                  </SelectItem>
-                ))}
+              <SelectContent position="popper" className="max-h-64">
+                {datasetOptions
+                  .filter(opt => {
+                    const q = datasetQuery.trim().toLowerCase();
+                    if (!q) return true;
+                    return (
+                      opt.name.toLowerCase().includes(q) ||
+                      opt.id.toLowerCase().includes(q) ||
+                      (opt.updatedAt || '').toLowerCase().includes(q)
+                    );
+                  })
+                  .map(opt => {
+                    const shared =
+                      datasetOptions.filter(other => other.name === opt.name).length > 1;
+                    const when = opt.updatedAt ? opt.updatedAt.slice(0, 10) : '';
+                    const label = shared
+                      ? `${opt.name} · ${when || 'undated'} · ${opt.id.slice(0, 8)}`
+                      : opt.name;
+                    return (
+                      <SelectItem key={opt.id} value={opt.id}>
+                        {label}
+                      </SelectItem>
+                    );
+                  })}
               </SelectContent>
             </Select>
           </div>

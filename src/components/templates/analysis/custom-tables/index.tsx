@@ -10,6 +10,7 @@ import {
   DialogTrigger,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import { Button } from '@/components/atoms/button';
 import { Label } from '@/components/atoms/label';
 import {
@@ -20,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
+import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
 import { datasetRequest, replayOperations, setActiveWeight } from '@/lib/dataset-data-ops';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
 import {
@@ -39,7 +41,12 @@ import {
   runCustomTable,
   saveNamedBanner,
 } from '@/lib/custom-tables/api';
-import { netPreset, NET_HELPER_COPY, type NetPresetId } from '@/lib/custom-tables/nets';
+import {
+  netPreset,
+  NET_HELPER_COPY,
+  offersTop2Box,
+  type NetPresetId,
+} from '@/lib/custom-tables/nets';
 import {
   drillClickCopy,
   drillRequest,
@@ -103,6 +110,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [bannerIdDraft, setBannerIdDraft] = useState('');
   const [bookName, setBookName] = useState('');
   const [variableSets, setVariableSets] = useState<Array<{ id: string; label: string }>>([]);
+  const [targetZone, setTargetZone] = useState<'stub' | 'banner'>('stub');
+  const [activeVariable, setActiveVariable] = useState(0);
 
   const columns = useMemo(() => {
     if (!sheetTab?.data?.initialColumns) return variableSets;
@@ -116,8 +125,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const rows = useMemo(() => sheetTab?.data?.initialData || [], [sheetTab?.data?.initialData]);
 
   const runDatasetId = useMemo(() => {
-    const selected = weightOptions.find(o => o.datasetId === weightChoice);
-    return selected ? pickRunDatasetId(selected) : weightChoice || datasetId || '';
+    const selected = weightOptions.find(o => o.optionId === weightChoice);
+    return selected ? pickRunDatasetId(selected) : datasetId || '';
   }, [weightOptions, weightChoice, datasetId]);
 
   const refreshNamedBanners = async (targetId: string) => {
@@ -172,13 +181,16 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
         if (cancelled) return;
         const opts = weightPickerOptions(res.versions || [], datasetId);
         setWeightOptions(opts);
-        const current = opts.find(o => o.datasetId === datasetId) || opts[0];
-        setWeightChoice(current?.datasetId || datasetId);
+        const current =
+          opts.find(o => o.kind === 'this_file') ||
+          opts.find(o => o.kind === 'this_file_unweighted') ||
+          opts[0];
+        setWeightChoice(current?.optionId || '');
       })
       .catch(() => {
         if (cancelled) return;
         setWeightOptions([]);
-        setWeightChoice(datasetId);
+        setWeightChoice('');
       });
     return () => {
       cancelled = true;
@@ -221,13 +233,20 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       return;
     }
     if (!canvas.stubs.length || !canvas.banners.length) {
-      setError('Drop at least one Stub (rows) question and one Banner (columns) question.');
+      setError('Add at least one Stub (rows) question and one Banner (columns) question.');
       return;
     }
     setBusy(true);
     setError(null);
     setPreviewWarning(null);
+    captureProductEvent('analysis_started', {
+      where: 'custom_tables',
+      analysis_type: 'banner_table',
+      dataset_id: datasetId,
+    });
     const body = buildTableRequest(canvas);
+    const selectedWeight = weightOptions.find(o => o.optionId === weightChoice);
+    if (selectedWeight?.weight === 'none') body.weight = 'none';
     const runId = runDatasetId;
     try {
       const preview = await previewCustomTable(runId, body, token);
@@ -238,7 +257,21 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       if (warn) setPreviewWarning(warn);
       const result = (await runCustomTable(runId, body, token)) as BannerBook & {
         spec?: StoredTableSpec;
+        weight?: { column?: string | null; weight_aware?: boolean };
       };
+      const askedUnweighted = selectedWeight?.weight === 'none';
+      if (askedUnweighted && result.weight?.column && result.weight.weight_aware !== false) {
+        setError(
+          'Unweighted is not available on this server yet. The table was not updated, so these numbers stay weighted.'
+        );
+        captureProductEvent('analysis_failed', {
+          where: 'custom_tables',
+          analysis_type: 'banner_table',
+          dataset_id: datasetId,
+          error_class: 'unweighted_unavailable',
+        });
+        return;
+      }
       setBook(result);
       setActiveSpecId(String(result.spec?.id || '') || null);
       setSavedRequestKey(tableRequestKey(canvas));
@@ -247,8 +280,21 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
         setCanvas(c => ({ ...c, bannerId: String(result.spec?.banner_id) }));
       }
       await refreshSavedSpecs(runId);
+      captureProductEvent('analysis_completed', {
+        where: 'custom_tables',
+        analysis_type: 'banner_table',
+        dataset_id: datasetId,
+      });
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Table failed');
+      setBook(null);
+      captureProductEvent('analysis_failed', {
+        where: 'custom_tables',
+        analysis_type: 'banner_table',
+        dataset_id: datasetId,
+        error_class: errorClass(e),
+      });
+      captureProductException(e, { where: 'custom_tables' });
+      setError(formatApiErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -424,13 +470,41 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               <p className="border-b border-border px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Variables
               </p>
-              <ul className="max-h-[360px] overflow-y-auto p-1 text-xs">
-                {columns.map(col => (
+              <ul
+                className="max-h-[360px] overflow-y-auto p-1 text-xs"
+                role="listbox"
+                aria-label="Variables"
+                tabIndex={0}
+                onKeyDown={event => {
+                  if (!columns.length) return;
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setActiveVariable(index => Math.min(columns.length - 1, index + 1));
+                  } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setActiveVariable(index => Math.max(0, index - 1));
+                  } else if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    const column = columns[activeVariable];
+                    if (column) dropColumn(targetZone, column.id);
+                  }
+                }}
+              >
+                {columns.map((col, index) => (
                   <li
                     key={col.id}
                     draggable
+                    role="option"
+                    aria-selected={index === activeVariable}
+                    tabIndex={-1}
                     onDragStart={e => e.dataTransfer.setData('text/plain', col.id)}
-                    className="cursor-grab rounded px-2 py-1 hover:bg-muted/60"
+                    onClick={() => {
+                      setActiveVariable(index);
+                      dropColumn(targetZone, col.id);
+                    }}
+                    className={`cursor-pointer rounded px-2 py-1 hover:bg-muted/60 ${
+                      index === activeVariable ? 'bg-muted/80' : ''
+                    }`}
                   >
                     <span className="font-medium">{col.label}</span>
                     {col.label !== col.id ? (
@@ -441,12 +515,25 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               </ul>
             </aside>
             <div className="flex min-w-0 flex-1 flex-col gap-3">
-              <DropZone label="Stub (rows)" onDropColumn={column => dropColumn('stub', column)}>
+              <DropZone
+                label="Stub (rows)"
+                active={targetZone === 'stub'}
+                empty={canvas.stubs.length === 0}
+                onActivate={() => setTargetZone('stub')}
+                onDropColumn={column => {
+                  setTargetZone('stub');
+                  dropColumn('stub', column);
+                }}
+              >
                 {canvas.stubs.map((stub, i) => (
                   <QuestionCard
                     key={stub.column}
                     title={stub.column}
                     values={stub.values}
+                    columnType={
+                      sheetTab?.data?.initialColumns?.find(column => column.id === stub.column)
+                        ?.type
+                    }
                     nets={stub.nets.map(n => n.label)}
                     onMove={(from, to) => setCanvas(c => moveCategory(c, 'stub', i, from, to))}
                     onNet={kind => addNet(i, kind)}
@@ -455,7 +542,13 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               </DropZone>
               <DropZone
                 label="Banner (columns)"
-                onDropColumn={column => dropColumn('banner', column)}
+                active={targetZone === 'banner'}
+                empty={canvas.banners.length === 0}
+                onActivate={() => setTargetZone('banner')}
+                onDropColumn={column => {
+                  setTargetZone('banner');
+                  dropColumn('banner', column);
+                }}
               >
                 {canvas.banners.map((banner, i) => (
                   <div key={banner.column} className="space-y-1">
@@ -689,7 +782,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                 </SelectTrigger>
                 <SelectContent>
                   {weightOptions.map(opt => (
-                    <SelectItem key={`${opt.kind}-${opt.datasetId}`} value={opt.datasetId}>
+                    <SelectItem key={opt.optionId} value={opt.optionId}>
                       {opt.label}
                     </SelectItem>
                   ))}
@@ -873,6 +966,11 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           </div>
           {table ? (
             <div className="overflow-x-auto rounded-md border border-border">
+              {book?.base_label ? (
+                <p className="border-b border-border px-2 py-1 text-left text-[11px] font-medium">
+                  {book.base_label}
+                </p>
+              ) : null}
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b bg-muted/40">
@@ -1013,7 +1111,22 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                 },
                 token
               )
-                .then(() => setError(null))
+                .then(result => {
+                  const report = result.replay_report;
+                  const table =
+                    report && typeof report.table === 'object' && report.table
+                      ? (report.table as BannerBook)
+                      : null;
+                  if (!table?.rows?.length) {
+                    setBook(null);
+                    setError('The table ran, but there is nothing to show.');
+                    return;
+                  }
+                  setBook(table);
+                  setActiveSpecId(table.spec?.id ? String(table.spec.id) : null);
+                  setCellClick(null);
+                  setError(null);
+                })
                 .catch(err =>
                   setError(err instanceof Error ? err.message : 'Could not run these tables')
                 )
@@ -1036,15 +1149,37 @@ function DropZone({
   onDropColumn,
   children,
   compact,
+  empty,
+  active,
+  onActivate,
 }: {
   label: string;
   onDropColumn: (column: string) => void;
   children: ReactNode;
   compact?: boolean;
+  empty?: boolean;
+  active?: boolean;
+  onActivate?: () => void;
 }) {
+  const showHint = empty === true;
   return (
     <div
-      className={`rounded-md border border-dashed border-border p-3 ${compact ? 'ml-4 bg-muted/10 p-2' : ''}`}
+      className={`rounded-md border border-dashed p-3 ${
+        active ? 'border-foreground/40 bg-muted/30' : 'border-border'
+      } ${compact ? 'ml-4 bg-muted/10 p-2' : ''}`}
+      tabIndex={onActivate ? 0 : undefined}
+      aria-label={
+        onActivate ? `${label}. ${active ? 'Selected.' : ''} Drag or click a variable.` : undefined
+      }
+      onClick={onActivate}
+      onFocus={onActivate}
+      onKeyDown={event => {
+        if (!onActivate) return;
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onActivate();
+        }
+      }}
       onDragOver={e => e.preventDefault()}
       onDrop={e => {
         e.preventDefault();
@@ -1055,6 +1190,7 @@ function DropZone({
       <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
+      {showHint ? <p className="text-xs text-muted-foreground">Drag or click a variable</p> : null}
       {children}
     </div>
   );
@@ -1063,12 +1199,14 @@ function DropZone({
 function QuestionCard({
   title,
   values,
+  columnType,
   nets,
   onMove,
   onNet,
 }: {
   title: string;
   values: string[];
+  columnType?: string;
   nets?: string[];
   onMove: (from: number, to: number) => void;
   onNet?: (kind: NetPresetId) => void;
@@ -1082,15 +1220,25 @@ function QuestionCard({
             <span className="flex-1">{value}</span>
             <button
               type="button"
-              className="text-muted-foreground"
-              onClick={() => onMove(i, i - 1)}
+              className="relative z-[80] px-1 text-muted-foreground"
+              aria-label={`Move ${value} up`}
+              onClick={event => {
+                event.preventDefault();
+                event.stopPropagation();
+                onMove(i, i - 1);
+              }}
             >
               ↑
             </button>
             <button
               type="button"
-              className="text-muted-foreground"
-              onClick={() => onMove(i, i + 1)}
+              className="relative z-[80] px-1 text-muted-foreground"
+              aria-label={`Move ${value} down`}
+              onClick={event => {
+                event.preventDefault();
+                event.stopPropagation();
+                onMove(i, i + 1);
+              }}
             >
               ↓
             </button>
@@ -1102,33 +1250,39 @@ function QuestionCard({
       ) : null}
       {onNet ? (
         <div className="mt-2 flex flex-wrap gap-1">
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-6 text-[10px]"
-            onClick={() => onNet('agree')}
-          >
-            NET Agree
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-6 text-[10px]"
-            onClick={() => onNet('yes')}
-          >
-            NET Yes
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-6 text-[10px]"
-            onClick={() => onNet('top2')}
-          >
-            Top-2-box
-          </Button>
+          {netPreset('agree', values) ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px]"
+              onClick={() => onNet('agree')}
+            >
+              NET Agree
+            </Button>
+          ) : null}
+          {netPreset('yes', values) ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px]"
+              onClick={() => onNet('yes')}
+            >
+              NET Yes
+            </Button>
+          ) : null}
+          {offersTop2Box(values, columnType) ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 text-[10px]"
+              onClick={() => onNet('top2')}
+            >
+              Top-2-box
+            </Button>
+          ) : null}
         </div>
       ) : null}
       {onNet ? <p className="mt-1 text-[10px] text-muted-foreground">{NET_HELPER_COPY}</p> : null}

@@ -120,6 +120,7 @@ export const AGENT_CAPABILITY_CATALOG = {
   "chart_aliases": {
     "bar": "bar",
     "bar_chart": "bar",
+    "bar_grouped": "bar",
     "box": "boxplot",
     "box_plot": "boxplot",
     "boxplot": "boxplot",
@@ -129,6 +130,7 @@ export const AGENT_CAPABILITY_CATALOG = {
     "line": "line",
     "line_chart": "line",
     "scatter": "scatter",
+    "scatter_line": "scatter",
     "scatter_plot": "scatter",
     "scatterplot": "scatter"
   },

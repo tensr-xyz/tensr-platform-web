@@ -107,6 +107,7 @@ import { recordTabSnapshot } from '@/lib/tab-history';
 import { SPREADSHEET_EVENTS, type TabColumnFilterPayload } from '@/lib/spreadsheet-commands';
 import { gridRowsForColumns, gridRowsFromStoredRecords } from '@/lib/sheet-grid-align';
 import { fetchWithColdStartRetry } from '@/lib/cold-start-fetch';
+import { fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
 
 const INITIAL_EMPTY_ROWS = 200;
 const ROWS_PER_BATCH = 250;
@@ -281,7 +282,7 @@ async function fetchDatasetGridSliceForSpreadsheet(
 
   let entry = cache.get(datasetId);
   if (!entry) {
-    const schemaRes = await fetchWithColdStartRetry(tensrApiUrl(`/datasets/${datasetId}/schema`), {
+    const schemaRes = await fetchDatasetSchema(datasetId, {
       headers,
     });
     if (!schemaRes.ok) return null;
@@ -809,7 +810,7 @@ export function Spreadsheet({
 
   const refreshColumnHeadersFromSchema = useCallback(async () => {
     if (!gridDatasetId || !idTokenRef.current) return;
-    const res = await fetch(tensrApiUrl(`/datasets/${gridDatasetId}/schema`), {
+    const res = await fetchDatasetSchema(gridDatasetId, {
       headers: { Authorization: `Bearer ${idTokenRef.current}` },
     });
     if (handleUnauthorizedResponse(res)) return;

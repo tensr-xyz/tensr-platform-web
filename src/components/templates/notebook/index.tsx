@@ -9,10 +9,11 @@ import MarkdownViewer from '@/components/organisms/markdown-viewer';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
 import { apiClient } from '@/lib/api-client';
-import { ApiRequestError } from '@/lib/api-error';
+import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 import { adoptDerivedDataset } from '@/lib/adopt-derived-dataset';
 import type { DerivedDatasetPayload } from '@/lib/adopt-derived-dataset';
 import { captureProductException } from '@/lib/product-analytics';
+import { presentCellError } from '@/lib/notebook-cell';
 
 export const CODE_EXECUTION_UNAVAILABLE = 'Code execution temporarily unavailable';
 
@@ -35,17 +36,27 @@ function detailFromApiBody(message: string): string | null {
 }
 
 function executionErrorMessage(err: unknown, fallback: string): string {
+  if (
+    err instanceof ApiRequestError &&
+    (err.status === 422 || err.message.includes('string_too_long'))
+  ) {
+    return 'That cell is too long to send. The dataset loads on the server, so run the cell again.';
+  }
   if (err instanceof ApiRequestError && err.status === 403) {
     const detail = detailFromApiBody(err.message);
     if (detail === CODE_EXECUTION_UNAVAILABLE || err.message.includes(CODE_EXECUTION_UNAVAILABLE)) {
       return CODE_EXECUTION_UNAVAILABLE;
     }
-    if (detail) return detail;
+    if (detail && !detail.includes('{') && detail.length < 240) return detail;
   }
   if (err instanceof Error && err.message.includes(CODE_EXECUTION_UNAVAILABLE)) {
     return CODE_EXECUTION_UNAVAILABLE;
   }
-  return err instanceof Error ? err.message : fallback;
+  const plain = formatApiErrorMessage(err);
+  if (!plain || plain.includes('{') || plain.length > 400 || /API Error:/i.test(plain)) {
+    return fallback;
+  }
+  return plain;
 }
 
 interface Cell {
@@ -55,6 +66,7 @@ interface Cell {
   stdout: string | null;
   output: OutputContent | null;
   error: string | null;
+  errorDetail: string | null;
   executionCount: number | null;
   runId: string | null;
 }
@@ -63,6 +75,8 @@ interface ExecutionResult {
   stdout: string | null;
   output: OutputContent | null;
   error: string | null;
+  traceback?: string | null;
+  suggestion?: string | null;
 }
 
 interface OutputContent {
@@ -136,7 +150,7 @@ interface NotebookCellProps {
   cell: Cell;
   language: 'python' | 'r';
   onContentChange: (cellId: number, content: string) => void;
-  onExecute: (cellId: number) => void;
+  onExecute: (cellId: number, source?: string) => void;
   isExecuting: boolean;
   isSelected: boolean;
   onSelect: (cellId: number) => void;
@@ -157,6 +171,8 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
 }) => {
   const { theme } = useTheme();
   const [isEditing, setIsEditing] = useState(cell.type === 'markdown' && !cell.content.trim());
+  const onExecuteRef = useRef(onExecute);
+  onExecuteRef.current = onExecute;
 
   const isDarkMode = theme === 'dark';
 
@@ -203,6 +219,15 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
                   },
                   padding: { top: 4, bottom: 4 },
                   glyphMargin: false,
+                }}
+                onMount={(editor, monaco) => {
+                  editor.onKeyDown(event => {
+                    const enter = event.keyCode === monaco.KeyCode.Enter;
+                    if (!enter || !(event.shiftKey || event.metaKey || event.ctrlKey)) return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onExecuteRef.current(cell.id, editor.getValue());
+                  });
                 }}
               />
             </div>
@@ -282,6 +307,15 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
               padding: { top: 4, bottom: 4 },
               glyphMargin: false,
             }}
+            onMount={(editor, monaco) => {
+              editor.onKeyDown(event => {
+                const enter = event.keyCode === monaco.KeyCode.Enter;
+                if (!enter || !(event.shiftKey || event.metaKey || event.ctrlKey)) return;
+                event.preventDefault();
+                event.stopPropagation();
+                onExecuteRef.current(cell.id, editor.getValue());
+              });
+            }}
           />
         </div>
 
@@ -300,6 +334,14 @@ const NotebookCell: React.FC<NotebookCellProps> = ({
         {cell.error && (
           <div className="py-1 pl-2 font-mono text-xs text-red-600 dark:text-red-400 whitespace-pre-wrap border-l-2 border-red-200 dark:border-red-700 bg-red-50 dark:bg-red-900 my-1">
             {cell.error}
+            {cell.errorDetail ? (
+              <details className="mt-1">
+                <summary className="cursor-pointer text-muted-foreground">Details</summary>
+                <pre className="mt-1 whitespace-pre-wrap text-[11px] text-muted-foreground">
+                  {cell.errorDetail}
+                </pre>
+              </details>
+            ) : null}
           </div>
         )}
 
@@ -361,6 +403,7 @@ export const Notebook: React.FC = () => {
       stdout: null,
       output: null,
       error: null,
+      errorDetail: null,
       executionCount: null,
       runId: null,
     },
@@ -377,15 +420,10 @@ export const Notebook: React.FC = () => {
     const data = activeTab.data.initialData;
 
     if (lang === 'python') {
-      // When a dataset_id is available the backend already loads df into the
-      // execution namespace — skip inlining to avoid the 50k char API limit.
+      // The server loads df, with its real types, when a dataset is open.
+      // Importing matplotlib here made a head() take about 15 seconds.
       if (getDatasetIdFromTab(activeTab)) {
-        return `import pandas as pd
-import matplotlib.pyplot as plt
-import base64
-from io import BytesIO
-
-# df is pre-loaded by the backend from the active dataset`;
+        return '';
       }
 
       // No dataset_id — inline the data, but cap at 200 rows so the request
@@ -407,6 +445,9 @@ df = pd.DataFrame(data_dict)${truncated ? `\n# Note: showing first ${MAX_INLINE_
 
 # Note: The backend already sets up __output__ capture system`;
     } else {
+      if (getDatasetIdFromTab(activeTab)) {
+        return '';
+      }
       // For R, write the data to a JSON string and parse it properly
       if (!Array.isArray(data) || data.length === 0) {
         return `# No data available
@@ -456,6 +497,7 @@ names(df) <- make.names(names(df))`;
       stdout: null,
       output: null,
       error: null,
+      errorDetail: null,
       executionCount: null,
       runId: null,
     };
@@ -477,7 +519,10 @@ names(df) <- make.names(names(df))`;
   ): Promise<ExecutionResult & { run_id?: string | null }> => {
     try {
       if (language === 'r') {
-        return apiClient.execute.r({ code });
+        return apiClient.execute.r({
+          code,
+          dataset_id: getDatasetIdFromTab(activeTab),
+        });
       }
       const datasetId = getDatasetIdFromTab(activeTab);
       return apiClient.execute.python({
@@ -530,11 +575,12 @@ names(df) <- make.names(names(df))`;
     }
   };
 
-  const executeCell = async (cellId: number) => {
+  const executeCell = async (cellId: number, source?: string) => {
     setIsExecuting(true);
     try {
       const cell = cells.find(c => c.id === cellId);
       if (!cell) return;
+      const content = typeof source === 'string' ? source : cell.content;
 
       // Skip execution for markdown cells
       if (cell.type === 'markdown') {
@@ -542,7 +588,7 @@ names(df) <- make.names(names(df))`;
         return;
       }
 
-      if (!cellHasRunnableCode(cell.content)) {
+      if (!cellHasRunnableCode(content)) {
         setCells(prevCells =>
           prevCells.map(c =>
             c.id === cellId
@@ -561,7 +607,7 @@ names(df) <- make.names(names(df))`;
       }
 
       const setupCode = generateSetupCode(language);
-      const fullCode = setupCode + '\n' + cell.content;
+      const fullCode = setupCode ? `${setupCode}\n${content}` : content;
 
       // Use real API call
       const result = await executeCode(fullCode, language);
@@ -600,7 +646,11 @@ names(df) <- make.names(names(df))`;
                 ...c,
                 stdout: result.stdout || null,
                 output: output,
-                error: result.error || (!result.stdout && !output ? 'Ran. No output.' : null),
+                ...presentCellError(
+                  result.error || (!result.stdout && !output ? 'Ran. No output.' : null),
+                  result.traceback,
+                  result.suggestion
+                ),
                 executionCount: (c.executionCount || 0) + 1,
                 runId: result.run_id || null,
               }
@@ -615,6 +665,7 @@ names(df) <- make.names(names(df))`;
             ? {
                 ...c,
                 error: executionErrorMessage(err, 'Failed to execute code'),
+                errorDetail: null,
                 stdout: null,
                 output: null,
                 runId: null,

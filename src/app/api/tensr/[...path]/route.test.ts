@@ -2,7 +2,13 @@
  * @jest-environment node
  */
 import { NextRequest } from 'next/server';
+import { getPostHogClient } from '@/lib/posthog-server';
 import { GET, POST, shouldDecodeBodyAsText } from './route';
+
+jest.mock('@/lib/posthog-server', () => {
+  const captureException = jest.fn();
+  return { getPostHogClient: () => ({ captureException }) };
+});
 
 const FN_URL = 'https://abc123.lambda-url.us-east-1.on.aws/';
 const API = 'https://5qv9lg3s55.execute-api.us-east-1.amazonaws.com';
@@ -79,6 +85,16 @@ describe('/api/tensr proxy: agent-loop stream', () => {
     expect(arrivals[2] - arrivals[0]).toBeGreaterThanOrEqual(250);
   });
 
+  it('sends the v2 stream to the Function URL without buffering', async () => {
+    const res = await post(['assistant', 'agent-loop-v2', 'stream']);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'https://abc123.lambda-url.us-east-1.on.aws/api/assistant/agent-loop-v2/stream'
+    );
+    expect(res.headers.get('Content-Type')).toContain('text/event-stream');
+    expect(res.headers.get('X-Tensr-Upstream')).toBe('function-url');
+    await res.body?.cancel();
+  });
+
   it('keeps the JSON agent-loop on API Gateway', async () => {
     fetchMock.mockImplementation(async () => Response.json({ status: 'ok' }));
     await post(['assistant', 'agent-loop']);
@@ -90,6 +106,119 @@ describe('/api/tensr proxy: agent-loop stream', () => {
     const res = await post(['assistant', 'agent-loop', 'stream']);
     expect(fetchMock.mock.calls[0][0]).toBe(`${API}/api/assistant/agent-loop/stream`);
     expect(res.headers.get('X-Tensr-Upstream')).toBe('api-gateway');
+  });
+
+  it('forwards a 503 event-stream as 200 and records the original status', async () => {
+    process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN = 'phc_test';
+    const capture = getPostHogClient().captureException as jest.Mock;
+    capture.mockClear();
+    fetchMock.mockImplementation(
+      async () =>
+        new Response('data: {"type":"result","response":{"status":"ok"}}\n\n', {
+          status: 503,
+          headers: { 'Content-Type': 'text/event-stream' },
+        })
+    );
+    const req = new NextRequest('http://localhost/api/tensr/assistant/agent-loop-v2/stream', {
+      method: 'POST',
+      headers: {
+        authorization: 'Bearer t',
+        'content-type': 'application/json',
+        'x-tensr-distinct-id': 'user-1',
+      },
+      body: JSON.stringify({ message: 'hi', session_id: 'sess-9' }),
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ path: ['assistant', 'agent-loop-v2', 'stream'] }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Tensr-Upstream-Status')).toBe('503');
+    expect(capture).toHaveBeenCalledWith(
+      expect.any(Error),
+      'user-1',
+      expect.objectContaining({ status: 503, session_id: 'sess-9', distinct_id: 'user-1' })
+    );
+    await res.body?.cancel();
+  });
+
+  it('treats an SSE first byte as 200 even when the upstream content type is not an event stream', async () => {
+    fetchMock.mockImplementation(
+      async () =>
+        new Response(': ping\n\ndata: {"type":"result"}\n\n', {
+          status: 503,
+          headers: { 'Content-Type': 'text/plain' },
+        })
+    );
+    const req = new NextRequest('http://localhost/api/tensr/assistant/agent-loop-v2/stream', {
+      method: 'POST',
+      headers: { authorization: 'Bearer t', 'content-type': 'application/json' },
+      body: JSON.stringify({ message: 'hi' }),
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ path: ['assistant', 'agent-loop-v2', 'stream'] }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Tensr-Upstream-Status')).toBe('503');
+    expect(res.headers.get('Content-Type')).toContain('text/event-stream');
+    await res.body?.cancel();
+  });
+
+  it('turns a non-SSE 503 on a stream into a continuing event', async () => {
+    fetchMock.mockImplementation(
+      async () =>
+        new Response('{"detail":"unavailable"}', {
+          status: 503,
+          headers: { 'Content-Type': 'application/json' },
+        })
+    );
+    const req = new NextRequest('http://localhost/api/tensr/assistant/agent-loop-v2/stream', {
+      method: 'POST',
+      headers: { authorization: 'Bearer t', 'content-type': 'application/json' },
+      body: JSON.stringify({ message: 'hi', session_id: 'sess-503' }),
+    });
+    const res = await POST(req, {
+      params: Promise.resolve({ path: ['assistant', 'agent-loop-v2', 'stream'] }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('X-Tensr-Upstream-Status')).toBe('503');
+    const text = await res.text();
+    expect(text).toContain('"status":"continuing"');
+    expect(text).toContain('sess-503');
+  });
+});
+
+describe('tensr proxy body', () => {
+  it('decodes only text and json', () => {
+    expect(shouldDecodeBodyAsText('application/json; charset=utf-8')).toBe(true);
+    expect(shouldDecodeBodyAsText('text/csv')).toBe(true);
+    expect(shouldDecodeBodyAsText('text/event-stream')).toBe(true);
+    expect(
+      shouldDecodeBodyAsText('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    ).toBe(false);
+    expect(shouldDecodeBodyAsText('application/pdf')).toBe(false);
+    expect(
+      shouldDecodeBodyAsText(
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      )
+    ).toBe(false);
+  });
+
+  it.each([
+    ['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'banner.xlsx'],
+    ['application/pdf', 'report.pdf'],
+  ])('passes %s through byte-identical', async (contentType, filename) => {
+    const payload = new Uint8Array([0xff, 0xfe, 0x00, 0x50, 0x4b, 0x03, 0x04, 0x80]);
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response(payload, {
+        status: 200,
+        headers: { 'Content-Type': contentType },
+      })
+    );
+    const req = new NextRequest(`http://localhost/api/tensr/reports/${filename}`);
+    const res = await GET(req, { params: Promise.resolve({ path: ['reports', filename] }) });
+    const got = new Uint8Array(await res.arrayBuffer());
+    expect(Array.from(got)).toEqual(Array.from(payload));
+    fetchMock.mockRestore();
   });
 });
 

@@ -1,10 +1,11 @@
 import React from 'react';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import LoginTemplate from './login';
 import { STYTCH_SESSION_DURATION_MINUTES } from '@/lib/stytch-session';
 
 const mockPush = jest.fn();
 const mockGoogleStart = jest.fn();
+const mockMicrosoftStart = jest.fn();
 const mockGitHubStart = jest.fn();
 const mockOAuthAuthenticate = jest.fn();
 const mockInitiateAuth = jest.fn();
@@ -22,6 +23,7 @@ let searchParams = new URLSearchParams();
 const fakeStytch = {
   oauth: {
     google: { start: (...a: unknown[]) => mockGoogleStart(...a) },
+    microsoft: { start: (...a: unknown[]) => mockMicrosoftStart(...a) },
     github: { start: (...a: unknown[]) => mockGitHubStart(...a) },
     authenticate: (...a: unknown[]) => mockOAuthAuthenticate(...a),
   },
@@ -111,9 +113,10 @@ describe('LoginTemplate', () => {
     mockRedeemStoredReferral.mockResolvedValue(null);
   });
 
-  it('offers Google, GitHub and email sign-in', () => {
+  it('offers Google, Microsoft, GitHub and email sign-in', () => {
     render(<LoginTemplate />);
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /continue with microsoft/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /continue with github/i })).toBeEnabled();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument();
@@ -122,6 +125,7 @@ describe('LoginTemplate', () => {
   describe('OAuth start', () => {
     it.each([
       ['Google', mockGoogleStart],
+      ['Microsoft', mockMicrosoftStart],
       ['GitHub', mockGitHubStart],
     ])('%s sends login and signup back to /login', async (provider, startMock) => {
       startMock.mockResolvedValue(undefined);
@@ -244,7 +248,8 @@ describe('LoginTemplate', () => {
       fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'ada@example.com' } });
       fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
       await screen.findByLabelText(/verification code/i);
-      expect(screen.getByText(/check your inbox and spam/i)).toBeInTheDocument();
+      expect(screen.getByText(/codes can take a minute/i)).toBeInTheDocument();
+      expect(screen.getByText(/code sent to/i)).toBeInTheDocument();
     }
 
     it('verifies the code with the methodId from the send step', async () => {
@@ -279,21 +284,30 @@ describe('LoginTemplate', () => {
     });
 
     it('resends a code and uses the new methodId', async () => {
-      mockResend.mockResolvedValue({ methodId: 'email-456' });
-      mockVerifyAuth.mockResolvedValue({ success: true });
-      await goToCodeStep();
+      jest.useFakeTimers({ advanceTimers: true });
+      try {
+        mockResend.mockResolvedValue({ methodId: 'email-456' });
+        mockVerifyAuth.mockResolvedValue({ success: true });
+        await goToCodeStep();
 
-      fireEvent.click(screen.getByRole('button', { name: /resend code/i }));
-      await waitFor(() => expect(mockResend).toHaveBeenCalledWith('ada@example.com'));
+        expect(screen.getByRole('button', { name: /resend code in 30s/i })).toBeDisabled();
+        await act(async () => {
+          jest.advanceTimersByTime(30_000);
+        });
+        fireEvent.click(screen.getByRole('button', { name: /^resend code$/i }));
+        await waitFor(() => expect(mockResend).toHaveBeenCalledWith('ada@example.com'));
 
-      fireEvent.change(screen.getByLabelText(/verification code/i), {
-        target: { value: '123456' },
-      });
-      fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+        fireEvent.change(screen.getByLabelText(/verification code/i), {
+          target: { value: '123456' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
 
-      await waitFor(() => {
-        expect(mockVerifyAuth).toHaveBeenCalledWith('ada@example.com', '123456', 'email-456');
-      });
+        await waitFor(() => {
+          expect(mockVerifyAuth).toHaveBeenCalledWith('ada@example.com', '123456', 'email-456');
+        });
+      } finally {
+        jest.useRealTimers();
+      }
     });
 
     it('"Go back" returns to the email step', async () => {

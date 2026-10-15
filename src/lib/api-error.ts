@@ -62,6 +62,22 @@ export function formatApiErrorMessage(error: unknown): string {
         }
         return plainApiFailure(detail);
       }
+      if (Array.isArray(detail)) {
+        const fields = [
+          ...new Set(
+            detail
+              .map(item => {
+                if (!item || typeof item !== 'object') return '';
+                const loc = (item as { loc?: unknown }).loc;
+                return Array.isArray(loc) ? String(loc[loc.length - 1] || '') : '';
+              })
+              .filter(Boolean)
+          ),
+        ].slice(0, 4);
+        return fields.length
+          ? `That analysis could not run. Check ${fields.join(', ')}.`
+          : 'That analysis could not run. Check the settings and try again.';
+      }
       if (detail && typeof detail === 'object' && !Array.isArray(detail)) {
         const d = detail as { error?: string; message?: string };
         if (d.error && ASSISTANT_ERROR_MESSAGES[d.error]) {
@@ -71,7 +87,7 @@ export function formatApiErrorMessage(error: unknown): string {
           return d.message;
         }
         if (typeof d.message === 'string' && d.message.trim()) {
-          return d.message;
+          return plainApiFailure(d.message);
         }
       }
       if (typeof outer.message === 'string' && outer.message.trim()) {
@@ -118,13 +134,17 @@ export function formatApiErrorMessage(error: unknown): string {
 
   if (raw.startsWith('API Error:')) {
     const withoutPrefix = raw.replace(/^API Error:\s*\d+\s*-?\s*/, '').trim();
-    if (withoutPrefix && !withoutPrefix.startsWith('{')) {
+    if (withoutPrefix && !withoutPrefix.includes('{') && !withoutPrefix.includes('}')) {
       return plainApiFailure(withoutPrefix);
     }
   }
 
   if (/^internal server error$/i.test(raw.trim())) {
     return 'The request failed. Try again.';
+  }
+
+  if (raw.includes('{') || raw.includes('}')) {
+    return 'That analysis could not run. Check the settings and try again.';
   }
 
   return raw || 'Something went wrong. Please try again.';

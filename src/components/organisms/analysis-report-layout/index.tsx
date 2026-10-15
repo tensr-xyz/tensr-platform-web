@@ -181,15 +181,19 @@ export function AnalysisReportLayout({
   const handleRerun = useCallback(() => {
     const key = analysisOp ?? report.meta.analysis_key;
     const prefs = loadOutputPreferences();
+    const stored =
+      analysisParameters && Object.keys(analysisParameters).some(name => name !== 'run_id')
+        ? analysisParameters
+        : null;
+    const request = rawResult?.request_body;
+    const fromResult =
+      request && typeof request === 'object' ? (request as Record<string, unknown>) : null;
+    const prefill = { ...(fromResult ?? {}), ...(stored ?? {}) };
     captureProductEvent('rerun_clicked', {
       dataset_id: sourceDatasetId ?? null,
       analysis_type: key || null,
-      stub_column:
-        typeof analysisParameters?.stub_column === 'string' ? analysisParameters.stub_column : null,
-      banner_column:
-        typeof analysisParameters?.banner_column === 'string'
-          ? analysisParameters.banner_column
-          : null,
+      stub_column: typeof prefill.stub_column === 'string' ? prefill.stub_column : null,
+      banner_column: typeof prefill.banner_column === 'string' ? prefill.banner_column : null,
       apa_format: prefs.apaFormat,
       include_charts: prefs.includeCharts,
       decimal_places: prefs.decimalPlaces,
@@ -201,8 +205,15 @@ export function AnalysisReportLayout({
       return;
     }
     setRerunNotice(null);
-    openSetup(key, analysisParameters ?? null);
-  }, [analysisOp, analysisParameters, openSetup, report.meta.analysis_key, sourceDatasetId]);
+    openSetup(key, prefill);
+  }, [
+    analysisOp,
+    analysisParameters,
+    openSetup,
+    rawResult,
+    report.meta.analysis_key,
+    sourceDatasetId,
+  ]);
 
   const handleRevealConsumedRows = useCallback(
     (group?: string) => {
@@ -234,13 +245,21 @@ export function AnalysisReportLayout({
     downloadTextFile(csv, `${slug}_tables.csv`, 'text/csv;charset=utf-8');
   }, [exportIdentity, report]);
 
+  const [exportError, setExportError] = useState<string | null>(null);
+  useEffect(() => {
+    setExportError(null);
+  }, [report.meta.title, sourceDatasetId]);
+
   const handleExportExcel = useCallback(() => {
+    setExportError(null);
     void downloadReportXlsx(report, {
       provenance,
       datasetId: sourceDatasetId,
       raw: rawResult,
     }).catch(err => {
       console.error('Excel export failed', err);
+      const message = err instanceof Error ? err.message : 'Excel export failed';
+      setExportError(message || 'Excel export failed');
     });
   }, [provenance, rawResult, report, sourceDatasetId]);
 
@@ -304,6 +323,14 @@ export function AnalysisReportLayout({
           synthesizing={synthesizing}
           onNewAnalysis={handleNewAnalysis}
         />
+        {exportError ? (
+          <p
+            role="alert"
+            className="border-b border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-destructive"
+          >
+            {exportError}
+          </p>
+        ) : null}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
           <div className="mx-auto w-full max-w-[1080px] px-7 py-6 pb-20">
             <AnalysisReportView

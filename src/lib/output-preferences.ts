@@ -34,6 +34,32 @@ export function saveOutputPreferences(prefs: OutputPreferences): void {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 }
 
+const OUTPUT_ALIAS_PAIRS = [
+  ['apa_format', 'apaFormat'],
+  ['include_charts', 'includeCharts'],
+  ['decimal_places', 'decimalPlaces'],
+] as const;
+
+/** The body the setup modal posts. One name per output field. */
+export function analyzeRunBody(
+  formBody: Record<string, unknown>,
+  prefs: OutputPreferences
+): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    ...formBody,
+    ...outputPreferencesToBody(prefs),
+  };
+  for (const [name, alias] of OUTPUT_ALIAS_PAIRS) {
+    if (
+      Object.prototype.hasOwnProperty.call(body, name) &&
+      Object.prototype.hasOwnProperty.call(body, alias)
+    ) {
+      delete body[alias];
+    }
+  }
+  return body;
+}
+
 /** Merged into every analyze POST body from the setup modal. */
 export function outputPreferencesToBody(prefs: OutputPreferences): Record<string, unknown> {
   return {

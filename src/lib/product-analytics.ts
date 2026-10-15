@@ -15,6 +15,7 @@ export function captureProductException(
 ): void {
   const err =
     error instanceof Error ? error : new Error(typeof error === 'string' ? error : 'Unknown error');
+  if (err.message.includes('Object Not Found Matching Id')) return;
   try {
     const captureException = (
       posthog as { captureException?: (error: Error, properties?: object) => void }

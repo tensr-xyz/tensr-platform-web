@@ -74,6 +74,14 @@ describe('custom table spec builder', () => {
     expect(canvas.banners[0].values).toEqual(['18-34', '35-54']);
   });
 
+  it('reorders a stub while a collaboration session is open', () => {
+    let canvas = defaultCanvas();
+    canvas = addStubQuestion(canvas, 'gender', ROWS);
+    canvas = moveCategory(canvas, 'stub', 0, 1, 0);
+    expect(canvas.stubs[0].values).toEqual(['Female', 'Male']);
+    expect(buildTableRequest(canvas).stubs[0].values).toEqual(['Female', 'Male']);
+  });
+
   it('reorder writes values onto the request', () => {
     let canvas = defaultCanvas();
     canvas = addStubQuestion(canvas, 'gender', ROWS);
@@ -124,13 +132,20 @@ describe('custom table spec builder', () => {
     expect(bannerColumnProduct(banners, false)).toBe(9);
   });
 
-  it('uniqueColumnValues skips blanks and keeps first-seen order', () => {
+  it('uniqueColumnValues skips blanks, keeps text order, and sorts numeric codes', () => {
     expect(
       uniqueColumnValues(
         [{ colour: 'red' }, { colour: '' }, { colour: 'blue' }, { colour: 'red' }],
         'colour'
       )
     ).toEqual(['red', 'blue']);
+    expect(uniqueColumnValues([{ q: 4 }, { q: 1 }, { q: 5 }, { q: 2 }, { q: 3 }], 'q')).toEqual([
+      '1',
+      '2',
+      '3',
+      '4',
+      '5',
+    ]);
   });
 
   it('restores the canvas from a persisted spec so reopen matches save', () => {

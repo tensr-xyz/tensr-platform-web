@@ -231,6 +231,13 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
     description:
       'Control phrase: the word player inside "a player shoots" is shot volume, not the Player column',
   },
+  {
+    prompt: 'What predicts points, independent of shot volume?',
+    mode: 'plan',
+    expected: 'plan-awaiting-approval',
+    description:
+      'Renamed scoring columns: made, taken, and percentage variants are components of shot volume',
+  },
   ...[
     'merge these on participant_id and weight to these targets, exclude missing categories',
     'Merge the files by participant_id and weight to the targets, excluding missing categories.',
@@ -246,6 +253,23 @@ export const FULL_BASELINE_CONTRACT: BaselineContractCase[] = [
       expected: 'plan-awaiting-approval',
       description:
         'Prolific merge-and-weight: every phrasing plans the same pipeline (tensr-api test_natural_phrasings_plan_the_same_pipeline)',
+    })
+  ),
+  ...[
+    'Do men and women rate the product differently?',
+    'Which age group are we doing worst with?',
+    'Give me the headline findings',
+    'Is our sample representative?',
+    'Can I trust these results?',
+    'Did anything change between wave 1 and wave 2?',
+    'What do the open-ended comments say about price?',
+  ].map(
+    (prompt): BaselineContractCase => ({
+      prompt,
+      mode: 'agent',
+      expected: 'tool_or_clarify',
+      description:
+        'Ordinary business questions reach the model. The pre-model gate does not force low_clarity.',
     })
   ),
 ];

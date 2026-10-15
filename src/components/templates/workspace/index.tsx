@@ -8,13 +8,13 @@ import TabManager from '@/components/organisms/tab-manager';
 import { FileSelector, ProjectFile } from '@/components/molecules/file-selector';
 import { cleanValue } from '@/utils/project';
 import ProjectLayout from '@/components/templates/project-layout';
-import Loading from '@/components/molecules/loading';
 import useAuth from '@/hooks/api/use-auth';
 import { Tab } from '@/stores/tabs-store';
 import PluginsLayout from '@/components/templates/plugins-layout';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { gridRowsForColumns, gridRowsFromPreview } from '@/lib/sheet-grid-align';
 import { fetchWithColdStartRetry, subscribeDatasetColdStart } from '@/lib/cold-start-fetch';
+import { fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { buildDefaultImportSettings, type ImportSettings } from '@/lib/import-settings';
 import { MULTI_FILE_PROJECTS_ENABLED } from '@/lib/feature-flags';
@@ -78,7 +78,7 @@ async function tryDatasetImportGridFromUuidPath(
   rowLimit: number
 ): Promise<{ data: unknown[][]; variableNames: string[]; rows: unknown[][] } | null> {
   if (!UUID_PATH_REGEX.test(filePath)) return null;
-  const schemaRes = await fetchWithColdStartRetry(tensrApiUrl(`/datasets/${filePath}/schema`), {
+  const schemaRes = await fetchDatasetSchema(filePath, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (schemaRes.status === 404) return null;
@@ -108,6 +108,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
   const projectRef = useRef<HTMLDivElement>(null);
   const mountedRef = useRef(false);
   const hasLoadedRef = useRef(false);
+  const loadGeneration = useRef(0);
 
   // Hooks and context
   const {
@@ -208,10 +209,12 @@ export default function Workspace({ resource }: WorkspaceProps) {
       hasLoadedRef.current = true;
 
       const loadData = async () => {
+        const generation = ++loadGeneration.current;
+        const current = () => mountedRef.current && generation === loadGeneration.current;
         try {
           // Check if project is already loaded before making API call
           if (isProjectLoaded(resourceId)) {
-            setIsLoading(false);
+            if (current()) setIsLoading(false);
             return;
           }
 
@@ -228,7 +231,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
                 setProjectFiles(projectDetails.files);
                 setProjectName(projectDetails.projectName);
                 setShowFileSelector(true);
-                setIsLoading(false);
+                if (current()) setIsLoading(false);
                 return;
               }
               // Launch: import the first file only (multi-file picker descoped).
@@ -237,7 +240,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
                 throw new Error('No authentication token available');
               }
               await fetchProjectData(resourceId, fetchTokenMulti, userId, 0);
-              if (mountedRef.current) {
+              if (current()) {
                 setIsLoading(false);
               }
               return;
@@ -255,11 +258,11 @@ export default function Workspace({ resource }: WorkspaceProps) {
             }
             await fetchProjectData(resourceId, fetchToken, userId, 0);
           }
-          if (mountedRef.current) {
+          if (current()) {
             setIsLoading(false);
           }
         } catch (err) {
-          if (mountedRef.current) {
+          if (current()) {
             setError(formatApiErrorMessage(err));
             setIsLoading(false);
           }
@@ -510,45 +513,29 @@ export default function Workspace({ resource }: WorkspaceProps) {
   }, [projectImportData, tabs]);
 
   useEffect(() => {
-    if (!awaitingDatasetTab) {
+    if (!isLoading && !awaitingDatasetTab) {
       setImportSlow(false);
       return;
     }
-    const timer = window.setTimeout(() => setImportSlow(true), 20000);
+    const timer = window.setTimeout(() => setImportSlow(true), 15000);
     return () => window.clearTimeout(timer);
-  }, [awaitingDatasetTab]);
+  }, [isLoading, awaitingDatasetTab]);
 
-  if (isLoading || awaitingDatasetTab) {
-    return (
-      <div className="flex h-screen flex-col items-center justify-center gap-4">
-        <Loading
-          message={
-            importSlow ? 'Still opening this dataset…' : startingUp ? 'Starting up…' : undefined
-          }
-        />
-        {importSlow ? (
-          <button
-            type="button"
-            className="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary"
-            onClick={() => {
-              if (typeof window !== 'undefined' && resourceId) {
-                sessionStorage.removeItem(`tensr:autoImport:${resourceId}`);
-              }
-              useProjectStore.getState().clearImportData();
-              hasLoadedRef.current = false;
-              setImportSlow(false);
-              setIsLoading(true);
-              setLoadAttempt(attempt => attempt + 1);
-            }}
-          >
-            Try again
-          </button>
-        ) : null}
-      </div>
-    );
-  }
+  const retryOpen = () => {
+    if (typeof window !== 'undefined' && resourceId) {
+      sessionStorage.removeItem(`tensr:autoImport:${resourceId}`);
+    }
+    useProjectStore.getState().clearImportData();
+    hasLoadedRef.current = false;
+    setImportSlow(false);
+    setError(null);
+    setIsLoading(true);
+    setLoadAttempt(attempt => attempt + 1);
+  };
 
-  if (error) {
+  const opening = isLoading || awaitingDatasetTab;
+
+  if (error && !opening) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="p-6 bg-red-50 border border-red-200 rounded-lg max-w-md">
@@ -570,13 +557,40 @@ export default function Workspace({ resource }: WorkspaceProps) {
           <div className="absolute left-3 right-3 top-2 z-20 pointer-events-none [&>*]:pointer-events-auto">
             <SpssWorkspaceWalkthrough />
           </div>
-          <TabManager
-            activeTab={activeTab}
-            tabs={tabs}
-            onTabClose={tabId => tabId && closeTab(tabId)}
-            onToggleSidebar={() => setRightPanelOpen(!rightPanelOpen)}
-            rightPanelOpen={rightPanelOpen}
-          />
+          {opening ? (
+            <div className="flex h-full flex-col gap-4 p-6" aria-busy="true">
+              {importSlow ? (
+                <div className="max-w-md space-y-3">
+                  <p className="text-sm text-foreground">
+                    This dataset is taking longer than usual to open. You can wait, or try again.
+                  </p>
+                  <button
+                    type="button"
+                    className="rounded-md border border-border px-3 py-1.5 text-sm hover:border-primary"
+                    onClick={retryOpen}
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="h-8 w-48 animate-pulse rounded bg-muted" />
+                  <div className="h-4 w-full animate-pulse rounded bg-muted" />
+                  <div className="h-4 w-5/6 animate-pulse rounded bg-muted" />
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-muted" />
+                  <span className="sr-only">{startingUp ? 'Starting up' : 'Loading dataset'}</span>
+                </>
+              )}
+            </div>
+          ) : (
+            <TabManager
+              activeTab={activeTab}
+              tabs={tabs}
+              onTabClose={tabId => tabId && closeTab(tabId)}
+              onToggleSidebar={() => setRightPanelOpen(!rightPanelOpen)}
+              rightPanelOpen={rightPanelOpen}
+            />
+          )}
         </div>
       </ProjectLayout>
 

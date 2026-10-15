@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useRef } from 'react';
+import Link from 'next/link';
 import { FileSpreadsheet, Upload } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Progress } from '@/components/atoms/progress';
@@ -145,7 +146,17 @@ export const FilePicker: React.FC<FilePickerProps> = ({
 
       {error && (
         <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
+          <AlertDescription>
+            {error.replace(' [Upgrade](/settings/billing)', '')}
+            {error.includes('[Upgrade](/settings/billing)') ? (
+              <>
+                {' '}
+                <Link href="/settings/billing" className="underline">
+                  Upgrade
+                </Link>
+              </>
+            ) : null}
+          </AlertDescription>
         </Alert>
       )}
     </div>

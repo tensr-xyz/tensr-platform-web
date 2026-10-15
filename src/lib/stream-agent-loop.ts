@@ -1,3 +1,5 @@
+import posthog from 'posthog-js';
+import { captureProductEvent } from '@/lib/product-analytics';
 import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { ApiRequestError } from '@/lib/api-error';
@@ -13,12 +15,44 @@ export type AgentLoopStreamProgress = {
 export type AgentLoopStreamHandlers = {
   /** Called synchronously per event and never awaited, so a slow render cannot hold the reader. */
   onProgress?: (progress: AgentLoopStreamProgress) => void;
+  onDelta?: (text: string) => void;
+  onReplace?: (text: string) => void;
   signal?: AbortSignal;
 };
 
+function readDistinctId(): string | undefined {
+  try {
+    const id = posthog.get_distinct_id?.();
+    return typeof id === 'string' && id ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function captureStreamStatus(
+  status: number,
+  sessionId: string | null | undefined,
+  distinctId: string | undefined
+) {
+  if (status < 400) return;
+  const properties = {
+    where: 'agent_stream',
+    status,
+    session_id: sessionId ?? null,
+    distinct_id: distinctId ?? null,
+  };
+  captureProductEvent('analysis_failed', properties);
+  captureProductEvent('stream_error', properties);
+  try {
+    posthog.captureException(new Error(`agent stream ${status}`), properties);
+  } catch {
+    // A failed capture must not hide the stream error.
+  }
+}
+
 function processSseLine(
   line: string,
-  onProgress: AgentLoopStreamHandlers['onProgress'],
+  handlers: AgentLoopStreamHandlers,
   acc: { result: AgentLoopResponse | null; timeout: AgentLoopResponse | null }
 ) {
   const trimmed = line.trim();
@@ -29,12 +63,32 @@ function processSseLine(
   let payload: {
     type?: string;
     step?: string;
+    name?: string;
     message?: string;
+    text?: string;
+    replace?: boolean;
     response?: AgentLoopResponse;
   };
   try {
     payload = JSON.parse(jsonStr);
   } catch {
+    return;
+  }
+
+  if (payload.type === 'delta' && payload.text) {
+    if (payload.replace) handlers.onReplace?.(payload.text);
+    else handlers.onDelta?.(payload.text);
+    return;
+  }
+
+  if (payload.type === 'tool') {
+    const step = payload.name || payload.step || 'tool';
+    const message = payload.message || `Running ${step.replace(/_/g, ' ')}`;
+    handlers.onProgress?.({
+      type: 'tool',
+      step,
+      message,
+    });
     return;
   }
 
@@ -44,7 +98,7 @@ function processSseLine(
     payload.type === 'tool_result'
   ) {
     if (payload.message) {
-      onProgress?.({
+      handlers.onProgress?.({
         type: payload.type,
         step: payload.step ?? 'progress',
         message: payload.message,
@@ -54,6 +108,15 @@ function processSseLine(
   }
 
   if (payload.type === 'error') {
+    captureProductEvent('analysis_failed', {
+      where: 'agent_stream',
+      status: 'error',
+      message: payload.message || 'Agent loop stream failed',
+    });
+    captureProductEvent('stream_error', {
+      where: 'agent_stream',
+      message: payload.message || 'Agent loop stream failed',
+    });
     throw new Error(payload.message || 'Agent loop stream failed');
   }
 
@@ -79,31 +142,49 @@ export async function streamAgentLoop(
     throw new Error('No authentication token found');
   }
 
-  const response = await fetch(tensrApiUrl('/assistant/agent-loop/stream'), {
-    method: 'POST',
-    cache: 'no-store',
-    headers: {
-      ...getTensrApiHeaders(),
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
-      message: params.message,
-      mode: params.mode,
-      dataset_id: params.datasetId ?? null,
-      open_datasets: params.openDatasets ?? [],
-      conversation_history: params.conversationHistory ?? null,
-      glossary: params.glossary ?? null,
-      approved_tool_call: params.approvedToolCall ?? null,
-      approved_tool_calls: params.approvedToolCalls ?? null,
-      attachments: params.attachments ?? null,
-    }),
-    signal: handlers.signal,
-  });
+  const v2 = params.agentVersion === 'v2';
+  const distinctId = readDistinctId();
+  const response = await fetch(
+    tensrApiUrl(v2 ? '/assistant/agent-loop-v2/stream' : '/assistant/agent-loop/stream'),
+    {
+      method: 'POST',
+      cache: 'no-store',
+      headers: {
+        ...getTensrApiHeaders(),
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        Authorization: `Bearer ${token}`,
+        ...(distinctId ? { 'X-Tensr-Distinct-Id': distinctId } : {}),
+      },
+      body: JSON.stringify(
+        v2
+          ? {
+              message: params.resume ? '' : params.message,
+              mode: params.mode,
+              dataset_id: params.datasetId ?? null,
+              session_id: params.sessionId ?? null,
+              resume: Boolean(params.resume || params.approvedBatch),
+              approved_batch: params.approvedBatch ?? null,
+            }
+          : {
+              message: params.message,
+              mode: params.mode,
+              dataset_id: params.datasetId ?? null,
+              open_datasets: params.openDatasets ?? [],
+              conversation_history: params.conversationHistory ?? null,
+              glossary: params.glossary ?? null,
+              approved_tool_call: params.approvedToolCall ?? null,
+              approved_tool_calls: params.approvedToolCalls ?? null,
+              attachments: params.attachments ?? null,
+            }
+      ),
+      signal: handlers.signal,
+    }
+  );
 
   if (!response.ok) {
     const errorText = await response.text();
+    captureStreamStatus(response.status, params.sessionId, distinctId);
     if (handleUnauthorizedResponse(response)) {
       throw new ApiRequestError(401, errorText);
     }
@@ -132,13 +213,13 @@ export async function streamAgentLoop(
       buffer = lines.pop() ?? '';
 
       for (const line of lines) {
-        processSseLine(line, handlers.onProgress, acc);
+        processSseLine(line, handlers, acc);
         if (acc.result) break;
       }
     }
 
     if (!acc.result && buffer.trim()) {
-      processSseLine(buffer, handlers.onProgress, acc);
+      processSseLine(buffer, handlers, acc);
     }
   } finally {
     if (acc.result) {
@@ -179,6 +260,30 @@ export async function streamAgentLoop(
 
   if (!acc.result) {
     throw new Error('Agent loop stream ended without a result');
+  }
+
+  if (params.agentVersion === 'v2' && acc.result.status === 'continuing') {
+    const hops = (params.resumeHops ?? 0) + 1;
+    if (hops > 3) {
+      return { ...acc.result, status: 'ok' };
+    }
+    handlers.onDelta?.('\n\n');
+    handlers.onProgress?.({
+      type: 'progress',
+      step: 'resume',
+      message: 'Continuing this turn',
+    });
+    return streamAgentLoop(
+      {
+        ...params,
+        message: '',
+        resume: true,
+        approvedBatch: null,
+        sessionId: acc.result.session_id ?? params.sessionId,
+        resumeHops: hops,
+      },
+      handlers
+    );
   }
 
   return acc.result;

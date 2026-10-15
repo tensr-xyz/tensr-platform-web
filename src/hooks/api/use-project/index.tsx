@@ -4,6 +4,7 @@ import useAuth from '@/hooks/api/use-auth';
 import { getAccessToken, getTensrApiHeaders } from '@/utils/auth';
 import { devLog } from '@/lib/dev-log';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
 
 interface UseProjectProps {
   projectId?: string;
@@ -99,7 +100,7 @@ export const useProject = ({ projectId, initialLoad = true }: UseProjectProps = 
       setError(null);
 
       try {
-        const dsRes = await fetch(tensrApiUrl(`/datasets/${id}/schema`), {
+        const dsRes = await fetchDatasetSchema(id, {
           headers: getTensrApiHeaders(),
         });
 

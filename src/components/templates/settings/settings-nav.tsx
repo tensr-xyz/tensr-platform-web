@@ -25,8 +25,11 @@ export function SettingsNav({ className, orientation = 'horizontal' }: SettingsN
   const showOrgTabs = !isPersonalAccount && Boolean(activeOrganization);
 
   const visibleItems = settingsNavItems.filter(link => {
-    if ('requiresOrg' in link && link.requiresOrg) {
+    if (link.href === '/settings/members') {
       return showOrgTabs;
+    }
+    if (link.href === '/settings/organisation') {
+      return showOrgTabs || isPersonalAccount;
     }
     return true;
   });

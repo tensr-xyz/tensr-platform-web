@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import { rakeDatasetWeights } from '@/lib/dataset-data-ops';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
 import { showDerivedResult } from '@/lib/show-derived-result';
@@ -45,6 +46,7 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
   const [pendingColumn, setPendingColumn] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [upperCap, setUpperCap] = useState('');
   const [targetsFilename, setTargetsFilename] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
 
@@ -82,12 +84,17 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
       return;
     }
     const payload = buildRakePayload(margins, { targetsFilename });
+    const cap = Number(upperCap);
+    if (upperCap.trim() && Number.isFinite(cap) && cap > 0) {
+      (payload as { upper?: number }).upper = cap;
+    }
     if (!Object.keys(payload.categorical_targets).length) {
       setError('Add at least one raking variable with numeric targets.');
       return;
     }
     setBusy(true);
     setError(null);
+    setNotice(null);
     try {
       const res = await rakeDatasetWeights(datasetId, payload, token);
       showDerivedResult(
@@ -106,7 +113,7 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
         setTargetsFilename(undefined);
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Rake failed');
+      setError(formatApiErrorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -125,6 +132,19 @@ export function RakeWeightsDialog({ children }: { children: ReactNode }) {
             <AlertDescription>{RAKE_MISSING_CATEGORY_WARNING}</AlertDescription>
           </Alert>
           <div className="space-y-1">
+            <Label htmlFor="rake-upper">Cap (optional)</Label>
+            <Input
+              id="rake-upper"
+              inputMode="decimal"
+              placeholder="1.1"
+              value={upperCap}
+              onChange={event => setUpperCap(event.target.value)}
+              className="text-xs"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Leave blank for no cap. A cap is applied on every raking step, and the saved weights
+              stay at or below this value. Margins can move slightly so the cap holds.
+            </p>
             <Label htmlFor="rake-targets-file">Targets file (CSV)</Label>
             <Input
               id="rake-targets-file"

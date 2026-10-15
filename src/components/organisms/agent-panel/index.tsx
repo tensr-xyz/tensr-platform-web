@@ -35,6 +35,9 @@ import { apiClient } from '@/lib/api-client';
 import { RecipeList, SaveAsRecipeButton } from '@/components/templates/data/recipes';
 import { getIdToken } from '@/utils/auth';
 import { useChatStore } from '@/stores/chat-store';
+import { useOptionalOrganizationContext } from '@/contexts/organisation-context';
+import { resolveAgentVersion } from '@/lib/agent-version';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAgentModeStore, type AgentMode } from '@/stores/agent-mode-store';
 import { ChatAnalysisApproval } from '@/components/molecules/chat-analysis-approval';
 import {
@@ -156,7 +159,7 @@ function ChatMessageBody({
   thinkingLines?: string[];
   resultMarkdown?: string;
   reportCard?: AnalysisReportChatCard;
-  onOpenReport?: (tabId: string) => string | void;
+  onOpenReport?: (tabId: string, runId?: string | null) => string | void | Promise<string | void>;
   charts?: AnalysisReportChart[];
   isStreaming?: boolean;
   repairSuggestions?: string[];
@@ -244,7 +247,7 @@ function ChatMessageBody({
             <AnalysisReportSummaryCard
               title={reportCard.title}
               summary={reportCard.summary}
-              onOpen={() => onOpenReport(reportCard.tabId)}
+              onOpen={() => onOpenReport(reportCard.tabId, reportCard.runId)}
             />
           ) : null}
 
@@ -351,9 +354,27 @@ function datasetTemplateFromLocation(): string | null {
   return trimmed || null;
 }
 
-function openReportFromChat(tabId: string, datasetId: string | null): string | void {
+async function openReportFromChat(
+  tabId: string,
+  datasetId: string | null,
+  runId?: string | null
+): Promise<string | void> {
   const outcome = openReportTab(tabId);
   if (!outcome.ok) {
+    if (runId) {
+      const { openAnalysisRunById } = await import('@/lib/analysis-runs');
+      const opened = await openAnalysisRunById(runId);
+      if (opened) {
+        captureProductEvent('report_opened', { dataset_id: datasetId, source: 'run_id' });
+        return;
+      }
+      captureProductEvent('report_open_failed', {
+        reason: 'dataset_deleted',
+        dataset_id: datasetId,
+        run_id: runId,
+      });
+      return 'This dataset was deleted, so that report cannot be opened.';
+    }
     captureProductEvent('report_open_failed', { reason: 'missing_tab', dataset_id: datasetId });
     return 'This report is no longer open. Run the analysis again.';
   }
@@ -464,6 +485,22 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
+  const v2SessionsRef = useRef<Map<string, string>>(new Map());
+  const organisation = useOptionalOrganizationContext();
+  const userAgentVersion = useAuthStore(state => state.user?.agentVersion);
+  const agentVersion = resolveAgentVersion({
+    isPersonalAccount: Boolean(organisation?.isPersonalAccount),
+    userAgentVersion,
+    organizationAgentVersion: organisation?.activeOrganization?.agentVersion,
+  });
+  const attachmentThreadRef = useRef(activeThreadId);
+  const lastFailedMessage = useRef<string | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
+  useEffect(() => {
+    if (attachmentThreadRef.current === activeThreadId) return;
+    attachmentThreadRef.current = activeThreadId;
+    setAttachments([]);
+  }, [activeThreadId]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busyMessageId, setBusyMessageId] = useState<string | null>(null);
   const [showRuns, setShowRuns] = useState(false);
@@ -516,6 +553,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       assistantMessageId?: string;
       approvedToolCall?: AgentLoopApprovedToolCall;
       approvedToolCalls?: AgentLoopApprovedToolCall[];
+      approvedBatch?: { batch: unknown; mac: string } | null;
       triggerMessage?: string;
       conversationHistory?: ReturnType<typeof buildAgentConversationHistory>;
       attachments?: AgentLoopAttachment[];
@@ -549,6 +587,30 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           approvedToolCall: opts.approvedToolCall ?? null,
           approvedToolCalls: opts.approvedToolCalls ?? null,
           attachments: turnAttachments,
+          agentVersion,
+          sessionId: (() => {
+            const threadId = useChatStore.getState().projects[projectId]?.activeThreadId;
+            return threadId ? (v2SessionsRef.current.get(threadId) ?? null) : null;
+          })(),
+          resume: Boolean(opts.approvedBatch),
+          approvedBatch: opts.approvedBatch ?? null,
+          onDelta: text => {
+            const current =
+              useChatStore
+                .getState()
+                .getMessages(projectId)
+                .find(m => m.id === assistantMessageId)?.content ?? '';
+            updateMessage(projectId, assistantMessageId, {
+              content: `${current}${text}`,
+              isStreaming: true,
+            });
+          },
+          onReplace: text => {
+            updateMessage(projectId, assistantMessageId, {
+              content: text,
+              isStreaming: true,
+            });
+          },
           onProgress: progress => {
             const prev = useChatStore
               .getState()
@@ -560,6 +622,11 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             });
           },
         });
+
+        if (response.session_id) {
+          const threadId = useChatStore.getState().projects[projectId]?.activeThreadId;
+          if (threadId) v2SessionsRef.current.set(threadId, response.session_id);
+        }
 
         const triggerMessage = opts.triggerMessage ?? opts.message;
         // Capture Plan/Why BEFORE the response patch overwrites chat content with
@@ -597,9 +664,28 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         const resultsSeenByType = new Map<string, number>();
 
         for (const entry of response.tool_results ?? []) {
-          // Need the full tool envelope ({ result, report, run_id }), not nested
-          // stats-only `result` — otherwise the tab opens without analysisReport
-          // and stays on the permanent "Results loading" placeholder.
+          // The stream carries the summary and run id. The report reads the
+          // full result stored for that id.
+          const streamedRunId = String(
+            (entry as { run_id?: string }).run_id || entry.result?.run_id || ''
+          );
+          if (entry.name === 'run_analysis' && streamedRunId && !entry.result?.result) {
+            const { fetchAnalysisRun } = await import('@/lib/analysis-runs');
+            const stored = await fetchAnalysisRun(streamedRunId);
+            if (stored?.result) {
+              entry.result = {
+                ...(entry.result ?? {}),
+                ok: true,
+                analysis_type: stored.op || entry.result?.analysis_type,
+                request_body:
+                  (stored.body as Record<string, unknown> | undefined) ||
+                  entry.result?.request_body,
+                result: stored.result as Record<string, unknown>,
+                report: stored.report as Record<string, unknown> | undefined,
+                run_id: stored.id,
+              };
+            }
+          }
           if (entry.name !== 'run_analysis' || !entry.result?.ok || !entry.result?.result) {
             continue;
           }
@@ -609,6 +695,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           const analysisType = String(entry.result.analysis_type ?? '');
           const requestBody = entry.result.request_body as Record<string, unknown> | undefined;
           if (!analysisType || !requestBody || !datasetId) continue;
+          captureProductEvent('analysis_completed', {
+            dataset_id: datasetId,
+            analysis_type: analysisType,
+            where: 'agent',
+            output_type: entry.result.report ? 'report' : 'result',
+          });
 
           const occurrence = resultsSeenByType.get(analysisType) ?? 0;
           resultsSeenByType.set(analysisType, occurrence + 1);
@@ -693,6 +785,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             tabId,
             title: report?.meta.title,
             summary: report?.summary,
+            runId: typeof entry.result.run_id === 'string' ? entry.result.run_id : undefined,
           });
 
           // ChatMessageBody renders content AND resultMarkdown. Setting both to the
@@ -700,7 +793,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           // content, report once in resultMarkdown.
           const { markdown } = analysisResultMarkdown(envelope);
           primaryChatFields = chatFieldsAfterRunAnalysis({
-            priorContent,
+            priorContent: agentVersion === 'v2' ? '' : priorContent,
             planSummary,
             whyThisTest,
             reportMarkdown: markdown,
@@ -763,6 +856,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
       messages,
       projectGlossary,
       projectId,
+      agentVersion,
       setLoading,
       tabs,
       updateMessage,
@@ -811,6 +905,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
     expirePendingSuggestionCards(projectId);
 
     const currentMessage = inputMessage;
+    lastFailedMessage.current = currentMessage;
     setInputMessage('');
     setLoading(projectId, true);
     setError(projectId, null);
@@ -827,8 +922,34 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         conversationHistory: buildAgentConversationHistory([...messages, userMessage]),
         attachments,
       });
+      lastFailedMessage.current = null;
+      setCanRetry(false);
     } catch (err: unknown) {
+      setCanRetry(true);
       captureProductException(err, { where: 'prompt' });
+      setError(projectId, formatApiErrorMessage(err));
+    } finally {
+      setLoading(projectId, false);
+    }
+  };
+
+  const retryLastMessage = async () => {
+    const again = lastFailedMessage.current;
+    if (!again || isLoading) return;
+    setLoading(projectId, true);
+    setError(projectId, null);
+    try {
+      await invokeAgentLoop({
+        message: again,
+        triggerMessage: again,
+        conversationHistory: buildAgentConversationHistory(messages),
+        attachments,
+      });
+      lastFailedMessage.current = null;
+      setCanRetry(false);
+    } catch (err: unknown) {
+      setCanRetry(true);
+      captureProductException(err, { where: 'prompt_retry' });
       setError(projectId, formatApiErrorMessage(err));
     } finally {
       setLoading(projectId, false);
@@ -979,6 +1100,13 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         tabId: openedTabId,
         title: reportWithApproach?.meta.title,
         summary: reportWithApproach?.summary,
+        runId:
+          analysisResult &&
+          typeof analysisResult === 'object' &&
+          'run_id' in analysisResult &&
+          typeof (analysisResult as { run_id?: unknown }).run_id === 'string'
+            ? (analysisResult as { run_id: string }).run_id
+            : undefined,
       });
       logAgentChatRenderPayload({
         content: chatFields.content,
@@ -1325,15 +1453,17 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           message: action.triggerMessage,
           assistantMessageId: messageId,
           attachments: action.attachments?.length ? action.attachments : attachmentsRef.current,
-          approvedToolCall: pipeline?.length
-            ? undefined
-            : {
-                tool_call_id: action.toolCallId,
-                name: action.name,
-                args: action.args,
-                rationale: action.rationale,
-                why_this_test: action.whyThisTest,
-              },
+          approvedBatch: action.approvedBatch ?? null,
+          approvedToolCall:
+            pipeline?.length || action.approvedBatch
+              ? undefined
+              : {
+                  tool_call_id: action.toolCallId,
+                  name: action.name,
+                  args: action.args,
+                  rationale: action.rationale,
+                  why_this_test: action.whyThisTest,
+                },
           approvedToolCalls: pipeline?.length ? pipeline : undefined,
           triggerMessage: action.triggerMessage,
         });
@@ -1759,10 +1889,11 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                                       thinkingLines={message.thinkingLines}
                                       resultMarkdown={message.resultMarkdown}
                                       reportCard={message.reportCard}
-                                      onOpenReport={tabId =>
+                                      onOpenReport={(tabId, runId) =>
                                         openReportFromChat(
                                           tabId,
-                                          workspaceDatasetId ?? getDatasetIdFromTab(activeTab)
+                                          workspaceDatasetId ?? getDatasetIdFromTab(activeTab),
+                                          runId
                                         )
                                       }
                                       charts={message.charts}
@@ -2071,7 +2202,19 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               <div className="shrink-0 border-t border-border bg-background p-4 min-w-0">
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription className="flex items-center justify-between gap-3">
+                    <span>{error}</span>
+                    {canRetry ? (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void retryLastMessage()}
+                      >
+                        Retry
+                      </Button>
+                    ) : null}
+                  </AlertDescription>
                 </Alert>
               </div>
             ) : null}

@@ -837,9 +837,9 @@ export function BannerTableForm({
 }: FormSliceProps) {
   return (
     <section className="space-y-3">
-      <FormSectionLabel>Variables</FormSectionLabel>
+      <FormSectionLabel>Stub and banner</FormSectionLabel>
       <ColumnSelect
-        label="Stub column"
+        label="Stub"
         value={form.chiA}
         onChange={chiA => setForm(f => ({ ...f, chiA }))}
         schema={schema}
@@ -848,7 +848,7 @@ export function BannerTableForm({
         errors={errors[WIZARD_FIELD.chiA]}
       />
       <ColumnSelect
-        label="Banner column"
+        label="Banner"
         value={form.chiB}
         onChange={chiB => setForm(f => ({ ...f, chiB }))}
         schema={schema}
@@ -857,9 +857,58 @@ export function BannerTableForm({
         notices={notices[WIZARD_FIELD.chiB]}
         errors={errors[WIZARD_FIELD.chiB]}
       />
-      <p className="text-[11px] leading-snug text-muted-foreground">
-        Column percentages use the banner. APA formatting, charts, and decimal places are below.
-      </p>
+      <label className="block space-y-1 text-[11px]">
+        <span className="text-muted-foreground">Weight</span>
+        <input
+          className="w-full rounded border bg-background px-2 py-1"
+          value={form.bannerWeight}
+          onChange={event => setForm(f => ({ ...f, bannerWeight: event.target.value }))}
+        />
+      </label>
+      <label className="block space-y-1 text-[11px]">
+        <span className="text-muted-foreground">Decimals</span>
+        <input
+          type="number"
+          min={0}
+          max={6}
+          step={1}
+          className="w-full rounded border bg-background px-2 py-1"
+          value={form.bannerDecimals}
+          onChange={event => setForm(f => ({ ...f, bannerDecimals: event.target.value }))}
+        />
+      </label>
+      <label className="block space-y-1 text-[11px]">
+        <span className="text-muted-foreground">Filter</span>
+        <input
+          className="w-full rounded border bg-background px-2 py-1"
+          value={form.bannerFilter}
+          onChange={event => setForm(f => ({ ...f, bannerFilter: event.target.value }))}
+        />
+      </label>
+      <label className="block space-y-1 text-[11px]">
+        <span className="text-muted-foreground">Nets</span>
+        <input
+          className="w-full rounded border bg-background px-2 py-1"
+          value={form.bannerNets}
+          onChange={event => setForm(f => ({ ...f, bannerNets: event.target.value }))}
+        />
+      </label>
+      <label className="flex items-center gap-2 text-[11px]">
+        <input
+          type="checkbox"
+          checked={form.apaFormat}
+          onChange={event => setForm(f => ({ ...f, apaFormat: event.target.checked }))}
+        />
+        APA format
+      </label>
+      <label className="flex items-center gap-2 text-[11px]">
+        <input
+          type="checkbox"
+          checked={form.includeCharts}
+          onChange={event => setForm(f => ({ ...f, includeCharts: event.target.checked }))}
+        />
+        Include charts
+      </label>
     </section>
   );
 }
@@ -2184,6 +2233,8 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
       return <RegressionTabs {...props} />;
     case 'logistic_regression':
       return <RegressionTabs {...props} logistic />;
+    case 'banner_table':
+      return <BannerTableForm {...props} />;
     case 'chi_square':
     case 'mcnemar':
       return <ChiSquareForm {...props} />;

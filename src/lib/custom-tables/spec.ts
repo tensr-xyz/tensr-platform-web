@@ -60,6 +60,7 @@ export type TableRequestBody = {
   low_base_threshold: number;
   suppress_low_base: boolean;
   banner_id?: string;
+  weight?: 'none';
 };
 
 export function defaultDecimals(): TableDecimals {
@@ -125,10 +126,15 @@ export function uniqueColumnValues(rows: Array<Record<string, unknown>>, column:
   for (const row of rows) {
     const raw = row[column];
     if (raw == null) continue;
-    const value = String(raw).trim();
+    const text = String(raw).trim();
+    const value =
+      /^-?\d+\.0+$/.test(text) && Number.isFinite(Number(text)) ? String(Number(text)) : text;
     if (!value || seen.has(value)) continue;
     seen.add(value);
     out.push(value);
+  }
+  if (out.length > 1 && out.every(value => /^-?\d+(\.\d+)?$/.test(value))) {
+    out.sort((a, b) => Number(a) - Number(b));
   }
   return out;
 }

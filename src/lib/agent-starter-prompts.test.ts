@@ -33,4 +33,19 @@ describe('starter prompts', () => {
     ]);
     expect(prompts.join('\n')).not.toMatch(/crosstab of participant_id by StartDate/i);
   });
+
+  it('does not suggest RespID, ResponseId, or a high-uniqueness integer', () => {
+    const prompts = starterPromptsForColumns([
+      { id: 'RespID', header: 'RespID', type: 'categorical', uniqueCount: 300 },
+      { id: 'ResponseId', header: 'ResponseId', type: 'string' },
+      { id: 'resp_id', header: 'resp_id', type: 'string' },
+      { id: 'case_no', header: 'case_no', type: 'integer', uniqueCount: 300 },
+      { id: 'Gender', header: 'Gender', type: 'categorical', uniqueCount: 2 },
+      { id: 'Group', header: 'Group', type: 'categorical', uniqueCount: 2 },
+    ]);
+    const text = prompts.join('\n');
+    expect(text).toMatch(/Gender/);
+    expect(text).toMatch(/Group/);
+    expect(text).not.toMatch(/RespID|ResponseId|resp_id|case_no/);
+  });
 });

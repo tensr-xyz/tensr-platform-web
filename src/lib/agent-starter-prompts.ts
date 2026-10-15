@@ -17,9 +17,28 @@ function isNumeric(column: StarterColumn): boolean {
   return /number|numeric|float|int|decimal/i.test(column.type || '');
 }
 
+function nameLooksLikeId(name: string): boolean {
+  for (const part of name.split(/[^A-Za-z0-9]+/).filter(Boolean)) {
+    if (/^(id|uid|uuid)$/i.test(part)) return true;
+    if (/(ID|Id)$/.test(part)) return true;
+    if (
+      /id$/i.test(part) &&
+      /^(resp|response|respondent|user|participant|case|record|session)/i.test(part)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isHighUniquenessInteger(column: StarterColumn): boolean {
+  if (typeof column.uniqueCount !== 'number' || column.uniqueCount < 40) return false;
+  return isNumeric(column) || /int/i.test(column.type || '');
+}
+
 function isIdColumn(column: StarterColumn): boolean {
-  const name = `${column.id || ''} ${column.header || ''}`.toLowerCase();
-  return /(^|[\s_])(id|uid|uuid)($|[\s_])/.test(` ${name} `) || name.includes('participant_id');
+  const raw = `${column.id || ''} ${column.header || ''}`;
+  return nameLooksLikeId(raw) || isHighUniquenessInteger(column);
 }
 
 function isDateColumn(column: StarterColumn): boolean {
@@ -47,7 +66,9 @@ export function starterPromptsForColumns(
   columns: StarterColumn[],
   options?: { notebook?: boolean }
 ): string[] {
-  const usable = columns.filter(column => column.id && !HIDDEN.has(column.id));
+  const usable = columns.filter(
+    column => column.id && !HIDDEN.has(column.id) && !isIdColumn(column)
+  );
   const numeric = usable.filter(isNumeric);
   const categorical = crosstabColumns(columns);
   const prompts: string[] = [];

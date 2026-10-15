@@ -19,22 +19,16 @@ import {
   countPreviewDistinctNonEmpty,
   getAnalysisRunBlockers,
 } from '@/lib/analysis-setup-validation';
-import { AnalysisDialogShell } from '@/components/molecules/analysis-dialog';
-import { Checkbox } from '@/components/atoms/checkbox';
-import { Label } from '@/components/atoms/label';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/atoms/select';
-import {
+  analyzeRunBody,
   loadOutputPreferences,
-  outputPreferencesToBody,
   saveOutputPreferences,
   type OutputPreferences,
 } from '@/lib/output-preferences';
+import { AnalysisDialogShell } from '@/components/molecules/analysis-dialog';
+import { Checkbox } from '@/components/atoms/checkbox';
+import { Label } from '@/components/atoms/label';
 import { renderAnalysisForm } from '@/components/templates/analysis/analysis-setup-forms';
 
 type Props = {
@@ -131,16 +125,13 @@ export function AnalysisSetupModal({
       return;
     }
     try {
-      const body = {
-        ...buildBodyFromForm(form),
-        ...outputPreferencesToBody(outputPrefs),
-      };
+      const body = analyzeRunBody(buildBodyFromForm(form), outputPrefs);
       const effectiveOp =
         form.analysis === 'chi_square' && form.chiUseFishersExact ? 'fishers_exact' : form.analysis;
       await onRun(effectiveOp, body);
       onOpenChange(false);
     } catch (e) {
-      setServerError(e instanceof Error ? e.message : 'Could not run analysis');
+      setServerError(formatApiErrorMessage(e));
     }
   };
 
@@ -205,25 +196,26 @@ export function AnalysisSetupModal({
               <Label htmlFor="decimal-places" className="text-sm">
                 Decimal places
               </Label>
-              <Select
-                value={String(outputPrefs.decimalPlaces)}
-                onValueChange={value => {
-                  const next = { ...outputPrefs, decimalPlaces: Number(value) };
+              <input
+                id="decimal-places"
+                type="number"
+                min={0}
+                max={6}
+                step={1}
+                className="h-8 w-24 rounded-md border border-input bg-background px-2 text-sm"
+                value={outputPrefs.decimalPlaces}
+                onChange={event => {
+                  const places = Number(event.target.value);
+                  const next = {
+                    ...outputPrefs,
+                    decimalPlaces: Number.isFinite(places)
+                      ? Math.max(0, Math.min(6, Math.round(places)))
+                      : outputPrefs.decimalPlaces,
+                  };
                   setOutputPrefs(next);
                   saveOutputPreferences(next);
                 }}
-              >
-                <SelectTrigger id="decimal-places" className="h-8 w-24">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="z-[250]">
-                  {[0, 1, 2, 3, 4, 5].map(n => (
-                    <SelectItem key={n} value={String(n)}>
-                      {n}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              />
             </div>
           </div>
         </>

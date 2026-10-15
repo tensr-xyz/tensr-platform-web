@@ -42,14 +42,15 @@ async function gotoLogin(page: Page, query = '') {
 }
 
 test.describe('Login page', () => {
-  test('offers Google, GitHub and email sign-in', async ({ page }) => {
+  test('offers Google, Microsoft, GitHub and email sign-in', async ({ page }) => {
     await gotoLogin(page);
+    await expect(page.getByRole('button', { name: /continue with microsoft/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /continue with github/i })).toBeVisible();
     await expect(page.getByLabel('Email')).toBeVisible();
     await expect(page.getByRole('button', { name: /^continue$/i })).toBeVisible();
   });
 
-  for (const provider of ['google', 'github'] as const) {
+  for (const provider of ['google', 'microsoft', 'github'] as const) {
     test(`${provider} button hands off to Stytch with /login as the redirect`, async ({
       page,
       baseURL,

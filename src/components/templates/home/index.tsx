@@ -12,7 +12,14 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Project, ProjectStatus } from '@/types/project';
 import { useToast } from '@/hooks/ui/use-toast';
 import { useDatasetUpload } from '@/hooks/api/use-dataset-upload';
-import { Avatar, AvatarFallback } from '@/components/atoms/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/molecules/dialog';
 import useAuth from '@/hooks/api/use-auth';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { cn } from '@/utils';
@@ -106,27 +113,6 @@ function TemplateIcon({ kind }: { kind: (typeof TEMPLATES)[number]['icon'] }) {
   }
 }
 
-function formatRelativeTime(dateString: string): string {
-  try {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMin = Math.floor((now.getTime() - date.getTime()) / 60000);
-    if (diffMin < 1) return 'just now';
-    if (diffMin < 60) return `${diffMin} min ago`;
-    const diffHr = Math.floor(diffMin / 60);
-    if (diffHr < 24) return `${diffHr} hr ago`;
-    if (date.toDateString() === now.toDateString()) {
-      return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    }
-    const yesterday = new Date(now);
-    yesterday.setDate(now.getDate() - 1);
-    if (date.toDateString() === yesterday.toDateString()) return 'yesterday';
-    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  } catch {
-    return 'Unknown';
-  }
-}
-
 function projectColor(projectId: string): string {
   let hash = 0;
   for (let i = 0; i < projectId.length; i++) hash += projectId.charCodeAt(i);
@@ -191,10 +177,12 @@ const HomeTemplate: React.FC = () => {
     [router, templateId, toast]
   );
 
-  const { uploadFile, isLoading: uploadBusy } = useDatasetUpload(
-    'workspace',
-    handleDatasetUploaded
-  );
+  const {
+    uploadFile,
+    isLoading: uploadBusy,
+    workbook,
+    clearWorkbook,
+  } = useDatasetUpload('workspace', handleDatasetUploaded);
 
   const projectsArray: HomeDatasetRow[] = Array.isArray(projects)
     ? (projects as HomeDatasetRow[])
@@ -218,37 +206,39 @@ const HomeTemplate: React.FC = () => {
     setUploadPickerOpen(true);
   }, []);
 
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(null);
+
   const handleDeleteDataset = useCallback(
-    async (projectId: string) => {
+    (projectId: string) => {
       const row = projectsArray.find(p => p.projectId === projectId);
       const name = row?.projectName || row?.name || 'Dataset';
-      if (
-        !window.confirm(
-          `Delete “${name}”? This permanently removes the dataset and its analysis history.`
-        )
-      ) {
-        return;
-      }
-      setDeletingId(projectId);
-      try {
-        await apiClient.datasets.delete(projectId);
-        await queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
-        toast({
-          title: 'Dataset deleted',
-          description: `“${name}” has been removed.`,
-        });
-      } catch (err) {
-        toast({
-          title: 'Could not delete dataset',
-          description: formatApiErrorMessage(err),
-          variant: 'destructive',
-        });
-      } finally {
-        setDeletingId(null);
-      }
+      setPendingDelete({ id: projectId, name });
     },
-    [projectsArray, queryClient, toast]
+    [projectsArray]
   );
+
+  const confirmDeleteDataset = useCallback(async () => {
+    if (!pendingDelete) return;
+    const { id: projectId, name } = pendingDelete;
+    setDeletingId(projectId);
+    try {
+      await apiClient.datasets.delete(projectId);
+      await queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      toast({
+        title: 'Dataset deleted',
+        description: `“${name}” has been removed.`,
+      });
+    } catch (err) {
+      toast({
+        title: 'Could not delete dataset',
+        description: formatApiErrorMessage(err),
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingId(null);
+      setPendingDelete(null);
+    }
+  }, [pendingDelete, queryClient, toast]);
 
   const handleExportDataset = useCallback(
     async (projectId: string) => {
@@ -339,23 +329,12 @@ const HomeTemplate: React.FC = () => {
     if (file) await uploadFile(file);
   };
 
-  const recentActivity = useMemo(() => {
-    return [...projectsArray]
-      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
-      .slice(0, 4)
-      .map(p => ({
-        id: p.projectId,
-        action: p.status === 'ready' ? 'updated project' : 'uploaded to',
-        on: p.projectName,
-        time: formatRelativeTime(p.updatedAt || p.createdAt),
-      }));
-  }, [projectsArray]);
+  const hasDatasets = projectsArray.length > 0;
 
   const workspaceLabel =
     !isPersonalAccount && activeOrganization
       ? activeOrganization.name
       : (user?.email?.split('@')[0] ?? 'personal');
-  const userInitials = (user?.email ?? 'YO').slice(0, 2).toUpperCase();
 
   return (
     <div className="w-full pb-8 text-left">
@@ -363,146 +342,137 @@ const HomeTemplate: React.FC = () => {
         <p className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
           Workspace · {workspaceLabel}
         </p>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="text-2xl font-medium tracking-tight text-foreground md:text-3xl">
             Datasets
           </h1>
+          {hasDatasets ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <DatasetFilePicker
+                open={uploadPickerOpen}
+                onOpenChange={setUploadPickerOpen}
+                onUploaded={handleDatasetUploaded}
+              >
+                <Button className="h-9 gap-2 rounded-full px-4" disabled={uploadBusy}>
+                  <Upload className="size-4" aria-hidden />
+                  {uploadBusy ? 'Uploading…' : 'Upload dataset'}
+                </Button>
+              </DatasetFilePicker>
+              <Button
+                variant="outline"
+                className="h-9 gap-2 rounded-full"
+                onClick={() => router.push('/project/new')}
+              >
+                <Plus className="size-4" aria-hidden />
+                New dataset
+              </Button>
+            </div>
+          ) : null}
         </div>
       </header>
 
-      <section className="mb-8 grid grid-cols-1 gap-4 lg:grid-cols-[1.65fr_1fr]">
-        <div
-          onDragOver={e => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleFileDrop}
-          className={cn(
-            'relative overflow-hidden rounded-2xl border bg-card p-5 md:p-6',
-            dragOver ? 'border-primary border-dashed bg-primary/5' : 'border-border'
-          )}
-        >
+      {!projectsLoading && !hasDatasets ? (
+        <section className="mb-8">
           <div
-            className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-primary/5"
-            aria-hidden
-          />
-          <div className="relative mb-5 flex items-start gap-3">
-            <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
-              <Upload className="size-4" aria-hidden />
-            </span>
-            <div>
-              <p className="text-sm font-medium text-foreground">Start a new analysis</p>
-              <p className="text-xs text-muted-foreground">
-                Drop a CSV, Excel, or JSON file — or pick a template below
-              </p>
-            </div>
-          </div>
-
-          <div className="relative grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-4">
-            {TEMPLATES.map(t => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => handleStartNewAnalysis(t.id)}
-                aria-pressed={uploadPickerOpen && templateId === t.id}
-                className={`rounded-xl border bg-background p-3.5 text-left transition-colors hover:border-primary ${
-                  uploadPickerOpen && templateId === t.id ? 'border-primary' : 'border-border'
-                }`}
-              >
-                <div className="mb-3 text-primary">
-                  <TemplateIcon kind={t.icon} />
-                </div>
-                <p className="text-[13px] font-medium text-foreground">{t.name}</p>
-                <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{t.desc}</p>
-                <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
-                  {t.tag}
-                </p>
-              </button>
-            ))}
-          </div>
-
-          <div className="relative mt-5 flex flex-wrap items-center gap-2">
-            <DatasetFilePicker
-              open={uploadPickerOpen}
-              title={TEMPLATES.find(t => t.id === templateId)?.name}
-              onOpenChange={open => {
-                setUploadPickerOpen(open);
-                if (!open) setTemplateId(null);
-              }}
-              onUploaded={handleDatasetUploaded}
-            >
-              <Button className="h-9 gap-2 rounded-full px-4" disabled={uploadBusy}>
-                <Upload className="size-4" aria-hidden />
-                {uploadBusy ? 'Uploading…' : 'Upload dataset'}
-              </Button>
-            </DatasetFilePicker>
-            <Button
-              variant="outline"
-              className="h-9 gap-2 rounded-full"
-              onClick={() => router.push('/project/new')}
-            >
-              <Plus className="size-4" aria-hidden />
-              New dataset
-            </Button>
-          </div>
-        </div>
-
-        <aside className="flex flex-col rounded-2xl border border-border bg-card p-5">
-          <div className="mb-4 flex items-center justify-between gap-2">
-            <p className="text-sm font-medium text-foreground">Recent activity</p>
-            <button type="button" className="text-xs text-muted-foreground hover:text-foreground">
-              View all →
-            </button>
-          </div>
-          <div className="flex flex-1 flex-col gap-3">
-            {recentActivity.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                Activity appears when you create projects.
-              </p>
-            ) : (
-              recentActivity.map(a => (
-                <div key={a.id} className="flex items-start gap-3">
-                  <Avatar className="size-7 shrink-0">
-                    <AvatarFallback className="text-[10px] font-semibold">
-                      {userInitials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm leading-snug">
-                      <span className="font-medium">You</span>
-                      <span className="text-muted-foreground"> {a.action} </span>
-                      <span className="font-medium">{a.on}</span>
-                    </p>
-                    <p className="text-xs text-muted-foreground">{a.time}</p>
-                  </div>
-                </div>
-              ))
+            onDragOver={e => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={handleFileDrop}
+            className={cn(
+              'relative overflow-hidden rounded-2xl border bg-card p-5 md:p-6',
+              dragOver ? 'border-primary border-dashed bg-primary/5' : 'border-border'
             )}
+          >
+            <div
+              className="pointer-events-none absolute -right-16 -top-16 size-56 rounded-full bg-primary/5"
+              aria-hidden
+            />
+            <div className="relative mb-5 flex items-start gap-3">
+              <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-primary text-primary-foreground">
+                <Upload className="size-4" aria-hidden />
+              </span>
+              <div>
+                <p className="text-sm font-medium text-foreground">Start a new analysis</p>
+                <p className="text-xs text-muted-foreground">
+                  Drop a CSV, Excel, or JSON file — or pick a template below
+                </p>
+                {workbook && workbook.sheets.length > 1 ? (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {workbook.sheets.map(name => (
+                      <button
+                        key={name}
+                        type="button"
+                        disabled={uploadBusy}
+                        className="rounded-md border border-border px-2 py-1 text-xs hover:border-primary disabled:opacity-50"
+                        onClick={() => {
+                          if (name === workbook.selected) {
+                            clearWorkbook();
+                            handleDatasetUploaded(workbook.datasetId, workbook.file.name);
+                            return;
+                          }
+                          void uploadFile(workbook.file, name);
+                        }}
+                      >
+                        {name === workbook.selected ? `${name} (opened)` : name}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="relative grid grid-cols-1 gap-2 sm:grid-cols-2 2xl:grid-cols-4">
+              {TEMPLATES.map(t => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => handleStartNewAnalysis(t.id)}
+                  aria-pressed={uploadPickerOpen && templateId === t.id}
+                  className={`rounded-xl border bg-background p-3.5 text-left transition-colors hover:border-primary ${
+                    uploadPickerOpen && templateId === t.id ? 'border-primary' : 'border-border'
+                  }`}
+                >
+                  <div className="mb-3 text-primary">
+                    <TemplateIcon kind={t.icon} />
+                  </div>
+                  <p className="text-[13px] font-medium text-foreground">{t.name}</p>
+                  <p className="mt-0.5 text-xs leading-snug text-muted-foreground">{t.desc}</p>
+                  <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-muted-foreground">
+                    {t.tag}
+                  </p>
+                </button>
+              ))}
+            </div>
+
+            <div className="relative mt-5 flex flex-wrap items-center gap-2">
+              <DatasetFilePicker
+                open={uploadPickerOpen}
+                title={TEMPLATES.find(t => t.id === templateId)?.name}
+                onOpenChange={open => {
+                  setUploadPickerOpen(open);
+                  if (!open) setTemplateId(null);
+                }}
+                onUploaded={handleDatasetUploaded}
+              >
+                <Button className="h-9 gap-2 rounded-full px-4" disabled={uploadBusy}>
+                  <Upload className="size-4" aria-hidden />
+                  {uploadBusy ? 'Uploading…' : 'Upload dataset'}
+                </Button>
+              </DatasetFilePicker>
+              <Button
+                variant="outline"
+                className="h-9 gap-2 rounded-full"
+                onClick={() => router.push('/project/new')}
+              >
+                <Plus className="size-4" aria-hidden />
+                New dataset
+              </Button>
+            </div>
           </div>
-          <hr className="my-4 border-border" />
-          <div className="grid grid-cols-3 gap-4 text-xs text-muted-foreground">
-            <div>
-              <p className="text-lg font-medium tabular-nums text-foreground">
-                {projectsArray.length}
-              </p>
-              <p>Datasets</p>
-            </div>
-            <div>
-              <p className="text-lg font-medium tabular-nums text-foreground">
-                {projectsArray.reduce((n, p) => n + (p.files?.length ?? 0), 0)}
-              </p>
-              <p>Files</p>
-            </div>
-            <div>
-              <p className="text-lg font-medium tabular-nums text-foreground">
-                {projectsArray.filter(p => p.status === 'ready').length}
-              </p>
-              <p>Ready</p>
-            </div>
-          </div>
-        </aside>
-      </section>
+        </section>
+      ) : null}
 
       <section>
         {projectsLoading ? (
@@ -544,6 +514,39 @@ const HomeTemplate: React.FC = () => {
           />
         )}
       </section>
+      <Dialog
+        open={pendingDelete != null}
+        onOpenChange={open => {
+          if (!open && !deletingId) setPendingDelete(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete {pendingDelete?.name}?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the dataset and its analysis history.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPendingDelete(null)}
+              disabled={Boolean(deletingId)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={() => void confirmDeleteDataset()}
+              disabled={Boolean(deletingId)}
+            >
+              {deletingId ? 'Deleting…' : 'Delete dataset'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

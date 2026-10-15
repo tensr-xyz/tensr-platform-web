@@ -139,12 +139,12 @@ const UserCursors = () => {
   }
 
   return (
-    <div className="pointer-events-none fixed inset-0 z-[9999]">
+    <>
       <RemoteCellSelections presence={presence} clientId={clientId} />
       {others.map(([userId, user]) => (
         <RemotePointer key={userId} userId={userId} user={user} />
       ))}
-    </div>
+    </>
   );
 };
 

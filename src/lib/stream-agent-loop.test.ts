@@ -1,8 +1,14 @@
 import { TextDecoder, TextEncoder } from 'util';
+import posthog from 'posthog-js';
 import { ApiRequestError } from '@/lib/api-error';
 import { streamAgentLoop } from '@/lib/stream-agent-loop';
 
 Object.assign(global, { TextDecoder, TextEncoder });
+
+jest.mock('posthog-js', () => ({
+  get_distinct_id: () => 'distinct-1',
+  captureException: jest.fn(),
+}));
 
 jest.mock('@/utils/auth', () => ({
   getStytchBearerForTensrApi: () => 'test-token',
@@ -35,6 +41,34 @@ function sseFetchResponse(body: string, status = 200) {
 describe('streamAgentLoop', () => {
   beforeEach(() => {
     (global.fetch as jest.Mock).mockReset();
+  });
+
+  it('surfaces a v2 tool event as panel progress', async () => {
+    const onProgress = jest.fn();
+    (global.fetch as jest.Mock).mockResolvedValue(
+      sseFetchResponse(
+        'data: {"type":"tool_start","step":"run_operations","message":"Running banner table"}\n\n' +
+          'data: {"type":"tool","name":"run_operations","message":"Running banner table"}\n\n' +
+          'data: {"type":"result","response":{"status":"ok","mode":"agent","answer_markdown":"Done."}}\n\n'
+      )
+    );
+
+    const result = await streamAgentLoop(
+      { message: 'crosstab', mode: 'agent', agentVersion: 'v2' },
+      { onProgress }
+    );
+
+    expect(result.answer_markdown).toBe('Done.');
+    expect(onProgress).toHaveBeenCalledWith({
+      type: 'tool_start',
+      step: 'run_operations',
+      message: 'Running banner table',
+    });
+    expect(onProgress).toHaveBeenCalledWith({
+      type: 'tool',
+      step: 'run_operations',
+      message: 'Running banner table',
+    });
   });
 
   it('surfaces progress then returns the result payload', async () => {
@@ -125,5 +159,71 @@ describe('streamAgentLoop', () => {
     await expect(streamAgentLoop({ message: 'long prep', mode: 'agent' })).rejects.toBeInstanceOf(
       ApiRequestError
     );
+  });
+
+  it('posts the v2 route, streams text, and resumes a continuing turn', async () => {
+    const onDelta = jest.fn();
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(
+        sseFetchResponse(
+          'data: {"type":"delta","text":"Partial "}\n\n' +
+            'data: {"type":"result","response":{"status":"continuing","mode":"agent","session_id":"sess-1","answer_markdown":""}}\n\n'
+        )
+      )
+      .mockResolvedValueOnce(
+        sseFetchResponse(
+          'data: {"type":"delta","text":"answer."}\n\n' +
+            'data: {"type":"final","text":"Checked answer.","status":"ok"}\n\n' +
+            'data: {"type":"result","response":{"status":"ok","mode":"agent","session_id":"sess-1","answer_markdown":"Checked answer."}}\n\n'
+        )
+      );
+
+    const result = await streamAgentLoop(
+      { message: 'crosstab', mode: 'agent', agentVersion: 'v2', sessionId: 'sess-1' },
+      { onDelta }
+    );
+
+    expect(result.answer_markdown).toBe('Checked answer.');
+    expect(onDelta).toHaveBeenNthCalledWith(1, 'Partial ');
+    expect(onDelta).toHaveBeenNthCalledWith(2, '\n\n');
+    expect(onDelta).toHaveBeenNthCalledWith(3, 'answer.');
+    const firstUrl = String((global.fetch as jest.Mock).mock.calls[0][0]);
+    const secondBody = JSON.parse(String((global.fetch as jest.Mock).mock.calls[1][1].body));
+    expect(firstUrl).toContain('/assistant/agent-loop-v2/stream');
+    expect(secondBody).toMatchObject({ resume: true, session_id: 'sess-1', message: '' });
+  });
+
+  it('replaces streamed text when a delta says the table block changed', async () => {
+    const onReplace = jest.fn();
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      sseFetchResponse(
+        'data: {"type":"delta","text":"The table follows.\\n\\n| group |\\n","replace":true}\n\n' +
+          'data: {"type":"result","response":{"status":"ok","mode":"agent","answer_markdown":"The table follows.\\n\\n| group |"}}\n\n'
+      )
+    );
+    const result = await streamAgentLoop(
+      { message: 'crosstab', mode: 'agent', agentVersion: 'v2' },
+      { onReplace }
+    );
+    expect(onReplace).toHaveBeenCalledWith('The table follows.\n\n| group |\n');
+    expect(result.answer_markdown).toContain('| group |');
+  });
+
+  it('captures a non-2xx stream with the session and distinct id', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(sseFetchResponse('nope', 503));
+    await expect(
+      streamAgentLoop({
+        message: 'crosstab',
+        mode: 'agent',
+        agentVersion: 'v2',
+        sessionId: 'sess-9',
+      })
+    ).rejects.toBeInstanceOf(ApiRequestError);
+    expect(posthog.captureException).toHaveBeenCalledWith(
+      expect.any(Error),
+      expect.objectContaining({ status: 503, session_id: 'sess-9', distinct_id: 'distinct-1' })
+    );
+    const headers = new Headers((global.fetch as jest.Mock).mock.calls[0][1].headers);
+    expect(headers.get('X-Tensr-Distinct-Id')).toBe('distinct-1');
   });
 });

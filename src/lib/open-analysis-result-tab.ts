@@ -1,7 +1,24 @@
 import { ANALYSIS_LABELS, type AnalysisKey } from '@/lib/analysis-definitions';
 import type { AnalysisReport, AnalyzeResponse } from '@/lib/analysis-report-types';
 import { appendAnalysisRunToDatasetTab } from '@/lib/analysis-runs';
+import { captureProductEvent } from '@/lib/product-analytics';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
+
+function noteReportOpened(params: {
+  op: string;
+  sourceDatasetId: string;
+  envelope?: AnalyzeResponse;
+  parameters?: Record<string, unknown>;
+}): void {
+  const report = params.envelope?.report;
+  const runId = params.envelope?.run_id || params.parameters?.run_id;
+  if (!report && !runId) return;
+  captureProductEvent('report_opened', {
+    dataset_id: params.sourceDatasetId,
+    analysis_type: params.op,
+    source: 'saved_report',
+  });
+}
 
 export function analysisRunFingerprint(op: string, parameters: Record<string, unknown>): string {
   const sorted = Object.keys(parameters)
@@ -62,6 +79,7 @@ export function openAnalysisResultTab(params: {
   );
   if (existing) {
     if (activate) setActiveTab(existing.id);
+    if (existing.data?.analysisReport || params.envelope?.report) noteReportOpened(params);
     return existing.id;
   }
 
@@ -100,6 +118,7 @@ export function openAnalysisResultTab(params: {
   }
 
   if (report) {
+    noteReportOpened(params);
     appendAnalysisRunToDatasetTab({
       sourceDatasetId: params.sourceDatasetId,
       op: String(params.op),

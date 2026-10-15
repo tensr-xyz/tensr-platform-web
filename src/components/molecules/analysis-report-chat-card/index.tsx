@@ -6,7 +6,7 @@ type Props = {
   title: string;
   summary: string;
   /** Return a sentence when the click cannot open a new view. */
-  onOpen: () => string | void;
+  onOpen: () => string | void | Promise<string | void>;
 };
 
 /** Chat stand-in for a report that already opened in its own tab. */
@@ -25,7 +25,14 @@ export function AnalysisReportChatCard({ title, summary, onOpen }: Props) {
         type="button"
         data-testid="analysis-report-open-tab"
         className="mt-2 text-sm font-medium text-primary hover:underline"
-        onClick={() => setNotice(onOpen() || null)}
+        onClick={() => {
+          const result = onOpen();
+          if (result && typeof (result as Promise<string | void>).then === 'function') {
+            void (result as Promise<string | void>).then(message => setNotice(message || null));
+            return;
+          }
+          setNotice((result as string | void) || null);
+        }}
       >
         Open report
       </button>

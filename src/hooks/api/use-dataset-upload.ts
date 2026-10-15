@@ -5,6 +5,13 @@ import { reportUploadFailure } from '@/lib/report-upload-failure';
 import { uploadDatasetFile, type UploadScope } from '@/lib/upload-dataset';
 import { captureProductEvent, errorClass } from '@/lib/product-analytics';
 
+export type WorkbookSheets = {
+  file: File;
+  sheets: string[];
+  selected: string;
+  datasetId: string;
+};
+
 const ALLOWED = new Set<string>(ACCEPTED_UPLOAD_EXTENSIONS);
 
 export function useDatasetUpload(
@@ -19,9 +26,10 @@ export function useDatasetUpload(
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [workbook, setWorkbook] = useState<WorkbookSheets | null>(null);
 
   const uploadFile = useCallback(
-    async (file: File): Promise<string | null> => {
+    async (file: File, sheet?: string): Promise<string | null> => {
       setIsLoading(true);
       setError(null);
       setUploadProgress(0);
@@ -42,15 +50,28 @@ export function useDatasetUpload(
 
       const started = performance.now();
       try {
-        const result = await uploadDatasetFile(file, token, scope, setUploadProgress);
+        const result = await uploadDatasetFile(file, token, scope, setUploadProgress, sheet);
+        const sheets = Array.isArray(result.sheets)
+          ? result.sheets.filter((name): name is string => typeof name === 'string')
+          : [];
         captureProductEvent('file_uploaded', {
           dataset_id: result.dataset_id,
           type: ext,
           rows: typeof result.n_rows === 'number' ? result.n_rows : null,
           cols: typeof result.n_cols === 'number' ? result.n_cols : null,
-          sheet_count: Array.isArray(result.sheets) ? result.sheets.length : null,
+          sheet_count: sheets.length || null,
           parse_duration_ms: Math.round(performance.now() - started),
         });
+        if (sheets.length > 1 && !sheet) {
+          setWorkbook({
+            file,
+            sheets,
+            selected: String(result.selected_sheet || sheets[0]),
+            datasetId: result.dataset_id,
+          });
+          return result.dataset_id;
+        }
+        setWorkbook(null);
         cbRef.current?.(result.dataset_id, file.name);
         return result.dataset_id;
       } catch (e) {
@@ -73,6 +94,8 @@ export function useDatasetUpload(
     isLoading,
     error,
     uploadProgress,
+    workbook,
+    clearWorkbook: () => setWorkbook(null),
     clearError: () => setError(null),
   };
 }

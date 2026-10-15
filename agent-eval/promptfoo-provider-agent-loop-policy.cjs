@@ -69,7 +69,10 @@ function classifyHeuristic(prompt, mode) {
   if (wantsQuality) return 'run_data_quality_scan';
   if (wantsAnalysis) return 'run_analysis';
   if (exploratory) return 'tool_or_clarify';
-  return 'ask_clarifying_question';
+  if (/best levels|quartile/i.test(text)) return 'ask_clarifying_question';
+  // Ordinary questions reach the model. Only greetings and the named
+  // underspecified asks above force a clarifying question.
+  return 'tool_or_clarify';
 }
 
 function classify(prompt, mode) {

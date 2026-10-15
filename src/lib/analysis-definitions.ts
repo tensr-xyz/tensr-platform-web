@@ -505,6 +505,24 @@ export function applyBodyToForm(
   if (op === 'shapiro_wilk' || op === 'lilliefors_ks' || op === 'runs_test') {
     if (typeof body.column === 'string') setOneSampleCol(body.column);
   }
+  if (op === 'banner_table') {
+    const stubList = Array.isArray(body.stubs) ? body.stubs[0] : undefined;
+    const bannerList = Array.isArray(body.banner) ? body.banner[0] : undefined;
+    const stub =
+      body.stub_column ??
+      body.column_a ??
+      (stubList && typeof stubList === 'object'
+        ? (stubList as { column?: unknown }).column
+        : undefined);
+    const banner =
+      body.banner_column ??
+      body.column_b ??
+      (bannerList && typeof bannerList === 'object'
+        ? (bannerList as { column?: unknown }).column
+        : undefined);
+    if (typeof stub === 'string') setChiA(stub);
+    if (typeof banner === 'string') setChiB(banner);
+  }
   if (op === 'chi_square') {
     if (typeof body.column_a === 'string') setChiA(body.column_a);
     if (typeof body.column_b === 'string') setChiB(body.column_b);
@@ -1043,6 +1061,47 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       ...deriveBinaryPayload(form),
     };
   }
+  if (analysis === 'banner_table') {
+    if (!form.chiA.trim() || !form.chiB.trim()) {
+      throw new Error('Select a stub column and a banner column');
+    }
+    if (form.chiA === form.chiB) throw new Error('Stub and banner must be different columns');
+    const body: Record<string, unknown> = {
+      stub_column: form.chiA,
+      banner_column: form.chiB,
+      column_percent: true,
+      column_letters: true,
+    };
+    const weight = form.bannerWeight.trim();
+    if (weight) body.weight = weight;
+    const decimals = form.bannerDecimals.trim();
+    if (decimals && !decimals.startsWith('{')) {
+      const places = Number(decimals);
+      if (!Number.isNaN(places)) {
+        const n = Math.max(0, Math.min(6, Math.round(places)));
+        body.decimal_places = n;
+        body.decimals = {
+          column_proportion: n,
+          row_proportion: n,
+          total_proportion: n,
+          column_mean: n,
+        };
+      }
+    }
+    const filter = form.bannerFilter.trim();
+    if (filter) body.filter = filter;
+    const nets = form.bannerNets.trim();
+    if (nets) {
+      try {
+        body.nets = JSON.parse(nets);
+      } catch {
+        body.nets = nets;
+      }
+    }
+    body.apa_format = form.apaFormat;
+    body.include_charts = form.includeCharts;
+    return body;
+  }
   if (analysis === 'chi_square') {
     if (chiUseFishersExact) {
       return { column_a: chiA, column_b: chiB };
@@ -1053,18 +1112,6 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       include_phi: chiIncludePhi,
       include_cramers_v: chiIncludeCramersV,
       use_fishers_exact: false,
-    };
-  }
-  if (analysis === 'banner_table') {
-    if (!chiA.trim() || !chiB.trim()) {
-      throw new Error('Select a stub column and a banner column');
-    }
-    if (chiA === chiB) throw new Error('Stub and banner must be different columns');
-    return {
-      stub_column: chiA,
-      banner_column: chiB,
-      column_percent: true,
-      column_letters: true,
     };
   }
   if (analysis === 'fishers_exact' || analysis === 'odds_ratio' || analysis === 'relative_risk') {
@@ -1526,6 +1573,12 @@ export function defaultFormFieldsFromSchema(
     networkIngest: 'edge_list' as const,
     networkWeightCol: '',
     openTextLexicon: '',
+    bannerWeight: '',
+    bannerDecimals: '',
+    bannerFilter: '',
+    bannerNets: '',
+    apaFormat: false,
+    includeCharts: false,
   };
 }
 
@@ -1603,7 +1656,35 @@ export type AnalysisFormState = {
   networkIngest: 'edge_list' | 'adjacency';
   networkWeightCol: string;
   openTextLexicon: string;
+  bannerWeight: string;
+  bannerDecimals: string;
+  bannerFilter: string;
+  bannerNets: string;
+  apaFormat: boolean;
+  includeCharts: boolean;
 };
+
+function bannerDecimalPlaces(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) return String(Math.round(value));
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return '';
+    if (trimmed.startsWith('{')) {
+      try {
+        return bannerDecimalPlaces(JSON.parse(trimmed) as unknown);
+      } catch {
+        return '';
+      }
+    }
+    const places = Number(trimmed);
+    return Number.isFinite(places) ? String(Math.round(places)) : '';
+  }
+  if (value && typeof value === 'object') {
+    const places = (value as { column_proportion?: unknown }).column_proportion;
+    if (typeof places === 'number' && Number.isFinite(places)) return String(places);
+  }
+  return '';
+}
 
 export function formStateFromBody(
   op: AnalysisKey,
@@ -1806,6 +1887,19 @@ export function formStateFromBody(
     if (typeof body.model_spec === 'string') state.semModelSpec = body.model_spec;
     const cols = body.columns as string[] | undefined;
     if (cols?.length) state.selectedCols = cols;
+  }
+  if (op === 'banner_table') {
+    state.bannerWeight = typeof body.weight === 'string' ? body.weight : '';
+    state.bannerDecimals = bannerDecimalPlaces(body.decimals ?? body.decimal_places);
+    state.bannerFilter = typeof body.filter === 'string' ? body.filter : '';
+    state.bannerNets =
+      body.nets == null
+        ? ''
+        : typeof body.nets === 'string'
+          ? body.nets
+          : JSON.stringify(body.nets);
+    state.apaFormat = body.apa_format === true;
+    state.includeCharts = body.include_charts === true;
   }
   return state;
 }

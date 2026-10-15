@@ -17,7 +17,9 @@ describe('formatApiErrorMessage', () => {
     const err = new Error(
       '{"detail":{"error":"trial_volume_cap_exhausted","message":"This trial allows 5 datasets. Upgrade to continue.","key":"datasets","used":5,"cap":5,"plan_code":"trial"}}'
     );
-    expect(formatApiErrorMessage(err)).toBe('This trial allows 5 datasets. Upgrade to continue.');
+    expect(formatApiErrorMessage(err)).toBe(
+      'This trial allows 5 datasets. Upgrade to continue. [Upgrade](/settings/billing)'
+    );
   });
 
   it('handles plain errors', () => {
@@ -104,6 +106,38 @@ describe('formatApiErrorMessage', () => {
     const shown = formatApiErrorMessage(new ApiRequestError(400, JSON.stringify({ detail })));
     expect(shown).toBe(detail);
     expect(shown).not.toMatch(/columns exist/i);
+  });
+
+  it('turns a validation list into a sentence', () => {
+    const shown = formatApiErrorMessage(
+      new ApiRequestError(
+        422,
+        JSON.stringify({
+          detail: [
+            {
+              type: 'extra_forbidden',
+              loc: ['body', 'apa_format'],
+              msg: 'Extra inputs are not permitted',
+            },
+            {
+              type: 'extra_forbidden',
+              loc: ['body', 'include_charts'],
+              msg: 'Extra inputs are not permitted',
+            },
+          ],
+        })
+      )
+    );
+    expect(shown).toBe('That analysis could not run. Check apa_format, include_charts.');
+    expect(shown).not.toContain('{');
+  });
+
+  it('never shows a raw JSON body when the payload cannot be read', () => {
+    const shown = formatApiErrorMessage(
+      new ApiRequestError(422, 'not-json {detail: extra_forbidden}')
+    );
+    expect(shown).not.toContain('{');
+    expect(shown).toMatch(/could not run|try again/i);
   });
 
   it('does not tell the user to check columns for an internal server error', () => {

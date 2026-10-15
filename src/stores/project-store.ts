@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
+import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import { columnNamesFromSchemaResponse } from '@/lib/dataset-schema';
-import { fetchWithColdStartRetry } from '@/lib/cold-start-fetch';
+import { fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
 import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 import { getTensrApiHeaders } from '@/utils/auth';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
@@ -74,7 +74,7 @@ async function fetchDatasetWorkspacePayload(
   label: string;
 } | null> {
   const authHeaders = datasetAuthHeaders(token);
-  const schemaRes = await fetchWithColdStartRetry(tensrApiUrl(`/datasets/${datasetId}/schema`), {
+  const schemaRes = await fetchDatasetSchema(datasetId, {
     headers: authHeaders,
   });
   if (
@@ -464,10 +464,7 @@ export const useProjectStore = create<ProjectStore>()(
 
             const base = getTensrApiBaseUrl();
             const authHeaders = datasetAuthHeaders(token);
-            const dsSchema = await fetchWithColdStartRetry(
-              tensrApiUrl(`/datasets/${projectId}/schema`),
-              { headers: authHeaders }
-            );
+            const dsSchema = await fetchDatasetSchema(projectId, { headers: authHeaders });
             if (
               handleUnauthorizedResponse(dsSchema, `project-store:getProjectDetails:${projectId}`)
             ) {
@@ -678,7 +675,6 @@ export const useProjectStore = create<ProjectStore>()(
               );
             }
 
-            const base = getTensrApiBaseUrl();
             const authHeaders = datasetAuthHeaders(token);
 
             let schemaRes: Response;
@@ -688,10 +684,7 @@ export const useProjectStore = create<ProjectStore>()(
               schema?: { name: string; type?: string }[];
             };
             try {
-              schemaRes = await fetchWithColdStartRetry(
-                tensrApiUrl(`/datasets/${datasetId}/schema`),
-                { headers: authHeaders }
-              );
+              schemaRes = await fetchDatasetSchema(datasetId, { headers: authHeaders });
               if (
                 handleUnauthorizedResponse(schemaRes, `project-store:fetchImportGrid:${datasetId}`)
               ) {
