@@ -11,6 +11,7 @@ export type BannerBookCell = {
   sd?: number | null;
   unweighted_n?: number | null;
   weighted_n?: number | null;
+  column_unweighted_n?: number | null;
   kish_ess?: number | null;
   low_base?: boolean;
   low_base_suppressed?: boolean;
@@ -34,7 +35,19 @@ export type BannerBook = {
   };
   spec?: { id?: string; decimals?: Record<string, number>; statistics?: string[] };
   base_label?: string | null;
-  weight?: { column?: string | null; weight_aware?: boolean; unweighted_n?: number | null };
+  weight?: {
+    column?: string | null;
+    weight_aware?: boolean;
+    unweighted_n?: number | null;
+    weighted_n?: number | null;
+  };
+  loop_table?: {
+    level?: string;
+    item_title?: string;
+    respondent_unweighted_n?: number | null;
+    respondent_weighted_n?: number | null;
+    paired_across_items?: boolean;
+  };
 };
 
 export type DisplayCell = {
@@ -60,7 +73,7 @@ export type DisplayRow = {
 };
 
 export type DisplayTable = {
-  headers: Array<{ id: string; label: string; letterSlot: string }>;
+  headers: Array<{ id: string; label: string; letterSlot: string; columnBase: number | null }>;
   rows: DisplayRow[];
 };
 
@@ -87,11 +100,24 @@ function fmtMean(cell: BannerBookCell): string | null {
   return `${mean} (SD ${Number(cell.sd).toFixed(2)})`;
 }
 
+function columnBaseFor(book: BannerBook, columnId: string): number | null {
+  const values = new Set<number>();
+  for (const row of book.rows || []) {
+    for (const cell of row.cells || []) {
+      if (cell.banner_id !== columnId || cell.column_unweighted_n == null) continue;
+      values.add(Number(cell.column_unweighted_n));
+    }
+  }
+  if (values.size !== 1) return null;
+  return [...values][0] ?? null;
+}
+
 export function displayBannerTable(book: BannerBook): DisplayTable {
   const headers = (book.banner_columns || []).map(col => ({
     id: col.id,
     label: col.label || col.id,
     letterSlot: col.letter_slot || '',
+    columnBase: columnBaseFor(book, col.id),
   }));
   const letterMap = new Map<string, string>();
   for (const item of book.letters || []) {
@@ -114,13 +140,15 @@ export function displayBannerTable(book: BannerBook): DisplayTable {
       const totalValue = fmtPct(cell.total_percent, places(book, 'total_proportion', 1));
       const countValue = fmtNum(cell.count ?? cell.weighted_n, places(book, 'count', 0));
       const caution = (text: string) => (lowBase && text && text !== '—' ? `${text} *` : text);
+      const columnBase =
+        cell.column_unweighted_n == null ? '' : `base n=${fmtNum(cell.column_unweighted_n)} · `;
       return {
         columnPercent: suppressed ? '*' : caution(columnValue),
         rowPercent: suppressed ? '*' : caution(rowValue),
         totalPercent: suppressed ? '*' : caution(totalValue),
         countText: suppressed ? '*' : caution(countValue),
         letters: letterMap.get(`${cell.stub_row_id}::${cell.banner_id}`) || '',
-        bases: `n=${fmtNum(cell.unweighted_n)} · wn=${fmtNum(cell.weighted_n)} · ESS=${fmtNum(cell.kish_ess)}`,
+        bases: `${columnBase}n=${fmtNum(cell.unweighted_n)} · wn=${fmtNum(cell.weighted_n)} · ESS=${fmtNum(cell.kish_ess)}`,
         lowBase,
         kind: cell.kind || row.kind,
         unweighted_n: cell.unweighted_n,
