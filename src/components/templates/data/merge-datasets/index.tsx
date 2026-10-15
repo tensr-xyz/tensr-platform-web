@@ -34,6 +34,7 @@ import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
 import { mergeUnmatchedReportLines } from '@/lib/merge-unmatched-report';
 import { pickObviousIdColumn } from '@/lib/obvious-id-column';
+import { derivedWorkspacePath } from '@/lib/adopt-derived-dataset';
 import { showDerivedResult } from '@/lib/show-derived-result';
 import { useTabsStore } from '@/stores/tabs-store';
 
@@ -214,17 +215,21 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
       if (!primaryDatasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
       if (!previewReady) throw new Error('Preview the unmatched rows before merging');
       const response = await mergeDatasets(primaryDatasetId, payload(), token);
-      if (isPreview(response) || !('dataset_id' in response)) {
+      if (
+        isPreview(response) ||
+        !('dataset_id' in response) ||
+        response.dataset_id === primaryDatasetId
+      ) {
         throw new Error('Merge did not save a dataset');
       }
-      if (showDerivedResult('merge_datasets', response, payload())) {
-        setOpen(false);
-        setReport(null);
-        return;
+      try {
+        showDerivedResult('merge_datasets', response, payload());
+      } catch {
+        // The route change below opens the saved dataset.
       }
-      router.push(
-        `/workspace/dataset/${response.dataset_id}?name=${encodeURIComponent(response.original_filename)}`
-      );
+      router.replace(derivedWorkspacePath(response.dataset_id, response.original_filename));
+      setOpen(false);
+      setReport(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to merge datasets');
     } finally {
@@ -259,7 +264,13 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={next => {
+        if (!next && isLoading) return;
+        setOpen(next);
+      }}
+    >
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
@@ -410,10 +421,14 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
         </div>
 
         <DialogFooter>
-          <Button onClick={handlePreview} disabled={isLoading || !primaryDatasetId}>
+          <Button
+            type="button"
+            onClick={handlePreview}
+            disabled={isLoading || !primaryDatasetId}
+          >
             {isLoading ? 'Working...' : 'Preview match'}
           </Button>
-          <Button onClick={handleMerge} disabled={isLoading || !previewReady}>
+          <Button type="button" onClick={handleMerge} disabled={isLoading || !previewReady}>
             Merge datasets
           </Button>
         </DialogFooter>
