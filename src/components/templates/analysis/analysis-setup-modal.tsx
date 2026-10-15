@@ -7,6 +7,7 @@ import {
   ANALYSIS_LABELS,
   ANALYSIS_WIZARD_META,
   type AnalysisKey,
+  bannerTableDecimalPlaces,
   buildBodyFromForm,
   defaultFormFieldsFromSchema,
   defaultFormForAnalysis,
@@ -86,8 +87,15 @@ export function AnalysisSetupModal({
     }
     if (initialBody && Object.keys(initialBody).length > 0) {
       setForm(formStateFromBody(initialOp, initialBody, schema));
+      if (initialOp === 'banner_table') {
+        setOutputPrefs(current => ({
+          ...current,
+          decimalPlaces: bannerTableDecimalPlaces(initialBody),
+        }));
+      }
     } else {
       setForm(defaultFormForAnalysis(initialOp, schema, preview));
+      setOutputPrefs(loadOutputPreferences());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody in bodyKey, schema in schemaKey, preview in previewKey
   }, [open, initialOp, bodyKey, schemaKey, previewKey]);

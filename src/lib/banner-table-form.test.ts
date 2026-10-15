@@ -30,6 +30,13 @@ describe('banner_table setup', () => {
       multiple_comparison: 'fdr',
       apa_format: false,
       include_charts: false,
+      decimal_places: 1,
+      decimals: {
+        column_proportion: 1,
+        row_proportion: 1,
+        total_proportion: 1,
+        column_mean: 1,
+      },
     });
   });
 

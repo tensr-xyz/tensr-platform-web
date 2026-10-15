@@ -161,6 +161,20 @@ describe('banner table rerun form', () => {
     expect(kept.includeCharts).toBe(false);
   });
 
+  it('prefills one decimal when the stored body only has the analyze default of 3', () => {
+    const form = formStateFromBody(
+      'banner_table',
+      {
+        stub_column: 'Q1_Satisfaction',
+        banner_column: 'Group',
+        decimal_places: 3,
+      },
+      SCHEMA
+    );
+    expect(form.bannerDecimals).toBe('1');
+    expect(buildBodyFromForm(form).decimals).toMatchObject({ column_proportion: 1 });
+  });
+
   it('keeps run disabled until the stub and banner are set', () => {
     const blockers = getAnalysisRunBlockers(
       'banner_table',
