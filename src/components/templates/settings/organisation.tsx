@@ -6,7 +6,15 @@ import { useOptionalOrganizationContext } from '@/contexts/organisation-context'
 import { updateProfile } from '@/lib/business-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/atoms/button';
+import { Checkbox } from '@/components/atoms/checkbox';
 import { Input } from '@/components/atoms/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/atoms/select';
 import { toast } from '@/hooks/ui/use-toast';
 import { useRouter } from 'next/navigation';
 import {
@@ -196,15 +204,14 @@ export default function OrganizationSettings() {
           <label htmlFor="schema-only" className="text-sm font-medium">
             Schema only privacy
           </label>
-          <input
+          <Checkbox
             id="schema-only"
-            type="checkbox"
             className="h-4 w-4"
             checked={(editedOrg?.privacyMode ?? 'full') === 'schema_only'}
             disabled={isLoading || !activeOrganization}
-            onChange={async event => {
+            onCheckedChange={async checked => {
               if (!activeOrganization) return;
-              const privacy_mode = event.target.checked ? 'schema_only' : 'full';
+              const privacy_mode = checked === true ? 'schema_only' : 'full';
               try {
                 const updated = await updateOrganization(activeOrganization.id, { privacy_mode });
                 setEditedOrg(updated);
@@ -238,14 +245,12 @@ export default function OrganizationSettings() {
             <label htmlFor="agent-version" className="text-sm font-medium">
               Agent version
             </label>
-            <select
-              id="agent-version"
-              className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+            <Select
               value={editedOrg.agentVersion ?? 'v1'}
               disabled={isLoading || !activeOrganization}
-              onChange={async event => {
+              onValueChange={async value => {
                 if (!activeOrganization) return;
-                const agent_version = event.target.value === 'v2' ? 'v2' : 'v1';
+                const agent_version = value === 'v2' ? 'v2' : 'v1';
                 try {
                   const updated = await updateOrganization(activeOrganization.id, {
                     agent_version,
@@ -265,9 +270,14 @@ export default function OrganizationSettings() {
                 }
               }}
             >
-              <option value="v1">v1</option>
-              <option value="v2">v2</option>
-            </select>
+              <SelectTrigger id="agent-version" className="h-9 w-auto min-w-24 text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="v1">v1</SelectItem>
+                <SelectItem value="v2">v2</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </section>
       ) : null}
@@ -351,19 +361,22 @@ function PersonalAgentVersion({
           <label htmlFor="agent-version" className="text-sm font-medium">
             Agent version
           </label>
-          <select
-            id="agent-version"
-            className="h-9 rounded-md border border-border bg-background px-3 text-sm"
+          <Select
             value={version}
             disabled={disabled}
-            onChange={event => {
-              const next = event.target.value === 'v2' ? 'v2' : 'v1';
+            onValueChange={value => {
+              const next = value === 'v2' ? 'v2' : 'v1';
               void onChange(next);
             }}
           >
-            <option value="v1">v1</option>
-            <option value="v2">v2</option>
-          </select>
+            <SelectTrigger id="agent-version" className="h-9 w-auto min-w-24 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="v1">v1</SelectItem>
+              <SelectItem value="v2">v2</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </section>
     </div>

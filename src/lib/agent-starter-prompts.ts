@@ -46,12 +46,18 @@ function isDateColumn(column: StarterColumn): boolean {
   return /date|datetime|timestamp/.test(blob);
 }
 
+/** More than about 12 distinct values is a continuous column, such as Age. */
+function isContinuous(column: StarterColumn): boolean {
+  return typeof column.uniqueCount === 'number' && column.uniqueCount > 12;
+}
+
 function crosstabColumns(columns: StarterColumn[]): StarterColumn[] {
   const eligible = columns.filter(
     column =>
       column.id &&
       !HIDDEN.has(column.id) &&
       !isNumeric(column) &&
+      !isContinuous(column) &&
       !isIdColumn(column) &&
       !isDateColumn(column)
   );
@@ -71,6 +77,7 @@ export function starterPromptsForColumns(
   );
   const numeric = usable.filter(isNumeric);
   const categorical = crosstabColumns(columns);
+  const continuous = usable.filter(column => isContinuous(column) && !isDateColumn(column));
   const prompts: string[] = [];
   if (options?.notebook) {
     if (numeric.length >= 2) {
@@ -86,6 +93,12 @@ export function starterPromptsForColumns(
       prompts.push(
         `Make a crosstab of ${label(categorical[0])} by ${label(categorical[1])} with column percentages`
       );
+    } else if (continuous[0] && categorical[0]) {
+      prompts.push(
+        `Bin ${label(continuous[0])} and crosstab it by ${label(categorical[0])} with column percentages`
+      );
+    } else if (continuous[0]) {
+      prompts.push(`Bin ${label(continuous[0])} before using it in a crosstab`);
     }
     if (numeric.length >= 2) {
       prompts.push(`Plot the correlation between ${label(numeric[0])} and ${label(numeric[1])}`);

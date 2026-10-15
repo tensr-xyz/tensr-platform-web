@@ -54,7 +54,21 @@ jest.mock('@/lib/business-api', () => ({
   updateProfile: (...args: unknown[]) => mockUpdateProfile(...args),
 }));
 
+function chooseAgentVersion(next: 'v1' | 'v2') {
+  const trigger = screen.getByLabelText('Agent version');
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false, pointerType: 'mouse' });
+  fireEvent.click(trigger);
+  fireEvent.click(screen.getByRole('option', { name: next }));
+}
+
 describe('OrganizationSettings', () => {
+  beforeAll(() => {
+    Element.prototype.hasPointerCapture = () => false;
+    Element.prototype.setPointerCapture = () => {};
+    Element.prototype.releasePointerCapture = () => {};
+    Element.prototype.scrollIntoView = () => {};
+  });
+
   beforeEach(() => {
     jest.clearAllMocks();
     mockOrg.role = 'MEMBER';
@@ -116,8 +130,8 @@ describe('OrganizationSettings', () => {
     });
     render(<OrganizationSettings />);
 
-    expect(screen.getByLabelText('Agent version')).toHaveValue('v1');
-    fireEvent.change(screen.getByLabelText('Agent version'), { target: { value: 'v2' } });
+    expect(screen.getByLabelText('Agent version')).toHaveTextContent('v1');
+    chooseAgentVersion('v2');
 
     await waitFor(() =>
       expect(updateOrganization).toHaveBeenCalledWith('org-1', { agent_version: 'v2' })
@@ -131,8 +145,8 @@ describe('OrganizationSettings', () => {
     mockUpdateProfile.mockResolvedValue(saved);
     render(<OrganizationSettings />);
 
-    expect(screen.getByLabelText('Agent version')).toHaveValue('v1');
-    fireEvent.change(screen.getByLabelText('Agent version'), { target: { value: 'v2' } });
+    expect(screen.getByLabelText('Agent version')).toHaveTextContent('v1');
+    chooseAgentVersion('v2');
 
     await waitFor(() => expect(mockUpdateProfile).toHaveBeenCalledWith({ agentVersion: 'v2' }));
     expect(mockSetUser).toHaveBeenCalledWith(saved);

@@ -9,6 +9,7 @@ import {
   DialogTitle,
 } from '@/components/molecules/dialog';
 import { Button } from '@/components/atoms/button';
+import { RadioGroup, RadioGroupItem } from '@/components/atoms/radio-group';
 import { Loader } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
@@ -246,38 +247,25 @@ export const Correlation = ({ children }: CorrelationProps) => {
             <div className="grid grid-cols-2 gap-4">
               <div className="border border-border rounded-lg p-4">
                 <h3 className="font-medium mb-2">Correlation Type</h3>
-                <div className="space-y-2">
+                <RadioGroup
+                  value={correlationType}
+                  onValueChange={value =>
+                    setCorrelationType(value as 'pearson' | 'spearman' | 'kendall')
+                  }
+                >
                   <label className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      value="pearson"
-                      checked={correlationType === 'pearson'}
-                      onChange={e => setCorrelationType(e.target.value as 'pearson')}
-                      className="mr-2"
-                    />
+                    <RadioGroupItem value="pearson" />
                     <span>Pearson (Linear)</span>
                   </label>
                   <label className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      value="spearman"
-                      checked={correlationType === 'spearman'}
-                      onChange={e => setCorrelationType(e.target.value as 'spearman')}
-                      className="mr-2"
-                    />
+                    <RadioGroupItem value="spearman" />
                     <span>Spearman (Rank)</span>
                   </label>
                   <label className="flex items-center space-x-2">
-                    <input
-                      type="radio"
-                      value="kendall"
-                      checked={correlationType === 'kendall'}
-                      onChange={e => setCorrelationType(e.target.value as 'kendall')}
-                      className="mr-2"
-                    />
+                    <RadioGroupItem value="kendall" />
                     <span>Kendall&apos;s Tau</span>
                   </label>
-                </div>
+                </RadioGroup>
               </div>
 
               <div className="border border-border rounded-lg p-4">
@@ -316,15 +304,18 @@ export const Correlation = ({ children }: CorrelationProps) => {
                       className="flex items-center justify-between bg-gray-100 dark:bg-gray-800 p-2 rounded-sm"
                     >
                       <span>{variable}</span>
-                      <button
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-auto w-auto text-red-500 hover:bg-transparent hover:text-red-700"
                         onClick={e => {
                           e.stopPropagation();
                           handleVariableSelect(variable);
                         }}
-                        className="text-red-500 hover:text-red-700"
                       >
                         ×
-                      </button>
+                      </Button>
                     </div>
                   ))
                 )}

@@ -8,6 +8,8 @@ import {
   DialogTrigger,
 } from '@/components/molecules/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/atoms/alert';
+import { Button } from '@/components/atoms/button';
+import { Checkbox } from '@/components/atoms/checkbox';
 import { Copy } from 'lucide-react';
 import { getAccessToken } from '@/utils/auth';
 import { findDatasetDuplicates } from '@/lib/dataset-data-ops';
@@ -134,10 +136,10 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
                         : 'hover:bg-gray-100 dark:hover:bg-gray-800'
                     }`}
                   >
-                    <input
-                      type="checkbox"
+                    <Checkbox
                       checked={selectedColumns.includes(variable)}
-                      onChange={() => {}}
+                      onCheckedChange={() => toggleColumn(variable)}
+                      onClick={event => event.stopPropagation()}
                       className="h-4 w-4"
                     />
                     <span>{variable}</span>
@@ -150,22 +152,20 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
             <div className="border rounded-lg p-4 space-y-4">
               <h3 className="font-medium mb-2">Options</h3>
               <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
+                <Checkbox
                   id="matchCase"
                   checked={matchCase}
-                  onChange={e => setMatchCase(e.target.checked)}
+                  onCheckedChange={checked => setMatchCase(checked === true)}
                   className="h-4 w-4"
                 />
                 <label htmlFor="matchCase">Match case when comparing string values</label>
               </div>
 
               <div className="flex items-center space-x-2">
-                <input
-                  type="checkbox"
+                <Checkbox
                   id="firstCaseOnly"
                   checked={firstCaseOnly}
-                  onChange={e => setFirstCaseOnly(e.target.checked)}
+                  onCheckedChange={checked => setFirstCaseOnly(checked === true)}
                   className="h-4 w-4"
                 />
                 <label htmlFor="firstCaseOnly">Show only first case in each duplicate group</label>
@@ -233,13 +233,12 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
         )}
 
         <DialogFooter>
-          <button
+          <Button
             onClick={findDuplicates}
             disabled={!isFileLoaded || selectedColumns.length === 0 || isLoading}
-            className="px-4 py-2 text-sm bg-blue-500 text-white rounded-sm hover:bg-blue-600 disabled:opacity-50"
           >
             {isLoading ? 'Finding Duplicates...' : 'Find Duplicates'}
-          </button>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

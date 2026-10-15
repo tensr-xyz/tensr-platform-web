@@ -15,7 +15,16 @@ import {
 } from '@/lib/analysis-setup-validation';
 import type { SchemaColumn } from '@/lib/analysis-report-types';
 import { Checkbox } from '@/components/atoms/checkbox';
+import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/atoms/select';
+import { Textarea } from '@/components/atoms/text-area';
 import {
   AdvancedOptionsDisclosure,
   ColumnSelect,
@@ -859,53 +868,55 @@ export function BannerTableForm({
       />
       <label className="block space-y-1 text-[11px]">
         <span className="text-muted-foreground">Weight</span>
-        <input
-          className="w-full rounded border bg-background px-2 py-1"
+        <Input
+          inputSize="sm"
+          className="w-full text-[11px]"
           value={form.bannerWeight}
           onChange={event => setForm(f => ({ ...f, bannerWeight: event.target.value }))}
         />
       </label>
       <label className="block space-y-1 text-[11px]">
         <span className="text-muted-foreground">Decimals</span>
-        <input
+        <Input
           type="number"
+          inputSize="sm"
           min={0}
           max={6}
           step={1}
-          className="w-full rounded border bg-background px-2 py-1"
+          className="w-full text-[11px]"
           value={form.bannerDecimals}
           onChange={event => setForm(f => ({ ...f, bannerDecimals: event.target.value }))}
         />
       </label>
       <label className="block space-y-1 text-[11px]">
         <span className="text-muted-foreground">Filter</span>
-        <input
-          className="w-full rounded border bg-background px-2 py-1"
+        <Input
+          inputSize="sm"
+          className="w-full text-[11px]"
           value={form.bannerFilter}
           onChange={event => setForm(f => ({ ...f, bannerFilter: event.target.value }))}
         />
       </label>
       <label className="block space-y-1 text-[11px]">
         <span className="text-muted-foreground">Nets</span>
-        <input
-          className="w-full rounded border bg-background px-2 py-1"
+        <Input
+          inputSize="sm"
+          className="w-full text-[11px]"
           value={form.bannerNets}
           onChange={event => setForm(f => ({ ...f, bannerNets: event.target.value }))}
         />
       </label>
       <label className="flex items-center gap-2 text-[11px]">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={form.apaFormat}
-          onChange={event => setForm(f => ({ ...f, apaFormat: event.target.checked }))}
+          onCheckedChange={checked => setForm(f => ({ ...f, apaFormat: checked === true }))}
         />
         APA format
       </label>
       <label className="flex items-center gap-2 text-[11px]">
-        <input
-          type="checkbox"
+        <Checkbox
           checked={form.includeCharts}
-          onChange={event => setForm(f => ({ ...f, includeCharts: event.target.checked }))}
+          onCheckedChange={checked => setForm(f => ({ ...f, includeCharts: checked === true }))}
         />
         Include charts
       </label>
@@ -947,26 +958,27 @@ export function ChiSquareForm({
         <>
           <FormSectionLabel>Association measures</FormSectionLabel>
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={form.chiIncludePhi}
-              onChange={e => setForm(f => ({ ...f, chiIncludePhi: e.target.checked }))}
+              onCheckedChange={checked => setForm(f => ({ ...f, chiIncludePhi: checked === true }))}
             />
             Phi coefficient (2×2 tables)
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={form.chiIncludeCramersV}
-              onChange={e => setForm(f => ({ ...f, chiIncludeCramersV: e.target.checked }))}
+              onCheckedChange={checked =>
+                setForm(f => ({ ...f, chiIncludeCramersV: checked === true }))
+              }
             />
             Cramér&apos;s V
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={form.chiUseFishersExact}
-              onChange={e => setForm(f => ({ ...f, chiUseFishersExact: e.target.checked }))}
+              onCheckedChange={checked =>
+                setForm(f => ({ ...f, chiUseFishersExact: checked === true }))
+              }
             />
             Use Fisher&apos;s exact test (recommended for 2×2 tables with small expected counts)
           </label>
@@ -975,16 +987,20 @@ export function ChiSquareForm({
       {form.analysis === 'weighted_kappa' && (
         <label className="flex flex-col gap-1 text-sm">
           <span>Weight scheme</span>
-          <select
-            className="rounded border border-border bg-background px-2 py-1"
+          <Select
             value={form.kappaWeights}
-            onChange={e =>
-              setForm(f => ({ ...f, kappaWeights: e.target.value as 'linear' | 'quadratic' }))
+            onValueChange={value =>
+              setForm(f => ({ ...f, kappaWeights: value as 'linear' | 'quadratic' }))
             }
           >
-            <option value="linear">Linear</option>
-            <option value="quadratic">Quadratic</option>
-          </select>
+            <SelectTrigger className="text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="linear">Linear</SelectItem>
+              <SelectItem value="quadratic">Quadratic</SelectItem>
+            </SelectContent>
+          </Select>
         </label>
       )}
     </section>
@@ -1110,8 +1126,8 @@ export function CodeOpenTextForm({
         One theme per line: <code className="text-[10px]">theme: keyword1, keyword2</code>. Matching
         is case-insensitive substring search (not NLP).
       </p>
-      <textarea
-        className="min-h-[120px] w-full rounded border border-border bg-background px-2 py-1.5 font-mono text-xs"
+      <Textarea
+        className="min-h-[120px] w-full px-2 py-1.5 font-mono text-xs"
         value={form.openTextLexicon}
         onChange={e => setForm(f => ({ ...f, openTextLexicon: e.target.value }))}
         placeholder={'quality: great, excellent, love\nprice: expensive, cheap, cost'}
@@ -1933,8 +1949,8 @@ function SemModelSpecField({
   return (
     <div className="flex flex-col gap-1.5">
       <FormSectionLabel>Model specification (semopy syntax)</FormSectionLabel>
-      <textarea
-        className="min-h-[120px] w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-xs"
+      <Textarea
+        className="min-h-[120px] w-full font-mono text-xs"
         value={form.semModelSpec}
         onChange={e => setForm(f => ({ ...f, semModelSpec: e.target.value }))}
         spellCheck={false}
