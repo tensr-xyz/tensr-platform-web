@@ -35,8 +35,13 @@ describe('mergeUnmatchedReportLines', () => {
               column: 'Q7',
               kind: 'same_code_different_label',
               code: '1',
-              left_label: 'Disagree',
-              right_label: "Pas d'accord",
+              left_label: 'Agree',
+              right_label: 'Disagree',
+            },
+            {
+              column: 'region',
+              kind: 'code_missing',
+              code: '99',
             },
           ],
         },
@@ -45,7 +50,8 @@ describe('mergeUnmatchedReportLines', () => {
     ).toEqual([
       '20 rows in the result.',
       'Added source_wave so each row keeps its source file.',
-      'Q7 code 1 is "Disagree" here and "Pas d\'accord" in another file.',
+      'Q7 code 1 is "Agree" here and "Disagree" in another file.',
+      "region code 99 is in one file's labels and missing from another.",
     ]);
   });
 
