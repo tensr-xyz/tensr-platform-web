@@ -157,7 +157,7 @@ function mergeRowPage(
   return merged.slice(0, totalRows);
 }
 
-type RowType = Record<string, any> & { id: string };
+type RowType = Record<string, any>;
 
 /** Empty grid row for virtual slots not yet loaded from the server. */
 function VirtualSheetPlaceholderRow({
@@ -1625,6 +1625,7 @@ export function Spreadsheet({
       minSize: 56,
       maxSize: 800,
     },
+    getRowId: (_row, index) => `row-${index}`,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     autoResetPageIndex: false,

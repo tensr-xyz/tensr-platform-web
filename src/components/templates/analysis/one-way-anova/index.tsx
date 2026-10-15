@@ -1,3 +1,4 @@
+import { gridDataKeys } from '@/lib/sheet-grid-align';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
 import { getIdToken } from '@/utils/auth';
 import { ReactNode, useMemo, useState, useRef } from 'react';
@@ -106,9 +107,7 @@ export const OneWayAnova = ({ children }: AnovaProps) => {
   const variables = useMemo(() => {
     if (!activeDataTab?.data?.initialData?.[0]) return [];
 
-    const columnNames = Object.keys(activeDataTab.data?.initialData?.[0] || {}).filter(
-      key => key !== 'id'
-    );
+    const columnNames = gridDataKeys(activeDataTab.data?.initialData?.[0]);
 
     return columnNames.map(colName => {
       const sampleValues =

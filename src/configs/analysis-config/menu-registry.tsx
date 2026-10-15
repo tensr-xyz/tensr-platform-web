@@ -162,6 +162,10 @@ export function isDialogMenuItem(name: string): boolean {
   return name in DIALOG_MENU;
 }
 
+export function dialogMenuNames(): string[] {
+  return Object.keys(DIALOG_MENU);
+}
+
 export function getMenuItemComponent(name: string): AnalysisComponent {
   if (DIALOG_MENU[name]) return DIALOG_MENU[name];
 

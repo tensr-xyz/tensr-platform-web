@@ -14,7 +14,7 @@ import {
   WORKSPACE_DATASET_REQUIRED,
 } from '@/lib/workspace-dataset';
 import { apiClient } from '@/lib/api-client';
-import { useTabsStore, type Tab } from '@/stores/tabs-store';
+import { useTabsStore, ViewType, type Tab } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import {
@@ -139,6 +139,16 @@ export function AnalysisSetupHost() {
 
   const setupOpen = setupOp !== null;
   const unavailableOpen = unavailableName !== null;
+
+  useEffect(() => {
+    const tab = useTabsStore.getState().tabs.find(item => item.id === activeTabId);
+    if (!tab) return;
+    if (tab.type !== ViewType.ANALYSIS_RESULT && tab.type !== ViewType.ANALYSIS_REPORT) return;
+    const store = useAnalysisSetupStore.getState();
+    if (store.dialogName) store.closeDialog();
+    if (store.setupOp) store.closeSetup();
+    if (store.unavailableName) store.closeUnavailable();
+  }, [activeTabId]);
 
   useEffect(() => {
     if (!setupOpen && !unavailableOpen) return;

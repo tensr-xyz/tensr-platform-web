@@ -11,6 +11,7 @@ import { Loader } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/atoms/card';
+import { gridDataKeys } from '@/lib/sheet-grid-align';
 import { useTabsStore } from '@/stores/tabs-store';
 import { adaptGenericTestResults, runDatasetAnalysis } from '@/lib/workspace-analysis';
 import { getDatasetIdFromTab, WORKSPACE_DATASET_REQUIRED } from '@/lib/workspace-dataset';
@@ -34,7 +35,7 @@ function useWorkspaceVariables() {
 
   const variables = useMemo((): Variable[] => {
     if (!activeDataTab?.data?.initialData?.[0]) return [];
-    const columnNames = Object.keys(activeDataTab.data.initialData[0]).filter(key => key !== 'id');
+    const columnNames = gridDataKeys(activeDataTab.data.initialData[0]);
     return columnNames.map(colName => {
       const sampleValues = activeDataTab
         .data!.initialData!.slice(0, 5)

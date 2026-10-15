@@ -1,3 +1,4 @@
+import { gridDataKeys } from '@/lib/sheet-grid-align';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
@@ -57,7 +58,7 @@ export function VariableSetsDialog({ children }: { children: ReactNode }) {
   const columnNames = useMemo(() => {
     const row = activeTab?.data?.initialData?.[0];
     if (!row) return [];
-    return Object.keys(row).filter(key => key !== 'id');
+    return gridDataKeys(row);
   }, [activeTab?.data?.initialData]);
 
   const [sets, setSets] = useState<VariableSet[]>([]);

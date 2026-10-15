@@ -1,3 +1,4 @@
+import { gridDataKeys } from '@/lib/sheet-grid-align';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
@@ -32,17 +33,15 @@ export const LogisticRegression = ({ children }: { children: ReactNode }) => {
 
   const variables = useMemo(() => {
     if (!activeDataTab?.data?.initialData?.[0]) return [];
-    return Object.keys(activeDataTab.data.initialData[0])
-      .filter(key => key !== 'id')
-      .map(colName => {
-        const sampleValues = activeDataTab
-          .data!.initialData!.slice(0, 5)
-          .map((row: Record<string, unknown>) => row[colName])
-          .filter(val => val != null && val !== '');
-        const numericValues = sampleValues.map(val => parseFloat(String(val)));
-        const isNumeric = numericValues.every(val => !isNaN(val));
-        return { name: colName, type: isNumeric ? 'number' : 'string' };
-      });
+    return gridDataKeys(activeDataTab.data.initialData[0]).map(colName => {
+      const sampleValues = activeDataTab
+        .data!.initialData!.slice(0, 5)
+        .map((row: Record<string, unknown>) => row[colName])
+        .filter(val => val != null && val !== '');
+      const numericValues = sampleValues.map(val => parseFloat(String(val)));
+      const isNumeric = numericValues.every(val => !isNaN(val));
+      return { name: colName, type: isNumeric ? 'number' : 'string' };
+    });
   }, [activeDataTab?.data?.initialData]);
 
   const allVariables = variables;
