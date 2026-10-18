@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import FilterPanel from '@/components/organisms/filter-panel';
 import { useTabsStore } from '@/stores/tabs-store';
 import { ScrollArea } from '@/components/atoms/scroll-area';
@@ -10,6 +10,7 @@ import type { ColumnSummary } from '@/types/file';
 import type { Column } from '@/stores/tabs-store';
 import { DatasetAnalysisRuns } from '@/components/organisms/dataset-analysis-runs';
 import { getDatasetIdFromTab, resolveSpreadsheetContextTab } from '@/lib/workspace-dataset';
+import { LoopGroups } from '@/components/templates/data/loop-groups';
 
 export const LeftPanel: React.FC = () => {
   const { tabs, activeTabId, updateTab } = useTabsStore();
@@ -37,6 +38,8 @@ export const LeftPanel: React.FC = () => {
 
   const columnList =
     spreadsheetSidePanel?.initialColumns?.map((col: { id: string }) => col.id) ?? [];
+  const [loopMembers, setLoopMembers] = useState<string[]>([]);
+  const flatColumnList = columnList.filter(id => !loopMembers.includes(id));
   const columnStats = (spreadsheetSidePanel?.columnStats ?? {}) as Record<string, ColumnSummary>;
   const initialData = (spreadsheetSidePanel?.initialData ?? []) as Record<string, unknown>[];
 
@@ -114,9 +117,10 @@ export const LeftPanel: React.FC = () => {
 
           <div className="min-h-0 flex-1 overflow-hidden">
             <ScrollArea className="h-full">
+              <LoopGroups datasetId={datasetId} onMembers={setLoopMembers} />
               <FilterPanel
                 filePath={spreadsheetSidePanel.filePath}
-                columnNames={columnList}
+                columnNames={flatColumnList}
                 columnStats={columnStats}
                 initialColumns={spreadsheetSidePanel.initialColumns}
                 columnSampleValues={columnSampleValues}

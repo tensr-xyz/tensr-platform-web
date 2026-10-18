@@ -42,6 +42,17 @@ function valueCodes(labels: Record<string, string> | undefined): string[] | unde
   });
 }
 
+/** Wide columns that belong in the loop group instead of the flat column list. */
+export function loopMemberNames(loops: LoopDefinition[]): string[] {
+  const names = new Set<string>();
+  for (const loop of loops) {
+    for (const member of loop.members || []) {
+      if (member.column) names.add(member.column);
+    }
+  }
+  return [...names];
+}
+
 /** At loop level the list is the brand column, the loop questions, and respondent columns. */
 export function loopPickerColumns(
   sheet: Array<{ id: string; label: string }>,

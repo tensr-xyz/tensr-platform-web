@@ -1,4 +1,4 @@
-import { loopPickerColumns, loopProposalSentence } from './loops';
+import { loopMemberNames, loopPickerColumns, loopProposalSentence } from './loops';
 
 const CARS = {
   id: 'aware+likes+owns',
@@ -19,6 +19,10 @@ describe('loop proposals', () => {
     expect(loopProposalSentence({ ...CARS, item_title: undefined })).toBe(
       'aware, owns, likes asked for brands A, B, C'
     );
+  });
+
+  it('names the wide columns that belong in the group', () => {
+    expect(loopMemberNames([CARS])).toEqual(['aware_A', 'owns_A']);
   });
 
   it('lists the loop questions and hides the wide columns', () => {

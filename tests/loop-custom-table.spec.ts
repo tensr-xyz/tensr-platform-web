@@ -55,12 +55,15 @@ test('uploads cars_EN.sav, confirms the loop, and tables aware by brand', async 
   await page.getByRole('button', { name: 'Upload and open' }).click();
   await expect(page).toHaveURL(/\/workspace\/dataset\//, { timeout: 30_000 });
 
+  const loops = page.getByRole('region', { name: 'Loops' });
+  await expect(loops.getByText('aware, likes, owns asked for brands A, B, C')).toBeVisible();
+  await loops.getByRole('button', { name: 'Confirm' }).click();
+  await expect(loops.getByLabel('Brand label')).toHaveValue('Brand');
+
   await openAnalysisPalette(page);
   await selectPaletteTab(page, 'Analyze');
   await paletteItem(page, 'Custom Tables').click();
   const dialog = page.getByRole('dialog', { name: 'Custom Tables' });
-  await expect(dialog.getByText('aware, likes, owns asked for brands A, B, C')).toBeVisible();
-  await dialog.getByRole('button', { name: 'Confirm' }).click();
   await dialog.getByRole('radio', { name: 'Brand' }).check();
   await expect(dialog.getByRole('option', { name: 'aware_A' })).toHaveCount(0);
   await dialog.getByRole('option', { name: /Are you aware of/ }).click();
@@ -72,6 +75,7 @@ test('uploads cars_EN.sav, confirms the loop, and tables aware by brand', async 
 
   await expect(dialog.getByText('n = 300 respondents')).toBeVisible();
   await expect(dialog.getByText('Significance tests are paired across brands.')).toBeVisible();
+  await expect(dialog.getByText('base n=300').first()).toBeVisible();
   const awareA = dialog.getByRole('cell', { name: /80\.46%/ });
   await expect(awareA).toBeVisible();
   await expect(awareA.locator('sup')).toHaveText(/c/);
