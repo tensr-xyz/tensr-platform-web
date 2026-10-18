@@ -12,7 +12,7 @@ test.skip(
 );
 
 test('uploads cars_EN.sav, confirms the loop, and tables aware by brand', async ({ page }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(180_000);
   await seedE2eSession(page);
   // The branch API's test auth does not attach a paid plan to /api/me, so the
   // subscription gate never opens the form. Upload, confirm, and the table stay
@@ -79,4 +79,12 @@ test('uploads cars_EN.sav, confirms the loop, and tables aware by brand', async 
   const awareA = dialog.getByRole('cell', { name: /80\.46%/ });
   await expect(awareA).toBeVisible();
   await expect(awareA.locator('sup')).toHaveText(/c/);
+
+  await page.keyboard.press('Escape');
+  const composer = page.getByPlaceholder('Ask about your data…');
+  await composer.fill('awareness by brand');
+  await composer.press('Enter');
+  await expect(page.getByText(/The brand table is in the result|Loop level/)).toBeVisible({
+    timeout: 60_000,
+  });
 });
