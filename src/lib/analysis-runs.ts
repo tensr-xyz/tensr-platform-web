@@ -18,6 +18,15 @@ export function provenanceTraceState(provenance: unknown): ProvenanceTraceState 
     return { kind: 'unknown' };
   }
   const p = provenance as Record<string, unknown>;
+  const bitsets = p.origin_bitsets;
+  if (
+    p.provenance_scope === 'per_origin' &&
+    bitsets &&
+    typeof bitsets === 'object' &&
+    Object.keys(bitsets as object).length > 0
+  ) {
+    return { kind: 'complete' };
+  }
   const unavailable = p.provenance_unavailable;
   if (typeof unavailable === 'string' && unavailable.trim()) {
     return { kind: 'unavailable', reason: unavailable.trim() };
@@ -41,6 +50,12 @@ export function provenanceBannerText(state: ProvenanceTraceState): string | null
     );
   }
   if (state.kind === 'unavailable') {
+    if (state.reason === 'multi_origin') {
+      return (
+        'This table combines more than one file. ' +
+        'Some rows are not cited against a source file, so the trace is incomplete.'
+      );
+    }
     return (
       `Provenance unavailable: ${state.reason}. ` +
       'These numbers should not be trusted as a complete row set.'

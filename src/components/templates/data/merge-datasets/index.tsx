@@ -421,11 +421,7 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
         </div>
 
         <DialogFooter>
-          <Button
-            type="button"
-            onClick={handlePreview}
-            disabled={isLoading || !primaryDatasetId}
-          >
+          <Button type="button" onClick={handlePreview} disabled={isLoading || !primaryDatasetId}>
             {isLoading ? 'Working...' : 'Preview match'}
           </Button>
           <Button type="button" onClick={handleMerge} disabled={isLoading || !previewReady}>
