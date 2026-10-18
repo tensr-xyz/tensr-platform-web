@@ -1,3 +1,4 @@
+import { gridDataKeys } from '@/lib/sheet-grid-align';
 import { ReactNode, useState, useMemo } from 'react';
 import {
   Dialog,
@@ -90,7 +91,7 @@ export const HandleMissingDataDialog = ({ children }: HandleMissingDataProps) =>
     if (!activeTab?.data?.initialData?.[0]) {
       return [];
     }
-    const cols = Object.keys(activeTab.data.initialData[0]).filter(key => key !== 'id');
+    const cols = gridDataKeys(activeTab.data.initialData[0]);
     return cols;
   }, [activeTab?.data?.initialData]);
 

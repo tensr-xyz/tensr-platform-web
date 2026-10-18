@@ -8,6 +8,7 @@ export type ColumnMetadata = {
   value_labels?: Record<string, string> | null;
   missing?: { user_values?: unknown; ranges?: unknown } | null;
   measure?: 'nominal' | 'ordinal' | 'scale' | string | null;
+  eligible_if?: Array<{ column: string; op: string; value: string }> | null;
 };
 
 export type SchemaColumn = {
@@ -194,6 +195,11 @@ export type AnalysisReport = {
     generated_at: string;
     rows_dataset: number;
     spss_procedure?: string;
+    output_preferences?: {
+      apaFormat?: boolean;
+      includeCharts?: boolean;
+      decimalPlaces?: number;
+    };
   };
   summary: string;
   /** Combined narrative text (summary + follow-up paragraphs). */

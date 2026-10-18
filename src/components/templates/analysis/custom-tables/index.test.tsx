@@ -1,8 +1,11 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { CustomTablesDialog } from './index';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
 import { replayOperations } from '@/lib/dataset-data-ops';
+import { listSavedTables, previewCustomTable, runCustomTable } from '@/lib/custom-tables/api';
+import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
+import { runDatasetAnalysis } from '@/lib/workspace-analysis';
 
 jest.mock('@/utils/auth', () => ({ getAccessToken: () => 'token' }));
 jest.mock('@/lib/dataset-data-ops', () => ({
@@ -21,6 +24,12 @@ jest.mock('@/lib/custom-tables/api', () => ({
   drillTableCell: jest.fn(),
   saveNamedBanner: jest.fn(),
 }));
+jest.mock('@/lib/workspace-analysis', () => ({
+  runDatasetAnalysis: jest.fn(async () => ({ report: { title: 'Banner' }, run_id: 'run-1' })),
+}));
+jest.mock('@/lib/open-analysis-result-tab', () => ({
+  openAnalysisResultTab: jest.fn(),
+}));
 jest.mock('@/components/molecules/dialog', () => {
   const Pass = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   return {
@@ -34,6 +43,11 @@ jest.mock('@/components/molecules/dialog', () => {
 });
 
 const replayMock = replayOperations as jest.Mock;
+const previewMock = previewCustomTable as jest.Mock;
+const runMock = runCustomTable as jest.Mock;
+const listSavedMock = listSavedTables as jest.Mock;
+const openReportMock = openAnalysisResultTab as jest.Mock;
+const analyzeMock = runDatasetAnalysis as jest.Mock;
 
 const DATASET_ID = 'cf509f57-0000-4000-8000-000000000001';
 
@@ -117,6 +131,65 @@ describe('Custom Tables dialog', () => {
         operation_list: expect.objectContaining({ schema_version: 1 }),
       }),
       'token'
+    );
+  });
+
+  it('keeps a plain Run out of Saved tables and confirms Run and save', async () => {
+    previewMock.mockResolvedValue({ warnings: [] });
+    runMock.mockResolvedValue({
+      spec: { id: 'spec-1' },
+      banner_columns: [],
+      rows: [],
+    });
+    render(
+      <CustomTablesDialog>
+        <span>Open</span>
+      </CustomTablesDialog>
+    );
+    fireEvent.click(screen.getByRole('option', { name: 'Q1_Satisfaction' }));
+    fireEvent.click(screen.getByLabelText(/Banner \(columns\)/));
+    fireEvent.click(screen.getByRole('option', { name: 'Group' }));
+
+    expect(screen.getByText(/Run and save stores the spec/)).toBeInTheDocument();
+    expect(screen.queryByText(/Run stores the spec/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+    await waitFor(() => expect(runMock).toHaveBeenCalled());
+    expect(runMock).toHaveBeenCalledWith(
+      DATASET_ID,
+      expect.objectContaining({ save: false }),
+      'token'
+    );
+    expect(previewMock).toHaveBeenCalledWith(
+      DATASET_ID,
+      expect.objectContaining({ save: false }),
+      'token'
+    );
+    expect(listSavedMock).not.toHaveBeenCalled();
+    expect(screen.queryByText('Table saved.')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run and save' }));
+    expect(await screen.findByText('Table saved.')).toBeInTheDocument();
+    expect(runMock).toHaveBeenCalledTimes(2);
+    expect(runMock.mock.calls.filter(call => call[1]?.save === true)).toHaveLength(1);
+    expect(previewMock.mock.calls.every(call => call[1]?.save === false)).toBe(true);
+    expect(listSavedMock).toHaveBeenCalledTimes(1);
+    expect(listSavedMock).toHaveBeenCalledWith(DATASET_ID, 'token');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open report' }));
+    await waitFor(() => expect(analyzeMock).toHaveBeenCalled());
+    expect(analyzeMock).toHaveBeenCalledWith(
+      DATASET_ID,
+      'banner_table',
+      expect.objectContaining({
+        stub_column: 'Q1_Satisfaction',
+        banner_column: 'Group',
+        letter_upper_alpha: 0.01,
+        multiple_comparison: 'fdr',
+      })
+    );
+    expect(openReportMock).toHaveBeenCalledWith(
+      expect.objectContaining({ op: 'banner_table', sourceDatasetId: DATASET_ID })
     );
   });
 });

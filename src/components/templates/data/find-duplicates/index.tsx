@@ -1,3 +1,4 @@
+import { gridDataKeys } from '@/lib/sheet-grid-align';
 import { ReactNode, useMemo, useState } from 'react';
 import {
   Dialog,
@@ -49,7 +50,7 @@ export const FindDuplicatesDialog = ({ children }: DuplicateDialogProps) => {
     if (!activeTab?.data?.initialData?.[0]) {
       return [];
     }
-    return Object.keys(activeTab.data.initialData[0]).filter(key => key !== 'id');
+    return gridDataKeys(activeTab.data.initialData[0]);
   }, [activeTab?.data?.initialData]);
 
   const toggleColumn = (column: string) => {

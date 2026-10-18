@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import {
   Dialog,
@@ -31,6 +31,8 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { getAccessToken } from '@/utils/auth';
+import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
+import { runDatasetAnalysis } from '@/lib/workspace-analysis';
 import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
 import { datasetRequest, replayOperations, setActiveWeight } from '@/lib/dataset-data-ops';
 import { LINEAGE_HIDDEN_COLUMNS } from '@/lib/adopt-derived-dataset';
@@ -122,6 +124,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [variableSets, setVariableSets] = useState<Array<{ id: string; label: string }>>([]);
   const [targetZone, setTargetZone] = useState<'stub' | 'banner'>('stub');
   const [activeVariable, setActiveVariable] = useState(0);
+  const [savedNotice, setSavedNotice] = useState(false);
+  const runLock = useRef(false);
 
   const columns = useMemo(() => {
     if (!sheetTab?.data?.initialColumns) return variableSets;
@@ -237,7 +241,51 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     setCanvas(c => applyNetToStub(c, stubIndex, net));
   };
 
-  const run = async () => {
+  const openSavedReport = async () => {
+    if (!datasetId || !canvas.stubs[0] || !canvas.banners[0]) return;
+    const request = buildTableRequest(canvas);
+    const stub = canvas.stubs[0];
+    const analyze: Record<string, unknown> = {
+      stub_column: stub.column,
+      banner_column: canvas.banners[0].column,
+      stubs: request.stubs,
+      banner: request.banner,
+      statistics: request.statistics,
+      significance_display: request.significance_display,
+      significance_alpha: request.significance_alpha,
+      letter_levels: request.letter_levels,
+      letter_case: request.letter_case,
+      letter_upper_alpha: request.letter_upper_alpha,
+      multiple_comparison: 'fdr',
+      nest_banners: request.nest_banners,
+      column_percent: true,
+      column_letters: request.significance_display !== 'cell_comparisons',
+      decimals: request.decimals,
+      low_base_threshold: request.low_base_threshold,
+      suppress_low_base: request.suppress_low_base,
+    };
+    if (stub.nets.length) analyze.nets = stub.nets;
+    if (request.banner_id) analyze.banner_id = request.banner_id;
+    setBusy(true);
+    setError(null);
+    try {
+      const envelope = await runDatasetAnalysis(datasetId, 'banner_table', analyze);
+      openAnalysisResultTab({
+        op: 'banner_table',
+        envelope,
+        parameters: analyze,
+        sourceDatasetId: datasetId,
+        sourceTabName: sheetTab?.name,
+      });
+    } catch (e) {
+      setError(formatApiErrorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const run = async (persist: boolean) => {
+    if (runLock.current) return;
     if (!datasetId) {
       setError(WORKSPACE_DATASET_REQUIRED);
       return;
@@ -249,17 +297,20 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     setBusy(true);
     setError(null);
     setPreviewWarning(null);
+    setSavedNotice(false);
     captureProductEvent('analysis_started', {
       where: 'custom_tables',
       analysis_type: 'banner_table',
       dataset_id: datasetId,
     });
     const body = buildTableRequest(canvas);
+    body.save = persist;
     const selectedWeight = weightOptions.find(o => o.optionId === weightChoice);
     if (selectedWeight?.weight === 'none') body.weight = 'none';
     const runId = runDatasetId;
+    runLock.current = true;
     try {
-      const preview = await previewCustomTable(runId, body, token);
+      const preview = await previewCustomTable(runId, { ...body, save: false }, token);
       const warn = (preview.warnings || [])
         .map(w => w.message)
         .filter(Boolean)
@@ -289,7 +340,10 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       if (result.spec?.banner_id) {
         setCanvas(c => ({ ...c, bannerId: String(result.spec?.banner_id) }));
       }
-      await refreshSavedSpecs(runId);
+      if (persist) {
+        await refreshSavedSpecs(runId);
+        setSavedNotice(true);
+      }
       captureProductEvent('analysis_completed', {
         where: 'custom_tables',
         analysis_type: 'banner_table',
@@ -306,6 +360,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       captureProductException(e, { where: 'custom_tables' });
       setError(formatApiErrorMessage(e));
     } finally {
+      runLock.current = false;
       setBusy(false);
     }
   };
@@ -943,8 +998,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               Saved tables
             </p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Run stores the spec. Reopen regenerates cells from the parquet. Save a book to run
-              this set on another wave.
+              Run and save stores the spec. Reopen regenerates cells from the parquet. Save a book
+              to run this set on another wave.
             </p>
             <div className="mt-2 flex gap-2">
               <Input
@@ -1174,7 +1229,24 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           >
             Run these tables on this file
           </Button>
-          <Button type="button" onClick={() => void run()} disabled={busy}>
+          {savedNotice ? (
+            <div className="mr-auto flex items-center gap-2 text-xs">
+              <span>Table saved.</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void openSavedReport()}
+                disabled={busy}
+              >
+                Open report
+              </Button>
+            </div>
+          ) : null}
+          <Button type="button" variant="outline" onClick={() => void run(false)} disabled={busy}>
+            {busy ? 'Running…' : 'Run'}
+          </Button>
+          <Button type="button" onClick={() => void run(true)} disabled={busy}>
             {busy ? 'Running…' : 'Run and save'}
           </Button>
         </DialogFooter>

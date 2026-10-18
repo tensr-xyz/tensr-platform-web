@@ -1092,14 +1092,22 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     }
     const filter = form.bannerFilter.trim();
     if (filter) body.filter = filter;
-    const nets = form.bannerNets.trim();
-    if (nets) {
-      try {
-        body.nets = JSON.parse(nets);
-      } catch {
-        body.nets = nets;
-      }
-    }
+    const nets = form.bannerNetRows
+      .map(row => ({
+        label: row.label.trim(),
+        values: row.codes
+          .split(/[,\s]+/)
+          .map(code => code.trim())
+          .filter(Boolean),
+      }))
+      .filter(row => row.label && row.values.length);
+    if (nets.length) body.nets = nets;
+    body.significance_display = 'column_letters';
+    body.significance_alpha = 0.05;
+    body.letter_levels = 2;
+    body.letter_case = 'lower';
+    body.letter_upper_alpha = 0.01;
+    body.multiple_comparison = 'fdr';
     body.apa_format = form.apaFormat;
     body.include_charts = form.includeCharts;
     return body;
@@ -1678,7 +1686,7 @@ export function defaultFormFieldsFromSchema(
     bannerWeight: '',
     bannerDecimals: '',
     bannerFilter: '',
-    bannerNets: '',
+    bannerNetRows: [] as BannerNetRow[],
     apaFormat: false,
     includeCharts: false,
   };
@@ -1780,10 +1788,65 @@ export type AnalysisFormState = {
   bannerWeight: string;
   bannerDecimals: string;
   bannerFilter: string;
-  bannerNets: string;
+  bannerNetRows: BannerNetRow[];
   apaFormat: boolean;
   includeCharts: boolean;
 };
+
+export type BannerNetRow = { label: string; codes: string };
+
+function bannerNetRowsFromBody(body: Record<string, unknown>): BannerNetRow[] {
+  const stubs = Array.isArray(body.stubs) ? body.stubs : [];
+  const first = stubs.find(item => item && typeof item === 'object') as
+    | { nets?: unknown }
+    | undefined;
+  const raw = Array.isArray(body.nets) ? body.nets : Array.isArray(first?.nets) ? first.nets : [];
+  return raw
+    .filter((net): net is { label?: unknown; values?: unknown } => !!net && typeof net === 'object')
+    .map(net => ({
+      label: String(net.label || ''),
+      codes: Array.isArray(net.values) ? net.values.map(value => String(value)).join(', ') : '',
+    }))
+    .filter(row => row.label || row.codes);
+}
+
+/** Re-run setup. Report output preferences fill APA and charts when the body omitted them. */
+export function bannerRerunPrefill(
+  requestBody: Record<string, unknown> | null,
+  parameters: Record<string, unknown> | null,
+  outputPreferences?: { apaFormat?: boolean; includeCharts?: boolean } | null
+): Record<string, unknown> {
+  const prefill: Record<string, unknown> = { ...(requestBody ?? {}) };
+  for (const [key, value] of Object.entries(parameters ?? {})) {
+    if (key !== 'run_id') prefill[key] = value;
+  }
+  delete prefill.run_id;
+  if (outputPreferences) {
+    if (
+      prefill.apa_format == null &&
+      prefill.apaFormat == null &&
+      typeof outputPreferences.apaFormat === 'boolean'
+    ) {
+      prefill.apa_format = outputPreferences.apaFormat;
+    }
+    if (
+      prefill.include_charts == null &&
+      prefill.includeCharts == null &&
+      typeof outputPreferences.includeCharts === 'boolean'
+    ) {
+      prefill.include_charts = outputPreferences.includeCharts;
+    }
+  }
+  return prefill;
+}
+
+/** Places a banner percent table used. One decimal when the spec did not set any. */
+export function bannerTableDecimalPlaces(body: Record<string, unknown>): number {
+  const fromTable = bannerDecimalPlaces(body.decimals);
+  const places = Number(fromTable);
+  if (fromTable && Number.isFinite(places)) return Math.max(0, Math.min(6, Math.round(places)));
+  return 1;
+}
 
 function bannerDecimalPlaces(value: unknown): string {
   if (typeof value === 'number' && Number.isFinite(value)) return String(Math.round(value));
@@ -2011,16 +2074,15 @@ export function formStateFromBody(
   }
   if (op === 'banner_table') {
     state.bannerWeight = typeof body.weight === 'string' ? body.weight : '';
-    state.bannerDecimals = bannerDecimalPlaces(body.decimals ?? body.decimal_places);
+    // A bare decimal_places of 3 is the analyze default. A percent table with
+    // no spec places is shown to 1 decimal (14.7%, not 14.729%).
+    state.bannerDecimals = String(bannerTableDecimalPlaces(body));
     state.bannerFilter = typeof body.filter === 'string' ? body.filter : '';
-    state.bannerNets =
-      body.nets == null
-        ? ''
-        : typeof body.nets === 'string'
-          ? body.nets
-          : JSON.stringify(body.nets);
-    state.apaFormat = body.apa_format === true;
-    state.includeCharts = body.include_charts === true;
+    state.bannerNetRows = bannerNetRowsFromBody(body);
+    const apa = body.apa_format ?? body.apaFormat;
+    const charts = body.include_charts ?? body.includeCharts;
+    if (typeof apa === 'boolean') state.apaFormat = apa;
+    if (typeof charts === 'boolean') state.includeCharts = charts;
   }
   return state;
 }

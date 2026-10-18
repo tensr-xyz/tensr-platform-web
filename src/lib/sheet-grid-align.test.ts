@@ -1,4 +1,9 @@
-import { gridRowsForColumns, gridRowsFromPreview } from './sheet-grid-align';
+import {
+  gridDataKeys,
+  gridRowsForColumns,
+  gridRowsFromPreview,
+  gridRowsFromStoredRecords,
+} from './sheet-grid-align';
 
 describe('sheet grid alignment', () => {
   it('renders the weight column as numbers when hidden uid columns sit in front', () => {
@@ -42,5 +47,33 @@ describe('sheet grid alignment', () => {
     expect(String(rows[0]['Survey weight, raked to targets.csv'])).not.toMatch(
       /[0-9a-f]{8}-[0-9a-f]{4}-/
     );
+  });
+
+  it('keeps a column named id, and any other column name, separate from the row key', () => {
+    const columns = [{ id: 'id' }, { id: 'row-0' }, { id: 'score' }];
+    const rows = gridRowsForColumns(
+      [
+        [1, 2],
+        ['kept', 'also'],
+        [9, 8],
+      ],
+      ['id', 'row-0', 'score'],
+      columns
+    );
+    expect(rows[0].id).toBe(1);
+    expect(rows[1].id).toBe(2);
+    expect(rows[0]['row-0']).toBe('kept');
+    expect(Object.keys(rows[0])).toEqual(['id', 'row-0', 'score']);
+
+    const stored = rows.map(row => ({ ...row }));
+    expect(stored[0].id).toBe(1);
+    const rebuilt = gridRowsFromStoredRecords(stored, columns);
+    expect(rebuilt.map(row => row.id)).toEqual([1, 2]);
+    expect(rebuilt[0]['row-0']).toBe('kept');
+  });
+
+  it('does not treat a real id column as the synthetic row key', () => {
+    expect(gridDataKeys({ id: 1, score: 3 })).toEqual(['id', 'score']);
+    expect(gridDataKeys({ id: 'row-0', score: 3 })).toEqual(['score']);
   });
 });

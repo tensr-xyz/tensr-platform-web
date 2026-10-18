@@ -41,5 +41,26 @@ export function mergeUnmatchedReportLines(report: MergeReport, keyed: boolean): 
   for (const note of report.type_coercions || []) {
     lines.push(`${note.column}: ${note.detail}`);
   }
+  for (const clash of report.label_conflicts || []) {
+    if (
+      clash.kind === 'same_code_different_label' &&
+      clash.code != null &&
+      clash.left_label != null &&
+      clash.right_label != null
+    ) {
+      lines.push(
+        `${clash.column} code ${clash.code} is "${clash.left_label}" here and "${clash.right_label}" in another file.`
+      );
+    } else if (
+      clash.kind === 'same_label_different_code' &&
+      clash.label != null &&
+      clash.left_code != null &&
+      clash.right_code != null
+    ) {
+      lines.push(
+        `${clash.column} label "${clash.label}" is code ${clash.left_code} here and code ${clash.right_code} in another file.`
+      );
+    }
+  }
   return lines;
 }
