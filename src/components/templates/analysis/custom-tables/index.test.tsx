@@ -150,9 +150,17 @@ describe('Custom Tables dialog', () => {
     fireEvent.click(screen.getByLabelText(/Banner \(columns\)/));
     fireEvent.click(screen.getByRole('option', { name: 'Group' }));
 
+    expect(screen.getByText(/Run and save stores the spec/)).toBeInTheDocument();
+    expect(screen.queryByText(/Run stores the spec/)).not.toBeInTheDocument();
+
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(runMock).toHaveBeenCalled());
     expect(runMock).toHaveBeenCalledWith(
+      DATASET_ID,
+      expect.objectContaining({ save: false }),
+      'token'
+    );
+    expect(previewMock).toHaveBeenCalledWith(
       DATASET_ID,
       expect.objectContaining({ save: false }),
       'token'
@@ -162,11 +170,10 @@ describe('Custom Tables dialog', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Run and save' }));
     expect(await screen.findByText('Table saved.')).toBeInTheDocument();
-    expect(runMock).toHaveBeenLastCalledWith(
-      DATASET_ID,
-      expect.not.objectContaining({ save: false }),
-      'token'
-    );
+    expect(runMock).toHaveBeenCalledTimes(2);
+    expect(runMock.mock.calls.filter(call => call[1]?.save === true)).toHaveLength(1);
+    expect(previewMock.mock.calls.every(call => call[1]?.save === false)).toBe(true);
+    expect(listSavedMock).toHaveBeenCalledTimes(1);
     expect(listSavedMock).toHaveBeenCalledWith(DATASET_ID, 'token');
 
     fireEvent.click(screen.getByRole('button', { name: 'Open report' }));
