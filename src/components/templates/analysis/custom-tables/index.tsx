@@ -1,6 +1,6 @@
 'use client';
 
-import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { FileText } from 'lucide-react';
 import {
   Dialog,
@@ -125,6 +125,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [targetZone, setTargetZone] = useState<'stub' | 'banner'>('stub');
   const [activeVariable, setActiveVariable] = useState(0);
   const [savedNotice, setSavedNotice] = useState(false);
+  const runLock = useRef(false);
 
   const columns = useMemo(() => {
     if (!sheetTab?.data?.initialColumns) return variableSets;
@@ -284,6 +285,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   };
 
   const run = async (persist: boolean) => {
+    if (runLock.current) return;
     if (!datasetId) {
       setError(WORKSPACE_DATASET_REQUIRED);
       return;
@@ -302,12 +304,13 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       dataset_id: datasetId,
     });
     const body = buildTableRequest(canvas);
-    if (!persist) body.save = false;
+    body.save = persist;
     const selectedWeight = weightOptions.find(o => o.optionId === weightChoice);
     if (selectedWeight?.weight === 'none') body.weight = 'none';
     const runId = runDatasetId;
+    runLock.current = true;
     try {
-      const preview = await previewCustomTable(runId, body, token);
+      const preview = await previewCustomTable(runId, { ...body, save: false }, token);
       const warn = (preview.warnings || [])
         .map(w => w.message)
         .filter(Boolean)
@@ -357,6 +360,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       captureProductException(e, { where: 'custom_tables' });
       setError(formatApiErrorMessage(e));
     } finally {
+      runLock.current = false;
       setBusy(false);
     }
   };
@@ -994,8 +998,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               Saved tables
             </p>
             <p className="mt-0.5 text-[11px] text-muted-foreground">
-              Run stores the spec. Reopen regenerates cells from the parquet. Save a book to run
-              this set on another wave.
+              Run and save stores the spec. Reopen regenerates cells from the parquet. Save a book
+              to run this set on another wave.
             </p>
             <div className="mt-2 flex gap-2">
               <Input
