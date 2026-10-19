@@ -9,6 +9,7 @@ import {
   resolveWorkspaceSelection,
   saveActiveOrganisationId,
 } from '@/lib/active-organisation';
+import { storedAgentVersion } from '@/lib/agent-version';
 import { devLog } from '@/lib/dev-log';
 import { mapApiInvitation, type OrganizationInvitation } from '@/lib/organization-invitations';
 import {
@@ -39,7 +40,7 @@ function mapApiOrganization(raw: Record<string, unknown>): Organization {
     slug: raw.slug as string | undefined,
     logoUrl: raw.logo_url as string | undefined,
     privacyMode: raw.privacy_mode === 'schema_only' ? 'schema_only' : 'full',
-    agentVersion: raw.agent_version === 'v2' ? 'v2' : 'v1',
+    agentVersion: storedAgentVersion(raw.agent_version),
     isPersonal: readIsPersonal(raw),
   };
 }

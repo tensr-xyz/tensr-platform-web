@@ -16,6 +16,23 @@ describe('needsEmailFromResponse', () => {
     expect(error).toBeInstanceOf(NeedsEmailError);
     expect(error?.firstName).toBe('Oliver');
     expect(error?.stytchUserId).toBe('user-live-1');
+    expect(error?.suggestedEmail).toBeNull();
+  });
+
+  it('keeps the Microsoft sign-in name as a suggestion', () => {
+    const error = needsEmailFromResponse(
+      409,
+      JSON.stringify({
+        detail: {
+          code: 'needs_email',
+          stytch_user_id: 'user-live-ms',
+          first_name: 'Ollie',
+          last_name: 'Darby',
+          suggested_email: 'ollie.darby@tensr.xyz',
+        },
+      })
+    );
+    expect(error?.suggestedEmail).toBe('ollie.darby@tensr.xyz');
   });
 
   it('ignores other responses', () => {

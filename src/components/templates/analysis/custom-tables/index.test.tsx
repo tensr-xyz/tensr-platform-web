@@ -19,6 +19,11 @@ jest.mock('@/lib/custom-tables/api', () => ({
   listSavedTables: jest.fn(async () => ({ specs: [] })),
   listNamedBanners: jest.fn(async () => ({ banners: [] })),
   listDatasetVersions: jest.fn(async () => ({ origin_dataset_id: 'ds', versions: [] })),
+  fetchColumnValues: jest.fn(async (_datasetId: string, column: string) => ({
+    column,
+    values: column === 'Group' ? ['Control'] : ['1'],
+  })),
+  fetchActiveWeight: jest.fn(async () => ({ active_weight_column: null })),
   getSavedTable: jest.fn(),
   downloadTableExport: jest.fn(),
   drillTableCell: jest.fn(),
@@ -149,6 +154,7 @@ describe('Custom Tables dialog', () => {
     fireEvent.click(screen.getByRole('option', { name: 'Q1_Satisfaction' }));
     fireEvent.click(screen.getByLabelText(/Banner \(columns\)/));
     fireEvent.click(screen.getByRole('option', { name: 'Group' }));
+    expect(await screen.findByText('Control')).toBeInTheDocument();
 
     expect(screen.getByText(/Run and save stores the spec/)).toBeInTheDocument();
     expect(screen.queryByText(/Run stores the spec/)).not.toBeInTheDocument();

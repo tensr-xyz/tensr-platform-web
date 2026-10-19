@@ -17,6 +17,7 @@ const mockStorePendingInviteToken = jest.fn();
 const mockCapture = jest.fn();
 const mockRedeemStoredReferral = jest.fn();
 const mockStoreReferralCode = jest.fn();
+const mockSendSessionEmailCode = jest.fn();
 
 let searchParams = new URLSearchParams();
 
@@ -36,6 +37,11 @@ type AuthState = {
   hasActiveSubscription: boolean;
   entitlements: { plan_code: string } | null;
   error: string | null;
+  needsEmail: {
+    firstName: string | null;
+    lastName: string | null;
+    suggestedEmail: string | null;
+  } | null;
   stytch: typeof fakeStytch | null;
 };
 
@@ -65,7 +71,7 @@ jest.mock('@/hooks/api/use-auth', () => ({
 jest.mock('@/lib/business-api', () => ({
   redeemStoredInvitation: (...a: unknown[]) => mockRedeemStoredInvitation(...a),
   storePendingInviteToken: (...a: unknown[]) => mockStorePendingInviteToken(...a),
-  sendSessionEmailCode: jest.fn(),
+  sendSessionEmailCode: (...a: unknown[]) => mockSendSessionEmailCode(...a),
   NeedsEmailError: class NeedsEmailError extends Error {},
 }));
 
@@ -103,6 +109,7 @@ const loggedOut: AuthState = {
   hasActiveSubscription: false,
   entitlements: null,
   error: null,
+  needsEmail: null,
   stytch: fakeStytch,
 };
 
@@ -209,6 +216,27 @@ describe('LoginTemplate', () => {
       searchParams = new URLSearchParams('stytch_token_type=magic_links&token=ml-1');
       render(<LoginTemplate />);
       expect(mockOAuthAuthenticate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Microsoft account with no mailbox', () => {
+    it('prefills the sign-in name and shows a send failure once', async () => {
+      authState = {
+        ...loggedOut,
+        needsEmail: {
+          firstName: 'Ollie',
+          lastName: 'Darby',
+          suggestedEmail: 'ollie.darby@tensr.xyz',
+        },
+      };
+      mockSendSessionEmailCode.mockRejectedValue(new Error('Not Found'));
+      render(<LoginTemplate />);
+
+      expect(await screen.findByDisplayValue('ollie.darby@tensr.xyz')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /send code/i }));
+
+      expect(await screen.findAllByText("Couldn't send the code, try again")).toHaveLength(1);
+      expect(screen.queryByText('Not Found')).not.toBeInTheDocument();
     });
   });
 

@@ -84,6 +84,12 @@ describe('provenanceTraceState', () => {
       kind: 'unavailable',
       reason: 'multi_origin',
     });
+    expect(
+      provenanceTraceState({
+        provenance_scope: 'per_origin',
+        origin_bitsets: { en: { hit_count: 2 }, fr: { hit_count: 1 } },
+      })
+    ).toEqual({ kind: 'complete' });
   });
 
   it('is complete only with a bitset and no misses', () => {
@@ -102,7 +108,7 @@ describe('provenanceBannerText', () => {
 
   it('prints unavailable with the reason, distinct from unknown', () => {
     expect(provenanceBannerText({ kind: 'unavailable', reason: 'multi_origin' })).toBe(
-      'Provenance unavailable: multi_origin. These numbers should not be trusted as a complete row set.'
+      'This table combines more than one file. Some rows are not cited against a source file, so the trace is incomplete.'
     );
   });
 

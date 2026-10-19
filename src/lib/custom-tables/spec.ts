@@ -121,6 +121,14 @@ export function defaultCanvas(): CustomTableCanvas {
   };
 }
 
+const SOURCE_FILE_EXTENSION = /\.(sav|zsav|csv|xlsx|xls|dta|sss|parquet|json|txt)$/i;
+
+/** Banner and stub chips show cars_DE, including when the stored code is cars_DE.sav. */
+export function displayCategory(column: string, value: string): string {
+  if (column !== 'source_wave' && !column.startsWith('source_wave')) return value;
+  return value.replace(SOURCE_FILE_EXTENSION, '');
+}
+
 export function uniqueColumnValues(rows: Array<Record<string, unknown>>, column: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
@@ -140,30 +148,38 @@ export function uniqueColumnValues(rows: Array<Record<string, unknown>>, column:
   return out;
 }
 
-function questionFromColumn(
+function questionFromValues(
   column: string,
-  rows: Array<Record<string, unknown>>
+  values: string[]
 ): { column: string; values: string[] } {
-  return { column, values: uniqueColumnValues(rows, column) };
+  const seen = new Set<string>();
+  const kept: string[] = [];
+  for (const value of values) {
+    const text = String(value ?? '').trim();
+    if (!text || seen.has(text)) continue;
+    seen.add(text);
+    kept.push(text);
+  }
+  return { column, values: kept };
 }
 
 export function addStubQuestion(
   canvas: CustomTableCanvas,
   column: string,
-  rows: Array<Record<string, unknown>>
+  values: string[]
 ): CustomTableCanvas {
   if (canvas.stubs.some(s => s.column === column)) return canvas;
-  const q = questionFromColumn(column, rows);
+  const q = questionFromValues(column, values);
   return { ...canvas, stubs: [...canvas.stubs, { ...q, nets: [] }] };
 }
 
 export function addBannerQuestion(
   canvas: CustomTableCanvas,
   column: string,
-  rows: Array<Record<string, unknown>>
+  values: string[]
 ): CustomTableCanvas {
   if (canvas.banners.some(b => b.column === column)) return canvas;
-  const q = questionFromColumn(column, rows);
+  const q = questionFromValues(column, values);
   return { ...canvas, banners: [...canvas.banners, { ...q, nested: [] }] };
 }
 
@@ -171,12 +187,12 @@ export function nestUnderBanner(
   canvas: CustomTableCanvas,
   parentIndex: number,
   column: string,
-  rows: Array<Record<string, unknown>>
+  values: string[]
 ): CustomTableCanvas {
   const banners = canvas.banners.map((banner, i) => {
     if (i !== parentIndex) return banner;
     if (banner.nested.some(n => n.column === column) || banner.column === column) return banner;
-    const q = questionFromColumn(column, rows);
+    const q = questionFromValues(column, values);
     return { ...banner, nested: [...banner.nested, { ...q, nested: [] }] };
   });
   return { ...canvas, banners };

@@ -1,4 +1,5 @@
 import {
+  approvalTextAlreadyOnCard,
   approvedRunFailureMessage,
   chartsFromToolResults,
   collectOpenDatasetsFromTabs,
@@ -293,5 +294,12 @@ describe('run-agent-loop client helpers', () => {
 
     expect(charts).toHaveLength(1);
     expect(charts[0]?.title).toBe('Revenue');
+  });
+
+  it('hides the bubble when it repeats the approval card', () => {
+    const plan =
+      'Waiting for approval:\nPlan\n1. compute (Q1_top2, IF(Q1_Satisfaction >= 4, 1, 0))';
+    expect(approvalTextAlreadyOnCard(plan, plan)).toBe(true);
+    expect(approvalTextAlreadyOnCard('Plan: run t-test', 'Compare groups')).toBe(false);
   });
 });

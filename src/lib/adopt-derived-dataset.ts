@@ -52,6 +52,25 @@ export function derivedDatasetFromToolResults(
   return latest;
 }
 
+/** A chat stack returns the new dataset on the tool result. Open it the way Merge does. */
+export function createdDatasetFromToolResults(
+  toolResults: Array<Record<string, unknown>> | undefined
+): DerivedDatasetPayload | null {
+  let latest: DerivedDatasetPayload | null = null;
+  for (const entry of toolResults ?? []) {
+    if (entry.created_dataset !== true) continue;
+    const id = String(entry.dataset_id || '').trim();
+    if (!id) continue;
+    latest = {
+      dataset_id: id,
+      original_filename:
+        typeof entry.original_filename === 'string' ? entry.original_filename : undefined,
+      n_rows: typeof entry.n_rows === 'number' ? entry.n_rows : undefined,
+    };
+  }
+  return latest;
+}
+
 export function derivedWorkspacePath(datasetId: string, filename?: string): string {
   const name = filename?.trim();
   const q = name ? `?name=${encodeURIComponent(name)}` : '';

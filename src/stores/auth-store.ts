@@ -12,6 +12,7 @@ interface Session {
 export type NeedsEmailPrompt = {
   firstName: string | null;
   lastName: string | null;
+  suggestedEmail: string | null;
 };
 
 interface AuthState {

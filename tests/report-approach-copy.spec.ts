@@ -91,7 +91,7 @@ test('Report Approach reads as English and keeps the tool trace behind Show tech
     };
     const approved = Boolean(body?.approved_tool_call || body?.approved_tool_calls);
     const response = approved ? completedResponse() : approvalResponse();
-    if (route.request().url().includes('/agent-loop/stream')) {
+    if (route.request().url().includes('/stream')) {
       await route.fulfill({
         status: 200,
         contentType: 'text/event-stream',
