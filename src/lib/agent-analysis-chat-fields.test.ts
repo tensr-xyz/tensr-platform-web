@@ -1,9 +1,11 @@
 import {
   attachApproachToReport,
   chatFieldsAfterRunAnalysis,
+  collapseRepeatedAnswer,
   preferRicherPlan,
   priorPlanForResult,
   reportCardForOpenedTab,
+  v2FinalAnswerFields,
 } from '@/lib/agent-analysis-chat-fields';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
 
@@ -211,5 +213,34 @@ describe('attachApproachToReport', () => {
     expect(merged?.approach?.plan).toContain('Exploration step');
     expect(merged?.approach?.why_this_test).toBe('New why');
     expect(merged?.approach?.exploration).toBe('trace');
+  });
+});
+
+describe('v2FinalAnswerFields', () => {
+  const answer = 'Q7 is higher in France after the recode.';
+
+  it('keeps one copy of an answer that was pasted three times', () => {
+    expect(collapseRepeatedAnswer(`${answer}\n\n${answer}\n\n${answer}`)).toBe(answer);
+  });
+
+  it('shows the answer once when the report card is the table', () => {
+    const fields = v2FinalAnswerFields({
+      answer: `${answer}\n\n${answer}\n\n${answer}`,
+      reportMarkdown: `${answer}\n\n### Custom Tables\n\n| Q7 | Total |`,
+      hasReportCard: true,
+    });
+    expect(fields.content).toBe(answer);
+    expect(fields.resultMarkdown).toBe('');
+  });
+
+  it('shows the report once when the answer is already the start of it', () => {
+    const report = `${answer}\n\n### Custom Tables\n\n| Q7 | Total |`;
+    const fields = v2FinalAnswerFields({
+      answer,
+      reportMarkdown: report,
+      hasReportCard: false,
+    });
+    expect(fields.content).toBe('');
+    expect(fields.resultMarkdown).toBe(report);
   });
 });
