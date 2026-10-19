@@ -93,7 +93,9 @@ test('a buffered approve stream renders the result as soon as it arrives', async
   await cdp.send('Emulation.setCPUThrottlingRate', { rate: 6 });
 
   const responded = page.waitForResponse(
-    r => r.url().includes('/agent-loop/stream') && r.request().postData()?.includes('approved')
+    r =>
+      (r.url().includes('/agent-loop/stream') || r.url().includes('/agent-loop-v2/stream')) &&
+      r.request().postData()?.includes('approved')
   );
   await page.getByRole('button', { name: 'Approve' }).click();
   await responded;

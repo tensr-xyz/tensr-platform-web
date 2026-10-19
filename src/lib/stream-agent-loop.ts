@@ -166,6 +166,7 @@ export async function streamAgentLoop(
               resume: Boolean(params.resume || params.approvedBatch),
               approved_batch: params.approvedBatch ?? null,
               attachments: params.attachments ?? null,
+              approved_tool_call: params.approvedToolCall ?? null,
               approved_tool_calls: params.approvedToolCalls ?? null,
             }
           : {

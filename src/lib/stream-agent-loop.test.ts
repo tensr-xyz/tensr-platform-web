@@ -181,6 +181,7 @@ describe('streamAgentLoop', () => {
     expect(body.dataset_id).toBe('ds-1');
     expect(body.attachments).toEqual([{ filename: 'extra.csv', content_base64: 'YQ==' }]);
     expect(body.approved_tool_calls[0].name).toBe('import_file');
+    expect(body.approved_tool_call).toBeNull();
   });
 
   it('posts the v2 route, streams text, and resumes a continuing turn', async () => {

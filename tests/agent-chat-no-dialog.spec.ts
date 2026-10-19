@@ -19,7 +19,7 @@ test.describe('Chat stays in chat (no dialog steal)', () => {
       ],
     };
     await page.route('**/assistant/agent-loop**', async route => {
-      if (route.request().url().includes('/agent-loop/stream')) {
+      if (route.request().url().includes('/stream')) {
         await route.fulfill({
           status: 200,
           contentType: 'text/event-stream',

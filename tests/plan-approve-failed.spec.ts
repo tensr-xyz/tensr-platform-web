@@ -39,7 +39,7 @@ async function planThenApprove(page: Page, approved: ApprovedReply) {
       approved_tool_calls?: unknown;
     };
     const isApprove = Boolean(body?.approved_tool_call || body?.approved_tool_calls);
-    const stream = route.request().url().includes('/agent-loop/stream');
+    const stream = route.request().url().includes('/stream');
     if (isApprove && approved.status !== 200) {
       await route.fulfill({
         status: approved.status,
