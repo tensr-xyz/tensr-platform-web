@@ -23,6 +23,14 @@ import Link from 'next/link';
 import Image from 'next/image';
 import posthog from 'posthog-js';
 
+function emailCodeSendError(err: unknown): string {
+  const message = err instanceof Error ? err.message.trim() : '';
+  if (!message || /^not found$/i.test(message)) {
+    return "Couldn't send the code, try again";
+  }
+  return message;
+}
+
 const LoginTemplate = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -63,6 +71,12 @@ const LoginTemplate = () => {
   // submit labels, or the form looks like it is sending before the user acts.
   const formBusy =
     isSendingCode || isVerifyingCode || isGoogleLoading || isMicrosoftLoading || isGitHubLoading;
+
+  useEffect(() => {
+    const suggested = needsEmail?.suggestedEmail?.trim();
+    if (!suggested) return;
+    setEmail(current => current || suggested);
+  }, [needsEmail?.suggestedEmail]);
 
   useEffect(() => {
     if (!isVerifying) {
@@ -224,9 +238,7 @@ const LoginTemplate = () => {
       resendCount.current = 0;
       setCodeNotice('Codes can take a minute. Check spam or quarantine.');
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : 'Failed to send verification email. Please try again.'
-      );
+      setError(emailCodeSendError(err));
       setIsVerifying(false);
     } finally {
       setIsSendingCode(false);
@@ -432,7 +444,6 @@ const LoginTemplate = () => {
                   onChange={event => setEmail(event.target.value)}
                   required
                 />
-                {error ? <p className="text-sm text-destructive">{error}</p> : null}
                 <Button type="submit" className="w-full" disabled={formBusy}>
                   {isSendingCode ? 'Sending code...' : 'Send code'}
                 </Button>
