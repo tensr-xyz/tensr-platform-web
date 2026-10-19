@@ -14,17 +14,20 @@ export class NeedsEmailError extends Error {
   firstName: string | null;
   lastName: string | null;
   stytchUserId: string | null;
+  suggestedEmail: string | null;
 
   constructor(detail: {
     first_name?: string | null;
     last_name?: string | null;
     stytch_user_id?: string | null;
+    suggested_email?: string | null;
   }) {
     super('Add an email to finish signing in');
     this.name = 'NeedsEmailError';
     this.firstName = detail.first_name ?? null;
     this.lastName = detail.last_name ?? null;
     this.stytchUserId = detail.stytch_user_id ?? null;
+    this.suggestedEmail = detail.suggested_email ?? null;
   }
 }
 
@@ -37,6 +40,7 @@ export function needsEmailFromResponse(status: number, text: string): NeedsEmail
         first_name?: string | null;
         last_name?: string | null;
         stytch_user_id?: string | null;
+        suggested_email?: string | null;
       };
     };
     if (body.detail?.code === 'needs_email') return new NeedsEmailError(body.detail);

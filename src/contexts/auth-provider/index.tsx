@@ -152,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             useAuthStore.getState().setNeedsEmail({
               firstName: err.firstName,
               lastName: err.lastName,
+              suggestedEmail: err.suggestedEmail,
             });
             setUser(null);
             setEntitlements(null);

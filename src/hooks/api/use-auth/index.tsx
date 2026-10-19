@@ -144,6 +144,7 @@ export const useAuth = () => {
           useAuthStore.getState().setNeedsEmail({
             firstName: profileError.firstName,
             lastName: profileError.lastName,
+            suggestedEmail: profileError.suggestedEmail,
           });
           setLoading(false);
           return {
