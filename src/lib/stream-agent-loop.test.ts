@@ -161,6 +161,28 @@ describe('streamAgentLoop', () => {
     );
   });
 
+  it('sends attachments and an approved import on the v2 stream', async () => {
+    (global.fetch as jest.Mock).mockResolvedValue(
+      sseFetchResponse(
+        'data: {"type":"result","response":{"status":"awaiting_approval","answer_markdown":"Plan"}}\n\n'
+      )
+    );
+    await streamAgentLoop({
+      message: 'merge this',
+      mode: 'plan',
+      agentVersion: 'v2',
+      datasetId: 'ds-1',
+      attachments: [{ filename: 'extra.csv', content_base64: 'YQ==' }],
+      approvedToolCalls: [
+        { tool_call_id: 'step-1', name: 'import_file', args: { filename: 'extra.csv' } },
+      ],
+    });
+    const body = JSON.parse(String((global.fetch as jest.Mock).mock.calls[0][1].body));
+    expect(body.dataset_id).toBe('ds-1');
+    expect(body.attachments).toEqual([{ filename: 'extra.csv', content_base64: 'YQ==' }]);
+    expect(body.approved_tool_calls[0].name).toBe('import_file');
+  });
+
   it('posts the v2 route, streams text, and resumes a continuing turn', async () => {
     const onDelta = jest.fn();
     (global.fetch as jest.Mock)
