@@ -20,4 +20,21 @@ describe('resolveAgentVersion', () => {
       })
     ).toBe('v1');
   });
+
+  it('uses v2 when the workspace has no stored version', () => {
+    expect(
+      resolveAgentVersion({
+        isPersonalAccount: true,
+        userAgentVersion: null,
+        organizationAgentVersion: 'v1',
+      })
+    ).toBe('v2');
+    expect(
+      resolveAgentVersion({
+        isPersonalAccount: false,
+        userAgentVersion: 'v1',
+        organizationAgentVersion: undefined,
+      })
+    ).toBe('v2');
+  });
 });

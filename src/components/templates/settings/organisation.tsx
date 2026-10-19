@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useOrganization, Organization } from '@/hooks/api/use-organisation';
 import { useOptionalOrganizationContext } from '@/contexts/organisation-context';
+import { storedAgentVersion } from '@/lib/agent-version';
 import { updateProfile } from '@/lib/business-api';
 import { useAuthStore } from '@/stores/auth-store';
 import { Button } from '@/components/atoms/button';
@@ -102,7 +103,7 @@ export default function OrganizationSettings() {
     if (isPersonal && !isLoading) {
       return (
         <PersonalAgentVersion
-          version={user?.agentVersion === 'v2' ? 'v2' : 'v1'}
+          version={storedAgentVersion(user?.agentVersion)}
           disabled={!user}
           onChange={async agentVersion => {
             try {
@@ -237,8 +238,8 @@ export default function OrganizationSettings() {
           <div className="border-b border-border px-6 py-4">
             <h3 className="text-base font-medium">Agent version</h3>
             <p className="mt-1 text-sm text-muted-foreground">
-              Which assistant loop this organisation uses. New organisations stay on v1 until an
-              admin switches them.
+              Which assistant loop this organisation uses. New organisations use v2. An admin can
+              switch this organisation to v1.
             </p>
           </div>
           <div className="flex items-center justify-between p-6">
@@ -246,7 +247,7 @@ export default function OrganizationSettings() {
               Agent version
             </label>
             <Select
-              value={editedOrg.agentVersion ?? 'v1'}
+              value={storedAgentVersion(editedOrg.agentVersion)}
               disabled={isLoading || !activeOrganization}
               onValueChange={async value => {
                 if (!activeOrganization) return;

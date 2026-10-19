@@ -127,15 +127,15 @@ describe('OrganizationSettings', () => {
     mockOrg.role = 'ADMIN';
     updateOrganization.mockResolvedValue({
       ...mockOrg,
-      agentVersion: 'v2',
+      agentVersion: 'v1',
     });
     render(<OrganizationSettings />);
 
-    expect(screen.getByLabelText('Agent version')).toHaveTextContent('v1');
-    chooseAgentVersion('v2');
+    expect(screen.getByLabelText('Agent version')).toHaveTextContent('v2');
+    chooseAgentVersion('v1');
 
     await waitFor(() =>
-      expect(updateOrganization).toHaveBeenCalledWith('org-1', { agent_version: 'v2' })
+      expect(updateOrganization).toHaveBeenCalledWith('org-1', { agent_version: 'v1' })
     );
   });
 
