@@ -1,4 +1,9 @@
-import { pickRunDatasetId, weightPickerOptions, WEIGHT_CROSSTAB_COPY } from './weight';
+import {
+  pickRunDatasetId,
+  preferredWeightOption,
+  weightPickerOptions,
+  WEIGHT_CROSSTAB_COPY,
+} from './weight';
 
 const ORIGIN = 'origin-id';
 const RAKED = 'raked-id';
@@ -47,6 +52,16 @@ describe('weight version picker', () => {
     const unweighted = opts.find(o => o.kind === 'unweighted')!;
     expect(pickRunDatasetId(unweighted)).toBe(ORIGIN);
     expect(pickRunDatasetId(opts.find(o => o.kind === 'this_file')!)).toBe(RAKED);
+  });
+
+  it('selects the shared weight instead of the unweighted file', () => {
+    const opts = weightPickerOptions(versions, ORIGIN, 'weight');
+    expect(opts[0].label).toBe('Weighted (weight)');
+    expect(opts[0].weight).toBe('active');
+    expect(preferredWeightOption(opts)?.optionId).toBe(opts[0].optionId);
+    expect(preferredWeightOption(weightPickerOptions(versions, ORIGIN))?.kind).toBe(
+      'this_file_unweighted'
+    );
   });
 
   it('says inferential tests use the active weight and other analyses refuse', () => {

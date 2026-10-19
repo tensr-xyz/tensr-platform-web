@@ -19,6 +19,22 @@ async function authedJson<T>(path: string, init: RequestInit, token?: string | n
   return res.json() as Promise<T>;
 }
 
+export function fetchColumnValues(datasetId: string, column: string, token?: string | null) {
+  return authedJson<{ column: string; values: string[] }>(
+    `/datasets/${datasetId}/columns/${encodeURIComponent(column)}/values`,
+    { method: 'GET' },
+    token
+  );
+}
+
+export function fetchActiveWeight(datasetId: string, token?: string | null) {
+  return authedJson<{ active_weight_column?: string | null }>(
+    `/datasets/${datasetId}/metadata`,
+    { method: 'GET' },
+    token
+  );
+}
+
 export function listDatasetVersions(datasetId: string, token?: string | null) {
   return authedJson<{ origin_dataset_id: string; versions: LineageVersion[] }>(
     `/datasets/${datasetId}/versions`,

@@ -21,12 +21,25 @@ function isWeightedOp(producing: string): boolean {
   return p === 'rake' || p.startsWith('weight:');
 }
 
-export function weightPickerOptions(versions: LineageVersion[], currentId: string): WeightOption[] {
+export function weightPickerOptions(
+  versions: LineageVersion[],
+  currentId: string,
+  activeWeightColumn?: string | null
+): WeightOption[] {
   const origin =
     versions.find(v => !v.parent_dataset_id) ||
     versions.find(v => v.producing_operation === 'upload') ||
     versions.find(v => v.dataset_id === v.origin_dataset_id);
   const options: WeightOption[] = [];
+  if (activeWeightColumn) {
+    options.push({
+      optionId: `active:${currentId}:${activeWeightColumn}`,
+      datasetId: currentId,
+      kind: 'this_file',
+      label: `Weighted (${activeWeightColumn})`,
+      weight: 'active',
+    });
+  }
   options.push({
     optionId: `unweighted-this:${currentId}`,
     datasetId: currentId,
@@ -69,4 +82,12 @@ export function weightPickerOptions(versions: LineageVersion[], currentId: strin
 
 export function pickRunDatasetId(option: WeightOption): string {
   return option.datasetId;
+}
+
+export function preferredWeightOption(options: WeightOption[]): WeightOption | undefined {
+  return (
+    options.find(option => option.optionId.startsWith('active:')) ||
+    options.find(option => option.kind === 'this_file_unweighted') ||
+    options[0]
+  );
 }
