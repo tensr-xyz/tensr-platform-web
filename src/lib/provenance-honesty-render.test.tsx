@@ -51,7 +51,9 @@ describe('analysis report honesty banners (menu-catalog)', () => {
       />
     );
     const banner = getTraceabilityBanner();
-    expect(banner).toHaveTextContent(/provenance unavailable: multi_origin/i);
+    expect(banner).toHaveTextContent(/combines more than one file/i);
+    expect(banner).toHaveTextContent(/not cited against a source file/i);
+    expect(banner).not.toHaveTextContent(/should not be trusted/i);
     expect(banner).not.toHaveTextContent(/traceability unknown/i);
     expect(screen.queryByTestId('provenance-inspector')).not.toBeInTheDocument();
   });

@@ -45,6 +45,8 @@ import { useTabsStore } from '@/stores/tabs-store';
 import {
   downloadTableExport,
   drillTableCell,
+  fetchActiveWeight,
+  fetchColumnValues,
   getSavedTable,
   listDatasetVersions,
   listNamedBanners,
@@ -76,6 +78,7 @@ import {
   buildTableRequest,
   canvasFromStoredSpec,
   defaultCanvas,
+  displayCategory,
   resetBuilderSurface,
   stricterLetterAlpha,
   moveCategory,
@@ -89,6 +92,7 @@ import {
 } from '@/lib/custom-tables/spec';
 import {
   pickRunDatasetId,
+  preferredWeightOption,
   WEIGHT_CROSSTAB_COPY,
   weightPickerOptions,
   type WeightOption,
@@ -135,8 +139,6 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     const known = new Set(fromSheet.map(column => column.id));
     return [...fromSheet, ...variableSets.filter(set => !known.has(set.id))];
   }, [sheetTab?.data?.initialColumns, variableSets]);
-
-  const rows = useMemo(() => sheetTab?.data?.initialData || [], [sheetTab?.data?.initialData]);
 
   const runDatasetId = useMemo(() => {
     const selected = weightOptions.find(o => o.optionId === weightChoice);
@@ -190,16 +192,17 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
       .catch(() => {
         if (!cancelled) setVariableSets([]);
       });
-    void listDatasetVersions(datasetId, token)
-      .then(res => {
+    void Promise.all([
+      listDatasetVersions(datasetId, token),
+      fetchActiveWeight(datasetId, token).catch(() => ({ active_weight_column: null })),
+    ])
+      .then(([res, meta]) => {
         if (cancelled) return;
-        const opts = weightPickerOptions(res.versions || [], datasetId);
+        const active = meta.active_weight_column || null;
+        setActiveWeightColumn(active || 'none');
+        const opts = weightPickerOptions(res.versions || [], datasetId, active);
         setWeightOptions(opts);
-        const current =
-          opts.find(o => o.kind === 'this_file') ||
-          opts.find(o => o.kind === 'this_file_unweighted') ||
-          opts[0];
-        setWeightChoice(current?.optionId || '');
+        setWeightChoice(preferredWeightOption(opts)?.optionId || '');
       })
       .catch(() => {
         if (cancelled) return;
@@ -221,12 +224,25 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const largeBanner = product > 16;
 
   const dropColumn = (zone: 'stub' | 'banner' | `nest:${number}`, column: string) => {
-    if (zone === 'stub') setCanvas(c => addStubQuestion(c, column, rows));
-    else if (zone === 'banner') setCanvas(c => addBannerQuestion(c, column, rows));
-    else {
-      const idx = Number(zone.split(':')[1]);
-      setCanvas(c => nestUnderBanner(c, idx, column, rows));
-    }
+    if (!datasetId) return;
+    void fetchColumnValues(datasetId, column, token)
+      .then(result => {
+        const values = result.values || [];
+        if (!values.length) {
+          setError(`${column} has no categories in the file.`);
+          return;
+        }
+        setError(null);
+        if (zone === 'stub') setCanvas(c => addStubQuestion(c, column, values));
+        else if (zone === 'banner') setCanvas(c => addBannerQuestion(c, column, values));
+        else {
+          const idx = Number(zone.split(':')[1]);
+          setCanvas(c => nestUnderBanner(c, idx, column, values));
+        }
+      })
+      .catch(err => {
+        setError(err instanceof Error ? err.message : `Could not load categories for ${column}.`);
+      });
   };
 
   const addNet = (stubIndex: number, kind: NetPresetId) => {
@@ -1328,13 +1344,13 @@ function QuestionCard({
       <ol className="mt-1 space-y-0.5">
         {values.map((value, i) => (
           <li key={value} className="flex items-center gap-1 text-[11px]">
-            <span className="flex-1">{value}</span>
+            <span className="flex-1">{displayCategory(title, value)}</span>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="relative z-[80] h-6 px-1 text-muted-foreground"
-              aria-label={`Move ${value} up`}
+              aria-label={`Move ${displayCategory(title, value)} up`}
               onClick={event => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -1348,7 +1364,7 @@ function QuestionCard({
               variant="ghost"
               size="sm"
               className="relative z-[80] h-6 px-1 text-muted-foreground"
-              aria-label={`Move ${value} down`}
+              aria-label={`Move ${displayCategory(title, value)} down`}
               onClick={event => {
                 event.preventDefault();
                 event.stopPropagation();

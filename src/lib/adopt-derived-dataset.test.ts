@@ -1,5 +1,6 @@
 import {
   adoptDerivedDataset,
+  createdDatasetFromToolResults,
   derivedDatasetFromToolResults,
   derivedWorkspacePath,
   spreadsheetPatchFromDerivedDataset,
@@ -232,5 +233,25 @@ describe('derivedDatasetFromToolResults', () => {
         },
       ])
     ).toBeNull();
+  });
+});
+
+describe('createdDatasetFromToolResults', () => {
+  it('opens the dataset a chat stack created', () => {
+    expect(
+      createdDatasetFromToolResults([
+        {
+          procedure: 'stack',
+          created_dataset: true,
+          dataset_id: '3c0d9850-aaaa',
+          original_filename: 'cars_EN + FR + DE',
+          n_rows: 900,
+        },
+      ])
+    ).toEqual({
+      dataset_id: '3c0d9850-aaaa',
+      original_filename: 'cars_EN + FR + DE',
+      n_rows: 900,
+    });
   });
 });

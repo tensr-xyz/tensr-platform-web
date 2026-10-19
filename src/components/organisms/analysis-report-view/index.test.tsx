@@ -38,7 +38,9 @@ describe('AnalysisReportView provenance banner', () => {
       />
     );
     const banner = screen.getByText('Traceability').closest('[role="status"]');
-    expect(banner).toHaveTextContent(/provenance unavailable: multi_origin/i);
+    expect(banner).toHaveTextContent(/combines more than one file/i);
+    expect(banner).toHaveTextContent(/not cited against a source file/i);
+    expect(banner).not.toHaveTextContent(/should not be trusted/i);
     expect(screen.queryByText(/traceability unknown/i)).not.toBeInTheDocument();
     expect(screen.queryByTestId('provenance-inspector')).not.toBeInTheDocument();
   });

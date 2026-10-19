@@ -1,5 +1,6 @@
 import {
   addBannerQuestion,
+  displayCategory,
   addStubQuestion,
   bannerColumnProduct,
   buildTableRequest,
@@ -24,12 +25,20 @@ const ROWS = [
 describe('tableRequestKey', () => {
   it('ignores the saved banner id but tracks cell contents', () => {
     const canvas = addBannerQuestion(
-      addStubQuestion(defaultCanvas(), 'gender', ROWS),
+      addStubQuestion(defaultCanvas(), 'gender', uniqueColumnValues(ROWS, 'gender')),
       'age_band',
-      ROWS
+      uniqueColumnValues(ROWS, 'age_band')
     );
     expect(tableRequestKey({ ...canvas, bannerId: 'b1' })).toBe(tableRequestKey(canvas));
     expect(tableRequestKey({ ...canvas, showCount: true })).not.toBe(tableRequestKey(canvas));
+  });
+});
+
+describe('displayCategory', () => {
+  it('drops a file extension from a source label and leaves other columns alone', () => {
+    expect(displayCategory('source_wave', 'cars_DE.sav')).toBe('cars_DE');
+    expect(displayCategory('source_wave_2', 'cars_EN.csv')).toBe('cars_EN');
+    expect(displayCategory('Q7', 'cars_DE.sav')).toBe('cars_DE.sav');
   });
 });
 
@@ -66,17 +75,17 @@ describe('custom table spec builder', () => {
     expect(restored.letterUpperAlpha).toBe(0.01);
   });
 
-  it('pins unique values when a question is dropped without an order', () => {
+  it('pins the supplied full-file categories, including values absent from a preview', () => {
     let canvas = defaultCanvas();
-    canvas = addStubQuestion(canvas, 'gender', ROWS);
+    canvas = addStubQuestion(canvas, 'gender', uniqueColumnValues(ROWS, 'gender'));
     expect(canvas.stubs[0].values).toEqual(['Male', 'Female']);
-    canvas = addBannerQuestion(canvas, 'age_band', ROWS);
-    expect(canvas.banners[0].values).toEqual(['18-34', '35-54']);
+    canvas = addBannerQuestion(canvas, 'source_wave', ['cars_EN', 'cars_FR', 'cars_DE']);
+    expect(canvas.banners[0].values).toEqual(['cars_EN', 'cars_FR', 'cars_DE']);
   });
 
   it('reorders a stub while a collaboration session is open', () => {
     let canvas = defaultCanvas();
-    canvas = addStubQuestion(canvas, 'gender', ROWS);
+    canvas = addStubQuestion(canvas, 'gender', uniqueColumnValues(ROWS, 'gender'));
     canvas = moveCategory(canvas, 'stub', 0, 1, 0);
     expect(canvas.stubs[0].values).toEqual(['Female', 'Male']);
     expect(buildTableRequest(canvas).stubs[0].values).toEqual(['Female', 'Male']);
@@ -84,7 +93,7 @@ describe('custom table spec builder', () => {
 
   it('reorder writes values onto the request', () => {
     let canvas = defaultCanvas();
-    canvas = addStubQuestion(canvas, 'gender', ROWS);
+    canvas = addStubQuestion(canvas, 'gender', uniqueColumnValues(ROWS, 'gender'));
     canvas = moveCategory(canvas, 'stub', 0, 1, 0);
     expect(canvas.stubs[0].values).toEqual(['Female', 'Male']);
     expect(buildTableRequest(canvas).stubs[0].values).toEqual(['Female', 'Male']);
@@ -115,8 +124,8 @@ describe('custom table spec builder', () => {
 
   it('nest under a span writes nested on the parent banner', () => {
     let canvas = defaultCanvas();
-    canvas = addBannerQuestion(canvas, 'age_band', ROWS);
-    canvas = nestUnderBanner(canvas, 0, 'gender', ROWS);
+    canvas = addBannerQuestion(canvas, 'age_band', uniqueColumnValues(ROWS, 'age_band'));
+    canvas = nestUnderBanner(canvas, 0, 'gender', uniqueColumnValues(ROWS, 'gender'));
     const banner = buildTableRequest(canvas).banner[0] as {
       nested?: Array<{ column: string }>;
     };

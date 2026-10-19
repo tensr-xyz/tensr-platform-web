@@ -56,7 +56,9 @@ import {
 import { cn } from '@/utils';
 import {
   adoptDerivedDataset,
+  createdDatasetFromToolResults,
   derivedDatasetFromToolResults,
+  derivedWorkspacePath,
   type DerivedDatasetPayload,
 } from '@/lib/adopt-derived-dataset';
 import { getDatasetIdFromTab, resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
@@ -668,6 +670,15 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           setAttachments([]);
         }
         updateMessage(projectId, assistantMessageId, patch);
+
+        const createdDataset = createdDatasetFromToolResults(
+          response.tool_results as Array<Record<string, unknown>> | undefined
+        );
+        if (createdDataset && createdDataset.dataset_id !== workspaceDatasetId) {
+          router.replace(
+            derivedWorkspacePath(createdDataset.dataset_id, createdDataset.original_filename)
+          );
+        }
 
         const execSummary = String(response.execution_summary || '').trim();
         const openedTabs: OpenedAnalysisTab[] = [];
