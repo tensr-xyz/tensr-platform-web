@@ -54,8 +54,8 @@ function actionSubtitle(action: ChatPendingAction): string | null {
     return action.proposedAction ? 'Apply to continue cleaning' : null;
   }
   if (action.kind === 'agent_tool_approval') {
-    // Match chat markdown: Plan (rationale) is the concrete request; Why is separate.
-    return action.rationale?.slice(0, 160) || null;
+    // The plan line below is the one copy of the rationale.
+    return null;
   }
   if (action.kind === 'proposed_action') {
     return action.summaryText?.slice(0, 120) || 'Confirm before applying';

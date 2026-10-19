@@ -260,6 +260,14 @@ export function approvedRunFailureMessage(response: AgentLoopResponse): string |
   );
 }
 
+/** The card already prints this sentence. The bubble should not print it again. */
+export function approvalTextAlreadyOnCard(content: string, rationale?: string | null): boolean {
+  const norm = (value: string) => value.replace(/\s+/g, ' ').trim();
+  const body = norm(content);
+  const card = norm(rationale || '');
+  return Boolean(body && card && body === card);
+}
+
 function signedV2Batch(
   pending: AgentLoopResponse['pending_approvals']
 ): { batch: unknown; mac: string } | null {

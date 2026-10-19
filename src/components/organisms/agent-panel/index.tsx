@@ -122,6 +122,7 @@ import {
   nextPlaybookStep,
 } from '@/lib/prep-playbook';
 import {
+  approvalTextAlreadyOnCard,
   approvedRunFailureMessage,
   collectOpenDatasetsFromTabs,
   deriveMessageUpdateFromLoopResponse,
@@ -1888,104 +1889,112 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                       const showSupersededBanner =
                         isSupersededSuggestion && message.id === firstSupersededSuggestionId;
                       const align = message.role === 'user' ? 'end' : 'start';
+                      const approvalRationale =
+                        pendingAction?.kind === 'agent_tool_approval'
+                          ? pendingAction.rationale
+                          : '';
+                      const hideDuplicateApproval = approvalTextAlreadyOnCard(
+                        typeof message.content === 'string' ? message.content : '',
+                        approvalRationale
+                      );
 
                       return (
                         <MessageScrollerItem key={message.id}>
                           <Message align={align} className="flex-col gap-2">
-                            <MessageContent
-                              className={cn(
-                                'max-w-[85%] text-[13px] leading-snug',
-                                message.role === 'user' ? '' : 'max-w-full'
-                              )}
-                            >
-                              <Bubble
-                                variant={message.role === 'user' ? 'default' : 'ghost'}
-                                align={align}
-                                className={message.role === 'user' ? '' : 'max-w-full'}
+                            {hideDuplicateApproval ? null : (
+                              <MessageContent
+                                className={cn(
+                                  'max-w-[85%] text-[13px] leading-snug',
+                                  message.role === 'user' ? '' : 'max-w-full'
+                                )}
                               >
-                                <BubbleContent
-                                  className={cn(
-                                    message.role === 'user'
-                                      ? 'text-[13px] leading-snug'
-                                      : 'w-full max-w-none text-[13px] leading-snug text-foreground'
-                                  )}
+                                <Bubble
+                                  variant={message.role === 'user' ? 'default' : 'ghost'}
+                                  align={align}
+                                  className={message.role === 'user' ? '' : 'max-w-full'}
                                 >
-                                  {typeof message.content === 'string' ? (
-                                    <ChatMessageBody
-                                      role={message.role}
-                                      content={message.content}
-                                      thinkingLines={message.thinkingLines}
-                                      resultMarkdown={message.resultMarkdown}
-                                      reportCard={message.reportCard}
-                                      onOpenReport={(tabId, runId) =>
-                                        openReportFromChat(
-                                          tabId,
-                                          workspaceDatasetId ?? getDatasetIdFromTab(activeTab),
-                                          runId
-                                        )
-                                      }
-                                      charts={message.charts}
-                                      isStreaming={message.isStreaming}
-                                      repairSuggestions={message.repairSuggestions}
-                                      onRepairPick={
-                                        message.repairBase
-                                          ? (column: string) => {
-                                              const dsId =
-                                                workspaceDatasetId ??
-                                                getDatasetIdFromTab(activeTab);
-                                              if (!dsId) return;
-                                              void (async () => {
-                                                const base = message.repairBase!;
-                                                const spec = {
-                                                  ...base.spec,
-                                                  column,
-                                                  value_column: column,
-                                                  y_column: column,
-                                                  x_column: column,
-                                                };
-                                                try {
-                                                  const result = await executeDataActionForDataset(
-                                                    dsId,
-                                                    {
-                                                      actionType: base.actionType,
-                                                      spec,
-                                                      rationale: `Retry with ${column}`,
-                                                      autoExecute: true,
+                                  <BubbleContent
+                                    className={cn(
+                                      message.role === 'user'
+                                        ? 'text-[13px] leading-snug'
+                                        : 'w-full max-w-none text-[13px] leading-snug text-foreground'
+                                    )}
+                                  >
+                                    {typeof message.content === 'string' ? (
+                                      <ChatMessageBody
+                                        role={message.role}
+                                        content={message.content}
+                                        thinkingLines={message.thinkingLines}
+                                        resultMarkdown={message.resultMarkdown}
+                                        reportCard={message.reportCard}
+                                        onOpenReport={(tabId, runId) =>
+                                          openReportFromChat(
+                                            tabId,
+                                            workspaceDatasetId ?? getDatasetIdFromTab(activeTab),
+                                            runId
+                                          )
+                                        }
+                                        charts={message.charts}
+                                        isStreaming={message.isStreaming}
+                                        repairSuggestions={message.repairSuggestions}
+                                        onRepairPick={
+                                          message.repairBase
+                                            ? (column: string) => {
+                                                const dsId =
+                                                  workspaceDatasetId ??
+                                                  getDatasetIdFromTab(activeTab);
+                                                if (!dsId) return;
+                                                void (async () => {
+                                                  const base = message.repairBase!;
+                                                  const spec = {
+                                                    ...base.spec,
+                                                    column,
+                                                    value_column: column,
+                                                    y_column: column,
+                                                    x_column: column,
+                                                  };
+                                                  try {
+                                                    const result =
+                                                      await executeDataActionForDataset(dsId, {
+                                                        actionType: base.actionType,
+                                                        spec,
+                                                        rationale: `Retry with ${column}`,
+                                                        autoExecute: true,
+                                                      });
+                                                    const charts: AnalysisReportChart[] = [];
+                                                    if (result.chart) {
+                                                      charts.push(
+                                                        result.chart as AnalysisReportChart
+                                                      );
                                                     }
-                                                  );
-                                                  const charts: AnalysisReportChart[] = [];
-                                                  if (result.chart) {
-                                                    charts.push(
-                                                      result.chart as AnalysisReportChart
-                                                    );
+                                                    updateMessage(projectId, message.id, {
+                                                      content: result.answer_markdown,
+                                                      charts: charts.length ? charts : undefined,
+                                                      repairSuggestions: undefined,
+                                                      repairBase: undefined,
+                                                    });
+                                                  } catch (err) {
+                                                    captureProductException(err, {
+                                                      where: 'repair_pick',
+                                                    });
+                                                    updateMessage(projectId, message.id, {
+                                                      content: formatApiErrorMessage(err),
+                                                    });
                                                   }
-                                                  updateMessage(projectId, message.id, {
-                                                    content: result.answer_markdown,
-                                                    charts: charts.length ? charts : undefined,
-                                                    repairSuggestions: undefined,
-                                                    repairBase: undefined,
-                                                  });
-                                                } catch (err) {
-                                                  captureProductException(err, {
-                                                    where: 'repair_pick',
-                                                  });
-                                                  updateMessage(projectId, message.id, {
-                                                    content: formatApiErrorMessage(err),
-                                                  });
-                                                }
-                                              })();
-                                            }
-                                          : undefined
-                                      }
-                                    />
-                                  ) : (
-                                    <pre className="overflow-x-auto text-xs">
-                                      {JSON.stringify(message.content, null, 2)}
-                                    </pre>
-                                  )}
-                                </BubbleContent>
-                              </Bubble>
-                            </MessageContent>
+                                                })();
+                                              }
+                                            : undefined
+                                        }
+                                      />
+                                    ) : (
+                                      <pre className="overflow-x-auto text-xs">
+                                        {JSON.stringify(message.content, null, 2)}
+                                      </pre>
+                                    )}
+                                  </BubbleContent>
+                                </Bubble>
+                              </MessageContent>
+                            )}
                             {pendingAction && !isSupersededSuggestion ? (
                               <ChatAnalysisApproval
                                 className="w-full"
