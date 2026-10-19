@@ -10,6 +10,7 @@ import {
   getStytchBearerForTensrApi,
   isSessionValid,
 } from '@/utils/auth';
+import { storedAgentVersion } from '@/lib/agent-version';
 import { getTensrApiBaseUrl, tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse, SessionExpiredError } from '@/lib/session-expired';
 import { Organization, OrganizationMember } from '@/hooks/api/use-organisation';
@@ -44,7 +45,7 @@ function normalizeOrganization(raw: Record<string, unknown>): Organization {
     slug: raw.slug as string | undefined,
     logoUrl: raw.logo_url as string | undefined,
     privacyMode: raw.privacy_mode === 'schema_only' ? 'schema_only' : 'full',
-    agentVersion: raw.agent_version === 'v2' ? 'v2' : 'v1',
+    agentVersion: storedAgentVersion(raw.agent_version),
     isPersonal: readIsPersonal(raw),
   };
 }
