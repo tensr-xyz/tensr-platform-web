@@ -43,18 +43,27 @@ import {
 } from '@/lib/workspace-dataset';
 import { useTabsStore } from '@/stores/tabs-store';
 import {
+  confirmLoop,
   downloadTableExport,
   drillTableCell,
   fetchActiveWeight,
   fetchColumnValues,
+  fetchLoopMetadata,
   getSavedTable,
   listDatasetVersions,
   listNamedBanners,
   listSavedTables,
   previewCustomTable,
+  renameLoop,
   runCustomTable,
   saveNamedBanner,
 } from '@/lib/custom-tables/api';
+import {
+  loopItemPlural,
+  loopPickerColumns,
+  loopProposalSentence,
+  type LoopDefinition,
+} from '@/lib/custom-tables/loops';
 import {
   netPreset,
   NET_HELPER_COPY,
@@ -130,6 +139,9 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const [activeVariable, setActiveVariable] = useState(0);
   const [savedNotice, setSavedNotice] = useState(false);
   const runLock = useRef(false);
+  const [loopProposals, setLoopProposals] = useState<LoopDefinition[]>([]);
+  const [confirmedLoops, setConfirmedLoops] = useState<LoopDefinition[]>([]);
+  const [importedWeightColumn, setImportedWeightColumn] = useState<string | null>(null);
 
   const columns = useMemo(() => {
     if (!sheetTab?.data?.initialColumns) return variableSets;
@@ -140,6 +152,11 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     return [...fromSheet, ...variableSets.filter(set => !known.has(set.id))];
   }, [sheetTab?.data?.initialColumns, variableSets]);
 
+  const activeLoop = confirmedLoops.find(loop => loop.id === canvas.level) ?? null;
+  const pickerColumns = useMemo(
+    () => loopPickerColumns(columns, activeLoop),
+    [columns, activeLoop]
+  );
   const runDatasetId = useMemo(() => {
     const selected = weightOptions.find(o => o.optionId === weightChoice);
     return selected ? pickRunDatasetId(selected) : datasetId || '';
@@ -198,7 +215,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
     ])
       .then(([res, meta]) => {
         if (cancelled) return;
-        const active = meta.active_weight_column || null;
+        const active = meta.active_weight_column || importedWeightColumn || null;
         setActiveWeightColumn(active || 'none');
         const opts = weightPickerOptions(res.versions || [], datasetId, active);
         setWeightOptions(opts);
@@ -208,6 +225,28 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
         if (cancelled) return;
         setWeightOptions([]);
         setWeightChoice('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, datasetId, token, importedWeightColumn]);
+
+  useEffect(() => {
+    if (!open || !datasetId) return;
+    let cancelled = false;
+    void fetchLoopMetadata(datasetId, token)
+      .then(res => {
+        if (cancelled) return;
+        setLoopProposals(res.loop_proposals || []);
+        setConfirmedLoops(res.loops || []);
+        const named = (res.active_weight_column || '').trim();
+        setImportedWeightColumn(named || null);
+        if (named) setActiveWeightColumn(named);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLoopProposals([]);
+        setConfirmedLoops([]);
       });
     return () => {
       cancelled = true;
@@ -223,7 +262,21 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const product = bannerColumnProduct(canvas.banners, canvas.nestBanners);
   const largeBanner = product > 16;
 
+  const placeColumn = (zone: 'stub' | 'banner' | `nest:${number}`, column: string, values: string[]) => {
+    if (zone === 'stub') setCanvas(c => addStubQuestion(c, column, values));
+    else if (zone === 'banner') setCanvas(c => addBannerQuestion(c, column, values));
+    else {
+      const idx = Number(zone.split(':')[1]);
+      setCanvas(c => nestUnderBanner(c, idx, column, values));
+    }
+  };
+
   const dropColumn = (zone: 'stub' | 'banner' | `nest:${number}`, column: string) => {
+    const picked = pickerColumns.find(item => item.id === column);
+    if (picked?.values?.length) {
+      placeColumn(zone, column, picked.values);
+      return;
+    }
     if (!datasetId) return;
     void fetchColumnValues(datasetId, column, token)
       .then(result => {
@@ -233,16 +286,53 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           return;
         }
         setError(null);
-        if (zone === 'stub') setCanvas(c => addStubQuestion(c, column, values));
-        else if (zone === 'banner') setCanvas(c => addBannerQuestion(c, column, values));
-        else {
-          const idx = Number(zone.split(':')[1]);
-          setCanvas(c => nestUnderBanner(c, idx, column, values));
-        }
+        placeColumn(zone, column, values);
       })
       .catch(err => {
         setError(err instanceof Error ? err.message : `Could not load categories for ${column}.`);
       });
+  };
+
+  const confirmProposal = async (loopId: string) => {
+    if (!datasetId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const saved = await confirmLoop(datasetId, loopId, token);
+      setLoopProposals(current => current.filter(item => item.id !== loopId));
+      setConfirmedLoops(current => [
+        ...current.filter(item => item.id !== saved.loop.id),
+        saved.loop,
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not confirm the loop');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const saveLoopTitle = async (loopId: string, title: string) => {
+    const next = title.trim();
+    if (!datasetId || !next) return;
+    setError(null);
+    try {
+      const saved = await renameLoop(datasetId, loopId, next, token);
+      setConfirmedLoops(current =>
+        current.map(loop => (loop.id === loopId ? { ...loop, ...saved.loop } : loop))
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not rename the loop');
+    }
+  };
+
+  const selectLevel = (level: string) => {
+    setCanvas(current => ({
+      ...current,
+      level: level === 'respondent' ? undefined : level,
+      stubs: [],
+      banners: [],
+    }));
+    setActiveVariable(0);
   };
 
   const addNet = (stubIndex: number, kind: NetPresetId) => {
@@ -546,6 +636,86 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           <DialogTitle>Custom Tables</DialogTitle>
         </DialogHeader>
         <div className="flex min-h-[280px] flex-col gap-3">
+          {loopProposals.length > 0 ? (
+            <div className="flex flex-col gap-2 rounded-md border border-border px-2 py-2">
+              {loopProposals.map(proposal => (
+                <div key={proposal.id} className="flex items-center justify-between gap-2">
+                  <p className="text-xs">{loopProposalSentence(proposal)}</p>
+                  {proposal.partial ? (
+                    <p className="text-[11px] text-muted-foreground">Partial match. It stays a proposal.</p>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => void confirmProposal(proposal.id)}
+                    >
+                      Confirm
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {confirmedLoops.length > 0 ? (
+            <fieldset className="flex flex-wrap items-end gap-3 rounded-md border border-border px-2 py-2">
+              <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Level
+              </legend>
+              <label className="flex items-center gap-1.5 text-xs">
+                <input
+                  type="radio"
+                  name="custom-table-level"
+                  checked={!canvas.level || canvas.level === 'respondent'}
+                  onChange={() => selectLevel('respondent')}
+                />
+                Respondent
+              </label>
+              {confirmedLoops.map(loop => (
+                <label key={loop.id} className="flex items-center gap-1.5 text-xs">
+                  <input
+                    type="radio"
+                    name="custom-table-level"
+                    checked={canvas.level === loop.id}
+                    onChange={() => selectLevel(loop.id)}
+                  />
+                  {loop.item_title || 'Brand'}
+                </label>
+              ))}
+              {activeLoop ? (
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="loop-item-title" className="text-[10px] uppercase text-muted-foreground">
+                    Loop name
+                  </Label>
+                  <Input
+                    id="loop-item-title"
+                    value={activeLoop.item_title ?? 'Brand'}
+                    className="h-8 w-32 text-xs"
+                    onChange={event => {
+                      const title = event.target.value;
+                      setConfirmedLoops(current =>
+                        current.map(loop =>
+                          loop.id === activeLoop.id ? { ...loop, item_title: title } : loop
+                        )
+                      );
+                    }}
+                    onBlur={event => {
+                      const next = event.target.value.trim();
+                      if (!next) {
+                        setConfirmedLoops(current =>
+                          current.map(loop =>
+                            loop.id === activeLoop.id ? { ...loop, item_title: 'Brand' } : loop
+                          )
+                        );
+                        return;
+                      }
+                      void saveLoopTitle(activeLoop.id, next);
+                    }}
+                  />
+                </div>
+              ) : null}
+            </fieldset>
+          ) : null}
           <div className="flex min-h-0 flex-1 gap-3">
             <aside className="w-[28%] shrink-0 overflow-hidden rounded-md border border-border bg-muted/20">
               <p className="border-b border-border px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
@@ -555,25 +725,31 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                 className="max-h-[360px] overflow-y-auto p-1 text-xs"
                 role="listbox"
                 aria-label="Variables"
+                aria-activedescendant={
+                  pickerColumns[activeVariable]
+                    ? `loop-var-${pickerColumns[activeVariable].id}`
+                    : undefined
+                }
                 tabIndex={0}
                 onKeyDown={event => {
-                  if (!columns.length) return;
+                  if (!pickerColumns.length) return;
                   if (event.key === 'ArrowDown') {
                     event.preventDefault();
-                    setActiveVariable(index => Math.min(columns.length - 1, index + 1));
+                    setActiveVariable(index => Math.min(pickerColumns.length - 1, index + 1));
                   } else if (event.key === 'ArrowUp') {
                     event.preventDefault();
                     setActiveVariable(index => Math.max(0, index - 1));
                   } else if (event.key === 'Enter' || event.key === ' ') {
                     event.preventDefault();
-                    const column = columns[activeVariable];
+                    const column = pickerColumns[activeVariable];
                     if (column) dropColumn(targetZone, column.id);
                   }
                 }}
               >
-                {columns.map((col, index) => (
+                {pickerColumns.map((col, index) => (
                   <li
                     key={col.id}
+                    id={`loop-var-${col.id}`}
                     draggable
                     role="option"
                     aria-selected={index === activeVariable}
@@ -588,7 +764,7 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                     }`}
                   >
                     <span className="font-medium">{col.label}</span>
-                    {col.label !== col.id ? (
+                    {!col.hideId && col.label !== col.id ? (
                       <span className="ml-1 text-[10px] text-muted-foreground">({col.id})</span>
                     ) : null}
                   </li>
@@ -917,6 +1093,21 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                         token
                       );
                       setWeightWarnings(result.warnings || []);
+                      if (activeWeightColumn !== 'none') {
+                        const optionId = `active:${activeWeightColumn}`;
+                        const option: WeightOption = {
+                          optionId,
+                          datasetId,
+                          kind: 'this_file',
+                          label: `Active weight (${activeWeightColumn})`,
+                          weight: 'active',
+                        };
+                        setWeightOptions(current => [
+                          option,
+                          ...current.filter(item => item.optionId !== optionId),
+                        ]);
+                        setWeightChoice(optionId);
+                      }
                     } catch (err) {
                       setError(err instanceof Error ? err.message : 'Could not set the weight');
                     }
@@ -1075,7 +1266,21 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
           </div>
           {table ? (
             <div className="overflow-x-auto rounded-md border border-border">
-              {book?.base_label ? (
+              {book?.loop_table ? (
+                <div className="border-b border-border px-2 py-1 text-left text-[11px]">
+                  <p className="font-medium">
+                    n = {book.loop_table.respondent_unweighted_n} respondents
+                    {book.weight?.weight_aware && book.loop_table.respondent_weighted_n != null
+                      ? ` · weighted n = ${Number(book.loop_table.respondent_weighted_n).toFixed(1)}`
+                      : ''}
+                  </p>
+                  {book.loop_table.paired_across_items ? (
+                    <p>
+                      Significance tests are paired across {loopItemPlural(book.loop_table.item_title)}.
+                    </p>
+                  ) : null}
+                </div>
+              ) : book?.base_label ? (
                 <p className="border-b border-border px-2 py-1 text-left text-[11px] font-medium">
                   {book.base_label}
                 </p>
@@ -1091,6 +1296,11 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                           <span className="ml-1 text-[10px] text-muted-foreground">
                             {h.letterSlot}
                           </span>
+                        ) : null}
+                        {h.columnBase != null ? (
+                          <div className="text-[10px] font-normal text-muted-foreground">
+                            base n={h.columnBase}
+                          </div>
                         ) : null}
                       </th>
                     ))}

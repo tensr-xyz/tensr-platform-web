@@ -1,5 +1,6 @@
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { formatApiErrorMessage } from '@/lib/api-error';
+import type { LoopDefinition } from './loops';
 import type { TableRequestBody, SavedTableSpecRow } from './spec';
 import type { LineageVersion } from './weight';
 
@@ -157,6 +158,39 @@ export function drillTableCell(
   }>(
     `/datasets/${datasetId}/tables/${specId}/drill`,
     { method: 'POST', body: JSON.stringify(body) },
+    token
+  );
+}
+
+export function fetchLoopMetadata(datasetId: string, token?: string | null) {
+  return authedJson<{
+    loop_proposals?: LoopDefinition[];
+    loops?: LoopDefinition[];
+    active_weight_column?: string | null;
+  }>(
+    `/datasets/${datasetId}/metadata`,
+    { method: 'GET' },
+    token
+  );
+}
+
+export function confirmLoop(datasetId: string, loopId: string, token?: string | null) {
+  return authedJson<{ ok?: boolean; loop: LoopDefinition }>(
+    `/datasets/${datasetId}/loops/${encodeURIComponent(loopId)}/confirm`,
+    { method: 'POST', body: JSON.stringify({}) },
+    token
+  );
+}
+
+export function renameLoop(
+  datasetId: string,
+  loopId: string,
+  itemTitle: string,
+  token?: string | null
+) {
+  return authedJson<{ ok?: boolean; loop: LoopDefinition }>(
+    `/datasets/${datasetId}/loops/${encodeURIComponent(loopId)}`,
+    { method: 'PATCH', body: JSON.stringify({ item_title: itemTitle }) },
     token
   );
 }
