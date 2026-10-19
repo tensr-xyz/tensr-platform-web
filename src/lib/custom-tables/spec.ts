@@ -121,6 +121,14 @@ export function defaultCanvas(): CustomTableCanvas {
   };
 }
 
+const SOURCE_FILE_EXTENSION = /\.(sav|zsav|csv|xlsx|xls|dta|sss|parquet|json|txt)$/i;
+
+/** Banner and stub chips show cars_DE, including when the stored code is cars_DE.sav. */
+export function displayCategory(column: string, value: string): string {
+  if (column !== 'source_wave' && !column.startsWith('source_wave')) return value;
+  return value.replace(SOURCE_FILE_EXTENSION, '');
+}
+
 export function uniqueColumnValues(rows: Array<Record<string, unknown>>, column: string): string[] {
   const seen = new Set<string>();
   const out: string[] = [];

@@ -78,6 +78,7 @@ import {
   buildTableRequest,
   canvasFromStoredSpec,
   defaultCanvas,
+  displayCategory,
   resetBuilderSurface,
   stricterLetterAlpha,
   moveCategory,
@@ -1343,13 +1344,13 @@ function QuestionCard({
       <ol className="mt-1 space-y-0.5">
         {values.map((value, i) => (
           <li key={value} className="flex items-center gap-1 text-[11px]">
-            <span className="flex-1">{value}</span>
+            <span className="flex-1">{displayCategory(title, value)}</span>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="relative z-[80] h-6 px-1 text-muted-foreground"
-              aria-label={`Move ${value} up`}
+              aria-label={`Move ${displayCategory(title, value)} up`}
               onClick={event => {
                 event.preventDefault();
                 event.stopPropagation();
@@ -1363,7 +1364,7 @@ function QuestionCard({
               variant="ghost"
               size="sm"
               className="relative z-[80] h-6 px-1 text-muted-foreground"
-              aria-label={`Move ${value} down`}
+              aria-label={`Move ${displayCategory(title, value)} down`}
               onClick={event => {
                 event.preventDefault();
                 event.stopPropagation();

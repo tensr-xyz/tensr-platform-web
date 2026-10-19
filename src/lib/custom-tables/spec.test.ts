@@ -1,5 +1,6 @@
 import {
   addBannerQuestion,
+  displayCategory,
   addStubQuestion,
   bannerColumnProduct,
   buildTableRequest,
@@ -30,6 +31,14 @@ describe('tableRequestKey', () => {
     );
     expect(tableRequestKey({ ...canvas, bannerId: 'b1' })).toBe(tableRequestKey(canvas));
     expect(tableRequestKey({ ...canvas, showCount: true })).not.toBe(tableRequestKey(canvas));
+  });
+});
+
+describe('displayCategory', () => {
+  it('drops a file extension from a source label and leaves other columns alone', () => {
+    expect(displayCategory('source_wave', 'cars_DE.sav')).toBe('cars_DE');
+    expect(displayCategory('source_wave_2', 'cars_EN.csv')).toBe('cars_EN');
+    expect(displayCategory('Q7', 'cars_DE.sav')).toBe('cars_DE.sav');
   });
 });
 
