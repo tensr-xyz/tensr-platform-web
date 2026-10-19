@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import { ChatAnalysisApproval } from './index';
+import { approvalPlanOnce, ChatAnalysisApproval } from './index';
 import type { ChatPendingAction } from '@/lib/chat-pending-action';
 
 const PLAN = 'Waiting for approval: Plan 1. compute (Q1_top2, IF(Q1_Satisfaction >= 4, 1, 0))';
@@ -26,5 +26,7 @@ describe('ChatAnalysisApproval', () => {
     );
     const hits = document.body.textContent?.match(/Waiting for approval: Plan 1\. compute/g) ?? [];
     expect(hits).toHaveLength(1);
+    expect(document.body.textContent).not.toContain('Plan:');
+    expect(approvalPlanOnce(`${PLAN} ${PLAN} ${PLAN}`)).toBe(PLAN);
   });
 });

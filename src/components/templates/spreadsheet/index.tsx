@@ -1350,6 +1350,13 @@ export function Spreadsheet({
 
   // Initial data loading - consolidated into single effect with proper guards
   const initialLoadDoneRef = useRef(false);
+  const loadedDatasetRef = useRef(gridDatasetId);
+  useEffect(() => {
+    if (loadedDatasetRef.current === gridDatasetId) return;
+    loadedDatasetRef.current = gridDatasetId;
+    initialLoadDoneRef.current = false;
+    setData([]);
+  }, [gridDatasetId]);
   useEffect(() => {
     if (!isProjectFile && decodedFilePath && !initialLoadDoneRef.current && !loadingRef.current) {
       const datasetId = gridDatasetId;

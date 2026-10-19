@@ -71,12 +71,18 @@ export function resolveSpreadsheetContextTab(
 
   if (activeTab.type === ViewType.ANALYSIS_RESULT) {
     const sourceId = activeTab.data?.sourceDatasetId ?? getDatasetIdFromTab(activeTab);
-    if (!sourceId) return undefined;
-
-    return tabs.find(
-      t => t.type === ViewType.SPREADSHEET && getDatasetIdFromTab(t) === sourceId && t.data
-    );
+    if (sourceId) {
+      const matched = tabs.find(
+        t => t.type === ViewType.SPREADSHEET && getDatasetIdFromTab(t) === sourceId && t.data
+      );
+      if (matched) return matched;
+    }
   }
 
-  return undefined;
+  return tabs.find(
+    t =>
+      t.type === ViewType.SPREADSHEET &&
+      t.data &&
+      Boolean(t.data.filePath || t.data.datasetId || (t.data.initialColumns?.length ?? 0) > 0)
+  );
 }
