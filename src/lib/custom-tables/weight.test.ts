@@ -64,6 +64,21 @@ describe('weight version picker', () => {
     );
   });
 
+  it('defaults a named weight column and keeps unweighted as the opt-out', () => {
+    const upload = [
+      {
+        dataset_id: ORIGIN,
+        producing_operation: 'upload',
+        parent_dataset_id: null,
+        origin_dataset_id: ORIGIN,
+      },
+    ];
+    const opts = weightPickerOptions(upload, ORIGIN, 'weight');
+    expect(opts.map(o => o.label)).toEqual(['Weighted (weight)', 'Unweighted (this file)']);
+    expect(opts.find(o => o.kind === 'this_file')?.weight).toBe('active');
+    expect(opts.find(o => o.kind === 'this_file_unweighted')?.weight).toBe('none');
+  });
+
   it('says inferential tests use the active weight and other analyses refuse', () => {
     expect(WEIGHT_CROSSTAB_COPY.toLowerCase()).toContain('active weight');
     expect(WEIGHT_CROSSTAB_COPY.toLowerCase()).toContain('refuse');
