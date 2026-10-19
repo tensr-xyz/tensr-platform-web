@@ -134,7 +134,14 @@ function AnalysisSectionsList({
                 value={`${sectionName}-${item.name}-${idx}`}
                 onSelect={() => onPick(item)}
               >
-                <span className="font-medium">{item.name}</span>
+                <span className="min-w-0">
+                  <span className="block font-medium">{item.name}</span>
+                  {item.hint ? (
+                    <span className="block text-xs text-muted-foreground" aria-hidden="true">
+                      {item.hint}
+                    </span>
+                  ) : null}
+                </span>
               </CommandItem>
             ))}
           </CommandGroup>

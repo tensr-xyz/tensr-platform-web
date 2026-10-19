@@ -11,7 +11,17 @@ export interface AnalysisItem {
   analysisKey?: AnalysisKey;
   component: ReturnType<typeof getMenuItemComponent> | undefined;
   searchBlob?: string;
+  hint?: string;
 }
+
+const PALETTE_HINTS: Record<string, string> = {
+  'Merge Datasets':
+    'Stack or append rows from another file, or join on a key. Use this to stack or append.',
+  'Fuse Waves':
+    'Stack waves of one survey and keep which wave each row came from. Use this for waves, not a key join.',
+  'Fuse Datasets':
+    'Join files on a respondent key. Use this when the same people are in more than one file.',
+};
 
 export const DATA_TAB_VALUE = 'data';
 export const PLUGINS_TAB_VALUE = 'plugins';
@@ -179,7 +189,10 @@ export function getAllAnalysisItems(): AnalysisItem[] {
                         ? 'save recipe analysis history'
                         : menuName === 'Recipes'
                           ? 'recipes run on this dataset export r script'
-                          : undefined,
+                          : menuName === 'Merge Datasets'
+                            ? 'merge datasets stack append add cases add rows join'
+                            : undefined,
+          hint: PALETTE_HINTS[menuName],
         });
       }
     }

@@ -275,6 +275,11 @@ export const MergeDatasetDialog = ({ children }: MergeDatasetProps) => {
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>Merge Datasets</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Stack or append rows from another file, or join on a key. Use Fuse Waves when the
+            files are waves of one survey, and Fuse Datasets when the same people are in more
+            than one file.
+          </p>
         </DialogHeader>
 
         <div className="space-y-4">
