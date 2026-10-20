@@ -107,6 +107,15 @@ function pluginMatchesQuery(plugin: PluginRecord, raw: string): boolean {
   return blob.includes(q);
 }
 
+function paletteKeywords(item: AnalysisItem): string[] {
+  return [item.searchBlob, item.hint]
+    .filter((part): part is string => Boolean(part && part.trim()))
+    .join(' ')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
 function paletteTabLabel(tab: string): string {
   if (tab === PLUGINS_TAB_VALUE) return 'Plugins';
   return PALETTE_TAB_LABELS[tab] ?? tab;
@@ -131,10 +140,20 @@ function AnalysisSectionsList({
             {items.map((item, idx) => (
               <CommandItem
                 key={`${item.name}-${idx}`}
-                value={`${sectionName}-${item.name}-${idx}`}
+                value={[sectionName, item.name, String(idx), item.searchBlob, item.hint]
+                  .filter(Boolean)
+                  .join(' ')}
+                keywords={paletteKeywords(item)}
                 onSelect={() => onPick(item)}
               >
-                <span className="font-medium">{item.name}</span>
+                <span className="min-w-0">
+                  <span className="block font-medium">{item.name}</span>
+                  {item.hint ? (
+                    <span className="block text-xs text-muted-foreground" aria-hidden="true">
+                      {item.hint}
+                    </span>
+                  ) : null}
+                </span>
               </CommandItem>
             ))}
           </CommandGroup>

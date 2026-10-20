@@ -40,6 +40,7 @@ export type DuplicateDetectionResult = {
 export type MergeReport = {
   how?: string;
   row_count?: number;
+  rows_already_in_file?: boolean;
   unmatched_left_count?: number;
   unmatched_right_count?: number;
   unmatched_left_keys?: string[];

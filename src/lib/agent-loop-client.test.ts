@@ -296,6 +296,25 @@ describe('run-agent-loop client helpers', () => {
     expect(charts[0]?.title).toBe('Revenue');
   });
 
+  it('keeps the v2 approval sentence on the card only', () => {
+    const plan =
+      'Waiting for approval:\nPlan\n1. compute (Q1_top2, IF(Q1_Satisfaction >= 4, 1, 0))';
+    const patch = deriveMessageUpdateFromLoopResponse(
+      {
+        status: 'awaiting_approval',
+        mode: 'agent',
+        answer_markdown: plan,
+        pending_approvals: { batch: [{ id: 's1' }], mac: 'abc' },
+      },
+      { triggerMessage: 'Save Q1_top2', datasetId: '11111111-1111-4111-8111-111111111111' }
+    );
+    expect(patch.content).toBe('');
+    expect(patch.pendingAction?.kind).toBe('agent_tool_approval');
+    if (patch.pendingAction?.kind === 'agent_tool_approval') {
+      expect(patch.pendingAction.rationale).toBe(plan);
+    }
+  });
+
   it('hides the bubble when it repeats the approval card', () => {
     const plan =
       'Waiting for approval:\nPlan\n1. compute (Q1_top2, IF(Q1_Satisfaction >= 4, 1, 0))';

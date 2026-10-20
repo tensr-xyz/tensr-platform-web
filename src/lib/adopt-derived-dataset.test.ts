@@ -30,6 +30,9 @@ jest.mock('@/stores/tabs-store', () => ({
         const tab = tabs.find(item => item.id === id);
         if (tab) Object.assign(tab, updates);
       },
+      setActiveTab(id: string) {
+        activeTabId = id;
+      },
     }),
   },
 }));
@@ -121,6 +124,7 @@ describe('adoptDerivedDataset', () => {
     ).toBe(true);
     expect(tabs).toHaveLength(1);
     expect(tabs[0].name).toBe('cars_EN + FR');
+    expect(activeTabId).toBe('sheet-1');
     expect(replace).toHaveBeenCalled();
     expect(String(replace.mock.calls[0][2])).toContain('/workspace/dataset/e5d1c555');
     replace.mockRestore();

@@ -167,6 +167,7 @@ export const AGENT_CAPABILITY_CATALOG = {
     "z_score"
   ],
   "filter_aliases": {
+    "!": "notEquals",
     "!=": "notEquals",
     "<": "lessThan",
     "<=": "lessThanOrEqual",
@@ -192,6 +193,7 @@ export const AGENT_CAPABILITY_CATALOG = {
     "lt": "lessThan",
     "lte": "lessThanOrEqual",
     "ne": "notEquals",
+    "not": "notEquals",
     "not_contains": "notContains",
     "not_equals": "notEquals",
     "notcontains": "notContains",

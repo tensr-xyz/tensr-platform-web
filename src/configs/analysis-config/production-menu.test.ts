@@ -198,4 +198,17 @@ describe('production menu false-door sweep', () => {
       });
     }
   });
+
+  it('finds Merge Datasets for stack and append, and says when to fuse', () => {
+    for (const query of ['stack', 'append']) {
+      const names = filterAnalysisItems(getAllAnalysisItems(), query).map(item => item.name);
+      expect(names).toContain('Merge Datasets');
+    }
+    const merge = getAllAnalysisItems().find(item => item.name === 'Merge Datasets');
+    const waves = getAllAnalysisItems().find(item => item.name === 'Fuse Waves');
+    const datasets = getAllAnalysisItems().find(item => item.name === 'Fuse Datasets');
+    expect(merge?.hint).toMatch(/stack or append/i);
+    expect(waves?.hint).toMatch(/waves/i);
+    expect(datasets?.hint).toMatch(/respondent key/i);
+  });
 });

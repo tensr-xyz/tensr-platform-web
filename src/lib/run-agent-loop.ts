@@ -309,7 +309,7 @@ export function deriveMessageUpdateFromLoopResponse(
     const signed = signedV2Batch(response.pending_approvals);
     if (signed) {
       return {
-        content: answer,
+        content: '',
         isStreaming: false,
         thinkingLines: undefined,
         lastFittedModel,
