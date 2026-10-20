@@ -2,6 +2,9 @@ import type { MergeReport } from '@/lib/dataset-data-ops';
 
 export function mergeUnmatchedReportLines(report: MergeReport, keyed: boolean): string[] {
   const lines = [`${report.row_count ?? 0} rows in the result.`];
+  if (report.rows_already_in_file) {
+    lines.unshift('These rows are already in this file');
+  }
   if (keyed) {
     const leftKeys = report.unmatched_left_keys || [];
     const rightKeys = report.unmatched_right_keys || [];
