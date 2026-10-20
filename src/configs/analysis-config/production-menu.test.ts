@@ -9,7 +9,6 @@ const DEAD_OR_MISLEADING_LABELS = [
   'Count Values',
   'Heatmap',
   'Latent Class Analysis (LCA, unvalidated)',
-  'MaxDiff',
   'Conjoint',
   'Choice simulator',
   'Reliability Analysis',
@@ -80,6 +79,7 @@ describe('production menu false-door sweep', () => {
     expect(PRODUCTION_MENU_ITEMS.analyze.sections['Tables']).toEqual([
       'Custom Tables',
       'Banner Book',
+      'Pivot table',
     ]);
     expect(PRODUCTION_MENU_ITEMS.analyze.sections['Descriptive Statistics']).toEqual([
       'Descriptives',

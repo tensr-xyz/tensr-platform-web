@@ -87,6 +87,9 @@ export const Q_AGENT_ANALYSIS_TYPES = new Set<string>([
   ...Q_PROCEDURES.filter(p => p.analysisType && !p.dialogOnly).map(p => p.analysisType as string),
   'maxdiff_mnl',
   'choice_simulator',
+  'pivot_table',
+  'cbc_design',
+  'maxdiff_design',
 ]);
 
 export function isQAgentAnalysisType(op: string | null | undefined): boolean {

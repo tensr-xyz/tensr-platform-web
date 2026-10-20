@@ -28,6 +28,8 @@ import { RankCasesDialog } from '@/components/templates/transform/rank-cases';
 import ComputeVariablesDialog from '@/components/templates/transform/compute-variable';
 import ShiftValuesDialog from '@/components/templates/transform/shift-values';
 import { CustomTablesDialog } from '@/components/templates/analysis/custom-tables';
+import { PivotTableDialog } from '@/components/templates/analysis/pivot-table';
+import { ChoiceModellingDialog } from '@/components/templates/analysis/choice-modelling';
 import { BannerBookDialog } from '@/components/templates/analysis/banner-book';
 import { RakeWeightsDialog } from '@/components/templates/data/rake-weights';
 import { CellWeightsDialog } from '@/components/templates/data/cell-weights';
@@ -107,6 +109,13 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Compute Variable': ComputeVariablesDialog,
   'Shift Values': ShiftValuesDialog,
   'Custom Tables': CustomTablesDialog,
+  'Pivot table': PivotTableDialog,
+  'Conjoint (CBC)': ({ children }) => (
+    <ChoiceModellingDialog mode="cbc">{children}</ChoiceModellingDialog>
+  ),
+  MaxDiff: ({ children }) => (
+    <ChoiceModellingDialog mode="maxdiff">{children}</ChoiceModellingDialog>
+  ),
   'Banner Book': BannerBookDialog,
   'Rake Weights': RakeWeightsDialog,
   'Cell weighting': CellWeightsDialog,

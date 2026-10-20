@@ -15,7 +15,7 @@ type AnalysisSetupState = {
   commandPaletteOpen: boolean;
   openSetup: (op: AnalysisKey, initialBody?: Record<string, unknown> | null) => void;
   openSetupFromPalette: (op: AnalysisKey) => void;
-  openDialog: (name: string) => void;
+  openDialog: (name: string, initialBody?: Record<string, unknown> | null) => void;
   openUnavailable: (featureName: string, kind?: UnavailableKind) => void;
   closeSetup: () => void;
   closeDialog: () => void;
@@ -69,9 +69,10 @@ export const useAnalysisSetupStore = create<AnalysisSetupState>(set => ({
             commandPaletteOpen: false,
           }
     ),
-  openDialog: name =>
+  openDialog: (name, initialBody = null) =>
     set(state => ({
       setupOp: null,
+      setupInitialBody: initialBody,
       dialogName: name,
       dialogNonce: state.dialogNonce + 1,
       unavailableName: null,
