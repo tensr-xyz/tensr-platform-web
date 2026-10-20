@@ -22,6 +22,16 @@ function plainCardText(text: string): string {
   return text.replace(/\*\*/g, '').replace(/`/g, '').replace(/\s+/g, ' ').trim();
 }
 
+/** The approval sentence, once, even when the payload repeats it. */
+export function approvalPlanOnce(rationale: string | undefined): string {
+  const text = plainCardText(rationale || '');
+  const marker = 'Waiting for approval:';
+  const first = text.indexOf(marker);
+  if (first < 0) return text;
+  const second = text.indexOf(marker, first + marker.length);
+  return (second < 0 ? text.slice(first) : text.slice(first, second)).trim();
+}
+
 function actionTitle(action: ChatPendingAction): string {
   if (action.kind === 'analysis_plan') {
     return analysisLabelForPlan(action.plan);
@@ -103,7 +113,10 @@ export function ChatAnalysisApproval({
     return null;
   }
 
-  const title = plainCardText(actionTitle(action));
+  const title =
+    action.kind === 'agent_tool_approval'
+      ? approvalPlanOnce(action.rationale) || plainCardText(actionTitle(action))
+      : plainCardText(actionTitle(action));
 
   if (action.status === 'expired' || isStale) {
     return (
@@ -194,10 +207,12 @@ export function ChatAnalysisApproval({
             {plainCardText(action.plan.rationale)}
           </p>
         ) : null}
-        {action.kind === 'agent_tool_approval' && action.rationale ? (
+        {action.kind === 'agent_tool_approval' &&
+        action.rationale &&
+        approvalPlanOnce(action.rationale) !== title ? (
           <p className="mt-1.5 text-[11px] leading-snug text-muted-foreground">
             <span className="font-medium text-foreground">Plan: </span>
-            {plainCardText(action.rationale)}
+            {approvalPlanOnce(action.rationale)}
           </p>
         ) : null}
         {action.kind === 'agent_tool_approval' && action.whyThisTest ? (

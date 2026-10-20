@@ -156,6 +156,7 @@ export function adoptDerivedDataset(result: DerivedDatasetPayload): boolean {
     name: result.original_filename || sheet.name,
     data,
   });
+  tabsState.setActiveTab(sheet.id);
 
   const project = useProjectStore.getState();
   if (project.importData) {

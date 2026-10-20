@@ -1893,10 +1893,11 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                         pendingAction?.kind === 'agent_tool_approval'
                           ? pendingAction.rationale
                           : '';
-                      const hideDuplicateApproval = approvalTextAlreadyOnCard(
-                        typeof message.content === 'string' ? message.content : '',
-                        approvalRationale
-                      );
+                      const messageText =
+                        typeof message.content === 'string' ? message.content : '';
+                      const hideDuplicateApproval =
+                        approvalTextAlreadyOnCard(messageText, approvalRationale) ||
+                        (pendingAction?.kind === 'agent_tool_approval' && !messageText.trim());
 
                       return (
                         <MessageScrollerItem key={message.id}>

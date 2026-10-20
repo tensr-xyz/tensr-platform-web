@@ -71,6 +71,15 @@ describe('resolveWorkspaceDatasetId', () => {
       data: { sourceDatasetId: datasetId, filePath: datasetId },
     };
     expect(resolveSpreadsheetContextTab([sheet, report], report)).toEqual(sheet);
+    const moved = {
+      ...sheet,
+      data: {
+        ...sheet.data,
+        datasetId: '44444444-4444-4444-8444-444444444444',
+        filePath: '44444444-4444-4444-8444-444444444444',
+      },
+    };
+    expect(resolveSpreadsheetContextTab([moved, report], report)).toEqual(moved);
     expect(resolveWorkspaceDatasetId({ tab: report, fileSystem: [{ fileId: datasetId }] })).toBe(
       datasetId
     );
