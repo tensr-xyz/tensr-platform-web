@@ -32,6 +32,8 @@ describe('ProvenanceInspector', () => {
           content_fingerprint: 'deadbeefcafebabe0123456789',
           origin_dataset_id: 'ds-origin',
           weight_vector: { identity: 'w1', method: 'rake' },
+          active_weight_column: 'w',
+          weight_column: null,
           convention: {
             variance_mode: 'q_taylor_srs',
             test_type: 't',
@@ -49,5 +51,7 @@ describe('ProvenanceInspector', () => {
     expect(screen.getByText('deadbeefcafebabe…')).toBeInTheDocument();
     expect(screen.getByText('ds-origin')).toBeInTheDocument();
     expect(screen.getByText(/identity=w1/)).toBeInTheDocument();
+    expect(screen.getByText('w', { exact: true })).toBeInTheDocument();
+    expect(screen.getByText('none', { exact: true })).toBeInTheDocument();
   });
 });
