@@ -24,9 +24,10 @@ export type OpenedAnalysisTab = {
 /** Human label for a results tab / See also link. */
 export function analysisTabLabel(
   analysisType: string,
-  requestBody: Record<string, unknown>
+  requestBody: Record<string, unknown>,
+  subtitle?: string | null
 ): string {
-  return formatAnalysisRunTabLabel(analysisType, requestBody);
+  return formatAnalysisRunTabLabel(analysisType, requestBody, subtitle);
 }
 
 /** One-line chat note when a chained enrichment step finishes. */

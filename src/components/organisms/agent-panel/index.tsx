@@ -804,7 +804,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             openedTabs.push({
               tabId,
               isEnrichment,
-              label: analysisTabLabel(analysisType, requestBody),
+              label: analysisTabLabel(analysisType, requestBody, report?.meta?.subtitle),
               fingerprint: analysisRunFingerprint(analysisType, requestBody),
               runId: typeof entry.result.run_id === 'string' ? entry.result.run_id : undefined,
             });

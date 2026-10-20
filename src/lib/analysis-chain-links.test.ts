@@ -1,10 +1,26 @@
 import {
+  analysisTabLabel,
   enrichmentCompletionNote,
   relatedLinkDisplayLabel,
   wireAnalysisChainLinks,
 } from '@/lib/analysis-chain-links';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import { ViewType, useTabsStore } from '@/stores/tabs-store';
+
+describe('analysisTabLabel', () => {
+  it('uses the report heading so a loop tab says Brand, not the item column', () => {
+    expect(
+      analysisTabLabel(
+        'banner_table',
+        { stub_column: 'aware', banner_column: 'item' },
+        'aware by Brand'
+      )
+    ).toBe('Custom Tables — aware by Brand');
+    expect(analysisTabLabel('banner_table', { stub_column: 'aware', banner_column: 'item' })).toBe(
+      'Custom Tables — aware by item'
+    );
+  });
+});
 
 describe('enrichmentCompletionNote', () => {
   it('names the correlation diagnostic and tab label', () => {
