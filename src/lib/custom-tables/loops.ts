@@ -60,7 +60,9 @@ export function loopPickerColumns(
 ): PickerColumn[] {
   if (!loop) return sheet.map(column => ({ id: column.id, label: column.label }));
   const members = new Set(
-    (loop.members || []).map(member => member.column).filter((column): column is string => Boolean(column))
+    (loop.members || [])
+      .map(member => member.column)
+      .filter((column): column is string => Boolean(column))
   );
   const brand: PickerColumn = {
     id: loop.item_key || 'item',
