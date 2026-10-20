@@ -137,8 +137,8 @@ export const TECHNIQUE_CONFIGS: Record<string, TechniqueConfig> = {
       { kind: 'columns', key: 'items', label: 'Items' },
     ],
   },
-  'MaxDiff (HB)': {
-    label: 'MaxDiff (HB)',
+  'MaxDiff (individual utilities)': {
+    label: 'MaxDiff (individual utilities)',
     route: 'techniques/maxdiff/hb',
     analysisOp: 'maxdiff_hb',
     fields: [
@@ -159,8 +159,8 @@ export const TECHNIQUE_CONFIGS: Record<string, TechniqueConfig> = {
       { kind: 'columns', key: 'attribute_columns', label: 'Attribute columns' },
     ],
   },
-  'Conjoint (HB)': {
-    label: 'Conjoint (HB)',
+  'Conjoint (individual utilities)': {
+    label: 'Conjoint (individual utilities)',
     route: 'techniques/conjoint/hb',
     analysisOp: 'conjoint_hb',
     fields: [

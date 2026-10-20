@@ -86,7 +86,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
     icon: <Calculator className="h-4 w-4" />,
     sections: {
       'Descriptive Statistics': ['Descriptives', 'Batch Tables'],
-      Tables: ['Custom Tables', 'Banner Book'],
+      Tables: ['Custom Tables', 'Banner Book', 'Pivot table'],
       'Compare Means': [
         'Independent-Samples T Test',
         'Paired-Samples T Test',
@@ -156,6 +156,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       ],
       Survival: ['Kaplan–Meier', 'Cox Proportional Hazards', 'Nelson–Aalen'],
       Network: ['Network'],
+      'Choice modelling': ['Conjoint (CBC)', 'MaxDiff'],
       'Survey techniques': [
         'TURF',
         'Driver Analysis',
@@ -172,8 +173,8 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Verbatim Coding',
         'MaxDiff (Count)',
         'MaxDiff (MNL)',
-        'MaxDiff (HB)',
-        'Conjoint (HB)',
+        'MaxDiff (individual utilities)',
+        'Conjoint (individual utilities)',
         'Choice Simulator',
       ],
     },

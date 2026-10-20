@@ -704,9 +704,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             (entry as { run_id?: string }).run_id || entry.result?.run_id || ''
           );
           if (entry.name === 'run_analysis' && streamedRunId && !entry.result?.result) {
-            const { analysisEnvelopeFromStoredRun, fetchAnalysisRun } = await import(
-              '@/lib/analysis-runs'
-            );
+            const { analysisEnvelopeFromStoredRun, fetchAnalysisRun } =
+              await import('@/lib/analysis-runs');
             const stored = await fetchAnalysisRun(streamedRunId);
             if (stored?.result) {
               entry.result = analysisEnvelopeFromStoredRun(

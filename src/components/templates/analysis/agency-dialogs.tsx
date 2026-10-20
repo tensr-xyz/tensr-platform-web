@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import { Textarea } from '@/components/atoms/text-area';
+import { ChoiceModellingDialog } from '@/components/templates/analysis/choice-modelling';
 import { apiClient } from '@/lib/api-client';
 import {
   isTechniqueRun,
@@ -528,107 +529,9 @@ export const FunnelDialog = ({ children }: { children: ReactNode }) => (
 );
 
 export function MaxDiffDialog({ children }: { children: ReactNode }) {
-  const { datasetId, columns } = useWorkspaceColumns();
-  const [best, setBest] = useState('');
-  const [worst, setWorst] = useState('');
-  const [items, setItems] = useState('');
-  const [mode, setMode] = useState<'count' | 'mnl'>('count');
-  return (
-    <AgencyDialog
-      title="MaxDiff (counting / MNL)"
-      trigger={children}
-      onRun={async () => {
-        if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
-        if (mode === 'count') {
-          const parameters = { best_column: best, worst_column: worst };
-          const payload = await apiClient.datasets.techniques.run(
-            datasetId,
-            'maxdiff/count',
-            parameters
-          );
-          return techniqueRun(payload, { op: 'maxdiff_count', parameters });
-        }
-        const parameters = {
-          best_column: best,
-          worst_column: worst,
-          set_columns: columns.filter(c => c.startsWith('set_')),
-          items: items
-            .split(',')
-            .map(s => s.trim())
-            .filter(Boolean),
-        };
-        const payload = await apiClient.datasets.techniques.run(
-          datasetId,
-          'maxdiff/mnl',
-          parameters
-        );
-        return techniqueRun(payload, { op: 'maxdiff_mnl', parameters });
-      }}
-    >
-      <div className="space-y-3">
-        <p className="text-xs text-muted-foreground">
-          Hierarchical Bayes is not offered. Counting or MNL only.
-        </p>
-        <Select value={mode} onValueChange={value => setMode(value as 'count' | 'mnl')}>
-          <SelectTrigger className="w-full text-sm">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="count">Counting</SelectItem>
-            <SelectItem value="mnl">MNL</SelectItem>
-          </SelectContent>
-        </Select>
-        <Label>Best</Label>
-        <ColumnSelect value={best} onValueChange={setBest} columns={columns} />
-        <Label>Worst</Label>
-        <ColumnSelect value={worst} onValueChange={setWorst} columns={columns} />
-        {mode === 'mnl' ? (
-          <>
-            <Label>Items (comma-separated)</Label>
-            <Input value={items} onChange={e => setItems(e.target.value)} />
-          </>
-        ) : null}
-      </div>
-    </AgencyDialog>
-  );
+  return <ChoiceModellingDialog mode="maxdiff">{children}</ChoiceModellingDialog>;
 }
 
 export function ConjointDialog({ children }: { children: ReactNode }) {
-  const { datasetId, columns } = useWorkspaceColumns();
-  const [chosen, setChosen] = useState('');
-  const [profile, setProfile] = useState('');
-  const [attrs, setAttrs] = useState('');
-  return (
-    <AgencyDialog
-      title="Conjoint (MNL)"
-      trigger={children}
-      onRun={async () => {
-        if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
-        const parameters = {
-          chosen_column: chosen,
-          profile_id_column: profile,
-          attribute_columns: attrs
-            .split(',')
-            .map(s => s.trim())
-            .filter(Boolean),
-        };
-        const payload = await apiClient.datasets.techniques.run(
-          datasetId,
-          'conjoint/mnl',
-          parameters
-        );
-        return techniqueRun(payload, { op: 'conjoint_mnl', parameters });
-      }}
-    >
-      <div className="space-y-3">
-        <p className="text-xs text-muted-foreground">MNL only. HB is not offered.</p>
-        <Label>Chosen</Label>
-        <ColumnSelect value={chosen} onValueChange={setChosen} columns={columns} />
-        <Label>Profile id</Label>
-        <ColumnSelect value={profile} onValueChange={setProfile} columns={columns} />
-        <Label>Attributes (comma-separated)</Label>
-        <Input value={attrs} onChange={e => setAttrs(e.target.value)} />
-      </div>
-    </AgencyDialog>
-  );
+  return <ChoiceModellingDialog mode="cbc">{children}</ChoiceModellingDialog>;
 }

@@ -28,6 +28,7 @@ import ComputeVariablesDialog from '@/components/templates/transform/compute-var
 import CountValuesDialog from '@/components/templates/transform/count-values';
 import ShiftValuesDialog from '@/components/templates/transform/shift-values';
 import { CustomTablesDialog } from '@/components/templates/analysis/custom-tables';
+import { PivotTableDialog } from '@/components/templates/analysis/pivot-table';
 import { RakeWeightsDialog } from '@/components/templates/data/rake-weights';
 import { CellWeightsDialog } from '@/components/templates/data/cell-weights';
 import { PipelineScriptDialog } from '@/components/templates/data/pipeline-script';
@@ -108,7 +109,8 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   Explore: DescriptivesLauncher,
   'Ratio Statistics': DescriptivesLauncher,
   'Custom Tables': CustomTablesDialog,
-  'Pivot Tables': DescriptivesLauncher,
+  'Pivot Tables': PivotTableDialog,
+  'Pivot table': PivotTableDialog,
 
   // Correlation & Regression
   'Correlation Analysis': CorrelationLauncher,

@@ -411,7 +411,9 @@ function matchMenuLabel(message: string): string | null {
     (a, b) => b[0].length - a[0].length
   );
   for (const [low, label] of labelsByLength) {
-    if (lower.includes(low)) return label;
+    if (!lower.includes(low)) continue;
+    if (low === 'maxdiff' && label === 'MaxDiff') continue;
+    return label;
   }
 
   // synonyms
