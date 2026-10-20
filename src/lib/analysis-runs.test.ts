@@ -1,4 +1,5 @@
 import {
+  analysisEnvelopeFromStoredRun,
   canRevealConsumedRows,
   normalizeStoredAnalysisRun,
   provenanceBannerText,
@@ -6,6 +7,7 @@ import {
   rSyntaxBadgeText,
   sourceRowsUsedLabel,
 } from './analysis-runs';
+import type { StoredAnalysisRun } from './analysis-runs';
 
 describe('normalizeStoredAnalysisRun', () => {
   it('keeps a stored report so removed analysis types still open', () => {
@@ -133,6 +135,30 @@ describe('sourceRowsUsedLabel', () => {
       '504 of 505 source rows used'
     );
     expect(sourceRowsUsedLabel(undefined)).toBeNull();
+  });
+});
+
+describe('analysisEnvelopeFromStoredRun', () => {
+  it('keeps the stored provenance, including a derived dataset and its parent', () => {
+    const stored = {
+      id: 'run-derived',
+      dataset_id: 'dcc32017',
+      op: 'descriptives',
+      created_at: '2026-10-20T00:00:00.000Z',
+      report: { meta: { title: 'Descriptives' } },
+      result: { statistics_block: { 'N Valid': 258, 'N Missing': 42 } },
+      provenance: {
+        dataset_id: 'dcc32017',
+        parent_dataset_id: 'fc7decc1',
+        row_uid_bitset: 'BQ==',
+        row_uid_bitset_miss_count: 0,
+      },
+      body: { columns: ['Q1_top2'] },
+    } as StoredAnalysisRun;
+    const envelope = analysisEnvelopeFromStoredRun(stored, { ok: true });
+    expect(envelope.provenance).toEqual(stored.provenance);
+    expect(envelope.run_id).toBe('run-derived');
+    expect(provenanceTraceState(envelope.provenance).kind).toBe('complete');
   });
 });
 

@@ -704,20 +704,15 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             (entry as { run_id?: string }).run_id || entry.result?.run_id || ''
           );
           if (entry.name === 'run_analysis' && streamedRunId && !entry.result?.result) {
-            const { fetchAnalysisRun } = await import('@/lib/analysis-runs');
+            const { analysisEnvelopeFromStoredRun, fetchAnalysisRun } = await import(
+              '@/lib/analysis-runs'
+            );
             const stored = await fetchAnalysisRun(streamedRunId);
             if (stored?.result) {
-              entry.result = {
-                ...(entry.result ?? {}),
-                ok: true,
-                analysis_type: stored.op || entry.result?.analysis_type,
-                request_body:
-                  (stored.body as Record<string, unknown> | undefined) ||
-                  entry.result?.request_body,
-                result: stored.result as Record<string, unknown>,
-                report: stored.report as Record<string, unknown> | undefined,
-                run_id: stored.id,
-              };
+              entry.result = analysisEnvelopeFromStoredRun(
+                stored,
+                (entry.result as Record<string, unknown> | undefined) ?? null
+              ) as typeof entry.result;
             }
           }
           if (entry.name !== 'run_analysis' || !entry.result?.ok || !entry.result?.result) {
