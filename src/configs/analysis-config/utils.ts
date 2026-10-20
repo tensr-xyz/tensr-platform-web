@@ -212,7 +212,11 @@ export function filterAnalysisItems(items: AnalysisItem[], searchTerm: string): 
   const lowerSearchTerm = searchTerm.toLowerCase();
 
   return items.filter(item => {
-    if (item.searchBlob?.toLowerCase().includes(lowerSearchTerm)) {
+    const keywords = [item.searchBlob, item.hint]
+      .filter((part): part is string => Boolean(part))
+      .join(' ')
+      .toLowerCase();
+    if (keywords.includes(lowerSearchTerm)) {
       return true;
     }
     if (item.analysisKey && analysisSearchBlob(item.analysisKey).includes(lowerSearchTerm)) {

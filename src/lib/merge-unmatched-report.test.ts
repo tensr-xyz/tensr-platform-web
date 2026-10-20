@@ -24,6 +24,12 @@ describe('mergeUnmatchedReportLines', () => {
     ]);
   });
 
+  it('says when the rows being stacked are already in the file', () => {
+    expect(
+      mergeUnmatchedReportLines({ row_count: 400, rows_already_in_file: true }, false)[0]
+    ).toBe('These rows are already in this file');
+  });
+
   it('shows a label clash on a stack preview', () => {
     expect(
       mergeUnmatchedReportLines(
