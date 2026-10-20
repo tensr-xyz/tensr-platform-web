@@ -73,7 +73,9 @@ export function DataQualityReportDialog({ children }: { children: ReactNode }) {
         { casts: [{ name, target_type: targetType }] },
         token
       );
-      const shown = showDerivedResult('fix_types', saved, { casts: [{ name, target_type: targetType }] });
+      const shown = showDerivedResult('fix_types', saved, {
+        casts: [{ name, target_type: targetType }],
+      });
       if (!shown && saved.dataset_id) {
         router.push(
           `/workspace/dataset/${saved.dataset_id}?name=${encodeURIComponent(saved.original_filename || 'typed')}`

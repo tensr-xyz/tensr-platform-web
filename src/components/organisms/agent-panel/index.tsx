@@ -62,6 +62,7 @@ import {
   type DerivedDatasetPayload,
 } from '@/lib/adopt-derived-dataset';
 import { getDatasetIdFromTab, resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
+import { notifyDatasetMetadata } from '@/lib/custom-tables/loops';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { dispatchApplyColumnFilters } from '@/lib/spreadsheet-commands';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
@@ -689,6 +690,14 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         const resultsSeenByType = new Map<string, number>();
 
         for (const entry of response.tool_results ?? []) {
+          const confirmedLoop =
+            String(entry.result?.operation || '') === 'confirm_loop' ||
+            String(entry.result?.analysis_type || '') === 'confirm_loop' ||
+            String((entry.args as { analysis_type?: string } | undefined)?.analysis_type || '') ===
+              'confirm_loop';
+          if (confirmedLoop && datasetId && entry.result?.ok !== false) {
+            notifyDatasetMetadata(datasetId);
+          }
           // The stream carries the summary and run id. The report reads the
           // full result stored for that id.
           const streamedRunId = String(

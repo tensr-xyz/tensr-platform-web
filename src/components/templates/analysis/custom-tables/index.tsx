@@ -262,7 +262,11 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
   const product = bannerColumnProduct(canvas.banners, canvas.nestBanners);
   const largeBanner = product > 16;
 
-  const placeColumn = (zone: 'stub' | 'banner' | `nest:${number}`, column: string, values: string[]) => {
+  const placeColumn = (
+    zone: 'stub' | 'banner' | `nest:${number}`,
+    column: string,
+    values: string[]
+  ) => {
     if (zone === 'stub') setCanvas(c => addStubQuestion(c, column, values));
     else if (zone === 'banner') setCanvas(c => addBannerQuestion(c, column, values));
     else {
@@ -642,7 +646,9 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                 <div key={proposal.id} className="flex items-center justify-between gap-2">
                   <p className="text-xs">{loopProposalSentence(proposal)}</p>
                   {proposal.partial ? (
-                    <p className="text-[11px] text-muted-foreground">Partial match. It stays a proposal.</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      Partial match. It stays a proposal.
+                    </p>
                   ) : (
                     <Button
                       type="button"
@@ -684,7 +690,10 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
               ))}
               {activeLoop ? (
                 <div className="flex items-center gap-2">
-                  <Label htmlFor="loop-item-title" className="text-[10px] uppercase text-muted-foreground">
+                  <Label
+                    htmlFor="loop-item-title"
+                    className="text-[10px] uppercase text-muted-foreground"
+                  >
                     Loop name
                   </Label>
                   <Input
@@ -1276,7 +1285,8 @@ export function CustomTablesDialog({ children }: { children: ReactNode }) {
                   </p>
                   {book.loop_table.paired_across_items ? (
                     <p>
-                      Significance tests are paired across {loopItemPlural(book.loop_table.item_title)}.
+                      Significance tests are paired across{' '}
+                      {loopItemPlural(book.loop_table.item_title)}.
                     </p>
                   ) : null}
                 </div>
