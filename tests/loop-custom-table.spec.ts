@@ -2,7 +2,12 @@ import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
-import { openAnalysisPalette, paletteItem, seedE2eSession, selectPaletteTab } from './fixtures/e2e-auth';
+import {
+  openAnalysisPalette,
+  paletteItem,
+  seedE2eSession,
+  selectPaletteTab,
+} from './fixtures/e2e-auth';
 
 const SAV = path.join(__dirname, 'fixtures/market-demo/cars_EN.sav');
 

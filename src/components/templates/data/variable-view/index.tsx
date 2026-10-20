@@ -115,7 +115,11 @@ export function VariableViewDialog({ children }: VariableViewProps) {
           <p className="text-sm text-muted-foreground">Open a dataset tab first.</p>
         ) : (
           <>
-            <LoopGroups datasetId={datasetId} onChange={() => void load()} onMembers={setMemberNames} />
+            <LoopGroups
+              datasetId={datasetId}
+              onChange={() => void load()}
+              onMembers={setMemberNames}
+            />
             <div className="flex-1 overflow-auto border rounded-md">
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 bg-muted/80">
@@ -139,115 +143,116 @@ export function VariableViewDialog({ children }: VariableViewProps) {
                 <tbody>
                   {columns.map((col, i) =>
                     memberNames.includes(col.name) ? null : (
-                    <tr key={col.name} className="border-t border-border/50">
-                      <td className="px-2 py-1 font-mono">{col.name}</td>
-                      <td className="px-2 py-1">
-                        <Input
-                          className="h-7 text-xs"
-                          value={col.label ?? ''}
-                          onChange={e => updateCol(i, { label: e.target.value || null })}
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <Select
-                          value={col.type || 'numeric'}
-                          onValueChange={v => updateCol(i, { type: v })}
-                        >
-                          <SelectTrigger className="h-7 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="numeric">Numeric</SelectItem>
-                            <SelectItem value="string">String</SelectItem>
-                            <SelectItem value="date">Date</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-1">
-                        <Input
-                          className="h-7 w-16 text-xs"
-                          type="number"
-                          value={col.width ?? 8}
-                          onChange={e => updateCol(i, { width: Number(e.target.value) })}
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <Select
-                          value={col.measure || 'none'}
-                          onValueChange={v =>
-                            updateCol(i, {
-                              measure: v === 'none' ? null : (v as ColumnMetadata['measure']),
-                            })
-                          }
-                        >
-                          <SelectTrigger className="h-7 text-xs">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="none">—</SelectItem>
-                            <SelectItem value="nominal">Nominal</SelectItem>
-                            <SelectItem value="ordinal">Ordinal</SelectItem>
-                            <SelectItem value="scale">Scale</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </td>
-                      <td className="px-2 py-1">
-                        <Input
-                          className="h-7 text-xs font-mono"
-                          placeholder="1=Male;2=Female"
-                          defaultValue={
-                            col.value_labels
-                              ? Object.entries(col.value_labels)
-                                  .map(([k, v]) => `${k}=${v}`)
-                                  .join(';')
-                              : ''
-                          }
-                          onBlur={e => {
-                            const map: Record<string, string> = {};
-                            e.target.value.split(';').forEach(pair => {
-                              const [k, v] = pair.split('=');
-                              if (k && v) map[k.trim()] = v.trim();
-                            });
-                            updateCol(i, { value_labels: Object.keys(map).length ? map : null });
-                          }}
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <Input
-                          className="h-7 text-xs font-mono"
-                          placeholder="99, -9"
-                          defaultValue={
-                            col.missing?.user_values
-                              ? Array.isArray(col.missing.user_values)
-                                ? col.missing.user_values.join(', ')
-                                : String(col.missing.user_values)
-                              : ''
-                          }
-                          onBlur={e => {
-                            const vals = e.target.value
-                              .split(',')
-                              .map(s => s.trim())
-                              .filter(Boolean);
-                            updateCol(i, {
-                              missing: vals.length ? { user_values: vals } : null,
-                            });
-                          }}
-                        />
-                      </td>
-                      <td className="px-2 py-1">
-                        <Input
-                          className="h-7 text-xs font-mono"
-                          placeholder="owns_A=1"
-                          aria-label={`Routing for ${col.name}`}
-                          defaultValue={formatEligibleIf(col.eligible_if)}
-                          onBlur={e => {
-                            const clauses = parseEligibleIf(e.target.value);
-                            updateCol(i, { eligible_if: clauses.length ? clauses : null });
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                      <tr key={col.name} className="border-t border-border/50">
+                        <td className="px-2 py-1 font-mono">{col.name}</td>
+                        <td className="px-2 py-1">
+                          <Input
+                            className="h-7 text-xs"
+                            value={col.label ?? ''}
+                            onChange={e => updateCol(i, { label: e.target.value || null })}
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <Select
+                            value={col.type || 'numeric'}
+                            onValueChange={v => updateCol(i, { type: v })}
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="numeric">Numeric</SelectItem>
+                              <SelectItem value="string">String</SelectItem>
+                              <SelectItem value="date">Date</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-2 py-1">
+                          <Input
+                            className="h-7 w-16 text-xs"
+                            type="number"
+                            value={col.width ?? 8}
+                            onChange={e => updateCol(i, { width: Number(e.target.value) })}
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <Select
+                            value={col.measure || 'none'}
+                            onValueChange={v =>
+                              updateCol(i, {
+                                measure: v === 'none' ? null : (v as ColumnMetadata['measure']),
+                              })
+                            }
+                          >
+                            <SelectTrigger className="h-7 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">—</SelectItem>
+                              <SelectItem value="nominal">Nominal</SelectItem>
+                              <SelectItem value="ordinal">Ordinal</SelectItem>
+                              <SelectItem value="scale">Scale</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-2 py-1">
+                          <Input
+                            className="h-7 text-xs font-mono"
+                            placeholder="1=Male;2=Female"
+                            defaultValue={
+                              col.value_labels
+                                ? Object.entries(col.value_labels)
+                                    .map(([k, v]) => `${k}=${v}`)
+                                    .join(';')
+                                : ''
+                            }
+                            onBlur={e => {
+                              const map: Record<string, string> = {};
+                              e.target.value.split(';').forEach(pair => {
+                                const [k, v] = pair.split('=');
+                                if (k && v) map[k.trim()] = v.trim();
+                              });
+                              updateCol(i, { value_labels: Object.keys(map).length ? map : null });
+                            }}
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <Input
+                            className="h-7 text-xs font-mono"
+                            placeholder="99, -9"
+                            defaultValue={
+                              col.missing?.user_values
+                                ? Array.isArray(col.missing.user_values)
+                                  ? col.missing.user_values.join(', ')
+                                  : String(col.missing.user_values)
+                                : ''
+                            }
+                            onBlur={e => {
+                              const vals = e.target.value
+                                .split(',')
+                                .map(s => s.trim())
+                                .filter(Boolean);
+                              updateCol(i, {
+                                missing: vals.length ? { user_values: vals } : null,
+                              });
+                            }}
+                          />
+                        </td>
+                        <td className="px-2 py-1">
+                          <Input
+                            className="h-7 text-xs font-mono"
+                            placeholder="owns_A=1"
+                            aria-label={`Routing for ${col.name}`}
+                            defaultValue={formatEligibleIf(col.eligible_if)}
+                            onBlur={e => {
+                              const clauses = parseEligibleIf(e.target.value);
+                              updateCol(i, { eligible_if: clauses.length ? clauses : null });
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    )
+                  )}
                 </tbody>
               </table>
             </div>

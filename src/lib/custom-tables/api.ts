@@ -167,11 +167,7 @@ export function fetchLoopMetadata(datasetId: string, token?: string | null) {
     loop_proposals?: LoopDefinition[];
     loops?: LoopDefinition[];
     active_weight_column?: string | null;
-  }>(
-    `/datasets/${datasetId}/metadata`,
-    { method: 'GET' },
-    token
-  );
+  }>(`/datasets/${datasetId}/metadata`, { method: 'GET' }, token);
 }
 
 export function confirmLoop(datasetId: string, loopId: string, token?: string | null) {
