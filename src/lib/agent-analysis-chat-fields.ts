@@ -26,6 +26,39 @@ export function reportCardForOpenedTab(opts: {
   };
 }
 
+/** The same answer pasted twice or three times, separated by blank lines, is one copy. */
+export function collapseRepeatedAnswer(text: string): string {
+  const trimmed = text.trim();
+  const blocks = trimmed
+    .split(/\n{2,}/)
+    .map(part => part.trim())
+    .filter(Boolean);
+  if (blocks.length >= 2 && blocks.every(block => block === blocks[0])) {
+    return blocks[0];
+  }
+  return trimmed;
+}
+
+/**
+ * v2 already wrote the final answer. Show that once. A report card is the table,
+ * not a second copy of the answer, and a report that starts with the answer is not pasted again.
+ */
+export function v2FinalAnswerFields(opts: {
+  answer: string;
+  reportMarkdown: string;
+  hasReportCard: boolean;
+}): { content: string; resultMarkdown: string } {
+  const answer = collapseRepeatedAnswer(opts.answer);
+  const report = opts.reportMarkdown.trim();
+  if (opts.hasReportCard) {
+    return { content: answer, resultMarkdown: '' };
+  }
+  if (answer && report && (report.startsWith(answer) || sameText(answer, report))) {
+    return { content: '', resultMarkdown: report };
+  }
+  return { content: answer, resultMarkdown: report };
+}
+
 /** Build chat fields after a successful run_analysis so Plan and report don't double-render. */
 function sameText(left: string, right: string): boolean {
   return (
