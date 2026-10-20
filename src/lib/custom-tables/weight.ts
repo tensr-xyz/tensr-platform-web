@@ -56,8 +56,9 @@ export function weightPickerOptions(
       weight: 'none',
     });
   }
+  const named = (activeWeightColumn || '').trim();
   const current = versions.find(v => v.dataset_id === currentId);
-  if (current && isWeightedOp(current.producing_operation)) {
+  if (current && isWeightedOp(current.producing_operation) && !named) {
     options.push({
       optionId: `weight:${current.dataset_id}`,
       datasetId: current.dataset_id,

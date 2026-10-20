@@ -156,6 +156,11 @@ function FuseDialog({
       <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            {mode === 'waves'
+              ? 'Stack waves of one survey and keep which wave each row came from. Use Merge Datasets to append one file or join on a key.'
+              : 'Join files on a respondent key when the same people are in more than one file. Use Merge Datasets to stack or append rows.'}
+          </p>
         </DialogHeader>
         <div className="space-y-4">
           <div className="space-y-2">

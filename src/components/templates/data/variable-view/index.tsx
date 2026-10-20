@@ -24,6 +24,8 @@ import { useTabsStore } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
 import type { ColumnMetadata } from '@/lib/analysis-report-types';
 import { formatEligibleIf, parseEligibleIf } from '@/lib/eligible-if';
+import { LoopGroups } from '@/components/templates/data/loop-groups';
+import { loopMemberNames, type LoopDefinition } from '@/lib/custom-tables/loops';
 
 interface VariableViewProps {
   children: ReactNode;
@@ -35,6 +37,7 @@ export function VariableViewDialog({ children }: VariableViewProps) {
   const currentProject = useProjectStore(s => s.currentProject);
   const [open, setOpen] = useState(false);
   const [columns, setColumns] = useState<ColumnMetadata[]>([]);
+  const [memberNames, setMemberNames] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -58,8 +61,13 @@ export function VariableViewDialog({ children }: VariableViewProps) {
       setError('Could not load variable metadata');
       return;
     }
-    const json = (await res.json()) as { columns?: ColumnMetadata[] };
+    const json = (await res.json()) as {
+      columns?: ColumnMetadata[];
+      loop_proposals?: LoopDefinition[];
+      loops?: LoopDefinition[];
+    };
     setColumns(json.columns || []);
+    setMemberNames(loopMemberNames([...(json.loop_proposals || []), ...(json.loops || [])]));
     setError('');
   }, [datasetId]);
 
@@ -107,6 +115,7 @@ export function VariableViewDialog({ children }: VariableViewProps) {
           <p className="text-sm text-muted-foreground">Open a dataset tab first.</p>
         ) : (
           <>
+            <LoopGroups datasetId={datasetId} onChange={() => void load()} onMembers={setMemberNames} />
             <div className="flex-1 overflow-auto border rounded-md">
               <table className="w-full text-left text-xs">
                 <thead className="sticky top-0 bg-muted/80">
@@ -128,7 +137,8 @@ export function VariableViewDialog({ children }: VariableViewProps) {
                   </tr>
                 </thead>
                 <tbody>
-                  {columns.map((col, i) => (
+                  {columns.map((col, i) =>
+                    memberNames.includes(col.name) ? null : (
                     <tr key={col.name} className="border-t border-border/50">
                       <td className="px-2 py-1 font-mono">{col.name}</td>
                       <td className="px-2 py-1">
