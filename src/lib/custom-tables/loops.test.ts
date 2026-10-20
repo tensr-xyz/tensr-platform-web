@@ -1,4 +1,10 @@
-import { loopMemberNames, loopPickerColumns, loopProposalSentence } from './loops';
+import {
+  DATASET_METADATA_EVENT,
+  loopMemberNames,
+  loopPickerColumns,
+  loopProposalSentence,
+  notifyDatasetMetadata,
+} from './loops';
 
 const CARS = {
   id: 'aware+likes+owns',
@@ -45,5 +51,16 @@ describe('loop proposals', () => {
     expect(columns[0]?.hideId).toBe(true);
     expect(columns[0]?.id).toBe('item');
     expect(columns.some(column => column.id === 'aware_A')).toBe(false);
+  });
+
+  it('tells the column panel to reload after a chat confirm', () => {
+    const heard: string[] = [];
+    const onEvent = (event: Event) => {
+      heard.push(String((event as CustomEvent<{ datasetId?: string }>).detail?.datasetId));
+    };
+    window.addEventListener(DATASET_METADATA_EVENT, onEvent);
+    notifyDatasetMetadata('dataset-1');
+    window.removeEventListener(DATASET_METADATA_EVENT, onEvent);
+    expect(heard).toEqual(['dataset-1']);
   });
 });

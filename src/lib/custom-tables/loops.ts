@@ -53,6 +53,14 @@ export function loopMemberNames(loops: LoopDefinition[]): string[] {
   return [...names];
 }
 
+export const DATASET_METADATA_EVENT = 'tensr-dataset-metadata';
+
+/** Tell the column panel to reload loop groups after a chat confirm. */
+export function notifyDatasetMetadata(datasetId: string) {
+  if (typeof window === 'undefined' || !datasetId) return;
+  window.dispatchEvent(new CustomEvent(DATASET_METADATA_EVENT, { detail: { datasetId } }));
+}
+
 /** At loop level the list is the brand column, the loop questions, and respondent columns. */
 export function loopPickerColumns(
   sheet: Array<{ id: string; label: string }>,

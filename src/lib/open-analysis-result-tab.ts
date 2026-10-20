@@ -30,8 +30,14 @@ export function analysisRunFingerprint(op: string, parameters: Record<string, un
   return `${op}:${JSON.stringify(sorted)}`;
 }
 
-export function formatAnalysisRunTabLabel(op: string, parameters: Record<string, unknown>): string {
+export function formatAnalysisRunTabLabel(
+  op: string,
+  parameters: Record<string, unknown>,
+  subtitle?: string | null
+): string {
   const base = ANALYSIS_LABELS[op as AnalysisKey] || op.replace(/_/g, ' ');
+  const heading = subtitle?.trim();
+  if (heading) return `${base} — ${heading}`;
   const dv =
     parameters.dependent_variable ??
     parameters.dependent ??
@@ -84,7 +90,7 @@ export function openAnalysisResultTab(params: {
   }
 
   const report = params.envelope?.report as AnalysisReport | undefined;
-  const label = formatAnalysisRunTabLabel(params.op, parameters);
+  const label = formatAnalysisRunTabLabel(params.op, parameters, report?.meta?.subtitle);
   const previousActive = useTabsStore.getState().activeTabId;
 
   addTab({
