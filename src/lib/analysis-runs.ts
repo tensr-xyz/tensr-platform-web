@@ -275,6 +275,23 @@ export function normalizeStoredAnalysisRun(row: unknown): StoredAnalysisRun | nu
   };
 }
 
+export function analysisEnvelopeFromStoredRun(
+  stored: StoredAnalysisRun,
+  prior?: Record<string, unknown> | null
+): Record<string, unknown> {
+  const previous = prior ?? {};
+  return {
+    ...previous,
+    ok: true,
+    analysis_type: stored.op || previous.analysis_type,
+    request_body: stored.body || previous.request_body,
+    result: stored.result,
+    report: stored.report,
+    run_id: stored.id,
+    provenance: stored.provenance ?? previous.provenance,
+  };
+}
+
 export function formatRunLabel(run: StoredAnalysisRun): string {
   const title = run.report.meta.title || run.op.replace(/_/g, ' ');
   const sub = run.report.meta.subtitle;

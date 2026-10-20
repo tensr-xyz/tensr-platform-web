@@ -5,6 +5,7 @@ import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { confirmLoop, fetchLoopMetadata, renameLoop } from '@/lib/custom-tables/api';
 import {
+  DATASET_METADATA_EVENT,
   loopMemberNames,
   loopProposalSentence,
   type LoopDefinition,
@@ -43,6 +44,17 @@ export function LoopGroups({ datasetId, onMembers, onChange }: LoopGroupsProps) 
     }
     void load().catch(() => setError('Could not load loops'));
   }, [datasetId, load, onMembers]);
+
+  useEffect(() => {
+    if (!datasetId) return;
+    const refresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ datasetId?: string }>).detail;
+      if (detail?.datasetId && detail.datasetId !== datasetId) return;
+      void load().catch(() => setError('Could not load loops'));
+    };
+    window.addEventListener(DATASET_METADATA_EVENT, refresh);
+    return () => window.removeEventListener(DATASET_METADATA_EVENT, refresh);
+  }, [datasetId, load]);
 
   if (!datasetId || (proposals.length === 0 && loops.length === 0 && !error)) return null;
 
