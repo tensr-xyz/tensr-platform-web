@@ -4,7 +4,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/atoms/button';
 import { Input } from '@/components/atoms/input';
 import { confirmLoop, fetchLoopMetadata, renameLoop } from '@/lib/custom-tables/api';
-import { loopMemberNames, loopProposalSentence, type LoopDefinition } from '@/lib/custom-tables/loops';
+import {
+  DATASET_METADATA_EVENT,
+  loopMemberNames,
+  loopProposalSentence,
+  type LoopDefinition,
+} from '@/lib/custom-tables/loops';
 import { getSessionJwt } from '@/utils/auth';
 
 type LoopGroupsProps = {
@@ -39,6 +44,17 @@ export function LoopGroups({ datasetId, onMembers, onChange }: LoopGroupsProps) 
     }
     void load().catch(() => setError('Could not load loops'));
   }, [datasetId, load, onMembers]);
+
+  useEffect(() => {
+    if (!datasetId) return;
+    const refresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ datasetId?: string }>).detail;
+      if (detail?.datasetId && detail.datasetId !== datasetId) return;
+      void load().catch(() => setError('Could not load loops'));
+    };
+    window.addEventListener(DATASET_METADATA_EVENT, refresh);
+    return () => window.removeEventListener(DATASET_METADATA_EVENT, refresh);
+  }, [datasetId, load]);
 
   if (!datasetId || (proposals.length === 0 && loops.length === 0 && !error)) return null;
 
@@ -79,7 +95,10 @@ export function LoopGroups({ datasetId, onMembers, onChange }: LoopGroupsProps) 
   return (
     <section role="region" aria-label="Loops" className="flex flex-col gap-2 px-2.5 py-2">
       {proposals.map(loop => (
-        <div key={loop.id} className="flex flex-col gap-1 rounded-md border border-border px-2 py-2">
+        <div
+          key={loop.id}
+          className="flex flex-col gap-1 rounded-md border border-border px-2 py-2"
+        >
           <p className="text-xs">{loopProposalSentence(loop)}</p>
           {loop.partial ? (
             <p className="text-[11px] text-muted-foreground">Partial match. It stays a proposal.</p>
@@ -91,7 +110,10 @@ export function LoopGroups({ datasetId, onMembers, onChange }: LoopGroupsProps) 
         </div>
       ))}
       {loops.map(loop => (
-        <div key={`${loop.id}-${loop.item_title || 'Brand'}`} className="flex flex-col gap-1 rounded-md border border-border px-2 py-2">
+        <div
+          key={`${loop.id}-${loop.item_title || 'Brand'}`}
+          className="flex flex-col gap-1 rounded-md border border-border px-2 py-2"
+        >
           <label className="flex items-center gap-2 text-xs">
             Brand label
             <Input

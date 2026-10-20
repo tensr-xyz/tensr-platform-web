@@ -2,7 +2,12 @@ import path from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
-import { openAnalysisPalette, paletteItem, seedE2eSession, selectPaletteTab } from './fixtures/e2e-auth';
+import {
+  openAnalysisPalette,
+  paletteItem,
+  seedE2eSession,
+  selectPaletteTab,
+} from './fixtures/e2e-auth';
 
 const SAV = path.join(__dirname, 'fixtures/market-demo/cars_EN.sav');
 
@@ -84,7 +89,7 @@ test('uploads cars_EN.sav, confirms the loop, and tables aware by brand', async 
   const composer = page.getByPlaceholder('Ask about your data…');
   await composer.fill('awareness by brand');
   await composer.press('Enter');
-  await expect(page.getByText(/The brand table is in the result|Loop level/)).toBeVisible({
+  await expect(page.getByText(/80\.5%|The brand table is in the result|Loop level/)).toBeVisible({
     timeout: 60_000,
   });
 });
