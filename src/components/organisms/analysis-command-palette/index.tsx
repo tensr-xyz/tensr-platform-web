@@ -135,6 +135,7 @@ function AnalysisSectionsList({
           const label = sectionName.replace(/\s*\(coming soon\)\s*/i, '').trim();
           return <CommandGroup key={sectionName} heading={`${label} — Coming soon`} />;
         }
+        if (items.length === 0) return null;
         return (
           <CommandGroup key={sectionName} heading={sectionName}>
             {items.map((item, idx) => (
@@ -345,7 +346,12 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
         >
           <DialogTitle className="sr-only">Search analyses and plugins</DialogTitle>
           <Command
-            shouldFilter={false}
+            shouldFilter
+            filter={(value, search) => {
+              const q = search.trim().toLowerCase();
+              if (!q) return 1;
+              return value.toLowerCase().includes(q) ? 1 : 0;
+            }}
             className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-none bg-transparent"
           >
             <CommandInput
@@ -406,7 +412,6 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
                   {showPluginsTab ? (
                     <TabsContent
                       value={PLUGINS_TAB_VALUE}
-                      forceMount
                       className="m-0 h-full border-0 p-0 outline-none data-[state=inactive]:hidden"
                     >
                       {pluginsError ? (
@@ -433,7 +438,15 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
                             return (
                               <CommandItem
                                 key={plugin.pluginId}
-                                value={plugin.pluginId}
+                                value={[
+                                  plugin.name,
+                                  plugin.description,
+                                  plugin.pluginId,
+                                  ...(plugin.tags || []),
+                                  ...(plugin.keywords || []),
+                                ]
+                                  .filter(Boolean)
+                                  .join(' ')}
                                 disabled={!canRun || busy}
                                 onSelect={() => void runPlugin(plugin)}
                                 title={
@@ -462,7 +475,6 @@ export function AnalysisCommandPalette({ open, onOpenChange }: Props) {
                     <TabsContent
                       key={tab}
                       value={tab}
-                      forceMount
                       className="m-0 h-full border-0 p-0 outline-none data-[state=inactive]:hidden"
                     >
                       <AnalysisSectionsList
