@@ -7,9 +7,19 @@ import {
   userFacingSchemaColumns,
 } from './adopt-derived-dataset';
 import type { TabData } from '@/stores/tabs-store';
+import { useChatStore } from '@/stores/chat-store';
 
 const tabs: Array<Record<string, unknown>> = [];
 let activeTabId = '';
+const mockProjectState: {
+  currentProject: { id: string } | null;
+  importData: null;
+  fileSystem: unknown[];
+} = {
+  currentProject: null,
+  importData: null,
+  fileSystem: [],
+};
 
 jest.mock('@/stores/tabs-store', () => ({
   ViewType: { SPREADSHEET: 'spreadsheet' },
@@ -39,7 +49,7 @@ jest.mock('@/stores/tabs-store', () => ({
 
 jest.mock('@/stores/project-store', () => ({
   useProjectStore: {
-    getState: () => ({ importData: null, fileSystem: [] }),
+    getState: () => mockProjectState,
   },
 }));
 
@@ -130,6 +140,33 @@ describe('adoptDerivedDataset', () => {
     expect(replace).toHaveBeenCalled();
     expect(String(replace.mock.calls[0][2])).toContain('/workspace/dataset/e5d1c555');
     replace.mockRestore();
+  });
+
+  it('keeps the open thread against the derived dataset after later messages', () => {
+    mockProjectState.currentProject = { id: 'parent-project' };
+    useChatStore.setState({ projects: {} });
+    useChatStore.getState().initializeSession('parent-project');
+    const messageId = useChatStore.getState().addMessage('parent-project', {
+      role: 'assistant',
+      content: 'Stacked.',
+      timestamp: new Date(),
+    });
+    const replace = jest.spyOn(History.prototype, 'replaceState').mockImplementation(() => undefined);
+    expect(
+      adoptDerivedDataset({
+        dataset_id: 'e5d1c555-9f80-497d-b0fb-2bfa07983d4c',
+        original_filename: 'cars_EN + FR',
+      })
+    ).toBe(true);
+    useChatStore.getState().updateMessage('parent-project', messageId, {
+      content: 'Scan score 91.',
+    });
+    const derived = useChatStore.getState().projects['e5d1c555-9f80-497d-b0fb-2bfa07983d4c'];
+    const messages = Object.values(derived.threads)[0].messages;
+    expect(messages.map(message => message.content)).toEqual(['Scan score 91.']);
+    replace.mockRestore();
+    mockProjectState.currentProject = null;
+    useChatStore.setState({ projects: {} });
   });
 });
 
