@@ -1,5 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
+import { apiClient } from '@/lib/api-client';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
 
 import { PivotTableDialog } from './index';
@@ -69,5 +70,31 @@ describe('pivot table dialog', () => {
       expect(button).toHaveClass('w-6');
       expect(button.querySelector('svg')).not.toBeNull();
     }
+  });
+
+  it('does not print column letters while Column letters is unticked', async () => {
+    (apiClient.datasets.analyze.run as jest.Mock).mockResolvedValue({
+      result: {
+        matrix: {
+          columns: [{ path: ['A'], kind: 'value' }],
+          rows: [{ path: ['row'], kind: 'value', cells: [{ value: 10, letters: 'B' }] }],
+        },
+      },
+    });
+    render(
+      <PivotTableDialog>
+        <button type="button">Open pivot</button>
+      </PivotTableDialog>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open pivot' }));
+    const dataTransfer = {
+      setData: jest.fn(),
+      getData: (type: string) => (type === 'application/x-tensr-column' ? 'aware_A' : ''),
+    };
+    fireEvent.drop(screen.getByText('Rows').parentElement!, { dataTransfer });
+    fireEvent.click(screen.getByRole('button', { name: 'Update pivot' }));
+    await waitFor(() => expect(screen.getByText('10')).toBeInTheDocument());
+    expect(screen.getByRole('checkbox', { name: 'Column letters' })).not.toBeChecked();
+    expect(screen.getByText('10').textContent).toBe('10');
   });
 });

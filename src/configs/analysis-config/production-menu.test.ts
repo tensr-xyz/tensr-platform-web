@@ -211,4 +211,35 @@ describe('production menu false-door sweep', () => {
     expect(waves?.hint).toMatch(/waves/i);
     expect(datasets?.hint).toMatch(/respondent key/i);
   });
+
+  it('hides choice modelling on the production app and keeps it on dev', () => {
+    const previous = process.env.NEXT_PUBLIC_VERCEL_ENV;
+    const previousFlag = process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
+    delete process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
+    const hidden = [
+      'MaxDiff',
+      'Conjoint (CBC)',
+      'MaxDiff (counting / MNL)',
+      'Conjoint (MNL)',
+      'MaxDiff (Count)',
+      'MaxDiff (MNL)',
+      'MaxDiff (individual utilities)',
+      'Conjoint (individual utilities)',
+      'Choice Simulator',
+    ];
+    try {
+      delete process.env.NEXT_PUBLIC_VERCEL_ENV;
+      const devNames = getAllAnalysisItems().map(item => item.name);
+      for (const name of hidden) expect(devNames).toContain(name);
+      process.env.NEXT_PUBLIC_VERCEL_ENV = 'production';
+      const prodNames = getAllAnalysisItems().map(item => item.name);
+      for (const name of hidden) expect(prodNames).not.toContain(name);
+      expect(prodNames).toContain('Merge Datasets');
+    } finally {
+      if (previous === undefined) delete process.env.NEXT_PUBLIC_VERCEL_ENV;
+      else process.env.NEXT_PUBLIC_VERCEL_ENV = previous;
+      if (previousFlag === undefined) delete process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
+      else process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED = previousFlag;
+    }
+  });
 });

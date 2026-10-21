@@ -1,7 +1,8 @@
-import { ANALYSIS_COMPONENTS, MENU_ITEMS } from './index';
 import { analysisSearchBlob, type AnalysisKey } from '@/lib/analysis-definitions';
-import { PRODUCTION_ANALYSIS_LABELS } from './production-menu';
+import { CHOICE_MODELLING_MENU_NAMES, choiceModellingEnabled } from '@/lib/feature-flags';
+import { ANALYSIS_COMPONENTS, MENU_ITEMS } from './index';
 import { COMING_SOON_SECTIONS, PALETTE_CATALOG } from './palette-catalog';
+import { PRODUCTION_ANALYSIS_LABELS } from './production-menu';
 import { getMenuItemComponent, isDialogMenuItem } from './menu-registry';
 
 export interface AnalysisItem {
@@ -150,6 +151,9 @@ export function getAllAnalysisItems(): AnalysisItem[] {
       }
 
       for (const menuName of names) {
+        if (!choiceModellingEnabled() && CHOICE_MODELLING_MENU_NAMES.has(menuName)) {
+          continue;
+        }
         const op = PRODUCTION_ANALYSIS_LABELS[menuName as keyof typeof PRODUCTION_ANALYSIS_LABELS];
         const displayName = paletteItemName(menuName, op);
 
