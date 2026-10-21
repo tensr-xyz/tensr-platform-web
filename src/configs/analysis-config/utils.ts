@@ -21,6 +21,11 @@ const PALETTE_HINTS: Record<string, string> = {
     'Stack waves of one survey and keep which wave each row came from. Use this for waves, not a key join.',
   'Fuse Datasets':
     'Join files on a respondent key. Use this when the same people are in more than one file.',
+  'Pivot table':
+    'Excel-style pivot of counts, sums, means, and percents. Same weights and letters as a banner.',
+  'Conjoint (CBC)':
+    'Choice-based conjoint design and conditional logit. Part-worths, importance, and willingness to pay.',
+  MaxDiff: 'Best-worst design and scores: counts, logit, and 0-100 rescaled scores.',
 };
 
 export const DATA_TAB_VALUE = 'data';

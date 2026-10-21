@@ -59,6 +59,29 @@ export function ProvenanceInspector({
           </>
         ) : null}
 
+        {'active_weight_column' in provenance ? (
+          <>
+            <dt className="font-medium text-foreground/80">active_weight_column</dt>
+            <dd className="font-mono text-[11px]">
+              {typeof provenance.active_weight_column === 'string' &&
+              provenance.active_weight_column.trim()
+                ? provenance.active_weight_column.trim()
+                : 'none'}
+            </dd>
+          </>
+        ) : null}
+
+        {'weight_column' in provenance ? (
+          <>
+            <dt className="font-medium text-foreground/80">weight_column</dt>
+            <dd className="font-mono text-[11px]">
+              {typeof provenance.weight_column === 'string' && provenance.weight_column.trim()
+                ? provenance.weight_column.trim()
+                : 'none'}
+            </dd>
+          </>
+        ) : null}
+
         {fingerprint ? (
           <>
             <dt className="font-medium text-foreground/80">content_fingerprint</dt>

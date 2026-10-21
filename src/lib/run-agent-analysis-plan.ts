@@ -15,6 +15,7 @@ import { resolveChatAction } from '@/lib/chat-actions';
 import { formatUnsupportedWithClosest } from '@/lib/agent-capabilities';
 import { isRetiredFromUi, retiredFromUiUserMessage } from '@/lib/retired-from-ui';
 import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
+import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 
 export type ParseIntentResult = {
   status: string;
@@ -351,6 +352,27 @@ export function openResultTabForPlan(
   const op = isAnalysisKey(plan.analysisType)
     ? plan.analysisType
     : (AGENT_OP_MAP[plan.analysisType] ?? plan.analysisType);
+  if (plan.analysisType === 'pivot_table') {
+    useAnalysisSetupStore
+      .getState()
+      .openDialog('Pivot table', { ...spec, __result: analysisResult });
+  }
+  const choiceDialog =
+    plan.analysisType === 'conjoint_mnl' ||
+    plan.analysisType === 'conjoint_hb' ||
+    plan.analysisType === 'cbc_design'
+      ? 'Conjoint (CBC)'
+      : plan.analysisType === 'maxdiff_count' ||
+          plan.analysisType === 'maxdiff_mnl' ||
+          plan.analysisType === 'maxdiff_hb' ||
+          plan.analysisType === 'maxdiff_design'
+        ? 'MaxDiff'
+        : null;
+  if (choiceDialog) {
+    useAnalysisSetupStore
+      .getState()
+      .openDialog(choiceDialog, { ...spec, __result: analysisResult });
+  }
   return (
     openAnalysisResultTab({
       op,

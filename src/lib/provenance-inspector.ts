@@ -56,6 +56,18 @@ export function formatProvenanceConventionMarkdown(
   }
   const weight = weightVectorSummary(provenance.weight_vector);
   if (weight) lines.push(`- **weight_vector:** ${weight}`);
+  if ('active_weight_column' in provenance) {
+    const active = provenance.active_weight_column;
+    lines.push(
+      `- **active_weight_column:** \`${typeof active === 'string' && active.trim() ? active.trim() : 'none'}\``
+    );
+  }
+  if ('weight_column' in provenance) {
+    const sent = provenance.weight_column;
+    lines.push(
+      `- **weight_column:** \`${typeof sent === 'string' && sent.trim() ? sent.trim() : 'none'}\``
+    );
+  }
   const fp = truncateFingerprint(provenance.content_fingerprint, 24);
   if (fp) lines.push(`- **content_fingerprint:** \`${fp}\``);
   if (typeof provenance.origin_dataset_id === 'string' && provenance.origin_dataset_id.trim()) {

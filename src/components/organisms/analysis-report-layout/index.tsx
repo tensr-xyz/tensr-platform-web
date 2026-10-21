@@ -198,6 +198,21 @@ export function AnalysisReportLayout({
       include_charts: prefs.includeCharts,
       decimal_places: prefs.decimalPlaces,
     });
+    const choiceDialog =
+      key === 'maxdiff_count' || key === 'maxdiff_mnl' || key === 'maxdiff_hb'
+        ? 'MaxDiff (counting / MNL)'
+        : key === 'conjoint_mnl' || key === 'conjoint_hb'
+          ? 'Conjoint (MNL)'
+          : null;
+    if (choiceDialog) {
+      useAnalysisSetupStore.getState().openDialog(choiceDialog, {
+        ...(fromResult || {}),
+        ...(stored || {}),
+        __op: key,
+      });
+      setRerunNotice(null);
+      return;
+    }
     if (!key || !isAnalysisKey(key)) {
       const message = 'This report cannot be re-run from here.';
       setRerunNotice(message);

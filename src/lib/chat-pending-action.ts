@@ -181,6 +181,20 @@ export function formatPlanVariablesLine(plan: AgentAnalysisPlan): string {
     const g = spec.independent ?? (spec.groups as string[] | undefined)?.[0];
     return [spec.dependent, g].filter(Boolean).join(' by ');
   }
+  if (plan.analysisType === 'pivot_table') {
+    const rows = (spec.rows as string[] | undefined) ?? [];
+    const columns = (spec.columns as string[] | undefined) ?? [];
+    const values = (spec.values as { agg?: string; column?: string }[] | undefined) ?? [];
+    const value = values[0];
+    const measure = value?.column
+      ? `${value.agg || 'sum'} of ${value.column}`
+      : value?.agg || 'count';
+    return [measure, rows.join(', '), columns.join(', ')].filter(Boolean).join(' · ');
+  }
+  if (plan.analysisType === 'conjoint_mnl' || plan.analysisType === 'cbc_design') {
+    const attrs = (spec.attribute_columns as string[] | undefined) ?? [];
+    return attrs.join(', ');
+  }
   if (plan.analysisType === 'correlations') {
     const v =
       (spec.variables as string[] | undefined) ?? (spec.predictors as string[] | undefined) ?? [];

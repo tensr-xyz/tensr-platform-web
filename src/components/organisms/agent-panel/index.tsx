@@ -58,7 +58,6 @@ import {
   adoptDerivedDataset,
   createdDatasetFromToolResults,
   derivedDatasetFromToolResults,
-  derivedWorkspacePath,
   type DerivedDatasetPayload,
 } from '@/lib/adopt-derived-dataset';
 import { getDatasetIdFromTab, resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
@@ -89,6 +88,7 @@ import {
 import {
   attachApproachToReport,
   chatFieldsAfterRunAnalysis,
+  v2FinalAnswerFields,
   logAgentChatRenderPayload,
   preferRicherPlan,
   priorPlanForResult,
@@ -677,9 +677,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           response.tool_results as Array<Record<string, unknown>> | undefined
         );
         if (createdDataset && createdDataset.dataset_id !== workspaceDatasetId) {
-          router.replace(
-            derivedWorkspacePath(createdDataset.dataset_id, createdDataset.original_filename)
-          );
+          // router.replace remounts the workspace and drops the rest of this chat.
+          // adoptDerivedDataset keeps the thread and opens the stacked file.
+          adoptDerivedDataset(createdDataset);
         }
 
         const execSummary = String(response.execution_summary || '').trim();
@@ -704,9 +704,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             (entry as { run_id?: string }).run_id || entry.result?.run_id || ''
           );
           if (entry.name === 'run_analysis' && streamedRunId && !entry.result?.result) {
-            const { analysisEnvelopeFromStoredRun, fetchAnalysisRun } = await import(
-              '@/lib/analysis-runs'
-            );
+            const { analysisEnvelopeFromStoredRun, fetchAnalysisRun } =
+              await import('@/lib/analysis-runs');
             const stored = await fetchAnalysisRun(streamedRunId);
             if (stored?.result) {
               entry.result = analysisEnvelopeFromStoredRun(
@@ -821,13 +820,20 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           // same report markdown is the live double-render bug — keep Plan in
           // content, report once in resultMarkdown.
           const { markdown } = analysisResultMarkdown(envelope);
-          primaryChatFields = chatFieldsAfterRunAnalysis({
-            priorContent: agentVersion === 'v2' ? '' : priorContent,
-            planSummary,
-            whyThisTest,
-            reportMarkdown: markdown,
-            answerMarkdown: response.answer_markdown,
-          });
+          primaryChatFields =
+            agentVersion === 'v2'
+              ? v2FinalAnswerFields({
+                  answer: response.answer_markdown || '',
+                  reportMarkdown: markdown,
+                  hasReportCard: Boolean(primaryReportCard),
+                })
+              : chatFieldsAfterRunAnalysis({
+                  priorContent: priorContent,
+                  planSummary,
+                  whyThisTest,
+                  reportMarkdown: markdown,
+                  answerMarkdown: response.answer_markdown,
+                });
         }
 
         wireAnalysisChainLinks(openedTabs);
