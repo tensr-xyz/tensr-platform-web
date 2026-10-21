@@ -255,24 +255,24 @@ export function PivotTableDialog({ children }: { children: ReactNode }) {
                       ) : null}
                       <Button
                         type="button"
-                        size="compact"
-                        variant="ghost"
+                        size="sm"
+                        variant="outline"
                         onClick={() => setFields(current => reorderField(current, field.id, -1))}
                       >
                         Up
                       </Button>
                       <Button
                         type="button"
-                        size="compact"
-                        variant="ghost"
+                        size="sm"
+                        variant="outline"
                         onClick={() => setFields(current => reorderField(current, field.id, 1))}
                       >
                         Down
                       </Button>
                       <Button
                         type="button"
-                        size="compact"
-                        variant="ghost"
+                        size="sm"
+                        variant="outline"
                         onClick={() => setFields(current => removeField(current, field.id))}
                       >
                         Remove

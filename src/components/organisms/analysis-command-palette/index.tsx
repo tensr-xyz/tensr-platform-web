@@ -135,6 +135,7 @@ function AnalysisSectionsList({
           const label = sectionName.replace(/\s*\(coming soon\)\s*/i, '').trim();
           return <CommandGroup key={sectionName} heading={`${label} — Coming soon`} />;
         }
+        if (items.length === 0) return null;
         return (
           <CommandGroup key={sectionName} heading={sectionName}>
             {items.map((item, idx) => (
