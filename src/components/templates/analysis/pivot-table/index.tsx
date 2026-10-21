@@ -1,6 +1,7 @@
 'use client';
 
 import { DragEvent, ReactNode, useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/atoms/alert';
 import { Button } from '@/components/atoms/button';
 import { Checkbox } from '@/components/atoms/checkbox';
@@ -255,27 +256,36 @@ export function PivotTableDialog({ children }: { children: ReactNode }) {
                       ) : null}
                       <Button
                         type="button"
-                        size="sm"
-                        variant="outline"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        aria-label="Move up"
+                        title="Move up"
                         onClick={() => setFields(current => reorderField(current, field.id, -1))}
                       >
-                        Up
+                        <ChevronUp className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         type="button"
-                        size="sm"
-                        variant="outline"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        aria-label="Move down"
+                        title="Move down"
                         onClick={() => setFields(current => reorderField(current, field.id, 1))}
                       >
-                        Down
+                        <ChevronDown className="h-3.5 w-3.5" />
                       </Button>
                       <Button
                         type="button"
-                        size="sm"
-                        variant="outline"
+                        size="icon"
+                        variant="ghost"
+                        className="h-6 w-6"
+                        aria-label="Remove"
+                        title="Remove"
                         onClick={() => setFields(current => removeField(current, field.id))}
                       >
-                        Remove
+                        <X className="h-3.5 w-3.5" />
                       </Button>
                     </li>
                   ))}

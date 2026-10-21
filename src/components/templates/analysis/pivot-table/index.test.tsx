@@ -63,10 +63,11 @@ describe('pivot table dialog', () => {
     expect(rowsZone).not.toBeNull();
     fireEvent.drop(rowsZone!, { dataTransfer });
 
-    for (const name of ['Up', 'Down', 'Remove']) {
+    for (const name of ['Move up', 'Move down', 'Remove']) {
       const button = screen.getByRole('button', { name });
-      expect(button).toHaveClass('border');
-      expect(button).toHaveClass('px-3');
+      expect(button).toHaveClass('h-6');
+      expect(button).toHaveClass('w-6');
+      expect(button.querySelector('svg')).not.toBeNull();
     }
   });
 });
