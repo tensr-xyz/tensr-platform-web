@@ -177,7 +177,11 @@ export function adoptDerivedDataset(result: DerivedDatasetPayload): boolean {
   }
 
   if (typeof window !== 'undefined') {
-    window.history.replaceState(
+    // Next.js patches history.replaceState and treats it as a navigation.
+    // That remounts Workspace on the new dataset id and opens an empty chat.
+    // The prototype call updates the address bar and leaves this chat mounted.
+    History.prototype.replaceState.call(
+      window.history,
       window.history.state,
       '',
       derivedWorkspacePath(id, result.original_filename)
