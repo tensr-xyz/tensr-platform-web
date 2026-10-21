@@ -1,9 +1,11 @@
 import {
   analysisEnvelopeFromStoredRun,
   canRevealConsumedRows,
+  displayedProvenance,
   normalizeStoredAnalysisRun,
   provenanceBannerText,
   provenanceTraceState,
+  storedRunIdToHydrate,
   rSyntaxBadgeText,
   sourceRowsUsedLabel,
 } from './analysis-runs';
@@ -159,6 +161,67 @@ describe('analysisEnvelopeFromStoredRun', () => {
     expect(envelope.provenance).toEqual(stored.provenance);
     expect(envelope.run_id).toBe('run-derived');
     expect(provenanceTraceState(envelope.provenance).kind).toBe('complete');
+  });
+
+  it('uses the stamp on the stored result when the wrapper has none', () => {
+    const stamp = {
+      dataset_id: 'child',
+      parent_dataset_id: 'parent',
+      row_uid_bitset: 'BQ==',
+      row_uid_bitset_miss_count: 0,
+    };
+    expect(displayedProvenance({}, { provenance: stamp })).toEqual(stamp);
+    expect(displayedProvenance([stamp])).toEqual(stamp);
+    expect(provenanceTraceState(displayedProvenance({}, { provenance: stamp })).kind).toBe(
+      'complete'
+    );
+    const run = normalizeStoredAnalysisRun({
+      id: 'run-freq',
+      dataset_id: 'child',
+      op: 'frequencies',
+      created_at: '2026-10-21T00:00:00.000Z',
+      report: { meta: { title: 'Frequency table' } },
+      result: { provenance: stamp },
+    });
+    expect(run?.provenance).toEqual(stamp);
+  });
+});
+
+describe('storedRunIdToHydrate', () => {
+  it('loads a frequencies stream that names the procedure instead of run_analysis', () => {
+    expect(
+      storedRunIdToHydrate({
+        name: 'frequencies',
+        analysis_type: 'frequencies',
+        run_id: 'run-freq',
+      })
+    ).toBe('run-freq');
+    expect(
+      storedRunIdToHydrate({
+        name: 'run_analysis',
+        run_id: 'run-1',
+        result: { result: { ok: true } },
+      })
+    ).toBeNull();
+    expect(storedRunIdToHydrate({ name: 'run_analysis', run_id: 'run-1' })).toBe('run-1');
+    expect(
+      storedRunIdToHydrate({
+        name: 'run_analysis',
+        result: { run_id: 'run-nested' },
+      })
+    ).toBe('run-nested');
+    expect(
+      storedRunIdToHydrate({
+        name: 'frequencies',
+        run_id: 'run-named',
+      })
+    ).toBe('run-named');
+    expect(
+      storedRunIdToHydrate({
+        name: 'ask_clarifying_question',
+        run_id: 'run-question',
+      })
+    ).toBeNull();
   });
 });
 

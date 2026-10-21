@@ -19,6 +19,7 @@ import { ApproachText } from './approach-text';
 import {
   PLUGIN_UNVERIFIED_STATEMENT,
   canRevealConsumedRows,
+  displayedProvenance,
   provenanceBannerText,
   provenanceTraceState,
   rSyntaxBadgeText,
@@ -503,11 +504,7 @@ export function AnalysisReportView({
   });
 
   const pluginMark = report.plugin_verification;
-  const inspectorProvenance =
-    provenance ??
-    (rawResult?.provenance && typeof rawResult.provenance === 'object'
-      ? (rawResult.provenance as Record<string, unknown>)
-      : null);
+  const inspectorProvenance = displayedProvenance(provenance, rawResult);
   const provenanceBanner = provenanceBannerText(provenanceTraceState(inspectorProvenance));
   const pluginBanner =
     pluginMark && (pluginMark.kind === 'not_verified' || pluginMark.kind === 'unknown')
@@ -949,7 +946,7 @@ export function AnalysisReportView({
           <ReportExportMenu
             report={report}
             rawResult={rawResult}
-            provenance={provenance}
+            provenance={inspectorProvenance}
             datasetId={datasetId}
             analysisRunId={analysisRunId}
             related={related}
