@@ -99,6 +99,9 @@ export function PivotTableDialog({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!open || !initialBody) return;
     setFields(fieldsFromPivotConfig(initialBody));
+    const record = initialBody as { significance?: unknown; config?: { significance?: unknown } };
+    const savedSignificance = record.significance ?? record.config?.significance;
+    if (typeof savedSignificance === 'boolean') setSignificance(savedSignificance);
     const result = initialBody.__result;
     if (result && typeof result === 'object') {
       const payload = result as {
@@ -382,7 +385,7 @@ export function PivotTableDialog({ children }: { children: ReactNode }) {
                           : Number(cell.value).toLocaleString(undefined, {
                               maximumFractionDigits: 2,
                             })}
-                        {cell.letters ? ` ${cell.letters}` : ''}
+                        {significance && cell.letters ? ` ${cell.letters}` : ''}
                       </td>
                     ))}
                   </tr>
