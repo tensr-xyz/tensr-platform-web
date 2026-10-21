@@ -47,4 +47,17 @@ describe('analysis command palette', () => {
 
     expect(screen.getByRole('option', { name: 'Merge Datasets' })).toBeVisible();
   });
+
+  it('filters the list to Pivot table when the search is pivot', async () => {
+    render(<AnalysisCommandPalette open onOpenChange={() => undefined} />);
+
+    fireEvent.change(screen.getByPlaceholderText('Search analyses and plugins…'), {
+      target: { value: 'pivot' },
+    });
+
+    expect(await screen.findByRole('option', { name: /Pivot table/ })).toBeVisible();
+    expect(screen.queryByRole('option', { name: 'Descriptives' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Compare Means')).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Merge Datasets' })).not.toBeInTheDocument();
+  });
 });

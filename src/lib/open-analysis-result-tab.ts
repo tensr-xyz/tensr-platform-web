@@ -79,7 +79,8 @@ export function openAnalysisResultTab(params: {
   const activate = params.activate !== false;
   const { tabs, addTab, setActiveTab } = useTabsStore.getState();
   const parameters = params.parameters ?? {};
-  const fingerprint = analysisRunFingerprint(params.op, parameters);
+  const runId = String(params.envelope?.run_id || '');
+  const fingerprint = `${analysisRunFingerprint(params.op, parameters)}:${params.sourceDatasetId}:${runId}`;
   const existing = tabs.find(
     t => t.type === ViewType.ANALYSIS_RESULT && t.data?.analysisFingerprint === fingerprint
   );

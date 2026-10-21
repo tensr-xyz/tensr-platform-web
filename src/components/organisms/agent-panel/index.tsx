@@ -700,12 +700,16 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           }
           // The stream carries the summary and run id. The report reads the
           // full result stored for that id.
-          const streamedRunId = String(
-            (entry as { run_id?: string }).run_id || entry.result?.run_id || ''
-          );
-          if (entry.name === 'run_analysis' && streamedRunId && !entry.result?.result) {
-            const { analysisEnvelopeFromStoredRun, fetchAnalysisRun } =
-              await import('@/lib/analysis-runs');
+          const { analysisEnvelopeFromStoredRun, fetchAnalysisRun, storedRunIdToHydrate } =
+            await import('@/lib/analysis-runs');
+          const streamedRunId = storedRunIdToHydrate({
+            name: entry.name,
+            analysis_type: (entry as { analysis_type?: string }).analysis_type,
+            procedure: (entry as { procedure?: string }).procedure,
+            run_id: (entry as { run_id?: string }).run_id,
+            result: entry.result,
+          });
+          if (streamedRunId) {
             const stored = await fetchAnalysisRun(streamedRunId);
             if (stored?.result) {
               entry.result = analysisEnvelopeFromStoredRun(
@@ -714,7 +718,12 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               ) as typeof entry.result;
             }
           }
-          if (entry.name !== 'run_analysis' || !entry.result?.ok || !entry.result?.result) {
+          const openedFromStoredRun = Boolean(streamedRunId && entry.result?.result);
+          if (
+            (entry.name !== 'run_analysis' && !openedFromStoredRun) ||
+            !entry.result?.ok ||
+            !entry.result?.result
+          ) {
             continue;
           }
           const isEnrichment = Boolean(

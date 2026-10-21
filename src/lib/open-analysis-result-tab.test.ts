@@ -93,4 +93,23 @@ describe('openAnalysisResultTab', () => {
     open('w', 'Weighted PTS vs MP again');
     expect(reports()).toHaveLength(2);
   });
+
+  it('opens the table on a new dataset as its own tab', () => {
+    const open = (datasetId: string, runId: string) =>
+      openAnalysisResultTab({
+        op: 'banner_table',
+        sourceDatasetId: datasetId,
+        parameters: { stub_column: 'Q7', banner_column: 'source_wave' },
+        envelope: {
+          result: {},
+          report: { summary: runId } as never,
+          run_id: runId,
+        },
+      });
+    open('stacked', 'before');
+    open('recoded', 'after');
+    const tabs = useTabsStore.getState().tabs;
+    expect(tabs).toHaveLength(2);
+    expect(tabs.map(tab => tab.data?.analysisRunId)).toEqual(['before', 'after']);
+  });
 });
