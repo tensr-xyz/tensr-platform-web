@@ -1,3 +1,4 @@
+import { carryChatToDataset } from '@/stores/chat-store';
 import { ViewType, type TabData } from '@/stores/tabs-store';
 import { useTabsStore } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -175,6 +176,9 @@ export function adoptDerivedDataset(result: DerivedDatasetPayload): boolean {
       project.fileSystem.map(f => (f.fileId && f.fileId === previousId ? { ...f, fileId: id } : f))
     );
   }
+
+  const projectId = useProjectStore.getState().currentProject?.id;
+  if (projectId) carryChatToDataset(String(projectId), id);
 
   if (typeof window !== 'undefined') {
     // Next.js patches history.replaceState and treats it as a navigation.

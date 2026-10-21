@@ -77,6 +77,37 @@ type ChatStore = ChatState & ChatActions;
 
 const DEFAULT_THREAD_TITLE = 'New chat';
 
+/** Live chat stays on the parent project id. A reload of the derived dataset reads this copy. */
+const carriedChat = new Map<string, string>();
+
+function snapshotProject(project: ProjectChats): ProjectChats {
+  return {
+    activeThreadId: project.activeThreadId,
+    threads: Object.fromEntries(
+      Object.entries(project.threads).map(([threadId, thread]) => [
+        threadId,
+        {
+          ...thread,
+          messages: thread.messages.map(message => ({ ...message })),
+        },
+      ])
+    ),
+  };
+}
+
+function withCarriedChat<T extends ChatState>(state: T, projectId: string): T {
+  const target = carriedChat.get(projectId);
+  const source = state.projects[projectId];
+  if (!target || target === projectId || !source) return state;
+  return {
+    ...state,
+    projects: {
+      ...state.projects,
+      [target]: snapshotProject(source),
+    },
+  };
+}
+
 function threadTitleFromMessage(content: string): string {
   const plain = content.replace(/\*\*/g, '').replace(/\n/g, ' ').trim();
   if (!plain) return DEFAULT_THREAD_TITLE;
@@ -158,18 +189,22 @@ export const useChatStore = create<ChatStore>()(
           const thread = createEmptyThread();
           set(state => {
             const project = ensureProject(state, projectId);
-            return {
-              projects: {
-                ...state.projects,
-                [projectId]: {
-                  activeThreadId: thread.id,
-                  threads: {
-                    ...project.threads,
-                    [thread.id]: thread,
+            return withCarriedChat(
+              {
+                ...state,
+                projects: {
+                  ...state.projects,
+                  [projectId]: {
+                    activeThreadId: thread.id,
+                    threads: {
+                      ...project.threads,
+                      [thread.id]: thread,
+                    },
                   },
                 },
               },
-            };
+              projectId
+            );
           });
           return thread.id;
         },
@@ -178,15 +213,19 @@ export const useChatStore = create<ChatStore>()(
           set(state => {
             const project = state.projects[projectId];
             if (!project?.threads[threadId]) return state;
-            return {
-              projects: {
-                ...state.projects,
-                [projectId]: {
-                  ...project,
-                  activeThreadId: threadId,
+            return withCarriedChat(
+              {
+                ...state,
+                projects: {
+                  ...state.projects,
+                  [projectId]: {
+                    ...project,
+                    activeThreadId: threadId,
+                  },
                 },
               },
-            };
+              projectId
+            );
           });
         },
 
@@ -203,15 +242,19 @@ export const useChatStore = create<ChatStore>()(
             const activeThreadId =
               project.activeThreadId === threadId ? nextIds[0] : project.activeThreadId;
 
-            return {
-              projects: {
-                ...state.projects,
-                [projectId]: {
-                  activeThreadId,
-                  threads: remaining,
+            return withCarriedChat(
+              {
+                ...state,
+                projects: {
+                  ...state.projects,
+                  [projectId]: {
+                    activeThreadId,
+                    threads: remaining,
+                  },
                 },
               },
-            };
+              projectId
+            );
           });
         },
 
@@ -246,18 +289,22 @@ export const useChatStore = create<ChatStore>()(
               title: shouldTitle ? threadTitleFromMessage(message.content) : active.title,
             };
 
-            return {
-              projects: {
-                ...state.projects,
-                [projectId]: {
-                  ...project,
-                  threads: {
-                    ...project.threads,
-                    [active.id]: updatedThread,
+            return withCarriedChat(
+              {
+                ...state,
+                projects: {
+                  ...state.projects,
+                  [projectId]: {
+                    ...project,
+                    threads: {
+                      ...project.threads,
+                      [active.id]: updatedThread,
+                    },
                   },
                 },
               },
-            };
+              projectId
+            );
           });
 
           return chatMessage.id;
@@ -274,18 +321,22 @@ export const useChatStore = create<ChatStore>()(
             const nextMessages = [...active.messages];
             nextMessages[idx] = { ...nextMessages[idx], ...patch };
 
-            return {
-              projects: {
-                ...state.projects,
-                [projectId]: {
-                  ...project,
-                  threads: {
-                    ...project.threads,
-                    [active.id]: { ...active, messages: nextMessages },
+            return withCarriedChat(
+              {
+                ...state,
+                projects: {
+                  ...state.projects,
+                  [projectId]: {
+                    ...project,
+                    threads: {
+                      ...project.threads,
+                      [active.id]: { ...active, messages: nextMessages },
+                    },
                   },
                 },
               },
-            };
+              projectId
+            );
           });
         },
 
@@ -308,18 +359,22 @@ export const useChatStore = create<ChatStore>()(
               return m;
             });
             if (!changed) return state;
-            return {
-              projects: {
-                ...state.projects,
-                [projectId]: {
-                  ...project,
-                  threads: {
-                    ...project.threads,
-                    [active.id]: { ...active, messages: nextMessages },
+            return withCarriedChat(
+              {
+                ...state,
+                projects: {
+                  ...state.projects,
+                  [projectId]: {
+                    ...project,
+                    threads: {
+                      ...project.threads,
+                      [active.id]: { ...active, messages: nextMessages },
+                    },
                   },
                 },
               },
-            };
+              projectId
+            );
           });
         },
 
@@ -368,23 +423,27 @@ export const useChatStore = create<ChatStore>()(
             const project = state.projects[projectId];
             if (!project) return state;
             const active = getActiveThread(project);
-            return {
-              projects: {
-                ...state.projects,
-                [projectId]: {
-                  ...project,
-                  threads: {
-                    ...project.threads,
-                    [active.id]: {
-                      ...active,
-                      messages: [],
-                      error: null,
-                      title: DEFAULT_THREAD_TITLE,
+            return withCarriedChat(
+              {
+                ...state,
+                projects: {
+                  ...state.projects,
+                  [projectId]: {
+                    ...project,
+                    threads: {
+                      ...project.threads,
+                      [active.id]: {
+                        ...active,
+                        messages: [],
+                        error: null,
+                        title: DEFAULT_THREAD_TITLE,
+                      },
                     },
                   },
                 },
               },
-            };
+              projectId
+            );
           });
         },
 
@@ -418,3 +477,12 @@ export const useChatStore = create<ChatStore>()(
     }
   )
 );
+
+/** Copy the open thread onto the derived dataset id and keep later writes in step. */
+export function carryChatToDataset(fromProjectId: string, datasetId: string): void {
+  const from = fromProjectId.trim();
+  const to = datasetId.trim();
+  if (!from || !to || from === to) return;
+  carriedChat.set(from, to);
+  useChatStore.setState(state => withCarriedChat(state, from));
+}
