@@ -68,6 +68,57 @@ export function canRevealConsumedRows(provenance: unknown): boolean {
   return provenanceTraceState(provenance).kind === 'complete';
 }
 
+function traceableProvenance(value: unknown): Record<string, unknown> | null {
+  if (Array.isArray(value)) {
+    const stamps = value.filter(
+      item => item && typeof item === 'object' && provenanceTraceState(item).kind !== 'unknown'
+    );
+    return stamps.length === 1 ? (stamps[0] as Record<string, unknown>) : null;
+  }
+  if (value && typeof value === 'object' && provenanceTraceState(value).kind !== 'unknown') {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+/** The stamp the report should show. A stored result stamp wins over an empty wrapper. */
+export function displayedProvenance(
+  provenance: unknown,
+  result?: unknown
+): Record<string, unknown> | null {
+  const direct = traceableProvenance(provenance);
+  if (direct) return direct;
+  const nested =
+    result && typeof result === 'object'
+      ? (result as { provenance?: unknown }).provenance
+      : undefined;
+  return traceableProvenance(nested);
+}
+
+/** v2 streams the procedure name, not run_analysis. The stored run still has the stamp. */
+export function storedRunIdToHydrate(entry: {
+  name?: unknown;
+  analysis_type?: unknown;
+  procedure?: unknown;
+  run_id?: unknown;
+  result?: { result?: unknown; run_id?: unknown } | null;
+}): string | null {
+  const runId = String(entry.run_id || entry.result?.run_id || '').trim();
+  if (!runId || entry.result?.result) return null;
+  const name = String(entry.name || '');
+  const toolOnly =
+    name === 'read_data' ||
+    name === 'data_edit' ||
+    name === 'import_file' ||
+    name === 'ask_clarifying_question' ||
+    name === 'start_prep_playbook' ||
+    name === 'run_data_quality_scan';
+  let analysis = String(entry.analysis_type || entry.procedure || '');
+  if (!analysis && name && name !== 'run_analysis' && !toolOnly) analysis = name;
+  if (name !== 'run_analysis' && !analysis) return null;
+  return runId;
+}
+
 export function sourceRowsUsedLabel(
   exclusion?: { rows_used?: number; rows_total?: number } | null,
   datasetRows?: number
@@ -262,10 +313,7 @@ export function normalizeStoredAnalysisRun(row: unknown): StoredAnalysisRun | nu
     created_at,
     report: report?.meta ? report : stubReportForOp(op, created_at),
     result: (r.result as Record<string, unknown>) ?? {},
-    provenance:
-      r.provenance && typeof r.provenance === 'object'
-        ? (r.provenance as Record<string, unknown>)
-        : null,
+    provenance: displayedProvenance(r.provenance, r.result),
     body:
       r.body && typeof r.body === 'object'
         ? (r.body as Record<string, unknown>)
