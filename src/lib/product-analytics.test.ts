@@ -1,6 +1,10 @@
 import posthog from 'posthog-js';
 import { ApiRequestError } from './api-error';
-import { captureProductEvent, captureProductException, productEnvironment } from './product-analytics';
+import {
+  captureProductEvent,
+  captureProductException,
+  productEnvironment,
+} from './product-analytics';
 
 jest.mock('posthog-js', () => ({
   register_for_session: jest.fn(),
@@ -31,7 +35,9 @@ describe('captureProductException scanner filter', () => {
       analysis_type: 'banner_table',
       dataset_id: 'cars',
     });
-    const completed = (posthog.capture as jest.Mock).mock.calls.find(call => call[0] === 'analysis_completed');
+    const completed = (posthog.capture as jest.Mock).mock.calls.find(
+      call => call[0] === 'analysis_completed'
+    );
     expect(completed?.[1].environment).toBe('local');
     expect(typeof completed?.[1].duration_ms).toBe('number');
     new ApiRequestError(500, 'x'.repeat(250));
@@ -40,7 +46,9 @@ describe('captureProductException scanner filter', () => {
       analysis_type: 'banner_table',
       message: 'y'.repeat(250),
     });
-    const failed = (posthog.capture as jest.Mock).mock.calls.find(call => call[0] === 'analysis_failed');
+    const failed = (posthog.capture as jest.Mock).mock.calls.find(
+      call => call[0] === 'analysis_failed'
+    );
     expect(failed?.[1].error_message).toHaveLength(200);
     expect(failed?.[1].http_status).toBe(500);
     expect(failed?.[1].analysis_type).toBe('banner_table');

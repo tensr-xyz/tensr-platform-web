@@ -23,7 +23,9 @@ export function productEnvironment(): 'prod' | 'dev' | 'local' {
 }
 
 function analysisKey(properties: Record<string, unknown>): string {
-  return [properties.where, properties.analysis_type, properties.dataset_id].map(value => String(value ?? '')).join('|');
+  return [properties.where, properties.analysis_type, properties.dataset_id]
+    .map(value => String(value ?? ''))
+    .join('|');
 }
 
 function httpStatus(value: unknown): number | null {
@@ -34,7 +36,10 @@ function withAnalysisProperties(
   event: string,
   properties: Record<string, unknown> | undefined
 ): Record<string, unknown> {
-  const next: Record<string, unknown> = { ...(properties ?? {}), environment: productEnvironment() };
+  const next: Record<string, unknown> = {
+    ...(properties ?? {}),
+    environment: productEnvironment(),
+  };
   if (event === 'analysis_started') {
     analysisStartedAt.set(analysisKey(next), Date.now());
   }
@@ -46,7 +51,8 @@ function withAnalysisProperties(
     const recent = recentApiRequestFailure();
     const message = next.error_message ?? next.message ?? recent?.message ?? '';
     next.error_message = String(message).slice(0, 200);
-    next.http_status = httpStatus(next.http_status) ?? httpStatus(next.status) ?? recent?.status ?? null;
+    next.http_status =
+      httpStatus(next.http_status) ?? httpStatus(next.status) ?? recent?.status ?? null;
     if (next.analysis_type == null) next.analysis_type = null;
   }
   return next;
