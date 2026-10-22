@@ -1877,6 +1877,24 @@
         "spssKeyword": "level",
         "rArgument": "level",
         "report": false
+      },
+      {
+        "name": "trend",
+        "type": "string",
+        "role": "advanced",
+        "default": null,
+        "spssKeyword": "trend",
+        "rArgument": "trend",
+        "report": false
+      },
+      {
+        "name": "min_base",
+        "type": "integer",
+        "role": "advanced",
+        "default": null,
+        "spssKeyword": "min_base",
+        "rArgument": "min_base",
+        "report": false
       }
     ],
     "depth": [
@@ -2242,6 +2260,34 @@
         "name": "level",
         "status": "have",
         "ours": "level",
+        "reason": ""
+      },
+      {
+        "source": "spss",
+        "name": "trend",
+        "status": "have",
+        "ours": "trend",
+        "reason": ""
+      },
+      {
+        "source": "r",
+        "name": "trend",
+        "status": "have",
+        "ours": "trend",
+        "reason": ""
+      },
+      {
+        "source": "spss",
+        "name": "min_base",
+        "status": "have",
+        "ours": "min_base",
+        "reason": ""
+      },
+      {
+        "source": "r",
+        "name": "min_base",
+        "status": "have",
+        "ours": "min_base",
         "reason": ""
       },
       {
