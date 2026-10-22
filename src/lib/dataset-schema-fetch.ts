@@ -30,7 +30,11 @@ export function fetchDatasetSchema(datasetId: string, init?: RequestInit): Promi
   if (pending) return pending.then(asResponse);
   const request = fetchWithColdStartRetry(tensrApiUrl(`/datasets/${datasetId}/schema`), init)
     .then(async response => {
-      noteServerTiming('schema', response.headers.get('Server-Timing'));
+      const readHeader = response.headers?.get;
+      noteServerTiming(
+        'schema',
+        typeof readHeader === 'function' ? readHeader.call(response.headers, 'Server-Timing') : null
+      );
       const cached: CachedSchema = {
         status: response.status,
         body: await response.text(),
