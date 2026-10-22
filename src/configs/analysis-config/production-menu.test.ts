@@ -212,11 +212,10 @@ describe('production menu false-door sweep', () => {
     expect(datasets?.hint).toMatch(/respondent key/i);
   });
 
-  it('hides choice modelling on the production app and keeps it on dev', () => {
-    const previous = process.env.NEXT_PUBLIC_VERCEL_ENV;
+  it('shows choice modelling unless the flag is off', () => {
     const previousFlag = process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
     delete process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
-    const hidden = [
+    const shown = [
       'MaxDiff',
       'Conjoint (CBC)',
       'MaxDiff (counting / MNL)',
@@ -228,16 +227,14 @@ describe('production menu false-door sweep', () => {
       'Choice Simulator',
     ];
     try {
-      delete process.env.NEXT_PUBLIC_VERCEL_ENV;
-      const devNames = getAllAnalysisItems().map(item => item.name);
-      for (const name of hidden) expect(devNames).toContain(name);
-      process.env.NEXT_PUBLIC_VERCEL_ENV = 'production';
-      const prodNames = getAllAnalysisItems().map(item => item.name);
-      for (const name of hidden) expect(prodNames).not.toContain(name);
-      expect(prodNames).toContain('Merge Datasets');
+      const names = getAllAnalysisItems().map(item => item.name);
+      for (const name of shown) expect(names).toContain(name);
+      expect(names).toContain('Merge Datasets');
+      process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED = 'false';
+      const offNames = getAllAnalysisItems().map(item => item.name);
+      for (const name of shown) expect(offNames).not.toContain(name);
+      expect(offNames).toContain('Merge Datasets');
     } finally {
-      if (previous === undefined) delete process.env.NEXT_PUBLIC_VERCEL_ENV;
-      else process.env.NEXT_PUBLIC_VERCEL_ENV = previous;
       if (previousFlag === undefined) delete process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
       else process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED = previousFlag;
     }
