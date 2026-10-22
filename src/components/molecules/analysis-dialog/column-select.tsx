@@ -31,6 +31,7 @@ export function ColumnSelect({
   className,
   allowEmpty = false,
   emptyLabel = 'None',
+  id,
 }: {
   label: string;
   value: string;
@@ -43,6 +44,7 @@ export function ColumnSelect({
   className?: string;
   allowEmpty?: boolean;
   emptyLabel?: string;
+  id?: string;
 }) {
   const actual = value ? columnSlotType(schema, value) : null;
   const mismatch = !!expectedType && !!actual && !slotTypeMatchesExpected(actual, expectedType);
@@ -59,7 +61,10 @@ export function ColumnSelect({
         value={value || (allowEmpty ? '__none__' : undefined)}
         onValueChange={next => onChange(next === '__none__' ? '' : next)}
       >
-        <SelectTrigger className="relative h-9 min-w-0 w-full pr-8 text-left [&>svg]:pointer-events-none [&>svg]:absolute [&>svg]:right-3 [&>svg]:top-1/2 [&>svg]:-translate-y-1/2">
+        <SelectTrigger
+          id={id}
+          className="relative h-9 min-w-0 w-full pr-8 text-left [&>svg]:pointer-events-none [&>svg]:absolute [&>svg]:right-3 [&>svg]:top-1/2 [&>svg]:-translate-y-1/2"
+        >
           {value ? (
             <div className="flex min-w-0 w-full items-center justify-start gap-2 overflow-hidden text-left">
               <span className="truncate text-sm">{value}</span>

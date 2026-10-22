@@ -76,9 +76,16 @@ function sameValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
 }
 
+function baseline(param: SpecParam): unknown {
+  if (param.default !== undefined && param.default !== null) return param.default;
+  if (param.type === 'columns') return [];
+  if (param.type === 'boolean') return false;
+  return '';
+}
+
 export function fieldChanged(param: SpecParam, value: unknown): boolean {
   if (param.report || param.role === 'required') return false;
-  return !sameValue(value ?? null, param.default ?? null);
+  return !sameValue(value ?? null, baseline(param));
 }
 
 export function valuesFromSpec(
@@ -183,6 +190,9 @@ function displayValue(value: unknown): string {
 
 export function advancedChanged(spec: AnalysisSpec, values: Record<string, unknown>): boolean {
   return spec.params.some(
-    param => param.role === 'advanced' && !param.report && fieldChanged(param, values[param.name])
+    param =>
+      (param.role === 'advanced' || param.role === 'default') &&
+      !param.report &&
+      fieldChanged(param, values[param.name])
   );
 }
