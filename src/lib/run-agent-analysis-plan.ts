@@ -298,6 +298,8 @@ export async function runAgentAnalysisPlan(
       analysis_type: String(resolvedOp),
       where: 'agent',
       error_class: errorClass(error),
+      error_message: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+      http_status: error instanceof ApiRequestError ? error.status : null,
     });
     throw error;
   }

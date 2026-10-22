@@ -8,6 +8,14 @@ export type TabColumnFilter = {
   };
 };
 
+const BLANK_CELL = new Set(['', 'nan', 'none', 'null', '<na>', 'nat', 'na']);
+
+function cellIsMissing(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === 'number' && Number.isNaN(value)) return true;
+  return BLANK_CELL.has(String(value).trim().toLowerCase());
+}
+
 export function applyClientColumnFilters<T extends Record<string, unknown>>(
   rows: T[],
   filters: TabColumnFilter[]
@@ -34,6 +42,12 @@ export function applyClientColumnFilters<T extends Record<string, unknown>>(
           return Number(cell) > Number(valStr);
         case 'lessThan':
           return Number(cell) < Number(valStr);
+        case 'isMissing':
+        case 'is_missing':
+          return cellIsMissing(cell);
+        case 'isNotMissing':
+        case 'is_not_missing':
+          return !cellIsMissing(cell);
         default:
           return true;
       }
