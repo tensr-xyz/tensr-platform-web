@@ -12,6 +12,7 @@ import useAuth from '@/hooks/api/use-auth';
 import { Tab } from '@/stores/tabs-store';
 import PluginsLayout from '@/components/templates/plugins-layout';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { FIRST_OPEN_ROWS, noteServerTiming, previewPageUrl } from '@/lib/dataset-open';
 import { gridRowsForColumns, gridRowsFromPreview } from '@/lib/sheet-grid-align';
 import { fetchWithColdStartRetry, subscribeDatasetColdStart } from '@/lib/cold-start-fetch';
 import { fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
@@ -37,11 +38,9 @@ interface WorkspaceProps {
 const UUID_PATH_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-const SMALL_DATASET_EAGER_LOAD = 2500;
-
 function importRowLimit(totalRows?: number): number {
-  const n = totalRows ?? SMALL_DATASET_EAGER_LOAD;
-  return Math.min(Math.max(n, 1), SMALL_DATASET_EAGER_LOAD);
+  const n = totalRows ?? FIRST_OPEN_ROWS;
+  return Math.min(Math.max(n, 1), FIRST_OPEN_ROWS);
 }
 
 /** Column-major grid payload (`data[col][row]`) for spreadsheet import */
@@ -52,9 +51,10 @@ async function fetchDatasetImportGrid(
 ): Promise<{ data: unknown[][]; variableNames: string[]; rows: unknown[][] }> {
   const headers = { Authorization: `Bearer ${token}` };
   const previewRes = await fetchWithColdStartRetry(
-    tensrApiUrl(`/datasets/${datasetId}/preview?limit=${rowLimit}`),
+    tensrApiUrl(previewPageUrl(datasetId, 0, rowLimit)),
     { headers }
   );
+  noteServerTiming('preview', previewRes.headers.get('Server-Timing'));
   if (!previewRes.ok) {
     const text = await previewRes.text();
     throw new Error(
@@ -341,7 +341,7 @@ export default function Workspace({ resource }: WorkspaceProps) {
           throw new Error(`Not a dataset id: ${dataToImport.filePath}`);
         }
 
-        // Load the full dataset (up to SMALL_DATASET_EAGER_LOAD) so scroll is instant
+        // First paint is the first page. The sheet loads the next page on scroll.
         const data = await tryDatasetImportGridFromUuidPath(datasetId, token, rowLimit);
         if (!data) {
           throw new Error(`Dataset not found: ${datasetId}`);

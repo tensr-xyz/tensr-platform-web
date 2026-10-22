@@ -1,4 +1,5 @@
 import { fetchWithColdStartRetry } from '@/lib/cold-start-fetch';
+import { noteServerTiming } from '@/lib/dataset-open';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 
 const TTL_MS = 15_000;
@@ -29,6 +30,7 @@ export function fetchDatasetSchema(datasetId: string, init?: RequestInit): Promi
   if (pending) return pending.then(asResponse);
   const request = fetchWithColdStartRetry(tensrApiUrl(`/datasets/${datasetId}/schema`), init)
     .then(async response => {
+      noteServerTiming('schema', response.headers.get('Server-Timing'));
       const cached: CachedSchema = {
         status: response.status,
         body: await response.text(),
