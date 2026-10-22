@@ -94,7 +94,7 @@ export type AnalysisKey =
 export type KolmogorovTestType = 'normality' | 'two_sample';
 
 export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
-  descriptives: 'Frequencies',
+  descriptives: 'Descriptive statistics',
   correlation: 'Bivariate Correlations',
   ttest_independent: 'Independent-Samples T Test',
   ttest_paired: 'Paired-Samples T Test',
@@ -184,7 +184,7 @@ export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
 };
 
 export const SPSS_MENU_PATHS: Record<AnalysisKey, string> = {
-  descriptives: 'Analyze → Descriptive Statistics → Frequencies',
+  descriptives: 'Analyze → Descriptive Statistics → Descriptives',
   correlation: 'Analyze → Correlate → Bivariate',
   ttest_independent: 'Analyze → Compare Means → Independent-Samples T Test',
   ttest_paired: 'Analyze → Compare Means → Paired-Samples T Test',
@@ -424,6 +424,7 @@ export type AnalysisFormSetters = {
   setPairedAfterCol: (v: string) => void;
   setOneSampleCol: (v: string) => void;
   setHypothesizedMean: (v: string) => void;
+  setWeightCol?: (s: string) => void;
 };
 
 export function applyBodyToForm(
@@ -450,6 +451,10 @@ export function applyBodyToForm(
   if (op === 'descriptives' || op === 'correlation') {
     const cols = body.columns as string[] | undefined;
     setSelectedCols(cols?.length ? cols : []);
+    if (op === 'descriptives') {
+      const weight = body.weight_column ?? body.weight;
+      if (typeof weight === 'string') setters.setWeightCol?.(weight);
+    }
     if (op === 'correlation') {
       const method = body.method;
       if (method === 'pearson' || method === 'spearman' || method === 'kendall')
@@ -837,9 +842,11 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     const statistics = (Object.entries(descriptiveStats) as [DescriptiveStatKey, boolean][])
       .filter(([, on]) => on)
       .map(([key]) => key);
+    const weight = form.weightCol.trim();
     return {
       columns: selectedCols.length ? selectedCols : undefined,
       statistics: statistics.length ? statistics : undefined,
+      ...(weight ? { weight_column: weight } : {}),
     };
   }
   if (analysis === 'correlation') {
@@ -1075,21 +1082,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       column_letters: true,
     };
     const weight = form.bannerWeight.trim();
-    if (weight) body.weight = weight;
-    const decimals = form.bannerDecimals.trim();
-    if (decimals && !decimals.startsWith('{')) {
-      const places = Number(decimals);
-      if (!Number.isNaN(places)) {
-        const n = Math.max(0, Math.min(6, Math.round(places)));
-        body.decimal_places = n;
-        body.decimals = {
-          column_proportion: n,
-          row_proportion: n,
-          total_proportion: n,
-          column_mean: n,
-        };
-      }
-    }
+    if (weight && weight !== '__none__') body.weight = weight;
     const filter = form.bannerFilter.trim();
     if (filter) body.filter = filter;
     const nets = form.bannerNetRows
@@ -1108,8 +1101,6 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     body.letter_case = 'lower';
     body.letter_upper_alpha = 0.01;
     body.multiple_comparison = 'fdr';
-    body.apa_format = form.apaFormat;
-    body.include_charts = form.includeCharts;
     return body;
   }
   if (analysis === 'chi_square') {
@@ -1636,6 +1627,7 @@ export function defaultFormFieldsFromSchema(
     hypothesizedDifference: '0',
     groupValues: '',
     descriptiveStats: { ...DEFAULT_DESCRIPTIVE_STATS },
+    weightCol: '',
     kruskalPostHoc: false,
     regressionMethod: 'enter',
     regressionIncludeConstant: true,
@@ -1785,6 +1777,7 @@ export type AnalysisFormState = {
   networkIngest: 'edge_list' | 'adjacency';
   networkWeightCol: string;
   openTextLexicon: string;
+  weightCol: string;
   bannerWeight: string;
   bannerDecimals: string;
   bannerFilter: string;
@@ -1919,6 +1912,9 @@ export function formStateFromBody(
     },
     setHypothesizedMean: v => {
       state.hypothesizedMean = v;
+    },
+    setWeightCol: v => {
+      state.weightCol = v;
     },
   });
   if (

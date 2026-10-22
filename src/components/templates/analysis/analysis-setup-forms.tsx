@@ -35,6 +35,7 @@ import {
   NumericField,
   PillToggle,
 } from '@/components/molecules/analysis-dialog';
+import { columnSlotType } from '@/lib/analysis-column-types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 
 const CONFIDENCE_OPTIONS: { value: ConfidenceLevelKey; label: string }[] = [
@@ -135,7 +136,43 @@ function CheckboxRow({
   );
 }
 
-export function DescriptivesForm({ form, setForm, schema, notices, errors }: FormSliceProps) {
+function numericNames(schema: FormSliceProps['schema'], names: string[]): string[] {
+  return names.filter(name => columnSlotType(schema, name) === 'numeric');
+}
+
+function WeightColumnPicker({
+  value,
+  onChange,
+  schema,
+  names,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  schema: FormSliceProps['schema'];
+  names: string[];
+}) {
+  return (
+    <ColumnSelect
+      label="Weight"
+      value={value}
+      onChange={onChange}
+      schema={schema}
+      names={numericNames(schema, names)}
+      expectedType="numeric"
+      allowEmpty
+      emptyLabel="Unweighted"
+    />
+  );
+}
+
+export function DescriptivesForm({
+  form,
+  setForm,
+  schema,
+  allNames,
+  notices,
+  errors,
+}: FormSliceProps) {
   return (
     <section className="space-y-4">
       <div className="space-y-3">
@@ -148,6 +185,12 @@ export function DescriptivesForm({ form, setForm, schema, notices, errors }: For
           showTypeShortcuts
           notices={notices[WIZARD_FIELD.columns]}
           errors={errors[WIZARD_FIELD.columns]}
+        />
+        <WeightColumnPicker
+          value={form.weightCol}
+          onChange={weightCol => setForm(f => ({ ...f, weightCol }))}
+          schema={schema}
+          names={allNames}
         />
         <p className="text-[10px] text-muted-foreground">
           Leave empty to include all applicable columns.
@@ -191,8 +234,7 @@ export function CorrelationForm({ form, setForm, schema, notices, errors }: Form
           errors={errors[WIZARD_FIELD.columns]}
         />
       </div>
-      <div className="space-y-3">
-        <FormSectionLabel>Options</FormSectionLabel>
+      <AdvancedOptionsDisclosure>
         <div className="flex flex-col gap-1.5">
           <Label className="text-xs text-muted-foreground">Correlation method</Label>
           <PillToggle
@@ -225,7 +267,7 @@ export function CorrelationForm({ form, setForm, schema, notices, errors }: Form
             setForm(f => ({ ...f, flagSignificantCorrelations }))
           }
         />
-      </div>
+      </AdvancedOptionsDisclosure>
     </section>
   );
 }
@@ -297,93 +339,97 @@ export function GroupNumericForm({
           )}
         </div>
       </div>
-      <div className="space-y-3">
-        <FormSectionLabel>Options</FormSectionLabel>
-        {showHypothesizedDifference ? (
-          <NumericField
-            label="Hypothesised difference"
-            value={form.hypothesizedDifference}
-            onChange={hypothesizedDifference => setForm(f => ({ ...f, hypothesizedDifference }))}
-            hint="The expected difference between group means under the null hypothesis. Usually 0."
-            error={errors[WIZARD_FIELD.hypothesizedDifference]?.[0]}
-          />
-        ) : null}
-        {showPostHoc ? (
-          <div className="flex flex-col gap-1.5">
-            <Label className="text-xs text-muted-foreground">Post-hoc method</Label>
-            <PillToggle
-              value={form.anovaPostHoc}
-              onChange={anovaPostHoc => setForm(f => ({ ...f, anovaPostHoc }))}
-              options={[
-                { value: 'none' as const, label: 'None' },
-                {
-                  value: 'tukey' as const,
-                  label: 'Tukey HSD',
-                  disabled: tukeyBlocked,
-                  disabledReason: 'Unavailable with more than 50 groups',
-                },
-                { value: 'bonferroni' as const, label: 'Bonferroni' },
-                { value: 'scheffe' as const, label: 'Scheffé' },
-                { value: 'games_howell' as const, label: 'Games-Howell' },
-              ]}
-              aria-label="Post-hoc method"
+      {showHypothesizedDifference ||
+      showPostHoc ||
+      showAnovaOptions ||
+      (showConfidence && !showAnovaOptions) ? (
+        <AdvancedOptionsDisclosure>
+          {showHypothesizedDifference ? (
+            <NumericField
+              label="Hypothesised difference"
+              value={form.hypothesizedDifference}
+              onChange={hypothesizedDifference => setForm(f => ({ ...f, hypothesizedDifference }))}
+              hint="The expected difference between group means under the null hypothesis. Usually 0."
+              error={errors[WIZARD_FIELD.hypothesizedDifference]?.[0]}
             />
-            <FieldFeedbackList
-              notices={notices[WIZARD_FIELD.anovaPostHoc]}
-              errors={errors[WIZARD_FIELD.anovaPostHoc]}
-            />
-          </div>
-        ) : null}
-        {showAnovaOptions ? (
-          <>
+          ) : null}
+          {showPostHoc ? (
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">Effect size</Label>
+              <Label className="text-xs text-muted-foreground">Post-hoc method</Label>
               <PillToggle
-                value={form.anovaEffectSize}
-                onChange={anovaEffectSize => setForm(f => ({ ...f, anovaEffectSize }))}
+                value={form.anovaPostHoc}
+                onChange={anovaPostHoc => setForm(f => ({ ...f, anovaPostHoc }))}
                 options={[
-                  { value: 'eta_squared' as const, label: 'η²' },
-                  { value: 'partial_eta_squared' as const, label: 'Partial η²' },
-                  { value: 'omega_squared' as const, label: 'ω²' },
                   { value: 'none' as const, label: 'None' },
+                  {
+                    value: 'tukey' as const,
+                    label: 'Tukey HSD',
+                    disabled: tukeyBlocked,
+                    disabledReason: 'Unavailable with more than 50 groups',
+                  },
+                  { value: 'bonferroni' as const, label: 'Bonferroni' },
+                  { value: 'scheffe' as const, label: 'Scheffé' },
+                  { value: 'games_howell' as const, label: 'Games-Howell' },
                 ]}
-                aria-label="Effect size"
+                aria-label="Post-hoc method"
+              />
+              <FieldFeedbackList
+                notices={notices[WIZARD_FIELD.anovaPostHoc]}
+                errors={errors[WIZARD_FIELD.anovaPostHoc]}
               />
             </div>
+          ) : null}
+          {showAnovaOptions ? (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs text-muted-foreground">Effect size</Label>
+                <PillToggle
+                  value={form.anovaEffectSize}
+                  onChange={anovaEffectSize => setForm(f => ({ ...f, anovaEffectSize }))}
+                  options={[
+                    { value: 'eta_squared' as const, label: 'η²' },
+                    { value: 'partial_eta_squared' as const, label: 'Partial η²' },
+                    { value: 'omega_squared' as const, label: 'ω²' },
+                    { value: 'none' as const, label: 'None' },
+                  ]}
+                  aria-label="Effect size"
+                />
+              </div>
+              <ConfidencePills
+                value={form.confidenceLevel}
+                onChange={confidenceLevel => setForm(f => ({ ...f, confidenceLevel }))}
+              />
+              <CheckboxRow
+                id="anova-desc-group"
+                label="Descriptives per group"
+                checked={form.anovaDescriptivesByGroup}
+                onCheckedChange={anovaDescriptivesByGroup =>
+                  setForm(f => ({ ...f, anovaDescriptivesByGroup }))
+                }
+              />
+              <div className="flex flex-col gap-1.5">
+                <Label className="text-xs text-muted-foreground">Homogeneity test</Label>
+                <PillToggle
+                  value={form.anovaHomogeneity}
+                  onChange={anovaHomogeneity => setForm(f => ({ ...f, anovaHomogeneity }))}
+                  options={[
+                    { value: 'levene' as const, label: "Levene's" },
+                    { value: 'brown_forsythe' as const, label: 'Brown–Forsythe' },
+                    { value: 'none' as const, label: 'None' },
+                  ]}
+                  aria-label="Homogeneity test"
+                />
+              </div>
+            </>
+          ) : null}
+          {showConfidence && !showAnovaOptions ? (
             <ConfidencePills
               value={form.confidenceLevel}
               onChange={confidenceLevel => setForm(f => ({ ...f, confidenceLevel }))}
             />
-            <CheckboxRow
-              id="anova-desc-group"
-              label="Descriptives per group"
-              checked={form.anovaDescriptivesByGroup}
-              onCheckedChange={anovaDescriptivesByGroup =>
-                setForm(f => ({ ...f, anovaDescriptivesByGroup }))
-              }
-            />
-            <div className="flex flex-col gap-1.5">
-              <Label className="text-xs text-muted-foreground">Homogeneity test</Label>
-              <PillToggle
-                value={form.anovaHomogeneity}
-                onChange={anovaHomogeneity => setForm(f => ({ ...f, anovaHomogeneity }))}
-                options={[
-                  { value: 'levene' as const, label: "Levene's" },
-                  { value: 'brown_forsythe' as const, label: 'Brown–Forsythe' },
-                  { value: 'none' as const, label: 'None' },
-                ]}
-                aria-label="Homogeneity test"
-              />
-            </div>
-          </>
-        ) : null}
-        {showConfidence && !showAnovaOptions ? (
-          <ConfidencePills
-            value={form.confidenceLevel}
-            onChange={confidenceLevel => setForm(f => ({ ...f, confidenceLevel }))}
-          />
-        ) : null}
-      </div>
+          ) : null}
+        </AdvancedOptionsDisclosure>
+      ) : null}
       {showAnovaOptions ? (
         <AdvancedOptionsDisclosure>
           <CheckboxRow
@@ -452,15 +498,14 @@ export function KruskalWallisForm({ form, setForm, ...rest }: FormSliceProps) {
         outcomeLabel="Test variable"
         groupingLabel="Grouping variable"
       />
-      <div className="mt-4 space-y-3">
-        <FormSectionLabel>Options</FormSectionLabel>
+      <AdvancedOptionsDisclosure>
         <CheckboxRow
           id="kruskal-posthoc"
           label="Post-hoc pairwise comparisons"
           checked={form.kruskalPostHoc}
           onCheckedChange={kruskalPostHoc => setForm(f => ({ ...f, kruskalPostHoc }))}
         />
-      </div>
+      </AdvancedOptionsDisclosure>
     </div>
   );
 }
@@ -498,13 +543,12 @@ export function PairedTTestForm({
           errors={errors[WIZARD_FIELD.pairedVar2]}
         />
       </div>
-      <div className="space-y-3">
-        <FormSectionLabel>Options</FormSectionLabel>
+      <AdvancedOptionsDisclosure>
         <ConfidencePills
           value={form.confidenceLevel}
           onChange={confidenceLevel => setForm(f => ({ ...f, confidenceLevel }))}
         />
-      </div>
+      </AdvancedOptionsDisclosure>
     </section>
   );
 }
@@ -543,13 +587,12 @@ export function OneSampleTTestForm({
         ) : null}
       </div>
       {!hideHypothesizedMean ? (
-        <div className="space-y-3">
-          <FormSectionLabel>Options</FormSectionLabel>
+        <AdvancedOptionsDisclosure>
           <ConfidencePills
             value={form.confidenceLevel}
             onChange={confidenceLevel => setForm(f => ({ ...f, confidenceLevel }))}
           />
-        </div>
+        </AdvancedOptionsDisclosure>
       ) : null}
     </section>
   );
@@ -563,16 +606,30 @@ function RegressionVariablesTab({
   notices,
   errors,
   logistic,
-}: FormSliceProps & { logistic?: boolean }) {
+  outcomeKind = 'numeric',
+}: FormSliceProps & {
+  logistic?: boolean;
+  outcomeKind?: 'numeric' | 'binary' | 'ordinal' | 'count';
+}) {
+  const dependentLabel =
+    outcomeKind === 'ordinal'
+      ? 'Dependent variable (ordered)'
+      : outcomeKind === 'count'
+        ? 'Dependent variable (count)'
+        : logistic
+          ? 'Dependent variable (binary)'
+          : 'Dependent variable';
+  const dependentType =
+    outcomeKind === 'binary' || outcomeKind === 'ordinal' ? 'categorical' : 'numeric';
   return (
     <div className="space-y-3">
       <ColumnSelect
-        label={logistic ? 'Dependent variable (binary)' : 'Dependent variable'}
+        label={dependentLabel}
         value={form.depCol}
         onChange={depCol => setForm(f => ({ ...f, depCol }))}
         schema={schema}
         names={allNames}
-        expectedType={logistic ? 'categorical' : 'numeric'}
+        expectedType={dependentType}
         notices={notices[WIZARD_FIELD.depCol]}
         errors={errors[WIZARD_FIELD.depCol]}
       />
@@ -591,14 +648,6 @@ function RegressionVariablesTab({
           errors={errors[WIZARD_FIELD.independentCols]}
         />
       </div>
-      <ColumnSelect
-        label="Cluster groups (optional — cluster-robust SEs)"
-        value={form.clusterByCol}
-        onChange={clusterByCol => setForm(f => ({ ...f, clusterByCol }))}
-        schema={schema}
-        names={allNames}
-        expectedType="categorical"
-      />
     </div>
   );
 }
@@ -641,10 +690,13 @@ function DeriveSplitFields({
 function RegressionOptionsTab({
   form,
   setForm,
+  schema,
+  allNames,
   errors,
   logistic,
+  countLike = false,
   showEntryMethod = false,
-}: FormSliceProps & { logistic?: boolean; showEntryMethod?: boolean }) {
+}: FormSliceProps & { logistic?: boolean; countLike?: boolean; showEntryMethod?: boolean }) {
   return (
     <div className="space-y-4">
       {showEntryMethod ? (
@@ -682,7 +734,7 @@ function RegressionOptionsTab({
           )
         }
       />
-      {!logistic ? (
+      {!logistic && !countLike ? (
         <>
           <div className="flex flex-col gap-1.5">
             <Label className="text-xs text-muted-foreground">Missing values</Label>
@@ -723,7 +775,7 @@ function RegressionOptionsTab({
             }
           />
         </>
-      ) : (
+      ) : logistic ? (
         <>
           <NumericField
             label="Classification cutoff"
@@ -747,14 +799,32 @@ function RegressionOptionsTab({
           />
           <DeriveSplitFields form={form} setForm={setForm} />
         </>
-      )}
+      ) : null}
+      <AdvancedOptionsDisclosure>
+        <ColumnSelect
+          label="Cluster groups (cluster-robust standard errors)"
+          value={form.clusterByCol}
+          onChange={clusterByCol => setForm(f => ({ ...f, clusterByCol }))}
+          schema={schema}
+          names={allNames}
+          expectedType="categorical"
+          allowEmpty
+          emptyLabel="No clustering"
+        />
+      </AdvancedOptionsDisclosure>
     </div>
   );
 }
 
-function RegressionTabs(props: FormSliceProps & { logistic?: boolean }) {
+function RegressionTabs(
+  props: FormSliceProps & {
+    logistic?: boolean;
+    outcomeKind?: 'numeric' | 'binary' | 'ordinal' | 'count';
+  }
+) {
   const showEntryMethod =
     props.form.analysis === 'linear_regression' || props.form.analysis === 'stepwise_regression';
+  const countLike = props.outcomeKind === 'count' || props.outcomeKind === 'ordinal';
   return (
     <Tabs defaultValue="variables" className="w-full">
       <TabsList className="mb-4 grid w-full grid-cols-2">
@@ -765,7 +835,7 @@ function RegressionTabs(props: FormSliceProps & { logistic?: boolean }) {
         <RegressionVariablesTab {...props} />
       </TabsContent>
       <TabsContent value="options" className="mt-0">
-        <RegressionOptionsTab {...props} showEntryMethod={showEntryMethod} />
+        <RegressionOptionsTab {...props} showEntryMethod={showEntryMethod} countLike={countLike} />
       </TabsContent>
     </Tabs>
   );
@@ -865,113 +935,85 @@ export function BannerTableForm({
         notices={notices[WIZARD_FIELD.chiB]}
         errors={errors[WIZARD_FIELD.chiB]}
       />
-      <label className="block space-y-1 text-[11px]">
-        <span className="text-muted-foreground">Weight</span>
-        <Input
-          inputSize="sm"
-          className="w-full text-[11px]"
-          value={form.bannerWeight}
-          onChange={event => setForm(f => ({ ...f, bannerWeight: event.target.value }))}
-        />
-      </label>
-      <label className="block space-y-1 text-[11px]">
-        <span className="text-muted-foreground">Decimals</span>
-        <Input
-          type="number"
-          inputSize="sm"
-          min={0}
-          max={6}
-          step={1}
-          className="w-full text-[11px]"
-          value={form.bannerDecimals}
-          onChange={event => setForm(f => ({ ...f, bannerDecimals: event.target.value }))}
-        />
-      </label>
-      <label className="block space-y-1 text-[11px]">
-        <span className="text-muted-foreground">Filter</span>
-        <Input
-          inputSize="sm"
-          className="w-full text-[11px]"
-          value={form.bannerFilter}
-          onChange={event => setForm(f => ({ ...f, bannerFilter: event.target.value }))}
-        />
-      </label>
-      <div className="space-y-2">
-        <span className="text-[11px] text-muted-foreground">Nets</span>
-        {form.bannerNetRows.map((row, index) => (
-          <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
-            <Input
-              inputSize="sm"
-              className="w-full text-[11px]"
-              aria-label="Net label"
-              value={row.label}
-              onChange={event =>
-                setForm(f => ({
-                  ...f,
-                  bannerNetRows: f.bannerNetRows.map((item, itemIndex) =>
-                    itemIndex === index ? { ...item, label: event.target.value } : item
-                  ),
-                }))
-              }
-            />
-            <Input
-              inputSize="sm"
-              className="w-full text-[11px]"
-              aria-label="Net codes"
-              placeholder="4, 5"
-              value={row.codes}
-              onChange={event =>
-                setForm(f => ({
-                  ...f,
-                  bannerNetRows: f.bannerNetRows.map((item, itemIndex) =>
-                    itemIndex === index ? { ...item, codes: event.target.value } : item
-                  ),
-                }))
-              }
-            />
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() =>
-                setForm(f => ({
-                  ...f,
-                  bannerNetRows: f.bannerNetRows.filter((_, itemIndex) => itemIndex !== index),
-                }))
-              }
-            >
-              Remove
-            </Button>
-          </div>
-        ))}
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() =>
-            setForm(f => ({
-              ...f,
-              bannerNetRows: [...f.bannerNetRows, { label: '', codes: '' }],
-            }))
-          }
-        >
-          Add net
-        </Button>
-      </div>
-      <label className="flex items-center gap-2 text-[11px]">
-        <Checkbox
-          checked={form.apaFormat}
-          onCheckedChange={checked => setForm(f => ({ ...f, apaFormat: checked === true }))}
-        />
-        APA format
-      </label>
-      <label className="flex items-center gap-2 text-[11px]">
-        <Checkbox
-          checked={form.includeCharts}
-          onCheckedChange={checked => setForm(f => ({ ...f, includeCharts: checked === true }))}
-        />
-        Include charts
-      </label>
+      <WeightColumnPicker
+        value={form.bannerWeight}
+        onChange={bannerWeight => setForm(f => ({ ...f, bannerWeight }))}
+        schema={schema}
+        names={allNames}
+      />
+      <AdvancedOptionsDisclosure>
+        <label className="block space-y-1 text-[11px]">
+          <span className="text-muted-foreground">Filter</span>
+          <Input
+            inputSize="sm"
+            className="w-full text-[11px]"
+            value={form.bannerFilter}
+            onChange={event => setForm(f => ({ ...f, bannerFilter: event.target.value }))}
+          />
+        </label>
+        <div className="space-y-2">
+          <span className="text-[11px] text-muted-foreground">Nets</span>
+          {form.bannerNetRows.map((row, index) => (
+            <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2">
+              <Input
+                inputSize="sm"
+                className="w-full text-[11px]"
+                aria-label="Net label"
+                value={row.label}
+                onChange={event =>
+                  setForm(f => ({
+                    ...f,
+                    bannerNetRows: f.bannerNetRows.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, label: event.target.value } : item
+                    ),
+                  }))
+                }
+              />
+              <Input
+                inputSize="sm"
+                className="w-full text-[11px]"
+                aria-label="Net codes"
+                placeholder="4, 5"
+                value={row.codes}
+                onChange={event =>
+                  setForm(f => ({
+                    ...f,
+                    bannerNetRows: f.bannerNetRows.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, codes: event.target.value } : item
+                    ),
+                  }))
+                }
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setForm(f => ({
+                    ...f,
+                    bannerNetRows: f.bannerNetRows.filter((_, itemIndex) => itemIndex !== index),
+                  }))
+                }
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              setForm(f => ({
+                ...f,
+                bannerNetRows: [...f.bannerNetRows, { label: '', codes: '' }],
+              }))
+            }
+          >
+            Add net
+          </Button>
+        </div>
+      </AdvancedOptionsDisclosure>
     </section>
   );
 }
@@ -1006,9 +1048,8 @@ export function ChiSquareForm({
         notices={notices[WIZARD_FIELD.chiB]}
         errors={errors[WIZARD_FIELD.chiB]}
       />
-      {form.analysis === 'chi_square' && (
-        <>
-          <FormSectionLabel>Association measures</FormSectionLabel>
+      {form.analysis === 'chi_square' ? (
+        <AdvancedOptionsDisclosure>
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={form.chiIncludePhi}
@@ -1034,27 +1075,29 @@ export function ChiSquareForm({
             />
             Use Fisher&apos;s exact test (recommended for 2×2 tables with small expected counts)
           </label>
-        </>
-      )}
-      {form.analysis === 'weighted_kappa' && (
-        <label className="flex flex-col gap-1 text-sm">
-          <span>Weight scheme</span>
-          <Select
-            value={form.kappaWeights}
-            onValueChange={value =>
-              setForm(f => ({ ...f, kappaWeights: value as 'linear' | 'quadratic' }))
-            }
-          >
-            <SelectTrigger className="text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="linear">Linear</SelectItem>
-              <SelectItem value="quadratic">Quadratic</SelectItem>
-            </SelectContent>
-          </Select>
-        </label>
-      )}
+        </AdvancedOptionsDisclosure>
+      ) : null}
+      {form.analysis === 'weighted_kappa' ? (
+        <AdvancedOptionsDisclosure>
+          <label className="flex flex-col gap-1 text-sm">
+            <span>Weight scheme</span>
+            <Select
+              value={form.kappaWeights}
+              onValueChange={value =>
+                setForm(f => ({ ...f, kappaWeights: value as 'linear' | 'quadratic' }))
+              }
+            >
+              <SelectTrigger className="text-sm">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="linear">Linear</SelectItem>
+                <SelectItem value="quadratic">Quadratic</SelectItem>
+              </SelectContent>
+            </Select>
+          </label>
+        </AdvancedOptionsDisclosure>
+      ) : null}
     </section>
   );
 }
@@ -1835,6 +1878,40 @@ export function NelsonAalenForm({ form, setForm, schema, allNames, errors }: For
   );
 }
 
+export function GeeForm({ form, setForm, schema, allNames, errors }: FormSliceProps) {
+  return (
+    <section className="space-y-3">
+      <ColumnSelect
+        label="Dependent variable"
+        value={form.depCol}
+        onChange={depCol => setForm(f => ({ ...f, depCol }))}
+        schema={schema}
+        names={allNames}
+        errors={errors[WIZARD_FIELD.depCol]}
+      />
+      <ColumnSelect
+        label="Cluster"
+        value={form.groupCol}
+        onChange={groupCol => setForm(f => ({ ...f, groupCol }))}
+        schema={schema}
+        names={allNames}
+        expectedType="categorical"
+        errors={errors[WIZARD_FIELD.groupCol]}
+      />
+      <FormSectionLabel>Predictors</FormSectionLabel>
+      <MultiColumnPicker
+        selected={form.independentCols}
+        onChange={independentCols => setForm(f => ({ ...f, independentCols }))}
+        schema={schema}
+        filterSlot="numeric"
+        showTypeShortcuts
+        minSelected={1}
+        errors={errors[WIZARD_FIELD.independentCols]}
+      />
+    </section>
+  );
+}
+
 export function MixedModelForm({ form, setForm, schema, allNames, errors }: FormSliceProps) {
   return (
     <section className="space-y-3">
@@ -1866,26 +1943,28 @@ export function MixedModelForm({ form, setForm, schema, allNames, errors }: Form
         minSelected={0}
         errors={errors[WIZARD_FIELD.independentCols]}
       />
-      <FormSectionLabel>
-        Random slopes (optional — leave empty for random intercept only)
-      </FormSectionLabel>
-      <MultiColumnPicker
-        selected={form.randomSlopeCols}
-        onChange={randomSlopeCols => setForm(f => ({ ...f, randomSlopeCols }))}
-        schema={schema}
-        filterSlot="numeric"
-        showTypeShortcuts
-        minSelected={0}
-      />
-      <PillToggle
-        value={form.reml ? 'reml' : 'ml'}
-        onChange={v => setForm(f => ({ ...f, reml: v === 'reml' }))}
-        options={[
-          { value: 'reml', label: 'REML' },
-          { value: 'ml', label: 'ML' },
-        ]}
-        aria-label="Estimation method"
-      />
+      <AdvancedOptionsDisclosure>
+        <FormSectionLabel>
+          Random slopes (optional — leave empty for random intercept only)
+        </FormSectionLabel>
+        <MultiColumnPicker
+          selected={form.randomSlopeCols}
+          onChange={randomSlopeCols => setForm(f => ({ ...f, randomSlopeCols }))}
+          schema={schema}
+          filterSlot="numeric"
+          showTypeShortcuts
+          minSelected={0}
+        />
+        <PillToggle
+          value={form.reml ? 'reml' : 'ml'}
+          onChange={v => setForm(f => ({ ...f, reml: v === 'reml' }))}
+          options={[
+            { value: 'reml', label: 'REML' },
+            { value: 'ml', label: 'ML' },
+          ]}
+          aria-label="Estimation method"
+        />
+      </AdvancedOptionsDisclosure>
     </section>
   );
 }
@@ -2306,8 +2385,6 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'chi_square':
     case 'mcnemar':
       return <ChiSquareForm {...props} />;
-    case 'banner_table':
-      return <BannerTableForm {...props} />;
     case 'mann_whitney_u':
       return (
         <GroupNumericForm
@@ -2336,7 +2413,7 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'anova_repeated':
       return <RepeatedMeasuresAnovaForm {...props} />;
     case 'poisson_regression':
-      return <RegressionTabs {...props} />;
+      return <RegressionTabs {...props} outcomeKind="count" />;
     case 'cohens_kappa':
     case 'fishers_exact':
     case 'odds_ratio':
@@ -2403,7 +2480,7 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'mixed_model':
       return <MixedModelForm {...props} />;
     case 'gee':
-      return <MixedModelForm {...props} />;
+      return <GeeForm {...props} />;
     case 'reliability':
       return <ReliabilityForm {...props} />;
     case 'rm_anova':
@@ -2430,10 +2507,11 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'sign_test':
       return <PairedTTestForm {...props} />;
     case 'probit_regression':
+      return <RegressionTabs {...props} logistic />;
     case 'negative_binomial_regression':
-      return <RegressionTabs {...props} logistic={props.form.analysis === 'probit_regression'} />;
+      return <RegressionTabs {...props} outcomeKind="count" />;
     case 'ordinal_regression':
-      return <RegressionTabs {...props} />;
+      return <RegressionTabs {...props} outcomeKind="ordinal" />;
     case 'median_test':
     case 'jonckheere_terpstra':
     case 'moses_test':

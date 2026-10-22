@@ -33,6 +33,7 @@ import { Checkbox } from '@/components/atoms/checkbox';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { renderAnalysisForm } from '@/components/templates/analysis/analysis-setup-forms';
+import { apiClient } from '@/lib/api-client';
 
 type Props = {
   open: boolean;
@@ -46,6 +47,28 @@ type Props = {
   onRun: (op: AnalysisKey, body: Record<string, unknown>) => Promise<void>;
   onBackToPalette: () => void;
 };
+
+const DEFAULTS_LINE: Partial<Record<AnalysisKey, string>> = {
+  descriptives: 'Mean, standard deviation, minimum, and maximum. Weight uses the active weight.',
+  banner_table: 'Column percents and significance letters, with FDR across columns.',
+  linear_regression: 'Enter method, intercept included, listwise deletion.',
+  poisson_regression: 'Log link and an intercept. Cluster-robust standard errors stay off.',
+  negative_binomial_regression:
+    'Log link and an intercept. Cluster-robust standard errors stay off.',
+  ordinal_regression:
+    'Proportional odds and an intercept. Cluster-robust standard errors stay off.',
+  gee: 'Exchangeable working correlation. No random slopes.',
+};
+
+function DefaultsSummary({ analysis }: { analysis: AnalysisKey }) {
+  return (
+    <p className="mb-3 rounded-md bg-muted/60 px-2.5 py-1.5 text-[11px] leading-snug text-muted-foreground">
+      <span className="font-medium text-foreground">Defaults. </span>
+      {DEFAULTS_LINE[analysis] ??
+        'The usual settings for this analysis. Open Advanced options to change them.'}
+    </p>
+  );
+}
 
 export function AnalysisSetupModal({
   open,
@@ -67,6 +90,7 @@ export function AnalysisSetupModal({
   const [outputPrefs, setOutputPrefs] = React.useState<OutputPreferences>(() =>
     loadOutputPreferences()
   );
+  const [activeWeight, setActiveWeight] = React.useState<string | null>(null);
 
   const bodyKey = React.useMemo(() => JSON.stringify(initialBody ?? null), [initialBody]);
   // The sheet schema arrives first, then the API schema (same names, sharper types)
@@ -79,6 +103,22 @@ export function AnalysisSetupModal({
   const previewKey = preview ? `${preview.headers.join('\u0001')}:${preview.rows.length}` : '';
 
   React.useEffect(() => {
+    if (!open || !datasetId) return;
+    let cancelled = false;
+    void apiClient.datasets
+      .getMetadata(datasetId)
+      .then(meta => {
+        if (!cancelled) setActiveWeight(meta.active_weight_column?.trim() || null);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveWeight(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, datasetId]);
+
+  React.useEffect(() => {
     if (!open) return;
     setServerError(null);
     if (!schema.length) {
@@ -87,18 +127,28 @@ export function AnalysisSetupModal({
     }
     if (initialBody && Object.keys(initialBody).length > 0) {
       setForm(formStateFromBody(initialOp, initialBody, schema));
-      if (initialOp === 'banner_table') {
-        setOutputPrefs(current => ({
-          ...current,
-          decimalPlaces: bannerTableDecimalPlaces(initialBody),
-        }));
-      }
+      setOutputPrefs(current => {
+        const next = { ...current };
+        const apa = initialBody.apa_format ?? initialBody.apaFormat;
+        const charts = initialBody.include_charts ?? initialBody.includeCharts;
+        if (typeof apa === 'boolean') next.apaFormat = apa;
+        if (typeof charts === 'boolean') next.includeCharts = charts;
+        if (initialOp === 'banner_table') {
+          next.decimalPlaces = bannerTableDecimalPlaces(initialBody);
+        }
+        return next;
+      });
     } else {
-      setForm(defaultFormForAnalysis(initialOp, schema, preview));
+      const fresh = defaultFormForAnalysis(initialOp, schema, preview);
+      if (activeWeight) {
+        fresh.weightCol = activeWeight;
+        fresh.bannerWeight = activeWeight;
+      }
+      setForm(fresh);
       setOutputPrefs(loadOutputPreferences());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody in bodyKey, schema in schemaKey, preview in previewKey
-  }, [open, initialOp, bodyKey, schemaKey, previewKey]);
+  }, [open, initialOp, bodyKey, schemaKey, previewKey, activeWeight]);
 
   const allNames = schema.map(c => c.name);
   const analysis = form.analysis;
@@ -168,6 +218,7 @@ export function AnalysisSetupModal({
         <p className="text-sm text-muted-foreground">Upload a dataset with a schema first.</p>
       ) : (
         <>
+          <DefaultsSummary analysis={analysis} />
           {renderAnalysisForm(analysis, {
             form,
             setForm,

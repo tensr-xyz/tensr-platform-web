@@ -11,6 +11,7 @@ import { Button } from '@/components/atoms/button';
 import { Textarea } from '@/components/atoms/text-area';
 import { cn } from '@/utils';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
+import { useTabsStore } from '@/stores/tabs-store';
 import {
   formatRunLabel,
   formatRunTime,
@@ -58,9 +59,15 @@ function VarPicker({
   );
 }
 
-function pickSpecInputs(report: AnalysisReport): { label: string; value: string; type?: string }[] {
+function pickSpecInputs(
+  report: AnalysisReport,
+  columns: { id: string; type?: string }[]
+): {
+  variables: { label: string; value: string; type?: string }[];
+  settings: { label: string; value: string }[];
+} {
   const inputs = report.analysis_spec?.inputs ?? {};
-  const pairs: { label: string; value: string; type?: string }[] = [];
+  const typeByName = new Map(columns.map(column => [column.id, column.type]));
   const labelMap: Record<string, string> = {
     dependent_variable: 'DV',
     dependent_var: 'DV',
@@ -75,24 +82,46 @@ function pickSpecInputs(report: AnalysisReport): { label: string; value: string;
     predictor: 'Predictor',
     covariate: 'Covariate',
   };
+  const variables: { label: string; value: string; type?: string }[] = [];
+  const settings: { label: string; value: string }[] = [];
+
+  const labelFor = (key: string) => labelMap[key] ?? key.replace(/_/g, ' ');
 
   for (const [key, raw] of Object.entries(inputs)) {
-    if (raw === null || raw === undefined) continue;
-    const value = Array.isArray(raw) ? raw.join(', ') : String(raw);
-    if (!value || key.startsWith('_')) continue;
-    pairs.push({
-      label: labelMap[key] ?? key.replace(/_/g, ' '),
-      value,
-    });
+    if (raw === null || raw === undefined || key.startsWith('_')) continue;
+    const label = labelFor(key);
+    if (typeof raw === 'boolean') {
+      settings.push({ label, value: raw ? 'On' : 'Off' });
+      continue;
+    }
+    if (typeof raw === 'number') {
+      settings.push({ label, value: String(raw) });
+      continue;
+    }
+    const names = (Array.isArray(raw) ? raw : [raw]).map(item => String(item));
+    const value = names.join(', ');
+    if (!value) continue;
+    if (names.length === 1 && (names[0] === 'true' || names[0] === 'false')) {
+      settings.push({ label, value: names[0] === 'true' ? 'On' : 'Off' });
+      continue;
+    }
+    const known = names.filter(name => typeByName.has(name));
+    if (columns.length && known.length === names.length) {
+      variables.push({ label, value, type: typeByName.get(known[0]) });
+    } else if (!columns.length && names.every(name => Number.isNaN(Number(name)))) {
+      variables.push({ label, value });
+    } else {
+      settings.push({ label, value });
+    }
   }
 
-  if (pairs.length === 0 && report.meta.subtitle) {
+  if (variables.length === 0 && settings.length === 0 && report.meta.subtitle) {
     const parts = report.meta.subtitle.split(/\s+by\s+/i);
-    if (parts[0]) pairs.push({ label: 'DV', value: parts[0].trim() });
-    if (parts[1]) pairs.push({ label: 'Factor', value: parts[1].trim() });
+    if (parts[0]) variables.push({ label: 'DV', value: parts[0].trim() });
+    if (parts[1]) variables.push({ label: 'Factor', value: parts[1].trim() });
   }
 
-  return pairs.slice(0, 4);
+  return { variables: variables.slice(0, 4), settings };
 }
 
 type Props = {
@@ -164,7 +193,14 @@ export function AnalysisReportRail({
     };
   }, [sourceDatasetId, currentRunId]);
 
-  const variables = pickSpecInputs(report);
+  const columns = useTabsStore(state => {
+    const tab = state.tabs.find(item => item.id === state.activeTabId);
+    return (tab?.data?.initialColumns ?? []).map(column => ({
+      id: column.id,
+      type: column.type,
+    }));
+  });
+  const { variables, settings } = pickSpecInputs(report, columns);
   const chartTitles = (report.charts?.length ? report.charts : report.chart ? [report.chart] : [])
     .filter(Boolean)
     .map(c => c!.title);
@@ -208,6 +244,19 @@ export function AnalysisReportRail({
               Open the setup dialog to change variables and run again.
             </p>
           )}
+          {settings.length ? (
+            <ul className="mt-2 space-y-1">
+              {settings.map(setting => (
+                <li
+                  key={`${setting.label}:${setting.value}`}
+                  className="flex justify-between gap-2 text-[11px]"
+                >
+                  <span className="text-muted-foreground">{setting.label}</span>
+                  <span className="font-medium text-foreground">{setting.value}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
         <div className="mt-2.5 flex gap-2">
           <Button
