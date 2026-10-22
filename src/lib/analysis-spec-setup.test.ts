@@ -4,6 +4,7 @@ import {
   bodyFromSpec,
   specRunBlockers,
   fieldChanged,
+  advancedChanged,
 } from './analysis-spec-setup';
 import type { SchemaColumn } from '@/lib/analysis-report-types';
 
@@ -44,6 +45,7 @@ describe('analysis spec setup', () => {
     expect(fieldChanged(spec!.params.find(param => param.name === 'method')!, values.method)).toBe(
       true
     );
+    expect(advancedChanged(spec!, values)).toBe(true);
   });
 
   it('blocks a run when a required column is empty', () => {

@@ -35,7 +35,13 @@ import { Label } from '@/components/atoms/label';
 import { renderAnalysisForm } from '@/components/templates/analysis/analysis-setup-forms';
 import { SpecDrivenSetup } from '@/components/templates/analysis/spec-driven-setup';
 import { apiClient } from '@/lib/api-client';
-import { bodyFromSpec, specFor, specRunBlockers, valuesFromSpec } from '@/lib/analysis-spec-setup';
+import {
+  bodyFromSpec,
+  isWeightParam,
+  specFor,
+  specRunBlockers,
+  valuesFromSpec,
+} from '@/lib/analysis-spec-setup';
 
 type Props = {
   open: boolean;
@@ -104,6 +110,8 @@ export function AnalysisSetupModal({
     [schema]
   );
   const previewKey = preview ? `${preview.headers.join('\u0001')}:${preview.rows.length}` : '';
+  const setupKey = `${initialOp}\u0001${bodyKey}\u0001${schemaKey}\u0001${previewKey}`;
+  const setupKeyRef = React.useRef('');
 
   React.useEffect(() => {
     if (!open || !datasetId) return;
@@ -129,10 +137,28 @@ export function AnalysisSetupModal({
       return;
     }
     const spec = specFor(initialOp);
+    const fullReset = setupKeyRef.current !== setupKey;
+    setupKeyRef.current = setupKey;
     if (spec) {
       const stored = initialBody && Object.keys(initialBody).length > 0 ? initialBody : null;
-      setSpecValues(valuesFromSpec(spec, stored, activeWeight, schema));
+      if (fullReset) {
+        setSpecValues(valuesFromSpec(spec, stored, activeWeight, schema));
+      } else if (activeWeight && !stored) {
+        setSpecValues(current => {
+          const next = { ...current };
+          let patched = false;
+          for (const param of spec.params) {
+            if (!isWeightParam(param)) continue;
+            if (next[param.name] == null || next[param.name] === '') {
+              next[param.name] = activeWeight;
+              patched = true;
+            }
+          }
+          return patched ? next : current;
+        });
+      }
     }
+    if (!fullReset) return;
     if (initialBody && Object.keys(initialBody).length > 0) {
       setForm(formStateFromBody(initialOp, initialBody, schema));
       setOutputPrefs(current => {

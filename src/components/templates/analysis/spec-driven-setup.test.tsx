@@ -20,7 +20,7 @@ describe('SpecDrivenSetup', () => {
       <SpecDrivenSetup spec={spec!} values={values} onChange={() => undefined} schema={SCHEMA} />
     );
     expect(screen.getByText('Required')).toBeInTheDocument();
-    expect(screen.getByText('Dependent')).toBeInTheDocument();
+    expect(screen.getByText('dependent')).toBeInTheDocument();
     expect(screen.getByText(/Defaults\./)).toBeInTheDocument();
     expect(screen.queryByText('APA-style tables')).not.toBeInTheDocument();
     expect(screen.queryByText('residual plots')).not.toBeInTheDocument();

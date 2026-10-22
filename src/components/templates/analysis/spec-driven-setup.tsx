@@ -60,9 +60,20 @@ function ChangedDot({ show }: { show: boolean }) {
   return <span className="inline-block size-1.5 rounded-full bg-primary" aria-label="Changed" />;
 }
 
-function FieldLabel({ param, changed }: { param: SpecParam; changed: boolean }) {
+function FieldLabel({
+  param,
+  changed,
+  htmlFor,
+}: {
+  param: SpecParam;
+  changed: boolean;
+  htmlFor: string;
+}) {
   return (
-    <Label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+    <Label
+      htmlFor={htmlFor}
+      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+    >
       {paramLabel(param)}
       <ChangedDot show={changed} />
     </Label>
@@ -82,12 +93,14 @@ function ParamField({
 }) {
   const changed = fieldChanged(param, value);
   const label = paramLabel(param);
+  const fieldId = `spec-${param.name}`;
 
   if (param.type === 'column') {
     return (
       <div className="flex flex-col gap-1.5">
-        <FieldLabel param={param} changed={changed} />
+        <FieldLabel param={param} changed={changed} htmlFor={fieldId} />
         <ColumnSelect
+          id={fieldId}
           label=""
           value={asText(value)}
           onChange={onChange}
@@ -108,8 +121,9 @@ function ParamField({
   if (columnList) {
     return (
       <div className="flex flex-col gap-1.5">
-        <FieldLabel param={param} changed={changed} />
+        <FieldLabel param={param} changed={changed} htmlFor={fieldId} />
         <MultiColumnPicker
+          id={fieldId}
           selected={asColumns(value)}
           onChange={onChange}
           schema={schema.filter(column => namesForParam(schema, param).includes(column.name))}
@@ -125,8 +139,9 @@ function ParamField({
     const items = Array.isArray(value) ? value.map(item => String(item)) : [];
     return (
       <div className="flex flex-col gap-1.5">
-        <FieldLabel param={param} changed={changed} />
+        <FieldLabel param={param} changed={changed} htmlFor={fieldId} />
         <Input
+          id={fieldId}
           value={items.join(', ')}
           onChange={event =>
             onChange(
@@ -163,9 +178,9 @@ function ParamField({
   if (param.type === 'enum') {
     return (
       <div className="flex flex-col gap-1.5">
-        <FieldLabel param={param} changed={changed} />
+        <FieldLabel param={param} changed={changed} htmlFor={fieldId} />
         <Select value={asText(value)} onValueChange={onChange}>
-          <SelectTrigger className="h-9 w-full">
+          <SelectTrigger id={fieldId} className="h-9 w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent className="z-[250]">
@@ -183,8 +198,9 @@ function ParamField({
   if (param.type === 'integer' || param.type === 'number') {
     return (
       <div className="flex flex-col gap-1.5">
-        <FieldLabel param={param} changed={changed} />
+        <FieldLabel param={param} changed={changed} htmlFor={fieldId} />
         <Input
+          id={fieldId}
           type="number"
           inputSize="sm"
           className="h-8 w-28"
@@ -211,8 +227,9 @@ function ParamField({
   if (jsonList) {
     return (
       <div className="flex flex-col gap-1.5">
-        <FieldLabel param={param} changed={changed} />
+        <FieldLabel param={param} changed={changed} htmlFor={fieldId} />
         <Input
+          id={fieldId}
           value={Array.isArray(value) ? value.join(', ') : ''}
           onChange={event => {
             const parts = event.target.value
@@ -232,8 +249,9 @@ function ParamField({
   if (param.type === 'json') {
     return (
       <div className="flex flex-col gap-1.5">
-        <FieldLabel param={param} changed={changed} />
+        <FieldLabel param={param} changed={changed} htmlFor={fieldId} />
         <textarea
+          id={fieldId}
           className="min-h-16 w-full rounded-md border border-border bg-background px-2 py-1.5 font-mono text-xs"
           value={value == null || value === '' ? '' : JSON.stringify(value)}
           onChange={event => {
@@ -255,8 +273,9 @@ function ParamField({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <FieldLabel param={param} changed={changed} />
+      <FieldLabel param={param} changed={changed} htmlFor={fieldId} />
       <Input
+        id={fieldId}
         value={asText(value)}
         onChange={event => onChange(event.target.value)}
         className="h-8 text-sm"
@@ -287,10 +306,12 @@ export function SpecDrivenSetup({ spec, values, onChange, schema }: Props) {
           ))}
         </div>
       ) : null}
-      <p className="rounded-md bg-muted/60 px-2.5 py-1.5 text-[11px] leading-snug text-muted-foreground">
-        <span className="font-medium text-foreground">Defaults. </span>
-        {defaultsLine(spec, values)}
-      </p>
+      {defaults.length || advanced.length ? (
+        <p className="rounded-md bg-muted/60 px-2.5 py-1.5 text-[11px] leading-snug text-muted-foreground">
+          <span className="font-medium text-foreground">Defaults. </span>
+          {defaultsLine(spec, values)}
+        </p>
+      ) : null}
       {defaults.length || advanced.length ? (
         <AdvancedOptionsDisclosure changed={advancedChanged(spec, values)}>
           {defaults.map(param => (
