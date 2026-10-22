@@ -134,7 +134,7 @@ export const TECHNIQUE_CONFIGS: Record<string, TechniqueConfig> = {
       { kind: 'column', key: 'best_column', label: 'Best column' },
       { kind: 'column', key: 'worst_column', label: 'Worst column' },
       { kind: 'columns', key: 'set_columns', label: 'Set columns' },
-      { kind: 'columns', key: 'items', label: 'Items' },
+      { kind: 'columns', key: 'items', label: 'Items', optional: true },
     ],
   },
   'MaxDiff (individual utilities)': {

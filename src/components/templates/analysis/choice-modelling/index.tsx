@@ -214,7 +214,7 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
       const built = maxdiffAnalyzeBody({
         roles: current,
         columns,
-        items,
+        items: '',
         segment,
         individual,
         savedOp,
@@ -479,9 +479,9 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
         ) : (
           <div className="space-y-2 text-sm">
             <p className="text-muted-foreground">
-              Long choice data: mark respondent, task, and chosen. Attribute columns are the levels.
-              Wide files list each alternative as brand=column, price=column. A design CSV joins on
-              version, task, and alternative.
+              {mode === 'cbc'
+                ? 'Long choice data: mark respondent, task, and chosen. Attribute columns are the levels. Wide files list each alternative as brand=column, price=column. A design CSV joins on version, task, and alternative.'
+                : 'Mark the best and worst columns. Set columns are the alternatives shown together. Item codes are read from those columns.'}
             </p>
             {mode === 'cbc' ? (
               <Select value={layout} onValueChange={value => setLayout(value as 'long' | 'wide')}>

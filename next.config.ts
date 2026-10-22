@@ -2,6 +2,9 @@ import type { NextConfig } from 'next';
 import path from 'node:path';
 
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV ?? '',
+  },
   output: 'standalone',
   // Next blocks dev HMR for 127.0.0.1 unless it is listed. The login form then
   // never hydrates and Continue submits the page to /login?.
