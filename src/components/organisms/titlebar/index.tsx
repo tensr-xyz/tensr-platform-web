@@ -1,23 +1,32 @@
-import React, { useCallback, useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { ProjectMenu } from '@/components/organisms/project-menu';
 import { ScrollArea, ScrollBar } from '@/components/atoms/scroll-area';
 import { Tabs } from '@/components/molecules/tabs';
 import { useTabsStore, Tab } from '@/stores/tabs-store';
 import { Button } from '@/components/atoms/button';
-import { Home, Search, Sparkles, X } from 'lucide-react';
+import { Home, Search, Sparkles, Users, X } from 'lucide-react';
 import { cn } from '@/utils';
-import { AnalysisCommandPalette } from '@/components/organisms/analysis-command-palette';
 import { useAnalysisPaletteShortcut } from '@/hooks/ui/use-analysis-palette-shortcut';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { ViewType } from '@/stores/tabs-store';
-import { Users } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/atoms/popover';
-import CollaborationPanel from '@/components/organisms/collaboration-panel';
 import { SessionAvatarGroup } from '@/components/molecules/session-avatar-group';
 import { useProjectStore } from '@/stores/project-store';
 import { useSession } from '@/hooks/ui/use-session';
 import { useAuth } from '@/hooks/api/use-auth';
+
+const AnalysisCommandPalette = dynamic(
+  () =>
+    import('@/components/organisms/analysis-command-palette').then(
+      module => module.AnalysisCommandPalette
+    ),
+  { ssr: false }
+);
+const CollaborationPanel = dynamic(() => import('@/components/organisms/collaboration-panel'), {
+  ssr: false,
+});
 
 interface SpreadsheetTab extends Tab {
   type: ViewType.SPREADSHEET;
@@ -144,6 +153,7 @@ const Titlebar = ({
   // Show live chrome when we have a session object, or when the URL says we should
   // (guest may still be restoring after join redirect).
   const inLiveSession = !!currentSession || !!searchParams.get('session')?.trim();
+  const [collabOpen, setCollabOpen] = useState(false);
 
   useAnalysisPaletteShortcut();
 
@@ -219,7 +229,9 @@ const Titlebar = ({
 
   return (
     <>
-      <AnalysisCommandPalette open={analysisPaletteOpen} onOpenChange={setAnalysisPaletteOpen} />
+      {analysisPaletteOpen ? (
+        <AnalysisCommandPalette open={analysisPaletteOpen} onOpenChange={setAnalysisPaletteOpen} />
+      ) : null}
       <header className="relative flex h-11 min-h-11 w-full shrink-0 items-stretch border-b border-border bg-background">
         <Button
           type="button"
@@ -340,7 +352,7 @@ const Titlebar = ({
 
         {activeTab && isSpreadsheetTab(activeTab) ? (
           <div className="flex shrink-0 items-stretch border-l border-border">
-            <Popover>
+            <Popover open={collabOpen} onOpenChange={setCollabOpen}>
               <PopoverTrigger asChild>
                 <Button
                   size="compact"
@@ -397,10 +409,12 @@ const Titlebar = ({
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="end" onOpenAutoFocus={e => e.preventDefault()}>
-                <CollaborationPanel
-                  projectId={currentProject?.id || currentFileId || ''}
-                  activeTab={activeTab}
-                />
+                {collabOpen ? (
+                  <CollaborationPanel
+                    projectId={currentProject?.id || currentFileId || ''}
+                    activeTab={activeTab}
+                  />
+                ) : null}
               </PopoverContent>
             </Popover>
           </div>

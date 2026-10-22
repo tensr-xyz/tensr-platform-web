@@ -10,6 +10,7 @@ import {
   openStoredAnalysisRun,
   type StoredAnalysisRun,
 } from '@/lib/analysis-runs';
+import { runWhenIdle } from '@/lib/dataset-open';
 import { useSession, wsService } from '@/hooks/ui/use-session';
 import { Button } from '@/components/atoms/button';
 import {
@@ -84,7 +85,9 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
   );
 
   useEffect(() => {
-    void load();
+    return runWhenIdle(() => {
+      void load();
+    });
   }, [load]);
 
   // Live collab: peers push `analysis_run_created` over WS — no REST polling.

@@ -108,9 +108,10 @@ import { SPREADSHEET_EVENTS, type TabColumnFilterPayload } from '@/lib/spreadshe
 import { gridRowsForColumns, gridRowsFromStoredRecords } from '@/lib/sheet-grid-align';
 import { fetchWithColdStartRetry } from '@/lib/cold-start-fetch';
 import { fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
+import { FIRST_OPEN_ROWS, noteServerTiming, previewPageUrl, runWhenIdle } from '@/lib/dataset-open';
 
 const INITIAL_EMPTY_ROWS = 200;
-const ROWS_PER_BATCH = 250;
+const ROWS_PER_BATCH = FIRST_OPEN_ROWS;
 const EXTRA_COLUMN_BATCH = 10;
 const DEFAULT_COLUMN_WIDTH = 150;
 const ROW_HEIGHT_PX = 36;
@@ -120,7 +121,7 @@ const INITIAL_PREFETCH_DELAY = 50;
 /** Rows to load beyond the last visible virtual row (fast scroll buffer). */
 const LOAD_AHEAD_ROWS = 180;
 /** Datasets at or below this size load entirely (one preview fetch for UUID datasets). */
-const SMALL_DATASET_EAGER_LOAD = 2500;
+const SMALL_DATASET_EAGER_LOAD = FIRST_OPEN_ROWS;
 /** Extra rows rendered above/below viewport — more while paginating to reduce blank flashes. */
 const VIRTUAL_OVERSCAN_LOADED = 40;
 const VIRTUAL_OVERSCAN_LOADING = 80;
@@ -211,7 +212,7 @@ function VirtualSheetPlaceholderRow({
 
 type UuidDatasetGridCache = Map<
   string,
-  { headers: string[]; variableNames: string[]; rows: unknown[][] }
+  { headers: string[]; variableNames: string[]; rows: unknown[][]; done: boolean }
 >;
 
 function compareSpreadsheetCellValues(av: unknown, bv: unknown, desc: boolean): number {
@@ -268,7 +269,7 @@ function sortDatasetPreviewRows(
   });
 }
 
-/** tensr-api dataset as grid: cache preview once, slice rows into fetch-page column-major `data`. */
+/** tensr-api dataset as grid: page the preview, then slice rows into column-major `data`. */
 async function fetchDatasetGridSliceForSpreadsheet(
   datasetId: string,
   token: string | null,
@@ -286,22 +287,34 @@ async function fetchDatasetGridSliceForSpreadsheet(
       headers,
     });
     if (!schemaRes.ok) return null;
+    noteServerTiming('schema', schemaRes.headers.get('Server-Timing'));
+    entry = { headers: [], variableNames: [], rows: [], done: false };
+    cache.set(datasetId, entry);
+  }
+
+  while (!entry.done && entry.rows.length < endRow) {
+    const offset = entry.rows.length;
+    const limit = Math.min(FIRST_OPEN_ROWS, Math.max(endRow - offset, 1));
     const previewRes = await fetchWithColdStartRetry(
-      tensrApiUrl(`/datasets/${datasetId}/preview?limit=5000`),
+      tensrApiUrl(previewPageUrl(datasetId, offset, limit)),
       { headers }
     );
     if (!previewRes.ok) return null;
+    noteServerTiming('preview', previewRes.headers.get('Server-Timing'));
     const preview = (await previewRes.json()) as {
       headers?: string[];
       variable_names?: string[];
       rows?: unknown[][];
+      truncated?: boolean;
     };
-    entry = {
-      headers: preview.headers || [],
-      variableNames: preview.variable_names || preview.headers || [],
-      rows: preview.rows || [],
-    };
-    cache.set(datasetId, entry);
+    if (entry.headers.length === 0) {
+      entry.headers = preview.headers || [];
+      entry.variableNames = preview.variable_names || preview.headers || [];
+    }
+    const page = preview.rows || [];
+    entry.rows.push(...page);
+    if (page.length < limit || preview.truncated === false) entry.done = true;
+    if (page.length === 0) break;
   }
 
   const sortedRows = sortDatasetPreviewRows(
@@ -835,15 +848,19 @@ export function Spreadsheet({
       return;
     }
     let cancelled = false;
-    void fetchDatasetColumnMetadata(gridDatasetId, idTokenRef.current)
-      .then(meta => {
-        if (!cancelled) setColumnMetadata(meta);
-      })
-      .catch(() => {
-        if (!cancelled) setColumnMetadata({});
-      });
+    const cancelIdle = runWhenIdle(() => {
+      if (cancelled || !idTokenRef.current) return;
+      void fetchDatasetColumnMetadata(gridDatasetId, idTokenRef.current)
+        .then(meta => {
+          if (!cancelled) setColumnMetadata(meta);
+        })
+        .catch(() => {
+          if (!cancelled) setColumnMetadata({});
+        });
+    });
     return () => {
       cancelled = true;
+      cancelIdle();
     };
   }, [gridDatasetId]);
 

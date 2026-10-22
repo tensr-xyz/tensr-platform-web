@@ -19,6 +19,7 @@ import {
   openStoredAnalysisRun,
   type StoredAnalysisRun,
 } from '@/lib/analysis-runs';
+import { runWhenIdle } from '@/lib/dataset-open';
 
 function RailSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -183,13 +184,16 @@ export function AnalysisReportRail({
   React.useEffect(() => {
     if (!sourceDatasetId) return;
     let cancelled = false;
-    listDatasetAnalysisRuns(sourceDatasetId).then(all => {
-      if (!cancelled) {
-        setOtherRuns(all.filter(r => r.id !== currentRunId).slice(0, 8));
-      }
+    const cancelIdle = runWhenIdle(() => {
+      void listDatasetAnalysisRuns(sourceDatasetId).then(all => {
+        if (!cancelled) {
+          setOtherRuns(all.filter(r => r.id !== currentRunId).slice(0, 8));
+        }
+      });
     });
     return () => {
       cancelled = true;
+      cancelIdle();
     };
   }, [sourceDatasetId, currentRunId]);
 
