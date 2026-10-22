@@ -4,11 +4,9 @@
 export const MULTI_FILE_PROJECTS_ENABLED =
   process.env.NEXT_PUBLIC_MULTI_FILE_PROJECTS_ENABLED === 'true';
 
-/** Choice modelling stays off the production app until it passes QA. On for dev and localhost.
+/** Choice modelling is on for production, dev, and localhost.
 
-The gate is the Vercel build: next.config bakes NEXT_PUBLIC_VERCEL_ENV from VERCEL_ENV.
-A production Vercel build is off. Localhost and preview builds are on.
-NEXT_PUBLIC_CHOICE_MODELLING_ENABLED overrides that, and it is also fixed at build time.
+NEXT_PUBLIC_CHOICE_MODELLING_ENABLED=false hides it. That value is fixed at build time.
  */
 export const CHOICE_MODELLING_MENU_NAMES: ReadonlySet<string> = new Set([
   'Conjoint (CBC)',
@@ -23,8 +21,5 @@ export const CHOICE_MODELLING_MENU_NAMES: ReadonlySet<string> = new Set([
 ]);
 
 export function choiceModellingEnabled(): boolean {
-  const flag = process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
-  if (flag === 'false') return false;
-  if (flag === 'true') return true;
-  return process.env.NEXT_PUBLIC_VERCEL_ENV !== 'production';
+  return process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED !== 'false';
 }
