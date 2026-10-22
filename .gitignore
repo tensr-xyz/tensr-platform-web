@@ -25,6 +25,7 @@ tests/live/.auth/
 
 # misc
 .DS_Store
+.worktrees/
 *.pem
 
 # debug
