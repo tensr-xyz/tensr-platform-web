@@ -69,7 +69,7 @@ describe('interpretProgressMessage', () => {
 
   it('falls back to generic columns phrase when spec has no known fields', () => {
     const msg = interpretProgressMessage(plan('descriptives', {}), 'validating');
-    expect(msg).toMatch(/Checking your columns look right for a Frequencies/i);
+    expect(msg).toMatch(/Checking your columns look right for a Descriptive statistics/i);
   });
 });
 

@@ -151,7 +151,9 @@ describe('adoptDerivedDataset', () => {
       content: 'Stacked.',
       timestamp: new Date(),
     });
-    const replace = jest.spyOn(History.prototype, 'replaceState').mockImplementation(() => undefined);
+    const replace = jest
+      .spyOn(History.prototype, 'replaceState')
+      .mockImplementation(() => undefined);
     expect(
       adoptDerivedDataset({
         dataset_id: 'e5d1c555-9f80-497d-b0fb-2bfa07983d4c',
