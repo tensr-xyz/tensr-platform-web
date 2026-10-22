@@ -33,7 +33,9 @@ import { Checkbox } from '@/components/atoms/checkbox';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { renderAnalysisForm } from '@/components/templates/analysis/analysis-setup-forms';
+import { SpecDrivenSetup } from '@/components/templates/analysis/spec-driven-setup';
 import { apiClient } from '@/lib/api-client';
+import { bodyFromSpec, specFor, specRunBlockers, valuesFromSpec } from '@/lib/analysis-spec-setup';
 
 type Props = {
   open: boolean;
@@ -91,6 +93,7 @@ export function AnalysisSetupModal({
     loadOutputPreferences()
   );
   const [activeWeight, setActiveWeight] = React.useState<string | null>(null);
+  const [specValues, setSpecValues] = React.useState<Record<string, unknown>>({});
 
   const bodyKey = React.useMemo(() => JSON.stringify(initialBody ?? null), [initialBody]);
   // The sheet schema arrives first, then the API schema (same names, sharper types)
@@ -125,6 +128,11 @@ export function AnalysisSetupModal({
       setForm(f => ({ ...f, analysis: initialOp }));
       return;
     }
+    const spec = specFor(initialOp);
+    if (spec) {
+      const stored = initialBody && Object.keys(initialBody).length > 0 ? initialBody : null;
+      setSpecValues(valuesFromSpec(spec, stored, activeWeight, schema));
+    }
     if (initialBody && Object.keys(initialBody).length > 0) {
       setForm(formStateFromBody(initialOp, initialBody, schema));
       setOutputPrefs(current => {
@@ -152,6 +160,7 @@ export function AnalysisSetupModal({
 
   const allNames = schema.map(c => c.name);
   const analysis = form.analysis;
+  const spec = specFor(analysis);
   const meta = ANALYSIS_WIZARD_META[analysis];
   const tooltip = ANALYSIS_WIZARD_TOOLTIPS[analysis];
 
@@ -166,8 +175,11 @@ export function AnalysisSetupModal({
   );
 
   const runBlockers = React.useMemo(
-    () => getAnalysisRunBlockers(analysis, form, schema, datasetId, preview),
-    [analysis, form, schema, datasetId, preview]
+    () =>
+      spec
+        ? specRunBlockers(spec, specValues)
+        : getAnalysisRunBlockers(analysis, form, schema, datasetId, preview),
+    [spec, specValues, analysis, form, schema, datasetId, preview]
   );
 
   const anovaPreviewLevels =
@@ -190,9 +202,13 @@ export function AnalysisSetupModal({
       return;
     }
     try {
-      const body = analyzeRunBody(buildBodyFromForm(form), outputPrefs);
+      const body = spec
+        ? analyzeRunBody(bodyFromSpec(spec, specValues, initialBody), outputPrefs)
+        : analyzeRunBody(buildBodyFromForm(form), outputPrefs);
       const effectiveOp =
-        form.analysis === 'chi_square' && form.chiUseFishersExact ? 'fishers_exact' : form.analysis;
+        !spec && form.analysis === 'chi_square' && form.chiUseFishersExact
+          ? 'fishers_exact'
+          : form.analysis;
       await onRun(effectiveOp, body);
       onOpenChange(false);
     } catch (e) {
@@ -218,16 +234,27 @@ export function AnalysisSetupModal({
         <p className="text-sm text-muted-foreground">Upload a dataset with a schema first.</p>
       ) : (
         <>
-          <DefaultsSummary analysis={analysis} />
-          {renderAnalysisForm(analysis, {
-            form,
-            setForm,
-            schema,
-            allNames,
-            notices: fieldNotices,
-            errors: fieldErrors,
-            tukeyBlocked,
-          })}
+          {spec ? (
+            <SpecDrivenSetup
+              spec={spec}
+              values={specValues}
+              onChange={(name, value) => setSpecValues(current => ({ ...current, [name]: value }))}
+              schema={schema}
+            />
+          ) : (
+            <>
+              <DefaultsSummary analysis={analysis} />
+              {renderAnalysisForm(analysis, {
+                form,
+                setForm,
+                schema,
+                allNames,
+                notices: fieldNotices,
+                errors: fieldErrors,
+                tukeyBlocked,
+              })}
+            </>
+          )}
           <div className="mt-6 space-y-3 border-t border-border pt-4">
             <p className="text-xs font-medium text-foreground">Report output</p>
             <div className="flex items-center gap-2">

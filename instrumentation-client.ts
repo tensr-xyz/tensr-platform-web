@@ -1,5 +1,6 @@
 import posthog from 'posthog-js';
 import { LINK_SCANNER_SESSION_PROPERTY, withoutLinkScannerException } from '@/lib/link-scanner';
+import { productEnvironment } from '@/lib/product-analytics';
 
 const posthogToken = process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN;
 
@@ -12,10 +13,20 @@ if (posthogToken) {
     cross_subdomain_cookie: true,
     persistence: 'localStorage+cookie',
     capture_exceptions: true,
-    before_send: event =>
-      withoutLinkScannerException(event, () => {
+    before_send: event => {
+      const tagged = event
+        ? {
+            ...event,
+            properties: {
+              ...((event.properties as Record<string, unknown> | null) ?? {}),
+              environment: productEnvironment(),
+            },
+          }
+        : event;
+      return withoutLinkScannerException(tagged, () => {
         posthog.register_for_session({ [LINK_SCANNER_SESSION_PROPERTY]: true });
-      }),
+      });
+    },
     session_recording: {
       maskAllInputs: true,
     },

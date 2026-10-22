@@ -54,7 +54,7 @@ export function ColumnSelect({
 
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <Label className="text-xs text-muted-foreground">{label}</Label>
+      {label ? <Label className="text-xs text-muted-foreground">{label}</Label> : null}
       <Select
         value={value || (allowEmpty ? '__none__' : undefined)}
         onValueChange={next => onChange(next === '__none__' ? '' : next)}

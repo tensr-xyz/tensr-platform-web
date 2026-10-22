@@ -347,7 +347,9 @@ const Titlebar = ({
                   variant="ghost"
                   className={cn(
                     'h-11 shrink-0 gap-2 rounded-none px-3 font-normal',
-                    inLiveSession ? 'min-w-0 text-foreground hover:bg-muted/80' : 'size-11 px-0'
+                    inLiveSession
+                      ? 'min-w-0 text-foreground hover:bg-muted/80'
+                      : 'size-11 px-0 justify-center'
                   )}
                   aria-label={
                     inLiveSession

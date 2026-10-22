@@ -16,7 +16,12 @@ import {
   stripLastFittedModelMarker,
 } from '@/lib/agent-conversation-history';
 
-const RETRYABLE_AGENT_LOOP_STATUSES = new Set([502, 503]);
+const RETRYABLE_AGENT_LOOP_STATUSES = new Set([502]);
+const WARMUP_AGENT_LOOP_STATUSES = new Set([500, 503]);
+
+function isStreamEndedWithoutResult(error: unknown): boolean {
+  return error instanceof Error && /ended without a result/i.test(error.message);
+}
 
 export type AgentLoopOpenDataset = {
   dataset_id: string;
@@ -115,6 +120,30 @@ export function collectOpenDatasetsFromTabs(tabs: Tab[]): AgentLoopOpenDataset[]
   return out;
 }
 
+export function downloadLoopExcelExports(
+  results: Array<Record<string, unknown>> | undefined
+): void {
+  if (typeof document === 'undefined' || !results?.length) return;
+  for (const entry of results) {
+    const encoded = entry.excel_base64;
+    if (typeof encoded !== 'string' || !encoded) continue;
+    const binary = atob(encoded);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+    const blob = new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = typeof entry.excel_filename === 'string' ? entry.excel_filename : 'banner.xlsx';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+}
+
 export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoopResponse> {
   const maxAttempts = 3;
   let lastError: unknown;
@@ -143,7 +172,20 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
     } catch (error) {
       lastError = error;
       const status = error instanceof ApiRequestError ? error.status : 0;
+      const warmup =
+        attempt === 0 &&
+        (WARMUP_AGENT_LOOP_STATUSES.has(status) || isStreamEndedWithoutResult(error));
+      if (warmup) {
+        params.onProgress?.({ type: 'progress', step: 'warming', message: 'Warming up' });
+        await new Promise<void>(resolve => {
+          window.setTimeout(resolve, 800);
+        });
+        continue;
+      }
       if (RETRYABLE_AGENT_LOOP_STATUSES.has(status) && attempt < maxAttempts - 1) {
+        if (attempt === 0) {
+          params.onProgress?.({ type: 'progress', step: 'warming', message: 'Warming up' });
+        }
         await new Promise<void>(resolve => {
           window.setTimeout(resolve, 1200 * (attempt + 1));
         });

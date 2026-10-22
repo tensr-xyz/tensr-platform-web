@@ -8,9 +8,11 @@ import { cn } from '@/utils';
 export function AdvancedOptionsDisclosure({
   children,
   className,
+  changed = false,
 }: {
   children: React.ReactNode;
   className?: string;
+  changed?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
 
@@ -23,6 +25,9 @@ export function AdvancedOptionsDisclosure({
         onClick={() => setOpen(o => !o)}
       >
         Advanced options
+        {changed ? (
+          <span className="inline-block size-1.5 rounded-full bg-primary" aria-label="Changed" />
+        ) : null}
         <ChevronDown
           className={cn('h-3.5 w-3.5 transition-transform', open && 'rotate-180')}
           aria-hidden

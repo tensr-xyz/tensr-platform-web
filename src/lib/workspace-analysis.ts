@@ -1,3 +1,4 @@
+import { ApiRequestError } from '@/lib/api-error';
 import { apiClient } from '@/lib/api-client';
 import type { AnalysisReport, AnalyzeResponse } from '@/lib/analysis-report-types';
 import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
@@ -32,6 +33,8 @@ export async function runDatasetAnalysis(
       analysis_type: op,
       where: 'setup',
       error_class: errorClass(error),
+      error_message: (error instanceof Error ? error.message : String(error)).slice(0, 200),
+      http_status: error instanceof ApiRequestError ? error.status : null,
     });
     throw error;
   }
