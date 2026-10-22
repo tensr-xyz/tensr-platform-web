@@ -62,7 +62,7 @@ import {
 } from '@/lib/adopt-derived-dataset';
 import { getDatasetIdFromTab, resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
 import { notifyDatasetMetadata } from '@/lib/custom-tables/loops';
-import { formatApiErrorMessage } from '@/lib/api-error';
+import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 import { dispatchApplyColumnFilters } from '@/lib/spreadsheet-commands';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { AgentInlineChart } from '@/components/organisms/agent-inline-chart';
@@ -127,6 +127,7 @@ import {
   approvedRunFailureMessage,
   collectOpenDatasetsFromTabs,
   deriveMessageUpdateFromLoopResponse,
+  downloadLoopExcelExports,
   runAgentLoop,
   type AgentLoopApprovedToolCall,
   type AgentLoopAttachment,
@@ -592,6 +593,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         });
 
       setLoading(projectId, false);
+      const turnStarted = performance.now();
 
       try {
         const response = await runAgentLoop({
@@ -639,6 +641,8 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             });
           },
         });
+
+        downloadLoopExcelExports(response.tool_results as Array<Record<string, unknown>> | undefined);
 
         if (response.session_id) {
           const threadId = useChatStore.getState().projects[projectId]?.activeThreadId;
@@ -736,6 +740,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             dataset_id: datasetId,
             analysis_type: analysisType,
             where: 'agent',
+            duration_ms: Math.round(performance.now() - turnStarted),
             output_type: entry.result.report ? 'report' : 'result',
           });
 
@@ -884,6 +889,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           error_class: errorClass(err),
           where: 'approved_run',
           dataset_id: datasetId,
+          analysis_type: null,
+          error_message: formatApiErrorMessage(err).slice(0, 200),
+          http_status: err instanceof ApiRequestError ? err.status : null,
         });
         // An approved run keeps its Plan text; the card shows the error.
         updateMessage(projectId, assistantMessageId, {
@@ -1236,6 +1244,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         error_class: errorClass(err),
         where: 'analysis_plan',
         dataset_id: workspaceDatasetId ?? getDatasetIdFromTab(activeTab),
+        analysis_type: plan.analysisType ?? null,
+        error_message: formatApiErrorMessage(err).slice(0, 200),
+        http_status: err instanceof ApiRequestError ? err.status : null,
       });
       const latestAction = getMessagePendingAction(messageId);
       updateMessage(projectId, messageId, {

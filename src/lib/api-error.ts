@@ -1,5 +1,12 @@
 /** Turn tensr-api error bodies into user-facing chat messages. */
 
+let recentApiFailure: { status: number; message: string; at: number } | null = null;
+
+export function recentApiRequestFailure(): { status: number; message: string } | null {
+  if (!recentApiFailure || Date.now() - recentApiFailure.at > 2000) return null;
+  return { status: recentApiFailure.status, message: recentApiFailure.message };
+}
+
 export class ApiRequestError extends Error {
   readonly status: number;
 
@@ -7,6 +14,7 @@ export class ApiRequestError extends Error {
     super(`API Error: ${status} - ${bodyText}`);
     this.name = 'ApiRequestError';
     this.status = status;
+    recentApiFailure = { status, message: bodyText.slice(0, 200), at: Date.now() };
   }
 }
 

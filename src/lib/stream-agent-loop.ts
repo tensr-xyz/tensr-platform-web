@@ -38,6 +38,9 @@ function captureStreamStatus(
   const properties = {
     where: 'agent_stream',
     status,
+    http_status: status,
+    analysis_type: null,
+    error_message: `agent stream ${status}`.slice(0, 200),
     session_id: sessionId ?? null,
     distinct_id: distinctId ?? null,
   };
@@ -111,6 +114,8 @@ function processSseLine(
     captureProductEvent('analysis_failed', {
       where: 'agent_stream',
       status: 'error',
+      analysis_type: null,
+      error_message: String(payload.message || 'Agent loop stream failed').slice(0, 200),
       message: payload.message || 'Agent loop stream failed',
     });
     captureProductEvent('stream_error', {
