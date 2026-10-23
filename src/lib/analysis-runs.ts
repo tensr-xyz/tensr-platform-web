@@ -228,7 +228,7 @@ export async function listDatasetAnalysisRuns(
       return normalized;
     })
     .finally(() => {
-      inflightRuns.delete(datasetId);
+      if (inflightRuns.get(datasetId) === request) inflightRuns.delete(datasetId);
     });
   if (!opts?.fresh) inflightRuns.set(datasetId, request);
   return request;

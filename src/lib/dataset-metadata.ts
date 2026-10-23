@@ -20,6 +20,7 @@ export async function fetchDatasetColumnMetadata(
   if (hit && Date.now() - hit.at < METADATA_TTL_MS) return hit.value;
   const pending = inflightMetadata.get(datasetId);
   if (pending) return pending;
+  const started = Date.now();
   const request = fetch(tensrApiUrl(`/datasets/${datasetId}/metadata`), {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   })
@@ -29,11 +30,15 @@ export async function fetchDatasetColumnMetadata(
       }
       const json = (await res.json()) as { column_metadata?: ColumnMetadataMap };
       const value = json.column_metadata ?? {};
-      recentMetadata.set(datasetId, { at: Date.now(), value });
-      return value;
+      const current = recentMetadata.get(datasetId);
+      if (!current || current.at < started) {
+        recentMetadata.set(datasetId, { at: Date.now(), value });
+        return value;
+      }
+      return current.value;
     })
     .finally(() => {
-      inflightMetadata.delete(datasetId);
+      if (inflightMetadata.get(datasetId) === request) inflightMetadata.delete(datasetId);
     });
   inflightMetadata.set(datasetId, request);
   return request;

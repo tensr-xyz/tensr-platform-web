@@ -19,9 +19,17 @@ export function fetchColumnStats(
   token: string
 ): Promise<Record<string, unknown>> {
   const key = columnStatsCacheKey(datasetId, version);
-  const hit = cached.get(key);
-  if (hit) return Promise.resolve(hit);
-  const pending = inflight.get(key);
+  const versioned = cached.get(key);
+  const unversioned = version ? cached.get(datasetId) : undefined;
+  const hit = versioned ?? unversioned;
+  if (hit) {
+    if (version && unversioned && !versioned) {
+      cached.set(key, unversioned);
+      cached.delete(datasetId);
+    }
+    return Promise.resolve(hit);
+  }
+  const pending = inflight.get(key) ?? (version ? inflight.get(datasetId) : undefined);
   if (pending) return pending;
   const request = fetch(tensrApiUrl('/api/analysis/analyze-file'), {
     method: 'POST',
@@ -43,7 +51,7 @@ export function fetchColumnStats(
       return stats;
     })
     .finally(() => {
-      inflight.delete(key);
+      if (inflight.get(key) === request) inflight.delete(key);
     });
   inflight.set(key, request);
   return request;

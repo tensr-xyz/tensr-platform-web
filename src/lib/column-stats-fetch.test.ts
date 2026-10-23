@@ -30,4 +30,10 @@ describe('fetchColumnStats', () => {
     await fetchColumnStats('ds-stats', 'etag-2', 'token');
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('reuses stats fetched before the schema version was known', async () => {
+    await fetchColumnStats('ds-stats', null, 'token');
+    await fetchColumnStats('ds-stats', 'etag-1', 'token');
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });

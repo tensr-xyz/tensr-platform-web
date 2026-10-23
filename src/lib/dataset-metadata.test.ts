@@ -1,4 +1,8 @@
-import { fetchDatasetColumnMetadata, resetDatasetMetadataCacheForTests } from './dataset-metadata';
+import {
+  fetchDatasetColumnMetadata,
+  patchColumnMetadata,
+  resetDatasetMetadataCacheForTests,
+} from './dataset-metadata';
 
 jest.mock('@/lib/tensr-api-url', () => ({
   tensrApiUrl: (path: string) => `http://api.test${path}`,
@@ -27,5 +31,36 @@ describe('fetchDatasetColumnMetadata', () => {
     expect(left).toEqual(right);
     await fetchDatasetColumnMetadata('ds-meta');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a patch that lands while a get is in flight', async () => {
+    let finishGet: (value: unknown) => void = () => undefined;
+    fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            column_metadata: { gender: { type: 'numeric', measure: 'nominal' } },
+          }),
+          text: async () => '',
+        });
+      }
+      return new Promise(resolve => {
+        finishGet = resolve;
+      });
+    });
+    const pending = fetchDatasetColumnMetadata('ds-race');
+    await patchColumnMetadata('ds-race', 'gender', { measure: 'nominal' });
+    finishGet({
+      ok: true,
+      json: async () => ({ column_metadata: { gender: { type: 'numeric' } } }),
+      text: async () => '',
+    });
+    await expect(pending).resolves.toEqual({
+      gender: { type: 'numeric', measure: 'nominal' },
+    });
+    await expect(fetchDatasetColumnMetadata('ds-race')).resolves.toEqual({
+      gender: { type: 'numeric', measure: 'nominal' },
+    });
   });
 });
