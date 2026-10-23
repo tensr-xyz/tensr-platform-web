@@ -3,10 +3,29 @@ import { devtools } from 'zustand/middleware';
 import { getTensrApiBaseUrl } from '@/lib/tensr-api-url';
 import { columnNamesFromSchemaResponse } from '@/lib/dataset-schema';
 import { fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
+import { dataTypeFromSchemaColumn } from '@/lib/schema-column-type';
 import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 import { getTensrApiHeaders } from '@/utils/auth';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { devLog } from '@/lib/dev-log';
+
+function columnSummariesFromSchema(
+  schema: { name?: string; type?: string | null; storage_type?: string | null }[] | undefined
+): Record<string, unknown> {
+  return Object.fromEntries(
+    (schema || [])
+      .filter(col => col.name)
+      .map(col => [
+        String(col.name),
+        {
+          name: col.name,
+          data_type: dataTypeFromSchemaColumn(col),
+          numeric_stats: null,
+          categorical_stats: null,
+        },
+      ])
+  );
+}
 
 function datasetAuthHeaders(token: string): HeadersInit {
   return {
@@ -102,7 +121,7 @@ async function fetchDatasetWorkspacePayload(
     n_rows?: number;
     n_cols?: number;
     original_filename?: string | null;
-    schema?: { name: string }[];
+    schema?: { name: string; type?: string | null; storage_type?: string | null }[];
   };
   const columnNames = columnNamesFromSchemaResponse(schemaJson);
   const label =
@@ -116,7 +135,7 @@ async function fetchDatasetWorkspacePayload(
     columnNames,
     totalRows: schemaJson.n_rows ?? columnNames.length,
     totalColumns: schemaJson.n_cols ?? columnNames.length,
-    columnSummaries: {},
+    columnSummaries: columnSummariesFromSchema(schemaJson.schema),
   };
   return { importData, label };
 }
@@ -681,7 +700,7 @@ export const useProjectStore = create<ProjectStore>()(
             let schemaJson: {
               n_rows?: number;
               n_cols?: number;
-              schema?: { name: string; type?: string }[];
+              schema?: { name: string; type?: string | null; storage_type?: string | null }[];
             };
             try {
               schemaRes = await fetchDatasetSchema(datasetId, { headers: authHeaders });
@@ -700,7 +719,7 @@ export const useProjectStore = create<ProjectStore>()(
               schemaJson = (await schemaRes.json()) as {
                 n_rows?: number;
                 n_cols?: number;
-                schema?: { name: string; type?: string }[];
+                schema?: { name: string; type?: string | null; storage_type?: string | null }[];
               };
             } catch (fetchError) {
               throw new Error(
@@ -720,19 +739,7 @@ export const useProjectStore = create<ProjectStore>()(
               columnNames,
               totalRows: schemaJson.n_rows ?? columnNames.length,
               totalColumns: schemaJson.n_cols ?? columnNames.length,
-              columnSummaries: Object.fromEntries(
-                (schemaJson.schema || [])
-                  .filter(col => col.name && col.type)
-                  .map(col => [
-                    col.name,
-                    {
-                      name: col.name,
-                      data_type: String(col.type),
-                      numeric_stats: null,
-                      categorical_stats: null,
-                    },
-                  ])
-              ) as Record<string, unknown>,
+              columnSummaries: columnSummariesFromSchema(schemaJson.schema),
             };
 
             set({

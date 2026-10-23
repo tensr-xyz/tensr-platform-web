@@ -1,8 +1,8 @@
 /**
  * Spreadsheet column-stats fetch policy.
  *
- * `/api/analysis/analyze-file` is attempted once per dataset. A 5xx used to
- * clear the attempt flag, and the load effect then refetched in a tight loop.
+ * `/api/analysis/analyze-file` runs once, when the stats panel opens.
+ * A 5xx used to clear the attempt flag, and the load effect then refetched.
  */
 
 export function shouldLoadColumnStats(opts: {
@@ -11,7 +11,9 @@ export function shouldLoadColumnStats(opts: {
   hasUsableStats: boolean;
   isLoading: boolean;
   attempted: boolean;
+  statsPanelOpen: boolean;
 }): boolean {
+  if (!opts.statsPanelOpen) return false;
   if (!opts.hasPath || opts.isProjectFile || opts.hasUsableStats || opts.isLoading) {
     return false;
   }

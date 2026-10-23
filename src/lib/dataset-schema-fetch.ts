@@ -12,6 +12,22 @@ type CachedSchema = {
 
 const recent = new Map<string, { at: number; cached: CachedSchema }>();
 const inflight = new Map<string, Promise<CachedSchema>>();
+const versions = new Map<string, string>();
+
+export function datasetContentVersion(datasetId: string): string | null {
+  return versions.get(datasetId) ?? null;
+}
+
+function rememberVersion(datasetId: string, body: string): void {
+  try {
+    const parsed = JSON.parse(body) as { version?: unknown };
+    if (typeof parsed.version === 'string' && parsed.version) {
+      versions.set(datasetId, parsed.version);
+    }
+  } catch {
+    // A non-JSON body has no dataset version to cache against.
+  }
+}
 
 function asResponse(cached: CachedSchema): Response {
   return new Response(cached.body, {
@@ -35,9 +51,11 @@ export function fetchDatasetSchema(datasetId: string, init?: RequestInit): Promi
         'schema',
         typeof readHeader === 'function' ? readHeader.call(response.headers, 'Server-Timing') : null
       );
+      const body = await response.text();
+      rememberVersion(datasetId, body);
       const cached: CachedSchema = {
         status: response.status,
-        body: await response.text(),
+        body,
         headers: [...response.headers.entries()],
       };
       if (response.status < 500) {

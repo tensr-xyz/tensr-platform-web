@@ -203,10 +203,35 @@ export type StoredAnalysisRun = {
   body?: Record<string, unknown> | null;
 };
 
-export async function listDatasetAnalysisRuns(datasetId: string): Promise<StoredAnalysisRun[]> {
-  const res = await apiClient.datasets.analyze.listRuns(datasetId);
-  const runs = Array.isArray(res) ? res : ((res as { runs?: StoredAnalysisRun[] })?.runs ?? []);
-  return runs.map(normalizeStoredAnalysisRun).filter((r): r is StoredAnalysisRun => r !== null);
+const RUNS_TTL_MS = 30_000;
+const recentRuns = new Map<string, { at: number; runs: StoredAnalysisRun[] }>();
+const inflightRuns = new Map<string, Promise<StoredAnalysisRun[]>>();
+
+export async function listDatasetAnalysisRuns(
+  datasetId: string,
+  opts?: { fresh?: boolean }
+): Promise<StoredAnalysisRun[]> {
+  if (!opts?.fresh) {
+    const hit = recentRuns.get(datasetId);
+    if (hit && Date.now() - hit.at < RUNS_TTL_MS) return hit.runs;
+    const pending = inflightRuns.get(datasetId);
+    if (pending) return pending;
+  }
+  const request = apiClient.datasets.analyze
+    .listRuns(datasetId)
+    .then(res => {
+      const runs = Array.isArray(res) ? res : ((res as { runs?: StoredAnalysisRun[] })?.runs ?? []);
+      const normalized = runs
+        .map(normalizeStoredAnalysisRun)
+        .filter((r): r is StoredAnalysisRun => r !== null);
+      recentRuns.set(datasetId, { at: Date.now(), runs: normalized });
+      return normalized;
+    })
+    .finally(() => {
+      inflightRuns.delete(datasetId);
+    });
+  if (!opts?.fresh) inflightRuns.set(datasetId, request);
+  return request;
 }
 
 export async function fetchAnalysisRun(runId: string): Promise<StoredAnalysisRun | null> {

@@ -281,3 +281,34 @@ describe('tensr proxy body', () => {
     fetchMock.mockRestore();
   });
 });
+
+describe('/api/tensr proxy: dataset JSON', () => {
+  const env = { ...process.env };
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_TENSR_API_URL = API;
+  });
+
+  afterEach(() => {
+    process.env = { ...env };
+    jest.restoreAllMocks();
+  });
+
+  it('forwards Server-Timing on a JSON schema response', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response('{"schema":[]}', {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Server-Timing': 'load_df;dur=20.0, schema;dur=1.5',
+        },
+      })
+    );
+    const req = new NextRequest('http://localhost/api/tensr/datasets/ds-1/schema');
+    const res = await GET(req, {
+      params: Promise.resolve({ path: ['datasets', 'ds-1', 'schema'] }),
+    });
+    expect(res.headers.get('Server-Timing')).toBe('load_df;dur=20.0, schema;dur=1.5');
+    expect(await res.json()).toEqual({ schema: [] });
+  });
+});

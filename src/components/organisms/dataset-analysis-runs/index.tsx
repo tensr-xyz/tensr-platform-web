@@ -49,7 +49,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
     (currentSession.datasetId === datasetId || !currentSession.datasetId);
 
   const load = useCallback(
-    async (opts?: { silent?: boolean; autoOpenRemote?: boolean }) => {
+    async (opts?: { silent?: boolean; autoOpenRemote?: boolean; fresh?: boolean }) => {
       if (!datasetId) {
         setRuns([]);
         return;
@@ -59,7 +59,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
       }
       setError(null);
       try {
-        const next = await listDatasetAnalysisRuns(datasetId);
+        const next = await listDatasetAnalysisRuns(datasetId, { fresh: opts?.fresh });
         if (opts?.autoOpenRemote && knownRunIdsRef.current.size > 0) {
           const newest = next[0];
           if (
@@ -95,7 +95,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
     if (!liveSession || !datasetId) return;
     return wsService.onAnalysisRunCreated(event => {
       if (event.datasetId !== datasetId) return;
-      void load({ silent: true, autoOpenRemote: true });
+      void load({ silent: true, autoOpenRemote: true, fresh: true });
     });
   }, [liveSession, datasetId, load]);
 

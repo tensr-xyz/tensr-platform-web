@@ -79,10 +79,11 @@ import { useSheetState } from '@/hooks/ui/use-sheet-state';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import {
   shouldClearAttemptOnPathChange,
-  shouldClearAttemptOnShowStats,
   shouldKeepAttemptAfterFetchSettled,
   shouldLoadColumnStats,
 } from '@/lib/column-stats-load-policy';
+import { fetchColumnStats } from '@/lib/column-stats-fetch';
+import { datasetContentVersion } from '@/lib/dataset-schema-fetch';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { getDatasetIdFromPath } from '@/lib/workspace-dataset';
 import { deriveLiveSheetId } from '@/lib/collaboration-sheet';
@@ -924,12 +925,7 @@ export function Spreadsheet({
 
   const hasUsableColumnStats = useMemo(() => {
     const merged = { ...(columnStats ?? {}), ...(localColumnStats ?? {}) };
-    return Object.values(merged).some(
-      s =>
-        s?.numeric_stats ||
-        s?.categorical_stats ||
-        (s?.data_type && s.data_type !== 'object' && s.data_type !== 'string')
-    );
+    return Object.values(merged).some(s => s?.numeric_stats || s?.categorical_stats);
   }, [columnStats, localColumnStats]);
 
   const columnSampleValues = useMemo(() => {
@@ -952,34 +948,25 @@ export function Spreadsheet({
 
   const loadColumnStats = useCallback(async () => {
     const statsPath = gridDatasetId ?? decodedFilePath;
-    if (!statsPath || statsLoadAttempted.current || isProjectFile || hasUsableColumnStats) {
+    const token = idTokenRef.current;
+    if (
+      !statsPath ||
+      !token ||
+      statsLoadAttempted.current ||
+      isProjectFile ||
+      hasUsableColumnStats
+    ) {
       return;
     }
 
     try {
       setIsLoadingStats(true);
       statsLoadAttempted.current = true;
-
-      const response = await fetch(tensrApiUrl('/api/analysis/analyze-file'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idTokenRef.current}`,
-        },
-        body: JSON.stringify({
-          path: statsPath,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error analyzing file: ${response.statusText}`);
-      }
-
-      const stats = await response.json();
-
-      if (!stats || typeof stats !== 'object') {
-        throw new Error('Invalid statistics data received');
-      }
+      const stats = (await fetchColumnStats(
+        statsPath,
+        datasetContentVersion(statsPath),
+        token
+      )) as Record<string, ColumnSummary>;
 
       setLocalColumnStats(stats);
 
@@ -1013,6 +1000,7 @@ export function Spreadsheet({
         hasUsableStats: hasUsableColumnStats,
         isLoading: isLoadingStats,
         attempted: statsLoadAttempted.current,
+        statsPanelOpen: showStats,
       })
     ) {
       loadColumnStats();
@@ -1024,24 +1012,7 @@ export function Spreadsheet({
     isLoadingStats,
     isProjectFile,
     loadColumnStats,
-  ]);
-
-  useEffect(() => {
-    const statsPath = gridDatasetId ?? decodedFilePath;
-    if (showStats && statsPath && !localColumnStats && !isLoadingStats && !isProjectFile) {
-      if (shouldClearAttemptOnShowStats()) {
-        statsLoadAttempted.current = false;
-      }
-      loadColumnStats();
-    }
-  }, [
     showStats,
-    decodedFilePath,
-    gridDatasetId,
-    localColumnStats,
-    isLoadingStats,
-    isProjectFile,
-    loadColumnStats,
   ]);
 
   const [sorting, setSorting] = useState<SortingState>([]);
