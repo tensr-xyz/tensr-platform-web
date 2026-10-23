@@ -284,14 +284,16 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
     }
 
     const body = await res.text();
+    const outHeaders = forwardResponseHeaders(res.headers);
+    outHeaders.set('Cache-Control', noStore);
+    outHeaders.set('Pragma', 'no-cache');
+    if (!outHeaders.has('Content-Type')) {
+      outHeaders.set('Content-Type', upstreamType || 'application/json');
+    }
 
     return new NextResponse(body, {
       status: res.status,
-      headers: {
-        'Content-Type': upstreamType || 'application/json',
-        'Cache-Control': noStore,
-        Pragma: 'no-cache',
-      },
+      headers: outHeaders,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Upstream request failed';
