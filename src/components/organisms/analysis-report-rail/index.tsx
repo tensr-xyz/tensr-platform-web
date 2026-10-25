@@ -15,8 +15,8 @@ import {
   formatRunLabel,
   formatRunTime,
   listDatasetAnalysisRuns,
-  openStoredAnalysisRun,
-  type StoredAnalysisRun,
+  openAnalysisRunById,
+  type AnalysisRunSummary,
 } from '@/lib/analysis-runs';
 import { runWhenIdle } from '@/lib/dataset-open';
 
@@ -150,7 +150,7 @@ export function AnalysisReportRail({
   onResolveAnnotation,
 }: Props) {
   const [draft, setDraft] = React.useState('');
-  const [otherRuns, setOtherRuns] = React.useState<StoredAnalysisRun[]>([]);
+  const [otherRuns, setOtherRuns] = React.useState<AnalysisRunSummary[]>([]);
 
   React.useEffect(() => {
     if (!sourceDatasetId) return;
@@ -253,7 +253,7 @@ export function AnalysisReportRail({
                 key={run.id}
                 type="button"
                 variant="ghost"
-                onClick={() => openStoredAnalysisRun(run)}
+                onClick={() => void openAnalysisRunById(run.id)}
                 className="h-auto w-full flex-col items-start gap-0.5 whitespace-normal rounded-sm px-2 py-1.5 text-left text-xs font-normal text-muted-foreground hover:bg-muted/50 hover:text-foreground"
               >
                 <span className="truncate font-medium text-foreground">{formatRunLabel(run)}</span>

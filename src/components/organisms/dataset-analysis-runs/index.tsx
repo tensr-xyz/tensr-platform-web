@@ -7,8 +7,7 @@ import {
   formatRunTime,
   listDatasetAnalysisRuns,
   openAnalysisRunById,
-  openStoredAnalysisRun,
-  type StoredAnalysisRun,
+  type AnalysisRunSummary,
 } from '@/lib/analysis-runs';
 import { runWhenIdle } from '@/lib/dataset-open';
 import { useSession, wsService } from '@/hooks/ui/use-session';
@@ -36,7 +35,7 @@ type Props = {
 
 export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
   const { currentSession } = useSession();
-  const [runs, setRuns] = useState<StoredAnalysisRun[]>([]);
+  const [runs, setRuns] = useState<AnalysisRunSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -67,7 +66,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
             !knownRunIdsRef.current.has(newest.id) &&
             !localEntriesRef.current.some(e => e.runId === newest.id)
           ) {
-            void openStoredAnalysisRun(newest);
+            void openAnalysisRunById(newest.id);
           }
         }
         knownRunIdsRef.current = new Set(next.map(r => r.id));
@@ -99,15 +98,11 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
     });
   }, [liveSession, datasetId, load]);
 
-  const openRun = async (runId: string, cached?: StoredAnalysisRun) => {
+  const openRun = async (runId: string) => {
     setOpeningId(runId);
     try {
-      if (cached) {
-        openStoredAnalysisRun(cached);
-      } else {
-        const ok = await openAnalysisRunById(runId);
-        if (!ok) setError('Saved analysis not found');
-      }
+      const ok = await openAnalysisRunById(runId);
+      if (!ok) setError('Saved analysis not found');
     } finally {
       setOpeningId(null);
     }
@@ -154,7 +149,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
             type="button"
             variant="ghost"
             disabled={openingId === run.id}
-            onClick={() => openRun(run.id, run)}
+            onClick={() => openRun(run.id)}
             className={cn(
               'h-auto w-full flex-col items-start gap-0.5 rounded-sm px-2 py-1.5 text-left text-xs font-normal',
               'hover:bg-muted/50 text-foreground',

@@ -2,6 +2,8 @@ import {
   analysisEnvelopeFromStoredRun,
   canRevealConsumedRows,
   displayedProvenance,
+  formatRunLabel,
+  normalizeAnalysisRunSummary,
   normalizeStoredAnalysisRun,
   provenanceBannerText,
   provenanceTraceState,
@@ -10,6 +12,28 @@ import {
   sourceRowsUsedLabel,
 } from './analysis-runs';
 import type { StoredAnalysisRun } from './analysis-runs';
+
+describe('normalizeAnalysisRunSummary', () => {
+  it('keeps the stored title and does not invent a report', () => {
+    const row = normalizeAnalysisRunSummary({
+      id: 'run-summary',
+      dataset_id: '11111111-1111-4111-8111-111111111111',
+      title: 'Q7, gender, age × source_wave',
+      op: 'banner_table',
+      created_at: '2026-01-01T00:00:00.000Z',
+      status: 'complete',
+    });
+    expect(row).toEqual({
+      id: 'run-summary',
+      dataset_id: '11111111-1111-4111-8111-111111111111',
+      op: 'banner_table',
+      created_at: '2026-01-01T00:00:00.000Z',
+      title: 'Q7, gender, age × source_wave',
+      status: 'complete',
+    });
+    expect(formatRunLabel(row!)).toBe('Q7, gender, age × source_wave');
+  });
+});
 
 describe('normalizeStoredAnalysisRun', () => {
   it('keeps a stored report so removed analysis types still open', () => {

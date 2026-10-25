@@ -203,34 +203,50 @@ export type StoredAnalysisRun = {
   body?: Record<string, unknown> | null;
 };
 
+/** Row from GET /datasets/{id}/runs. The report lives on the full run. */
+export type AnalysisRunSummary = {
+  id: string;
+  dataset_id: string;
+  op: string;
+  created_at: string;
+  title: string;
+  status?: string;
+};
+
 const RUNS_TTL_MS = 30_000;
-const recentRuns = new Map<string, { at: number; runs: StoredAnalysisRun[] }>();
-const inflightRuns = new Map<string, Promise<StoredAnalysisRun[]>>();
+const recentRuns = new Map<string, { at: number; runs: AnalysisRunSummary[] }>();
+const inflightRuns = new Map<string, Promise<AnalysisRunSummary[]>>();
 
 export async function listDatasetAnalysisRuns(
   datasetId: string,
   opts?: { fresh?: boolean }
-): Promise<StoredAnalysisRun[]> {
+): Promise<AnalysisRunSummary[]> {
   if (!opts?.fresh) {
     const hit = recentRuns.get(datasetId);
     if (hit && Date.now() - hit.at < RUNS_TTL_MS) return hit.runs;
-    const pending = inflightRuns.get(datasetId);
-    if (pending) return pending;
   }
-  const request = apiClient.datasets.analyze
-    .listRuns(datasetId)
-    .then(res => {
-      const runs = Array.isArray(res) ? res : ((res as { runs?: StoredAnalysisRun[] })?.runs ?? []);
-      const normalized = runs
-        .map(normalizeStoredAnalysisRun)
-        .filter((r): r is StoredAnalysisRun => r !== null);
-      recentRuns.set(datasetId, { at: Date.now(), runs: normalized });
-      return normalized;
-    })
-    .finally(() => {
-      if (inflightRuns.get(datasetId) === request) inflightRuns.delete(datasetId);
-    });
-  if (!opts?.fresh) inflightRuns.set(datasetId, request);
+  const pending = inflightRuns.get(datasetId);
+  if (pending) return pending;
+  const request = (async () => {
+    const collected: AnalysisRunSummary[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 20; page += 1) {
+      const res = await apiClient.datasets.analyze.listRuns(datasetId, cursor);
+      const rows = Array.isArray(res) ? res : ((res as { runs?: unknown[] })?.runs ?? []);
+      for (const row of rows) {
+        const summary = normalizeAnalysisRunSummary(row);
+        if (summary) collected.push(summary);
+      }
+      const next = Array.isArray(res) ? undefined : (res as { next_cursor?: string | null }).next_cursor;
+      if (!next) break;
+      cursor = String(next);
+    }
+    recentRuns.set(datasetId, { at: Date.now(), runs: collected });
+    return collected;
+  })().finally(() => {
+    if (inflightRuns.get(datasetId) === request) inflightRuns.delete(datasetId);
+  });
+  inflightRuns.set(datasetId, request);
   return request;
 }
 
@@ -322,6 +338,24 @@ function stubReportForOp(op: string, createdAt: string): AnalysisReport {
   };
 }
 
+export function normalizeAnalysisRunSummary(row: unknown): AnalysisRunSummary | null {
+  if (!row || typeof row !== 'object') return null;
+  const r = row as Record<string, unknown>;
+  const id = String(r.id ?? '');
+  const dataset_id = String(r.dataset_id ?? '');
+  const op = String(r.op ?? '');
+  if (!id || !dataset_id || !op) return null;
+  const storedTitle = String(r.title ?? '').trim();
+  return {
+    id,
+    dataset_id,
+    op,
+    created_at: String(r.created_at ?? ''),
+    title: storedTitle || op.replace(/_/g, ' '),
+    status: r.status == null || r.status === '' ? undefined : String(r.status),
+  };
+}
+
 export function normalizeStoredAnalysisRun(row: unknown): StoredAnalysisRun | null {
   if (!row || typeof row !== 'object') return null;
   const r = row as Record<string, unknown>;
@@ -365,9 +399,13 @@ export function analysisEnvelopeFromStoredRun(
   };
 }
 
-export function formatRunLabel(run: StoredAnalysisRun): string {
-  const title = run.report.meta.title || run.op.replace(/_/g, ' ');
-  const sub = run.report.meta.subtitle;
+export function formatRunLabel(run: {
+  op: string;
+  title?: string;
+  report?: { meta?: { title?: string; subtitle?: string } };
+}): string {
+  const title = run.title || run.report?.meta?.title || run.op.replace(/_/g, ' ');
+  const sub = run.report?.meta?.subtitle;
   return sub ? `${title} · ${sub}` : title;
 }
 
