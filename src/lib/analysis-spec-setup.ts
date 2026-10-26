@@ -1,8 +1,9 @@
-import specs from '@/lib/analysis-specs.generated.json';
 import type { ColumnSlotType } from '@/lib/analysis-column-types';
 import { columnSlotType, slotTypeMatchesExpected } from '@/lib/analysis-column-types';
 import { categoricalColumnNames } from '@/lib/analysis-definitions';
 import type { DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
+import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { getStytchBearerForTensrApi } from '@/utils/auth';
 
 export type SpecParam = {
   name: string;
@@ -14,6 +15,8 @@ export type SpecParam = {
   report?: boolean;
   label?: string;
   alias?: string;
+  displayDefault?: string;
+  allowEmpty?: boolean;
 };
 
 export type AnalysisSpec = {
@@ -24,36 +27,93 @@ export type AnalysisSpec = {
   params: SpecParam[];
 };
 
-const BY_KEY = new Map<string, AnalysisSpec>(
-  (specs as AnalysisSpec[]).map(spec => [spec.key, spec])
-);
+let cachedSpecs: Map<string, AnalysisSpec> | null = null;
+let loading: Promise<void> | null = null;
 
-/** Catalog names stay column_a / column_b. The dialog still says Row and Column. */
-const PRESENTED_SLOTS: Record<string, Record<string, { label: string; columnTypes: string[] }>> = {
-  chi_square: {
-    column_a: { label: 'Row variable', columnTypes: ['categorical'] },
-    column_b: { label: 'Column variable', columnTypes: ['categorical'] },
-  },
-};
+function readString(raw: Record<string, unknown>, ...keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = raw[key];
+    if (typeof value === 'string') return value;
+  }
+  return undefined;
+}
 
-const PRESENTED = new Map<string, AnalysisSpec>();
+function normalizeParam(raw: Record<string, unknown>): SpecParam {
+  const columnTypes = raw.columnTypes ?? raw.column_types;
+  const displayDefault = readString(raw, 'displayDefault', 'display_default');
+  return {
+    name: String(raw.name ?? ''),
+    type: String(raw.type ?? 'string'),
+    role: String(raw.role ?? 'advanced'),
+    default: raw.default,
+    columnTypes: Array.isArray(columnTypes) ? columnTypes.map(String) : undefined,
+    enum: Array.isArray(raw.enum) ? raw.enum.map(String) : undefined,
+    report: raw.report === true,
+    label: typeof raw.label === 'string' ? raw.label : undefined,
+    alias: typeof raw.alias === 'string' ? raw.alias : undefined,
+    displayDefault,
+    allowEmpty: raw.allowEmpty === true || raw.allow_empty === true,
+  };
+}
+
+function normalizeSpec(raw: Record<string, unknown>): AnalysisSpec {
+  const params = Array.isArray(raw.params) ? raw.params : [];
+  const outputs = Array.isArray(raw.outputs) ? raw.outputs : [];
+  return {
+    key: String(raw.key ?? ''),
+    family: String(raw.family ?? ''),
+    rReference: readString(raw, 'rReference', 'r_reference') ?? '',
+    outputs: outputs.map(String),
+    params: params
+      .filter((param): param is Record<string, unknown> => Boolean(param) && typeof param === 'object')
+      .map(normalizeParam),
+  };
+}
+
+/** Jest installs a fixture. The app loads GET /datasets/analysis-specs once per session. */
+export function installAnalysisSpecs(specs: AnalysisSpec[]): void {
+  cachedSpecs = new Map(specs.map(spec => [spec.key, spec]));
+  loading = Promise.resolve();
+}
+
+export function resetAnalysisSpecs(): void {
+  cachedSpecs = null;
+  loading = null;
+}
 
 export function specFor(key: string): AnalysisSpec | undefined {
-  const spec = BY_KEY.get(key);
-  if (!spec) return undefined;
-  const slots = PRESENTED_SLOTS[key];
-  if (!slots) return spec;
-  const cached = PRESENTED.get(key);
-  if (cached) return cached;
-  const presented: AnalysisSpec = {
-    ...spec,
-    params: spec.params.map(param => {
-      const slot = slots[param.name];
-      return slot ? { ...param, ...slot } : param;
-    }),
-  };
-  PRESENTED.set(key, presented);
-  return presented;
+  return cachedSpecs?.get(key);
+}
+
+export function ensureAnalysisSpecs(): Promise<void> {
+  if (cachedSpecs) return Promise.resolve();
+  if (loading) return loading;
+  const token = getStytchBearerForTensrApi();
+  const request = fetch(tensrApiUrl('/datasets/analysis-specs'), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!request || typeof request.then !== 'function') {
+    loading = Promise.resolve();
+    return loading;
+  }
+  loading = request
+    .then(async response => {
+      if (!response.ok) throw new Error(`analysis specs ${response.status}`);
+      const body = (await response.json()) as { specs?: unknown };
+      const specs = Array.isArray(body.specs) ? body.specs : [];
+      cachedSpecs = new Map(
+        specs
+          .filter((spec): spec is Record<string, unknown> => Boolean(spec) && typeof spec === 'object')
+          .map(spec => normalizeSpec(spec))
+          .filter(spec => spec.key)
+          .map(spec => [spec.key, spec])
+      );
+    })
+    .catch(error => {
+      loading = null;
+      throw error;
+    });
+  return loading;
 }
 
 export function paramLabel(param: SpecParam): string {
@@ -125,8 +185,8 @@ export function valuesFromSpec(
   spec: AnalysisSpec,
   body: Record<string, unknown> | null | undefined,
   activeWeight: string | null,
-  schema: SchemaColumn[],
-  preview?: DatasetPreview | null
+  _schema: SchemaColumn[],
+  _preview?: DatasetPreview | null
 ): Record<string, unknown> {
   const stored = body && Object.keys(body).length > 0;
   const values: Record<string, unknown> = {};
@@ -139,22 +199,6 @@ export function valuesFromSpec(
     }
     if (!stored && isWeightParam(param) && activeWeight) {
       values[param.name] = activeWeight;
-      continue;
-    }
-    if (!stored && param.role === 'required' && param.type === 'column') {
-      const taken = new Set(
-        Object.values(values).filter((item): item is string => typeof item === 'string')
-      );
-      values[param.name] =
-        namesForParam(schema, param, preview).find(name => !taken.has(name)) ?? '';
-      continue;
-    }
-    if (!stored && param.role === 'required' && param.type === 'columns') {
-      const taken = new Set(
-        Object.values(values).filter((item): item is string => typeof item === 'string')
-      );
-      const first = namesForParam(schema, param, preview).find(name => !taken.has(name));
-      values[param.name] = first ? [first] : [];
       continue;
     }
     if (param.default !== undefined && param.default !== null) {
@@ -201,18 +245,25 @@ export function bodyFromSpec(
 export function specRunBlockers(spec: AnalysisSpec, values: Record<string, unknown>): string[] {
   const blockers: string[] = [];
   for (const param of spec.params) {
-    if (param.role !== 'required' || param.report) continue;
+    if (param.role !== 'required' || param.report || isWeightParam(param)) continue;
     if (!present(values[param.name])) blockers.push(`${paramLabel(param)} is required.`);
   }
   return blockers;
 }
 
+function chipValue(param: SpecParam, values: Record<string, unknown>): string {
+  const raw = values[param.name];
+  const empty = raw == null || raw === '' || (Array.isArray(raw) && raw.length === 0);
+  if (empty && param.displayDefault) return param.displayDefault;
+  return displayValue(raw ?? param.default);
+}
+
 export function defaultsLine(spec: AnalysisSpec, values: Record<string, unknown>): string {
   const parts = spec.params
     .filter(param => param.role === 'default' && !param.report)
-    .map(param => `${paramLabel(param)}: ${displayValue(values[param.name] ?? param.default)}`);
+    .map(param => `${paramLabel(param)} ${chipValue(param, values)}`);
   return parts.length
-    ? parts.join('. ') + '.'
+    ? parts.join(', ')
     : 'The usual settings for this analysis. Open Advanced options to change them.';
 }
 

@@ -1,7 +1,8 @@
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 
-import { specFor, valuesFromSpec } from '@/lib/analysis-spec-setup';
+import { installAnalysisSpecs, specFor, valuesFromSpec } from '@/lib/analysis-spec-setup';
+import { SPEC_FIXTURES } from '@/lib/analysis-spec-fixtures';
 import type { SchemaColumn } from '@/lib/analysis-report-types';
 
 import { SpecDrivenSetup } from './spec-driven-setup';
@@ -12,6 +13,10 @@ const SCHEMA: SchemaColumn[] = [
 ];
 
 describe('SpecDrivenSetup', () => {
+  beforeAll(() => {
+    installAnalysisSpecs(SPEC_FIXTURES);
+  });
+
   it('shows required pickers, a defaults chip, and collapsed advanced options', () => {
     const spec = specFor('linear_regression');
     expect(spec).toBeDefined();
@@ -20,8 +25,9 @@ describe('SpecDrivenSetup', () => {
       <SpecDrivenSetup spec={spec!} values={values} onChange={() => undefined} schema={SCHEMA} />
     );
     expect(screen.getByText('Required')).toBeInTheDocument();
-    expect(screen.getByText('dependent')).toBeInTheDocument();
-    expect(screen.getByText(/Defaults\./)).toBeInTheDocument();
+    expect(screen.getByText('Dependent variable')).toBeInTheDocument();
+    expect(screen.getByText(/confidence 0.95/)).toBeInTheDocument();
+    expect(screen.getByText(/missing listwise/)).toBeInTheDocument();
     expect(screen.queryByText('APA-style tables')).not.toBeInTheDocument();
     expect(screen.queryByText('residual plots')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /advanced options/i }));

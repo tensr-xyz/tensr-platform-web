@@ -14,6 +14,10 @@ import {
   SelectValue,
 } from '@/components/atoms/select';
 import {
+  AdvancedOptionsDisclosure,
+  FormSectionLabel,
+} from '@/components/molecules/analysis-dialog';
+import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -47,6 +51,8 @@ const ROLES: ChoiceRole[] = [
   'best',
   'worst',
   'attribute',
+  'price',
+  'segment',
 ];
 
 function downloadText(name: string, text: string) {
@@ -94,7 +100,10 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
   const [roles, setRoles] = useState<Record<string, ChoiceRole>>({});
   const [price, setPrice] = useState('');
   const [segment, setSegment] = useState('');
-  const [individual, setIndividual] = useState(false);
+  const [estimate, setEstimate] = useState<'cbc' | 'mnl' | 'utilities' | 'counting'>(
+    mode === 'cbc' ? 'cbc' : 'counting'
+  );
+  const individual = estimate === 'utilities';
   const [summary, setSummary] = useState('');
   const [layout, setLayout] = useState<'long' | 'wide'>('long');
   const [wideLines, setWideLines] = useState('brand=b1, price=p1\nbrand=b2, price=p2');
@@ -110,7 +119,13 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
     const saved = rolesFromSavedChoiceBody(initialBody);
     if (Object.keys(saved.roles).length) setRoles(saved.roles);
     if (saved.items) setItems(saved.items);
-    setIndividual(saved.individual);
+    if (saved.savedOp === 'conjoint_hb' || saved.savedOp === 'maxdiff_hb' || saved.individual) {
+      setEstimate('utilities');
+    } else if (saved.savedOp === 'conjoint_mnl' || saved.savedOp === 'maxdiff_mnl') {
+      setEstimate('mnl');
+    } else if (saved.savedOp === 'maxdiff_count') {
+      setEstimate('counting');
+    }
     setSavedOp(saved.savedOp);
     setSavedSets(saved.setColumns);
   }, [open, initialBody]);
@@ -214,7 +229,12 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
         items: '',
         segment,
         individual,
-        savedOp,
+        savedOp:
+          estimate === 'counting'
+            ? 'maxdiff_count'
+            : estimate === 'utilities'
+              ? 'maxdiff_hb'
+              : 'maxdiff_mnl',
         savedSetColumns: savedSets,
       });
       const op = built.op;
@@ -369,7 +389,7 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
       <DialogTrigger asChild>{children}</DialogTrigger>
       <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
-          <DialogTitle>{mode === 'cbc' ? 'Conjoint (CBC)' : 'MaxDiff'}</DialogTitle>
+          <DialogTitle>{mode === 'cbc' ? 'Conjoint' : 'MaxDiff'}</DialogTitle>
         </DialogHeader>
         <div className="flex gap-2">
           <Button
@@ -480,6 +500,67 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
                 ? 'Long choice data: mark respondent, task, and chosen. Attribute columns are the levels. Wide files list each alternative as brand=column, price=column. A design CSV joins on version, task, and alternative.'
                 : 'Mark the best and worst columns. Set columns are the alternatives shown together. Item codes are read from those columns.'}
             </p>
+            <FormSectionLabel>Required</FormSectionLabel>
+            <Label>
+              Method
+              <Select
+                value={estimate}
+                onValueChange={value =>
+                  setEstimate(value as 'cbc' | 'mnl' | 'utilities' | 'counting')
+                }
+              >
+                <SelectTrigger className="mt-1 w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {mode === 'cbc' ? (
+                    <>
+                      <SelectItem value="cbc">CBC</SelectItem>
+                      <SelectItem value="mnl">MNL</SelectItem>
+                      <SelectItem value="utilities">Individual utilities</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="counting">Counting</SelectItem>
+                      <SelectItem value="mnl">MNL</SelectItem>
+                      <SelectItem value="utilities">Individual utilities</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </Label>
+            <ul className="max-h-48 space-y-1 overflow-auto">
+              {columns.map(column => (
+                <li key={column} className="flex items-center gap-2">
+                  <span className="w-40 truncate">{column}</span>
+                  <Select
+                    value={roleMap[column] || 'attribute'}
+                    onValueChange={value =>
+                      setRoles(current => ({
+                        ...(Object.keys(current).length ? current : roleMap),
+                        [column]: value as ChoiceRole,
+                      }))
+                    }
+                  >
+                    <SelectTrigger className="h-7 w-36 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ROLES.map(role => (
+                        <SelectItem key={role} value={role}>
+                          {role}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </li>
+              ))}
+            </ul>
+            <p className="rounded-md bg-muted/60 px-2.5 py-1.5 text-[11px] leading-snug text-muted-foreground">
+              <span className="font-medium text-foreground">Defaults. </span>
+              {mode === 'cbc' ? `method ${estimate}, layout ${layout}` : `method ${estimate}`}
+            </p>
+            <AdvancedOptionsDisclosure>
             {mode === 'cbc' ? (
               <Select value={layout} onValueChange={value => setLayout(value as 'long' | 'wide')}>
                 <SelectTrigger className="w-full text-sm">
@@ -526,33 +607,6 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
                 />
               </Label>
             ) : null}
-            <ul className="max-h-48 space-y-1 overflow-auto">
-              {columns.map(column => (
-                <li key={column} className="flex items-center gap-2">
-                  <span className="w-40 truncate">{column}</span>
-                  <Select
-                    value={roleMap[column] || 'ignore'}
-                    onValueChange={value =>
-                      setRoles(current => ({
-                        ...(Object.keys(current).length ? current : roleMap),
-                        [column]: value as ChoiceRole,
-                      }))
-                    }
-                  >
-                    <SelectTrigger className="h-7 w-36 text-xs">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ROLES.map(role => (
-                        <SelectItem key={role} value={role}>
-                          {role}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </li>
-              ))}
-            </ul>
             {mode === 'cbc' ? (
               <Label>
                 Price attribute for willingness to pay
@@ -593,13 +647,11 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
                 </SelectContent>
               </Select>
             </Label>
-            <label className="flex items-center gap-2">
-              <Checkbox
-                checked={individual}
-                onCheckedChange={value => setIndividual(value === true)}
-              />
-              Individual utilities (penalised mixed logit)
-            </label>
+            </AdvancedOptionsDisclosure>
+            <FormSectionLabel>Report output</FormSectionLabel>
+            <p className="text-xs text-muted-foreground">
+              APA tables and charts follow the workspace report settings.
+            </p>
             {mode === 'cbc' && utilities ? (
               <div className="space-y-2">
                 <Label>

@@ -9,7 +9,7 @@ import {
 } from './choice-roles';
 
 describe('choice column roles', () => {
-  it('maps qa_cbc_long.csv headers and leaves non set_N columns ignored', () => {
+  it('maps qa_cbc_long.csv and treats other long-format columns as attributes', () => {
     const header = readFileSync(path.join(__dirname, 'fixtures', 'qa_cbc_long.csv'), 'utf8')
       .split(/\r?\n/, 1)[0]
       .split(',');
@@ -19,12 +19,12 @@ describe('choice column roles', () => {
       task: 'task',
       alternative: 'alternative',
       chosen: 'chosen',
-      brand: 'ignore',
+      brand: 'attribute',
     });
     expect(suggestChoiceRoles(['best', 'worst', 'set_1', 'set_2', 'notes'])).toMatchObject({
       set_1: 'attribute',
       set_2: 'attribute',
-      notes: 'ignore',
+      notes: 'attribute',
     });
   });
 
@@ -40,7 +40,8 @@ describe('choice column roles', () => {
     expect(roles.respondent).toBe('respondent');
     expect(roles.task).toBe('task');
     expect(roles.chosen).toBe('chosen');
-    expect(roles.brand).toBe('ignore');
+    expect(roles.brand).toBe('attribute');
+    expect(roles.price).toBe('price');
     const body = conjointBodyFromRoles(
       { ...roles, brand: 'attribute', price: 'attribute' },
       { layout: 'long', priceAttribute: 'price' }

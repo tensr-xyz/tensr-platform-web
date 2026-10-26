@@ -129,7 +129,12 @@ export function sourceRowsUsedLabel(
   return `${used.toLocaleString()} of ${total.toLocaleString()} source rows used`;
 }
 
-export type RSyntaxVerificationKind = 'verified' | 'verified_in_ci' | 'not_verified' | 'unknown';
+export type RSyntaxVerificationKind =
+  | 'verified'
+  | 'verified_in_ci'
+  | 'not_verified'
+  | 'unknown'
+  | 'pending';
 
 export type RSyntaxVerification = {
   kind: RSyntaxVerificationKind;
@@ -152,7 +157,8 @@ export function rSyntaxVerificationState(value: unknown): RSyntaxVerification {
     v.kind === 'verified' ||
     v.kind === 'verified_in_ci' ||
     v.kind === 'not_verified' ||
-    v.kind === 'unknown'
+    v.kind === 'unknown' ||
+    v.kind === 'pending'
   ) {
     return {
       kind: v.kind,
@@ -185,6 +191,9 @@ export function rSyntaxBadgeText(value: unknown): { kind: RSyntaxVerificationKin
       kind: 'not_verified',
       text: state.statement || 'Generated R does not reproduce the engine result.',
     };
+  }
+  if (state.kind === 'pending') {
+    return { kind: 'pending', text: state.statement || 'Checking the R syntax.' };
   }
   return {
     kind: 'unknown',

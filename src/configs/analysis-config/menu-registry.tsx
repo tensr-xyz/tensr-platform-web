@@ -60,7 +60,6 @@ import {
 } from '@/components/templates/analysis/techniques';
 import {
   BatchTablesDialog,
-  ConjointDialog,
   CorrespondenceDialog,
   DriversDialog,
   FuseWavesDialog,
@@ -110,7 +109,7 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Shift Values': ShiftValuesDialog,
   'Custom Tables': CustomTablesDialog,
   'Pivot table': PivotTableDialog,
-  'Conjoint (CBC)': ({ children }) => (
+  Conjoint: ({ children }) => (
     <ChoiceModellingDialog mode="cbc">{children}</ChoiceModellingDialog>
   ),
   MaxDiff: ({ children }) => (
@@ -132,7 +131,6 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   NPS: NpsDialog,
   'Brand Funnel': FunnelDialog,
   'MaxDiff (counting / MNL)': MaxDiffDialog,
-  'Conjoint (MNL)': ConjointDialog,
   'Lag Cases': LagCasesDialog,
   'Lead Cases': LeadCasesDialog,
   'Rank Cases': RankCasesDialog,
