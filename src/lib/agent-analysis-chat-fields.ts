@@ -26,7 +26,7 @@ export function reportCardForOpenedTab(opts: {
       (opts.summary || 'Open the report tab for the full table.').trim() ||
       'Open the report tab for the full table.',
     runId: opts.runId || null,
-    excelDownload: opts.excelDownload ?? null,
+    ...(opts.excelDownload ? { excelDownload: opts.excelDownload } : {}),
   };
 }
 
