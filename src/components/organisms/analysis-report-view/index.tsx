@@ -22,6 +22,7 @@ import {
   displayedProvenance,
   provenanceBannerText,
   provenanceTraceState,
+  fetchAnalysisRun,
   rSyntaxBadgeText,
   sourceRowsUsedLabel,
 } from '@/lib/analysis-runs';
@@ -474,6 +475,25 @@ export function AnalysisReportView({
   analysisRunId,
 }: Props) {
   const [copyState, setCopyState] = React.useState<string | null>(null);
+  const [rVerification, setRVerification] = React.useState(report.r_syntax_verification);
+  React.useEffect(() => {
+    setRVerification(report.r_syntax_verification);
+  }, [report]);
+  React.useEffect(() => {
+    if (rVerification?.kind !== 'pending' || !analysisRunId) return;
+    let cancelled = false;
+    const timer = window.setInterval(() => {
+      void fetchAnalysisRun(analysisRunId).then(run => {
+        const next = run?.report?.r_syntax_verification;
+        if (cancelled || !next || next.kind === 'pending') return;
+        setRVerification(next);
+      });
+    }, 2000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [analysisRunId, rVerification]);
   const [rawOpen, setRawOpen] = React.useState(false);
   const primaryTable = report.tables[0];
   const blocks = resolveReportBlocks(report);
@@ -519,15 +539,17 @@ export function AnalysisReportView({
       ? pluginMark.statement || PLUGIN_UNVERIFIED_STATEMENT
       : null;
   const statusBanner = pluginBanner ?? provenanceBanner;
-  const rBadge = rSyntaxBadgeText(report.r_syntax_verification);
+  const rBadge = rSyntaxBadgeText(rVerification);
   const showRBadge =
     !report.meta.analysis_key.startsWith('plugin:') && report.meta.analysis_key !== 'chart_builder';
   const rBadgeTitle =
     rBadge.kind === 'verified'
       ? 'Verified against R ✓'
-      : rBadge.kind === 'not_verified'
-        ? 'R check failed'
-        : 'Not verified against R';
+      : rBadge.kind === 'pending'
+        ? 'Checking R syntax'
+        : rBadge.kind === 'not_verified'
+          ? 'R check failed'
+          : 'Not verified against R';
   const canReveal =
     canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
   const rowsUsedLabel = sourceRowsUsedLabel(report.exclusion_summary, report.meta.rows_dataset);

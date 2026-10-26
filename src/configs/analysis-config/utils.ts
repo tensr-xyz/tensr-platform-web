@@ -24,8 +24,8 @@ const PALETTE_HINTS: Record<string, string> = {
     'Join files on a respondent key. Use this when the same people are in more than one file.',
   'Pivot table':
     'Excel-style pivot of counts, sums, means, and percents. Same weights and letters as a banner.',
-  'Conjoint (CBC)':
-    'Choice-based conjoint design and conditional logit. Part-worths, importance, and willingness to pay.',
+  Conjoint:
+    'Choice-based conjoint. CBC, MNL, or individual utilities, with part-worths and willingness to pay.',
   MaxDiff: 'Best-worst design and scores: counts, logit, and 0-100 rescaled scores.',
 };
 

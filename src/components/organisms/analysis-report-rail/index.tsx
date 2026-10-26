@@ -20,6 +20,7 @@ import {
   type AnalysisRunSummary,
 } from '@/lib/analysis-runs';
 import { runWhenIdle } from '@/lib/dataset-open';
+import { resolveSpreadsheetContextTab } from '@/lib/workspace-dataset';
 
 function RailSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -60,6 +61,25 @@ function VarPicker({
   );
 }
 
+const LEGACY_INPUT_KEYS = new Set(['column_a', 'column_b']);
+
+function columnName(item: unknown): string | null {
+  if (typeof item === 'string' && item.trim()) return item.trim();
+  if (item && typeof item === 'object' && 'column' in item) {
+    const column = (item as { column?: unknown }).column;
+    if (typeof column === 'string' && column.trim()) return column.trim();
+  }
+  return null;
+}
+
+function expandNames(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map(columnName).filter((name): name is string => Boolean(name));
+  }
+  const one = columnName(raw);
+  return one ? [one] : [];
+}
+
 function pickSpecInputs(
   report: AnalysisReport,
   columns: { id: string; type?: string }[]
@@ -71,25 +91,47 @@ function pickSpecInputs(
   const typeByName = new Map(columns.map(column => [column.id, column.type]));
   const labelMap: Record<string, string> = {
     dependent_variable: 'DV',
+    dependent: 'DV',
     dependent_var: 'DV',
     dv: 'DV',
     outcome: 'DV',
     y: 'DV',
+    value_column: 'Test variable',
     independent_variable: 'Factor',
     independent_var: 'Factor',
+    independents: 'Factor',
     factor: 'Factor',
     group: 'Factor',
+    group_column: 'Grouping variable',
     x: 'Factor',
     predictor: 'Predictor',
     covariate: 'Covariate',
+    stub_column: 'Stub',
+    stub_columns: 'Stub',
+    stubs: 'Stub',
+    banner_column: 'Banner',
+    banner: 'Banner',
+    weight: 'Weight',
+    weight_column: 'Weight',
   };
   const variables: { label: string; value: string; type?: string }[] = [];
   const settings: { label: string; value: string }[] = [];
+  const stubNames = [...expandNames(inputs.stubs), ...expandNames(inputs.stub_columns)];
+  const seen = new Set<string>();
 
   const labelFor = (key: string) => labelMap[key] ?? key.replace(/_/g, ' ');
+  const pushVariable = (label: string, name: string) => {
+    const key = `${label}\u0000${name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    variables.push({ label, value: name, type: typeByName.get(name) });
+  };
 
   for (const [key, raw] of Object.entries(inputs)) {
-    if (raw === null || raw === undefined || key.startsWith('_')) continue;
+    if (raw === null || raw === undefined || key.startsWith('_') || LEGACY_INPUT_KEYS.has(key)) {
+      continue;
+    }
+    if (key === 'stub_column' && stubNames.length) continue;
     const label = labelFor(key);
     if (typeof raw === 'boolean') {
       settings.push({ label, value: raw ? 'On' : 'Off' });
@@ -99,21 +141,22 @@ function pickSpecInputs(
       settings.push({ label, value: String(raw) });
       continue;
     }
-    const names = (Array.isArray(raw) ? raw : [raw]).map(item => String(item));
-    const value = names.join(', ');
-    if (!value) continue;
+    const names = expandNames(raw);
+    if (!names.length) continue;
     if (names.length === 1 && (names[0] === 'true' || names[0] === 'false')) {
       settings.push({ label, value: names[0] === 'true' ? 'On' : 'Off' });
       continue;
     }
-    const known = names.filter(name => typeByName.has(name));
-    if (columns.length && known.length === names.length) {
-      variables.push({ label, value, type: typeByName.get(known[0]) });
-    } else if (!columns.length && names.every(name => Number.isNaN(Number(name)))) {
-      variables.push({ label, value });
-    } else {
-      settings.push({ label, value });
+    const looksLikeColumns = names.some(name => typeByName.has(name)) || key in labelMap;
+    if (looksLikeColumns) {
+      for (const name of names) pushVariable(label, name);
+      continue;
     }
+    if (!columns.length && names.every(name => Number.isNaN(Number(name)))) {
+      for (const name of names) pushVariable(label, name);
+      continue;
+    }
+    settings.push({ label, value: names.join(', ') });
   }
 
   if (variables.length === 0 && settings.length === 0 && report.meta.subtitle) {
@@ -122,7 +165,7 @@ function pickSpecInputs(
     if (parts[1]) variables.push({ label: 'Factor', value: parts[1].trim() });
   }
 
-  return { variables: variables.slice(0, 4), settings };
+  return { variables, settings };
 }
 
 type Props = {
@@ -198,8 +241,9 @@ export function AnalysisReportRail({
   }, [sourceDatasetId, currentRunId]);
 
   const initialColumns = useTabsStore(state => {
-    const tab = state.tabs.find(item => item.id === state.activeTabId);
-    return tab?.data?.initialColumns;
+    const active = state.tabs.find(item => item.id === state.activeTabId);
+    const sheet = resolveSpreadsheetContextTab(state.tabs, active);
+    return sheet?.data?.initialColumns;
   });
   const columns = React.useMemo(
     () =>

@@ -202,7 +202,7 @@ export function AnalysisReportLayout({
       key === 'maxdiff_count' || key === 'maxdiff_mnl' || key === 'maxdiff_hb'
         ? 'MaxDiff (counting / MNL)'
         : key === 'conjoint_mnl' || key === 'conjoint_hb'
-          ? 'Conjoint (MNL)'
+          ? 'Conjoint'
           : null;
     if (choiceDialog) {
       useAnalysisSetupStore.getState().openDialog(choiceDialog, {

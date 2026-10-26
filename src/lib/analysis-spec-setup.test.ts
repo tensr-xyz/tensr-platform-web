@@ -5,7 +5,12 @@ import {
   specRunBlockers,
   fieldChanged,
   advancedChanged,
+  defaultsLine,
+  ensureAnalysisSpecs,
+  installAnalysisSpecs,
+  resetAnalysisSpecs,
 } from './analysis-spec-setup';
+import { SPEC_FIXTURES } from './analysis-spec-fixtures';
 import type { DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
 
 const SCHEMA: SchemaColumn[] = [
@@ -15,14 +20,25 @@ const SCHEMA: SchemaColumn[] = [
 ];
 
 describe('analysis spec setup', () => {
-  it('prefills a required numeric column and the active weight', () => {
+  beforeAll(() => {
+    installAnalysisSpecs(SPEC_FIXTURES);
+  });
+
+  it('leaves required pickers empty and prefills only the active weight', () => {
     const spec = specFor('linear_regression');
     expect(spec).toBeDefined();
     const values = valuesFromSpec(spec!, null, 'weight', SCHEMA);
-    expect(values.dependent).toBe('score');
-    expect(values.independents).toEqual(['weight']);
+    expect(values.dependent).toBe('');
+    expect(values.independents).toEqual([]);
     expect(values.include_constant).toBe(true);
     expect(values.decimal_places).toBeUndefined();
+
+    const ttest = specFor('ttest_independent')!;
+    const tValues = valuesFromSpec(ttest, null, 'weight', SCHEMA);
+    expect(tValues.group_column).toBe('');
+    expect(tValues.value_column).toBe('');
+    expect(tValues.weight_column).toBe('weight');
+    expect(defaultsLine(ttest, tValues)).toBe('confidence 0.95, missing listwise');
   });
 
   it('prefills a re-run from the stored body and keeps keys the form does not edit', () => {
@@ -76,8 +92,8 @@ describe('analysis spec setup', () => {
       ]),
     };
     const values = valuesFromSpec(spec!, null, null, schema, preview);
-    expect(values.column_a).toBe('Gender');
-    expect(values.column_b).toBe('Group');
+    expect(values.column_a).toBe('');
+    expect(values.column_b).toBe('');
   });
 
   it('allows None for a weight column by omitting it', () => {
@@ -88,5 +104,50 @@ describe('analysis spec setup', () => {
     const values = valuesFromSpec(spec, { [weight.name]: '' }, 'weight', SCHEMA);
     const body = bodyFromSpec(spec, values, null);
     expect(body[weight.name]).toBeUndefined();
+    expect(specRunBlockers(spec, values).join(' ')).not.toMatch(/Weight/);
+    const fresh = valuesFromSpec(spec, null, null, SCHEMA);
+    expect(defaultsLine(spec, fresh)).toContain('mean, std, min, max');
+  });
+
+  it('fetches the API catalog once per session and keeps the written labels', async () => {
+    resetAnalysisSpecs();
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        specs: [
+          {
+            key: 'descriptives',
+            family: 'describe',
+            r_reference: 'base::summary',
+            outputs: [],
+            params: [
+              {
+                name: 'columns',
+                type: 'columns',
+                role: 'required',
+                default: null,
+                label: 'Variables',
+                column_types: ['numeric'],
+                allow_empty: true,
+              },
+            ],
+          },
+        ],
+      }),
+    } as Response);
+    try {
+      await ensureAnalysisSpecs();
+      await ensureAnalysisSpecs();
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(specFor('descriptives')?.rReference).toBe('base::summary');
+      expect(specFor('descriptives')?.params[0]).toMatchObject({
+        label: 'Variables',
+        columnTypes: ['numeric'],
+        allowEmpty: true,
+      });
+    } finally {
+      fetchMock.mockRestore();
+      installAnalysisSpecs(SPEC_FIXTURES);
+    }
   });
 });

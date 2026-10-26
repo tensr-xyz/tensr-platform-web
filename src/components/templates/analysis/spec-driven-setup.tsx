@@ -157,7 +157,7 @@ function ParamField({
             )
           }
           className="h-8 text-sm"
-          placeholder="None"
+          placeholder={param.displayDefault || 'None'}
         />
       </div>
     );

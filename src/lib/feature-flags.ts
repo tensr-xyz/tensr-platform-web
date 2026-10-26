@@ -9,14 +9,12 @@ export const MULTI_FILE_PROJECTS_ENABLED =
 NEXT_PUBLIC_CHOICE_MODELLING_ENABLED=false hides it. That value is fixed at build time.
  */
 export const CHOICE_MODELLING_MENU_NAMES: ReadonlySet<string> = new Set([
-  'Conjoint (CBC)',
+  'Conjoint',
   'MaxDiff',
   'MaxDiff (counting / MNL)',
-  'Conjoint (MNL)',
   'MaxDiff (Count)',
   'MaxDiff (MNL)',
   'MaxDiff (individual utilities)',
-  'Conjoint (individual utilities)',
   'Choice Simulator',
 ]);
 

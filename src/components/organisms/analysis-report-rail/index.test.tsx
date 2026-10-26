@@ -56,4 +56,60 @@ describe('AnalysisReportRail column snapshot', () => {
     expect(renders).toBe(1);
     expect(screen.getAllByText('Age')).toHaveLength(1);
   });
+
+  it('lists every banner stub with the spreadsheet column type and drops legacy aliases', () => {
+    const datasetId = '1b401802-7ee5-42f5-9144-6f37bc084e42';
+    useTabsStore.setState({
+      tabs: [
+        {
+          id: 'sheet-1',
+          name: 'cars',
+          content: '',
+          isDirty: false,
+          type: ViewType.SPREADSHEET,
+          data: {
+            datasetId,
+            initialColumns: [
+              { id: 'Q7', accessor: 'Q7', header: 'Q7', width: 80, type: 'number' },
+              { id: 'Q8', accessor: 'Q8', header: 'Q8', width: 80, type: 'string' },
+              { id: 'Age', accessor: 'Age', header: 'Age', width: 80, type: 'number' },
+              { id: 'Region', accessor: 'Region', header: 'Region', width: 80, type: 'string' },
+            ],
+          },
+        },
+        {
+          id: 'report-1',
+          name: 'Banner',
+          content: '',
+          isDirty: false,
+          type: ViewType.ANALYSIS_RESULT,
+          data: { sourceDatasetId: datasetId },
+        },
+      ],
+      activeTabId: 'report-1',
+    });
+    const banner = {
+      ...report,
+      analysis_spec: {
+        analysis_key: 'banner_table',
+        inputs: {
+          stub_column: 'Q7',
+          stubs: [{ column: 'Q7' }, { column: 'Q8' }, { column: 'Age' }],
+          banner_column: 'Region',
+          column_a: 'Q7',
+          column_b: 'Age',
+        },
+      },
+    } as AnalysisReport;
+
+    render(<AnalysisReportRail report={banner} outline={[]} />);
+
+    expect(screen.getAllByText('Q7')).toHaveLength(1);
+    expect(screen.getByText('Q8')).toBeInTheDocument();
+    expect(screen.getByText('Age')).toBeInTheDocument();
+    expect(screen.getByText('Region')).toBeInTheDocument();
+    const q7 = screen.getByText('Q7').closest('button');
+    expect(q7?.textContent).toContain('#');
+    expect(q7?.textContent).not.toContain('T');
+  });
 });

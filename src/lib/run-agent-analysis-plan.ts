@@ -363,7 +363,7 @@ export function openResultTabForPlan(
     plan.analysisType === 'conjoint_mnl' ||
     plan.analysisType === 'conjoint_hb' ||
     plan.analysisType === 'cbc_design'
-      ? 'Conjoint (CBC)'
+      ? 'Conjoint'
       : plan.analysisType === 'maxdiff_count' ||
           plan.analysisType === 'maxdiff_mnl' ||
           plan.analysisType === 'maxdiff_hb' ||

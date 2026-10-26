@@ -9,7 +9,6 @@ const DEAD_OR_MISLEADING_LABELS = [
   'Count Values',
   'Heatmap',
   'Latent Class Analysis (LCA, unvalidated)',
-  'Conjoint',
   'Choice simulator',
   'Reliability Analysis',
   'RM ANOVA',
@@ -217,13 +216,11 @@ describe('production menu false-door sweep', () => {
     delete process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
     const shown = [
       'MaxDiff',
-      'Conjoint (CBC)',
+      'Conjoint',
       'MaxDiff (counting / MNL)',
-      'Conjoint (MNL)',
       'MaxDiff (Count)',
       'MaxDiff (MNL)',
       'MaxDiff (individual utilities)',
-      'Conjoint (individual utilities)',
       'Choice Simulator',
     ];
     try {

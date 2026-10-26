@@ -37,6 +37,7 @@ import { SpecDrivenSetup } from '@/components/templates/analysis/spec-driven-set
 import { apiClient } from '@/lib/api-client';
 import {
   bodyFromSpec,
+  ensureAnalysisSpecs,
   isWeightParam,
   specFor,
   specRunBlockers,
@@ -100,6 +101,22 @@ export function AnalysisSetupModal({
   );
   const [activeWeight, setActiveWeight] = React.useState<string | null>(null);
   const [specValues, setSpecValues] = React.useState<Record<string, unknown>>({});
+  const [specsReady, setSpecsReady] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void ensureAnalysisSpecs()
+      .then(() => {
+        if (!cancelled) setSpecsReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setSpecsReady(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const bodyKey = React.useMemo(() => JSON.stringify(initialBody ?? null), [initialBody]);
   // The sheet schema arrives first, then the API schema (same names, sharper types)
@@ -182,7 +199,7 @@ export function AnalysisSetupModal({
       setOutputPrefs(loadOutputPreferences());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody in bodyKey, schema in schemaKey, preview in previewKey
-  }, [open, initialOp, bodyKey, schemaKey, previewKey, activeWeight]);
+  }, [open, initialOp, bodyKey, schemaKey, previewKey, activeWeight, specsReady]);
 
   const allNames = schema.map(c => c.name);
   const analysis = form.analysis;
