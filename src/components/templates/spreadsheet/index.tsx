@@ -84,6 +84,11 @@ import {
 } from '@/lib/column-stats-load-policy';
 import { fetchColumnStats } from '@/lib/column-stats-fetch';
 import { datasetContentVersion } from '@/lib/dataset-schema-fetch';
+import {
+  columnTypeFromSchemaColumn,
+  dataTypeFromSchemaColumn,
+  type SchemaColumnType,
+} from '@/lib/schema-column-type';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { getDatasetIdFromPath } from '@/lib/workspace-dataset';
 import { deriveLiveSheetId } from '@/lib/collaboration-sheet';
@@ -654,16 +659,6 @@ export function Spreadsheet({
     uuidDatasetGridCacheRef.current.clear();
   }, [decodedFilePath]);
 
-  // Reset stats when file path changes
-  useEffect(() => {
-    if (filePath) {
-      setLocalColumnStats(undefined);
-      if (shouldClearAttemptOnPathChange()) {
-        statsLoadAttempted.current = false;
-      }
-    }
-  }, [filePath]);
-
   /** Tab props may omit stats; `/api/analysis/analyze-file` fills `localColumnStats`. */
   const mergedColumnStats = useMemo(
     (): Record<string, ColumnSummary> => ({
@@ -822,6 +817,18 @@ export function Spreadsheet({
     projectFileSystem,
   ]);
 
+  // A path string that flips between forms of the same dataset must not fetch analyze-file twice.
+  const statsDatasetRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!gridDatasetId) return;
+    if (statsDatasetRef.current === gridDatasetId) return;
+    statsDatasetRef.current = gridDatasetId;
+    setLocalColumnStats(undefined);
+    if (shouldClearAttemptOnPathChange()) {
+      statsLoadAttempted.current = false;
+    }
+  }, [gridDatasetId]);
+
   const refreshColumnHeadersFromSchema = useCallback(async () => {
     if (!gridDatasetId || !idTokenRef.current) return;
     const res = await fetchDatasetSchema(gridDatasetId, {
@@ -830,14 +837,47 @@ export function Spreadsheet({
     if (handleUnauthorizedResponse(res)) return;
     if (!res.ok) return;
     const json = (await res.json()) as {
-      schema?: { name: string; label?: string | null }[];
+      schema?: (SchemaColumnType & { label?: string | null })[];
     };
     const map: Record<string, string> = {};
-    for (const col of json.schema || []) {
+    const schema = json.schema || [];
+    for (const col of schema) {
+      if (!col.name) continue;
       map[col.name] = String(col.label || col.name);
     }
     setColumnHeaderOverrides(map);
-  }, [gridDatasetId]);
+    if (!tabId) return;
+    const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+    const columns = tab?.data?.initialColumns;
+    if (!tab?.data || !columns?.length) return;
+    const byName = new Map(schema.filter(col => col.name).map(col => [String(col.name), col]));
+    let changed = false;
+    const nextColumns = columns.map(col => {
+      const schemaCol = col.id ? byName.get(col.id) : undefined;
+      if (!schemaCol) return col;
+      const type = columnTypeFromSchemaColumn(schemaCol);
+      if (col.type === type) return col;
+      changed = true;
+      return { ...col, type };
+    });
+    const nextStats = { ...(tab.data.columnStats ?? {}) };
+    for (const schemaCol of schema) {
+      if (!schemaCol.name) continue;
+      const dataType = dataTypeFromSchemaColumn(schemaCol);
+      const prev = nextStats[schemaCol.name] ?? { name: schemaCol.name };
+      if (prev.data_type === dataType) continue;
+      nextStats[schemaCol.name] = { ...prev, name: schemaCol.name, data_type: dataType };
+      changed = true;
+    }
+    if (!changed) return;
+    updateTab(tabId, {
+      data: {
+        ...tab.data,
+        initialColumns: nextColumns,
+        columnStats: nextStats,
+      },
+    });
+  }, [gridDatasetId, tabId, updateTab]);
 
   useEffect(() => {
     void refreshColumnHeadersFromSchema();
@@ -902,11 +942,13 @@ export function Spreadsheet({
   );
 
   useEffect(() => {
-    if (!activeTab?.data || activeTab.data.datasetId || !gridDatasetId) return;
-    updateTab(activeTab.id, {
-      data: { ...activeTab.data, datasetId: gridDatasetId },
+    if (!tabId || !gridDatasetId) return;
+    const sheet = useTabsStore.getState().tabs.find(t => t.id === tabId);
+    if (!sheet?.data || sheet.data.datasetId) return;
+    updateTab(tabId, {
+      data: { ...sheet.data, datasetId: gridDatasetId },
     });
-  }, [activeTab, gridDatasetId, updateTab]);
+  }, [tabId, gridDatasetId, updateTab]);
 
   const isFullyLoadedInMemory = useMemo(
     () => !!totalRowCount && data.length >= totalRowCount,
@@ -950,6 +992,7 @@ export function Spreadsheet({
     const statsPath = gridDatasetId ?? decodedFilePath;
     const token = idTokenRef.current;
     if (
+      !showStats ||
       !statsPath ||
       !token ||
       statsLoadAttempted.current ||
@@ -989,7 +1032,15 @@ export function Spreadsheet({
     } finally {
       setIsLoadingStats(false);
     }
-  }, [decodedFilePath, gridDatasetId, isProjectFile, hasUsableColumnStats, tabId, updateTab]);
+  }, [
+    decodedFilePath,
+    gridDatasetId,
+    isProjectFile,
+    hasUsableColumnStats,
+    showStats,
+    tabId,
+    updateTab,
+  ]);
 
   useEffect(() => {
     const statsPath = gridDatasetId ?? decodedFilePath;

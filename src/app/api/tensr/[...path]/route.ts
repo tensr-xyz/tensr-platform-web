@@ -91,6 +91,13 @@ function forwardResponseHeaders(from: Headers): Headers {
       headers.set(key, value);
     }
   });
+  // API Gateway drops Server-Timing. The API also sends X-Server-Timing; put it on the
+  // header Resource Timing reads.
+  const timing = headers.get('server-timing') || headers.get('x-server-timing');
+  if (timing) {
+    headers.set('Server-Timing', timing);
+    headers.set('X-Server-Timing', timing);
+  }
   return headers;
 }
 

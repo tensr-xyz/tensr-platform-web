@@ -1,3 +1,4 @@
+import { fetchLoopMetadata } from '@/lib/custom-tables/api';
 import {
   fetchDatasetColumnMetadata,
   patchColumnMetadata,
@@ -31,6 +32,25 @@ describe('fetchDatasetColumnMetadata', () => {
     expect(left).toEqual(right);
     await fetchDatasetColumnMetadata('ds-meta');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares that response with loop metadata', async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        column_metadata: { gender: { type: 'numeric' } },
+        loops: [],
+        active_weight_column: 'weight',
+      }),
+      text: async () => '',
+    });
+    const [columns, loops] = await Promise.all([
+      fetchDatasetColumnMetadata('ds-shared'),
+      fetchLoopMetadata('ds-shared'),
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(columns.gender).toEqual({ type: 'numeric' });
+    expect(loops.active_weight_column).toBe('weight');
   });
 
   it('keeps a patch that lands while a get is in flight', async () => {

@@ -29,7 +29,15 @@ import { copyTableRich } from '@/utils/apa-clipboard';
 import { ReportChartCard } from '@/components/molecules/report-chart-card';
 import { Button } from '@/components/atoms/button';
 import { ReportExportMenu } from '@/components/organisms/analysis-report-view/export-menu';
+import { downloadExcelArtifact, excelDownloadFromResult } from '@/lib/excel-download';
+import { downloadReportXlsx } from '@/lib/report-export';
 import { cn } from '@/utils';
+
+function cellText(cell: unknown): string {
+  if (cell == null) return '';
+  if (typeof cell === 'object') return JSON.stringify(cell);
+  return String(cell);
+}
 
 function tableToTsv(t: AnalysisReportTable): string {
   const esc = (cell: string) => {
@@ -260,7 +268,7 @@ function ReportTable({
             >
               {table.columns.map((c, i) => (
                 <th
-                  key={c}
+                  key={`${i}-${String(c)}`}
                   className={cn(
                     'whitespace-nowrap px-3 py-2.5',
                     i === 0 ? 'text-left' : 'text-right'
@@ -302,7 +310,7 @@ function ReportTable({
                             !alignRight && 'font-medium text-foreground'
                           )}
                         >
-                          {cell}
+                          {cellText(cell)}
                         </span>
                       )}
                     </td>
@@ -942,6 +950,30 @@ export function AnalysisReportView({
           <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={onPrint}>
             <Printer className="mr-1.5 size-3.5" aria-hidden />
             Print
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs"
+            data-testid="report-excel-download"
+            onClick={() => {
+              const artifact = excelDownloadFromResult(rawResult);
+              if (artifact) {
+                downloadExcelArtifact(artifact);
+                flash('Excel download started');
+                return;
+              }
+              void downloadReportXlsx(report, {
+                provenance: inspectorProvenance,
+                datasetId,
+                raw: rawResult ?? null,
+              })
+                .then(() => flash('Excel download started'))
+                .catch(() => flash('Excel export failed'));
+            }}
+          >
+            Excel
           </Button>
           <ReportExportMenu
             report={report}

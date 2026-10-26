@@ -1,4 +1,5 @@
 import type { AnalysisReport } from '@/lib/analysis-report-types';
+import type { ExcelDownload } from '@/lib/excel-download';
 
 /** Short chat stand-in once the full report is open in its own tab. */
 export type AnalysisReportChatCard = {
@@ -6,6 +7,7 @@ export type AnalysisReportChatCard = {
   title: string;
   summary: string;
   runId?: string | null;
+  excelDownload?: ExcelDownload | null;
 };
 
 export function reportCardForOpenedTab(opts: {
@@ -13,6 +15,7 @@ export function reportCardForOpenedTab(opts: {
   title?: string | null;
   summary?: string | null;
   runId?: string | null;
+  excelDownload?: ExcelDownload | null;
 }): AnalysisReportChatCard | null {
   const tabId = opts.tabId?.trim();
   if (!tabId) return null;
@@ -23,6 +26,7 @@ export function reportCardForOpenedTab(opts: {
       (opts.summary || 'Open the report tab for the full table.').trim() ||
       'Open the report tab for the full table.',
     runId: opts.runId || null,
+    excelDownload: opts.excelDownload ?? null,
   };
 }
 
