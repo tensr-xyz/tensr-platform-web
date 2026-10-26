@@ -311,4 +311,21 @@ describe('/api/tensr proxy: dataset JSON', () => {
     expect(res.headers.get('Server-Timing')).toBe('load_df;dur=20.0, schema;dur=1.5');
     expect(await res.json()).toEqual({ schema: [] });
   });
+
+  it('promotes X-Server-Timing when the gateway drops Server-Timing', async () => {
+    jest.spyOn(global, 'fetch').mockResolvedValue(
+      new Response('{"schema":[]}', {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Server-Timing': 'load_df;dur=20.0, schema;dur=1.5',
+        },
+      })
+    );
+    const req = new NextRequest('http://localhost/api/tensr/datasets/ds-1/schema');
+    const res = await GET(req, {
+      params: Promise.resolve({ path: ['datasets', 'ds-1', 'schema'] }),
+    });
+    expect(res.headers.get('Server-Timing')).toBe('load_df;dur=20.0, schema;dur=1.5');
+  });
 });

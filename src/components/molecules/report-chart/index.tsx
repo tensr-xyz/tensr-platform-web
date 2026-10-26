@@ -1093,11 +1093,12 @@ export function ReportChart({
     const el = wrapRef.current;
     if (!el) return;
     const ro = new ResizeObserver(entries => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      setWidth(w);
+      const w = Math.round(entries[0]?.contentRect.width ?? 0);
+      if (w > 0) setWidth(prev => (prev === w ? prev : w));
     });
     ro.observe(el);
-    setWidth(el.clientWidth);
+    const initial = Math.round(el.clientWidth);
+    if (initial > 0) setWidth(initial);
     return () => ro.disconnect();
   }, []);
 

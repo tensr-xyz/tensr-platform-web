@@ -347,8 +347,8 @@ export function AnalysisReportLayout({
             {exportError}
           </p>
         ) : null}
-        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <div className="mx-auto w-full max-w-[1080px] px-7 py-6 pb-20">
+        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain">
+          <div className="mx-auto w-full min-w-0 max-w-[1080px] px-7 py-6 pb-20">
             <AnalysisReportView
               report={report}
               rawResult={rawResult}

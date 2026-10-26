@@ -18,3 +18,8 @@ export function dataTypeFromSchemaColumn(column: SchemaColumnType): string {
   }
   return column.type ? String(column.type) : 'string';
 }
+
+/** Grid badge type. Numeric schema columns are numeric before analyze-file runs. */
+export function columnTypeFromSchemaColumn(column: SchemaColumnType): 'number' | 'string' {
+  return isNumericDataType(dataTypeFromSchemaColumn(column)) ? 'number' : 'string';
+}

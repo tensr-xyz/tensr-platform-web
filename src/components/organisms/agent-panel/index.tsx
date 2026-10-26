@@ -123,6 +123,10 @@ import {
   nextPlaybookStep,
 } from '@/lib/prep-playbook';
 import {
+  excelDownloadFromResult,
+  excelDownloadFromToolResults,
+} from '@/lib/excel-download';
+import {
   approvalTextAlreadyOnCard,
   approvedRunFailureMessage,
   collectOpenDatasetsFromTabs,
@@ -261,6 +265,7 @@ function ChatMessageBody({
             <AnalysisReportSummaryCard
               title={reportCard.title}
               summary={reportCard.summary}
+              excelDownload={reportCard.excelDownload}
               onOpen={() => onOpenReport(reportCard.tabId, reportCard.runId)}
             />
           ) : null}
@@ -828,6 +833,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
             title: report?.meta.title,
             summary: report?.summary,
             runId: typeof entry.result.run_id === 'string' ? entry.result.run_id : undefined,
+            excelDownload: excelDownloadFromToolResults(
+              response.tool_results as Array<Record<string, unknown>> | undefined
+            ),
           });
 
           // ChatMessageBody renders content AND resultMarkdown. Setting both to the
@@ -1152,6 +1160,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
         tabId: openedTabId,
         title: reportWithApproach?.meta.title,
         summary: reportWithApproach?.summary,
+        excelDownload: excelDownloadFromResult(analysisResult),
         runId:
           analysisResult &&
           typeof analysisResult === 'object' &&

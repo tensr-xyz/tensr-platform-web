@@ -406,7 +406,8 @@ export function formatRunLabel(run: {
 }): string {
   const title = run.title || run.report?.meta?.title || run.op.replace(/_/g, ' ');
   const sub = run.report?.meta?.subtitle;
-  return sub ? `${title} · ${sub}` : title;
+  if (!sub || sub === title) return title;
+  return `${title} · ${sub}`;
 }
 
 export function formatRunTime(iso: string): string {

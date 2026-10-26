@@ -64,6 +64,40 @@ export function formatAnalysisRunTabLabel(
   return base;
 }
 
+function specificReportTitle(op: string, report?: AnalysisReport): string | null {
+  const title = report?.meta?.title?.trim();
+  if (!title) return null;
+  const catalog = ANALYSIS_LABELS[op as AnalysisKey];
+  if (!catalog) return title;
+  if (title === catalog || title.startsWith(`${catalog} (`) || title.startsWith(`${catalog} —`)) {
+    return null;
+  }
+  return title;
+}
+
+function bannerCrossFromParameters(parameters: Record<string, unknown>): string | null {
+  const names: string[] = [];
+  const stubs = parameters.stubs;
+  if (Array.isArray(stubs)) {
+    for (const item of stubs) {
+      if (typeof item === 'string' && item.trim()) names.push(item.trim());
+      else if (item && typeof item === 'object' && 'column' in item) {
+        const column = String((item as { column?: unknown }).column || '').trim();
+        if (column) names.push(column);
+      }
+    }
+  }
+  const banner = parameters.banner_column ?? parameters.column_b ?? parameters.banner;
+  const bannerText = Array.isArray(banner)
+    ? banner
+        .map(item => String(item).trim())
+        .filter(Boolean)
+        .join(', ')
+    : String(banner || '').trim();
+  if (!names.length || !bannerText) return null;
+  return `${names.join(', ')} × ${bannerText}`;
+}
+
 /**
  * Opens or focuses a workspace results tab; renders AnalysisReportLayout when report data is present.
  */
@@ -81,17 +115,34 @@ export function openAnalysisResultTab(params: {
   const parameters = params.parameters ?? {};
   const runId = String(params.envelope?.run_id || '');
   const fingerprint = `${analysisRunFingerprint(params.op, parameters)}:${params.sourceDatasetId}:${runId}`;
+  const report = params.envelope?.report as AnalysisReport | undefined;
+  const label =
+    specificReportTitle(params.op, report) ||
+    bannerCrossFromParameters(parameters) ||
+    formatAnalysisRunTabLabel(params.op, parameters, report?.meta?.subtitle);
   const existing = tabs.find(
     t => t.type === ViewType.ANALYSIS_RESULT && t.data?.analysisFingerprint === fingerprint
   );
   if (existing) {
-    if (activate) setActiveTab(existing.id);
-    if (existing.data?.analysisReport || params.envelope?.report) noteReportOpened(params);
+    const incoming = report;
+    if (incoming && !existing.data?.analysisReport && existing.data) {
+      useTabsStore.getState().updateTab(existing.id, {
+        name: label,
+        data: {
+          ...existing.data,
+          analysisReport: incoming,
+          analysisResult: params.envelope?.result ?? existing.data.analysisResult,
+          analysisRunId: params.envelope?.run_id ?? existing.data.analysisRunId,
+          analysisProvenance: params.envelope?.provenance ?? existing.data.analysisProvenance,
+        },
+      });
+    }
+    if (activate && useTabsStore.getState().activeTabId !== existing.id) {
+      setActiveTab(existing.id);
+    }
+    if (existing.data?.analysisReport || incoming) noteReportOpened(params);
     return existing.id;
   }
-
-  const report = params.envelope?.report as AnalysisReport | undefined;
-  const label = formatAnalysisRunTabLabel(params.op, parameters, report?.meta?.subtitle);
   const previousActive = useTabsStore.getState().activeTabId;
 
   addTab({
