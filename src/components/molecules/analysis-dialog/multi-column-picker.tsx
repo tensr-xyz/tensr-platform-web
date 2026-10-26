@@ -25,6 +25,7 @@ export function MultiColumnPicker({
   notices,
   errors,
   className,
+  id,
 }: {
   selected: string[];
   onChange: (cols: string[]) => void;
@@ -38,6 +39,7 @@ export function MultiColumnPicker({
   notices?: WizardFieldNotice[];
   errors?: string[];
   className?: string;
+  id?: string;
 }) {
   const [query, setQuery] = React.useState('');
   const allNames = schema.map(c => c.name);
@@ -103,6 +105,7 @@ export function MultiColumnPicker({
       </div>
 
       <Input
+        id={id}
         value={query}
         onChange={e => setQuery(e.target.value)}
         placeholder="Search columns…"

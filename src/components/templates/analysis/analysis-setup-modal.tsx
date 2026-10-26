@@ -33,6 +33,15 @@ import { Checkbox } from '@/components/atoms/checkbox';
 import { Input } from '@/components/atoms/input';
 import { Label } from '@/components/atoms/label';
 import { renderAnalysisForm } from '@/components/templates/analysis/analysis-setup-forms';
+import { SpecDrivenSetup } from '@/components/templates/analysis/spec-driven-setup';
+import { apiClient } from '@/lib/api-client';
+import {
+  bodyFromSpec,
+  isWeightParam,
+  specFor,
+  specRunBlockers,
+  valuesFromSpec,
+} from '@/lib/analysis-spec-setup';
 
 type Props = {
   open: boolean;
@@ -46,6 +55,28 @@ type Props = {
   onRun: (op: AnalysisKey, body: Record<string, unknown>) => Promise<void>;
   onBackToPalette: () => void;
 };
+
+const DEFAULTS_LINE: Partial<Record<AnalysisKey, string>> = {
+  descriptives: 'Mean, standard deviation, minimum, and maximum. Weight uses the active weight.',
+  banner_table: 'Column percents and significance letters, with FDR across columns.',
+  linear_regression: 'Enter method, intercept included, listwise deletion.',
+  poisson_regression: 'Log link and an intercept. Cluster-robust standard errors stay off.',
+  negative_binomial_regression:
+    'Log link and an intercept. Cluster-robust standard errors stay off.',
+  ordinal_regression:
+    'Proportional odds and an intercept. Cluster-robust standard errors stay off.',
+  gee: 'Exchangeable working correlation. No random slopes.',
+};
+
+function DefaultsSummary({ analysis }: { analysis: AnalysisKey }) {
+  return (
+    <p className="mb-3 rounded-md bg-muted/60 px-2.5 py-1.5 text-[11px] leading-snug text-muted-foreground">
+      <span className="font-medium text-foreground">Defaults. </span>
+      {DEFAULTS_LINE[analysis] ??
+        'The usual settings for this analysis. Open Advanced options to change them.'}
+    </p>
+  );
+}
 
 export function AnalysisSetupModal({
   open,
@@ -67,6 +98,8 @@ export function AnalysisSetupModal({
   const [outputPrefs, setOutputPrefs] = React.useState<OutputPreferences>(() =>
     loadOutputPreferences()
   );
+  const [activeWeight, setActiveWeight] = React.useState<string | null>(null);
+  const [specValues, setSpecValues] = React.useState<Record<string, unknown>>({});
 
   const bodyKey = React.useMemo(() => JSON.stringify(initialBody ?? null), [initialBody]);
   // The sheet schema arrives first, then the API schema (same names, sharper types)
@@ -77,6 +110,24 @@ export function AnalysisSetupModal({
     [schema]
   );
   const previewKey = preview ? `${preview.headers.join('\u0001')}:${preview.rows.length}` : '';
+  const setupKey = `${initialOp}\u0001${bodyKey}\u0001${schemaKey}\u0001${previewKey}`;
+  const setupKeyRef = React.useRef('');
+
+  React.useEffect(() => {
+    if (!open || !datasetId) return;
+    let cancelled = false;
+    void apiClient.datasets
+      .getMetadata(datasetId)
+      .then(meta => {
+        if (!cancelled) setActiveWeight(meta.active_weight_column?.trim() || null);
+      })
+      .catch(() => {
+        if (!cancelled) setActiveWeight(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, datasetId]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -85,23 +136,57 @@ export function AnalysisSetupModal({
       setForm(f => ({ ...f, analysis: initialOp }));
       return;
     }
+    const spec = specFor(initialOp);
+    const fullReset = setupKeyRef.current !== setupKey;
+    setupKeyRef.current = setupKey;
+    if (spec) {
+      const stored = initialBody && Object.keys(initialBody).length > 0 ? initialBody : null;
+      if (fullReset) {
+        setSpecValues(valuesFromSpec(spec, stored, activeWeight, schema, preview));
+      } else if (activeWeight && !stored) {
+        setSpecValues(current => {
+          const next = { ...current };
+          let patched = false;
+          for (const param of spec.params) {
+            if (!isWeightParam(param)) continue;
+            if (next[param.name] == null || next[param.name] === '') {
+              next[param.name] = activeWeight;
+              patched = true;
+            }
+          }
+          return patched ? next : current;
+        });
+      }
+    }
+    if (!fullReset) return;
     if (initialBody && Object.keys(initialBody).length > 0) {
       setForm(formStateFromBody(initialOp, initialBody, schema));
-      if (initialOp === 'banner_table') {
-        setOutputPrefs(current => ({
-          ...current,
-          decimalPlaces: bannerTableDecimalPlaces(initialBody),
-        }));
-      }
+      setOutputPrefs(current => {
+        const next = { ...current };
+        const apa = initialBody.apa_format ?? initialBody.apaFormat;
+        const charts = initialBody.include_charts ?? initialBody.includeCharts;
+        if (typeof apa === 'boolean') next.apaFormat = apa;
+        if (typeof charts === 'boolean') next.includeCharts = charts;
+        if (initialOp === 'banner_table') {
+          next.decimalPlaces = bannerTableDecimalPlaces(initialBody);
+        }
+        return next;
+      });
     } else {
-      setForm(defaultFormForAnalysis(initialOp, schema, preview));
+      const fresh = defaultFormForAnalysis(initialOp, schema, preview);
+      if (activeWeight) {
+        fresh.weightCol = activeWeight;
+        fresh.bannerWeight = activeWeight;
+      }
+      setForm(fresh);
       setOutputPrefs(loadOutputPreferences());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody in bodyKey, schema in schemaKey, preview in previewKey
-  }, [open, initialOp, bodyKey, schemaKey, previewKey]);
+  }, [open, initialOp, bodyKey, schemaKey, previewKey, activeWeight]);
 
   const allNames = schema.map(c => c.name);
   const analysis = form.analysis;
+  const spec = specFor(analysis);
   const meta = ANALYSIS_WIZARD_META[analysis];
   const tooltip = ANALYSIS_WIZARD_TOOLTIPS[analysis];
 
@@ -116,8 +201,11 @@ export function AnalysisSetupModal({
   );
 
   const runBlockers = React.useMemo(
-    () => getAnalysisRunBlockers(analysis, form, schema, datasetId, preview),
-    [analysis, form, schema, datasetId, preview]
+    () =>
+      spec
+        ? specRunBlockers(spec, specValues)
+        : getAnalysisRunBlockers(analysis, form, schema, datasetId, preview),
+    [spec, specValues, analysis, form, schema, datasetId, preview]
   );
 
   const anovaPreviewLevels =
@@ -140,9 +228,13 @@ export function AnalysisSetupModal({
       return;
     }
     try {
-      const body = analyzeRunBody(buildBodyFromForm(form), outputPrefs);
+      const body = spec
+        ? analyzeRunBody(bodyFromSpec(spec, specValues, initialBody), outputPrefs)
+        : analyzeRunBody(buildBodyFromForm(form), outputPrefs);
       const effectiveOp =
-        form.analysis === 'chi_square' && form.chiUseFishersExact ? 'fishers_exact' : form.analysis;
+        !spec && form.analysis === 'chi_square' && form.chiUseFishersExact
+          ? 'fishers_exact'
+          : form.analysis;
       await onRun(effectiveOp, body);
       onOpenChange(false);
     } catch (e) {
@@ -168,15 +260,28 @@ export function AnalysisSetupModal({
         <p className="text-sm text-muted-foreground">Upload a dataset with a schema first.</p>
       ) : (
         <>
-          {renderAnalysisForm(analysis, {
-            form,
-            setForm,
-            schema,
-            allNames,
-            notices: fieldNotices,
-            errors: fieldErrors,
-            tukeyBlocked,
-          })}
+          {spec ? (
+            <SpecDrivenSetup
+              spec={spec}
+              values={specValues}
+              onChange={(name, value) => setSpecValues(current => ({ ...current, [name]: value }))}
+              schema={schema}
+              preview={preview}
+            />
+          ) : (
+            <>
+              <DefaultsSummary analysis={analysis} />
+              {renderAnalysisForm(analysis, {
+                form,
+                setForm,
+                schema,
+                allNames,
+                notices: fieldNotices,
+                errors: fieldErrors,
+                tukeyBlocked,
+              })}
+            </>
+          )}
           <div className="mt-6 space-y-3 border-t border-border pt-4">
             <p className="text-xs font-medium text-foreground">Report output</p>
             <div className="flex items-center gap-2">

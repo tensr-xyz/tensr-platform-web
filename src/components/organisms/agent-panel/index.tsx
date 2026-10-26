@@ -122,10 +122,7 @@ import {
   fetchPlaybookStep,
   nextPlaybookStep,
 } from '@/lib/prep-playbook';
-import {
-  excelDownloadFromResult,
-  excelDownloadFromToolResults,
-} from '@/lib/excel-download';
+import { excelDownloadFromResult, excelDownloadFromToolResults } from '@/lib/excel-download';
 import {
   approvalTextAlreadyOnCard,
   approvedRunFailureMessage,
@@ -647,7 +644,9 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
           },
         });
 
-        downloadLoopExcelExports(response.tool_results as Array<Record<string, unknown>> | undefined);
+        downloadLoopExcelExports(
+          response.tool_results as Array<Record<string, unknown>> | undefined
+        );
 
         if (response.session_id) {
           const threadId = useChatStore.getState().projects[projectId]?.activeThreadId;

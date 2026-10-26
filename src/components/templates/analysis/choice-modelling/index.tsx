@@ -80,10 +80,7 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
   const [pane, setPane] = useState<'design' | 'analyse'>('analyse');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [attributes, setAttributes] = useState<Attribute[]>([
-    { name: 'brand', levels: 'North, West, Metro' },
-    { name: 'price', levels: '2, 3, 4' },
-  ]);
+  const [attributes, setAttributes] = useState<Attribute[]>([{ name: '', levels: '' }]);
   const [items, setItems] = useState('Price, Quality, Brand, Speed, Support');
   const [prohibited, setProhibited] = useState('');
   const [method, setMethod] = useState('balanced_overlap');
@@ -559,20 +556,42 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
             {mode === 'cbc' ? (
               <Label>
                 Price attribute for willingness to pay
-                <Input
-                  value={price}
-                  placeholder="price"
-                  onChange={event => setPrice(event.target.value)}
-                />
+                <Select
+                  value={price || '__none__'}
+                  onValueChange={value => setPrice(value === '__none__' ? '' : value)}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {columns.map(column => (
+                      <SelectItem key={column} value={column}>
+                        {column}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Label>
             ) : null}
             <Label>
               Segment by
-              <Input
-                value={segment}
-                placeholder="optional banner column"
-                onChange={event => setSegment(event.target.value)}
-              />
+              <Select
+                value={segment || '__none__'}
+                onValueChange={value => setSegment(value === '__none__' ? '' : value)}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {columns.map(column => (
+                    <SelectItem key={column} value={column}>
+                      {column}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Label>
             <label className="flex items-center gap-2">
               <Checkbox

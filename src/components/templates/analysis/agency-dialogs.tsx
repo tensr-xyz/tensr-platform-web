@@ -385,6 +385,45 @@ export function OpenTextCodingDialog({ children }: { children: ReactNode }) {
   );
 }
 
+function MultiColumnPicker({
+  value,
+  onChange,
+  columns,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  columns: string[];
+}) {
+  const selected = new Set(
+    value
+      .split(',')
+      .map(item => item.trim())
+      .filter(Boolean)
+  );
+  return (
+    <div className="max-h-40 space-y-1 overflow-auto rounded-md border border-border p-2">
+      {columns.length ? (
+        columns.map(column => (
+          <label key={column} className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={selected.has(column)}
+              onCheckedChange={checked => {
+                const next = new Set(selected);
+                if (checked === true) next.add(column);
+                else next.delete(column);
+                onChange(columns.filter(name => next.has(name)).join(', '));
+              }}
+            />
+            {column}
+          </label>
+        ))
+      ) : (
+        <p className="text-xs text-muted-foreground">Open a dataset to choose columns.</p>
+      )}
+    </div>
+  );
+}
+
 function TechniqueColumnDialog({
   title,
   path,
@@ -395,7 +434,7 @@ function TechniqueColumnDialog({
   title: string;
   path: string;
   analysisOp: string;
-  fields: { key: string; label: string; multi?: boolean }[];
+  fields: { key: string; label: string; multi?: boolean; numeric?: boolean }[];
   children: ReactNode;
 }) {
   const { datasetId, columns } = useWorkspaceColumns();
@@ -408,12 +447,14 @@ function TechniqueColumnDialog({
         if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
         const body: Record<string, unknown> = {};
         for (const field of fields) {
-          body[field.key] = field.multi
-            ? (values[field.key] || '')
-                .split(',')
-                .map(s => s.trim())
-                .filter(Boolean)
-            : values[field.key];
+          body[field.key] = field.numeric
+            ? Number(values[field.key]) || undefined
+            : field.multi
+              ? (values[field.key] || '')
+                  .split(',')
+                  .map(s => s.trim())
+                  .filter(Boolean)
+              : values[field.key];
         }
         const payload = await apiClient.datasets.techniques.run(datasetId, path, body);
         return techniqueRun(payload, { op: analysisOp, parameters: body });
@@ -424,8 +465,15 @@ function TechniqueColumnDialog({
           <div key={field.key}>
             <Label>{field.label}</Label>
             {field.multi ? (
+              <MultiColumnPicker
+                value={values[field.key] || ''}
+                onChange={next => setValues(v => ({ ...v, [field.key]: next }))}
+                columns={columns}
+              />
+            ) : field.numeric ? (
               <Input
-                placeholder="col_a, col_b"
+                type="number"
+                min={1}
                 value={values[field.key] || ''}
                 onChange={e => setValues(v => ({ ...v, [field.key]: e.target.value }))}
               />
@@ -448,7 +496,10 @@ export const TurfDialog = ({ children }: { children: ReactNode }) => (
     title="TURF"
     path="turf"
     analysisOp="turf"
-    fields={[{ key: 'items', label: 'Items', multi: true }]}
+    fields={[
+      { key: 'items', label: 'Items', multi: true },
+      { key: 'k', label: 'Reach (k)', numeric: true },
+    ]}
   >
     {children}
   </TechniqueColumnDialog>
@@ -512,7 +563,10 @@ export const NpsDialog = ({ children }: { children: ReactNode }) => (
     title="NPS"
     path="nps"
     analysisOp="nps"
-    fields={[{ key: 'score_column', label: 'Score' }]}
+    fields={[
+      { key: 'score_column', label: 'Score' },
+      { key: 'group_column', label: 'Group' },
+    ]}
   >
     {children}
   </TechniqueColumnDialog>
