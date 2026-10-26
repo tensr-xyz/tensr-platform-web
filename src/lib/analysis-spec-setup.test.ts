@@ -6,7 +6,7 @@ import {
   fieldChanged,
   advancedChanged,
 } from './analysis-spec-setup';
-import type { SchemaColumn } from '@/lib/analysis-report-types';
+import type { DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
 
 const SCHEMA: SchemaColumn[] = [
   { name: 'score', type: 'numeric', missing_count: 0 },
@@ -54,6 +54,30 @@ describe('analysis spec setup', () => {
     expect(
       specRunBlockers(spec, { ...values, dependent: '', independents: [] }).length
     ).toBeGreaterThan(0);
+  });
+
+  it('labels chi-square slots and skips id and high-cardinality columns', () => {
+    const spec = specFor('chi_square');
+    expect(spec?.params.find(param => param.name === 'column_a')?.label).toBe('Row variable');
+    expect(spec?.params.find(param => param.name === 'column_b')?.label).toBe('Column variable');
+    const schema: SchemaColumn[] = [
+      { name: 'RespID', type: 'categorical', missing_count: 0 },
+      { name: 'Gender', type: 'categorical', missing_count: 0 },
+      { name: 'Age', type: 'categorical', missing_count: 0 },
+      { name: 'Group', type: 'categorical', missing_count: 0 },
+    ];
+    const preview: DatasetPreview = {
+      headers: ['RespID', 'Gender', 'Age', 'Group'],
+      rows: Array.from({ length: 60 }, (_, index) => [
+        index + 1,
+        index % 2 === 0 ? 'F' : 'M',
+        18 + index,
+        index % 3 === 0 ? 'Control' : 'Treat',
+      ]),
+    };
+    const values = valuesFromSpec(spec!, null, null, schema, preview);
+    expect(values.column_a).toBe('Gender');
+    expect(values.column_b).toBe('Group');
   });
 
   it('allows None for a weight column by omitting it', () => {

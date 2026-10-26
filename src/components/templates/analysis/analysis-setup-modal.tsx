@@ -142,7 +142,7 @@ export function AnalysisSetupModal({
     if (spec) {
       const stored = initialBody && Object.keys(initialBody).length > 0 ? initialBody : null;
       if (fullReset) {
-        setSpecValues(valuesFromSpec(spec, stored, activeWeight, schema));
+        setSpecValues(valuesFromSpec(spec, stored, activeWeight, schema, preview));
       } else if (activeWeight && !stored) {
         setSpecValues(current => {
           const next = { ...current };
@@ -266,6 +266,7 @@ export function AnalysisSetupModal({
               values={specValues}
               onChange={(name, value) => setSpecValues(current => ({ ...current, [name]: value }))}
               schema={schema}
+              preview={preview}
             />
           ) : (
             <>

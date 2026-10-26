@@ -17,7 +17,7 @@ import {
   MultiColumnPicker,
 } from '@/components/molecules/analysis-dialog';
 import type { ColumnSlotType } from '@/lib/analysis-column-types';
-import type { SchemaColumn } from '@/lib/analysis-report-types';
+import type { DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
 import {
   advancedChanged,
   defaultsLine,
@@ -34,6 +34,7 @@ type Props = {
   values: Record<string, unknown>;
   onChange: (name: string, value: unknown) => void;
   schema: SchemaColumn[];
+  preview?: DatasetPreview | null;
 };
 
 function asText(value: unknown): string {
@@ -85,11 +86,13 @@ function ParamField({
   value,
   onChange,
   schema,
+  preview,
 }: {
   param: SpecParam;
   value: unknown;
   onChange: (value: unknown) => void;
   schema: SchemaColumn[];
+  preview?: DatasetPreview | null;
 }) {
   const changed = fieldChanged(param, value);
   const label = paramLabel(param);
@@ -105,7 +108,7 @@ function ParamField({
           value={asText(value)}
           onChange={onChange}
           schema={schema}
-          names={namesForParam(schema, param)}
+          names={namesForParam(schema, param, preview)}
           expectedType={slotOf(param)}
           allowEmpty={param.role !== 'required' || isWeightParam(param)}
           emptyLabel="None"
@@ -126,7 +129,9 @@ function ParamField({
           id={fieldId}
           selected={asColumns(value)}
           onChange={onChange}
-          schema={schema.filter(column => namesForParam(schema, param).includes(column.name))}
+          schema={schema.filter(column =>
+            namesForParam(schema, param, preview).includes(column.name)
+          )}
           filterSlot={slotOf(param)}
           minSelected={param.role === 'required' ? 1 : undefined}
           showEmptyIncludesAll={param.role !== 'required'}
@@ -285,7 +290,7 @@ function ParamField({
   );
 }
 
-export function SpecDrivenSetup({ spec, values, onChange, schema }: Props) {
+export function SpecDrivenSetup({ spec, values, onChange, schema, preview }: Props) {
   const required = spec.params.filter(param => param.role === 'required' && !param.report);
   const defaults = spec.params.filter(param => param.role === 'default' && !param.report);
   const advanced = spec.params.filter(param => param.role === 'advanced' && !param.report);
@@ -302,6 +307,7 @@ export function SpecDrivenSetup({ spec, values, onChange, schema }: Props) {
               value={values[param.name]}
               onChange={value => onChange(param.name, value)}
               schema={schema}
+              preview={preview}
             />
           ))}
         </div>
@@ -321,6 +327,7 @@ export function SpecDrivenSetup({ spec, values, onChange, schema }: Props) {
               value={values[param.name]}
               onChange={value => onChange(param.name, value)}
               schema={schema}
+              preview={preview}
             />
           ))}
           {advanced.map(param => (
@@ -330,6 +337,7 @@ export function SpecDrivenSetup({ spec, values, onChange, schema }: Props) {
               value={values[param.name]}
               onChange={value => onChange(param.name, value)}
               schema={schema}
+              preview={preview}
             />
           ))}
         </AdvancedOptionsDisclosure>

@@ -1,7 +1,8 @@
 import specs from '@/lib/analysis-specs.generated.json';
 import type { ColumnSlotType } from '@/lib/analysis-column-types';
 import { columnSlotType, slotTypeMatchesExpected } from '@/lib/analysis-column-types';
-import type { SchemaColumn } from '@/lib/analysis-report-types';
+import { categoricalColumnNames } from '@/lib/analysis-definitions';
+import type { DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
 
 export type SpecParam = {
   name: string;
@@ -27,8 +28,32 @@ const BY_KEY = new Map<string, AnalysisSpec>(
   (specs as AnalysisSpec[]).map(spec => [spec.key, spec])
 );
 
+/** Catalog names stay column_a / column_b. The dialog still says Row and Column. */
+const PRESENTED_SLOTS: Record<string, Record<string, { label: string; columnTypes: string[] }>> = {
+  chi_square: {
+    column_a: { label: 'Row variable', columnTypes: ['categorical'] },
+    column_b: { label: 'Column variable', columnTypes: ['categorical'] },
+  },
+};
+
+const PRESENTED = new Map<string, AnalysisSpec>();
+
 export function specFor(key: string): AnalysisSpec | undefined {
-  return BY_KEY.get(key);
+  const spec = BY_KEY.get(key);
+  if (!spec) return undefined;
+  const slots = PRESENTED_SLOTS[key];
+  if (!slots) return spec;
+  const cached = PRESENTED.get(key);
+  if (cached) return cached;
+  const presented: AnalysisSpec = {
+    ...spec,
+    params: spec.params.map(param => {
+      const slot = slots[param.name];
+      return slot ? { ...param, ...slot } : param;
+    }),
+  };
+  PRESENTED.set(key, presented);
+  return presented;
 }
 
 export function paramLabel(param: SpecParam): string {
@@ -64,10 +89,18 @@ function slotFor(types: string[] | undefined): ColumnSlotType | undefined {
   return undefined;
 }
 
-export function namesForParam(schema: SchemaColumn[], param: SpecParam): string[] {
+export function namesForParam(
+  schema: SchemaColumn[],
+  param: SpecParam,
+  preview?: DatasetPreview | null
+): string[] {
   const names = schema.map(column => column.name);
   const slot = slotFor(param.columnTypes);
   if (!slot) return names;
+  if (slot === 'categorical') {
+    const categorical = categoricalColumnNames(schema, preview);
+    if (categorical.length) return categorical;
+  }
   const matched = names.filter(name => slotTypeMatchesExpected(columnSlotType(schema, name), slot));
   return matched.length ? matched : names;
 }
@@ -92,7 +125,8 @@ export function valuesFromSpec(
   spec: AnalysisSpec,
   body: Record<string, unknown> | null | undefined,
   activeWeight: string | null,
-  schema: SchemaColumn[]
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
 ): Record<string, unknown> {
   const stored = body && Object.keys(body).length > 0;
   const values: Record<string, unknown> = {};
@@ -111,14 +145,15 @@ export function valuesFromSpec(
       const taken = new Set(
         Object.values(values).filter((item): item is string => typeof item === 'string')
       );
-      values[param.name] = namesForParam(schema, param).find(name => !taken.has(name)) ?? '';
+      values[param.name] =
+        namesForParam(schema, param, preview).find(name => !taken.has(name)) ?? '';
       continue;
     }
     if (!stored && param.role === 'required' && param.type === 'columns') {
       const taken = new Set(
         Object.values(values).filter((item): item is string => typeof item === 'string')
       );
-      const first = namesForParam(schema, param).find(name => !taken.has(name));
+      const first = namesForParam(schema, param, preview).find(name => !taken.has(name));
       values[param.name] = first ? [first] : [];
       continue;
     }
