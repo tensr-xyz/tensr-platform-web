@@ -197,13 +197,18 @@ export function AnalysisReportRail({
     };
   }, [sourceDatasetId, currentRunId]);
 
-  const columns = useTabsStore(state => {
+  const initialColumns = useTabsStore(state => {
     const tab = state.tabs.find(item => item.id === state.activeTabId);
-    return (tab?.data?.initialColumns ?? []).map(column => ({
-      id: column.id,
-      type: column.type,
-    }));
+    return tab?.data?.initialColumns;
   });
+  const columns = React.useMemo(
+    () =>
+      (initialColumns ?? []).map(column => ({
+        id: column.id,
+        type: column.type,
+      })),
+    [initialColumns]
+  );
   const { variables, settings } = pickSpecInputs(report, columns);
   const chartTitles = (report.charts?.length ? report.charts : report.chart ? [report.chart] : [])
     .filter(Boolean)
