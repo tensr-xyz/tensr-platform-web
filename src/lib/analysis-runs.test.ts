@@ -265,4 +265,19 @@ describe('rSyntaxBadgeText', () => {
     );
     expect(rSyntaxBadgeText({ kind: 'not_verified', statement: 'miss' }).kind).toBe('not_verified');
   });
+
+  it('does not call a pending stamp verified, and names a failed check', () => {
+    const pending = rSyntaxBadgeText({
+      kind: 'pending',
+      statement: 'R syntax is being checked.',
+    });
+    expect(pending.text).toMatch(/being checked/i);
+    expect(pending.text).not.toMatch(/verified against r/i);
+    expect(
+      rSyntaxBadgeText({ kind: 'unknown', reason: 'verify_failed' }).text
+    ).toBe('R check unavailable');
+    expect(rSyntaxBadgeText({ kind: 'unknown', reason: 'timeout' }).text).toBe(
+      'R check unavailable'
+    );
+  });
 });

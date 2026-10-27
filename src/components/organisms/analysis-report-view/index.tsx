@@ -23,6 +23,8 @@ import {
   provenanceBannerText,
   provenanceTraceState,
   fetchAnalysisRun,
+  R_CHECK_POLL_LIMIT,
+  recheckAnalysisRun,
   rSyntaxBadgeText,
   sourceRowsUsedLabel,
 } from '@/lib/analysis-runs';
@@ -482,7 +484,20 @@ export function AnalysisReportView({
   React.useEffect(() => {
     if (rVerification?.kind !== 'pending' || !analysisRunId) return;
     let cancelled = false;
+    let polls = 0;
     const timer = window.setInterval(() => {
+      polls += 1;
+      if (polls >= R_CHECK_POLL_LIMIT) {
+        window.clearInterval(timer);
+        if (!cancelled) {
+          setRVerification({
+            kind: 'unknown',
+            reason: 'timeout',
+            statement: 'R check unavailable.',
+          });
+        }
+        return;
+      }
       void fetchAnalysisRun(analysisRunId).then(run => {
         const next = run?.report?.r_syntax_verification;
         if (cancelled || !next || next.kind === 'pending') return;
@@ -494,6 +509,13 @@ export function AnalysisReportView({
       window.clearInterval(timer);
     };
   }, [analysisRunId, rVerification]);
+  const recheckR = () => {
+    if (!analysisRunId) return;
+    setRVerification({ kind: 'pending', reason: 'async', statement: 'R syntax is being checked.' });
+    void recheckAnalysisRun(analysisRunId).then(next => {
+      if (next && next.kind !== 'pending') setRVerification(next);
+    });
+  };
   const [rawOpen, setRawOpen] = React.useState(false);
   const primaryTable = report.tables[0];
   const blocks = resolveReportBlocks(report);
@@ -542,8 +564,10 @@ export function AnalysisReportView({
   const rBadge = rSyntaxBadgeText(rVerification);
   const showRBadge =
     !report.meta.analysis_key.startsWith('plugin:') && report.meta.analysis_key !== 'chart_builder';
-  const rBadgeTitle =
-    rBadge.kind === 'verified'
+  const rCheckUnavailable = rBadge.text === 'R check unavailable';
+  const rBadgeTitle = rCheckUnavailable
+    ? 'R check unavailable'
+    : rBadge.kind === 'verified'
       ? 'Verified against R ✓'
       : rBadge.kind === 'pending'
         ? 'Checking R syntax'
@@ -640,6 +664,18 @@ export function AnalysisReportView({
           >
             <p className="text-xs font-medium text-amber-800 dark:text-amber-200">{rBadgeTitle}</p>
             <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{rBadge.text}</p>
+            {rCheckUnavailable && analysisRunId ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                data-testid="r-check-retry"
+                onClick={recheckR}
+              >
+                Re-check
+              </Button>
+            ) : null}
             {report.reproducibility?.r_script ? (
               <pre
                 data-testid="r-equivalent-syntax"

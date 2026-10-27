@@ -1,0 +1,4647 @@
+[
+  {
+    "key": "ancova",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "outcome_column",
+        "type": "column",
+        "role": "required",
+        "label": "Outcome",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "covariate_column",
+        "type": "column",
+        "role": "required",
+        "label": "Covariate",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "include_interaction",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Interaction",
+        "default": false
+      },
+      {
+        "name": "ss_type",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Sum of squares",
+        "default": 3
+      }
+    ]
+  },
+  {
+    "key": "anova_mixed",
+    "params": [
+      {
+        "name": "subject_column",
+        "type": "column",
+        "role": "required",
+        "label": "Subject",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "between_factor",
+        "type": "string",
+        "role": "required",
+        "label": "Between-subjects factor",
+        "default": null
+      },
+      {
+        "name": "within_measures",
+        "type": "columns",
+        "role": "required",
+        "label": "Within-subjects measures",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      }
+    ]
+  },
+  {
+    "key": "anova_oneway",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Factor",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "value_column",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "post_hoc",
+        "type": "enum",
+        "role": "default",
+        "label": "Post hoc test",
+        "default": "none"
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "include_group_descriptives",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Group descriptives",
+        "default": true
+      },
+      {
+        "name": "homogeneity_test",
+        "type": "enum",
+        "role": "default",
+        "label": "Homogeneity",
+        "default": "levene"
+      },
+      {
+        "name": "use_welch",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Welch",
+        "default": false
+      },
+      {
+        "name": "effect_size",
+        "type": "enum",
+        "role": "default",
+        "label": "Effect-size statistic",
+        "default": "eta_squared"
+      },
+      {
+        "name": "missing_values",
+        "type": "enum",
+        "role": "default",
+        "label": "missing",
+        "default": "listwise"
+      },
+      {
+        "name": "output_chart",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Chart",
+        "default": "boxplot"
+      }
+    ]
+  },
+  {
+    "key": "anova_repeated",
+    "params": [
+      {
+        "name": "subject_column",
+        "type": "column",
+        "role": "required",
+        "label": "Subject",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "measure_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Measures",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "anova_threeway",
+    "params": [
+      {
+        "name": "factor_a",
+        "type": "string",
+        "role": "required",
+        "label": "Factor A variable",
+        "default": null
+      },
+      {
+        "name": "factor_b",
+        "type": "string",
+        "role": "required",
+        "label": "Factor B variable",
+        "default": null
+      },
+      {
+        "name": "factor_c",
+        "type": "string",
+        "role": "required",
+        "label": "Factor C variable",
+        "default": null
+      },
+      {
+        "name": "value_column",
+        "type": "column",
+        "role": "required",
+        "label": "Test variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "include_interactions",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Interactions",
+        "default": true
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      }
+    ]
+  },
+  {
+    "key": "anova_twoway",
+    "params": [
+      {
+        "name": "factor_a",
+        "type": "string",
+        "role": "required",
+        "label": "Factor A variable",
+        "default": null
+      },
+      {
+        "name": "factor_b",
+        "type": "string",
+        "role": "required",
+        "label": "Factor B variable",
+        "default": null
+      },
+      {
+        "name": "value_column",
+        "type": "column",
+        "role": "required",
+        "label": "Test variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "include_interaction",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Interaction",
+        "default": true
+      },
+      {
+        "name": "post_hoc",
+        "type": "enum",
+        "role": "default",
+        "label": "Post hoc test",
+        "default": "none"
+      },
+      {
+        "name": "session_filter",
+        "type": "json",
+        "role": "advanced",
+        "label": "Session",
+        "default": null
+      },
+      {
+        "name": "ss_type",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Sum of squares",
+        "default": 3
+      }
+    ]
+  },
+  {
+    "key": "arima_sarima",
+    "params": [
+      {
+        "name": "target_column",
+        "type": "column",
+        "role": "required",
+        "label": "Target",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "date_column",
+        "type": "column",
+        "role": "advanced",
+        "label": "Date",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "seasonal_period",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Season length",
+        "default": null
+      },
+      {
+        "name": "forecast_steps",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Forecast horizon",
+        "default": 12
+      },
+      {
+        "name": "order",
+        "type": "json",
+        "role": "advanced",
+        "label": "ARIMA order",
+        "default": null
+      },
+      {
+        "name": "seasonal_order",
+        "type": "json",
+        "role": "advanced",
+        "label": "Seasonal ARIMA order",
+        "default": null
+      },
+      {
+        "name": "exogenous",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "interval",
+        "type": "number",
+        "role": "advanced",
+        "label": "Interval",
+        "default": 0.95
+      },
+      {
+        "name": "transform",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Transform",
+        "default": "none"
+      },
+      {
+        "name": "boxcox_lambda",
+        "type": "number",
+        "role": "advanced",
+        "label": "Box-Cox lambda",
+        "default": null
+      },
+      {
+        "name": "constant",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Constant",
+        "default": true
+      },
+      {
+        "name": "drift",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Drift",
+        "default": false
+      },
+      {
+        "name": "holdout",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Holdout",
+        "default": 0
+      },
+      {
+        "name": "candidates",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Candidate models",
+        "default": false
+      }
+    ]
+  },
+  {
+    "key": "autocorrelation",
+    "params": [
+      {
+        "name": "target_column",
+        "type": "column",
+        "role": "required",
+        "label": "Target",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "date_column",
+        "type": "column",
+        "role": "advanced",
+        "label": "Date",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "max_lags",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Maximum lags",
+        "default": 20
+      }
+    ]
+  },
+  {
+    "key": "banner_table",
+    "params": [
+      {
+        "name": "stub_column",
+        "type": "column",
+        "role": "required",
+        "label": "Rows",
+        "default": null,
+        "columnTypes": [
+          "categorical",
+          "numeric"
+        ]
+      },
+      {
+        "name": "banner_column",
+        "type": "column",
+        "role": "required",
+        "label": "Columns",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "advanced",
+        "label": "First variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "advanced",
+        "label": "Second variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_percent",
+        "type": "boolean",
+        "role": "default",
+        "label": "Column percentages",
+        "default": true
+      },
+      {
+        "name": "column_letters",
+        "type": "boolean",
+        "role": "default",
+        "label": "Letters",
+        "default": true
+      },
+      {
+        "name": "nest_banners",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Nest the banners",
+        "default": true
+      },
+      {
+        "name": "row_percent",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Row percentages",
+        "default": false
+      },
+      {
+        "name": "low_base_threshold",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Low base",
+        "default": null
+      },
+      {
+        "name": "suppress_low_base",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Hide low bases",
+        "default": null
+      },
+      {
+        "name": "stubs",
+        "type": "json",
+        "role": "advanced",
+        "label": "Rows",
+        "default": null
+      },
+      {
+        "name": "stub_columns",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Rows",
+        "default": null,
+        "columnTypes": [
+          "categorical",
+          "numeric"
+        ]
+      },
+      {
+        "name": "banner",
+        "type": "json",
+        "role": "advanced",
+        "label": "Columns",
+        "default": null
+      },
+      {
+        "name": "banner_id",
+        "type": "string",
+        "role": "advanced",
+        "label": "Saved banner",
+        "default": null
+      },
+      {
+        "name": "statistics",
+        "type": "columns",
+        "role": "default",
+        "label": "Statistics",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "filter_ref",
+        "type": "json",
+        "role": "advanced",
+        "label": "Filter",
+        "default": null
+      },
+      {
+        "name": "nets",
+        "type": "json",
+        "role": "advanced",
+        "label": "Nets",
+        "default": null
+      },
+      {
+        "name": "significance_display",
+        "type": "string",
+        "role": "advanced",
+        "label": "How to show significance",
+        "default": null
+      },
+      {
+        "name": "multiple_comparison",
+        "type": "string",
+        "role": "default",
+        "label": "Correction",
+        "default": null
+      },
+      {
+        "name": "significance_alpha",
+        "type": "number",
+        "role": "default",
+        "label": "alpha",
+        "default": 0.05
+      },
+      {
+        "name": "letter_levels",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Letter grouping",
+        "default": 2
+      },
+      {
+        "name": "letter_upper_alpha",
+        "type": "number",
+        "role": "advanced",
+        "label": "Upper letter alpha",
+        "default": 0.01
+      },
+      {
+        "name": "letter_case",
+        "type": "string",
+        "role": "advanced",
+        "label": "Significance letter case",
+        "default": "lower"
+      },
+      {
+        "name": "weight",
+        "type": "string",
+        "role": "required",
+        "label": "Weight",
+        "default": null
+      },
+      {
+        "name": "decimals",
+        "type": "json",
+        "role": "advanced",
+        "label": "Decimal places by statistic",
+        "default": null
+      },
+      {
+        "name": "level",
+        "type": "string",
+        "role": "advanced",
+        "label": "Level",
+        "default": null
+      },
+      {
+        "name": "trend",
+        "type": "string",
+        "role": "advanced",
+        "label": "Trend",
+        "default": null
+      },
+      {
+        "name": "min_base",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Minimum base",
+        "default": null
+      }
+    ]
+  },
+  {
+    "key": "batch_tables",
+    "params": [
+      {
+        "name": "banner",
+        "type": "json",
+        "role": "advanced",
+        "label": "Banner",
+        "default": null
+      },
+      {
+        "name": "stub_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Stubs",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "sort_by_significance",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Sort significant first",
+        "default": false
+      }
+    ]
+  },
+  {
+    "key": "canonical_correlation",
+    "params": [
+      {
+        "name": "set_a",
+        "type": "columns",
+        "role": "required",
+        "label": "First set",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "set_b",
+        "type": "columns",
+        "role": "required",
+        "label": "Second set",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "cbc_design",
+    "params": [
+      {
+        "name": "attributes",
+        "type": "json",
+        "role": "advanced",
+        "label": "Attribute levels",
+        "default": null
+      },
+      {
+        "name": "method",
+        "type": "string",
+        "role": "default",
+        "label": "method",
+        "default": "balanced_overlap"
+      },
+      {
+        "name": "n_tasks",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Tasks",
+        "default": 8
+      },
+      {
+        "name": "n_alternatives",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Alternatives per task",
+        "default": 3
+      },
+      {
+        "name": "n_versions",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Versions",
+        "default": 1
+      },
+      {
+        "name": "none_option",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "None-of-these",
+        "default": false
+      },
+      {
+        "name": "prohibited",
+        "type": "json",
+        "role": "advanced",
+        "label": "Prohibited combinations",
+        "default": null
+      },
+      {
+        "name": "seed",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Seed",
+        "default": 0
+      }
+    ]
+  },
+  {
+    "key": "chi_square",
+    "params": [
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "Row variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "required",
+        "label": "Column variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "include_phi",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Phi",
+        "default": true
+      },
+      {
+        "name": "include_cramers_v",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Cramer's V",
+        "default": true
+      },
+      {
+        "name": "use_fishers_exact",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Fisher's exact test",
+        "default": false
+      },
+      {
+        "name": "filter_ref",
+        "type": "json",
+        "role": "advanced",
+        "label": "Filter",
+        "default": null
+      },
+      {
+        "name": "weight_column",
+        "type": "column",
+        "role": "required",
+        "label": "Weight",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "choice_simulator",
+    "params": [
+      {
+        "name": "utilities",
+        "type": "json",
+        "role": "advanced",
+        "label": "Utilities",
+        "default": null
+      },
+      {
+        "name": "profiles",
+        "type": "json",
+        "role": "advanced",
+        "label": "Profiles",
+        "default": null
+      },
+      {
+        "name": "sensitivity",
+        "type": "json",
+        "role": "advanced",
+        "label": "Sensitivity",
+        "default": null
+      }
+    ]
+  },
+  {
+    "key": "cluster_analysis",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "method",
+        "type": "enum",
+        "role": "default",
+        "label": "method",
+        "default": "kmeans"
+      },
+      {
+        "name": "n_clusters",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Clusters",
+        "default": 3
+      },
+      {
+        "name": "standardize",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Standardize",
+        "default": true
+      }
+    ]
+  },
+  {
+    "key": "cochran_armitage",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "outcome_column",
+        "type": "column",
+        "role": "required",
+        "label": "Outcome",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "cochrans_q",
+    "params": [
+      {
+        "name": "measure_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Measures",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "code_open_text",
+    "params": [
+      {
+        "name": "text_column",
+        "type": "column",
+        "role": "required",
+        "label": "Text",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "codebook",
+        "type": "json",
+        "role": "advanced",
+        "label": "Codebook",
+        "default": null
+      },
+      {
+        "name": "assignments",
+        "type": "json",
+        "role": "advanced",
+        "label": "Assignments",
+        "default": null
+      },
+      {
+        "name": "coder_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Coders",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "crosstab_column",
+        "type": "column",
+        "role": "advanced",
+        "label": "Crosstab",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "lexicon",
+        "type": "json",
+        "role": "advanced",
+        "label": "Lexicon",
+        "default": null
+      },
+      {
+        "name": "multi_response",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Multiple response",
+        "default": false
+      }
+    ]
+  },
+  {
+    "key": "cohens_kappa",
+    "params": [
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "First variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "required",
+        "label": "Second variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "confirmatory_factor_analysis",
+    "params": [
+      {
+        "name": "indicators",
+        "type": "columns",
+        "role": "required",
+        "label": "Indicators",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "model_spec",
+        "type": "string",
+        "role": "required",
+        "label": "Model specification",
+        "default": null
+      },
+      {
+        "name": "model_spec_auto_generated",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Specification was generated",
+        "default": false
+      }
+    ]
+  },
+  {
+    "key": "conjoint_hb",
+    "params": [
+      {
+        "name": "chosen_column",
+        "type": "column",
+        "role": "required",
+        "label": "Chosen",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "alt_column",
+        "type": "column",
+        "role": "required",
+        "label": "Alternative",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "task_column",
+        "type": "column",
+        "role": "required",
+        "label": "Task",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "respondent_column",
+        "type": "column",
+        "role": "required",
+        "label": "Respondent",
+        "default": "respondent_id",
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "alternatives",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Alternatives",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "items",
+        "type": "columns",
+        "role": "required",
+        "label": "Items",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "attribute_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Attributes",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "conjoint_mnl",
+    "params": [
+      {
+        "name": "chosen_column",
+        "type": "column",
+        "role": "required",
+        "label": "Chosen",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "profile_id_column",
+        "type": "column",
+        "role": "required",
+        "label": "Profile",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "attribute_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Attributes",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "price_attribute",
+        "type": "string",
+        "role": "advanced",
+        "label": "Price",
+        "default": null
+      },
+      {
+        "name": "segment_column",
+        "type": "column",
+        "role": "advanced",
+        "label": "Segment",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "weight_column",
+        "type": "column",
+        "role": "required",
+        "label": "Weight",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "respondent_column",
+        "type": "column",
+        "role": "required",
+        "label": "Respondent",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "wide_map",
+        "type": "json",
+        "role": "advanced",
+        "label": "Wide layout",
+        "default": null
+      },
+      {
+        "name": "design_rows",
+        "type": "json",
+        "role": "advanced",
+        "label": "Design matrix rows",
+        "default": null
+      },
+      {
+        "name": "join_on",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Join keys",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "correlation",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "method",
+        "type": "enum",
+        "role": "default",
+        "label": "method",
+        "default": "pearson"
+      },
+      {
+        "name": "significance_alpha",
+        "type": "number",
+        "role": "default",
+        "label": "alpha",
+        "default": 0.05
+      },
+      {
+        "name": "tail",
+        "type": "enum",
+        "role": "default",
+        "label": "tail",
+        "default": "two_tailed"
+      },
+      {
+        "name": "flag_significant",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Flag significant cells",
+        "default": false
+      },
+      {
+        "name": "missing_values",
+        "type": "enum",
+        "role": "default",
+        "label": "missing",
+        "default": "pairwise"
+      }
+    ]
+  },
+  {
+    "key": "correspondence",
+    "params": [
+      {
+        "name": "row_column",
+        "type": "column",
+        "role": "required",
+        "label": "Row variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_column",
+        "type": "column",
+        "role": "required",
+        "label": "Column variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "cox_proportional_hazards",
+    "params": [
+      {
+        "name": "duration_column",
+        "type": "column",
+        "role": "required",
+        "label": "Time",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "event_column",
+        "type": "column",
+        "role": "required",
+        "label": "Event",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "covariates",
+        "type": "columns",
+        "role": "required",
+        "label": "Covariates",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "dbscan",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "epsilon",
+        "type": "number",
+        "role": "advanced",
+        "label": "Epsilon",
+        "default": 0.5
+      },
+      {
+        "name": "min_samples",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Minimum samples",
+        "default": 5
+      },
+      {
+        "name": "standardize",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Standardize",
+        "default": true
+      }
+    ]
+  },
+  {
+    "key": "decision_tree",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "max_depth",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Maximum depth",
+        "default": 5
+      },
+      {
+        "name": "min_samples_leaf",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Minimum leaf size",
+        "default": 5
+      },
+      {
+        "name": "test_fraction",
+        "type": "number",
+        "role": "advanced",
+        "label": "Holdout fraction",
+        "default": 0.25
+      }
+    ]
+  },
+  {
+    "key": "descriptives",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "statistics",
+        "type": "columns",
+        "role": "default",
+        "label": "Statistics",
+        "default": null,
+        "displayDefault": "mean, std, min, max",
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "weight_column",
+        "type": "column",
+        "role": "required",
+        "label": "Weight",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "discriminant_analysis",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "feature_columns",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Features",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "drivers",
+    "params": [
+      {
+        "name": "outcome",
+        "type": "column",
+        "role": "required",
+        "label": "Outcome",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "drivers",
+        "type": "columns",
+        "role": "required",
+        "label": "Drivers",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "method",
+        "type": "string",
+        "role": "default",
+        "label": "method",
+        "default": "johnson"
+      }
+    ]
+  },
+  {
+    "key": "efa",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "n_factors",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Factors",
+        "default": null
+      }
+    ]
+  },
+  {
+    "key": "exponential_smoothing",
+    "params": [
+      {
+        "name": "target_column",
+        "type": "column",
+        "role": "required",
+        "label": "Target",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "date_column",
+        "type": "column",
+        "role": "advanced",
+        "label": "Date",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "seasonal_period",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Season length",
+        "default": 12
+      },
+      {
+        "name": "forecast_steps",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Forecast horizon",
+        "default": 12
+      }
+    ]
+  },
+  {
+    "key": "fishers_exact",
+    "params": [
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "Row variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "required",
+        "label": "Column variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "alternative",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Alternative",
+        "default": "two-sided"
+      }
+    ]
+  },
+  {
+    "key": "fleiss_kappa",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "categories",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Categories",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "frequencies",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "categorical",
+          "numeric"
+        ]
+      },
+      {
+        "name": "statistics",
+        "type": "columns",
+        "role": "default",
+        "label": "Statistics",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "weight_column",
+        "type": "column",
+        "role": "required",
+        "label": "Weight",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "friedman",
+    "params": [
+      {
+        "name": "measure_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Measures",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "funnel",
+    "params": [
+      {
+        "name": "stages",
+        "type": "columns",
+        "role": "required",
+        "label": "Stages",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "fuse_waves",
+    "params": [
+      {
+        "name": "dataset_ids",
+        "type": "columns",
+        "role": "required",
+        "label": "Datasets",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "wave_names",
+        "type": "columns",
+        "role": "required",
+        "label": "Waves",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "persist",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Save result",
+        "default": true
+      },
+      {
+        "name": "key",
+        "type": "string",
+        "role": "advanced",
+        "label": "Key",
+        "default": null
+      }
+    ]
+  },
+  {
+    "key": "gabor_granger",
+    "params": [
+      {
+        "name": "price_column",
+        "type": "column",
+        "role": "required",
+        "label": "Price",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "buy_column",
+        "type": "column",
+        "role": "required",
+        "label": "Would buy",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "gee",
+    "params": [
+      {
+        "name": "outcome",
+        "type": "column",
+        "role": "required",
+        "label": "Outcome",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "group",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "family",
+        "type": "enum",
+        "role": "default",
+        "label": "Family",
+        "default": "binomial"
+      },
+      {
+        "name": "corstr",
+        "type": "enum",
+        "role": "default",
+        "label": "Working correlation",
+        "default": "exchangeable"
+      }
+    ]
+  },
+  {
+    "key": "generalized_linear_mixed_model",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "fixed_effects",
+        "type": "columns",
+        "role": "required",
+        "label": "Fixed-effect terms",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "family",
+        "type": "enum",
+        "role": "default",
+        "label": "Family",
+        "default": "binomial"
+      },
+      {
+        "name": "random_effects",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Random-effect terms",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "derive_binary_from",
+        "type": "json",
+        "role": "advanced",
+        "label": "Binary source",
+        "default": null
+      },
+      {
+        "name": "save_derived_variable",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Save the derived variable",
+        "default": false
+      },
+      {
+        "name": "method",
+        "type": "enum",
+        "role": "default",
+        "label": "method",
+        "default": "glmer"
+      }
+    ]
+  },
+  {
+    "key": "goodman_kruskal_gamma",
+    "params": [
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "First variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "required",
+        "label": "Second variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "goodman_kruskal_lambda",
+    "params": [
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "First variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "required",
+        "label": "Second variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "gradient_boosting",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "test_fraction",
+        "type": "number",
+        "role": "advanced",
+        "label": "Holdout fraction",
+        "default": 0.25
+      },
+      {
+        "name": "mode",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Mode",
+        "default": "classification"
+      },
+      {
+        "name": "n_estimators",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Trees",
+        "default": 100
+      }
+    ]
+  },
+  {
+    "key": "hierarchical_regression",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "blocks",
+        "type": "json",
+        "role": "advanced",
+        "label": "Blocks",
+        "default": null
+      },
+      {
+        "name": "method",
+        "type": "enum",
+        "role": "default",
+        "label": "method",
+        "default": "enter"
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      }
+    ]
+  },
+  {
+    "key": "hotelling_t2",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "dependent_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Dependent variables",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "group_values",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Groups to compare",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "jonckheere_terpstra",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "value_column",
+        "type": "column",
+        "role": "required",
+        "label": "Test variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "group_order",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Order of groups",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "kaplan_meier",
+    "params": [
+      {
+        "name": "duration_column",
+        "type": "column",
+        "role": "required",
+        "label": "Time",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "event_column",
+        "type": "column",
+        "role": "required",
+        "label": "Event",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "kendalls_w",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "categories",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Categories",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "kolmogorov_smirnov",
+    "params": [
+      {
+        "name": "test_type",
+        "type": "enum",
+        "role": "default",
+        "label": "Test",
+        "default": "two_sample"
+      },
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "First variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "advanced",
+        "label": "Second variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "kruskal_wallis",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "value_column",
+        "type": "column",
+        "role": "required",
+        "label": "Test variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "post_hoc",
+        "type": "boolean",
+        "role": "default",
+        "label": "Post hoc test",
+        "default": false
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      }
+    ]
+  },
+  {
+    "key": "latent_class_analysis",
+    "params": [
+      {
+        "name": "indicators",
+        "type": "columns",
+        "role": "required",
+        "label": "Indicators",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "n_classes",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Classes",
+        "default": 2
+      }
+    ]
+  },
+  {
+    "key": "lilliefors_ks",
+    "params": [
+      {
+        "name": "column",
+        "type": "column",
+        "role": "required",
+        "label": "Variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "linear_mixed_model",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "fixed_effects",
+        "type": "columns",
+        "role": "required",
+        "label": "Fixed-effect terms",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "random_effects",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Random-effect terms",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "linear_regression",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "include_constant",
+        "type": "boolean",
+        "role": "default",
+        "label": "constant",
+        "default": true
+      },
+      {
+        "name": "method",
+        "type": "enum",
+        "role": "default",
+        "label": "method",
+        "default": "enter"
+      },
+      {
+        "name": "missing_values",
+        "type": "enum",
+        "role": "default",
+        "label": "missing",
+        "default": "listwise"
+      },
+      {
+        "name": "residual_plots",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Residual plot",
+        "default": "none"
+      },
+      {
+        "name": "collinearity_diagnostics",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Collinearity",
+        "default": false
+      },
+      {
+        "name": "cluster_by",
+        "type": "string",
+        "role": "advanced",
+        "label": "Cluster",
+        "default": null
+      },
+      {
+        "name": "derive_mean_log_rt",
+        "type": "json",
+        "role": "advanced",
+        "label": "Mean log response time",
+        "default": null
+      },
+      {
+        "name": "scales",
+        "type": "json",
+        "role": "advanced",
+        "label": "Scales",
+        "default": null
+      },
+      {
+        "name": "reference_levels",
+        "type": "json",
+        "role": "advanced",
+        "label": "Reference category",
+        "default": null
+      },
+      {
+        "name": "interactions",
+        "type": "json",
+        "role": "advanced",
+        "label": "Interactions",
+        "default": null
+      }
+    ]
+  },
+  {
+    "key": "logistic_regression",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "derive_binary_from",
+        "type": "json",
+        "role": "advanced",
+        "label": "Binary source",
+        "default": null
+      },
+      {
+        "name": "save_derived_variable",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Save the derived variable",
+        "default": false
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "classification_cutoff",
+        "type": "number",
+        "role": "advanced",
+        "label": "Cutoff for classification",
+        "default": 0.5
+      },
+      {
+        "name": "max_iter",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Maximum iterations",
+        "default": 20
+      },
+      {
+        "name": "include_constant",
+        "type": "boolean",
+        "role": "default",
+        "label": "constant",
+        "default": true
+      },
+      {
+        "name": "hosmer_lemeshow",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Hosmer-Lemeshow",
+        "default": false
+      },
+      {
+        "name": "cluster_by",
+        "type": "string",
+        "role": "advanced",
+        "label": "Cluster",
+        "default": null
+      },
+      {
+        "name": "reference_levels",
+        "type": "json",
+        "role": "advanced",
+        "label": "Reference category",
+        "default": null
+      },
+      {
+        "name": "interactions",
+        "type": "json",
+        "role": "advanced",
+        "label": "Interactions",
+        "default": null
+      },
+      {
+        "name": "scales",
+        "type": "json",
+        "role": "advanced",
+        "label": "Scales",
+        "default": null
+      },
+      {
+        "name": "predict_at",
+        "type": "json",
+        "role": "advanced",
+        "label": "Prediction point",
+        "default": null
+      },
+      {
+        "name": "others_at",
+        "type": "string",
+        "role": "advanced",
+        "label": "Other responses",
+        "default": "mean"
+      },
+      {
+        "name": "derive_hours_since_group_min",
+        "type": "json",
+        "role": "advanced",
+        "label": "Hours since group minimum",
+        "default": null
+      }
+    ]
+  },
+  {
+    "key": "loglinear",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "model",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Model",
+        "default": "saturated"
+      },
+      {
+        "name": "max_iterations",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Iterations",
+        "default": 20
+      }
+    ]
+  },
+  {
+    "key": "mann_whitney_u",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "value_column",
+        "type": "column",
+        "role": "required",
+        "label": "Test variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "hypothesized_difference",
+        "type": "number",
+        "role": "advanced",
+        "label": "Test value",
+        "default": 0.0
+      },
+      {
+        "name": "missing_values",
+        "type": "enum",
+        "role": "default",
+        "label": "missing",
+        "default": "listwise"
+      },
+      {
+        "name": "group_values",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Groups to compare",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "exact",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Exact test",
+        "default": false
+      }
+    ]
+  },
+  {
+    "key": "manova",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "dependent_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Dependent variables",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "mantel_haenszel",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "outcome_column",
+        "type": "column",
+        "role": "required",
+        "label": "Outcome",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "maxdiff_count",
+    "params": [
+      {
+        "name": "best_column",
+        "type": "column",
+        "role": "required",
+        "label": "Best",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "worst_column",
+        "type": "column",
+        "role": "required",
+        "label": "Worst",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "items",
+        "type": "columns",
+        "role": "required",
+        "label": "Items",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "weight_column",
+        "type": "column",
+        "role": "required",
+        "label": "Weight",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "segment_column",
+        "type": "column",
+        "role": "advanced",
+        "label": "Segment",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "maxdiff_design",
+    "params": [
+      {
+        "name": "items",
+        "type": "columns",
+        "role": "required",
+        "label": "Items",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "n_sets",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Sets",
+        "default": 8
+      },
+      {
+        "name": "set_size",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Alternatives in a set",
+        "default": 4
+      },
+      {
+        "name": "n_versions",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Versions",
+        "default": 1
+      },
+      {
+        "name": "seed",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Seed",
+        "default": 0
+      }
+    ]
+  },
+  {
+    "key": "maxdiff_hb",
+    "params": [
+      {
+        "name": "best_column",
+        "type": "column",
+        "role": "required",
+        "label": "Best",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "worst_column",
+        "type": "column",
+        "role": "required",
+        "label": "Worst",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "set_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Sets",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "items",
+        "type": "columns",
+        "role": "required",
+        "label": "Items",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "respondent_column",
+        "type": "column",
+        "role": "required",
+        "label": "Respondent",
+        "default": "respondent_id",
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "maxdiff_mnl",
+    "params": [
+      {
+        "name": "best_column",
+        "type": "column",
+        "role": "required",
+        "label": "Best",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "worst_column",
+        "type": "column",
+        "role": "required",
+        "label": "Worst",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "set_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Sets",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "items",
+        "type": "columns",
+        "role": "required",
+        "label": "Items",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "mcnemar",
+    "params": [
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "First variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "required",
+        "label": "Second variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "median_test",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "value_column",
+        "type": "column",
+        "role": "required",
+        "label": "Test variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "merge_datasets",
+    "params": [
+      {
+        "name": "secondary_dataset_id",
+        "type": "string",
+        "role": "advanced",
+        "label": "Second dataset",
+        "default": null
+      },
+      {
+        "name": "sources",
+        "type": "json",
+        "role": "advanced",
+        "label": "Sources",
+        "default": null
+      },
+      {
+        "name": "merge_type",
+        "type": "enum",
+        "role": "advanced",
+        "label": "How to merge",
+        "default": "add_cases"
+      },
+      {
+        "name": "keys",
+        "type": "json",
+        "role": "advanced",
+        "label": "Keys",
+        "default": null
+      },
+      {
+        "name": "key_map",
+        "type": "json",
+        "role": "advanced",
+        "label": "Key mapping",
+        "default": null
+      },
+      {
+        "name": "allow_many",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Permit multiple codes",
+        "default": false
+      },
+      {
+        "name": "preview",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Preview only",
+        "default": false
+      }
+    ]
+  },
+  {
+    "key": "mixed_anova",
+    "params": [
+      {
+        "name": "subject_column",
+        "type": "column",
+        "role": "required",
+        "label": "Subject",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "between_factor",
+        "type": "string",
+        "role": "required",
+        "label": "Between-subjects factor",
+        "default": null
+      },
+      {
+        "name": "within_measures",
+        "type": "columns",
+        "role": "required",
+        "label": "Within-subjects measures",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      }
+    ]
+  },
+  {
+    "key": "mixed_model",
+    "params": [
+      {
+        "name": "outcome",
+        "type": "column",
+        "role": "required",
+        "label": "Outcome",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "group",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "fixed_effects",
+        "type": "columns",
+        "role": "required",
+        "label": "Fixed-effect terms",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "random_slopes",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Random slope terms",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "reml",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "REML",
+        "default": true
+      }
+    ]
+  },
+  {
+    "key": "moderation_analysis",
+    "params": [
+      {
+        "name": "outcome_column",
+        "type": "column",
+        "role": "required",
+        "label": "Outcome",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "predictor_column",
+        "type": "column",
+        "role": "required",
+        "label": "Predictor",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "moderator_column",
+        "type": "column",
+        "role": "required",
+        "label": "Moderator",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "center_variables",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Center predictors",
+        "default": true
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      }
+    ]
+  },
+  {
+    "key": "moses_test",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "value_column",
+        "type": "column",
+        "role": "required",
+        "label": "Test variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "trim_fraction",
+        "type": "number",
+        "role": "advanced",
+        "label": "Trim proportion",
+        "default": 0.05
+      }
+    ]
+  },
+  {
+    "key": "multidimensional_scaling",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "n_components",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Components",
+        "default": 2
+      }
+    ]
+  },
+  {
+    "key": "multilevel_modelling",
+    "params": [
+      {
+        "name": "outcome_column",
+        "type": "column",
+        "role": "required",
+        "label": "Outcome",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "level1_predictors",
+        "type": "columns",
+        "role": "required",
+        "label": "Level-1 predictors",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "level2_group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Level-2 group",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "random_slopes",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Random slope terms",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "negative_binomial_regression",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "include_constant",
+        "type": "boolean",
+        "role": "default",
+        "label": "constant",
+        "default": true
+      },
+      {
+        "name": "offset_column",
+        "type": "column",
+        "role": "advanced",
+        "label": "Offset",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "nelson_aalen",
+    "params": [
+      {
+        "name": "duration_column",
+        "type": "column",
+        "role": "required",
+        "label": "Time",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "event_column",
+        "type": "column",
+        "role": "required",
+        "label": "Event",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "network",
+    "params": [
+      {
+        "name": "source",
+        "type": "column",
+        "role": "required",
+        "label": "Source",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "target",
+        "type": "column",
+        "role": "required",
+        "label": "Target",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "weight",
+        "type": "string",
+        "role": "required",
+        "label": "Weight",
+        "default": null
+      },
+      {
+        "name": "adjacency_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Adjacency variables",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "neural_network_mlp",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "test_fraction",
+        "type": "number",
+        "role": "advanced",
+        "label": "Holdout fraction",
+        "default": 0.25
+      },
+      {
+        "name": "mode",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Mode",
+        "default": "classification"
+      }
+    ]
+  },
+  {
+    "key": "nps",
+    "params": [
+      {
+        "name": "score_column",
+        "type": "column",
+        "role": "required",
+        "label": "Score",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "column",
+        "type": "column",
+        "role": "required",
+        "label": "Variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "odds_ratio",
+    "params": [
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "First variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "required",
+        "label": "Second variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "ordinal_regression",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "include_constant",
+        "type": "boolean",
+        "role": "default",
+        "label": "constant",
+        "default": true
+      },
+      {
+        "name": "link",
+        "type": "enum",
+        "role": "default",
+        "label": "Link",
+        "default": "logit"
+      }
+    ]
+  },
+  {
+    "key": "partial_correlation",
+    "params": [
+      {
+        "name": "column_x",
+        "type": "string",
+        "role": "required",
+        "label": "X variable",
+        "default": null
+      },
+      {
+        "name": "column_y",
+        "type": "string",
+        "role": "required",
+        "label": "Y variable",
+        "default": null
+      },
+      {
+        "name": "control_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Controls",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "method",
+        "type": "enum",
+        "role": "default",
+        "label": "method",
+        "default": "pearson"
+      }
+    ]
+  },
+  {
+    "key": "pca",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "n_components",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Components",
+        "default": null
+      }
+    ]
+  },
+  {
+    "key": "pivot_table",
+    "params": [
+      {
+        "name": "rows",
+        "type": "columns",
+        "role": "required",
+        "label": "Rows",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "values",
+        "type": "json",
+        "role": "advanced",
+        "label": "Values",
+        "default": null
+      },
+      {
+        "name": "filter",
+        "type": "json",
+        "role": "advanced",
+        "label": "Filter",
+        "default": null
+      },
+      {
+        "name": "top_n",
+        "type": "integer",
+        "role": "advanced",
+        "label": "How many to keep",
+        "default": 24
+      },
+      {
+        "name": "significance",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Significance",
+        "default": false
+      },
+      {
+        "name": "show_subtotals",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Subtotals",
+        "default": true
+      },
+      {
+        "name": "show_grand_total",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Grand total",
+        "default": true
+      }
+    ]
+  },
+  {
+    "key": "poisson_regression",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "include_constant",
+        "type": "boolean",
+        "role": "default",
+        "label": "constant",
+        "default": true
+      },
+      {
+        "name": "offset_column",
+        "type": "column",
+        "role": "advanced",
+        "label": "Offset",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "poststratify",
+    "params": [
+      {
+        "name": "variables",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "cells",
+        "type": "json",
+        "role": "advanced",
+        "label": "Weighting cells",
+        "default": null
+      },
+      {
+        "name": "persist",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Save result",
+        "default": true
+      },
+      {
+        "name": "missing_handling",
+        "type": "string",
+        "role": "advanced",
+        "label": "Missing",
+        "default": "exclude"
+      },
+      {
+        "name": "impute_to",
+        "type": "json",
+        "role": "advanced",
+        "label": "Impute toward",
+        "default": null
+      },
+      {
+        "name": "missing_targets",
+        "type": "json",
+        "role": "advanced",
+        "label": "Targets for missing cells",
+        "default": null
+      },
+      {
+        "name": "targets_filename",
+        "type": "string",
+        "role": "advanced",
+        "label": "Targets file",
+        "default": null
+      },
+      {
+        "name": "targets_role",
+        "type": "string",
+        "role": "advanced",
+        "label": "Role of the targets",
+        "default": null
+      },
+      {
+        "name": "weight_label",
+        "type": "string",
+        "role": "advanced",
+        "label": "Name for the weight",
+        "default": null
+      }
+    ]
+  },
+  {
+    "key": "probit_regression",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "derive_binary_from",
+        "type": "json",
+        "role": "advanced",
+        "label": "Binary source",
+        "default": null
+      },
+      {
+        "name": "save_derived_variable",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Save the derived variable",
+        "default": false
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "include_constant",
+        "type": "boolean",
+        "role": "default",
+        "label": "constant",
+        "default": true
+      }
+    ]
+  },
+  {
+    "key": "rake",
+    "params": [
+      {
+        "name": "categorical_targets",
+        "type": "json",
+        "role": "advanced",
+        "label": "Category targets",
+        "default": null
+      },
+      {
+        "name": "persist",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Save result",
+        "default": false
+      },
+      {
+        "name": "missing_handling",
+        "type": "string",
+        "role": "advanced",
+        "label": "Missing",
+        "default": null
+      },
+      {
+        "name": "impute_to",
+        "type": "json",
+        "role": "advanced",
+        "label": "Impute toward",
+        "default": null
+      },
+      {
+        "name": "missing_targets",
+        "type": "json",
+        "role": "advanced",
+        "label": "Targets for missing cells",
+        "default": null
+      },
+      {
+        "name": "targets_filename",
+        "type": "string",
+        "role": "advanced",
+        "label": "Targets file",
+        "default": null
+      },
+      {
+        "name": "targets_role",
+        "type": "string",
+        "role": "advanced",
+        "label": "Role of the targets",
+        "default": null
+      },
+      {
+        "name": "targets_columns",
+        "type": "json",
+        "role": "advanced",
+        "label": "Target variables",
+        "default": null
+      },
+      {
+        "name": "weight_label",
+        "type": "string",
+        "role": "advanced",
+        "label": "Name for the weight",
+        "default": null
+      },
+      {
+        "name": "numeric_targets",
+        "type": "json",
+        "role": "advanced",
+        "label": "Numeric weighting targets",
+        "default": null
+      },
+      {
+        "name": "lower",
+        "type": "number",
+        "role": "advanced",
+        "label": "Lower bound",
+        "default": null
+      },
+      {
+        "name": "upper",
+        "type": "number",
+        "role": "advanced",
+        "label": "Upper bound",
+        "default": null
+      },
+      {
+        "name": "trim_iterations",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Trim passes",
+        "default": null
+      },
+      {
+        "name": "use_existing_weight",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Keep the current weight",
+        "default": false
+      },
+      {
+        "name": "design_weight_column",
+        "type": "column",
+        "role": "required",
+        "label": "Design weight",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "random_forest_classification",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "test_fraction",
+        "type": "number",
+        "role": "advanced",
+        "label": "Holdout fraction",
+        "default": 0.25
+      },
+      {
+        "name": "n_estimators",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Trees",
+        "default": 100
+      },
+      {
+        "name": "min_samples_leaf",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Minimum leaf size",
+        "default": 5
+      }
+    ]
+  },
+  {
+    "key": "random_forest_regression",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "test_fraction",
+        "type": "number",
+        "role": "advanced",
+        "label": "Holdout fraction",
+        "default": 0.25
+      },
+      {
+        "name": "n_estimators",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Trees",
+        "default": 100
+      },
+      {
+        "name": "min_samples_leaf",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Minimum leaf size",
+        "default": 5
+      }
+    ]
+  },
+  {
+    "key": "relative_risk",
+    "params": [
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "First variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "required",
+        "label": "Second variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "reliability",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "reliability_cronbach",
+    "params": [
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "rm_anova",
+    "params": [
+      {
+        "name": "subject_column",
+        "type": "column",
+        "role": "required",
+        "label": "Subject",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "measure_columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Measures",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "runs_test",
+    "params": [
+      {
+        "name": "column",
+        "type": "column",
+        "role": "required",
+        "label": "Variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "cutoff",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Cutoff",
+        "default": "median"
+      }
+    ]
+  },
+  {
+    "key": "set_active_weight",
+    "params": [
+      {
+        "name": "column",
+        "type": "column",
+        "role": "required",
+        "label": "Variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "shapiro_wilk",
+    "params": [
+      {
+        "name": "column",
+        "type": "column",
+        "role": "required",
+        "label": "Variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "sign_test",
+    "params": [
+      {
+        "name": "before_column",
+        "type": "column",
+        "role": "required",
+        "label": "Before",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "after_column",
+        "type": "column",
+        "role": "required",
+        "label": "After",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "somers_d",
+    "params": [
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "First variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "required",
+        "label": "Second variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "stationarity_tests",
+    "params": [
+      {
+        "name": "target_column",
+        "type": "column",
+        "role": "required",
+        "label": "Target",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "date_column",
+        "type": "column",
+        "role": "advanced",
+        "label": "Date",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "stepwise_regression",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "include_constant",
+        "type": "boolean",
+        "role": "default",
+        "label": "constant",
+        "default": true
+      },
+      {
+        "name": "method",
+        "type": "enum",
+        "role": "default",
+        "label": "method",
+        "default": "enter"
+      },
+      {
+        "name": "missing_values",
+        "type": "enum",
+        "role": "default",
+        "label": "missing",
+        "default": "listwise"
+      },
+      {
+        "name": "residual_plots",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Residual plot",
+        "default": "none"
+      },
+      {
+        "name": "collinearity_diagnostics",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Collinearity",
+        "default": false
+      },
+      {
+        "name": "cluster_by",
+        "type": "string",
+        "role": "advanced",
+        "label": "Cluster",
+        "default": null
+      },
+      {
+        "name": "derive_mean_log_rt",
+        "type": "json",
+        "role": "advanced",
+        "label": "Mean log response time",
+        "default": null
+      },
+      {
+        "name": "scales",
+        "type": "json",
+        "role": "advanced",
+        "label": "Scales",
+        "default": null
+      },
+      {
+        "name": "reference_levels",
+        "type": "json",
+        "role": "advanced",
+        "label": "Reference category",
+        "default": null
+      },
+      {
+        "name": "interactions",
+        "type": "json",
+        "role": "advanced",
+        "label": "Interactions",
+        "default": null
+      }
+    ]
+  },
+  {
+    "key": "stl_decomposition",
+    "params": [
+      {
+        "name": "target_column",
+        "type": "column",
+        "role": "required",
+        "label": "Target",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "date_column",
+        "type": "column",
+        "role": "advanced",
+        "label": "Date",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "period",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Period",
+        "default": 12
+      }
+    ]
+  },
+  {
+    "key": "structural_equation_modelling",
+    "params": [
+      {
+        "name": "model_spec",
+        "type": "string",
+        "role": "required",
+        "label": "Model specification",
+        "default": null
+      },
+      {
+        "name": "columns",
+        "type": "columns",
+        "role": "required",
+        "label": "Variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      }
+    ]
+  },
+  {
+    "key": "svm_classification",
+    "params": [
+      {
+        "name": "dependent",
+        "type": "column",
+        "role": "required",
+        "label": "Dependent variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "independents",
+        "type": "columns",
+        "role": "required",
+        "label": "Independent variables",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "test_fraction",
+        "type": "number",
+        "role": "advanced",
+        "label": "Holdout fraction",
+        "default": 0.25
+      }
+    ]
+  },
+  {
+    "key": "ttest_independent",
+    "params": [
+      {
+        "name": "group_column",
+        "type": "column",
+        "role": "required",
+        "label": "Grouping variable",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "value_column",
+        "type": "column",
+        "role": "required",
+        "label": "Test variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "hypothesized_difference",
+        "type": "number",
+        "role": "advanced",
+        "label": "Test value",
+        "default": 0.0
+      },
+      {
+        "name": "missing_values",
+        "type": "enum",
+        "role": "default",
+        "label": "missing",
+        "default": "listwise"
+      },
+      {
+        "name": "group_values",
+        "type": "columns",
+        "role": "advanced",
+        "label": "Groups to compare",
+        "default": null,
+        "columnTypes": [
+          "categorical"
+        ]
+      },
+      {
+        "name": "exact",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Exact test",
+        "default": false
+      }
+    ]
+  },
+  {
+    "key": "ttest_one_sample",
+    "params": [
+      {
+        "name": "value_column",
+        "type": "column",
+        "role": "required",
+        "label": "Test variable",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "hypothesized_mean",
+        "type": "number",
+        "role": "advanced",
+        "label": "Test value",
+        "default": null
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      }
+    ]
+  },
+  {
+    "key": "ttest_paired",
+    "params": [
+      {
+        "name": "before_column",
+        "type": "column",
+        "role": "required",
+        "label": "Before",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "after_column",
+        "type": "column",
+        "role": "required",
+        "label": "After",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "exact",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Exact test",
+        "default": false
+      }
+    ]
+  },
+  {
+    "key": "turf",
+    "params": [
+      {
+        "name": "items",
+        "type": "columns",
+        "role": "required",
+        "label": "Items",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "k",
+        "type": "integer",
+        "role": "advanced",
+        "label": "Neighbours",
+        "default": null
+      },
+      {
+        "name": "method",
+        "type": "string",
+        "role": "default",
+        "label": "method",
+        "default": "greedy"
+      }
+    ]
+  },
+  {
+    "key": "van_westendorp",
+    "params": [
+      {
+        "name": "too_cheap",
+        "type": "string",
+        "role": "required",
+        "label": "Too-cheap price",
+        "default": null
+      },
+      {
+        "name": "cheap",
+        "type": "string",
+        "role": "required",
+        "label": "Cheap",
+        "default": null
+      },
+      {
+        "name": "expensive",
+        "type": "string",
+        "role": "required",
+        "label": "Expensive",
+        "default": null
+      },
+      {
+        "name": "too_expensive",
+        "type": "string",
+        "role": "required",
+        "label": "Too-expensive price",
+        "default": null
+      }
+    ]
+  },
+  {
+    "key": "weighted_kappa",
+    "params": [
+      {
+        "name": "column_a",
+        "type": "column",
+        "role": "required",
+        "label": "First variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "column_b",
+        "type": "column",
+        "role": "required",
+        "label": "Second variable",
+        "default": null,
+        "columnTypes": [
+          "any"
+        ]
+      },
+      {
+        "name": "weights",
+        "type": "enum",
+        "role": "advanced",
+        "label": "Weights",
+        "default": "linear"
+      }
+    ]
+  },
+  {
+    "key": "wilcoxon_signed_rank",
+    "params": [
+      {
+        "name": "before_column",
+        "type": "column",
+        "role": "required",
+        "label": "Before",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "after_column",
+        "type": "column",
+        "role": "required",
+        "label": "After",
+        "default": null,
+        "columnTypes": [
+          "numeric"
+        ]
+      },
+      {
+        "name": "confidence_level",
+        "type": "number",
+        "role": "default",
+        "label": "confidence",
+        "default": 0.95
+      },
+      {
+        "name": "exact",
+        "type": "boolean",
+        "role": "advanced",
+        "label": "Exact test",
+        "default": false
+      }
+    ]
+  }
+]

@@ -1044,6 +1044,12 @@ class ApiClient {
 
       get: (runId: string) => this.request<any>(`/datasets/analysis-runs/${runId}`),
 
+      recheckR: (runId: string) =>
+        this.request<{ r_syntax_verification?: unknown }>(
+          `/datasets/analysis-runs/${runId}/r-check`,
+          { method: 'POST' }
+        ),
+
       resolve: (runId: string, group?: string) => {
         const q = group ? `?group=${encodeURIComponent(group)}` : '';
         return this.request<{

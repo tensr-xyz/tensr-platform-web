@@ -100,8 +100,8 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
   const [roles, setRoles] = useState<Record<string, ChoiceRole>>({});
   const [price, setPrice] = useState('');
   const [segment, setSegment] = useState('');
-  const [estimate, setEstimate] = useState<'cbc' | 'mnl' | 'utilities' | 'counting'>(
-    mode === 'cbc' ? 'cbc' : 'counting'
+  const [estimate, setEstimate] = useState<'mnl' | 'utilities' | 'counting'>(
+    mode === 'cbc' ? 'mnl' : 'counting'
   );
   const individual = estimate === 'utilities';
   const [summary, setSummary] = useState('');
@@ -506,7 +506,7 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
               <Select
                 value={estimate}
                 onValueChange={value =>
-                  setEstimate(value as 'cbc' | 'mnl' | 'utilities' | 'counting')
+                  setEstimate(value as 'mnl' | 'utilities' | 'counting')
                 }
               >
                 <SelectTrigger className="mt-1 w-full text-sm">
@@ -515,7 +515,6 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
                 <SelectContent>
                   {mode === 'cbc' ? (
                     <>
-                      <SelectItem value="cbc">CBC</SelectItem>
                       <SelectItem value="mnl">MNL</SelectItem>
                       <SelectItem value="utilities">Individual utilities</SelectItem>
                     </>

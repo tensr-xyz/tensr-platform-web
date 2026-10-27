@@ -1,12 +1,7 @@
 name: CI — e2e
 
-# Web only. Vercel production is main, which is released manually.
-# This job runs on pull requests and on pushes to development (the preview branch).
-# It does not run on main. workflow_dispatch is available if a main SHA needs a rerun.
+# Web only. Playwright runs when someone starts it. Pull requests and pushes do not.
 on:
-  pull_request:
-  push:
-    branches: [development]
   workflow_dispatch:
 
 concurrency:

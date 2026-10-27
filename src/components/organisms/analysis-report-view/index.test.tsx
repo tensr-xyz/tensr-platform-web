@@ -225,3 +225,49 @@ describe('AnalysisReportView approach copy', () => {
     expect(screen.getByText(/Considered keeping the columns for shot volume/)).toBeInTheDocument();
   });
 });
+
+describe('AnalysisReportView R badge states', () => {
+  it('shows a pending check without claiming it is verified', () => {
+    render(
+      <AnalysisReportView
+        report={sampleReport({
+          r_syntax_verification: { kind: 'pending', statement: 'R syntax is being checked.' },
+        })}
+        analysisRunId="run-1"
+      />
+    );
+    const badge = screen.getByTestId('r-syntax-badge');
+    expect(badge).toHaveTextContent(/checking r syntax/i);
+    expect(badge).toHaveTextContent(/being checked/i);
+    expect(badge).not.toHaveTextContent(/verified against r/i);
+    expect(screen.queryByTestId('r-check-retry')).not.toBeInTheDocument();
+  });
+
+  it('shows not verified when the stamp says the script missed', () => {
+    render(
+      <AnalysisReportView
+        report={sampleReport({
+          r_syntax_verification: {
+            kind: 'not_verified',
+            statement: 'Generated R does not reproduce the engine result.',
+          },
+        })}
+      />
+    );
+    expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent(/r check failed/i);
+    expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent(/does not reproduce/i);
+  });
+
+  it('shows R check unavailable and a re-check button when the verify lambda failed', () => {
+    render(
+      <AnalysisReportView
+        report={sampleReport({
+          r_syntax_verification: { kind: 'unknown', reason: 'verify_failed' },
+        })}
+        analysisRunId="run-1"
+      />
+    );
+    expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent('R check unavailable');
+    expect(screen.getByTestId('r-check-retry')).toBeInTheDocument();
+  });
+});
