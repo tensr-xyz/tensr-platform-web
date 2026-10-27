@@ -8,6 +8,9 @@ import {
   provenanceBannerText,
   provenanceTraceState,
   storedRunIdToHydrate,
+  R_CHECK_POLL_LIMIT,
+  R_CHECK_STILL_AFTER,
+  rCheckPhase,
   rSyntaxBadgeText,
   sourceRowsUsedLabel,
 } from './analysis-runs';
@@ -279,5 +282,16 @@ describe('rSyntaxBadgeText', () => {
     expect(rSyntaxBadgeText({ kind: 'unknown', reason: 'timeout' }).text).toBe(
       'R check unavailable'
     );
+  });
+});
+
+describe('rCheckPhase', () => {
+  it('keeps checking, then says still checking, and only then unavailable', () => {
+    expect(rCheckPhase(0)).toBe('checking');
+    expect(rCheckPhase(R_CHECK_STILL_AFTER - 1)).toBe('checking');
+    expect(rCheckPhase(R_CHECK_STILL_AFTER)).toBe('still');
+    expect(rCheckPhase(R_CHECK_POLL_LIMIT - 1)).toBe('still');
+    expect(rCheckPhase(R_CHECK_POLL_LIMIT)).toBe('unavailable');
+    expect(R_CHECK_POLL_LIMIT).toBeGreaterThan(R_CHECK_STILL_AFTER);
   });
 });

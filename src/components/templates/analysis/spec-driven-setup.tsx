@@ -35,6 +35,8 @@ type Props = {
   onChange: (name: string, value: unknown) => void;
   schema: SchemaColumn[];
   preview?: DatasetPreview | null;
+  /** Descriptives waits to show the empty-variable error until Run or a change. */
+  revealSelectionError?: boolean;
 };
 
 function asText(value: unknown): string {
@@ -87,12 +89,14 @@ function ParamField({
   onChange,
   schema,
   preview,
+  revealSelectionError,
 }: {
   param: SpecParam;
   value: unknown;
   onChange: (value: unknown) => void;
   schema: SchemaColumn[];
   preview?: DatasetPreview | null;
+  revealSelectionError?: boolean;
 }) {
   const changed = fieldChanged(param, value);
   const label = paramLabel(param);
@@ -134,6 +138,8 @@ function ParamField({
           )}
           filterSlot={slotOf(param)}
           minSelected={param.role === 'required' ? 1 : undefined}
+          selectionNoun={/variable/i.test(paramLabel(param)) ? 'variable' : 'column'}
+          revealSelectionError={revealSelectionError}
           showEmptyIncludesAll={param.role !== 'required'}
         />
       </div>
@@ -290,7 +296,14 @@ function ParamField({
   );
 }
 
-export function SpecDrivenSetup({ spec, values, onChange, schema, preview }: Props) {
+export function SpecDrivenSetup({
+  spec,
+  values,
+  onChange,
+  schema,
+  preview,
+  revealSelectionError,
+}: Props) {
   const required = spec.params.filter(param => param.role === 'required' && !param.report);
   const defaults = spec.params.filter(param => param.role === 'default' && !param.report);
   const advanced = spec.params.filter(param => param.role === 'advanced' && !param.report);
@@ -308,6 +321,9 @@ export function SpecDrivenSetup({ spec, values, onChange, schema, preview }: Pro
               onChange={value => onChange(param.name, value)}
               schema={schema}
               preview={preview}
+              revealSelectionError={
+                spec.key === 'descriptives' ? revealSelectionError : undefined
+              }
             />
           ))}
         </div>

@@ -104,6 +104,7 @@ describe('analysis spec setup', () => {
     const values = valuesFromSpec(spec, { [weight.name]: '' }, 'weight', SCHEMA);
     const body = bodyFromSpec(spec, values, null);
     expect(body[weight.name]).toBeUndefined();
+    expect(specRunBlockers(spec, values)).toContain('Select at least one variable.');
     expect(specRunBlockers(spec, values).join(' ')).not.toMatch(/Weight/);
     const fresh = valuesFromSpec(spec, null, null, SCHEMA);
     expect(defaultsLine(spec, fresh)).toContain('mean, std, min, max');
