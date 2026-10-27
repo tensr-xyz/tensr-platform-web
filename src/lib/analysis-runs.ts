@@ -195,10 +195,21 @@ export function rSyntaxBadgeText(value: unknown): { kind: RSyntaxVerificationKin
   if (state.kind === 'pending') {
     return { kind: 'pending', text: state.statement || 'Checking the R syntax.' };
   }
+  if (state.reason === 'verify_failed' || state.reason === 'timeout') {
+    return { kind: 'unknown', text: 'R check unavailable' };
+  }
   return {
     kind: 'unknown',
     text: state.statement || 'R syntax reproduction unknown.',
   };
+}
+
+/** How many polls the report waits before the badge says the check is unavailable. */
+export const R_CHECK_POLL_LIMIT = 30;
+
+export function rCheckFinished(value: unknown): boolean {
+  const state = rSyntaxVerificationState(value);
+  return state.kind !== 'pending';
 }
 
 export type StoredAnalysisRun = {
@@ -257,6 +268,21 @@ export async function listDatasetAnalysisRuns(
   });
   inflightRuns.set(datasetId, request);
   return request;
+}
+
+export async function recheckAnalysisRun(
+  runId: string
+): Promise<RSyntaxVerification | null> {
+  try {
+    const body = await apiClient.datasets.analyze.recheckR(runId);
+    return rSyntaxVerificationState(body?.r_syntax_verification);
+  } catch {
+    return {
+      kind: 'unknown',
+      reason: 'verify_failed',
+      statement: 'R check unavailable.',
+    };
+  }
 }
 
 export async function fetchAnalysisRun(runId: string): Promise<StoredAnalysisRun | null> {

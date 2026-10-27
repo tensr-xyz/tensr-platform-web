@@ -112,4 +112,17 @@ describe('AnalysisReportRail column snapshot', () => {
     expect(q7?.textContent).toContain('#');
     expect(q7?.textContent).not.toContain('T');
   });
+
+  it('shows On and Off for boolean settings', () => {
+    const withFlags = {
+      ...report,
+      analysis_spec: {
+        analysis_key: 'linear_regression',
+        inputs: { dependent_variable: 'Age', column_percent: true, include_constant: false },
+      },
+    } as AnalysisReport;
+    render(<AnalysisReportRail report={withFlags} outline={[]} />);
+    expect(screen.getByText('On')).toBeInTheDocument();
+    expect(screen.getByText('Off')).toBeInTheDocument();
+  });
 });

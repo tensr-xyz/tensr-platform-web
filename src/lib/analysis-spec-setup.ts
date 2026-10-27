@@ -121,8 +121,10 @@ export function paramLabel(param: SpecParam): string {
   return param.name.replace(/_/g, ' ');
 }
 
+const WEIGHT_PARAMS = new Set(['weight', 'weight_column', 'design_weight_column']);
+
 export function isWeightParam(param: SpecParam): boolean {
-  return param.type === 'column' && param.name.toLowerCase().includes('weight');
+  return WEIGHT_PARAMS.has(param.name);
 }
 
 function camel(name: string): string {
@@ -199,6 +201,14 @@ export function valuesFromSpec(
     }
     if (!stored && isWeightParam(param) && activeWeight) {
       values[param.name] = activeWeight;
+      continue;
+    }
+    if (
+      param.role === 'required' &&
+      !isWeightParam(param) &&
+      (param.type === 'column' || param.type === 'columns')
+    ) {
+      values[param.name] = param.type === 'columns' ? [] : '';
       continue;
     }
     if (param.default !== undefined && param.default !== null) {
