@@ -23,7 +23,8 @@ import {
   provenanceBannerText,
   provenanceTraceState,
   fetchAnalysisRun,
-  R_CHECK_POLL_LIMIT,
+  R_CHECK_POLL_MS,
+  rCheckPhase,
   recheckAnalysisRun,
   rSyntaxBadgeText,
   sourceRowsUsedLabel,
@@ -478,8 +479,10 @@ export function AnalysisReportView({
 }: Props) {
   const [copyState, setCopyState] = React.useState<string | null>(null);
   const [rVerification, setRVerification] = React.useState(report.r_syntax_verification);
+  const [rPhase, setRPhase] = React.useState<'checking' | 'still' | 'unavailable'>('checking');
   React.useEffect(() => {
     setRVerification(report.r_syntax_verification);
+    setRPhase('checking');
   }, [report]);
   React.useEffect(() => {
     if (rVerification?.kind !== 'pending' || !analysisRunId) return;
@@ -487,9 +490,11 @@ export function AnalysisReportView({
     let polls = 0;
     const timer = window.setInterval(() => {
       polls += 1;
-      if (polls >= R_CHECK_POLL_LIMIT) {
+      const phase = rCheckPhase(polls);
+      if (phase === 'unavailable') {
         window.clearInterval(timer);
         if (!cancelled) {
+          setRPhase('unavailable');
           setRVerification({
             kind: 'unknown',
             reason: 'timeout',
@@ -498,12 +503,13 @@ export function AnalysisReportView({
         }
         return;
       }
+      if (phase === 'still' && !cancelled) setRPhase('still');
       void fetchAnalysisRun(analysisRunId).then(run => {
         const next = run?.report?.r_syntax_verification;
         if (cancelled || !next || next.kind === 'pending') return;
         setRVerification(next);
       });
-    }, 2000);
+    }, R_CHECK_POLL_MS);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -565,15 +571,19 @@ export function AnalysisReportView({
   const showRBadge =
     !report.meta.analysis_key.startsWith('plugin:') && report.meta.analysis_key !== 'chart_builder';
   const rCheckUnavailable = rBadge.text === 'R check unavailable';
+  const rStillChecking = rBadge.kind === 'pending' && rPhase === 'still';
   const rBadgeTitle = rCheckUnavailable
     ? 'R check unavailable'
     : rBadge.kind === 'verified'
       ? 'Verified against R ✓'
-      : rBadge.kind === 'pending'
-        ? 'Checking R syntax'
-        : rBadge.kind === 'not_verified'
-          ? 'R check failed'
-          : 'Not verified against R';
+      : rStillChecking
+        ? 'Still checking'
+        : rBadge.kind === 'pending'
+          ? 'Checking R syntax'
+          : rBadge.kind === 'not_verified'
+            ? 'R check failed'
+            : 'Not verified against R';
+  const rBadgeBody = rStillChecking ? 'Still checking.' : rBadge.text;
   const canReveal =
     canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
   const rowsUsedLabel = sourceRowsUsedLabel(report.exclusion_summary, report.meta.rows_dataset);
@@ -663,7 +673,7 @@ export function AnalysisReportView({
             )}
           >
             <p className="text-xs font-medium text-amber-800 dark:text-amber-200">{rBadgeTitle}</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{rBadge.text}</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{rBadgeBody}</p>
             {rCheckUnavailable && analysisRunId ? (
               <Button
                 type="button"

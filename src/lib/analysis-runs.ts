@@ -204,8 +204,20 @@ export function rSyntaxBadgeText(value: unknown): { kind: RSyntaxVerificationKin
   };
 }
 
+/** Poll interval. The verify function timeout is 180s, so the report waits past a cold start. */
+export const R_CHECK_POLL_MS = 2000;
+
+/** After this many polls the badge says still checking instead of giving up. */
+export const R_CHECK_STILL_AFTER = 30;
+
 /** How many polls the report waits before the badge says the check is unavailable. */
-export const R_CHECK_POLL_LIMIT = 30;
+export const R_CHECK_POLL_LIMIT = 90;
+
+export function rCheckPhase(polls: number): 'checking' | 'still' | 'unavailable' {
+  if (polls >= R_CHECK_POLL_LIMIT) return 'unavailable';
+  if (polls >= R_CHECK_STILL_AFTER) return 'still';
+  return 'checking';
+}
 
 export function rCheckFinished(value: unknown): boolean {
   const state = rSyntaxVerificationState(value);

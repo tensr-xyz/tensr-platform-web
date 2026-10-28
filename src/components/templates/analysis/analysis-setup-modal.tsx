@@ -102,6 +102,7 @@ export function AnalysisSetupModal({
   const [activeWeight, setActiveWeight] = React.useState<string | null>(null);
   const [specValues, setSpecValues] = React.useState<Record<string, unknown>>({});
   const [specsReady, setSpecsReady] = React.useState(false);
+  const [runAttempted, setRunAttempted] = React.useState(false);
 
   React.useEffect(() => {
     if (!open) return;
@@ -149,6 +150,7 @@ export function AnalysisSetupModal({
   React.useEffect(() => {
     if (!open) return;
     setServerError(null);
+    setRunAttempted(false);
     if (!schema.length) {
       setForm(f => ({ ...f, analysis: initialOp }));
       return;
@@ -239,6 +241,7 @@ export function AnalysisSetupModal({
   const canRun = runBlockers.length === 0;
 
   const run = async () => {
+    setRunAttempted(true);
     setServerError(null);
     if (runBlockers.length) {
       setServerError(runBlockers[0]);
@@ -268,7 +271,7 @@ export function AnalysisSetupModal({
       tooltip={tooltip}
       onBack={onBackToPalette}
       busy={busy}
-      canRun={canRun}
+      canRun={analysis === 'descriptives' ? true : canRun}
       runBlockers={runBlockers}
       serverError={serverError}
       onRun={run}
@@ -284,6 +287,7 @@ export function AnalysisSetupModal({
               onChange={(name, value) => setSpecValues(current => ({ ...current, [name]: value }))}
               schema={schema}
               preview={preview}
+              revealSelectionError={runAttempted}
             />
           ) : (
             <>

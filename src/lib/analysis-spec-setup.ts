@@ -256,7 +256,14 @@ export function specRunBlockers(spec: AnalysisSpec, values: Record<string, unkno
   const blockers: string[] = [];
   for (const param of spec.params) {
     if (param.role !== 'required' || param.report || isWeightParam(param)) continue;
-    if (!present(values[param.name])) blockers.push(`${paramLabel(param)} is required.`);
+    if (!present(values[param.name])) {
+      const label = paramLabel(param);
+      blockers.push(
+        param.type === 'columns' && /variable/i.test(label)
+          ? 'Select at least one variable.'
+          : `${label} is required.`
+      );
+    }
   }
   return blockers;
 }

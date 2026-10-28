@@ -22,6 +22,8 @@ export function MultiColumnPicker({
   showEmptyIncludesAll = false,
   showTypeShortcuts = false,
   minSelected,
+  selectionNoun = 'column',
+  revealSelectionError,
   notices,
   errors,
   className,
@@ -36,12 +38,20 @@ export function MultiColumnPicker({
   showEmptyIncludesAll?: boolean;
   showTypeShortcuts?: boolean;
   minSelected?: number;
+  /** Singular noun in the empty-selection message. */
+  selectionNoun?: string;
+  /**
+   * Undefined shows the minimum as soon as the field is empty.
+   * False waits until the user changes the selection. True shows it now.
+   */
+  revealSelectionError?: boolean;
   notices?: WizardFieldNotice[];
   errors?: string[];
   className?: string;
   id?: string;
 }) {
   const [query, setQuery] = React.useState('');
+  const [touched, setTouched] = React.useState(false);
   const allNames = schema.map(c => c.name);
 
   const filtered = React.useMemo(() => {
@@ -50,30 +60,42 @@ export function MultiColumnPicker({
     return allNames.filter(n => n.toLowerCase().includes(q));
   }, [allNames, query]);
 
+  const changeSelection = (cols: string[]) => {
+    setTouched(true);
+    onChange(cols);
+  };
+
   const toggle = (name: string) => {
     if (selected.includes(name)) {
-      onChange(selected.filter(c => c !== name));
+      changeSelection(selected.filter(c => c !== name));
     } else {
-      onChange([...selected, name]);
+      changeSelection([...selected, name]);
     }
   };
 
   const selectBySlot = (slot: ColumnSlotType) => {
     const names = schema.filter(c => columnSlotType(schema, c.name) === slot).map(c => c.name);
     const merged = new Set([...selected, ...names]);
-    onChange([...merged]);
+    changeSelection([...merged]);
   };
+
+  const noun = selectionNoun.trim() || 'column';
+  const minMessage =
+    minSelected === 1
+      ? `Select at least one ${noun}.`
+      : `Select at least ${minSelected} ${noun === 'variable' ? 'variables' : 'columns'}.`;
+  const showMinError =
+    revealSelectionError === undefined ? true : revealSelectionError || touched;
 
   const emptyMessage = showEmptyIncludesAll
     ? 'Leave empty to include all applicable columns'
     : emptyHint;
 
-  const minError =
-    minSelected != null && selected.length > 0 && selected.length < minSelected
-      ? `Select at least ${minSelected} columns.`
-      : minSelected != null && selected.length === 0 && !showEmptyIncludesAll
-        ? `Select at least ${minSelected} columns.`
-        : undefined;
+  const belowMinimum =
+    minSelected != null &&
+    selected.length < minSelected &&
+    (selected.length > 0 || !showEmptyIncludesAll);
+  const minError = showMinError && belowMinimum ? minMessage : undefined;
 
   const allErrors = [...(errors ?? []), ...(minError ? [minError] : [])];
 
@@ -92,7 +114,7 @@ export function MultiColumnPicker({
                   type="button"
                   className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                   aria-label={`Remove ${name}`}
-                  onClick={() => onChange(selected.filter(c => c !== name))}
+                  onClick={() => changeSelection(selected.filter(c => c !== name))}
                 >
                   <X className="h-3 w-3" />
                 </button>
