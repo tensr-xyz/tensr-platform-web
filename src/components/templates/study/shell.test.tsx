@@ -179,6 +179,52 @@ describe('StudyShell', () => {
     });
   });
 
+  it('splits a theme through the codeframe route', async () => {
+    const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/open-end/propose')) {
+        return jsonResponse({
+          codes: [{ id: 'price', label: 'Price', keywords: ['price'] }],
+        });
+      }
+      if (url.includes('/open-end/frame')) return jsonResponse({ ok: true });
+      if (url.includes('/preview')) {
+        return jsonResponse({ variable_names: ['comment'], rows: [] });
+      }
+      return jsonResponse({ organizations: [], rows: [], variable_names: [], findings: [] });
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    render(
+      <StudyShell
+        project={{ id: 'p1', name: 'Brand tracker' }}
+        datasets={[{ id: 'ds', original_filename: 'w4.sav' }]}
+        onBack={() => undefined}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Code frame' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Propose' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Split' }));
+    fireEvent.change(screen.getByPlaceholderText('First theme'), { target: { value: 'Cost' } });
+    fireEvent.change(screen.getByPlaceholderText('Second theme'), { target: { value: 'Value' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Split price' }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(call => String(call[0]).includes('/open-end/frame'))).toBe(
+        true
+      )
+    );
+    const frameCall = fetchMock.mock.calls.find(call =>
+      String(call[0]).includes('/open-end/frame')
+    );
+    expect(JSON.parse(String(frameCall?.[1]?.body))).toMatchObject({
+      action: 'split',
+      code_id: 'price',
+      parts: [
+        { id: 'cost', label: 'Cost' },
+        { id: 'value', label: 'Value' },
+      ],
+    });
+  });
+
   it('loads weighting targets from another dataset in the study', async () => {
     const fetchMock = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
