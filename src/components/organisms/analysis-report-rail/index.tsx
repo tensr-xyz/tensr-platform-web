@@ -21,6 +21,8 @@ import {
 } from '@/lib/analysis-runs';
 import { runWhenIdle } from '@/lib/dataset-open';
 import { resolveSpreadsheetContextTab } from '@/lib/workspace-dataset';
+import { ensureAnalysisSpecs, specFor } from '@/lib/analysis-spec-setup';
+import { railParamLabel } from '@/lib/analysis-report-rail-labels';
 
 function RailSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -61,7 +63,7 @@ function VarPicker({
   );
 }
 
-const LEGACY_INPUT_KEYS = new Set(['column_a', 'column_b']);
+const BANNER_KEYS = new Set(['banner_table', 'crosstabs', 'cross_tab', 'custom_tables']);
 
 function columnName(item: unknown): string | null {
   if (typeof item === 'string' && item.trim()) return item.trim();
@@ -88,38 +90,14 @@ function pickSpecInputs(
   settings: { label: string; value: string }[];
 } {
   const inputs = report.analysis_spec?.inputs ?? {};
+  const analysisKey = report.analysis_spec?.analysis_key || report.meta.analysis_key || '';
   const typeByName = new Map(columns.map(column => [column.id, column.type]));
-  const labelMap: Record<string, string> = {
-    dependent_variable: 'DV',
-    dependent: 'DV',
-    dependent_var: 'DV',
-    dv: 'DV',
-    outcome: 'DV',
-    y: 'DV',
-    value_column: 'Test variable',
-    independent_variable: 'Factor',
-    independent_var: 'Factor',
-    independents: 'Factor',
-    factor: 'Factor',
-    group: 'Factor',
-    group_column: 'Grouping variable',
-    x: 'Factor',
-    predictor: 'Predictor',
-    covariate: 'Covariate',
-    stub_column: 'Rows',
-    stub_columns: 'Rows',
-    stubs: 'Rows',
-    banner_column: 'Columns',
-    banner: 'Columns',
-    weight: 'Weight',
-    weight_column: 'Weight',
-  };
   const variables: { label: string; value: string; type?: string }[] = [];
   const settings: { label: string; value: string }[] = [];
   const stubNames = [...expandNames(inputs.stubs), ...expandNames(inputs.stub_columns)];
   const seen = new Set<string>();
 
-  const labelFor = (key: string) => labelMap[key] ?? key.replace(/_/g, ' ');
+  const labelFor = (key: string) => railParamLabel(analysisKey, key);
   const pushVariable = (label: string, name: string) => {
     const key = `${label}\u0000${name}`;
     if (seen.has(key)) return;
@@ -128,11 +106,11 @@ function pickSpecInputs(
   };
 
   for (const [key, raw] of Object.entries(inputs)) {
-    if (raw === null || raw === undefined || key.startsWith('_') || LEGACY_INPUT_KEYS.has(key)) {
-      continue;
-    }
-    if (key === 'stub_column' && stubNames.length) continue;
+    if (raw === null || raw === undefined || key.startsWith('_')) continue;
+    if (BANNER_KEYS.has(analysisKey) && (key === 'column_a' || key === 'column_b')) continue;
     const label = labelFor(key);
+    if (!label) continue;
+    if (key === 'stub_column' && stubNames.length) continue;
     if (typeof raw === 'boolean') {
       settings.push({ label, value: raw ? 'On' : 'Off' });
       continue;
@@ -147,7 +125,11 @@ function pickSpecInputs(
       settings.push({ label, value: names[0] === 'true' ? 'On' : 'Off' });
       continue;
     }
-    const looksLikeColumns = names.some(name => typeByName.has(name)) || key in labelMap;
+    const paramType = specFor(analysisKey)?.params.find(item => item.name === key)?.type;
+    const looksLikeColumns =
+      names.some(name => typeByName.has(name)) ||
+      paramType === 'column' ||
+      paramType === 'columns';
     if (looksLikeColumns) {
       for (const name of names) pushVariable(label, name);
       continue;
@@ -223,6 +205,19 @@ export function AnalysisReportRail({
 }: Props) {
   const [draft, setDraft] = React.useState('');
   const [otherRuns, setOtherRuns] = React.useState<AnalysisRunSummary[]>([]);
+  const [specsReady, setSpecsReady] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void ensureAnalysisSpecs()
+      .then(() => {
+        if (!cancelled) setSpecsReady(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!sourceDatasetId) return;
@@ -253,7 +248,10 @@ export function AnalysisReportRail({
       })),
     [initialColumns]
   );
-  const { variables, settings } = pickSpecInputs(report, columns);
+  const { variables, settings } = React.useMemo(
+    () => pickSpecInputs(report, columns),
+    [report, columns, specsReady]
+  );
   const chartTitles = (report.charts?.length ? report.charts : report.chart ? [report.chart] : [])
     .filter(Boolean)
     .map(c => c!.title);
