@@ -2,6 +2,7 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LoaderCircle, BarChart3 } from 'lucide-react';
+import { ANALYSIS_LABELS, type AnalysisKey } from '@/lib/analysis-definitions';
 import {
   formatRunLabel,
   formatRunTime,
@@ -89,6 +90,15 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
     });
   }, [load]);
 
+  const localRunKey = localEntries
+    .map(entry => entry.runId)
+    .filter((id): id is string => Boolean(id))
+    .join(',');
+  useEffect(() => {
+    if (!datasetId || !localRunKey) return;
+    void load({ silent: true, fresh: true });
+  }, [datasetId, localRunKey, load]);
+
   // Live collab: peers push `analysis_run_created` over WS — no REST polling.
   useEffect(() => {
     if (!liveSession || !datasetId) return;
@@ -110,6 +120,25 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
 
   const serverIds = new Set(runs.map(r => r.id));
   const localOnly = localEntries.filter(e => e.runId && !serverIds.has(e.runId));
+  const listed = [
+    ...runs.map(run => ({
+      key: run.id,
+      runId: run.id,
+      title: formatRunLabel(run),
+      createdAt: run.created_at,
+    })),
+    ...localOnly.map(entry => ({
+      key: entry.id,
+      runId: entry.runId as string,
+      title:
+        (entry.subtitle &&
+        entry.subtitle.replace(/_/g, ' ').toLowerCase() !== entry.analysisType.replace(/_/g, ' ').toLowerCase()
+          ? entry.subtitle
+          : ANALYSIS_LABELS[entry.analysisType as AnalysisKey]) ||
+        entry.analysisType.replace(/_/g, ' '),
+      createdAt: entry.createdAt,
+    })),
+  ].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
   if (!datasetId && localEntries.length === 0) return null;
 
@@ -142,44 +171,27 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
       {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
 
       <div className="flex flex-col gap-0.5">
-        {runs.map(run => (
+        {listed.map(row => (
           <Button
             size="compact"
-            key={run.id}
+            key={row.key}
             type="button"
             variant="ghost"
-            disabled={openingId === run.id}
-            onClick={() => openRun(run.id)}
+            disabled={openingId === row.runId}
+            onClick={() => openRun(row.runId)}
             className={cn(
               'h-auto w-full flex-col items-start gap-0.5 rounded-sm px-2 py-1.5 text-left text-xs font-normal',
               'hover:bg-muted/50 text-foreground',
-              openingId === run.id && 'opacity-60'
+              openingId === row.runId && 'opacity-60'
             )}
           >
             <span className="inline-flex items-center gap-1.5 font-medium">
               <BarChart3 className="size-3 shrink-0 text-primary" aria-hidden />
-              <span className="truncate">{formatRunLabel(run)}</span>
+              <span className="truncate">{row.title}</span>
             </span>
             <span className="font-mono text-[10px] text-muted-foreground">
-              {formatRunTime(run.created_at)}
+              {formatRunTime(row.createdAt)}
             </span>
-          </Button>
-        ))}
-
-        {localOnly.map(entry => (
-          <Button
-            size="compact"
-            key={entry.id}
-            type="button"
-            variant="ghost"
-            disabled={openingId === entry.runId}
-            onClick={() => entry.runId && openRun(entry.runId)}
-            className="h-auto w-full flex-col items-start gap-0.5 rounded-sm px-2 py-1.5 text-left text-xs font-normal hover:bg-muted/50"
-          >
-            <span className="truncate font-medium">{entry.analysisType.replace(/_/g, ' ')}</span>
-            {entry.subtitle ? (
-              <span className="truncate text-[10px] text-muted-foreground">{entry.subtitle}</span>
-            ) : null}
           </Button>
         ))}
 
