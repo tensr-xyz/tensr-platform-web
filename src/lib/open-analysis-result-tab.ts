@@ -141,6 +141,14 @@ export function openAnalysisResultTab(params: {
       setActiveTab(existing.id);
     }
     if (existing.data?.analysisReport || incoming) noteReportOpened(params);
+    if (report && runId) {
+      appendAnalysisRunToDatasetTab({
+        sourceDatasetId: params.sourceDatasetId,
+        op: String(params.op),
+        runId,
+        report,
+      });
+    }
     return existing.id;
   }
   const previousActive = useTabsStore.getState().activeTabId;

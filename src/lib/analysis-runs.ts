@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 import type { AnalysisReport, AnalyzeResponse } from '@/lib/analysis-report-types';
 import { ANALYSIS_LABELS, type AnalysisKey } from '@/lib/analysis-definitions';
+import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
 import { isRetiredFromUi, retiredFromUiUserMessage } from '@/lib/retired-from-ui';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import { useTabsStore, ViewType, type AgentAnalysisHistoryEntry } from '@/stores/tabs-store';
@@ -328,6 +329,14 @@ export async function openAnalysisRunById(runId: string): Promise<boolean> {
   return true;
 }
 
+function catalogRunTitle(op: string, stored?: string): string {
+  const raw = op.replace(/_/g, ' ');
+  const title = (stored || '').trim();
+  const folded = title.toLowerCase();
+  if (title && folded !== raw.toLowerCase() && folded !== op.toLowerCase()) return title;
+  return ANALYSIS_LABELS[op as AnalysisKey] || raw;
+}
+
 /** Link a completed run to the source dataset spreadsheet tab (in-session list). */
 export function appendAnalysisRunToDatasetTab(params: {
   sourceDatasetId: string;
@@ -335,13 +344,12 @@ export function appendAnalysisRunToDatasetTab(params: {
   runId?: string;
   report: AnalysisReport;
 }): void {
+  recentRuns.delete(params.sourceDatasetId);
   const { tabs, updateTab } = useTabsStore.getState();
   const sheetTab = tabs.find(
     t =>
       t.type === ViewType.SPREADSHEET &&
-      (t.data?.filePath === params.sourceDatasetId ||
-        t.path === params.sourceDatasetId ||
-        t.data?.filePath?.includes(params.sourceDatasetId))
+      getDatasetIdFromTab(t) === params.sourceDatasetId
   );
   if (!sheetTab?.data) return;
 
@@ -366,7 +374,7 @@ export function appendAnalysisRunToDatasetTab(params: {
 }
 
 function stubReportForOp(op: string, createdAt: string): AnalysisReport {
-  const title = ANALYSIS_LABELS[op as AnalysisKey] || op.replace(/_/g, ' ');
+  const title = catalogRunTitle(op);
   const summary = isRetiredFromUi(op)
     ? retiredFromUiUserMessage(op)
     : 'This saved run has no stored report. The original output cannot be reconstructed from the list entry.';
@@ -398,7 +406,7 @@ export function normalizeAnalysisRunSummary(row: unknown): AnalysisRunSummary | 
     dataset_id,
     op,
     created_at: String(r.created_at ?? ''),
-    title: storedTitle || op.replace(/_/g, ' '),
+    title: catalogRunTitle(op, storedTitle),
     status: r.status == null || r.status === '' ? undefined : String(r.status),
   };
 }
@@ -451,7 +459,7 @@ export function formatRunLabel(run: {
   title?: string;
   report?: { meta?: { title?: string; subtitle?: string } };
 }): string {
-  const title = run.title || run.report?.meta?.title || run.op.replace(/_/g, ' ');
+  const title = catalogRunTitle(run.op, run.title || run.report?.meta?.title);
   const sub = run.report?.meta?.subtitle;
   if (!sub || sub === title) return title;
   return `${title} · ${sub}`;
