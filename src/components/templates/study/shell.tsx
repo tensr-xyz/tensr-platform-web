@@ -20,6 +20,14 @@ export type StudyDataset = {
   n_rows?: number;
 };
 
+export type SelectedCell = {
+  bitset: string;
+  textColumn: string;
+  claim: string;
+  base: string;
+  weight: string;
+};
+
 type TabId = 'chat' | 'sources' | 'responses' | 'tables' | 'report';
 
 const TABS: { id: TabId; label: string; live: boolean }[] = [
@@ -80,6 +88,7 @@ export function StudyShell({
 }) {
   const [tab, setTab] = useState<TabId>('responses');
   const [datasetId, setDatasetId] = useState(project.active_dataset_id || datasets[0]?.id || '');
+  const [cell, setCell] = useState<SelectedCell | null>(null);
   const active = TABS.find(item => item.id === tab);
 
   return (
@@ -127,16 +136,26 @@ export function StudyShell({
         {!active?.live ? (
           <p className="text-sm text-muted-foreground">Coming next.</p>
         ) : tab === 'responses' ? (
-          <Responses datasetId={datasetId} />
+          <Responses datasetId={datasetId} datasets={datasets} cell={cell} onSelectCell={setCell} />
         ) : (
-          <TablesPanel datasetId={datasetId} projectId={project.id} />
+          <TablesPanel datasetId={datasetId} projectId={project.id} onSelectCell={setCell} />
         )}
       </main>
     </div>
   );
 }
 
-function Responses({ datasetId }: { datasetId: string }) {
+function Responses({
+  datasetId,
+  datasets,
+  cell,
+  onSelectCell,
+}: {
+  datasetId: string;
+  datasets: StudyDataset[];
+  cell: SelectedCell | null;
+  onSelectCell: (cell: SelectedCell) => void;
+}) {
   const [view, setView] = useState<'sheet' | 'evidence' | 'themes' | 'frame'>('sheet');
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
@@ -231,10 +250,17 @@ function Responses({ datasetId }: { datasetId: string }) {
           />
         ) : null}
         {view === 'evidence' ? (
-          <Evidence datasetId={datasetId} columns={columns} onQuotes={setQuotes} quotes={quotes} />
+          <Evidence datasetId={datasetId} cell={cell} onQuotes={setQuotes} quotes={quotes} />
         ) : null}
         {view === 'themes' ? (
-          <Themes datasetId={datasetId} columns={columns} onQuotes={setQuotes} />
+          <Themes
+            datasetId={datasetId}
+            columns={columns}
+            onSelectCell={selected => {
+              onSelectCell(selected);
+              setView('evidence');
+            }}
+          />
         ) : null}
         {view === 'frame' ? <CodeFrame datasetId={datasetId} columns={columns} /> : null}
       </div>
@@ -248,6 +274,7 @@ function Responses({ datasetId }: { datasetId: string }) {
       {weightOpen ? (
         <WeightingModal
           datasetId={datasetId}
+          datasets={datasets}
           columns={columns}
           onClose={() => setWeightOpen(false)}
         />
@@ -378,59 +405,47 @@ function QualityList({ report }: { report: Record<string, unknown> | null }) {
 
 function Evidence({
   datasetId,
-  columns,
+  cell,
   quotes,
   onQuotes,
 }: {
   datasetId: string;
-  columns: string[];
+  cell: SelectedCell | null;
   quotes: Record<string, unknown> | null;
   onQuotes: (value: Record<string, unknown>) => void;
 }) {
-  const [textColumn, setTextColumn] = useState(columns[0] || '');
-  const [bitset, setBitset] = useState('');
   const [error, setError] = useState('');
+  useEffect(() => {
+    if (!datasetId || !cell?.bitset || !cell.textColumn) return;
+    setError('');
+    api(`/datasets/${datasetId}/quotes`, {
+      method: 'POST',
+      body: JSON.stringify({
+        text_column: cell.textColumn,
+        row_uid_bitset: cell.bitset,
+        page: 1,
+        page_size: 20,
+      }),
+    })
+      .then(onQuotes)
+      .catch(err => setError(err.message));
+  }, [datasetId, cell, onQuotes]);
+  if (!cell) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Select a cell in Themes or Tables to open its verbatims.
+      </p>
+    );
+  }
   return (
     <div className="space-y-3 text-sm">
-      <p>
-        Claim, base, and weight come from the table cell. Paste its row-uid bitset to open the
-        verbatims.
+      <p className="font-medium">{cell.claim}</p>
+      <p className="text-muted-foreground">
+        Base {cell.base || '—'} · Weight {cell.weight || 'none'} · {cell.textColumn}
       </p>
-      <select
-        className="rounded-md border border-border bg-background px-2 py-1"
-        value={textColumn}
-        onChange={event => setTextColumn(event.target.value)}
-      >
-        {columns.map(column => (
-          <option key={column}>{column}</option>
-        ))}
-      </select>
-      <textarea
-        className="block w-full rounded-md border border-border bg-background p-2"
-        rows={3}
-        placeholder="row_uid_bitset"
-        value={bitset}
-        onChange={event => setBitset(event.target.value)}
-      />
-      <Button
-        type="button"
-        onClick={() => {
-          setError('');
-          api(`/datasets/${datasetId}/quotes`, {
-            method: 'POST',
-            body: JSON.stringify({
-              text_column: textColumn,
-              row_uid_bitset: bitset,
-              page: 1,
-              page_size: 20,
-            }),
-          })
-            .then(onQuotes)
-            .catch(err => setError(err.message));
-        }}
-      >
-        Open quotes
-      </Button>
+      {!cell.textColumn ? (
+        <p className="text-destructive">This cell has no source text column on its codeframe.</p>
+      ) : null}
       {error ? <p className="text-destructive">{error}</p> : null}
       <QuoteList quotes={quotes} />
     </div>
@@ -455,20 +470,49 @@ function QuoteList({ quotes }: { quotes: Record<string, unknown> | null }) {
   );
 }
 
+type ThemeRow = {
+  id: string;
+  label: string;
+  column?: string;
+  source_text_column?: string | null;
+  cells?: {
+    banner_id: string;
+    percent?: number | null;
+    column_unweighted_n?: number;
+    provenance?: { row_uid_bitset?: string };
+  }[];
+};
+
+function selectionFromRow(book: Record<string, unknown>, row: ThemeRow): SelectedCell | null {
+  const cell = (row.cells || []).find(
+    item => item.banner_id !== 'total' && item.provenance?.row_uid_bitset
+  );
+  const bitset = cell?.provenance?.row_uid_bitset;
+  if (!bitset) return null;
+  const weight = book.resolved_weight || (book.weight as { column?: string } | undefined)?.column;
+  return {
+    bitset,
+    textColumn: row.source_text_column || '',
+    claim: `${row.label}${cell?.percent != null ? ` ${cell.percent.toFixed(1)}%` : ''}`,
+    base: cell?.column_unweighted_n != null ? String(cell.column_unweighted_n) : '',
+    weight: weight ? String(weight) : '',
+  };
+}
+
 function Themes({
   datasetId,
   columns,
-  onQuotes,
+  onSelectCell,
 }: {
   datasetId: string;
   columns: string[];
-  onQuotes: (value: Record<string, unknown>) => void;
+  onSelectCell: (cell: SelectedCell) => void;
 }) {
   const [stub, setStub] = useState('');
   const [banner, setBanner] = useState('');
   const [book, setBook] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
-  const rows = useMemo(() => (book?.rows as { id: string; label: string }[]) || [], [book]);
+  const rows = useMemo(() => (book?.rows as ThemeRow[]) || [], [book]);
   return (
     <div className="space-y-3 text-sm">
       <div className="flex flex-wrap gap-2">
@@ -496,7 +540,7 @@ function Themes({
           type="button"
           onClick={() => {
             setError('');
-            api(`/datasets/${datasetId}/tables/preview`, {
+            api(`/datasets/${datasetId}/tables`, {
               method: 'POST',
               body: JSON.stringify({
                 stubs: [{ column: stub }],
@@ -516,31 +560,16 @@ function Themes({
       {error ? <p className="text-destructive">{error}</p> : null}
       <ul className="space-y-1">
         {rows.map(row => {
-          const cell = (
-            (book?.cells as {
-              stub_row_id: string;
-              percent: number;
-              banner_id: string;
-              provenance?: { row_uid_bitset?: string };
-            }[]) || []
-          ).find(item => item.stub_row_id === row.id && item.banner_id !== 'total');
+          const cell = (row.cells || []).find(item => item.banner_id !== 'total');
           return (
             <li key={row.id}>
               <button
                 type="button"
                 className="text-left"
                 onClick={() => {
-                  const bitset = cell?.provenance?.row_uid_bitset;
-                  if (!bitset) return;
-                  api(`/datasets/${datasetId}/quotes`, {
-                    method: 'POST',
-                    body: JSON.stringify({
-                      text_column: stub.replace(/_codes$/, ''),
-                      row_uid_bitset: bitset,
-                      page: 1,
-                      page_size: 20,
-                    }),
-                  }).then(onQuotes);
+                  if (!book) return;
+                  const selected = selectionFromRow(book, row);
+                  if (selected) onSelectCell(selected);
                 }}
               >
                 {row.label} {cell?.percent != null ? `${cell.percent.toFixed(1)}%` : ''}
@@ -553,29 +582,63 @@ function Themes({
   );
 }
 
+type FrameCode = { id: string; label: string; keywords: string[] };
+
+function codeIdFromLabel(label: string): string {
+  const slug = label
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_|_$/g, '');
+  return slug || 'code';
+}
+
 function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[] }) {
   const [textColumn, setTextColumn] = useState('');
-  const [codes, setCodes] = useState<{ id: string; label: string; keywords: string[] }[]>([]);
+  const [codes, setCodes] = useState<FrameCode[]>([]);
   const [progress, setProgress] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
   const [rename, setRename] = useState({ code: '', label: '' });
   const [sourceDataset, setSourceDataset] = useState('');
+  const [schemaOnly, setSchemaOnly] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [split, setSplit] = useState<{ id: string; left: string; right: string } | null>(null);
 
-  async function poll(jobId: string | null) {
-    const body = {
-      text_column: textColumn,
-      codes,
-      use_model: true,
-      job_id: jobId,
-    };
+  useEffect(() => {
+    api('/api/organizations')
+      .then(body => {
+        const active = (body.organizations || []).find(
+          (org: { id?: string; privacy_mode?: string }) => org.id === body.active_organization_id
+        );
+        setSchemaOnly(active?.privacy_mode === 'schema_only');
+      })
+      .catch(() => setSchemaOnly(false));
+  }, []);
+
+  const codeColumn = String(progress?.code_column || (textColumn ? `${textColumn}_codes` : ''));
+  const frameDataset = String(progress?.derived_dataset_id || datasetId);
+
+  async function poll(jobId: string | null, useModel: boolean) {
     const result = await api(`/datasets/${datasetId}/open-end/apply`, {
       method: 'POST',
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        text_column: textColumn,
+        codes,
+        use_model: schemaOnly ? false : useModel,
+        job_id: jobId,
+      }),
     });
     setProgress(result);
     if (!result.done && result.job_id) {
-      await poll(String(result.job_id));
+      await poll(String(result.job_id), useModel);
     }
+  }
+
+  async function editFrame(body: Record<string, unknown>) {
+    await api(`/datasets/${frameDataset}/open-end/frame`, {
+      method: 'POST',
+      body: JSON.stringify({ code_column: codeColumn, ...body }),
+    });
   }
 
   return (
@@ -608,22 +671,132 @@ function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[
         </Button>
         <Button
           type="button"
+          variant="outline"
           onClick={() => {
             setError('');
-            poll(null).catch(err => setError(err.message));
+            poll(null, false).catch(err => setError(err.message));
           }}
         >
-          Code with Haiku
+          Code with keywords
         </Button>
+        {schemaOnly ? null : (
+          <Button
+            type="button"
+            onClick={() => {
+              setError('');
+              poll(null, true).catch(err => setError(err.message));
+            }}
+          >
+            Code with Haiku
+          </Button>
+        )}
       </div>
+      {schemaOnly ? (
+        <p className="text-muted-foreground">Schema-only studies code with keywords.</p>
+      ) : null}
       {error ? <p className="text-destructive">{error}</p> : null}
-      <ul>
+      <ul className="space-y-1">
         {codes.map(code => (
-          <li key={code.id}>
-            {code.label} <span className="text-muted-foreground">{code.id}</span>
+          <li key={code.id} className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={selected.includes(code.id)}
+                onChange={event => {
+                  setSelected(current =>
+                    event.target.checked
+                      ? [...current, code.id]
+                      : current.filter(id => id !== code.id)
+                  );
+                }}
+              />
+              {code.label} <span className="text-muted-foreground">{code.id}</span>
+            </label>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-7"
+              onClick={() => setSplit({ id: code.id, left: '', right: '' })}
+            >
+              Split
+            </Button>
           </li>
         ))}
       </ul>
+      {selected.length > 1 ? (
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            const [into, ...rest] = selected;
+            setError('');
+            rest
+              .reduce(
+                (chain, codeId) =>
+                  chain.then(() => editFrame({ action: 'merge', code_id: codeId, into })),
+                Promise.resolve()
+              )
+              .then(() => {
+                setCodes(current =>
+                  current.filter(code => code.id === into || !rest.includes(code.id))
+                );
+                setSelected([into]);
+              })
+              .catch(err => setError(err.message));
+          }}
+        >
+          Merge
+        </Button>
+      ) : null}
+      {split ? (
+        <form
+          className="flex flex-wrap gap-2"
+          onSubmit={event => {
+            event.preventDefault();
+            const left = codeIdFromLabel(split.left);
+            const right = codeIdFromLabel(split.right);
+            setError('');
+            editFrame({
+              action: 'split',
+              code_id: split.id,
+              parts: [
+                { id: left, label: split.left, keywords: [split.left.toLowerCase()] },
+                { id: right, label: split.right, keywords: [split.right.toLowerCase()] },
+              ],
+            })
+              .then(() => {
+                setCodes(current =>
+                  current.flatMap(code =>
+                    code.id === split.id
+                      ? [
+                          { id: left, label: split.left, keywords: [split.left.toLowerCase()] },
+                          { id: right, label: split.right, keywords: [split.right.toLowerCase()] },
+                        ]
+                      : [code]
+                  )
+                );
+                setSplit(null);
+              })
+              .catch(err => setError(err.message));
+          }}
+        >
+          <input
+            className="rounded-md border border-border px-2 py-1"
+            placeholder="First theme"
+            value={split.left}
+            onChange={event => setSplit({ ...split, left: event.target.value })}
+          />
+          <input
+            className="rounded-md border border-border px-2 py-1"
+            placeholder="Second theme"
+            value={split.right}
+            onChange={event => setSplit({ ...split, right: event.target.value })}
+          />
+          <Button type="submit" variant="outline">
+            Split {split.id}
+          </Button>
+        </form>
+      ) : null}
       {progress ? (
         <p>
           {String(progress.processed)} / {String(progress.total)} · review{' '}
@@ -693,56 +866,104 @@ function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[
   );
 }
 
+type WeightTarget = { column: string; code: string; percent: string };
+
 function WeightingModal({
   datasetId,
+  datasets,
   columns,
   onClose,
 }: {
   datasetId: string;
+  datasets: StudyDataset[];
   columns: string[];
   onClose: () => void;
 }) {
-  const [column, setColumn] = useState(columns[0] || '');
-  const [code, setCode] = useState('');
-  const [target, setTarget] = useState('50');
+  const [targets, setTargets] = useState<WeightTarget[]>([
+    { column: columns[0] || '', code: '', percent: '50' },
+  ]);
+  const [sourceDataset, setSourceDataset] = useState(
+    datasets.find(dataset => dataset.id !== datasetId)?.id || ''
+  );
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
+
+  function updateTarget(index: number, patch: Partial<WeightTarget>) {
+    setTargets(current => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
+  }
+
   return (
     <dialog
       open
-      className="fixed inset-0 z-20 m-auto h-fit w-[420px] rounded-xl border border-border bg-background p-5"
+      className="fixed inset-0 z-20 m-auto h-fit w-[520px] rounded-xl border border-border bg-background p-5"
     >
       <h2 className="text-lg font-medium">Weighting</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        Rake one category to a target share. Efficiency and effective base come back on the result.
+        Rake each code to a target share. Load those shares from another dataset in this study.
       </p>
+      <ul className="mt-3 space-y-2">
+        {targets.map((row, index) => (
+          <li key={index} className="grid grid-cols-[1fr_1fr_5rem_auto] gap-2">
+            <select
+              aria-label={`Target column ${index + 1}`}
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
+              value={row.column}
+              onChange={event => updateTarget(index, { column: event.target.value })}
+            >
+              {columns.map(item => (
+                <option key={item}>{item}</option>
+              ))}
+            </select>
+            <input
+              aria-label={`Target code ${index + 1}`}
+              className="rounded-md border border-border px-2 py-1 text-sm"
+              placeholder="Code"
+              value={row.code}
+              onChange={event => updateTarget(index, { code: event.target.value })}
+            />
+            <input
+              aria-label={`Target percent ${index + 1}`}
+              className="rounded-md border border-border px-2 py-1 text-sm"
+              value={row.percent}
+              onChange={event => updateTarget(index, { percent: event.target.value })}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              className="h-8"
+              onClick={() => setTargets(current => current.filter((_, i) => i !== index))}
+            >
+              Remove
+            </Button>
+          </li>
+        ))}
+      </ul>
+      <Button
+        type="button"
+        variant="outline"
+        className="mt-2 h-8"
+        onClick={() =>
+          setTargets(current => [...current, { column: columns[0] || '', code: '', percent: '' }])
+        }
+      >
+        Add target
+      </Button>
       <label className="mt-3 block text-sm">
-        Column
+        Load from
         <select
           className="mt-1 block w-full rounded-md border border-border bg-background px-2 py-1"
-          value={column}
-          onChange={event => setColumn(event.target.value)}
+          value={sourceDataset}
+          onChange={event => setSourceDataset(event.target.value)}
         >
-          {columns.map(item => (
-            <option key={item}>{item}</option>
-          ))}
+          <option value="">Dataset in this study</option>
+          {datasets
+            .filter(dataset => dataset.id !== datasetId)
+            .map(dataset => (
+              <option key={dataset.id} value={dataset.id}>
+                {dataset.original_filename || dataset.id}
+              </option>
+            ))}
         </select>
-      </label>
-      <label className="mt-3 block text-sm">
-        Code
-        <input
-          className="mt-1 block w-full rounded-md border border-border px-2 py-1"
-          value={code}
-          onChange={event => setCode(event.target.value)}
-        />
-      </label>
-      <label className="mt-3 block text-sm">
-        Target %
-        <input
-          className="mt-1 block w-full rounded-md border border-border px-2 py-1"
-          value={target}
-          onChange={event => setTarget(event.target.value)}
-        />
       </label>
       {error ? <p className="mt-2 text-sm text-destructive">{error}</p> : null}
       {result ? (
@@ -754,16 +975,57 @@ function WeightingModal({
           · ESS {String((result.diagnostics as { kish_ess?: number })?.kish_ess ?? '')}
         </p>
       ) : null}
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4 flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            if (!sourceDataset) return;
+            const columnsToLoad = [...new Set(targets.map(row => row.column).filter(Boolean))];
+            setError('');
+            Promise.all(
+              columnsToLoad.map(column =>
+                api(`/datasets/${sourceDataset}/explore/column_frequencies`, {
+                  method: 'POST',
+                  body: JSON.stringify({ column }),
+                }).then(body => ({ column, body }))
+              )
+            )
+              .then(loaded => {
+                const next: WeightTarget[] = [];
+                for (const item of loaded) {
+                  const frequencies = (item.body.frequencies || []) as {
+                    value: string;
+                    percentage: number;
+                  }[];
+                  for (const frequency of frequencies) {
+                    next.push({
+                      column: item.column,
+                      code: String(frequency.value),
+                      percent: String(Math.round(frequency.percentage * 1000) / 10),
+                    });
+                  }
+                }
+                if (next.length) setTargets(next);
+              })
+              .catch(err => setError(err.message));
+          }}
+        >
+          Load targets
+        </Button>
         <Button
           type="button"
           onClick={() => {
+            const categorical: Record<string, Record<string, number>> = {};
+            for (const row of targets) {
+              if (!row.column || !row.code) continue;
+              categorical[row.column] = categorical[row.column] || {};
+              categorical[row.column][row.code] = Number(row.percent) / 100;
+            }
             setError('');
             api(`/datasets/${datasetId}/weights/rake`, {
               method: 'POST',
-              body: JSON.stringify({
-                categorical_targets: { [column]: { [code]: Number(target) / 100 } },
-              }),
+              body: JSON.stringify({ categorical_targets: categorical }),
             })
               .then(setResult)
               .catch(err => setError(err.message));
@@ -872,7 +1134,15 @@ function AnovaModal({
   );
 }
 
-function TablesPanel({ datasetId, projectId }: { datasetId: string; projectId: string }) {
+function TablesPanel({
+  datasetId,
+  projectId,
+  onSelectCell,
+}: {
+  datasetId: string;
+  projectId: string;
+  onSelectCell: (cell: SelectedCell) => void;
+}) {
   const [specs, setSpecs] = useState<
     { spec_id?: string; id?: string; name?: string; label?: string }[]
   >([]);
@@ -948,6 +1218,25 @@ function TablesPanel({ datasetId, projectId }: { datasetId: string; projectId: s
               Open spec {String((openSpec.spec as { id?: string })?.id || '')} · base{' '}
               {String((openSpec.weight as { weighted_n?: number })?.weighted_n ?? '')}
             </p>
+            <ul className="mt-2 space-y-1 text-foreground">
+              {((openSpec.rows as ThemeRow[]) || []).map(row => {
+                const picked = (row.cells || []).find(item => item.banner_id !== 'total');
+                return (
+                  <li key={row.id}>
+                    <button
+                      type="button"
+                      className="text-left"
+                      onClick={() => {
+                        const selected = selectionFromRow(openSpec, row);
+                        if (selected) onSelectCell(selected);
+                      }}
+                    >
+                      {row.label} {picked?.percent != null ? `${picked.percent.toFixed(1)}%` : ''}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
             <div className="mt-2 flex gap-2">
               {(['xlsx', 'pptx', 'docx'] as const).map(kind => (
                 <Button
