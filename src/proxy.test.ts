@@ -60,7 +60,13 @@ describe('proxy (edge session gate)', () => {
 
   it('protects every app area but not /login', () => {
     expect(config.matcher).toEqual(
-      expect.arrayContaining(['/dashboard/:path*', '/workspace/:path*', '/subscription'])
+      expect.arrayContaining([
+        '/dashboard/:path*',
+        '/studies',
+        '/studies/:path*',
+        '/workspace/:path*',
+        '/subscription',
+      ])
     );
     expect(config.matcher.some(m => m.startsWith('/login'))).toBe(false);
   });

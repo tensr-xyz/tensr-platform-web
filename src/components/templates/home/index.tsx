@@ -358,6 +358,13 @@ const HomeTemplate: React.FC = () => {
               <Button
                 variant="outline"
                 className="h-9 gap-2 rounded-full"
+                onClick={() => router.push('/studies')}
+              >
+                Studies
+              </Button>
+              <Button
+                variant="outline"
+                className="h-9 gap-2 rounded-full"
                 onClick={() => router.push('/project/new')}
               >
                 <Plus className="size-4" aria-hidden />
@@ -462,6 +469,13 @@ const HomeTemplate: React.FC = () => {
                   {uploadBusy ? 'Uploading…' : 'Upload dataset'}
                 </Button>
               </DatasetFilePicker>
+              <Button
+                variant="outline"
+                className="h-9 gap-2 rounded-full"
+                onClick={() => router.push('/studies')}
+              >
+                Studies
+              </Button>
               <Button
                 variant="outline"
                 className="h-9 gap-2 rounded-full"

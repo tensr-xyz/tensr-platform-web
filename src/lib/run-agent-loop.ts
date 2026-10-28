@@ -85,6 +85,8 @@ export type RunAgentLoopParams = {
   message: string;
   mode: AgentMode;
   datasetId?: string | null;
+  projectId?: string | null;
+  openTableSpec?: Record<string, unknown> | null;
   openDatasets?: AgentLoopOpenDataset[];
   conversationHistory?: Array<{ role: string; content: string }>;
   glossary?: string | null;

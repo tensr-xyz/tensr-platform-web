@@ -49,6 +49,8 @@ export function proxy(request: NextRequest) {
 export const config = {
   matcher: [
     '/dashboard/:path*',
+    '/studies/:path*',
+    '/studies',
     '/workspace/:path*',
     '/settings/:path*',
     '/plugins/:path*',
