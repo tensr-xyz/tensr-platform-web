@@ -58,6 +58,10 @@ describe('StudyShell', () => {
       if (url.includes('/tables') && init?.method === 'POST') {
         return jsonResponse({
           resolved_weight: 'weight',
+          answered_n: 240,
+          respondent_n: 400,
+          letters: [{ stub_row_id: 'price', banner_id: 'gender=F', letter: 'a' }],
+          banner_columns: [{ id: 'gender=F', label: 'gender=F' }],
           rows: [
             {
               id: 'price',
@@ -68,7 +72,7 @@ describe('StudyShell', () => {
                 {
                   banner_id: 'gender=F',
                   percent: 40,
-                  column_unweighted_n: 25,
+                  column_unweighted_n: 240,
                   provenance: { row_uid_bitset: 'bitset-1' },
                 },
               ],
@@ -101,7 +105,8 @@ describe('StudyShell', () => {
     fireEvent.change(selects[1], { target: { value: 'comment_codes' } });
     fireEvent.change(selects[2], { target: { value: 'gender' } });
     fireEvent.click(screen.getByRole('button', { name: 'Run themes' }));
-    fireEvent.click(await screen.findByRole('button', { name: /40\.0%/ }));
+    expect(await screen.findByText('Base: answered 240 of 400')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: /40\.0% a/ }));
     expect(await screen.findByText('too dear')).toBeTruthy();
     const quoteCall = fetchMock.mock.calls.find(call => String(call[0]).includes('/quotes'));
     const body = JSON.parse(String(quoteCall?.[1]?.body));
@@ -367,5 +372,95 @@ describe('StudyShell', () => {
       { id: 'late', label: 'Late', keywords: ['late'] },
     ]);
     expect(await screen.findByText('Coded 4 of 4 comments.')).toBeTruthy();
+  });
+
+  it('asks Haiku to propose the frame before it codes', async () => {
+    const fetchMock = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/open-end/propose')) {
+        return jsonResponse({
+          codes: [{ id: 'price', label: 'Price', keywords: ['price'] }],
+        });
+      }
+      if (url.includes('/open-end/apply')) {
+        return jsonResponse({ done: true, processed: 4, total: 4, review_count: 0 });
+      }
+      if (url.includes('/preview')) {
+        return jsonResponse({ variable_names: ['comments'], rows: [] });
+      }
+      return jsonResponse({ organizations: [], rows: [], findings: [] });
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    render(
+      <StudyShell
+        project={{ id: 'p1', name: 'Brand tracker' }}
+        datasets={[{ id: 'ds', original_filename: 'w4.sav' }]}
+        onBack={() => undefined}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Code frame' }));
+    fireEvent.change(await screen.findByLabelText('Open-end column'), {
+      target: { value: 'comments' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Code with Haiku' }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(call => String(call[0]).includes('/open-end/apply'))).toBe(
+        true
+      )
+    );
+    const proposeCall = fetchMock.mock.calls.find(call =>
+      String(call[0]).includes('/open-end/propose')
+    );
+    expect(JSON.parse(String(proposeCall?.[1]?.body))).toMatchObject({
+      use_model: true,
+      confirm_verbatims_sent: true,
+    });
+    const applyCall = fetchMock.mock.calls.find(call =>
+      String(call[0]).includes('/open-end/apply')
+    );
+    expect(JSON.parse(String(applyCall?.[1]?.body)).use_model).toBe(true);
+  });
+
+  it('shows a sig letter on a saved table', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/tables') && init?.method === 'POST') {
+        return jsonResponse({
+          letters: [{ stub_row_id: 'agree:Agree', banner_id: 'region=North', letter: 'A' }],
+          banner_columns: [{ id: 'region=North', label: 'region=North' }],
+          rows: [
+            {
+              id: 'agree:Agree',
+              label: 'Agree',
+              cells: [
+                {
+                  banner_id: 'region=North',
+                  percent: 43,
+                  column_unweighted_n: 80,
+                  provenance: { row_uid_bitset: 'bit' },
+                },
+              ],
+            },
+          ],
+        });
+      }
+      if (url.includes('/preview')) {
+        return jsonResponse({ variable_names: ['agree', 'region'], rows: [] });
+      }
+      return jsonResponse({ specs: [], books: [], rows: [], variable_names: [] });
+    }) as unknown as typeof fetch;
+    render(
+      <StudyShell
+        project={{ id: 'p1', name: 'Brand tracker' }}
+        datasets={[{ id: 'ds', original_filename: 'w4.sav' }]}
+        onBack={() => undefined}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Tables' }));
+    await screen.findAllByRole('option', { name: 'agree' });
+    fireEvent.change(screen.getByLabelText('Table stub'), { target: { value: 'agree' } });
+    fireEvent.change(screen.getByLabelText('Table banner'), { target: { value: 'region' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save table' }));
+    expect(await screen.findByRole('button', { name: /43\.0% A/ })).toBeTruthy();
   });
 });

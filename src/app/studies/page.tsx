@@ -6,7 +6,7 @@ import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { Button } from '@/components/atoms/button';
 import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
-import { fetchStudyJson, studyRowText } from '@/lib/study-session';
+import { fetchStudyJson, studiesWithDatasets, studyRowText } from '@/lib/study-session';
 
 type ProjectRow = {
   id: string;
@@ -39,7 +39,7 @@ function StudiesList() {
       `/api/projects?${params}`
     )
       .then(body => {
-        const page = body.projects || [];
+        const page = studiesWithDatasets(body.projects || []);
         setProjects(current => (nextCursor ? [...current, ...page] : page));
         setCursor(String(body.next_cursor || ''));
       })
@@ -53,7 +53,7 @@ function StudiesList() {
     fetchStudyJson<{ projects?: ProjectRow[]; next_cursor?: string }>(`/api/projects?${params}`)
       .then(body => {
         if (cancelled) return;
-        setProjects(body.projects || []);
+        setProjects(studiesWithDatasets(body.projects || []));
         setCursor(String(body.next_cursor || ''));
       })
       .catch(err => {

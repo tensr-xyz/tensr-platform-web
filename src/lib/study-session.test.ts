@@ -1,4 +1,9 @@
-import { bearerWhenReady, fetchStudyJson, studyRowText } from './study-session';
+import {
+  bearerWhenReady,
+  fetchStudyJson,
+  studiesWithDatasets,
+  studyRowText,
+} from './study-session';
 
 jest.mock('@/utils/auth', () => ({
   getStytchBearerForTensrApi: () => 'session-jwt',
@@ -45,5 +50,13 @@ describe('study session', () => {
       updated_at: '2026-10-29T11:00:00.000Z',
     });
     expect(text.startsWith('Brand tracker · 2 datasets · ')).toBe(true);
+  });
+
+  it('drops studies that have no datasets', () => {
+    const visible = studiesWithDatasets([
+      { name: 'osf_data', dataset_count: 0 },
+      { name: 'Brand tracker', dataset_count: 2 },
+    ]);
+    expect(visible.map(project => project.name)).toEqual(['Brand tracker']);
   });
 });

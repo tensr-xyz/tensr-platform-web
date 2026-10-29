@@ -13,7 +13,6 @@ import {
   codedStub,
   datasetSwitcherLabel,
   efficiencyPercent,
-  isCrosstabBook,
   isInternalColumn,
   bannerHeading,
   lettersFor,
@@ -683,6 +682,11 @@ function BannerGrid({
           </tbody>
         </table>
       </div>
+      {book.answered_n != null && book.respondent_n != null ? (
+        <p className="text-muted-foreground">
+          Base: answered {String(book.answered_n)} of {String(book.respondent_n)}
+        </p>
+      ) : null}
       {notCoded?.unweighted_n != null ? (
         <p className="text-muted-foreground">Not coded: {notCoded.unweighted_n}</p>
       ) : null}
@@ -829,10 +833,14 @@ function CodeFrame({
     }
   }
 
-  async function proposeCodes() {
+  async function proposeCodes(useModel = false) {
     const result = await api(`/datasets/${datasetId}/open-end/propose`, {
       method: 'POST',
-      body: JSON.stringify({ text_column: textColumn, use_model: false }),
+      body: JSON.stringify({
+        text_column: textColumn,
+        use_model: useModel,
+        confirm_verbatims_sent: useModel,
+      }),
     });
     const next = (result.codes || []) as FrameCode[];
     setCodes(next);
@@ -896,11 +904,10 @@ function CodeFrame({
             disabled={!textColumn}
             onClick={() => {
               setError('');
-              const ready = codes.length ? Promise.resolve(codes) : proposeCodes();
-              ready
+              proposeCodes(true)
                 .then(next => {
                   if (!next.length) {
-                    setError('Propose a frame before coding with Haiku.');
+                    setError('Haiku did not propose any themes for that column.');
                     return;
                   }
                   return poll(null, true, next);
@@ -916,7 +923,7 @@ function CodeFrame({
         <p className="text-muted-foreground">Schema-only studies code with keywords.</p>
       ) : (
         <p className="text-muted-foreground">
-          Haiku codes the themes in the frame. An empty frame is proposed first.
+          Haiku proposes themes from a sample of the answers, then codes every row.
         </p>
       )}
       {error ? <p className="text-destructive">{error}</p> : null}
@@ -1569,7 +1576,9 @@ function TablesPanel({
             >
               <option value="">Column</option>
               {columns.map(column => (
-                <option key={column}>{column}</option>
+                <option key={column} value={column}>
+                  {column}
+                </option>
               ))}
             </select>
           </label>
@@ -1583,7 +1592,9 @@ function TablesPanel({
             >
               <option value="">None</option>
               {columns.map(column => (
-                <option key={column}>{column}</option>
+                <option key={column} value={column}>
+                  {column}
+                </option>
               ))}
             </select>
           </label>
@@ -1597,7 +1608,9 @@ function TablesPanel({
             >
               <option value="">Unweighted</option>
               {columns.map(column => (
-                <option key={column}>{column}</option>
+                <option key={column} value={column}>
+                  {column}
+                </option>
               ))}
             </select>
           </label>
@@ -1722,7 +1735,7 @@ function TablesPanel({
             ) : (
               <div key={index}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.text}</ReactMarkdown>
-                {(looksLikeCrosstab(entry.text) || isCrosstabBook(openSpec)) && openSpec ? (
+                {looksLikeCrosstab(entry.text) && openSpec ? (
                   <Button
                     type="button"
                     variant="outline"

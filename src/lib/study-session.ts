@@ -52,6 +52,12 @@ export function fetchStudyJson<T>(path: string): Promise<T> {
   return pending;
 }
 
+export function studiesWithDatasets<T extends { dataset_count?: number | null }>(
+  projects: T[]
+): T[] {
+  return projects.filter(project => (project.dataset_count ?? 0) > 0);
+}
+
 export function studyRowText(project: {
   name: string;
   updated_at?: string | null;
