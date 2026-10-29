@@ -1,10 +1,22 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
+import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { streamAgentLoop } from '@/lib/stream-agent-loop';
 import { Button } from '@/components/atoms/button';
+import {
+  categoricalColumns,
+  datasetSwitcherLabel,
+  efficiencyPercent,
+  isInternalColumn,
+  looksLikeCrosstab,
+  numericColumns,
+  visibleColumns,
+  type ColumnInfo,
+} from './shell-helpers';
 
 export type StudyProject = {
   id: string;
@@ -18,6 +30,7 @@ export type StudyDataset = {
   id: string;
   original_filename?: string;
   n_rows?: number;
+  lineage_label?: string | null;
 };
 
 export type SelectedCell = {
@@ -57,7 +70,7 @@ async function downloadFile(path: string, filename: string, method = 'GET') {
   URL.revokeObjectURL(url);
 }
 
-async function api(path: string, init?: RequestInit) {
+async function api(path: string, init?: RequestInit): Promise<any> {
   const token = getStytchBearerForTensrApi();
   const response = await fetch(tensrApiUrl(path), {
     ...init,
@@ -69,10 +82,14 @@ async function api(path: string, init?: RequestInit) {
     },
   });
   const text = await response.text();
-  const body = text ? JSON.parse(text) : {};
+  let body: any = {};
+  try {
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = {};
+  }
   if (!response.ok) {
-    const detail = typeof body.detail === 'string' ? body.detail : text;
-    throw new Error(detail || response.statusText);
+    throw new Error(formatApiErrorMessage(new ApiRequestError(response.status, text)));
   }
   return body;
 }
@@ -81,15 +98,29 @@ export function StudyShell({
   project,
   datasets,
   onBack,
+  onAdopted,
 }: {
   project: StudyProject;
   datasets: StudyDataset[];
   onBack: () => void;
+  onAdopted?: (dataset: StudyDataset) => void;
 }) {
   const [tab, setTab] = useState<TabId>('responses');
   const [datasetId, setDatasetId] = useState(project.active_dataset_id || datasets[0]?.id || '');
   const [cell, setCell] = useState<SelectedCell | null>(null);
+  const [evidenceRequest, setEvidenceRequest] = useState(0);
   const active = TABS.find(item => item.id === tab);
+
+  function adopt(dataset: StudyDataset) {
+    onAdopted?.(dataset);
+    setDatasetId(dataset.id);
+  }
+
+  function openEvidence(selected: SelectedCell) {
+    setCell(selected);
+    setTab('responses');
+    setEvidenceRequest(value => value + 1);
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-background font-sans text-foreground">
@@ -110,7 +141,7 @@ export function StudyShell({
             >
               {datasets.map(dataset => (
                 <option key={dataset.id} value={dataset.id}>
-                  {dataset.original_filename || dataset.id}
+                  {datasetSwitcherLabel(dataset)}
                 </option>
               ))}
             </select>
@@ -136,32 +167,53 @@ export function StudyShell({
         {!active?.live ? (
           <p className="text-sm text-muted-foreground">Coming next.</p>
         ) : tab === 'responses' ? (
-          <Responses datasetId={datasetId} datasets={datasets} cell={cell} onSelectCell={setCell} />
+          <Responses
+            datasetId={datasetId}
+            datasets={datasets}
+            cell={cell}
+            evidenceRequest={evidenceRequest}
+            onSelectCell={setCell}
+            onAdopted={adopt}
+          />
         ) : (
-          <TablesPanel datasetId={datasetId} projectId={project.id} onSelectCell={setCell} />
+          <TablesPanel datasetId={datasetId} projectId={project.id} onSelectCell={openEvidence} />
         )}
       </main>
     </div>
   );
 }
 
+const SHEET_PAGE = 100;
+
 function Responses({
   datasetId,
   datasets,
   cell,
+  evidenceRequest,
   onSelectCell,
+  onAdopted,
 }: {
   datasetId: string;
   datasets: StudyDataset[];
   cell: SelectedCell | null;
+  evidenceRequest: number;
   onSelectCell: (cell: SelectedCell) => void;
+  onAdopted: (dataset: StudyDataset) => void;
 }) {
-  const [view, setView] = useState<'sheet' | 'evidence' | 'themes' | 'frame'>('sheet');
+  const [view, setView] = useState<'sheet' | 'evidence' | 'themes' | 'frame'>(
+    evidenceRequest ? 'evidence' : 'sheet'
+  );
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
   const [filterColumn, setFilterColumn] = useState('');
   const [filterValue, setFilterValue] = useState('');
   const [showLabels, setShowLabels] = useState(true);
+  const sheetKey = `${datasetId}|${filterColumn}|${filterValue}|${showLabels}`;
+  const [sheetPage, setSheetPage] = useState({ key: sheetKey, offset: 0 });
+  if (sheetPage.key !== sheetKey) {
+    setSheetPage({ key: sheetKey, offset: 0 });
+  }
+  const offset = sheetPage.key === sheetKey ? sheetPage.offset : 0;
   const [selectedColumn, setSelectedColumn] = useState('');
   const [frequencies, setFrequencies] = useState<Record<string, unknown> | null>(null);
   const [quality, setQuality] = useState<Record<string, unknown> | null>(null);
@@ -172,7 +224,8 @@ function Responses({
   useEffect(() => {
     if (!datasetId) return;
     const params = new URLSearchParams({
-      limit: '40',
+      limit: String(SHEET_PAGE),
+      offset: String(offset),
       show_value_labels: String(showLabels),
     });
     if (filterColumn && filterValue) {
@@ -186,10 +239,20 @@ function Responses({
     api(`/datasets/${datasetId}/data-quality`)
       .then(setQuality)
       .catch(() => setQuality(null));
-  }, [datasetId, filterColumn, filterValue, showLabels]);
+  }, [datasetId, filterColumn, filterValue, showLabels, offset]);
 
-  const columns = (preview?.variable_names as string[]) || [];
-  const rows = (preview?.rows as unknown[][]) || [];
+  const allColumns = (preview?.variable_names as string[]) || [];
+  const shownIndexes = allColumns
+    .map((name, index) => (isInternalColumn(name) ? -1 : index))
+    .filter(index => index >= 0);
+  const columns = shownIndexes.map(index => allColumns[index]);
+  const rows = ((preview?.rows as unknown[][]) || []).map(row =>
+    shownIndexes.map(index => row[index])
+  );
+  const columnInfo = ((preview?.columns as ColumnInfo[]) || []).filter(column => column?.name);
+  const typed = columnInfo.some(column => column.type || column.measure);
+  const factorColumns = typed ? categoricalColumns(columnInfo) : columns;
+  const dependentColumns = typed ? numericColumns(columnInfo) : columns;
 
   useEffect(() => {
     if (!datasetId || !selectedColumn) return;
@@ -238,8 +301,9 @@ function Responses({
           <Sheet
             columns={columns}
             rows={rows}
-            matched={Number(preview?.n_rows_matched ?? preview?.n_rows ?? 0)}
-            total={Number(preview?.n_rows ?? 0)}
+            matched={Number(preview?.n_rows_matched ?? preview?.n_rows ?? rows.length)}
+            offset={offset}
+            pageSize={SHEET_PAGE}
             filterColumn={filterColumn}
             filterValue={filterValue}
             showLabels={showLabels}
@@ -247,6 +311,7 @@ function Responses({
             onFilterValue={setFilterValue}
             onShowLabels={setShowLabels}
             onSelectColumn={setSelectedColumn}
+            onOffset={value => setSheetPage({ key: sheetKey, offset: value })}
           />
         ) : null}
         {view === 'evidence' ? (
@@ -262,7 +327,14 @@ function Responses({
             }}
           />
         ) : null}
-        {view === 'frame' ? <CodeFrame datasetId={datasetId} columns={columns} /> : null}
+        {view === 'frame' ? (
+          <CodeFrame
+            datasetId={datasetId}
+            columns={columns}
+            datasets={datasets}
+            onAdopted={onAdopted}
+          />
+        ) : null}
       </div>
       <aside className="rounded-xl border border-border p-4 text-sm">
         <h2 className="mb-2 font-medium">Variable</h2>
@@ -277,10 +349,16 @@ function Responses({
           datasets={datasets}
           columns={columns}
           onClose={() => setWeightOpen(false)}
+          onAdopted={onAdopted}
         />
       ) : null}
       {anovaOpen ? (
-        <AnovaModal datasetId={datasetId} columns={columns} onClose={() => setAnovaOpen(false)} />
+        <AnovaModal
+          datasetId={datasetId}
+          factors={factorColumns}
+          dependents={dependentColumns}
+          onClose={() => setAnovaOpen(false)}
+        />
       ) : null}
     </div>
   );
@@ -290,7 +368,8 @@ function Sheet(props: {
   columns: string[];
   rows: unknown[][];
   matched: number;
-  total: number;
+  offset: number;
+  pageSize: number;
   filterColumn: string;
   filterValue: string;
   showLabels: boolean;
@@ -298,6 +377,7 @@ function Sheet(props: {
   onFilterValue: (value: string) => void;
   onShowLabels: (value: boolean) => void;
   onSelectColumn: (value: string) => void;
+  onOffset: (value: number) => void;
 }) {
   return (
     <div>
@@ -332,8 +412,27 @@ function Sheet(props: {
           Labels
         </label>
         <span className="text-muted-foreground">
-          {props.matched} of {props.total}
+          {props.rows.length ? props.offset + 1 : 0}–{props.offset + props.rows.length} of{' '}
+          {props.matched}
         </span>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-8"
+          disabled={props.offset === 0}
+          onClick={() => props.onOffset(Math.max(0, props.offset - props.pageSize))}
+        >
+          Previous
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-8"
+          disabled={props.offset + props.rows.length >= props.matched}
+          onClick={() => props.onOffset(props.offset + props.pageSize)}
+        >
+          Next
+        </Button>
       </div>
       <div className="overflow-auto rounded-xl border border-border">
         <table className="min-w-full text-left text-xs">
@@ -349,7 +448,7 @@ function Sheet(props: {
             </tr>
           </thead>
           <tbody>
-            {props.rows.slice(0, 30).map((row, index) => (
+            {props.rows.map((row, index) => (
               <tr key={index}>
                 {props.columns.map((column, cell) => (
                   <td key={column} className="border-b border-border px-2 py-1.5">
@@ -378,9 +477,9 @@ function FrequencyList({ frequencies }: { frequencies: Record<string, unknown> |
   return (
     <ul className="mt-2 space-y-1">
       <li className="text-muted-foreground">
-        Weighted %{frequencies.weight_column ? ` · ${String(frequencies.weight_column)}` : ''}
+        {frequencies.weight_column ? `Weighted % · ${String(frequencies.weight_column)}` : '%'}
       </li>
-      {rows.slice(0, 8).map(row => (
+      {rows.map(row => (
         <li key={row.value} className="flex justify-between gap-2">
           <span>{row.value}</span>
           <span>{(row.percentage * 100).toFixed(1)}%</span>
@@ -492,7 +591,7 @@ function selectionFromRow(book: Record<string, unknown>, row: ThemeRow): Selecte
   const weight = book.resolved_weight || (book.weight as { column?: string } | undefined)?.column;
   return {
     bitset,
-    textColumn: row.source_text_column || '',
+    textColumn: row.source_text_column || row.column || '',
     claim: `${row.label}${cell?.percent != null ? ` ${cell.percent.toFixed(1)}%` : ''}`,
     base: cell?.column_unweighted_n != null ? String(cell.column_unweighted_n) : '',
     weight: weight ? String(weight) : '',
@@ -522,7 +621,7 @@ function Themes({
           onChange={event => setStub(event.target.value)}
         >
           <option value="">Theme column</option>
-          {columns.map(column => (
+          {visibleColumns(columns).map(column => (
             <option key={column}>{column}</option>
           ))}
         </select>
@@ -532,7 +631,7 @@ function Themes({
           onChange={event => setBanner(event.target.value)}
         >
           <option value="">Banner</option>
-          {columns.map(column => (
+          {visibleColumns(columns).map(column => (
             <option key={column}>{column}</option>
           ))}
         </select>
@@ -593,7 +692,17 @@ function codeIdFromLabel(label: string): string {
   return slug || 'code';
 }
 
-function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[] }) {
+function CodeFrame({
+  datasetId,
+  columns,
+  datasets,
+  onAdopted,
+}: {
+  datasetId: string;
+  columns: string[];
+  datasets: StudyDataset[];
+  onAdopted: (dataset: StudyDataset) => void;
+}) {
   const [textColumn, setTextColumn] = useState('');
   const [codes, setCodes] = useState<FrameCode[]>([]);
   const [progress, setProgress] = useState<Record<string, unknown> | null>(null);
@@ -618,20 +727,38 @@ function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[
   const codeColumn = String(progress?.code_column || (textColumn ? `${textColumn}_codes` : ''));
   const frameDataset = String(progress?.derived_dataset_id || datasetId);
 
-  async function poll(jobId: string | null, useModel: boolean) {
+  async function poll(jobId: string | null, useModel: boolean, frame: FrameCode[] = codes) {
     const result = await api(`/datasets/${datasetId}/open-end/apply`, {
       method: 'POST',
       body: JSON.stringify({
         text_column: textColumn,
-        codes,
+        codes: frame,
         use_model: schemaOnly ? false : useModel,
         job_id: jobId,
       }),
     });
     setProgress(result);
-    if (!result.done && result.job_id) {
-      await poll(String(result.job_id), useModel);
+    if (result.done && result.derived_dataset_id) {
+      onAdopted({
+        id: String(result.derived_dataset_id),
+        original_filename: String(result.original_filename || 'coded'),
+        lineage_label: 'coded comments',
+        n_rows: Number(result.n_rows || 0) || undefined,
+      });
     }
+    if (!result.done && result.job_id) {
+      await poll(String(result.job_id), useModel, frame);
+    }
+  }
+
+  async function proposeCodes() {
+    const result = await api(`/datasets/${datasetId}/open-end/propose`, {
+      method: 'POST',
+      body: JSON.stringify({ text_column: textColumn, use_model: false }),
+    });
+    const next = (result.codes || []) as FrameCode[];
+    setCodes(next);
+    return next;
   }
 
   async function editFrame(body: Record<string, unknown>) {
@@ -644,12 +771,13 @@ function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[
   return (
     <div className="space-y-3 text-sm">
       <select
+        aria-label="Open-end column"
         className="rounded-md border border-border bg-background px-2 py-1"
         value={textColumn}
         onChange={event => setTextColumn(event.target.value)}
       >
         <option value="">Open-end column</option>
-        {columns.map(column => (
+        {visibleColumns(columns).map(column => (
           <option key={column}>{column}</option>
         ))}
       </select>
@@ -659,12 +787,7 @@ function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[
           variant="outline"
           onClick={() => {
             setError('');
-            api(`/datasets/${datasetId}/open-end/propose`, {
-              method: 'POST',
-              body: JSON.stringify({ text_column: textColumn, use_model: false }),
-            })
-              .then(result => setCodes(result.codes || []))
-              .catch(err => setError(err.message));
+            proposeCodes().catch(err => setError(err.message));
           }}
         >
           Propose
@@ -672,9 +795,19 @@ function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[
         <Button
           type="button"
           variant="outline"
+          disabled={!textColumn}
           onClick={() => {
             setError('');
-            poll(null, false).catch(err => setError(err.message));
+            const ready = codes.length ? Promise.resolve(codes) : proposeCodes();
+            ready
+              .then(next => {
+                if (!next.length) {
+                  setError('No themes were proposed for that column.');
+                  return;
+                }
+                return poll(null, false, next);
+              })
+              .catch(err => setError(err.message));
           }}
         >
           Code with keywords
@@ -682,6 +815,7 @@ function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[
         {schemaOnly ? null : (
           <Button
             type="button"
+            disabled={!textColumn || !codes.length}
             onClick={() => {
               setError('');
               poll(null, true).catch(err => setError(err.message));
@@ -799,46 +933,53 @@ function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[
       ) : null}
       {progress ? (
         <p>
-          {String(progress.processed)} / {String(progress.total)} · review{' '}
-          {String(progress.review_count ?? 0)}
+          {progress.error
+            ? String(progress.error)
+            : progress.done
+              ? `Coded ${String(progress.processed)} of ${String(progress.total)} comments.${
+                  Number(progress.review_count || 0)
+                    ? ` ${String(progress.review_count)} need a look.`
+                    : ''
+                }`
+              : `Coding comments: ${String(progress.processed)} of ${String(progress.total)}.`}
         </p>
       ) : null}
+      {selected.length === 1 ? (
+        <form
+          className="flex flex-wrap gap-2"
+          onSubmit={event => {
+            event.preventDefault();
+            const codeId = selected[0];
+            setError('');
+            editFrame({ action: 'rename', code_id: codeId, label: rename.label })
+              .then(() => {
+                setCodes(current =>
+                  current.map(code =>
+                    code.id === codeId ? { ...code, label: rename.label } : code
+                  )
+                );
+              })
+              .catch(err => setError(err.message));
+          }}
+        >
+          <input
+            className="rounded-md border border-border px-2 py-1"
+            aria-label="New theme label"
+            placeholder="New label"
+            value={rename.label}
+            onChange={event => setRename({ ...rename, label: event.target.value })}
+          />
+          <Button type="submit" variant="outline">
+            Rename
+          </Button>
+        </form>
+      ) : null}
       <form
-        className="flex flex-wrap gap-2"
+        className="flex flex-wrap items-end gap-2"
         onSubmit={event => {
           event.preventDefault();
-          const codeColumn = progress?.code_column || `${textColumn}_codes`;
-          api(`/datasets/${progress?.derived_dataset_id || datasetId}/open-end/frame`, {
-            method: 'POST',
-            body: JSON.stringify({
-              code_column: codeColumn,
-              action: 'rename',
-              code_id: rename.code,
-              label: rename.label,
-            }),
-          }).catch(err => setError(err.message));
-        }}
-      >
-        <input
-          className="rounded-md border border-border px-2 py-1"
-          placeholder="Code id"
-          value={rename.code}
-          onChange={event => setRename({ ...rename, code: event.target.value })}
-        />
-        <input
-          className="rounded-md border border-border px-2 py-1"
-          placeholder="New label"
-          value={rename.label}
-          onChange={event => setRename({ ...rename, label: event.target.value })}
-        />
-        <Button type="submit" variant="outline">
-          Rename
-        </Button>
-      </form>
-      <form
-        className="flex flex-wrap gap-2"
-        onSubmit={event => {
-          event.preventDefault();
+          if (!sourceDataset) return;
+          setError('');
           api(`/datasets/${datasetId}/open-end/reapply`, {
             method: 'POST',
             body: JSON.stringify({
@@ -848,17 +989,38 @@ function CodeFrame({ datasetId, columns }: { datasetId: string; columns: string[
               use_model: false,
             }),
           })
-            .then(setProgress)
+            .then(result => {
+              setProgress(result);
+              if (result.derived_dataset_id) {
+                onAdopted({
+                  id: String(result.derived_dataset_id),
+                  original_filename: String(result.original_filename || 'coded'),
+                  lineage_label: 'coded comments',
+                });
+              }
+            })
             .catch(err => setError(err.message));
         }}
       >
-        <input
-          className="rounded-md border border-border px-2 py-1"
-          placeholder="Coded wave dataset"
-          value={sourceDataset}
-          onChange={event => setSourceDataset(event.target.value)}
-        />
-        <Button type="submit" variant="outline">
+        <label className="text-sm">
+          Reapply onto
+          <select
+            aria-label="Reapply dataset"
+            className="mt-1 block rounded-md border border-border bg-background px-2 py-1"
+            value={sourceDataset}
+            onChange={event => setSourceDataset(event.target.value)}
+          >
+            <option value="">Dataset in this study</option>
+            {datasets
+              .filter(dataset => dataset.id !== datasetId)
+              .map(dataset => (
+                <option key={dataset.id} value={dataset.id}>
+                  {datasetSwitcherLabel(dataset)}
+                </option>
+              ))}
+          </select>
+        </label>
+        <Button type="submit" variant="outline" disabled={!sourceDataset || !textColumn}>
           Reapply
         </Button>
       </form>
@@ -873,11 +1035,13 @@ function WeightingModal({
   datasets,
   columns,
   onClose,
+  onAdopted,
 }: {
   datasetId: string;
   datasets: StudyDataset[];
   columns: string[];
   onClose: () => void;
+  onAdopted: (dataset: StudyDataset) => void;
 }) {
   const [targets, setTargets] = useState<WeightTarget[]>([
     { column: columns[0] || '', code: '', percent: '50' },
@@ -885,8 +1049,27 @@ function WeightingModal({
   const [sourceDataset, setSourceDataset] = useState(
     datasets.find(dataset => dataset.id !== datasetId)?.id || ''
   );
+  const [codeOptions, setCodeOptions] = useState<Record<string, string[]>>({});
   const [result, setResult] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    const needed = [...new Set(targets.map(row => row.column).filter(Boolean))];
+    for (const column of needed) {
+      if (codeOptions[column]) continue;
+      api(`/datasets/${datasetId}/explore/column_frequencies`, {
+        method: 'POST',
+        body: JSON.stringify({ column }),
+      })
+        .then(body => {
+          const values = ((body.frequencies || []) as { value: string }[]).map(row =>
+            String(row.value)
+          );
+          setCodeOptions(current => ({ ...current, [column]: values }));
+        })
+        .catch(() => setCodeOptions(current => ({ ...current, [column]: [] })));
+    }
+  }, [datasetId, targets, codeOptions]);
 
   function updateTarget(index: number, patch: Partial<WeightTarget>) {
     setTargets(current => current.map((row, i) => (i === index ? { ...row, ...patch } : row)));
@@ -914,13 +1097,19 @@ function WeightingModal({
                 <option key={item}>{item}</option>
               ))}
             </select>
-            <input
+            <select
               aria-label={`Target code ${index + 1}`}
-              className="rounded-md border border-border px-2 py-1 text-sm"
-              placeholder="Code"
+              className="rounded-md border border-border bg-background px-2 py-1 text-sm"
               value={row.code}
               onChange={event => updateTarget(index, { code: event.target.value })}
-            />
+            >
+              <option value="">Code</option>
+              {(codeOptions[row.column] || []).map(code => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
             <input
               aria-label={`Target percent ${index + 1}`}
               className="rounded-md border border-border px-2 py-1 text-sm"
@@ -969,8 +1158,8 @@ function WeightingModal({
       {result ? (
         <p className="mt-2 text-sm">
           Efficiency{' '}
-          {String(
-            (result.diagnostics as { weighting_efficiency?: number })?.weighting_efficiency ?? ''
+          {efficiencyPercent(
+            (result.diagnostics as { weighting_efficiency?: number })?.weighting_efficiency
           )}{' '}
           · ESS {String((result.diagnostics as { kish_ess?: number })?.kish_ess ?? '')}
         </p>
@@ -1027,7 +1216,19 @@ function WeightingModal({
               method: 'POST',
               body: JSON.stringify({ categorical_targets: categorical }),
             })
-              .then(setResult)
+              .then(payload => {
+                setResult(payload);
+                const nextId = String(payload.derived_dataset_id || payload.dataset_id || '');
+                if (nextId && nextId !== datasetId) {
+                  const names = Object.keys(categorical).join(', ');
+                  onAdopted({
+                    id: nextId,
+                    original_filename: String(payload.original_filename || 'weighted'),
+                    lineage_label: names ? `weighted to ${names}` : 'weighted',
+                    n_rows: Number(payload.n_rows || 0) || undefined,
+                  });
+                }
+              })
               .catch(err => setError(err.message));
           }}
         >
@@ -1043,15 +1244,17 @@ function WeightingModal({
 
 function AnovaModal({
   datasetId,
-  columns,
+  factors,
+  dependents,
   onClose,
 }: {
   datasetId: string;
-  columns: string[];
+  factors: string[];
+  dependents: string[];
   onClose: () => void;
 }) {
-  const [group, setGroup] = useState(columns[0] || '');
-  const [value, setValue] = useState(columns[1] || columns[0] || '');
+  const [group, setGroup] = useState(factors[0] || '');
+  const [value, setValue] = useState(dependents[0] || '');
   const [postHoc, setPostHoc] = useState('tukey');
   const [welch, setWelch] = useState(false);
   const [result, setResult] = useState('');
@@ -1069,7 +1272,7 @@ function AnovaModal({
           value={group}
           onChange={event => setGroup(event.target.value)}
         >
-          {columns.map(item => (
+          {factors.map(item => (
             <option key={item}>{item}</option>
           ))}
         </select>
@@ -1081,7 +1284,7 @@ function AnovaModal({
           value={value}
           onChange={event => setValue(event.target.value)}
         >
-          {columns.map(item => (
+          {dependents.map(item => (
             <option key={item}>{item}</option>
           ))}
         </select>
@@ -1148,9 +1351,20 @@ function TablesPanel({
   >([]);
   const [books, setBooks] = useState<{ book_id?: string; id?: string; name?: string }[]>([]);
   const [openSpec, setOpenSpec] = useState<Record<string, unknown> | null>(null);
+  const [columns, setColumns] = useState<string[]>([]);
+  const [stub, setStub] = useState('');
+  const [banner, setBanner] = useState('');
+  const [weight, setWeight] = useState('');
+  const [statistic, setStatistic] = useState('column_proportion');
+  const [letters, setLetters] = useState(true);
+  const [threads, setThreads] = useState<
+    Record<string, { role: 'user' | 'assistant'; text: string }[]>
+  >({});
   const [message, setMessage] = useState('');
-  const [answer, setAnswer] = useState('');
+  const [warming, setWarming] = useState(false);
   const [error, setError] = useState('');
+  const threadKey = String((openSpec?.spec as { id?: string } | undefined)?.id || 'draft');
+  const thread = threads[threadKey] || [];
 
   useEffect(() => {
     if (!datasetId) return;
@@ -1160,12 +1374,161 @@ function TablesPanel({
     api(`/datasets/${datasetId}/banner-books`)
       .then(body => setBooks(body.books || body.banner_books || []))
       .catch(() => setBooks([]));
+    api(`/datasets/${datasetId}/preview?limit=1`)
+      .then(body => setColumns(visibleColumns((body.variable_names as string[]) || [])))
+      .catch(() => setColumns([]));
   }, [datasetId]);
+
+  function tableBody(save: boolean) {
+    return {
+      stubs: [{ column: stub }],
+      banner: banner ? [{ column: banner }] : [],
+      statistics: [statistic],
+      significance_display: letters ? 'column_letters' : 'none',
+      weight: weight || 'none',
+      save,
+    };
+  }
+
+  async function askAboutTable() {
+    setError('');
+    setWarming(false);
+    const run = () =>
+      streamAgentLoop({
+        message,
+        mode: 'ask',
+        agentVersion: 'v2',
+        datasetId,
+        projectId,
+        openTableSpec: openSpec,
+      });
+    try {
+      let result;
+      try {
+        result = await run();
+      } catch (err) {
+        if (!(err instanceof ApiRequestError) || err.status !== 503) throw err;
+        setWarming(true);
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        result = await run();
+      }
+      const answer = result.answer_markdown || '';
+      setThreads(current => ({
+        ...current,
+        [threadKey]: [
+          ...(current[threadKey] || []),
+          { role: 'user', text: message },
+          { role: 'assistant', text: answer },
+        ],
+      }));
+      setMessage('');
+    } catch (err) {
+      setError(
+        err instanceof ApiRequestError && err.status === 503
+          ? 'The assistant is still warming up. Wait a moment and ask again.'
+          : formatApiErrorMessage(err)
+      );
+    } finally {
+      setWarming(false);
+    }
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
       <div>
         {error ? <p className="mb-3 text-sm text-destructive">{error}</p> : null}
+        <form
+          className="mb-4 flex flex-wrap items-end gap-2 text-sm"
+          onSubmit={event => {
+            event.preventDefault();
+            if (!stub) return;
+            setError('');
+            api(`/datasets/${datasetId}/tables`, {
+              method: 'POST',
+              body: JSON.stringify(tableBody(true)),
+            })
+              .then(body => {
+                setOpenSpec(body);
+                const spec = body.spec as { id?: string; label?: string } | undefined;
+                const id = String(spec?.id || '');
+                if (id) {
+                  setSpecs(current =>
+                    current.some(item => (item.spec_id || item.id) === id)
+                      ? current
+                      : [{ spec_id: id, label: spec?.label || stub }, ...current]
+                  );
+                }
+              })
+              .catch(err => setError(err.message));
+          }}
+        >
+          <label>
+            Stub
+            <select
+              aria-label="Table stub"
+              className="mt-1 block rounded-md border border-border bg-background px-2 py-1"
+              value={stub}
+              onChange={event => setStub(event.target.value)}
+            >
+              <option value="">Column</option>
+              {columns.map(column => (
+                <option key={column}>{column}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Banner
+            <select
+              aria-label="Table banner"
+              className="mt-1 block rounded-md border border-border bg-background px-2 py-1"
+              value={banner}
+              onChange={event => setBanner(event.target.value)}
+            >
+              <option value="">None</option>
+              {columns.map(column => (
+                <option key={column}>{column}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Weight
+            <select
+              aria-label="Table weight"
+              className="mt-1 block rounded-md border border-border bg-background px-2 py-1"
+              value={weight}
+              onChange={event => setWeight(event.target.value)}
+            >
+              <option value="">Unweighted</option>
+              {columns.map(column => (
+                <option key={column}>{column}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Statistic
+            <select
+              aria-label="Table statistic"
+              className="mt-1 block rounded-md border border-border bg-background px-2 py-1"
+              value={statistic}
+              onChange={event => setStatistic(event.target.value)}
+            >
+              <option value="column_proportion">Column %</option>
+              <option value="row_proportion">Row %</option>
+              <option value="unweighted_n">Count</option>
+            </select>
+          </label>
+          <label className="flex items-center gap-2 pb-1">
+            <input
+              type="checkbox"
+              checked={letters}
+              onChange={event => setLetters(event.target.checked)}
+            />
+            Sig letters
+          </label>
+          <Button type="submit" disabled={!stub}>
+            Save table
+          </Button>
+        </form>
         <h2 className="mb-2 text-sm font-medium">Saved tables</h2>
         <ul className="space-y-1 text-sm">
           {specs.map(spec => {
@@ -1267,26 +1630,46 @@ function TablesPanel({
           value={message}
           onChange={event => setMessage(event.target.value)}
         />
-        <Button
-          type="button"
-          className="mt-2"
-          onClick={() => {
-            setError('');
-            streamAgentLoop({
-              message,
-              mode: 'ask',
-              agentVersion: 'v2',
-              datasetId,
-              projectId,
-              openTableSpec: openSpec,
-            })
-              .then(result => setAnswer(result.answer_markdown || ''))
-              .catch(err => setError(err.message));
-          }}
-        >
+        <Button type="button" className="mt-2" onClick={() => void askAboutTable()}>
           Ask
         </Button>
-        {answer ? <p className="mt-3 whitespace-pre-wrap text-sm">{answer}</p> : null}
+        {warming ? <p className="mt-3 text-sm text-muted-foreground">Warming up…</p> : null}
+        <div className="mt-3 space-y-3 text-sm">
+          {thread.map((entry, index) =>
+            entry.role === 'user' ? (
+              <p key={index}>{entry.text}</p>
+            ) : (
+              <div key={index}>
+                <ReactMarkdown>{entry.text}</ReactMarkdown>
+                {looksLikeCrosstab(entry.text) && openSpec ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="mt-2 h-8"
+                    onClick={() => {
+                      const spec = openSpec.spec as Record<string, unknown> | undefined;
+                      api(`/datasets/${datasetId}/tables`, {
+                        method: 'POST',
+                        body: JSON.stringify({
+                          stubs: spec?.stubs || tableBody(true).stubs,
+                          banner: spec?.banner || [],
+                          statistics: spec?.statistics || ['column_proportion'],
+                          significance_display: spec?.significance_display || 'column_letters',
+                          weight: spec?.weight || 'none',
+                          save: true,
+                        }),
+                      })
+                        .then(body => setOpenSpec(body))
+                        .catch(err => setError(err.message));
+                    }}
+                  >
+                    Save as table
+                  </Button>
+                ) : null}
+              </div>
+            )
+          )}
+        </div>
       </aside>
     </div>
   );

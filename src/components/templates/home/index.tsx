@@ -355,13 +355,15 @@ const HomeTemplate: React.FC = () => {
                   {uploadBusy ? 'Uploading…' : 'Upload dataset'}
                 </Button>
               </DatasetFilePicker>
-              <Button
-                variant="outline"
-                className="h-9 gap-2 rounded-full"
-                onClick={() => router.push('/studies')}
-              >
-                Studies
-              </Button>
+              {process.env.NEXT_PUBLIC_INTERNAL_STUDIES === '1' ? (
+                <Button
+                  variant="outline"
+                  className="h-9 gap-2 rounded-full"
+                  onClick={() => router.push('/studies')}
+                >
+                  Studies
+                </Button>
+              ) : null}
               <Button
                 variant="outline"
                 className="h-9 gap-2 rounded-full"
@@ -469,13 +471,15 @@ const HomeTemplate: React.FC = () => {
                   {uploadBusy ? 'Uploading…' : 'Upload dataset'}
                 </Button>
               </DatasetFilePicker>
-              <Button
-                variant="outline"
-                className="h-9 gap-2 rounded-full"
-                onClick={() => router.push('/studies')}
-              >
-                Studies
-              </Button>
+              {process.env.NEXT_PUBLIC_INTERNAL_STUDIES === '1' ? (
+                <Button
+                  variant="outline"
+                  className="h-9 gap-2 rounded-full"
+                  onClick={() => router.push('/studies')}
+                >
+                  Studies
+                </Button>
+              ) : null}
               <Button
                 variant="outline"
                 className="h-9 gap-2 rounded-full"

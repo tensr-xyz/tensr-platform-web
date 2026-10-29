@@ -8,8 +8,7 @@ import {
   type StudyDataset,
   type StudyProject,
 } from '@/components/templates/study/shell';
-import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
-import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { fetchStudy } from '@/lib/study-session';
 
 export default function StudyPage() {
   return (
@@ -27,33 +26,59 @@ function StudyLoader() {
   const [datasets, setDatasets] = useState<StudyDataset[]>([]);
   const [error, setError] = useState('');
 
+  function applyBody(body: {
+    project: StudyProject;
+    datasets?: {
+      id: string;
+      original_filename?: string;
+      n_rows?: number;
+      lineage_label?: string | null;
+    }[];
+  }) {
+    setProject(body.project);
+    setDatasets(
+      (body.datasets || []).map(row => ({
+        id: row.id,
+        original_filename: row.original_filename,
+        n_rows: row.n_rows,
+        lineage_label: row.lineage_label,
+      }))
+    );
+  }
+
   useEffect(() => {
-    const token = getStytchBearerForTensrApi();
-    fetch(tensrApiUrl(`/api/projects/${projectId}`), {
-      headers: { ...getTensrApiHeaders(), Authorization: token ? `Bearer ${token}` : '' },
-    })
+    let cancelled = false;
+    fetchStudy(`/api/projects/${projectId}`)
       .then(async response => {
         if (!response.ok) throw new Error(await response.text());
         return response.json();
       })
       .then(body => {
-        setProject(body.project);
-        setDatasets(
-          (body.datasets || []).map(
-            (row: { id: string; original_filename?: string; n_rows?: number }) => ({
-              id: row.id,
-              original_filename: row.original_filename,
-              n_rows: row.n_rows,
-            })
-          )
-        );
+        if (!cancelled) applyBody(body);
       })
-      .catch(err => setError(err.message));
+      .catch(err => {
+        if (!cancelled) setError(err.message);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [projectId]);
 
   if (error) return <p className="p-8 text-sm text-destructive">{error}</p>;
   if (!project) return <p className="p-8 text-sm text-muted-foreground">Loading study…</p>;
   return (
-    <StudyShell project={project} datasets={datasets} onBack={() => router.push('/studies')} />
+    <StudyShell
+      project={project}
+      datasets={datasets}
+      onBack={() => router.push('/studies')}
+      onAdopted={dataset => {
+        setDatasets(current =>
+          current.some(row => row.id === dataset.id)
+            ? current.map(row => (row.id === dataset.id ? { ...row, ...dataset } : row))
+            : [...current, dataset]
+        );
+        setProject(current => (current ? { ...current, active_dataset_id: dataset.id } : current));
+      }}
+    />
   );
 }

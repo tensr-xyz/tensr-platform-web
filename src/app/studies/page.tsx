@@ -6,8 +6,15 @@ import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { Button } from '@/components/atoms/button';
 import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
+import { fetchStudy, studyRowText } from '@/lib/study-session';
 
-type ProjectRow = { id: string; name: string; status?: string; updated_at?: string };
+type ProjectRow = {
+  id: string;
+  name: string;
+  status?: string;
+  updated_at?: string;
+  dataset_count?: number;
+};
 
 export default function StudiesPage() {
   return (
@@ -20,20 +27,28 @@ export default function StudiesPage() {
 function StudiesList() {
   const router = useRouter();
   const [projects, setProjects] = useState<ProjectRow[]>([]);
+  const [cursor, setCursor] = useState('');
   const [error, setError] = useState('');
   const [name, setName] = useState('');
 
-  useEffect(() => {
-    const token = getStytchBearerForTensrApi();
-    fetch(tensrApiUrl('/api/projects'), {
-      headers: { ...getTensrApiHeaders(), Authorization: token ? `Bearer ${token}` : '' },
-    })
+  function load(nextCursor = '') {
+    const params = new URLSearchParams({ limit: '50' });
+    if (nextCursor) params.set('cursor', nextCursor);
+    fetchStudy(`/api/projects?${params}`)
       .then(async response => {
         if (!response.ok) throw new Error(await response.text());
         return response.json();
       })
-      .then(body => setProjects(body.projects || []))
+      .then(body => {
+        const page = (body.projects || []) as ProjectRow[];
+        setProjects(current => (nextCursor ? [...current, ...page] : page));
+        setCursor(String(body.next_cursor || ''));
+      })
       .catch(err => setError(err.message));
+  }
+
+  useEffect(() => {
+    load();
   }, []);
 
   return (
@@ -53,7 +68,7 @@ function StudiesList() {
               className="flex w-full items-center justify-between px-4 py-3 text-left"
               onClick={() => router.push(`/studies/${project.id}`)}
             >
-              <span>{project.name}</span>
+              <span>{studyRowText(project)}</span>
               <span className="text-xs text-muted-foreground">{project.status || 'active'}</span>
             </button>
           </li>
@@ -62,6 +77,11 @@ function StudiesList() {
           <li className="px-4 py-6 text-sm text-muted-foreground">No studies yet.</li>
         ) : null}
       </ul>
+      {cursor ? (
+        <Button type="button" variant="outline" className="mt-3" onClick={() => load(cursor)}>
+          Load more
+        </Button>
+      ) : null}
       <form
         className="mt-4 flex gap-2"
         onSubmit={event => {

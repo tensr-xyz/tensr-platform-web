@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StudyShell } from './shell';
 
+jest.mock('react-markdown', () => ({
+  __esModule: true,
+  default: ({ children }: { children?: string }) => <div>{children}</div>,
+}));
+
 function jsonResponse(body: unknown) {
   return {
     ok: true,
@@ -274,5 +279,88 @@ describe('StudyShell', () => {
     expect(JSON.parse(String(rakeCall?.[1]?.body)).categorical_targets).toEqual({
       gender: { F: 0.6, M: 0.4 },
     });
+    expect(await screen.findByText(/90\.0%/)).toBeTruthy();
+  });
+
+  it('labels a derived dataset and hides internal columns', async () => {
+    global.fetch = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/preview')) {
+        return jsonResponse({
+          variable_names: ['_row_uid', 'comment', 'comment_coding'],
+          rows: [['uid-1', 'late again', { code: 'late' }]],
+          n_rows: 1,
+          n_rows_matched: 1,
+        });
+      }
+      return jsonResponse({ rows: [], variable_names: [], findings: [] });
+    }) as unknown as typeof fetch;
+    render(
+      <StudyShell
+        project={{ id: 'p1', name: 'Brand tracker', active_dataset_id: 'child' }}
+        datasets={[
+          {
+            id: 'child',
+            original_filename: 'w4.sav',
+            lineage_label: 'coded comments',
+          },
+        ]}
+        onBack={() => undefined}
+      />
+    );
+    expect(screen.getByRole('option', { name: 'w4.sav · coded comments' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'comment' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '_row_uid' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'comment_coding' })).toBeNull();
+    expect(screen.getByText(/1.1 of 1/)).toBeTruthy();
+  });
+
+  it('proposes a frame before coding with keywords', async () => {
+    const fetchMock = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.includes('/open-end/propose')) {
+        return jsonResponse({
+          codes: [{ id: 'late', label: 'Late', keywords: ['late'] }],
+        });
+      }
+      if (url.includes('/open-end/apply')) {
+        return jsonResponse({
+          done: true,
+          processed: 4,
+          total: 4,
+          review_count: 0,
+          derived_dataset_id: 'coded-1',
+          original_filename: 'w4.sav',
+        });
+      }
+      if (url.includes('/preview')) {
+        return jsonResponse({ variable_names: ['comments'], rows: [] });
+      }
+      return jsonResponse({ organizations: [], rows: [], findings: [] });
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    render(
+      <StudyShell
+        project={{ id: 'p1', name: 'Brand tracker' }}
+        datasets={[{ id: 'ds', original_filename: 'w4.sav' }]}
+        onBack={() => undefined}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Code frame' }));
+    expect(await screen.findByRole('option', { name: 'comments' })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Open-end column'), { target: { value: 'comments' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Code with keywords' }));
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.some(call => String(call[0]).includes('/open-end/apply'))).toBe(
+        true
+      )
+    );
+    const applyCall = fetchMock.mock.calls.find(call =>
+      String(call[0]).includes('/open-end/apply')
+    );
+    expect(JSON.parse(String(applyCall?.[1]?.body)).codes).toEqual([
+      { id: 'late', label: 'Late', keywords: ['late'] },
+    ]);
+    expect(await screen.findByText('Coded 4 of 4 comments.')).toBeTruthy();
   });
 });
