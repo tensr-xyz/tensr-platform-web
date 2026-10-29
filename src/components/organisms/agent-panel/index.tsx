@@ -122,7 +122,12 @@ import {
   fetchPlaybookStep,
   nextPlaybookStep,
 } from '@/lib/prep-playbook';
-import { excelDownloadFromResult, excelDownloadFromToolResults } from '@/lib/excel-download';
+import {
+  excelDownloadFromResult,
+  excelDownloadFromToolResults,
+  openSignedDownload,
+  type ExportDownload,
+} from '@/lib/excel-download';
 import {
   approvalTextAlreadyOnCard,
   approvedRunFailureMessage,
@@ -166,6 +171,7 @@ function ChatMessageBody({
   isStreaming,
   repairSuggestions,
   onRepairPick,
+  fileDownloads,
 }: {
   role: 'user' | 'assistant';
   content: string;
@@ -177,6 +183,7 @@ function ChatMessageBody({
   isStreaming?: boolean;
   repairSuggestions?: string[];
   onRepairPick?: (column: string) => void;
+  fileDownloads?: ExportDownload[];
 }) {
   if (role === 'user') {
     return <div className="whitespace-pre-wrap break-words text-sm">{content}</div>;
@@ -283,6 +290,17 @@ function ChatMessageBody({
       ) : null}
       {charts?.map((chart, i) => (
         <AgentInlineChart key={`${chart.kind}-${i}`} chart={chart} />
+      ))}
+      {fileDownloads?.map(file => (
+        <button
+          key={file.key}
+          type="button"
+          data-testid="chat-export-download"
+          className="mt-2 mr-3 text-sm font-medium text-primary hover:underline"
+          onClick={() => void openSignedDownload(file)}
+        >
+          Download {file.filename}
+        </button>
       ))}
     </>
   );
@@ -1974,6 +1992,7 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
                                           )
                                         }
                                         charts={message.charts}
+                                        fileDownloads={message.fileDownloads}
                                         isStreaming={message.isStreaming}
                                         repairSuggestions={message.repairSuggestions}
                                         onRepairPick={

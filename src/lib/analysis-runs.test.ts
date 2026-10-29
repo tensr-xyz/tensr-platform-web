@@ -4,6 +4,7 @@ import {
   displayedProvenance,
   formatRunLabel,
   normalizeAnalysisRunSummary,
+  savedRunDisplayTitle,
   normalizeStoredAnalysisRun,
   provenanceBannerText,
   provenanceTraceState,
@@ -35,6 +36,21 @@ describe('normalizeAnalysisRunSummary', () => {
       status: 'complete',
     });
     expect(formatRunLabel(row!)).toBe('Q7, gender, age × source_wave');
+  });
+});
+
+describe('savedRunDisplayTitle', () => {
+  it('keeps the banner cross and skips the procedure name', () => {
+    expect(
+      savedRunDisplayTitle('banner_table', {
+        meta: { title: 'Q7, gender × source_wave', subtitle: 'Q7 by source_wave' },
+      })
+    ).toBe('Q7, gender × source_wave');
+    expect(
+      savedRunDisplayTitle('banner_table', {
+        meta: { title: 'banner table', subtitle: 'Q7 by source_wave' },
+      })
+    ).toBe('Q7 by source_wave');
   });
 });
 

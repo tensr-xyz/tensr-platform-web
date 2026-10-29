@@ -242,6 +242,38 @@ describe('run-agent-loop client helpers', () => {
     expect(patch.thinkingLines).toBeUndefined();
   });
 
+  it('keeps export files as keys and leaves the signed URL out of the message', () => {
+    const secret =
+      'https://bucket.s3.amazonaws.com/exports/excel/abc/banner.xlsx?X-Amz-Security-Token=secret';
+    const patch = deriveMessageUpdateFromLoopResponse(
+      {
+        status: 'ok',
+        mode: 'agent',
+        answer_markdown: 'Exported banner.xlsx and tracker.sps.',
+        tool_results: [
+          {
+            name: 'run_analysis',
+            downloads: [
+              {
+                filename: 'banner.xlsx',
+                url: secret,
+                expires: 1700000000,
+                key: 'exports/excel/abc/banner.xlsx',
+              },
+            ],
+          } as never,
+        ],
+      },
+      { triggerMessage: 'Export everything.', datasetId: null }
+    );
+    expect(patch.content).not.toContain('X-Amz-');
+    expect(patch.content).not.toContain('amazonaws.com');
+    expect(patch.fileDownloads).toEqual([
+      { filename: 'banner.xlsx', key: 'exports/excel/abc/banner.xlsx', expires: 1700000000 },
+    ]);
+    expect(JSON.stringify(patch.fileDownloads)).not.toContain('X-Amz-');
+  });
+
   it('approvedRunFailureMessage flags an approved run that did not complete', () => {
     expect(
       approvedRunFailureMessage({ status: 'ok', mode: 'plan', answer_markdown: 'Done.' })

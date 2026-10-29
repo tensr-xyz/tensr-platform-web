@@ -4,6 +4,7 @@ import { chartFromAnalysisEnvelope } from '@/lib/agent-chart-from-dataset';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import type { AgentMode } from '@/stores/agent-mode-store';
 import type { Tab } from '@/stores/tabs-store';
+import { downloadsFromToolResults } from '@/lib/excel-download';
 import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
 import type {
   ChatPendingAction,
@@ -413,6 +414,9 @@ export function deriveMessageUpdateFromLoopResponse(
     }
   }
 
+  const fileDownloads = downloadsFromToolResults(
+    response.tool_results as Array<Record<string, unknown>> | undefined
+  );
   return {
     content: answer,
     charts: charts.length ? charts : undefined,
@@ -421,5 +425,6 @@ export function deriveMessageUpdateFromLoopResponse(
     lastFittedModel,
     turnState: response.turn_state,
     pendingAction,
+    fileDownloads: fileDownloads.length ? fileDownloads : undefined,
   };
 }

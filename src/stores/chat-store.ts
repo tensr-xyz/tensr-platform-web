@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { AnalysisReportChatCard } from '@/lib/agent-analysis-chat-fields';
 import type { AnalysisReportChart } from '@/lib/analysis-report-types';
 import type { ChatPendingAction } from '@/lib/chat-pending-action';
+import type { ExportDownload } from '@/lib/excel-download';
 
 export interface ChatMessage {
   id: string;
@@ -31,6 +32,8 @@ export interface ChatMessage {
   repairSuggestions?: string[];
   /** Spec used to retry a data action when a repair chip is clicked. */
   repairBase?: { actionType: string; spec: Record<string, unknown> };
+  /** Export files for this turn. The S3 key is stored; the URL is signed on click. */
+  fileDownloads?: ExportDownload[];
 }
 
 export interface ChatThread {

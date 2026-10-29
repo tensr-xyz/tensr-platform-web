@@ -62,6 +62,50 @@ export function excelDownloadFromToolResults(
   return null;
 }
 
+export type ExportDownload = {
+  filename: string;
+  key: string;
+  expires?: number;
+};
+
+/** Signed files on a tool result. The URL is left on the wire and is not kept. */
+export function downloadsFromToolResults(
+  results: Array<Record<string, unknown>> | undefined
+): ExportDownload[] {
+  if (!results?.length) return [];
+  const found: ExportDownload[] = [];
+  for (const entry of results) {
+    const downloads = entry.downloads;
+    if (!Array.isArray(downloads)) continue;
+    for (const item of downloads) {
+      if (!item || typeof item !== 'object') continue;
+      const file = item as Record<string, unknown>;
+      const filename = typeof file.filename === 'string' ? file.filename : '';
+      const key = typeof file.key === 'string' ? file.key : '';
+      if (!filename || !key) continue;
+      found.push({
+        filename,
+        key,
+        expires: typeof file.expires === 'number' ? file.expires : undefined,
+      });
+    }
+  }
+  return found;
+}
+
+export async function openSignedDownload(file: ExportDownload): Promise<void> {
+  if (typeof document === 'undefined') return;
+  const { apiClient } = await import('@/lib/api-client');
+  const signed = await apiClient.assistant.signExport(file.key);
+  const link = document.createElement('a');
+  link.href = signed.url;
+  link.download = signed.filename || file.filename;
+  link.rel = 'noopener';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 export function downloadExcelArtifact(file: ExcelDownload): void {
   if (typeof document === 'undefined') return;
   const binary = atob(file.excelBase64);
