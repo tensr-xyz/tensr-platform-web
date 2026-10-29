@@ -834,15 +834,19 @@ function CodeFrame({
   }
 
   async function proposeCodes(useModel = false) {
-    const result = await api(`/datasets/${datasetId}/open-end/propose`, {
-      method: 'POST',
-      body: JSON.stringify({
-        text_column: textColumn,
-        use_model: useModel,
-        confirm_verbatims_sent: useModel,
-      }),
-    });
-    const next = (result.codes || []) as FrameCode[];
+    const request = () =>
+      api(`/datasets/${datasetId}/open-end/propose`, {
+        method: 'POST',
+        body: JSON.stringify({
+          text_column: textColumn,
+          use_model: useModel,
+          confirm_verbatims_sent: useModel,
+        }),
+      });
+    const read = (result: { codes?: FrameCode[] }) =>
+      Array.isArray(result?.codes) ? result.codes : [];
+    let next = read(await request());
+    if (useModel && !next.length) next = read(await request());
     setCodes(next);
     return next;
   }

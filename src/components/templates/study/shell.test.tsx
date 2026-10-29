@@ -421,6 +421,42 @@ describe('StudyShell', () => {
     expect(JSON.parse(String(applyCall?.[1]?.body)).use_model).toBe(true);
   });
 
+  it('retries Haiku once when the first proposal is empty', async () => {
+    let proposals = 0;
+    const fetchMock = jest.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/open-end/propose')) {
+        proposals += 1;
+        return jsonResponse(
+          proposals === 1
+            ? { codes: [] }
+            : { codes: [{ id: 'price', label: 'Price', keywords: ['price'] }] }
+        );
+      }
+      if (url.includes('/open-end/apply')) {
+        return jsonResponse({ done: true, processed: 4, total: 4, review_count: 0 });
+      }
+      if (url.includes('/preview')) {
+        return jsonResponse({ variable_names: ['comments'], rows: [] });
+      }
+      return jsonResponse({ organizations: [], rows: [], findings: [] });
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    render(
+      <StudyShell
+        project={{ id: 'p1', name: 'Brand tracker' }}
+        datasets={[{ id: 'ds', original_filename: 'w4.sav' }]}
+        onBack={() => undefined}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Code frame' }));
+    await screen.findByRole('option', { name: 'comments' });
+    fireEvent.change(screen.getByLabelText('Open-end column'), { target: { value: 'comments' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Code with Haiku' }));
+    expect(await screen.findByText('Coded 4 of 4 comments.')).toBeTruthy();
+    expect(proposals).toBe(2);
+  });
+
   it('shows a sig letter on a saved table', async () => {
     global.fetch = jest.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
