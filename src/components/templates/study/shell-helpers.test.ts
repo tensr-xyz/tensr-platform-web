@@ -1,10 +1,14 @@
 import {
   categoricalColumns,
   codedColumns,
+  codedStub,
   datasetSwitcherLabel,
+  directTableAnswer,
   efficiencyPercent,
   isInternalColumn,
+  lettersFor,
   looksLikeCrosstab,
+  newestDatasetId,
   numericColumns,
   visibleColumns,
 } from './shell-helpers';
@@ -54,5 +58,83 @@ describe('study shell helpers', () => {
   it('recognises a crosstab answer', () => {
     expect(looksLikeCrosstab('| Price | 40% |')).toBe(true);
     expect(looksLikeCrosstab('The base is 400.')).toBe(false);
+  });
+
+  it('treats numeric text the way the API coerces it', () => {
+    const columns = [
+      { name: 'id', type: 'numeric' },
+      { name: 'agree_value_numeric', type: 'string' },
+      { name: 'region', type: 'string' },
+    ];
+    const sample = {
+      names: ['id', 'agree_value_numeric', 'region'],
+      values: [
+        ['1', '4', 'North'],
+        ['2', '5', 'South'],
+      ],
+    };
+    expect(numericColumns(columns, sample)).toEqual(['id', 'agree_value_numeric']);
+    expect(categoricalColumns(columns, sample)).toEqual(['region']);
+  });
+
+  it('does not repeat a lineage word that is already the file name', () => {
+    expect(
+      datasetSwitcherLabel({
+        id: 'child',
+        original_filename: 'coded',
+        lineage_label: 'coded comments',
+      })
+    ).toBe('coded comments');
+  });
+
+  it('opens the newest dataset', () => {
+    expect(
+      newestDatasetId(
+        [
+          { id: 'old', updated_at: '2026-01-01T00:00:00Z' },
+          { id: 'new', updated_at: '2026-10-01T00:00:00Z' },
+        ],
+        'old'
+      )
+    ).toBe('new');
+  });
+
+  it('answers which banner is highest from the open table', () => {
+    expect(
+      directTableAnswer('which region is most likely to agree', {
+        banner_columns: [
+          { id: 'total', label: 'Total' },
+          { id: 'region=North', label: 'North' },
+          { id: 'region=South', label: 'South' },
+        ],
+        rows: [
+          {
+            id: 'agree',
+            label: 'Agree',
+            cells: [
+              { banner_id: 'total', percent: 30 },
+              { banner_id: 'region=North', percent: 43 },
+              { banner_id: 'region=South', percent: 21 },
+            ],
+          },
+        ],
+      })
+    ).toBe('North (43%).');
+    expect(
+      lettersFor(
+        [{ stub_row_id: 'agree', banner_id: 'region=North', letter: 'a' }],
+        'agree',
+        'region=North'
+      )
+    ).toBe('a');
+  });
+
+  it('sends a coded column as multi-response', () => {
+    expect(codedStub('comments_codes')).toEqual({
+      column: 'comments_codes',
+      multiple_response: true,
+      value_delimiter: '|',
+    });
+    expect(codedStub('region')).toEqual({ column: 'region' });
   });
 });

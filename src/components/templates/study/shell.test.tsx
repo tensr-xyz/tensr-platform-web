@@ -1,6 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StudyShell } from './shell';
 
+jest.mock('remark-gfm', () => ({
+  __esModule: true,
+  default: () => undefined,
+}));
+
 jest.mock('react-markdown', () => ({
   __esModule: true,
   default: ({ children }: { children?: string }) => <div>{children}</div>,
@@ -96,7 +101,7 @@ describe('StudyShell', () => {
     fireEvent.change(selects[1], { target: { value: 'comment_codes' } });
     fireEvent.change(selects[2], { target: { value: 'gender' } });
     fireEvent.click(screen.getByRole('button', { name: 'Run themes' }));
-    fireEvent.click(await screen.findByRole('button', { name: /Price/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /40\.0%/ }));
     expect(await screen.findByText('too dear')).toBeTruthy();
     const quoteCall = fetchMock.mock.calls.find(call => String(call[0]).includes('/quotes'));
     const body = JSON.parse(String(quoteCall?.[1]?.body));

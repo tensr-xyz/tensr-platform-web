@@ -6,7 +6,7 @@ import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { Button } from '@/components/atoms/button';
 import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
-import { fetchStudy, studyRowText } from '@/lib/study-session';
+import { fetchStudyJson, studyRowText } from '@/lib/study-session';
 
 type ProjectRow = {
   id: string;
@@ -30,25 +30,41 @@ function StudiesList() {
   const [cursor, setCursor] = useState('');
   const [error, setError] = useState('');
   const [name, setName] = useState('');
+  const [loading, setLoading] = useState(true);
 
   function load(nextCursor = '') {
     const params = new URLSearchParams({ limit: '50' });
     if (nextCursor) params.set('cursor', nextCursor);
-    fetchStudy(`/api/projects?${params}`)
-      .then(async response => {
-        if (!response.ok) throw new Error(await response.text());
-        return response.json();
-      })
+    return fetchStudyJson<{ projects?: ProjectRow[]; next_cursor?: string }>(
+      `/api/projects?${params}`
+    )
       .then(body => {
-        const page = (body.projects || []) as ProjectRow[];
+        const page = body.projects || [];
         setProjects(current => (nextCursor ? [...current, ...page] : page));
         setCursor(String(body.next_cursor || ''));
       })
-      .catch(err => setError(err.message));
+      .catch(err => setError(err instanceof Error ? err.message : String(err)))
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    const params = new URLSearchParams({ limit: '50' });
+    fetchStudyJson<{ projects?: ProjectRow[]; next_cursor?: string }>(`/api/projects?${params}`)
+      .then(body => {
+        if (cancelled) return;
+        setProjects(body.projects || []);
+        setCursor(String(body.next_cursor || ''));
+      })
+      .catch(err => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
@@ -73,7 +89,10 @@ function StudiesList() {
             </button>
           </li>
         ))}
-        {!projects.length ? (
+        {loading ? (
+          <li className="px-4 py-6 text-sm text-muted-foreground">Loading studies…</li>
+        ) : null}
+        {!loading && !projects.length ? (
           <li className="px-4 py-6 text-sm text-muted-foreground">No studies yet.</li>
         ) : null}
       </ul>

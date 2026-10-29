@@ -34,6 +34,24 @@ export async function fetchStudy(path: string, init?: RequestInit): Promise<Resp
   });
 }
 
+const studyJsonInflight = new Map<string, Promise<unknown>>();
+
+/** One in-flight GET per path. A second mount shares the response instead of calling again. */
+export function fetchStudyJson<T>(path: string): Promise<T> {
+  const existing = studyJsonInflight.get(path) as Promise<T> | undefined;
+  if (existing) return existing;
+  const pending = fetchStudy(path)
+    .then(async response => {
+      if (!response.ok) throw new Error(await response.text());
+      return (await response.json()) as T;
+    })
+    .finally(() => {
+      if (studyJsonInflight.get(path) === pending) studyJsonInflight.delete(path);
+    });
+  studyJsonInflight.set(path, pending);
+  return pending;
+}
+
 export function studyRowText(project: {
   name: string;
   updated_at?: string | null;

@@ -1,7 +1,8 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { getStytchBearerForTensrApi, getTensrApiHeaders } from '@/utils/auth';
 import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
@@ -9,13 +10,24 @@ import { streamAgentLoop } from '@/lib/stream-agent-loop';
 import { Button } from '@/components/atoms/button';
 import {
   categoricalColumns,
+  codedStub,
   datasetSwitcherLabel,
+  directTableAnswer,
   efficiencyPercent,
+  isCrosstabBook,
   isInternalColumn,
+  bannerHeading,
+  lettersFor,
   looksLikeCrosstab,
+  newestDatasetId,
   numericColumns,
   visibleColumns,
+  type BannerCell,
+  type BannerColumn,
+  type BannerRow,
   type ColumnInfo,
+  type ColumnSample,
+  type SigLetter,
 } from './shell-helpers';
 
 export type StudyProject = {
@@ -31,6 +43,7 @@ export type StudyDataset = {
   original_filename?: string;
   n_rows?: number;
   lineage_label?: string | null;
+  updated_at?: string | null;
 };
 
 export type SelectedCell = {
@@ -106,7 +119,9 @@ export function StudyShell({
   onAdopted?: (dataset: StudyDataset) => void;
 }) {
   const [tab, setTab] = useState<TabId>('responses');
-  const [datasetId, setDatasetId] = useState(project.active_dataset_id || datasets[0]?.id || '');
+  const [datasetId, setDatasetId] = useState(() =>
+    newestDatasetId(datasets, project.active_dataset_id)
+  );
   const [cell, setCell] = useState<SelectedCell | null>(null);
   const [evidenceRequest, setEvidenceRequest] = useState(0);
   const active = TABS.find(item => item.id === tab);
@@ -250,9 +265,13 @@ function Responses({
     shownIndexes.map(index => row[index])
   );
   const columnInfo = ((preview?.columns as ColumnInfo[]) || []).filter(column => column?.name);
+  const sample: ColumnSample = {
+    names: allColumns,
+    values: (preview?.rows as unknown[][]) || [],
+  };
   const typed = columnInfo.some(column => column.type || column.measure);
-  const factorColumns = typed ? categoricalColumns(columnInfo) : columns;
-  const dependentColumns = typed ? numericColumns(columnInfo) : columns;
+  const factorColumns = typed ? categoricalColumns(columnInfo, sample) : columns;
+  const dependentColumns = typed ? numericColumns(columnInfo, sample) : columns;
 
   useEffect(() => {
     if (!datasetId || !selectedColumn) return;
@@ -569,33 +588,107 @@ function QuoteList({ quotes }: { quotes: Record<string, unknown> | null }) {
   );
 }
 
-type ThemeRow = {
-  id: string;
-  label: string;
-  column?: string;
-  source_text_column?: string | null;
-  cells?: {
-    banner_id: string;
-    percent?: number | null;
-    column_unweighted_n?: number;
-    provenance?: { row_uid_bitset?: string };
-  }[];
-};
-
-function selectionFromRow(book: Record<string, unknown>, row: ThemeRow): SelectedCell | null {
-  const cell = (row.cells || []).find(
-    item => item.banner_id !== 'total' && item.provenance?.row_uid_bitset
-  );
+function selectionFromCell(
+  book: Record<string, unknown>,
+  row: BannerRow,
+  cell: BannerCell | undefined
+): SelectedCell | null {
   const bitset = cell?.provenance?.row_uid_bitset;
-  if (!bitset) return null;
+  if (!cell || !bitset) return null;
   const weight = book.resolved_weight || (book.weight as { column?: string } | undefined)?.column;
+  const percent = cell.percent != null ? `${cell.percent.toFixed(1)}%` : '';
+  const count = cell.unweighted_n != null ? `${cell.unweighted_n} respondents` : '';
   return {
     bitset,
     textColumn: row.source_text_column || row.column || '',
-    claim: `${row.label}${cell?.percent != null ? ` ${cell.percent.toFixed(1)}%` : ''}`,
-    base: cell?.column_unweighted_n != null ? String(cell.column_unweighted_n) : '',
+    claim: [row.label, percent, count].filter(Boolean).join(' · '),
+    base: cell.column_unweighted_n != null ? String(cell.column_unweighted_n) : '',
     weight: weight ? String(weight) : '',
   };
+}
+
+function BannerGrid({
+  book,
+  onSelectCell,
+}: {
+  book: Record<string, unknown>;
+  onSelectCell: (cell: SelectedCell) => void;
+}) {
+  const stored = (book.banner_columns as BannerColumn[]) || [];
+  const columns = stored.length
+    ? stored
+    : Array.from(
+        new Map(
+          ((book.rows as BannerRow[]) || [])
+            .flatMap(row => row.cells || [])
+            .map(cell => [cell.banner_id, { id: cell.banner_id, label: cell.banner_id }])
+        ).values()
+      );
+  const letters = (book.letters as SigLetter[]) || [];
+  const rows = ((book.rows as BannerRow[]) || []).filter(row => row.kind !== 'net');
+  const notCoded = ((book.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
+    ?.not_coded;
+  if (!columns.length) return null;
+  return (
+    <div className="space-y-2">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left text-sm">
+          <thead>
+            <tr>
+              <th className="border-b border-border px-2 py-1" />
+              {columns.map(column => (
+                <th key={column.id} className="border-b border-border px-2 py-1 font-medium">
+                  {bannerHeading(column)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th className="px-2 py-1 font-normal text-muted-foreground">Base</th>
+              {columns.map(column => {
+                const sample = rows
+                  .flatMap(row => row.cells || [])
+                  .find(cell => cell.banner_id === column.id);
+                return (
+                  <td key={column.id} className="px-2 py-1 text-muted-foreground">
+                    {sample?.column_unweighted_n ?? '—'}
+                  </td>
+                );
+              })}
+            </tr>
+            {rows.map(row => (
+              <tr key={row.id}>
+                <th className="px-2 py-1 font-normal">{row.label}</th>
+                {columns.map(column => {
+                  const cell = (row.cells || []).find(item => item.banner_id === column.id);
+                  const letter = lettersFor(letters, row.id, column.id);
+                  return (
+                    <td key={column.id} className="px-2 py-1">
+                      <button
+                        type="button"
+                        className="text-left"
+                        onClick={() => {
+                          const selected = selectionFromCell(book, row, cell);
+                          if (selected) onSelectCell(selected);
+                        }}
+                      >
+                        {cell?.percent != null ? `${cell.percent.toFixed(1)}%` : '—'}
+                        {letter ? ` ${letter}` : ''}
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {notCoded?.unweighted_n != null ? (
+        <p className="text-muted-foreground">Not coded: {notCoded.unweighted_n}</p>
+      ) : null}
+    </div>
+  );
 }
 
 function Themes({
@@ -611,7 +704,6 @@ function Themes({
   const [banner, setBanner] = useState('');
   const [book, setBook] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
-  const rows = useMemo(() => (book?.rows as ThemeRow[]) || [], [book]);
   return (
     <div className="space-y-3 text-sm">
       <div className="flex flex-wrap gap-2">
@@ -642,7 +734,7 @@ function Themes({
             api(`/datasets/${datasetId}/tables`, {
               method: 'POST',
               body: JSON.stringify({
-                stubs: [{ column: stub }],
+                stubs: [codedStub(stub)],
                 banner: banner ? [{ column: banner }] : [],
                 statistics: ['column_proportion'],
                 significance_display: 'column_letters',
@@ -657,26 +749,7 @@ function Themes({
         </Button>
       </div>
       {error ? <p className="text-destructive">{error}</p> : null}
-      <ul className="space-y-1">
-        {rows.map(row => {
-          const cell = (row.cells || []).find(item => item.banner_id !== 'total');
-          return (
-            <li key={row.id}>
-              <button
-                type="button"
-                className="text-left"
-                onClick={() => {
-                  if (!book) return;
-                  const selected = selectionFromRow(book, row);
-                  if (selected) onSelectCell(selected);
-                }}
-              >
-                {row.label} {cell?.percent != null ? `${cell.percent.toFixed(1)}%` : ''}
-              </button>
-            </li>
-          );
-        })}
-      </ul>
+      {book ? <BannerGrid book={book} onSelectCell={onSelectCell} /> : null}
     </div>
   );
 }
@@ -741,7 +814,13 @@ function CodeFrame({
     if (result.done && result.derived_dataset_id) {
       onAdopted({
         id: String(result.derived_dataset_id),
-        original_filename: String(result.original_filename || 'coded'),
+        original_filename: String(
+          result.original_filename ||
+            (result.derived_dataset as { original_filename?: string } | undefined)
+              ?.original_filename ||
+            datasets.find(dataset => dataset.id === datasetId)?.original_filename ||
+            textColumn
+        ),
         lineage_label: 'coded comments',
         n_rows: Number(result.n_rows || 0) || undefined,
       });
@@ -815,10 +894,19 @@ function CodeFrame({
         {schemaOnly ? null : (
           <Button
             type="button"
-            disabled={!textColumn || !codes.length}
+            disabled={!textColumn}
             onClick={() => {
               setError('');
-              poll(null, true).catch(err => setError(err.message));
+              const ready = codes.length ? Promise.resolve(codes) : proposeCodes();
+              ready
+                .then(next => {
+                  if (!next.length) {
+                    setError('Propose a frame before coding with Haiku.');
+                    return;
+                  }
+                  return poll(null, true, next);
+                })
+                .catch(err => setError(err.message));
             }}
           >
             Code with Haiku
@@ -827,7 +915,11 @@ function CodeFrame({
       </div>
       {schemaOnly ? (
         <p className="text-muted-foreground">Schema-only studies code with keywords.</p>
-      ) : null}
+      ) : (
+        <p className="text-muted-foreground">
+          Haiku codes the themes in the frame. An empty frame is proposed first.
+        </p>
+      )}
       {error ? <p className="text-destructive">{error}</p> : null}
       <ul className="space-y-1">
         {codes.map(code => (
@@ -994,7 +1086,13 @@ function CodeFrame({
               if (result.derived_dataset_id) {
                 onAdopted({
                   id: String(result.derived_dataset_id),
-                  original_filename: String(result.original_filename || 'coded'),
+                  original_filename: String(
+                    result.original_filename ||
+                      (result.derived_dataset as { original_filename?: string } | undefined)
+                        ?.original_filename ||
+                      datasets.find(dataset => dataset.id === datasetId)?.original_filename ||
+                      textColumn
+                  ),
                   lineage_label: 'coded comments',
                 });
               }
@@ -1381,7 +1479,7 @@ function TablesPanel({
 
   function tableBody(save: boolean) {
     return {
-      stubs: [{ column: stub }],
+      stubs: [codedStub(stub)],
       banner: banner ? [{ column: banner }] : [],
       statistics: [statistic],
       significance_display: letters ? 'column_letters' : 'none',
@@ -1393,6 +1491,19 @@ function TablesPanel({
   async function askAboutTable() {
     setError('');
     setWarming(false);
+    const direct = directTableAnswer(message, openSpec);
+    if (direct) {
+      setThreads(current => ({
+        ...current,
+        [threadKey]: [
+          ...(current[threadKey] || []),
+          { role: 'user', text: message },
+          { role: 'assistant', text: direct },
+        ],
+      }));
+      setMessage('');
+      return;
+    }
     const run = () =>
       streamAgentLoop({
         message,
@@ -1581,25 +1692,9 @@ function TablesPanel({
               Open spec {String((openSpec.spec as { id?: string })?.id || '')} · base{' '}
               {String((openSpec.weight as { weighted_n?: number })?.weighted_n ?? '')}
             </p>
-            <ul className="mt-2 space-y-1 text-foreground">
-              {((openSpec.rows as ThemeRow[]) || []).map(row => {
-                const picked = (row.cells || []).find(item => item.banner_id !== 'total');
-                return (
-                  <li key={row.id}>
-                    <button
-                      type="button"
-                      className="text-left"
-                      onClick={() => {
-                        const selected = selectionFromRow(openSpec, row);
-                        if (selected) onSelectCell(selected);
-                      }}
-                    >
-                      {row.label} {picked?.percent != null ? `${picked.percent.toFixed(1)}%` : ''}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="mt-2 text-foreground">
+              <BannerGrid book={openSpec} onSelectCell={onSelectCell} />
+            </div>
             <div className="mt-2 flex gap-2">
               {(['xlsx', 'pptx', 'docx'] as const).map(kind => (
                 <Button
@@ -1640,8 +1735,8 @@ function TablesPanel({
               <p key={index}>{entry.text}</p>
             ) : (
               <div key={index}>
-                <ReactMarkdown>{entry.text}</ReactMarkdown>
-                {looksLikeCrosstab(entry.text) && openSpec ? (
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{entry.text}</ReactMarkdown>
+                {(looksLikeCrosstab(entry.text) || isCrosstabBook(openSpec)) && openSpec ? (
                   <Button
                     type="button"
                     variant="outline"

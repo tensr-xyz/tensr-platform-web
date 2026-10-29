@@ -33,6 +33,7 @@ function StudyLoader() {
       original_filename?: string;
       n_rows?: number;
       lineage_label?: string | null;
+      updated_at?: string | null;
     }[];
   }) {
     setProject(body.project);
@@ -42,6 +43,7 @@ function StudyLoader() {
         original_filename: row.original_filename,
         n_rows: row.n_rows,
         lineage_label: row.lineage_label,
+        updated_at: row.updated_at,
       }))
     );
   }
