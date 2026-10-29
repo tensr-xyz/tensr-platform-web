@@ -2,12 +2,12 @@
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { LoaderCircle, BarChart3 } from 'lucide-react';
-import { ANALYSIS_LABELS, type AnalysisKey } from '@/lib/analysis-definitions';
 import {
   formatRunLabel,
   formatRunTime,
   listDatasetAnalysisRuns,
   openAnalysisRunById,
+  savedRunDisplayTitle,
   type AnalysisRunSummary,
 } from '@/lib/analysis-runs';
 import { runWhenIdle } from '@/lib/dataset-open';
@@ -29,6 +29,7 @@ type Props = {
     id: string;
     runId?: string;
     analysisType: string;
+    title?: string;
     subtitle?: string;
     createdAt: string;
   }[];
@@ -131,11 +132,10 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
       key: entry.id,
       runId: entry.runId as string,
       title:
-        (entry.subtitle &&
-        entry.subtitle.replace(/_/g, ' ').toLowerCase() !== entry.analysisType.replace(/_/g, ' ').toLowerCase()
-          ? entry.subtitle
-          : ANALYSIS_LABELS[entry.analysisType as AnalysisKey]) ||
-        entry.analysisType.replace(/_/g, ' '),
+        entry.title ||
+        savedRunDisplayTitle(entry.analysisType, {
+          meta: { title: '', subtitle: entry.subtitle },
+        }),
       createdAt: entry.createdAt,
     })),
   ].sort((left, right) => right.createdAt.localeCompare(left.createdAt));

@@ -329,6 +329,28 @@ export async function openAnalysisRunById(runId: string): Promise<boolean> {
   return true;
 }
 
+/** Label for Saved analyses. A banner keeps the stub × banner title, not the procedure name. */
+export function savedRunDisplayTitle(
+  op: string,
+  report?: { meta?: { title?: string; subtitle?: string } } | null
+): string {
+  const raw = op.replace(/_/g, ' ').toLowerCase();
+  const catalog = ANALYSIS_LABELS[op as AnalysisKey] || '';
+  const title = (report?.meta?.title || '').trim();
+  const folded = title.replace(/_/g, ' ').toLowerCase();
+  const generic =
+    !title ||
+    folded === raw ||
+    folded === op.toLowerCase() ||
+    title === catalog ||
+    (Boolean(catalog) && (title.startsWith(`${catalog} (`) || title.startsWith(`${catalog} —`)));
+  if (!generic) return title;
+  const subtitle = (report?.meta?.subtitle || '').trim();
+  const subtitleFolded = subtitle.replace(/_/g, ' ').toLowerCase();
+  if (subtitle && subtitleFolded !== raw && subtitle !== catalog) return subtitle;
+  return catalog || op.replace(/_/g, ' ');
+}
+
 function catalogRunTitle(op: string, stored?: string): string {
   const raw = op.replace(/_/g, ' ');
   const title = (stored || '').trim();
@@ -358,6 +380,7 @@ export function appendAnalysisRunToDatasetTab(params: {
     createdAt: params.report.meta.generated_at || new Date().toISOString(),
     analysisType: params.op,
     content: params.report.summary || params.report.meta.title,
+    title: savedRunDisplayTitle(params.op, params.report),
     subtitle: params.report.meta.subtitle,
     runId: params.runId,
   };

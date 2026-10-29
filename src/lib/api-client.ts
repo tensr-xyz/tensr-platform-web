@@ -732,6 +732,12 @@ class ApiClient {
 
   /** tensr-api `/assistant/*` — dataset-scoped tutor / intent. */
   assistant = {
+    signExport: (key: string) =>
+      this.request<{ filename: string; url: string; expires: number }>('/assistant/exports/sign', {
+        method: 'POST',
+        body: JSON.stringify({ key }),
+      }),
+
     parseIntent: (data: {
       datasetId: string;
       message: string;
