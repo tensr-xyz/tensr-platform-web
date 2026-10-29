@@ -12,7 +12,6 @@ import {
   categoricalColumns,
   codedStub,
   datasetSwitcherLabel,
-  directTableAnswer,
   efficiencyPercent,
   isCrosstabBook,
   isInternalColumn,
@@ -1491,19 +1490,6 @@ function TablesPanel({
   async function askAboutTable() {
     setError('');
     setWarming(false);
-    const direct = directTableAnswer(message, openSpec);
-    if (direct) {
-      setThreads(current => ({
-        ...current,
-        [threadKey]: [
-          ...(current[threadKey] || []),
-          { role: 'user', text: message },
-          { role: 'assistant', text: direct },
-        ],
-      }));
-      setMessage('');
-      return;
-    }
     const run = () =>
       streamAgentLoop({
         message,

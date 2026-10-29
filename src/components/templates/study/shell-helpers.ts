@@ -129,36 +129,6 @@ export function lettersFor(letters: SigLetter[], rowId: string, bannerId: string
     .join('');
 }
 
-export function directTableAnswer(
-  question: string,
-  book: Record<string, unknown> | null
-): string | null {
-  const asked = question.toLowerCase();
-  if (!/\b(which|most|highest|more likely|least|lowest)\b/.test(asked)) return null;
-  const rows = (book?.rows as BannerRow[] | undefined) || [];
-  const banners = (book?.banner_columns as BannerColumn[] | undefined) || [];
-  const mentioned = rows.find(row => asked.includes(String(row.label || '').toLowerCase()));
-  const agree = rows.find(row => /agree/.test(String(row.label || '').toLowerCase()));
-  const row =
-    mentioned ||
-    (asked.includes('agree') ? agree : undefined) ||
-    rows.find(item => item.kind === 'value') ||
-    rows[0];
-  if (!row) return null;
-  const wantLow = /\b(least|lowest)\b/.test(asked);
-  const cells = (row.cells || []).filter(
-    cell => cell.banner_id !== 'total' && typeof cell.percent === 'number'
-  );
-  if (!cells.length) return null;
-  const best = cells.reduce((current, cell) => {
-    if (wantLow) return (cell.percent as number) < (current.percent as number) ? cell : current;
-    return (cell.percent as number) > (current.percent as number) ? cell : current;
-  });
-  const banner = banners.find(item => item.id === best.banner_id);
-  const name = banner ? bannerHeading(banner) : best.banner_id;
-  return `${name} (${Math.round(best.percent as number)}%).`;
-}
-
 export function codedStub(column: string): {
   column: string;
   multiple_response?: boolean;

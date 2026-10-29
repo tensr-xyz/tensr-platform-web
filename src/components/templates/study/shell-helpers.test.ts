@@ -3,7 +3,6 @@ import {
   codedColumns,
   codedStub,
   datasetSwitcherLabel,
-  directTableAnswer,
   efficiencyPercent,
   isInternalColumn,
   lettersFor,
@@ -99,27 +98,7 @@ describe('study shell helpers', () => {
     ).toBe('new');
   });
 
-  it('answers which banner is highest from the open table', () => {
-    expect(
-      directTableAnswer('which region is most likely to agree', {
-        banner_columns: [
-          { id: 'total', label: 'Total' },
-          { id: 'region=North', label: 'North' },
-          { id: 'region=South', label: 'South' },
-        ],
-        rows: [
-          {
-            id: 'agree',
-            label: 'Agree',
-            cells: [
-              { banner_id: 'total', percent: 30 },
-              { banner_id: 'region=North', percent: 43 },
-              { banner_id: 'region=South', percent: 21 },
-            ],
-          },
-        ],
-      })
-    ).toBe('North (43%).');
+  it('joins a sig letter onto its banner cell', () => {
     expect(
       lettersFor(
         [{ stub_row_id: 'agree', banner_id: 'region=North', letter: 'a' }],
