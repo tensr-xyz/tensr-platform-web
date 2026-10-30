@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
@@ -13,6 +13,26 @@ import {
   type ExportDownload,
 } from '@/lib/excel-download';
 import { runAgentLoop } from '@/lib/run-agent-loop';
+import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
+import {
+  getAnalysisOpForMenuName,
+  isDialogMenuItem,
+} from '@/configs/analysis-config/menu-registry';
+import { getAllAnalysisItems, type AnalysisItem } from '@/configs/analysis-config/utils';
+import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
+import { useTabsStore, ViewType } from '@/stores/tabs-store';
+import {
+  CodeFramePanel,
+  datasetRowId,
+  downloadExport,
+  EvidencePanel,
+  fileToBase64,
+  setSurveyCell,
+  TablesBuilder,
+  ThemesPanel,
+  useSurveyCell,
+  WeightPanel,
+} from '@/components/flow/survey-screens';
 type DatasetRow = {
   dataset_id?: string;
   id?: string;
@@ -36,6 +56,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const pathname = usePathname();
   const { isAuthReady, isAuthenticated } = useAuth();
   const [palette, setPalette] = useState(false);
+  const [pendingAsk, setPendingAsk] = useState<string | null>(null);
   const [projects, setProjects] = useState<FlowProject[]>([]);
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
   const [folderName, setFolderName] = useState<string | null>(null);
@@ -87,6 +108,34 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const section = slug[0] === 'p' ? slug[2] || 'chat' : slug[0] || 'projects';
   const projectId = slug[0] === 'p' ? slug[1] : '';
   const project = projects.find(item => item.id === projectId);
+  const openDataset =
+    datasets.find(
+      row => row.project_id === project?.id && datasetRowId(row) === project?.active_dataset_id
+    ) ||
+    datasets.find(row => row.project_id === project?.id) ||
+    datasets[0];
+  const openDatasetId =
+    project?.active_dataset_id || (openDataset ? datasetRowId(openDataset) : '');
+
+  useEffect(() => {
+    if (!openDatasetId) return;
+    const store = useTabsStore.getState();
+    const existing = store.tabs.find(
+      tab => tab.type === ViewType.SPREADSHEET && tab.data?.datasetId === openDatasetId
+    );
+    if (existing) {
+      if (store.activeTabId !== existing.id) store.setActiveTab(existing.id);
+      return;
+    }
+    store.addTab({
+      name: openDataset?.original_filename || 'Dataset',
+      content: '',
+      isDirty: false,
+      type: ViewType.SPREADSHEET,
+      path: openDatasetId,
+      data: { datasetId: openDatasetId, initialColumns: [], initialData: [] },
+    });
+  }, [openDatasetId, openDataset?.original_filename]);
 
   return (
     <SubscriptionGate>
@@ -176,15 +225,31 @@ export function FlowApp({ slug }: { slug: string[] }) {
             ) : section === 'tables' ? (
               <TablesScreen project={project} datasets={datasets} />
             ) : section === 'report' ? (
-              <ReportScreen projectId={projectId} />
+              <ReportScreen projectId={projectId} project={project} datasets={datasets} />
             ) : section === 'interviews' ? (
-              <InterviewsScreen projectId={projectId} />
+              <InterviewsScreen projectId={projectId} project={project} datasets={datasets} />
             ) : (
-              <ChatScreen project={project} datasets={datasets} />
+              <ChatScreen
+                project={project}
+                datasets={datasets}
+                pendingAsk={pendingAsk}
+                onAsked={() => setPendingAsk(null)}
+              />
             )}
           </div>
         </div>
-        {palette ? <Palette datasets={datasets} onClose={() => setPalette(false)} /> : null}
+        {palette ? (
+          <Palette
+            datasetId={openDatasetId}
+            onClose={() => setPalette(false)}
+            onAsk={name => {
+              setPalette(false);
+              setPendingAsk(name);
+              if (projectId) router.push(`/flow/p/${projectId}/chat`);
+            }}
+          />
+        ) : null}
+        <AnalysisSetupHost />
       </div>
     </SubscriptionGate>
   );
@@ -418,16 +483,37 @@ function PluginsScreen() {
   );
 }
 
-function Palette({ datasets, onClose }: { datasets: DatasetRow[]; onClose: () => void }) {
+function Palette({
+  datasetId,
+  onClose,
+  onAsk,
+}: {
+  datasetId?: string;
+  onClose: () => void;
+  onAsk: (name: string) => void;
+}) {
   const [query, setQuery] = useState('');
-  const analyses = [
-    'banner table',
-    'anova',
-    'chi-square',
-    'descriptives',
-    'linear regression',
-    'maxdiff',
-  ].filter(name => name.includes(query.toLowerCase()));
+  const [index, setIndex] = useState(0);
+  const analyses = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    return getAllAnalysisItems()
+      .filter(item => !needle || item.name.toLowerCase().includes(needle))
+      .slice(0, 12);
+  }, [query]);
+  const chosen = analyses[Math.min(index, Math.max(analyses.length - 1, 0))];
+
+  const openSetup = (item: AnalysisItem) => {
+    onClose();
+    const store = useAnalysisSetupStore.getState();
+    if (isDialogMenuItem(item.name)) {
+      store.openDialog(item.name);
+      return;
+    }
+    const op = getAnalysisOpForMenuName(item.name);
+    if (op) store.openSetupFromPalette(op);
+    else store.openUnavailable(item.name);
+  };
+
   return (
     <div className="flow-palette" onClick={onClose}>
       <div onClick={event => event.stopPropagation()}>
@@ -436,29 +522,66 @@ function Palette({ datasets, onClose }: { datasets: DatasetRow[]; onClose: () =>
           autoFocus
           value={query}
           placeholder="Search analyses"
-          onChange={event => setQuery(event.target.value)}
+          onChange={event => {
+            setQuery(event.target.value);
+            setIndex(0);
+          }}
+          onKeyDown={event => {
+            if (event.key === 'ArrowDown') {
+              event.preventDefault();
+              setIndex(current => Math.min(current + 1, analyses.length - 1));
+            } else if (event.key === 'ArrowUp') {
+              event.preventDefault();
+              setIndex(current => Math.max(current - 1, 0));
+            } else if (event.key === 'Enter' && chosen) {
+              event.preventDefault();
+              if (event.metaKey || event.ctrlKey) onAsk(chosen.name);
+              else openSetup(chosen);
+            } else if (event.key === 'Escape') {
+              onClose();
+            }
+          }}
         />
-        {analyses.map(name => (
-          <div key={name} style={{ padding: '8px 4px' }}>
-            {name}
-          </div>
+        {analyses.map((item, itemIndex) => (
+          <button
+            key={`${item.section}-${item.name}`}
+            className="flow-pick"
+            type="button"
+            data-active={item.name === chosen?.name && itemIndex === index}
+            onClick={() => openSetup(item)}
+            onDoubleClick={() => onAsk(item.name)}
+          >
+            {item.name}
+            <span className="flow-muted"> {item.section}</span>
+          </button>
         ))}
         <p className="flow-muted">
-          {datasets[0]?.original_filename || 'No dataset open'} · Enter opens setup in the project.
-          ⌘Enter asks the agent.
+          {datasetId ? 'Dataset open' : 'No dataset open'} · Enter opens setup. ⌘Enter asks the
+          agent.
         </p>
       </div>
     </div>
   );
 }
 
-function ChatScreen({ project, datasets }: { project?: FlowProject; datasets: DatasetRow[] }) {
+function ChatScreen({
+  project,
+  datasets,
+  pendingAsk,
+  onAsked,
+}: {
+  project?: FlowProject;
+  datasets: DatasetRow[];
+  pendingAsk?: string | null;
+  onAsked?: () => void;
+}) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
   const [question, setQuestion] = useState('');
   const [answer, setAnswer] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [downloads, setDownloads] = useState<ExportDownload[]>([]);
+  const askedRef = useRef<string | null>(null);
   const [sessions, setSessions] = useState<{ session_id: string }[]>([]);
   const [recipes, setRecipes] = useState<{ name?: string; recipe_id?: string }[]>([]);
 
@@ -474,32 +597,44 @@ function ChatScreen({ project, datasets }: { project?: FlowProject; datasets: Da
       .catch(() => setRecipes([]));
   }, [project]);
 
-  const send = async () => {
-    const text = question;
-    if (!text.trim() || status === 'Warming up') return;
-    setStatus('Warming up');
-    try {
-      const result = await runAgentLoop({
-        message: text,
-        mode: 'agent',
-        datasetId: datasetId || null,
-        agentVersion: 'v2',
-      });
-      setAnswer(result.answer_markdown || '');
-      const entries = (result.tool_results || []).flatMap(item => {
-        const nested =
-          item.result && typeof item.result === 'object'
-            ? [item.result as Record<string, unknown>]
-            : [];
-        return [item as unknown as Record<string, unknown>, ...nested];
-      });
-      setDownloads(downloadsFromToolResults(entries));
-      setQuestion('');
-      setStatus(null);
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : 'The reply did not finish. Ask again.');
-    }
-  };
+  const sendText = useCallback(
+    async (text: string) => {
+      if (!text.trim() || status === 'Warming up') return;
+      setQuestion(text);
+      setStatus('Warming up');
+      try {
+        const result = await runAgentLoop({
+          message: text,
+          mode: 'agent',
+          datasetId: datasetId || null,
+          agentVersion: 'v2',
+        });
+        setAnswer(result.answer_markdown || '');
+        const entries = (result.tool_results || []).flatMap(item => {
+          const nested =
+            item.result && typeof item.result === 'object'
+              ? [item.result as Record<string, unknown>]
+              : [];
+          return [item as unknown as Record<string, unknown>, ...nested];
+        });
+        setDownloads(downloadsFromToolResults(entries));
+        setQuestion('');
+        setStatus(null);
+      } catch (err) {
+        setStatus(err instanceof Error ? err.message : 'The reply did not finish. Ask again.');
+      }
+    },
+    [datasetId, status]
+  );
+
+  useEffect(() => {
+    if (!pendingAsk || askedRef.current === pendingAsk) return;
+    askedRef.current = pendingAsk;
+    onAsked?.();
+    void sendText(pendingAsk);
+  }, [pendingAsk, onAsked, sendText]);
+
+  const send = () => void sendText(question);
 
   return (
     <div className="flow-split">
@@ -659,32 +794,147 @@ function SourcesScreen({ projectId, datasets }: { projectId: string; datasets: D
       <section className="flow-panel">
         <h2>Stack waves</h2>
         <Link href={`/flow/p/${projectId}/sources`}>Review mapping is on the stack screen.</Link>
-        <StackScreen projectId={projectId} embedded />
+        <StackScreen projectId={projectId} datasets={datasets} embedded />
       </section>
     </div>
   );
 }
 
-function StackScreen({ projectId, embedded }: { projectId: string; embedded?: boolean }) {
-  const [note, setNote] = useState('source_wave → wave');
+function StackScreen({
+  projectId,
+  datasets,
+  embedded,
+}: {
+  projectId: string;
+  datasets: DatasetRow[];
+  embedded?: boolean;
+}) {
+  const router = useRouter();
+  const mine = datasets.filter(row => row.project_id === projectId);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [columns, setColumns] = useState<string[]>([]);
+  const [decisions, setDecisions] = useState<Record<string, 'accept' | 'override' | 'skip'>>({});
+  const [overrides, setOverrides] = useState<Record<string, string>>({});
+  const [error, setError] = useState('');
+  const [note, setNote] = useState('');
+  const firstId = picked[0] || (mine[0] ? datasetRowId(mine[0]) : '');
+
+  useEffect(() => {
+    if (!firstId) return;
+    void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${firstId}/metadata`)
+      .then(meta => {
+        const names = (meta.columns || []).map(column => column.name || '').filter(Boolean);
+        setColumns(names);
+        setDecisions(current => {
+          const next = { ...current };
+          for (const name of names) if (!next[name]) next[name] = 'accept';
+          return next;
+        });
+      })
+      .catch(() => setColumns([]));
+  }, [firstId]);
+
   const save = () => {
+    const ids = (picked.length ? picked : mine.map(datasetRowId)).filter(Boolean);
+    if (ids.length < 2) {
+      setError('Pick at least two datasets to stack.');
+      return;
+    }
+    setError('');
+    const mappings = columns.map(column => ({
+      source_column: column,
+      target_column: decisions[column] === 'override' ? overrides[column] || column : column,
+      decision: decisions[column] || 'accept',
+      note: '',
+    }));
     void flowJson(`/api/projects/${projectId}/wave-maps`, {
       method: 'POST',
-      body: JSON.stringify({
-        sources: ['wave file'],
-        mappings: [{ source_column: note, target_column: 'wave', decision: 'accept', note: '' }],
-      }),
-    });
+      body: JSON.stringify({ sources: ids, mappings }),
+    })
+      .then(() =>
+        flowJson<{ dataset_id?: string; derived_dataset_id?: string }>(
+          '/datasets/intake/fuse-datasets',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              dataset_ids: ids,
+              wave_names: ids.map((_, index) => `wave_${index + 1}`),
+            }),
+          }
+        )
+      )
+      .then(fused => {
+        const nextId = fused.derived_dataset_id || fused.dataset_id || '';
+        if (!nextId) throw new Error('The stack did not return a dataset.');
+        return flowJson(`/api/projects/${projectId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active_dataset_id: nextId }),
+        }).then(() => nextId);
+      })
+      .then(nextId => {
+        setNote(`Stacked dataset ${nextId}`);
+        router.push(`/flow/p/${projectId}/responses`);
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'The stack did not save'));
   };
+
   return (
     <div className={embedded ? '' : 'flow-panel'}>
-      {!embedded ? <h2>Stack waves</h2> : null}
+      {!embedded ? <h2>Stack waves</h2> : <h2>Stack waves</h2>}
       <p className="flow-muted">
-        Accept or override each column before the stack is saved. The originals stay.
+        Accept, override, or skip each column. Save runs the fuse and opens the stacked dataset.
       </p>
-      <input className="flow-input" value={note} onChange={event => setNote(event.target.value)} />
-      <button className="flow-btn" type="button" onClick={save}>
-        Save mapping review
+      {mine.map(row => {
+        const id = datasetRowId(row);
+        return (
+          <label key={id} className="flow-row">
+            <input
+              type="checkbox"
+              checked={picked.includes(id)}
+              onChange={event => {
+                setPicked(current =>
+                  event.target.checked ? [...current, id] : current.filter(item => item !== id)
+                );
+              }}
+            />
+            {row.original_filename || id}
+          </label>
+        );
+      })}
+      {columns.map(column => (
+        <div key={column} className="flow-row">
+          <span>{column}</span>
+          <select
+            className="flow-input"
+            aria-label={`Decision for ${column}`}
+            value={decisions[column] || 'accept'}
+            onChange={event =>
+              setDecisions(current => ({
+                ...current,
+                [column]: event.target.value as 'accept' | 'override' | 'skip',
+              }))
+            }
+          >
+            <option value="accept">Accept</option>
+            <option value="override">Override</option>
+            <option value="skip">Skip</option>
+          </select>
+          {decisions[column] === 'override' ? (
+            <input
+              className="flow-input"
+              aria-label={`Override ${column}`}
+              value={overrides[column] || ''}
+              onChange={event =>
+                setOverrides(current => ({ ...current, [column]: event.target.value }))
+              }
+            />
+          ) : null}
+        </div>
+      ))}
+      {error ? <p className="flow-error">{error}</p> : null}
+      {note ? <p>{note}</p> : null}
+      <button className="flow-btn primary" type="button" onClick={save}>
+        Save
       </button>
     </div>
   );
@@ -701,6 +951,10 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
   const [descError, setDescError] = useState<string | null>(null);
+  const surveyCell = useSurveyCell();
+  useEffect(() => {
+    if (surveyCell) setTab('evidence');
+  }, [surveyCell]);
   useEffect(() => {
     if (!datasetId) return;
     void flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`)
@@ -767,15 +1021,32 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
         </div>
       ) : null}
       {tab === 'notebook' ? <Notebook datasetId={datasetId} /> : null}
-      {tab === 'evidence' ? <Evidence projectId={project?.id} /> : null}
+      {tab === 'evidence' ? <EvidencePanel datasetId={datasetId} /> : null}
       {tab === 'themes' ? (
-        <p>Themes use the open-end code frame on this dataset. Interview mentions stay a count.</p>
+        <ThemesPanel
+          datasetId={datasetId}
+          onSelectCell={cell => {
+            setSurveyCell(cell);
+            setTab('evidence');
+          }}
+        />
       ) : null}
       {anovaOpen ? (
         <AnovaModal columns={columns} datasetId={datasetId} onClose={() => setAnovaOpen(false)} />
       ) : null}
       {weightOpen ? (
-        <WeightModal datasetId={datasetId} onClose={() => setWeightOpen(false)} />
+        <WeightPanel
+          datasetId={datasetId}
+          datasets={datasets.filter(row => !project || row.project_id === project.id)}
+          onClose={() => setWeightOpen(false)}
+          onAdopted={nextId => {
+            if (!project) return;
+            void flowJson(`/api/projects/${project.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ active_dataset_id: nextId }),
+            });
+          }}
+        />
       ) : null}
     </div>
   );
@@ -812,30 +1083,6 @@ function Notebook({ datasetId }: { datasetId?: string }) {
         Run
       </button>
       <pre>{output}</pre>
-    </div>
-  );
-}
-
-function Evidence({ projectId }: { projectId?: string }) {
-  const [rows, setRows] = useState<{ id: string; filename?: string }[]>([]);
-  useEffect(() => {
-    if (!projectId) return;
-    void flowJson<{ interviews?: { id: string; filename?: string }[]; count_label?: string }>(
-      `/api/projects/${projectId}/interviews`
-    )
-      .then(page => setRows(page.interviews || []))
-      .catch(() => setRows([]));
-  }, [projectId]);
-  return (
-    <div className="flow-panel">
-      <h2>Evidence</h2>
-      <p>
-        Survey cells keep their bitset. Interview passages are listed separately and are not added
-        to survey percentages.
-      </p>
-      {rows.map(row => (
-        <div key={row.id}>{row.filename} · interview</div>
-      ))}
     </div>
   );
 }
@@ -906,118 +1153,199 @@ function AnovaModal({
   );
 }
 
-function WeightModal({ datasetId, onClose }: { datasetId?: string; onClose: () => void }) {
-  return (
-    <div className="flow-palette" onClick={onClose}>
-      <div onClick={event => event.stopPropagation()}>
-        <h2>Weighting</h2>
-        <p className="flow-muted">
-          Rake writes a new dataset from target margins on{' '}
-          {datasetId ? 'the open dataset' : 'a dataset'}. This screen does not invent margins. Live
-          fielding targets are coming soon.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: DatasetRow[] }) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
-  const [saved, setSaved] = useState<{ id?: string; label?: string }[]>([]);
-  const [inserted, setInserted] = useState('');
-  useEffect(() => {
-    if (!datasetId) return;
-    void flowJson<{ specs?: { id?: string; label?: string }[] }>(`/datasets/${datasetId}/tables`)
-      .then(page => setSaved(page.specs || []))
-      .catch(() => setSaved([]));
-  }, [datasetId]);
   return (
     <div className="flow-split">
-      <section className="flow-panel">
-        <h2>Table builder</h2>
-        <p>Inserted: {inserted || 'none'}</p>
-        <h2>Saved</h2>
-        {saved.map(table => (
-          <button
-            key={table.id}
-            className="flow-btn"
-            type="button"
-            onClick={() => setInserted(table.label || table.id || '')}
-          >
-            Insert {table.label || table.id}
-          </button>
-        ))}
-        <p className="flow-muted">
-          Banner books export one workbook. Each file has its own download.
-        </p>
-      </section>
+      <TablesBuilder datasetId={datasetId} projectId={project?.id} />
       <SidePanel datasetId={datasetId} />
     </div>
   );
 }
 
-function ReportScreen({ projectId }: { projectId: string }) {
-  const [files, setFiles] = useState<{ kind: string; filename: string }[]>([]);
-  const [title, setTitle] = useState('Client readout');
-  const generate = async (kind?: string) => {
-    const path = `/api/projects/${projectId}/deliverables${kind ? `?kind=${kind}` : ''}`;
-    if (kind) {
-      const response = await flowFetch(path, {
-        method: 'POST',
-        body: JSON.stringify({
-          title,
-          findings: ['Finding from the saved tables.'],
-          table_names: ['Banner'],
-        }),
-      });
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = kind;
-      anchor.click();
+function ReportScreen({
+  projectId,
+  project,
+  datasets,
+}: {
+  projectId: string;
+  project?: FlowProject;
+  datasets: DatasetRow[];
+}) {
+  const datasetId =
+    project?.active_dataset_id || datasets.find(row => row.project_id === projectId)?.dataset_id;
+  const [specs, setSpecs] = useState<
+    { id: string; label: string; spec: Record<string, unknown> }[]
+  >([]);
+  const [picked, setPicked] = useState<string[]>([]);
+  const [template, setTemplate] = useState<string>('');
+  const [error, setError] = useState('');
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    if (!datasetId) return;
+    void flowJson<{ specs?: { spec_id?: string; id?: string; label?: string; name?: string }[] }>(
+      `/datasets/${datasetId}/tables`
+    )
+      .then(async page => {
+        const rows = page.specs || [];
+        const loaded = await Promise.all(
+          rows.map(async row => {
+            const id = row.spec_id || row.id || '';
+            const detail = await flowJson<{ spec?: Record<string, unknown> }>(
+              `/datasets/${datasetId}/tables/${id}`
+            );
+            return { id, label: row.label || row.name || id, spec: detail.spec || {} };
+          })
+        );
+        setSpecs(loaded.filter(row => row.id));
+        setPicked(loaded.map(row => row.id).filter(Boolean));
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'Could not load saved tables'));
+  }, [datasetId]);
+
+  const selected = specs.filter(row => picked.includes(row.id));
+
+  const deck = async () => {
+    if (!datasetId || !selected.length) {
+      setError('Save a table before building a deck.');
       return;
     }
-    const page = await flowJson<{ files?: { kind: string; filename: string }[] }>(path, {
-      method: 'POST',
-      body: JSON.stringify({
-        title,
-        findings: ['Finding from the saved tables.'],
-        table_names: ['Banner'],
-      }),
-    });
-    setFiles(page.files || []);
+    setError('');
+    const created = await flowJson<{ export_id?: string; filename?: string }>(
+      `/datasets/${datasetId}/export/deck`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          spec_ids: selected.map(row => row.id),
+          ...(template ? { template_base64: template } : {}),
+        }),
+      }
+    );
+    if (!created.export_id) throw new Error('The deck export did not return a file.');
+    await downloadExport(`/exports/${created.export_id}`, created.filename || 'deck.pptx');
+    setNote('Deck downloaded.');
   };
+
+  const bannerBook = async () => {
+    if (!datasetId || !selected.length) {
+      setError('Save a table before building a banner book.');
+      return;
+    }
+    setError('');
+    const saved = await flowJson<{ book?: { id?: string } }>(
+      `/datasets/${datasetId}/banner-books`,
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          name: 'Banner book',
+          specs: selected.map(row => row.spec).filter(spec => Object.keys(spec).length),
+        }),
+      }
+    );
+    const bookId = saved.book?.id;
+    if (!bookId) throw new Error('The banner book was not saved.');
+    await downloadExport(
+      `/datasets/${datasetId}/banner-books/${bookId}/export.xlsx`,
+      'banner-book.xlsx',
+      {
+        method: 'POST',
+        body: JSON.stringify({ target_dataset_id: datasetId, mapping: {} }),
+      }
+    );
+    setNote('Banner book downloaded.');
+  };
+
+  const topline = async () => {
+    if (!datasetId || !selected[0]) {
+      setError('Save a table before building a topline.');
+      return;
+    }
+    setError('');
+    await downloadExport(
+      `/datasets/${datasetId}/tables/${selected[0].id}/export.docx`,
+      'topline.docx'
+    );
+    setNote('Topline downloaded.');
+  };
+
   return (
     <div className="flow-panel">
       <h2>Report</h2>
-      <input
-        className="flow-input"
-        value={title}
-        onChange={event => setTitle(event.target.value)}
-      />
-      <button className="flow-btn primary" type="button" onClick={() => void generate()}>
-        Generate deck, banner book, and topline
-      </button>
-      <div>
-        {files.map(file => (
-          <button
-            key={file.kind}
-            className="flow-btn"
-            type="button"
-            onClick={() => void generate(file.kind)}
-          >
-            {file.filename}
-          </button>
-        ))}
+      <p className="flow-muted">Deck, banner book, and topline come from the saved tables.</p>
+      {specs.map(row => (
+        <label key={row.id} className="flow-row">
+          <input
+            type="checkbox"
+            checked={picked.includes(row.id)}
+            onChange={event =>
+              setPicked(current =>
+                event.target.checked ? [...current, row.id] : current.filter(id => id !== row.id)
+              )
+            }
+          />
+          {row.label}
+        </label>
+      ))}
+      <label>
+        PowerPoint template
+        <input
+          type="file"
+          accept=".pptx"
+          onChange={event => {
+            const file = event.target.files?.[0];
+            if (!file) {
+              setTemplate('');
+              return;
+            }
+            void fileToBase64(file).then(setTemplate);
+          }}
+        />
+      </label>
+      {error ? <p className="flow-error">{error}</p> : null}
+      {note ? <p>{note}</p> : null}
+      <div className="flow-row">
+        <button
+          className="flow-btn primary"
+          type="button"
+          onClick={() => void deck().catch(err => setError(String(err.message || err)))}
+        >
+          Deck
+        </button>
+        <button
+          className="flow-btn"
+          type="button"
+          onClick={() => void bannerBook().catch(err => setError(String(err.message || err)))}
+        >
+          Banner book
+        </button>
+        <button
+          className="flow-btn"
+          type="button"
+          onClick={() => void topline().catch(err => setError(String(err.message || err)))}
+        >
+          Topline
+        </button>
       </div>
     </div>
   );
 }
 
-function InterviewsScreen({ projectId }: { projectId: string }) {
+function InterviewsScreen({
+  projectId,
+  project,
+  datasets,
+}: {
+  projectId: string;
+  project?: FlowProject;
+  datasets: DatasetRow[];
+}) {
+  const datasetId =
+    project?.active_dataset_id || datasets.find(row => row.project_id === projectId)?.dataset_id;
   const [label, setLabel] = useState('');
+  const [themes, setThemes] = useState<string[]>([]);
+  const [theme, setTheme] = useState('');
   const [rows, setRows] = useState<
     {
       id: string;
@@ -1028,6 +1356,7 @@ function InterviewsScreen({ projectId }: { projectId: string }) {
   >([]);
   const [code, setCode] = useState('');
   const load = useCallback(() => {
+    const query = theme ? `?theme=${encodeURIComponent(theme)}` : '';
     void flowJson<{
       interviews?: {
         id: string;
@@ -1035,68 +1364,89 @@ function InterviewsScreen({ projectId }: { projectId: string }) {
         passage_count?: number;
         passages_index?: { passage_id: string; speaker?: string; start?: string; end?: string }[];
       }[];
+      themes?: string[];
       count_label?: string;
-    }>(`/api/projects/${projectId}/interviews`).then(page => {
+    }>(`/api/projects/${projectId}/interviews${query}`).then(page => {
       setRows(page.interviews || []);
+      setThemes(page.themes || []);
       setLabel(page.count_label || '');
     });
-  }, [projectId]);
+  }, [projectId, theme]);
   useEffect(() => {
     load();
   }, [load]);
   return (
-    <div className="flow-panel">
-      <h2>Interviews</h2>
-      <p>{label}</p>
-      <p className="flow-muted">
-        Counts only. These passages are not added to survey percentages. No audio.
-      </p>
-      <input
-        type="file"
-        accept=".txt,.vtt,.docx"
-        onChange={event => {
-          const file = event.target.files?.[0];
-          if (!file) return;
-          const body = new FormData();
-          body.append('upload', file);
-          void flowFetch(`/api/projects/${projectId}/interviews`, { method: 'POST', body }).then(
-            () => load()
-          );
-        }}
-      />
-      {rows.map(row => (
-        <div key={row.id}>
-          <div>
-            {row.filename} · {row.passage_count} passages
+    <div className="flow-split">
+      <div className="flow-panel">
+        <h2>Interviews</h2>
+        <p>{label}</p>
+        <label>
+          Theme
+          <select
+            className="flow-input"
+            value={theme}
+            onChange={event => setTheme(event.target.value)}
+          >
+            <option value="">All themes</option>
+            {themes.map(item => (
+              <option key={item}>{item}</option>
+            ))}
+          </select>
+        </label>
+        <p className="flow-muted">
+          Counts only. These passages are not added to survey percentages. No audio.
+        </p>
+        <input
+          type="file"
+          accept=".txt,.vtt,.docx"
+          onChange={event => {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            const body = new FormData();
+            body.append('upload', file);
+            void flowFetch(`/api/projects/${projectId}/interviews`, { method: 'POST', body }).then(
+              () => load()
+            );
+          }}
+        />
+        {rows.map(row => (
+          <div key={row.id}>
+            <div>
+              {row.filename} · {row.passage_count} passages
+            </div>
+            {(row.passages_index || []).slice(0, 8).map(passage => (
+              <form
+                key={passage.passage_id}
+                onSubmit={event => {
+                  event.preventDefault();
+                  if (!code.trim()) return;
+                  void flowJson(`/api/projects/${projectId}/interviews/${row.id}/codes`, {
+                    method: 'POST',
+                    body: JSON.stringify({ passage_id: passage.passage_id, code }),
+                  }).then(() => load());
+                }}
+              >
+                <span>
+                  {passage.speaker || 'Speaker'} {passage.start || ''}–{passage.end || ''}
+                </span>
+                <input
+                  className="flow-input"
+                  value={code}
+                  placeholder="Code"
+                  onChange={event => setCode(event.target.value)}
+                />
+                <button className="flow-btn" type="submit">
+                  Code passage
+                </button>
+              </form>
+            ))}
           </div>
-          {(row.passages_index || []).slice(0, 8).map(passage => (
-            <form
-              key={passage.passage_id}
-              onSubmit={event => {
-                event.preventDefault();
-                if (!code.trim()) return;
-                void flowJson(`/api/projects/${projectId}/interviews/${row.id}/codes`, {
-                  method: 'POST',
-                  body: JSON.stringify({ passage_id: passage.passage_id, code }),
-                }).then(() => load());
-              }}
-            >
-              <span>
-                {passage.speaker || 'Speaker'} {passage.start || ''}–{passage.end || ''}
-              </span>
-              <input
-                className="flow-input"
-                value={code}
-                placeholder="Code"
-                onChange={event => setCode(event.target.value)}
-              />
-              <button className="flow-btn" type="submit">
-                Code passage
-              </button>
-            </form>
-          ))}
-        </div>
-      ))}
+        ))}
+      </div>
+      <CodeFramePanel
+        datasetId={datasetId}
+        datasets={datasets.filter(row => row.project_id === projectId)}
+      />
     </div>
   );
 }
