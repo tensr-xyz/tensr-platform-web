@@ -270,9 +270,7 @@ export async function listDatasetAnalysisRuns(
         const summary = normalizeAnalysisRunSummary(row);
         if (summary) collected.push(summary);
       }
-      const next = Array.isArray(res)
-        ? undefined
-        : (res as { next_cursor?: string | null }).next_cursor;
+      const next = Array.isArray(res) ? undefined : (res as { next_cursor?: string | null }).next_cursor;
       if (!next) break;
       cursor = String(next);
     }
@@ -285,7 +283,9 @@ export async function listDatasetAnalysisRuns(
   return request;
 }
 
-export async function recheckAnalysisRun(runId: string): Promise<RSyntaxVerification | null> {
+export async function recheckAnalysisRun(
+  runId: string
+): Promise<RSyntaxVerification | null> {
   try {
     const body = await apiClient.datasets.analyze.recheckR(runId);
     return rSyntaxVerificationState(body?.r_syntax_verification);
@@ -369,7 +369,9 @@ export function appendAnalysisRunToDatasetTab(params: {
   recentRuns.delete(params.sourceDatasetId);
   const { tabs, updateTab } = useTabsStore.getState();
   const sheetTab = tabs.find(
-    t => t.type === ViewType.SPREADSHEET && getDatasetIdFromTab(t) === params.sourceDatasetId
+    t =>
+      t.type === ViewType.SPREADSHEET &&
+      getDatasetIdFromTab(t) === params.sourceDatasetId
   );
   if (!sheetTab?.data) return;
 

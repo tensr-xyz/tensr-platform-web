@@ -8,7 +8,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "outcome_column",
@@ -16,7 +18,9 @@
         "role": "required",
         "label": "Outcome",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "covariate_column",
@@ -24,7 +28,9 @@
         "role": "required",
         "label": "Covariate",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "include_interaction",
@@ -51,7 +57,9 @@
         "role": "required",
         "label": "Subject",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "between_factor",
@@ -66,7 +74,9 @@
         "role": "required",
         "label": "Within-subjects measures",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",
@@ -86,7 +96,9 @@
         "role": "required",
         "label": "Factor",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "value_column",
@@ -94,7 +106,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "post_hoc",
@@ -163,7 +177,9 @@
         "role": "required",
         "label": "Subject",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "measure_columns",
@@ -171,7 +187,9 @@
         "role": "required",
         "label": "Measures",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -205,7 +223,9 @@
         "role": "required",
         "label": "Test variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "include_interactions",
@@ -246,7 +266,9 @@
         "role": "required",
         "label": "Test variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "include_interaction",
@@ -287,7 +309,9 @@
         "role": "required",
         "label": "Target",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "date_column",
@@ -295,7 +319,9 @@
         "role": "advanced",
         "label": "Date",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "seasonal_period",
@@ -331,7 +357,9 @@
         "role": "advanced",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "interval",
@@ -393,7 +421,9 @@
         "role": "required",
         "label": "Target",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "date_column",
@@ -401,7 +431,9 @@
         "role": "advanced",
         "label": "Date",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "max_lags",
@@ -421,7 +453,10 @@
         "role": "required",
         "label": "Rows",
         "default": null,
-        "columnTypes": ["categorical", "numeric"]
+        "columnTypes": [
+          "categorical",
+          "numeric"
+        ]
       },
       {
         "name": "banner_column",
@@ -429,7 +464,9 @@
         "role": "required",
         "label": "Columns",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "column_a",
@@ -437,7 +474,9 @@
         "role": "advanced",
         "label": "First variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_b",
@@ -445,7 +484,9 @@
         "role": "advanced",
         "label": "Second variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_percent",
@@ -502,7 +543,10 @@
         "role": "advanced",
         "label": "Rows",
         "default": null,
-        "columnTypes": ["categorical", "numeric"]
+        "columnTypes": [
+          "categorical",
+          "numeric"
+        ]
       },
       {
         "name": "banner",
@@ -524,7 +568,9 @@
         "role": "default",
         "label": "Statistics",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "filter_ref",
@@ -635,7 +681,9 @@
         "role": "required",
         "label": "Stubs",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "sort_by_significance",
@@ -655,7 +703,9 @@
         "role": "required",
         "label": "First set",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "set_b",
@@ -663,7 +713,9 @@
         "role": "required",
         "label": "Second set",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -737,7 +789,9 @@
         "role": "required",
         "label": "Row variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "column_b",
@@ -745,7 +799,9 @@
         "role": "required",
         "label": "Column variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "include_phi",
@@ -781,7 +837,9 @@
         "role": "required",
         "label": "Weight",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -820,7 +878,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "method",
@@ -854,7 +914,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "outcome_column",
@@ -862,7 +924,9 @@
         "role": "required",
         "label": "Outcome",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -875,7 +939,9 @@
         "role": "required",
         "label": "Measures",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -888,7 +954,9 @@
         "role": "required",
         "label": "Text",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "codebook",
@@ -910,7 +978,9 @@
         "role": "required",
         "label": "Coders",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "crosstab_column",
@@ -918,7 +988,9 @@
         "role": "advanced",
         "label": "Crosstab",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "lexicon",
@@ -945,7 +1017,9 @@
         "role": "required",
         "label": "First variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_b",
@@ -953,7 +1027,9 @@
         "role": "required",
         "label": "Second variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -966,7 +1042,9 @@
         "role": "required",
         "label": "Indicators",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "model_spec",
@@ -993,7 +1071,9 @@
         "role": "required",
         "label": "Chosen",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "alt_column",
@@ -1001,7 +1081,9 @@
         "role": "required",
         "label": "Alternative",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "task_column",
@@ -1009,7 +1091,9 @@
         "role": "required",
         "label": "Task",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "respondent_column",
@@ -1017,7 +1101,9 @@
         "role": "required",
         "label": "Respondent",
         "default": "respondent_id",
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "alternatives",
@@ -1025,7 +1111,9 @@
         "role": "advanced",
         "label": "Alternatives",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "items",
@@ -1033,7 +1121,9 @@
         "role": "required",
         "label": "Items",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "attribute_columns",
@@ -1041,7 +1131,9 @@
         "role": "required",
         "label": "Attributes",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1054,7 +1146,9 @@
         "role": "required",
         "label": "Chosen",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "profile_id_column",
@@ -1062,7 +1156,9 @@
         "role": "required",
         "label": "Profile",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "attribute_columns",
@@ -1070,7 +1166,9 @@
         "role": "required",
         "label": "Attributes",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "price_attribute",
@@ -1085,7 +1183,9 @@
         "role": "advanced",
         "label": "Segment",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "weight_column",
@@ -1093,7 +1193,9 @@
         "role": "required",
         "label": "Weight",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "respondent_column",
@@ -1101,7 +1203,9 @@
         "role": "required",
         "label": "Respondent",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "wide_map",
@@ -1123,7 +1227,9 @@
         "role": "advanced",
         "label": "Join keys",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1136,7 +1242,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "method",
@@ -1184,7 +1292,9 @@
         "role": "required",
         "label": "Row variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_column",
@@ -1192,7 +1302,9 @@
         "role": "required",
         "label": "Column variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1205,7 +1317,9 @@
         "role": "required",
         "label": "Time",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "event_column",
@@ -1213,7 +1327,9 @@
         "role": "required",
         "label": "Event",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "covariates",
@@ -1221,7 +1337,9 @@
         "role": "required",
         "label": "Covariates",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -1234,7 +1352,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "epsilon",
@@ -1268,7 +1388,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -1276,7 +1398,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "max_depth",
@@ -1310,7 +1434,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "statistics",
@@ -1319,7 +1445,9 @@
         "label": "Statistics",
         "default": null,
         "displayDefault": "mean, std, min, max",
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "weight_column",
@@ -1327,7 +1455,9 @@
         "role": "required",
         "label": "Weight",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -1340,7 +1470,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "columns",
@@ -1348,7 +1480,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "feature_columns",
@@ -1356,7 +1490,9 @@
         "role": "advanced",
         "label": "Features",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1369,7 +1505,9 @@
         "role": "required",
         "label": "Outcome",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "drivers",
@@ -1377,7 +1515,9 @@
         "role": "required",
         "label": "Drivers",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "method",
@@ -1397,7 +1537,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "n_factors",
@@ -1417,7 +1559,9 @@
         "role": "required",
         "label": "Target",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "date_column",
@@ -1425,7 +1569,9 @@
         "role": "advanced",
         "label": "Date",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "seasonal_period",
@@ -1452,7 +1598,9 @@
         "role": "required",
         "label": "Row variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "column_b",
@@ -1460,7 +1608,9 @@
         "role": "required",
         "label": "Column variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "alternative",
@@ -1480,7 +1630,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "categories",
@@ -1488,7 +1640,9 @@
         "role": "advanced",
         "label": "Categories",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1501,7 +1655,10 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["categorical", "numeric"]
+        "columnTypes": [
+          "categorical",
+          "numeric"
+        ]
       },
       {
         "name": "statistics",
@@ -1509,7 +1666,9 @@
         "role": "default",
         "label": "Statistics",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "weight_column",
@@ -1517,7 +1676,9 @@
         "role": "required",
         "label": "Weight",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -1530,7 +1691,9 @@
         "role": "required",
         "label": "Measures",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -1543,7 +1706,9 @@
         "role": "required",
         "label": "Stages",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1556,7 +1721,9 @@
         "role": "required",
         "label": "Datasets",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "wave_names",
@@ -1564,7 +1731,9 @@
         "role": "required",
         "label": "Waves",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "persist",
@@ -1591,7 +1760,9 @@
         "role": "required",
         "label": "Price",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "buy_column",
@@ -1599,7 +1770,9 @@
         "role": "required",
         "label": "Would buy",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1612,7 +1785,9 @@
         "role": "required",
         "label": "Outcome",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -1620,7 +1795,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "group",
@@ -1628,7 +1805,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "family",
@@ -1655,7 +1834,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "fixed_effects",
@@ -1663,7 +1844,9 @@
         "role": "required",
         "label": "Fixed-effect terms",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "group_column",
@@ -1671,7 +1854,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "family",
@@ -1686,7 +1871,9 @@
         "role": "advanced",
         "label": "Random-effect terms",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "derive_binary_from",
@@ -1720,7 +1907,9 @@
         "role": "required",
         "label": "First variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_b",
@@ -1728,7 +1917,9 @@
         "role": "required",
         "label": "Second variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1741,7 +1932,9 @@
         "role": "required",
         "label": "First variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_b",
@@ -1749,7 +1942,9 @@
         "role": "required",
         "label": "Second variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1762,7 +1957,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -1770,7 +1967,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "test_fraction",
@@ -1804,7 +2003,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "blocks",
@@ -1838,7 +2039,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "dependent_columns",
@@ -1846,7 +2049,9 @@
         "role": "required",
         "label": "Dependent variables",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "group_values",
@@ -1854,7 +2059,9 @@
         "role": "advanced",
         "label": "Groups to compare",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       }
     ]
   },
@@ -1867,7 +2074,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "value_column",
@@ -1875,7 +2084,9 @@
         "role": "required",
         "label": "Test variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "group_order",
@@ -1883,7 +2094,9 @@
         "role": "advanced",
         "label": "Order of groups",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       }
     ]
   },
@@ -1896,7 +2109,9 @@
         "role": "required",
         "label": "Time",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "event_column",
@@ -1904,7 +2119,9 @@
         "role": "required",
         "label": "Event",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "group_column",
@@ -1912,7 +2129,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       }
     ]
   },
@@ -1925,7 +2144,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "categories",
@@ -1933,7 +2154,9 @@
         "role": "advanced",
         "label": "Categories",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1953,7 +2176,9 @@
         "role": "required",
         "label": "First variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_b",
@@ -1961,7 +2186,9 @@
         "role": "advanced",
         "label": "Second variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -1974,7 +2201,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "value_column",
@@ -1982,7 +2211,9 @@
         "role": "required",
         "label": "Test variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "post_hoc",
@@ -2009,7 +2240,9 @@
         "role": "required",
         "label": "Indicators",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "n_classes",
@@ -2029,7 +2262,9 @@
         "role": "required",
         "label": "Variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -2042,7 +2277,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "fixed_effects",
@@ -2050,7 +2287,9 @@
         "role": "required",
         "label": "Fixed-effect terms",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "group_column",
@@ -2058,7 +2297,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "random_effects",
@@ -2066,7 +2307,9 @@
         "role": "advanced",
         "label": "Random-effect terms",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -2079,7 +2322,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -2087,7 +2332,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",
@@ -2177,7 +2424,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -2185,7 +2434,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "derive_binary_from",
@@ -2296,7 +2547,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "model",
@@ -2323,7 +2576,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "value_column",
@@ -2331,7 +2586,9 @@
         "role": "required",
         "label": "Test variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",
@@ -2360,7 +2617,9 @@
         "role": "advanced",
         "label": "Groups to compare",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "exact",
@@ -2380,7 +2639,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "dependent_columns",
@@ -2388,7 +2649,9 @@
         "role": "required",
         "label": "Dependent variables",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -2401,7 +2664,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "outcome_column",
@@ -2409,7 +2674,9 @@
         "role": "required",
         "label": "Outcome",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -2422,7 +2689,9 @@
         "role": "required",
         "label": "Best",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "worst_column",
@@ -2430,7 +2699,9 @@
         "role": "required",
         "label": "Worst",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "items",
@@ -2438,7 +2709,9 @@
         "role": "required",
         "label": "Items",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "weight_column",
@@ -2446,7 +2719,9 @@
         "role": "required",
         "label": "Weight",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "segment_column",
@@ -2454,7 +2729,9 @@
         "role": "advanced",
         "label": "Segment",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -2467,7 +2744,9 @@
         "role": "required",
         "label": "Items",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "n_sets",
@@ -2508,7 +2787,9 @@
         "role": "required",
         "label": "Best",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "worst_column",
@@ -2516,7 +2797,9 @@
         "role": "required",
         "label": "Worst",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "set_columns",
@@ -2524,7 +2807,9 @@
         "role": "required",
         "label": "Sets",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "items",
@@ -2532,7 +2817,9 @@
         "role": "required",
         "label": "Items",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "respondent_column",
@@ -2540,7 +2827,9 @@
         "role": "required",
         "label": "Respondent",
         "default": "respondent_id",
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -2553,7 +2842,9 @@
         "role": "required",
         "label": "Best",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "worst_column",
@@ -2561,7 +2852,9 @@
         "role": "required",
         "label": "Worst",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "set_columns",
@@ -2569,7 +2862,9 @@
         "role": "required",
         "label": "Sets",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "items",
@@ -2577,7 +2872,9 @@
         "role": "required",
         "label": "Items",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -2590,7 +2887,9 @@
         "role": "required",
         "label": "First variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_b",
@@ -2598,7 +2897,9 @@
         "role": "required",
         "label": "Second variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -2611,7 +2912,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "value_column",
@@ -2619,7 +2922,9 @@
         "role": "required",
         "label": "Test variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -2686,7 +2991,9 @@
         "role": "required",
         "label": "Subject",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "between_factor",
@@ -2701,7 +3008,9 @@
         "role": "required",
         "label": "Within-subjects measures",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",
@@ -2721,7 +3030,9 @@
         "role": "required",
         "label": "Outcome",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "group",
@@ -2729,7 +3040,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "fixed_effects",
@@ -2737,7 +3050,9 @@
         "role": "required",
         "label": "Fixed-effect terms",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "random_slopes",
@@ -2745,7 +3060,9 @@
         "role": "advanced",
         "label": "Random slope terms",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "reml",
@@ -2765,7 +3082,9 @@
         "role": "required",
         "label": "Outcome",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "predictor_column",
@@ -2773,7 +3092,9 @@
         "role": "required",
         "label": "Predictor",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "moderator_column",
@@ -2781,7 +3102,9 @@
         "role": "required",
         "label": "Moderator",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "center_variables",
@@ -2808,7 +3131,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "value_column",
@@ -2816,7 +3141,9 @@
         "role": "required",
         "label": "Test variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "trim_fraction",
@@ -2836,7 +3163,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "n_components",
@@ -2856,7 +3185,9 @@
         "role": "required",
         "label": "Outcome",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "level1_predictors",
@@ -2864,7 +3195,9 @@
         "role": "required",
         "label": "Level-1 predictors",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "level2_group_column",
@@ -2872,7 +3205,9 @@
         "role": "required",
         "label": "Level-2 group",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "random_slopes",
@@ -2880,7 +3215,9 @@
         "role": "advanced",
         "label": "Random slope terms",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -2893,7 +3230,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -2901,7 +3240,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",
@@ -2923,7 +3264,9 @@
         "role": "advanced",
         "label": "Offset",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -2936,7 +3279,9 @@
         "role": "required",
         "label": "Time",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "event_column",
@@ -2944,7 +3289,9 @@
         "role": "required",
         "label": "Event",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       }
     ]
   },
@@ -2957,7 +3304,9 @@
         "role": "required",
         "label": "Source",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "target",
@@ -2965,7 +3314,9 @@
         "role": "required",
         "label": "Target",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "weight",
@@ -2980,7 +3331,9 @@
         "role": "required",
         "label": "Adjacency variables",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -2993,7 +3346,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -3001,7 +3356,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "test_fraction",
@@ -3028,7 +3385,9 @@
         "role": "required",
         "label": "Score",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "column",
@@ -3036,7 +3395,9 @@
         "role": "required",
         "label": "Variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "group_column",
@@ -3044,7 +3405,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       }
     ]
   },
@@ -3057,7 +3420,9 @@
         "role": "required",
         "label": "First variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_b",
@@ -3065,7 +3430,9 @@
         "role": "required",
         "label": "Second variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -3078,7 +3445,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -3086,7 +3455,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",
@@ -3134,7 +3505,9 @@
         "role": "required",
         "label": "Controls",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "method",
@@ -3154,7 +3527,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "n_components",
@@ -3174,7 +3549,9 @@
         "role": "required",
         "label": "Rows",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "columns",
@@ -3182,7 +3559,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "values",
@@ -3237,7 +3616,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -3245,7 +3626,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",
@@ -3267,7 +3650,9 @@
         "role": "advanced",
         "label": "Offset",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -3280,7 +3665,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "cells",
@@ -3349,7 +3736,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -3357,7 +3746,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "derive_binary_from",
@@ -3496,7 +3887,9 @@
         "role": "required",
         "label": "Design weight",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -3509,7 +3902,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -3517,7 +3912,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "test_fraction",
@@ -3551,7 +3948,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -3559,7 +3958,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "test_fraction",
@@ -3593,7 +3994,9 @@
         "role": "required",
         "label": "First variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_b",
@@ -3601,7 +4004,9 @@
         "role": "required",
         "label": "Second variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -3614,7 +4019,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -3627,7 +4034,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -3640,7 +4049,9 @@
         "role": "required",
         "label": "Subject",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "measure_columns",
@@ -3648,7 +4059,9 @@
         "role": "required",
         "label": "Measures",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -3661,7 +4074,9 @@
         "role": "required",
         "label": "Variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "cutoff",
@@ -3681,7 +4096,9 @@
         "role": "required",
         "label": "Variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -3694,7 +4111,9 @@
         "role": "required",
         "label": "Variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -3707,7 +4126,9 @@
         "role": "required",
         "label": "Before",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "after_column",
@@ -3715,7 +4136,9 @@
         "role": "required",
         "label": "After",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -3728,7 +4151,9 @@
         "role": "required",
         "label": "First variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_b",
@@ -3736,7 +4161,9 @@
         "role": "required",
         "label": "Second variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -3749,7 +4176,9 @@
         "role": "required",
         "label": "Target",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "date_column",
@@ -3757,7 +4186,9 @@
         "role": "advanced",
         "label": "Date",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       }
     ]
   },
@@ -3770,7 +4201,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -3778,7 +4211,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",
@@ -3868,7 +4303,9 @@
         "role": "required",
         "label": "Target",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "date_column",
@@ -3876,7 +4313,9 @@
         "role": "advanced",
         "label": "Date",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "period",
@@ -3903,7 +4342,9 @@
         "role": "required",
         "label": "Variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       }
     ]
   },
@@ -3916,7 +4357,9 @@
         "role": "required",
         "label": "Dependent variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "independents",
@@ -3924,7 +4367,9 @@
         "role": "required",
         "label": "Independent variables",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "test_fraction",
@@ -3944,7 +4389,9 @@
         "role": "required",
         "label": "Grouping variable",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "value_column",
@@ -3952,7 +4399,9 @@
         "role": "required",
         "label": "Test variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",
@@ -3981,7 +4430,9 @@
         "role": "advanced",
         "label": "Groups to compare",
         "default": null,
-        "columnTypes": ["categorical"]
+        "columnTypes": [
+          "categorical"
+        ]
       },
       {
         "name": "exact",
@@ -4001,7 +4452,9 @@
         "role": "required",
         "label": "Test variable",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "hypothesized_mean",
@@ -4028,7 +4481,9 @@
         "role": "required",
         "label": "Before",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "after_column",
@@ -4036,7 +4491,9 @@
         "role": "required",
         "label": "After",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",
@@ -4063,7 +4520,9 @@
         "role": "required",
         "label": "Items",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "k",
@@ -4123,7 +4582,9 @@
         "role": "required",
         "label": "First variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "column_b",
@@ -4131,7 +4592,9 @@
         "role": "required",
         "label": "Second variable",
         "default": null,
-        "columnTypes": ["any"]
+        "columnTypes": [
+          "any"
+        ]
       },
       {
         "name": "weights",
@@ -4151,7 +4614,9 @@
         "role": "required",
         "label": "Before",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "after_column",
@@ -4159,7 +4624,9 @@
         "role": "required",
         "label": "After",
         "default": null,
-        "columnTypes": ["numeric"]
+        "columnTypes": [
+          "numeric"
+        ]
       },
       {
         "name": "confidence_level",

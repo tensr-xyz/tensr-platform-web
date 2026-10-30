@@ -505,7 +505,9 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
               Method
               <Select
                 value={estimate}
-                onValueChange={value => setEstimate(value as 'mnl' | 'utilities' | 'counting')}
+                onValueChange={value =>
+                  setEstimate(value as 'mnl' | 'utilities' | 'counting')
+                }
               >
                 <SelectTrigger className="mt-1 w-full text-sm">
                   <SelectValue />
@@ -558,78 +560,58 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
               {mode === 'cbc' ? `method ${estimate}, layout ${layout}` : `method ${estimate}`}
             </p>
             <AdvancedOptionsDisclosure>
-              {mode === 'cbc' ? (
-                <Select value={layout} onValueChange={value => setLayout(value as 'long' | 'wide')}>
-                  <SelectTrigger className="w-full text-sm">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="long">Long format</SelectItem>
-                    <SelectItem value="wide">Wide format</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : null}
-              {mode === 'cbc' && layout === 'wide' ? (
-                <Label>
-                  Alternatives, one per line
-                  <textarea
-                    className="border-input bg-background min-h-16 w-full rounded-md border px-3 py-2 text-sm"
-                    value={wideLines}
-                    onChange={event => setWideLines(event.target.value)}
-                  />
-                </Label>
-              ) : null}
-              {mode === 'cbc' ? (
-                <Label>
-                  Design file to join
-                  <Input
-                    type="file"
-                    accept=".csv,text/csv"
-                    onChange={event => {
-                      const file = event.target.files?.[0];
-                      if (!file) return;
-                      void file.text().then(text => {
-                        const [header, ...lines] = text.trim().split(/\r?\n/);
-                        const names = header.split(',').map(name => name.trim());
-                        setDesignRows(
-                          lines.filter(Boolean).map(line => {
-                            const cells = line.split(',');
-                            return Object.fromEntries(
-                              names.map((name, index) => [name, (cells[index] || '').trim()])
-                            );
-                          })
-                        );
-                      });
-                    }}
-                  />
-                </Label>
-              ) : null}
-              {mode === 'cbc' ? (
-                <Label>
-                  Price attribute for willingness to pay
-                  <Select
-                    value={price || '__none__'}
-                    onValueChange={value => setPrice(value === '__none__' ? '' : value)}
-                  >
-                    <SelectTrigger className="mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">None</SelectItem>
-                      {columns.map(column => (
-                        <SelectItem key={column} value={column}>
-                          {column}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </Label>
-              ) : null}
+            {mode === 'cbc' ? (
+              <Select value={layout} onValueChange={value => setLayout(value as 'long' | 'wide')}>
+                <SelectTrigger className="w-full text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="long">Long format</SelectItem>
+                  <SelectItem value="wide">Wide format</SelectItem>
+                </SelectContent>
+              </Select>
+            ) : null}
+            {mode === 'cbc' && layout === 'wide' ? (
               <Label>
-                Segment by
+                Alternatives, one per line
+                <textarea
+                  className="border-input bg-background min-h-16 w-full rounded-md border px-3 py-2 text-sm"
+                  value={wideLines}
+                  onChange={event => setWideLines(event.target.value)}
+                />
+              </Label>
+            ) : null}
+            {mode === 'cbc' ? (
+              <Label>
+                Design file to join
+                <Input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={event => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    void file.text().then(text => {
+                      const [header, ...lines] = text.trim().split(/\r?\n/);
+                      const names = header.split(',').map(name => name.trim());
+                      setDesignRows(
+                        lines.filter(Boolean).map(line => {
+                          const cells = line.split(',');
+                          return Object.fromEntries(
+                            names.map((name, index) => [name, (cells[index] || '').trim()])
+                          );
+                        })
+                      );
+                    });
+                  }}
+                />
+              </Label>
+            ) : null}
+            {mode === 'cbc' ? (
+              <Label>
+                Price attribute for willingness to pay
                 <Select
-                  value={segment || '__none__'}
-                  onValueChange={value => setSegment(value === '__none__' ? '' : value)}
+                  value={price || '__none__'}
+                  onValueChange={value => setPrice(value === '__none__' ? '' : value)}
                 >
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -644,6 +626,26 @@ export function ChoiceModellingDialog({ children, mode }: { children: ReactNode;
                   </SelectContent>
                 </Select>
               </Label>
+            ) : null}
+            <Label>
+              Segment by
+              <Select
+                value={segment || '__none__'}
+                onValueChange={value => setSegment(value === '__none__' ? '' : value)}
+              >
+                <SelectTrigger className="mt-1">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {columns.map(column => (
+                    <SelectItem key={column} value={column}>
+                      {column}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Label>
             </AdvancedOptionsDisclosure>
             <FormSectionLabel>Report output</FormSectionLabel>
             <p className="text-xs text-muted-foreground">

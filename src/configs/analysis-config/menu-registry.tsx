@@ -109,7 +109,9 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Shift Values': ShiftValuesDialog,
   'Custom Tables': CustomTablesDialog,
   'Pivot table': PivotTableDialog,
-  Conjoint: ({ children }) => <ChoiceModellingDialog mode="cbc">{children}</ChoiceModellingDialog>,
+  Conjoint: ({ children }) => (
+    <ChoiceModellingDialog mode="cbc">{children}</ChoiceModellingDialog>
+  ),
   MaxDiff: ({ children }) => (
     <ChoiceModellingDialog mode="maxdiff">{children}</ChoiceModellingDialog>
   ),
