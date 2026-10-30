@@ -65,7 +65,9 @@ function normalizeSpec(raw: Record<string, unknown>): AnalysisSpec {
     rReference: readString(raw, 'rReference', 'r_reference') ?? '',
     outputs: outputs.map(String),
     params: params
-      .filter((param): param is Record<string, unknown> => Boolean(param) && typeof param === 'object')
+      .filter(
+        (param): param is Record<string, unknown> => Boolean(param) && typeof param === 'object'
+      )
       .map(normalizeParam),
   };
 }
@@ -103,7 +105,9 @@ export function ensureAnalysisSpecs(): Promise<void> {
       const specs = Array.isArray(body.specs) ? body.specs : [];
       cachedSpecs = new Map(
         specs
-          .filter((spec): spec is Record<string, unknown> => Boolean(spec) && typeof spec === 'object')
+          .filter(
+            (spec): spec is Record<string, unknown> => Boolean(spec) && typeof spec === 'object'
+          )
           .map(spec => normalizeSpec(spec))
           .filter(spec => spec.key)
           .map(spec => [spec.key, spec])

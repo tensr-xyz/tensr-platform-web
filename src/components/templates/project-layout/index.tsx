@@ -213,8 +213,8 @@ const ProjectLayout = ({
             defaultSize={terminalOpen ? 75 : 100}
             className="overflow-hidden"
           >
-                <div className="h-full min-w-0 flex flex-col">
-                  <div className="min-w-0 flex-1 overflow-hidden">
+            <div className="h-full min-w-0 flex flex-col">
+              <div className="min-w-0 flex-1 overflow-hidden">
                 <WorkspaceErrorBoundary title="Workspace panel error">
                   {renderContent()}
                 </WorkspaceErrorBoundary>

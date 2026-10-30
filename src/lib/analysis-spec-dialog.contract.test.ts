@@ -73,7 +73,11 @@ describe.each(DIALOG_CASES)('$key setup dialog', row => {
     const values = valuesFromSpec(spec, null, 'active_w', SCHEMA);
     for (const param of required) {
       const value = values[param.name];
-      if (param.name === 'weight' || param.name === 'weight_column' || param.name === 'design_weight_column') {
+      if (
+        param.name === 'weight' ||
+        param.name === 'weight_column' ||
+        param.name === 'design_weight_column'
+      ) {
         expect(value).toBe('active_w');
       } else if (param.type === 'columns') {
         expect(value).toEqual([]);
@@ -116,8 +120,8 @@ describe('named dialogs', () => {
 
   it('descriptives, t-test, and banner use the researcher labels', () => {
     const labels = (key: string) =>
-      specFrom(DIALOG_CASES.find(row => row.key === key)!).params
-        .filter(param => param.role === 'required')
+      specFrom(DIALOG_CASES.find(row => row.key === key)!)
+        .params.filter(param => param.role === 'required')
         .map(param => param.label);
     expect(labels('descriptives')).toEqual(expect.arrayContaining(['Variables', 'Weight']));
     expect(labels('ttest_independent')).toEqual(

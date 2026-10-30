@@ -31,7 +31,13 @@ export const SPEC_FIXTURES: AnalysisSpec[] = [
         default: 0.95,
         label: 'confidence',
       },
-      { name: 'include_constant', type: 'boolean', role: 'default', default: true, label: 'constant' },
+      {
+        name: 'include_constant',
+        type: 'boolean',
+        role: 'default',
+        default: true,
+        label: 'constant',
+      },
       {
         name: 'method',
         type: 'enum',
