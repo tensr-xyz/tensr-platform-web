@@ -476,7 +476,7 @@ function ChatScreen({ project, datasets }: { project?: FlowProject; datasets: Da
 
   const send = async () => {
     const text = question;
-    if (!text.trim()) return;
+    if (!text.trim() || status === 'Warming up') return;
     setStatus('Warming up');
     try {
       const result = await runAgentLoop({
@@ -532,7 +532,12 @@ function ChatScreen({ project, datasets }: { project?: FlowProject; datasets: Da
           onChange={event => setQuestion(event.target.value)}
           placeholder="Ask about this project"
         />
-        <button className="flow-btn primary" type="button" onClick={() => void send()}>
+        <button
+          className="flow-btn primary"
+          type="button"
+          disabled={status === 'Warming up'}
+          onClick={() => void send()}
+        >
           Send
         </button>
       </section>
@@ -546,6 +551,7 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
   const [phase, setPhase] = useState<'idle' | 'warming' | 'error' | 'done'>('idle');
   const [note, setNote] = useState('');
   const ask = async () => {
+    if (phase === 'warming' || !question.trim()) return;
     const text = question;
     setPhase('warming');
     setNote('Warming up');
@@ -575,7 +581,12 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
         value={question}
         onChange={event => setQuestion(event.target.value)}
       />
-      <button className="flow-btn" type="button" onClick={() => void ask()}>
+      <button
+        className="flow-btn"
+        type="button"
+        disabled={phase === 'warming'}
+        onClick={() => void ask()}
+      >
         Ask about the open table
       </button>
       {phase === 'warming' ? <p>Warming up</p> : null}

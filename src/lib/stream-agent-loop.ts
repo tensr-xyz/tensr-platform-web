@@ -286,7 +286,7 @@ export async function streamAgentLoop(
 
   if (!acc.result && acc.draft) {
     acc.result = {
-      status: acc.draft.status,
+      status: acc.draft.status === 'continuing' ? 'ok' : acc.draft.status,
       mode: params.mode,
       answer_markdown: acc.draft.text,
     };
