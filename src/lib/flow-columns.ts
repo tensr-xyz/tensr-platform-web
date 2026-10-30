@@ -2,6 +2,7 @@
 
 export type FlowColumn = {
   name: string;
+  label?: string | null;
   type?: string;
   measure?: string;
 };

@@ -101,6 +101,7 @@ export type RunAgentLoopParams = {
   onProgress?: (progress: { type: string; step: string; message: string }) => void;
   onDelta?: (text: string) => void;
   onReplace?: (text: string) => void;
+  signal?: AbortSignal;
 };
 
 export function collectOpenDatasetsFromTabs(tabs: Tab[]): AgentLoopOpenDataset[] {
@@ -168,9 +169,20 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           approvedBatch: params.approvedBatch,
           resumeHops: params.resumeHops,
         },
-        { onProgress: params.onProgress, onDelta: params.onDelta, onReplace: params.onReplace }
+        {
+          onProgress: params.onProgress,
+          onDelta: params.onDelta,
+          onReplace: params.onReplace,
+          signal: params.signal,
+        }
       );
     } catch (error) {
+      if (
+        error instanceof Error &&
+        (error.name === 'TimeoutError' || error.name === 'AbortError')
+      ) {
+        throw error;
+      }
       lastError = error;
       const status = error instanceof ApiRequestError ? error.status : 0;
       const warmup =

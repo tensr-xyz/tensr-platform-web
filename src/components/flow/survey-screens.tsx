@@ -593,13 +593,29 @@ export function CodeFramePanel({
               source_dataset_id: sourceDataset,
               code_column: `${textColumn}_codes`,
               use_model: false,
+              candidate_dataset_ids: datasets.map(dataset => datasetRowId(dataset)).filter(Boolean),
             }),
           })
             .then(result => {
               setProgress(result);
               if (result.derived_dataset_id) onAdopted?.(String(result.derived_dataset_id));
             })
-            .catch(err => setError(err instanceof Error ? err.message : 'Reapply failed'));
+            .catch(err => {
+              const raw = err instanceof Error ? err.message : 'Reapply failed';
+              try {
+                const body = JSON.parse(raw) as {
+                  detail?: { message?: string; frames?: { dataset_id: string }[] };
+                };
+                const frames = body.detail?.frames || [];
+                if (frames[0]?.dataset_id) setSourceDataset(frames[0].dataset_id);
+                setError(
+                  body.detail?.message ||
+                    'That file has no saved code frame. Pick the dataset in this project that has one.'
+                );
+              } catch {
+                setError(raw);
+              }
+            });
         }}
       >
         <select

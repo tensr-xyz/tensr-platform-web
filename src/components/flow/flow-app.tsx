@@ -42,13 +42,34 @@ type DatasetRow = {
   updated_at?: string;
 };
 
+function LogoMark() {
+  return (
+    <svg className="flow-logo" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true">
+      <rect width="48" height="48" rx="8" fill="#1B1C1A" />
+      <rect x="8" y="8" width="12" height="12" rx="2" fill="#FFFFFF" />
+      <rect x="24" y="8" width="12" height="12" rx="2" fill="#6FC2A6" />
+      <rect x="8" y="24" width="12" height="12" rx="2" fill="#FFFFFF" />
+      <rect x="24" y="24" width="12" height="12" rx="2" fill="#FFFFFF" />
+      <rect x="24" y="32" width="12" height="8" rx="2" fill="#FFFFFF" />
+    </svg>
+  );
+}
+
+function editedLabel(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
 const PROJECT_TABS = [
   ['chat', 'Chat'],
+  ['details', 'Details'],
   ['sources', 'Sources'],
   ['responses', 'Responses'],
   ['tables', 'Tables'],
   ['report', 'Report'],
-  ['interviews', 'Interviews'],
+  ['clips', 'Clips'],
 ] as const;
 
 export function FlowApp({ slug }: { slug: string[] }) {
@@ -62,6 +83,9 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [folderName, setFolderName] = useState<string | null>(null);
   const [datasets, setDatasets] = useState<DatasetRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [account, setAccount] = useState('');
+  const [orgName, setOrgName] = useState('');
+  const [shareOpen, setShareOpen] = useState(false);
 
   useEffect(() => {
     if (!isAuthReady) return;
@@ -89,6 +113,20 @@ export function FlowApp({ slug }: { slug: string[] }) {
   useEffect(() => {
     if (isAuthenticated) void reload();
   }, [isAuthenticated, reload]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    void flowJson<{
+      email?: string;
+      user?: { email?: string; name?: string };
+      active_organization?: { name?: string };
+    }>('/me')
+      .then(page => {
+        setAccount(page.user?.name || page.user?.email || page.email || '');
+        setOrgName(page.active_organization?.name || '');
+      })
+      .catch(() => undefined);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     window.localStorage.removeItem('tensr-classic');
@@ -137,64 +175,114 @@ export function FlowApp({ slug }: { slug: string[] }) {
     });
   }, [openDatasetId, openDataset?.original_filename]);
 
+  const initials = account
+    .split(/[\s@]/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part[0]?.toUpperCase())
+    .join('');
+
   return (
     <SubscriptionGate>
-      <div className="flow">
-        <aside className="flow-side">
-          <div className="flow-brand">
-            <strong>Tensr</strong>
-            <span>workspace</span>
-          </div>
-          <nav className="flow-nav">
-            <button type="button" onClick={() => router.push('/flow')}>
-              New project
-            </button>
-            <button type="button" onClick={() => setPalette(true)}>
-              Search <span className="flow-muted">⌘K</span>
-            </button>
-            <Link href="/flow">Home</Link>
-            <button type="button" data-active={section === 'projects'}>
-              Datasets <span className="flow-muted">{datasets.length}</span>
-            </button>
-            <Link href="/flow/plugins">Plugins</Link>
-          </nav>
-          <div>
-            <div className="flow-muted">Folders</div>
-            {folders.map(folder => (
+      <div className={projectId ? 'flow flow-project' : 'flow flow-home'}>
+        {projectId ? null : (
+          <aside className="flow-side">
+            <div className="flow-brand">
+              <LogoMark />
+              <div className="flow-brand-name">
+                <strong>Tensr</strong>
+                <em>{orgName ? ` · ${orgName}` : ''}</em>
+              </div>
+            </div>
+            <nav className="flow-nav">
+              <button className="flow-new" type="button" onClick={() => router.push('/flow')}>
+                New project <span className="flow-k">⌘N</span>
+              </button>
+              <button type="button" onClick={() => setPalette(true)}>
+                Search <span className="flow-k">⌘K</span>
+              </button>
+              <Link href="/flow" data-active={section === 'projects'}>
+                Home
+              </Link>
+              <Link href="/flow" data-active="false">
+                Datasets <span className="flow-k">{datasets.length}</span>
+              </Link>
+              <Link href="/flow/plugins" data-active={section === 'plugins'}>
+                Plugins
+              </Link>
+            </nav>
+            <div className="flow-folders">
+              <h2>Folders</h2>
+              <FolderCreate onCreated={reload} />
+              {folders.map(folder => (
+                <button
+                  key={folder.id}
+                  type="button"
+                  data-active={folderName === folder.name}
+                  onClick={() => {
+                    setFolderName(folder.name);
+                    router.push('/flow');
+                  }}
+                >
+                  {folder.name}
+                </button>
+              ))}
+            </div>
+            <div className="flow-user">
+              <span className="flow-avatar">{initials || '·'}</span>
+              <div>
+                <strong>{account || 'Signed in'}</strong>
+                <span>
+                  {orgName && account && orgName.startsWith(account)
+                    ? orgName.slice(account.length).trim() || 'Workspace'
+                    : orgName || 'Workspace'}
+                </span>
+              </div>
               <button
-                key={folder.id}
-                className="flow-folder"
+                className="flow-btn"
                 type="button"
-                data-active={folderName === folder.name}
+                aria-label="Classic workspace"
                 onClick={() => {
-                  setFolderName(folder.name);
-                  router.push('/flow');
+                  window.localStorage.setItem('tensr-classic', '1');
+                  router.push('/dashboard?classic=1');
                 }}
               >
-                {folder.name}
+                ···
               </button>
-            ))}
-            <FolderCreate onCreated={reload} />
-          </div>
-          <button
-            type="button"
-            className="flow-muted"
-            onClick={() => {
-              window.localStorage.setItem('tensr-classic', '1');
-              router.push('/dashboard?classic=1');
-            }}
-          >
-            Classic workspace
-          </button>
-        </aside>
-        <div className="flow-main">
-          <header className="flow-top">
-            <div>
-              <div className="flow-muted">{project ? 'Project' : 'Workspace'}</div>
-              <h1>{project?.name || 'Projects'}</h1>
             </div>
-            {projectId ? (
-              <nav className="flow-tabs">
+          </aside>
+        )}
+        <div className="flow-main">
+          {projectId ? (
+            <>
+              <header className="proj-bar">
+                <div className="proj-brand">
+                  <Link href="/flow" aria-label="Projects">
+                    <LogoMark />
+                  </Link>
+                  <div>
+                    <strong>{project?.name || 'Project'}</strong>
+                    <span className="flow-muted">
+                      {project?.updated_at
+                        ? `Edited ${editedLabel(project.updated_at)}`
+                        : 'Project'}
+                    </span>
+                  </div>
+                </div>
+                <button className="proj-search" type="button" onClick={() => setPalette(true)}>
+                  Search analyses
+                </button>
+                <div className="proj-actions">
+                  <span className="flow-soon">Fielding coming soon</span>
+                  <button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
+                    Share
+                  </button>
+                  <Link className="flow-btn primary" href={`/flow/p/${projectId}/report`}>
+                    Export
+                  </Link>
+                </div>
+              </header>
+              <nav className="proj-tabs">
                 {PROJECT_TABS.map(([key, label]) => (
                   <Link
                     key={key}
@@ -205,8 +293,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   </Link>
                 ))}
               </nav>
-            ) : null}
-          </header>
+            </>
+          ) : null}
           <div className="flow-body">
             {error ? <p className="flow-error">{error}</p> : null}
             {section === 'plugins' ? (
@@ -218,6 +306,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 folderName={folderName}
                 onCreated={reload}
               />
+            ) : section === 'details' ? (
+              <DetailsScreen project={project} />
             ) : section === 'sources' ? (
               <SourcesScreen projectId={projectId} datasets={datasets} />
             ) : section === 'responses' ? (
@@ -228,6 +318,15 @@ export function FlowApp({ slug }: { slug: string[] }) {
               <ReportScreen projectId={projectId} project={project} datasets={datasets} />
             ) : section === 'interviews' ? (
               <InterviewsScreen projectId={projectId} project={project} datasets={datasets} />
+            ) : section === 'clips' ? (
+              <section className="flow-panel">
+                <h2>Clips</h2>
+                <p className="flow-soon">Coming soon</p>
+                <p className="flow-muted">
+                  Interview audio and clip reels are not available. Transcripts are on Interviews.
+                </p>
+                <Link href={`/flow/p/${projectId}/interviews`}>Open interviews</Link>
+              </section>
             ) : (
               <ChatScreen
                 project={project}
@@ -248,6 +347,9 @@ export function FlowApp({ slug }: { slug: string[] }) {
               if (projectId) router.push(`/flow/p/${projectId}/chat`);
             }}
           />
+        ) : null}
+        {shareOpen && projectId ? (
+          <ShareModal projectId={projectId} onClose={() => setShareOpen(false)} />
         ) : null}
         <AnalysisSetupHost />
       </div>
@@ -306,7 +408,8 @@ function ProjectsScreen({
   });
   return (
     <div>
-      <div className="flow-tabs" style={{ marginBottom: 16 }}>
+      <h1 className="flow-page-title">{folderName || 'Projects'}</h1>
+      <div className="flow-toolbar">
         <button
           className="flow-chip"
           type="button"
@@ -425,13 +528,61 @@ function ProjectsScreen({
 
 function ProjectCard({ project, datasets }: { project: FlowProject; datasets: DatasetRow[] }) {
   const count = datasets.filter(row => row.project_id === project.id).length;
+  const status = project.status || 'active';
   return (
     <Link href={`/flow/p/${project.id}/chat`} className="flow-card">
-      <div className="flow-muted">{project.folder || 'No folder'}</div>
+      <span className={status === 'active' ? 'flow-pill live' : 'flow-pill'}>{status}</span>
       <h2>{project.name}</h2>
-      <div>{count} datasets</div>
-      <div className="flow-muted">{project.status || 'active'}</div>
+      <div className="flow-muted">{project.folder || 'No folder'}</div>
+      <div>
+        {count} dataset{count === 1 ? '' : 's'}
+      </div>
+      <div className="flow-muted">{editedLabel(project.updated_at)}</div>
     </Link>
+  );
+}
+
+function DetailsScreen({ project }: { project?: FlowProject }) {
+  return (
+    <section className="flow-panel">
+      <h2>{project?.name || 'Project'}</h2>
+      <p className="flow-muted">Folder {project?.folder || 'None'}</p>
+      <p className="flow-muted">Status {project?.status || 'active'}</p>
+      <p className="flow-muted">Edited {project?.updated_at || '—'}</p>
+      {project ? <Members projectId={project.id} /> : null}
+    </section>
+  );
+}
+
+function ShareModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
+  const [note, setNote] = useState('');
+  const link =
+    typeof window === 'undefined' ? '' : `${window.location.origin}/flow/p/${projectId}/chat`;
+  return (
+    <div className="flow-modal">
+      <div>
+        <h2>Share</h2>
+        <p className="flow-muted">
+          Anyone in this workspace with the project can open it. Public links are coming soon.
+        </p>
+        <input className="flow-input" readOnly value={link} aria-label="Project link" />
+        <div className="flow-row">
+          <button
+            className="flow-btn primary"
+            type="button"
+            onClick={() => {
+              void navigator.clipboard.writeText(link).then(() => setNote('Copied'));
+            }}
+          >
+            Copy link
+          </button>
+          <button className="flow-btn" type="button" onClick={onClose}>
+            Close
+          </button>
+        </div>
+        {note ? <p>{note}</p> : null}
+      </div>
+    </div>
   );
 }
 
@@ -602,12 +753,25 @@ function ChatScreen({
       if (!text.trim() || status === 'Warming up') return;
       setQuestion(text);
       setStatus('Warming up');
+      setAnswer('');
+      let draft = '';
       try {
         const result = await runAgentLoop({
           message: text,
           mode: 'agent',
           datasetId: datasetId || null,
           agentVersion: 'v2',
+          signal: AbortSignal.timeout(120_000),
+          onDelta: chunk => {
+            draft += chunk;
+            setAnswer(draft);
+            setStatus(null);
+          },
+          onReplace: next => {
+            draft = next;
+            setAnswer(next);
+            setStatus(null);
+          },
         });
         setAnswer(result.answer_markdown || '');
         const entries = (result.tool_results || []).flatMap(item => {
@@ -642,8 +806,9 @@ function ChatScreen({
 
   return (
     <div className="flow-split">
-      <section>
+      <aside className="flow-rail">
         <div className="flow-muted">Chats</div>
+        {sessions.length === 0 ? <p className="flow-muted">No saved chats yet</p> : null}
         {sessions.map(session => (
           <div key={session.session_id}>{session.session_id.slice(0, 8)}</div>
         ))}
@@ -651,9 +816,13 @@ function ChatScreen({
         {recipes.map(recipe => (
           <div key={recipe.recipe_id}>{recipe.name}</div>
         ))}
+      </aside>
+      <section className="flow-thread">
         {answer ? (
-          <article className="flow-panel" dangerouslySetInnerHTML={{ __html: plain(answer) }} />
-        ) : null}
+          <article dangerouslySetInnerHTML={{ __html: plain(answer) }} />
+        ) : (
+          <p className="flow-muted">Ask about this project. The reply stays in this thread.</p>
+        )}
         {downloads.map(file => (
           <button
             key={file.key}
@@ -664,21 +833,24 @@ function ChatScreen({
             {file.filename}
           </button>
         ))}
-        {status ? <p className="flow-error">{status}</p> : null}
-        <textarea
-          className="flow-text"
-          value={question}
-          onChange={event => setQuestion(event.target.value)}
-          placeholder="Ask about this project"
-        />
-        <button
-          className="flow-btn primary"
-          type="button"
-          disabled={status === 'Warming up'}
-          onClick={() => void send()}
-        >
-          Send
-        </button>
+        {status === 'Warming up' ? <p className="flow-status">Warming up</p> : null}
+        {status && status !== 'Warming up' ? <p className="flow-error">{status}</p> : null}
+        <div className="flow-composer">
+          <textarea
+            className="flow-text"
+            value={question}
+            onChange={event => setQuestion(event.target.value)}
+            placeholder="Ask about this project"
+          />
+          <button
+            className="flow-btn primary"
+            type="button"
+            disabled={status === 'Warming up'}
+            onClick={() => void send()}
+          >
+            Send
+          </button>
+        </div>
       </section>
       <SidePanel datasetId={datasetId} />
     </div>
@@ -713,7 +885,7 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
     }
   };
   return (
-    <aside className="flow-panel">
+    <aside className="flow-output">
       <h2>Ask</h2>
       <textarea
         className="flow-text"
@@ -863,6 +1035,7 @@ function StackScreen({
             body: JSON.stringify({
               dataset_ids: ids,
               wave_names: ids.map((_, index) => `wave_${index + 1}`),
+              mappings,
             }),
           }
         )
@@ -951,7 +1124,11 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
     datasets[0]?.dataset_id;
   const [tab, setTab] = useState<'sheet' | 'notebook' | 'evidence' | 'themes'>('sheet');
   const [columns, setColumns] = useState<FlowColumn[]>([]);
-  const [preview, setPreview] = useState<string[][]>([]);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [preview, setPreview] = useState<unknown[][]>([]);
+  const [pageOffset, setPageOffset] = useState(0);
+  const [rowTotal, setRowTotal] = useState(0);
+  const pageSize = 50;
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
   const [descError, setDescError] = useState<string | null>(null);
@@ -967,10 +1144,19 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
         setColumns(rows);
       })
       .catch(() => setColumns([]));
-    void flowJson<{ rows?: string[][] }>(`/datasets/${datasetId}/preview`)
-      .then(page => setPreview(page.rows || []))
-      .catch(() => setPreview([]));
-  }, [datasetId]);
+    void flowJson<{ rows?: unknown[][]; headers?: string[]; n_rows?: number }>(
+      `/datasets/${datasetId}/preview?limit=${pageSize}&offset=${pageOffset}`
+    )
+      .then(page => {
+        setHeaders(page.headers || []);
+        setPreview(page.rows || []);
+        setRowTotal(page.n_rows || 0);
+      })
+      .catch(() => {
+        setPreview([]);
+        setHeaders([]);
+      });
+  }, [datasetId, pageOffset]);
   return (
     <div>
       <div className="flow-tabs" style={{ marginBottom: 12 }}>
@@ -994,17 +1180,54 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
       </div>
       {tab === 'sheet' ? (
         <div>
-          <table className="flow-table">
-            <tbody>
-              {preview.slice(0, 8).map((row, index) => (
-                <tr key={index}>
-                  {row.slice(0, 6).map((cell, cellIndex) => (
-                    <td key={cellIndex}>{String(cell)}</td>
+          <div className="flow-table-wrap flow-sheet">
+            <table className="flow-table">
+              <thead>
+                <tr>
+                  {(headers.length
+                    ? headers
+                    : columns.map(column => column.label || column.name)
+                  ).map((header, index) => (
+                    <th key={`${header}-${index}`}>{header}</th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {preview.map((row, index) => (
+                  <tr key={index}>
+                    {row.map((cell, cellIndex) => (
+                      <td key={cellIndex}>{cell == null || cell === 'null' ? '' : String(cell)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="flow-paging">
+            <span>
+              {rowTotal === 0
+                ? '0 rows'
+                : `${pageOffset + 1}–${Math.min(pageOffset + preview.length, rowTotal)} of ${rowTotal}`}
+            </span>
+            <span>
+              <button
+                className="flow-btn"
+                type="button"
+                disabled={pageOffset === 0}
+                onClick={() => setPageOffset(current => Math.max(0, current - pageSize))}
+              >
+                Previous
+              </button>{' '}
+              <button
+                className="flow-btn"
+                type="button"
+                disabled={pageOffset + pageSize >= rowTotal}
+                onClick={() => setPageOffset(current => current + pageSize)}
+              >
+                Next
+              </button>
+            </span>
+          </div>
           <button
             className="flow-btn"
             type="button"
