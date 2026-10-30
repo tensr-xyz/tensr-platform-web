@@ -629,9 +629,13 @@ function ChatScreen({
 
   useEffect(() => {
     if (!pendingAsk || askedRef.current === pendingAsk) return;
-    askedRef.current = pendingAsk;
-    onAsked?.();
-    void sendText(pendingAsk);
+    const text = pendingAsk;
+    const handle = window.setTimeout(() => {
+      askedRef.current = text;
+      onAsked?.();
+      void sendText(text);
+    }, 0);
+    return () => window.clearTimeout(handle);
   }, [pendingAsk, onAsked, sendText]);
 
   const send = () => void sendText(question);
@@ -1052,6 +1056,22 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   );
 }
 
+function notebookText(result: {
+  stdout?: string | null;
+  output?: unknown;
+  error?: string | null;
+}): string {
+  if (typeof result.error === 'string' && result.error) return result.error;
+  if (typeof result.stdout === 'string' && result.stdout) return result.stdout;
+  if (typeof result.output === 'string') return result.output;
+  if (result.output == null) return '';
+  try {
+    return JSON.stringify(result.output, null, 2);
+  } catch {
+    return 'The notebook returned a value that could not be shown.';
+  }
+}
+
 function Notebook({ datasetId }: { datasetId?: string }) {
   const [code, setCode] = useState('df.head()');
   const [output, setOutput] = useState('');
@@ -1070,11 +1090,14 @@ function Notebook({ datasetId }: { datasetId?: string }) {
         className="flow-btn"
         type="button"
         onClick={() => {
-          void flowJson<{ output?: string; error?: string }>('/api/execute/python', {
-            method: 'POST',
-            body: JSON.stringify({ code, dataset_id: datasetId, save_as_dataset: false }),
-          })
-            .then(result => setOutput(result.error || result.output || ''))
+          void flowJson<{ stdout?: string | null; output?: unknown; error?: string | null }>(
+            '/api/execute/python',
+            {
+              method: 'POST',
+              body: JSON.stringify({ code, dataset_id: datasetId, save_as_dataset: false }),
+            }
+          )
+            .then(result => setOutput(notebookText(result)))
             .catch(err =>
               setOutput(err instanceof Error ? err.message : 'The notebook could not run')
             );
@@ -1366,11 +1389,13 @@ function InterviewsScreen({
       }[];
       themes?: string[];
       count_label?: string;
-    }>(`/api/projects/${projectId}/interviews${query}`).then(page => {
-      setRows(page.interviews || []);
-      setThemes(page.themes || []);
-      setLabel(page.count_label || '');
-    });
+    }>(`/api/projects/${projectId}/interviews${query}`)
+      .then(page => {
+        setRows(page.interviews || []);
+        setThemes(page.themes || []);
+        setLabel(page.count_label || '');
+      })
+      .catch(err => setLabel(err instanceof Error ? err.message : 'Could not load interviews'));
   }, [projectId, theme]);
   useEffect(() => {
     load();

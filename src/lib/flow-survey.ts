@@ -9,7 +9,11 @@ export type BannerCell = {
   percent?: number | null;
   column_unweighted_n?: number;
   unweighted_n?: number;
-  provenance?: { row_uid_bitset?: string };
+  provenance?: {
+    row_uid_bitset?: string;
+    origin_bitsets?: Record<string, { row_uid_bitset?: string }>;
+    provenance_unavailable?: string;
+  };
 };
 
 export type BannerRow = {
@@ -64,13 +68,25 @@ export function efficiencyPercent(value: unknown): string {
   return `${percent.toFixed(1)}%`;
 }
 
+function bitsetFrom(cell: BannerCell): string {
+  if (cell.provenance?.provenance_unavailable) return '';
+  const direct = cell.provenance?.row_uid_bitset;
+  if (direct) return direct;
+  const origins = cell.provenance?.origin_bitsets;
+  if (!origins) return '';
+  for (const item of Object.values(origins)) {
+    if (item?.row_uid_bitset) return item.row_uid_bitset;
+  }
+  return '';
+}
+
 export function selectionFromCell(
   book: Record<string, unknown>,
   row: BannerRow,
   cell: BannerCell | undefined
 ): SurveyCell | null {
-  const bitset = cell?.provenance?.row_uid_bitset;
-  if (!cell || !bitset) return null;
+  if (!cell) return null;
+  const bitset = bitsetFrom(cell);
   const weight = book.resolved_weight || (book.weight as { column?: string } | undefined)?.column;
   const percent = cell.percent != null ? `${cell.percent.toFixed(1)}%` : '';
   const count = cell.unweighted_n != null ? String(cell.unweighted_n) : '';

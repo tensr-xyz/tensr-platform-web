@@ -212,6 +212,8 @@ export function EvidencePanel({ datasetId }: { datasetId?: string }) {
   useEffect(() => {
     if (!datasetId || !cell?.bitset || !cell.textColumn) {
       setQuotes(null);
+      if (cell && !cell.bitset)
+        setError('This cell has no respondent bitset, so the verbatims cannot be listed.');
       return;
     }
     setError('');

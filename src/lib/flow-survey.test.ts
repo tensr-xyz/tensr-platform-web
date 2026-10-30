@@ -32,6 +32,41 @@ describe('flow survey grid', () => {
     });
   });
 
+  it('uses an origin bitset when the cell does not carry one of its own', () => {
+    const selected = selectionFromCell(
+      {},
+      { id: 'row-1', label: 'Theme', column: 'open_end' },
+      {
+        banner_id: 'total',
+        percent: 10,
+        unweighted_n: 2,
+        column_unweighted_n: 8,
+        provenance: { origin_bitsets: { origin: { row_uid_bitset: 'abc' } } },
+      }
+    );
+    expect(selected?.bitset).toBe('abc');
+    expect(selected?.percent).toBe('10.0%');
+  });
+
+  it('keeps the cell claim when provenance says the bitset is unavailable', () => {
+    const selected = selectionFromCell(
+      {},
+      { id: 'row-1', label: 'Theme', column: 'open_end' },
+      {
+        banner_id: 'total',
+        percent: 10,
+        unweighted_n: 2,
+        column_unweighted_n: 8,
+        provenance: {
+          provenance_unavailable: 'unknown_row_uids',
+          origin_bitsets: { origin: { row_uid_bitset: 'abc' } },
+        },
+      }
+    );
+    expect(selected?.bitset).toBe('');
+    expect(selected?.n).toBe('2');
+  });
+
   it('shows rake efficiency as a percent', () => {
     expect(efficiencyPercent(0.82)).toBe('82.0%');
   });
