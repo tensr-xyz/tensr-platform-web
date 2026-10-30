@@ -34,6 +34,15 @@ function emailCodeSendError(err: unknown): string {
 const LoginTemplate = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const sessionToken = hash.get('session_token');
+    if (!sessionToken) return;
+    storeSession(sessionToken, hash.get('session_jwt') || undefined);
+    window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    router.replace(safeReturnTo(searchParams.get('returnTo')) || '/flow');
+  }, [router, searchParams]);
   const {
     initiateAuth,
     verifyAuth,
