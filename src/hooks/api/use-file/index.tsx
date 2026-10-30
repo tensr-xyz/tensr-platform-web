@@ -43,6 +43,8 @@ export const useFileHandler = ({
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [files, setFiles] = useState<FileMetadata[]>([]);
+  const filesRef = useRef(files);
+  filesRef.current = files;
   const [lastSavedTime, setLastSavedTime] = useState<Date | null>(null);
   const [fileVersions, setFileVersions] = useState<FileVersion[]>([]);
   const [isLoadingVersions, setIsLoadingVersions] = useState(false);
@@ -118,7 +120,11 @@ export const useFileHandler = ({
       }
 
       const data = await response.json();
-      const rows = Array.isArray(data) ? data : [];
+      const rows = Array.isArray(data)
+        ? data
+        : Array.isArray((data as { datasets?: unknown[] })?.datasets)
+          ? (data as { datasets: Record<string, unknown>[] }).datasets
+          : [];
       const userFiles: FileMetadata[] = rows.map((row: Record<string, unknown>) => {
         const updated = String(row.updated_at ?? '');
         return {
@@ -136,7 +142,7 @@ export const useFileHandler = ({
     } catch (err: any) {
       console.error('Error fetching files:', err);
       setError(err.message || 'Failed to fetch files');
-      return [];
+      return filesRef.current;
     } finally {
       setIsLoading(false);
     }

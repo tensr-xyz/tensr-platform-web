@@ -120,7 +120,7 @@ export async function streamAgentAnalysisRun(
   }
 
   if (!result) {
-    throw new Error('Analysis stream ended without a result');
+    throw new Error('The analysis did not finish. Ask again.');
   }
 
   return result;

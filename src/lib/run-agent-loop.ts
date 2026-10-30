@@ -21,7 +21,7 @@ const RETRYABLE_AGENT_LOOP_STATUSES = new Set([502]);
 const WARMUP_AGENT_LOOP_STATUSES = new Set([500, 503]);
 
 function isStreamEndedWithoutResult(error: unknown): boolean {
-  return error instanceof Error && /ended without a result/i.test(error.message);
+  return error instanceof Error && error.name === 'AgentStreamClosed';
 }
 
 export type AgentLoopOpenDataset = {

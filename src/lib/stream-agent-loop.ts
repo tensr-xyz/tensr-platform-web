@@ -56,7 +56,11 @@ function captureStreamStatus(
 function processSseLine(
   line: string,
   handlers: AgentLoopStreamHandlers,
-  acc: { result: AgentLoopResponse | null; timeout: AgentLoopResponse | null }
+  acc: {
+    result: AgentLoopResponse | null;
+    timeout: AgentLoopResponse | null;
+    draft: { text: string; status: string } | null;
+  }
 ) {
   const trimmed = line.trim();
   if (!trimmed.startsWith('data:')) return;
@@ -69,6 +73,7 @@ function processSseLine(
     name?: string;
     message?: string;
     text?: string;
+    status?: string;
     replace?: boolean;
     response?: AgentLoopResponse;
   };
@@ -127,6 +132,14 @@ function processSseLine(
 
   if (payload.type === 'timeout' && payload.response) {
     acc.timeout = payload.response;
+    return;
+  }
+
+  if (payload.type === 'final') {
+    acc.draft = {
+      text: typeof payload.text === 'string' ? payload.text : '',
+      status: typeof payload.status === 'string' ? payload.status : 'ok',
+    };
     return;
   }
 
@@ -206,9 +219,14 @@ export async function streamAgentLoop(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
-  const acc: { result: AgentLoopResponse | null; timeout: AgentLoopResponse | null } = {
+  const acc: {
+    result: AgentLoopResponse | null;
+    timeout: AgentLoopResponse | null;
+    draft: { text: string; status: string } | null;
+  } = {
     result: null,
     timeout: null,
+    draft: null,
   };
 
   try {
@@ -266,8 +284,18 @@ export async function streamAgentLoop(
     );
   }
 
+  if (!acc.result && acc.draft) {
+    acc.result = {
+      status: acc.draft.status,
+      mode: params.mode,
+      answer_markdown: acc.draft.text,
+    };
+  }
+
   if (!acc.result) {
-    throw new Error('Agent loop stream ended without a result');
+    const closed = new Error('The reply did not finish. Ask again.');
+    closed.name = 'AgentStreamClosed';
+    throw closed;
   }
 
   if (params.agentVersion === 'v2' && acc.result.status === 'continuing') {
