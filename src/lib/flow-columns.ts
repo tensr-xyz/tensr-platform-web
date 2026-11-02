@@ -5,6 +5,7 @@ export type FlowColumn = {
   label?: string | null;
   type?: string;
   measure?: string;
+  value_labels?: Record<string, string> | null;
 };
 
 export function isDependentColumn(column: FlowColumn): boolean {

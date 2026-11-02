@@ -3966,3 +3966,171 @@ select.flow-input {
   font-weight: var(--weight-medium);
   text-decoration: none;
 }
+
+.sheet-col-name {
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  line-height: 16px;
+}
+
+.sheet-col-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.rail-analysis {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  color: var(--color-ink);
+  text-decoration: none;
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.rail-analysis:hover {
+  background: var(--color-canvas);
+}
+
+.rail-badge {
+  flex: none;
+  width: 18px;
+  padding-top: 1px;
+  color: var(--color-accent);
+  font-size: 10px;
+  font-weight: var(--weight-medium);
+}
+
+.rail-analysis-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.rail-analysis-copy > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rail-analysis-copy .flow-muted {
+  font-size: 11px;
+}
+
+.variable-panel h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 22px;
+}
+
+.variable-question {
+  margin: -6px 0 4px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.variable-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+}
+
+.variable-panel .value-row-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: 4px;
+  font-size: 13px;
+}
+
+.variable-panel .value-track {
+  grid-column: 1 / -1;
+}
+
+.rail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 8px;
+}
+
+.rail-plus {
+  color: var(--color-muted);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.rail-chat {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rail-chat > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rail-chat .flow-muted {
+  flex: none;
+  font-size: 11px;
+}
+
+.sheet-toolbar .flow-btn svg {
+  margin-right: 6px;
+}
+
+.flow-table td.sheet-cell[data-numeric] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.sheet-rownum {
+  width: 36px;
+  text-align: right;
+}
+
+.sheet-rownum button {
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 11px;
+  padding: 0;
+}
+
+.variable-missing {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-warn);
+  font-size: 12px;
+}
+
+.variable-action {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  color: var(--color-ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.variable-missing[data-none] {
+  color: var(--color-muted);
+}
+
+.flow-table th[data-numeric] .sheet-col {
+  align-items: flex-end;
+  margin-left: auto;
+}

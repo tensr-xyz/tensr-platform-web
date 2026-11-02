@@ -209,6 +209,24 @@ function editedAgo(value?: string | null): string {
   return `Edited ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
 }
 
+function isNumericColumn(column?: FlowColumn): boolean {
+  const type = String(column?.type || '').toLowerCase();
+  return ['numeric', 'number', 'float', 'integer', 'double'].includes(type);
+}
+
+function shortAgo(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const minutes = Math.round((Date.now() - date.getTime()) / 60000);
+  if (minutes < 5) return 'now';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  if (hours < 24 * 6) return date.toLocaleDateString('en-GB', { weekday: 'short' });
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+}
+
 function editedWhen(value?: string | null): string {
   const label = editedAgo(value).replace(/^Edited /, '');
   return label || '—';
@@ -2805,10 +2823,15 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
 
   const names = headers.length ? headers : columns.map(column => column.label || column.name);
   const needle = query.trim().toLowerCase();
-  const headerHits = names
+  const visibleNames = names
     .map((name, index) => ({ name, index }))
-    .filter(column => !needle || column.name.toLowerCase().includes(needle));
-  const shownCols = headerHits.length ? headerHits : names.map((name, index) => ({ name, index }));
+    .filter(column => !isInternalColumn(column.name));
+  const headerHits = visibleNames.filter(
+    column => !needle || column.name.toLowerCase().includes(needle)
+  );
+  const shownCols = headerHits.length ? headerHits : visibleNames;
+  const columnMeta = (name: string) =>
+    columns.find(column => column.name === name || column.label === name);
   const activeIndex = shownCols[selectedCol]?.index ?? shownCols[0]?.index ?? 0;
   const shownRows = preview
     .map((row, index) => ({ row, index }))
@@ -2878,15 +2901,23 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
           onChange={event => setQuery(event.target.value)}
         />
         <div>
-          <div className="flow-muted">Chats</div>
+          <div className="rail-head">
+            <span className="flow-muted">Chats</span>
+            {project ? (
+              <Link className="rail-plus" href={`/flow/p/${project.id}/chat`} aria-label="New chat">
+                +
+              </Link>
+            ) : null}
+          </div>
           {sessions === null ? (
             <Skeleton className="h-8 w-full" />
           ) : sessions.length === 0 ? (
             <p className="flow-muted">No saved chats yet</p>
           ) : (
             sessions.slice(0, 6).map(session => (
-              <div key={session.session_id} className="chat-item">
-                {chatTitle(session)}
+              <div key={session.session_id} className="chat-item rail-chat">
+                <span>{chatTitle(session)}</span>
+                <span className="flow-muted">{shortAgo(session.updated_at)}</span>
               </div>
             ))
           )}
@@ -2898,9 +2929,13 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
           ) : specs.length === 0 ? (
             <p className="flow-muted">No saved tables yet</p>
           ) : (
-            specs.slice(0, 8).map(spec => (
-              <Link key={spec.id} href={`/flow/p/${project?.id}/tables`}>
-                {spec.label}
+            specs.slice(0, 8).map((spec, index) => (
+              <Link key={spec.id} className="rail-analysis" href={`/flow/p/${project?.id}/tables`}>
+                <span className="rail-badge">T{index + 1}</span>
+                <span className="rail-analysis-copy">
+                  <span>{spec.label}</span>
+                  <span className="flow-muted">Custom Tables</span>
+                </span>
               </Link>
             ))
           )}
@@ -2944,6 +2979,14 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
             data-active={showStats}
             onClick={() => setShowStats(current => !current)}
           >
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <path
+                d="M2 10V6M5 10V3M8 10V5M11 10V2"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+              />
+            </svg>
             Stats
           </Button>
           <Button
@@ -2952,6 +2995,15 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
             data-active={showFilters}
             onClick={() => setShowFilters(current => !current)}
           >
+            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+              <path
+                d="M1.5 2h9L7 6.5V10L5 9V6.5z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.2"
+                strokeLinejoin="round"
+              />
+            </svg>
             Filters{needle || valueFilter != null ? ' 1' : ''}
           </Button>
           {surveyCell ? (
@@ -3058,7 +3110,10 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                       <tr>
                         <th>#</th>
                         {shownCols.map((column, position) => (
-                          <th key={`${column.name}-${column.index}`}>
+                          <th
+                            key={`${column.name}-${column.index}`}
+                            data-numeric={isNumericColumn(columnMeta(column.name)) || undefined}
+                          >
                             <Button
                               type="button"
                               className="sheet-col"
@@ -3068,7 +3123,23 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                                 if (!surveyCell) setSide('variable');
                               }}
                             >
-                              {column.name}
+                              <span className="sheet-col-name">{column.name}</span>
+                              <span className="sheet-col-label">
+                                {(() => {
+                                  const meta = columnMeta(column.name);
+                                  const label =
+                                    meta?.label && meta.label !== column.name ? meta.label : '';
+                                  if (label) return label;
+                                  const type = String(meta?.type || '').toLowerCase();
+                                  if (
+                                    ['numeric', 'number', 'float', 'integer', 'double'].includes(
+                                      type
+                                    )
+                                  )
+                                    return '123';
+                                  return type ? 'abc' : '\u00a0';
+                                })()}
+                              </span>
                               {showStats ? (
                                 <ColumnSpark
                                   values={shownRows.map(({ row }) =>
@@ -3093,7 +3164,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                             data-evidence={inEvidence || undefined}
                             onClick={() => setSelectedRow(index)}
                           >
-                            <td>
+                            <td className="sheet-rownum">
                               <Button type="button" onClick={() => setSelectedRow(index)}>
                                 {pageOffset + index + 1}
                               </Button>
@@ -3102,6 +3173,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                               <td
                                 key={column.index}
                                 className="sheet-cell"
+                                data-numeric={isNumericColumn(columnMeta(column.name)) || undefined}
                                 data-active={columnMarked(column.name, column.index)}
                               >
                                 {row[column.index] == null || row[column.index] === 'null'
@@ -3182,10 +3254,24 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
               />
             ) : null}
             {side === 'variable' && !codedColumn ? (
-              <div className="output-body">
-                <div className="flow-muted">On this page</div>
-                <h2>{activeName}</h2>
-                <div className="flow-muted">{counts.length} values in the loaded rows</div>
+              <div className="output-body variable-panel">
+                <div className="flow-muted">
+                  {[
+                    columnMeta(activeName)?.measure || columnMeta(activeName)?.type,
+                    `${counts.length} code${counts.length === 1 ? '' : 's'}`,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </div>
+                <h2>{columnMeta(activeName)?.name || activeName}</h2>
+                {columnMeta(activeName)?.label &&
+                columnMeta(activeName)?.label !== columnMeta(activeName)?.name ? (
+                  <p className="flow-muted variable-question">{columnMeta(activeName)?.label}</p>
+                ) : null}
+                <div className="variable-head">
+                  <span className="flow-muted">Click codes to filter</span>
+                  <span className="flow-muted">% of loaded rows</span>
+                </div>
                 {counts.map(item => (
                   <Button
                     key={item.label}
@@ -3198,14 +3284,37 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                     }}
                   >
                     <span className="value-row-grid">
-                      <span>{item.label}</span>
+                      <span>
+                        {item.label}
+                        {columnMeta(activeName)?.value_labels?.[item.label]
+                          ? ` ${columnMeta(activeName)?.value_labels?.[item.label]}`
+                          : ''}
+                      </span>
+                      <span>{Math.round((item.count / countTotal) * 100)}%</span>
                       <span className="value-track">
                         <i style={{ width: `${Math.round((item.count / countTotal) * 100)}%` }} />
                       </span>
-                      <span>{item.count}</span>
                     </span>
                   </Button>
                 ))}
+                {(() => {
+                  const missing = activeValues.filter(value => value === '').length;
+                  return (
+                    <div className="variable-missing" data-none={missing === 0 || undefined}>
+                      <span>Missing</span>
+                      <span>
+                        {missing
+                          ? `${Math.round((missing / countTotal) * 100)}% · ${missing} rows`
+                          : 'None on this page'}
+                      </span>
+                    </div>
+                  );
+                })()}
+                {project ? (
+                  <Link className="variable-action" href={`/flow/p/${project.id}/tables`}>
+                    Use as banner column <span aria-hidden="true">+</span>
+                  </Link>
+                ) : null}
               </div>
             ) : null}
             {side === 'agent' ? (
