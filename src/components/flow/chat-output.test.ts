@@ -1,6 +1,7 @@
 import {
   answerWithoutBase,
   keepLineBreaks,
+  outputKind,
   outputBaseNote,
   outputTakeaway,
   outputTitle,
@@ -26,10 +27,23 @@ describe('chat output panel', () => {
     const results = [
       {
         name: 'run_analysis',
-        result: { title: 'How much do you like brand A by source file' },
+        analysis_type: 'banner_table',
+        summary: { title: 'How much do you like brand A × source file' },
       },
     ];
-    expect(outputTitle(results, answer)).toBe('How much do you like brand A by source file');
+    expect(outputTitle(results, answer)).toBe('How much do you like brand A × source file');
+    expect(outputKind(results)).toBe('Crosstab');
+    expect(
+      outputTitle(
+        [
+          {
+            procedure: 'anova_oneway',
+            request_body: { value_column: 'likes_A', group_column: 'region' },
+          },
+        ],
+        answer
+      )
+    ).toBe('likes_A by region');
   });
 
   it('falls back to the first prose sentence that is not the base', () => {
