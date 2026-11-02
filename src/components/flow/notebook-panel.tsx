@@ -3,6 +3,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Table } from '@/components/ui/table';
 import { flowJson } from '@/lib/flow-api';
 
 export type NotebookCell = {
@@ -10,8 +11,32 @@ export type NotebookCell = {
   kind: 'code' | 'text';
   source: string;
   output: string;
+  table?: Record<string, unknown>[] | null;
   running: boolean;
 };
+
+/** Earlier code cells run first with their output silenced, so names carry over within the session. */
+export function sessionCode(cells: NotebookCell[], index: number): string {
+  const earlier = cells
+    .slice(0, index)
+    .filter(cell => cell.kind === 'code' && cell.source.trim())
+    .map(cell => cell.source);
+  const current = cells[index]?.source || '';
+  if (!earlier.length) return current;
+  return [
+    'import contextlib as _tensr_ctx, io as _tensr_io',
+    'with _tensr_ctx.redirect_stdout(_tensr_io.StringIO()):',
+    `    exec(${JSON.stringify(earlier.join('\n\n'))}, globals())`,
+    current,
+  ].join('\n');
+}
+
+export function notebookTable(output: unknown): Record<string, unknown>[] | null {
+  if (!output || typeof output !== 'object') return null;
+  const value = output as { type?: string; data?: unknown };
+  if (value.type !== 'table' || !Array.isArray(value.data)) return null;
+  return value.data.filter(row => row && typeof row === 'object') as Record<string, unknown>[];
+}
 
 let cellKey = 0;
 
@@ -35,6 +60,9 @@ export function notebookText(result: {
   if (typeof result.stdout === 'string' && result.stdout) return result.stdout;
   if (typeof result.output === 'string') return result.output;
   if (result.output == null) return '';
+  const typed = result.output as { type?: string; data?: unknown };
+  if (typed && typed.type === 'text' && typeof typed.data === 'string') return typed.data;
+  if (typed && typed.type === 'table') return '';
   try {
     return JSON.stringify(result.output, null, 2);
   } catch {
@@ -90,23 +118,33 @@ export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: R
     setCells(current => current.map(cell => (cell.id === id ? { ...cell, ...next } : cell)));
   };
 
-  const run = (cell: NotebookCell) => {
-    if (!datasetId || cell.kind !== 'code' || !cell.source.trim()) return;
+  const run = (cell: NotebookCell, list: NotebookCell[] = cells): Promise<void> => {
+    if (!datasetId || cell.kind !== 'code' || !cell.source.trim()) return Promise.resolve();
+    const index = list.findIndex(item => item.id === cell.id);
     const firstLoad = !loadedOnce;
     patch(cell.id, {
       running: true,
+      table: null,
       output: firstLoad ? 'Loading data…' : 'Running…',
     });
-    void flowJson<{ stdout?: string | null; output?: unknown; error?: string | null }>(
+    return flowJson<{ stdout?: string | null; output?: unknown; error?: string | null }>(
       '/api/execute/python',
       {
         method: 'POST',
-        body: JSON.stringify({ code: cell.source, dataset_id: datasetId, save_as_dataset: false }),
+        body: JSON.stringify({
+          code: sessionCode(list, index < 0 ? 0 : index),
+          dataset_id: datasetId,
+          save_as_dataset: false,
+        }),
       }
     )
       .then(result => {
         setLoadedOnce(true);
-        patch(cell.id, { running: false, output: notebookText(result) });
+        patch(cell.id, {
+          running: false,
+          output: notebookText(result) || (result.error ? '' : 'Ran · no output'),
+          table: result.error ? null : notebookTable(result.output),
+        });
       })
       .catch(err =>
         patch(cell.id, {
@@ -116,15 +154,17 @@ export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: R
       );
   };
 
-  const runAll = () => {
-    cells.filter(cell => cell.kind === 'code').forEach(run);
+  const runAll = async () => {
+    for (const cell of cells.filter(item => item.kind === 'code')) {
+      await run(cell, cells);
+    }
   };
 
   return (
     <div className="notebook-page">
       <div className="notebook-bar">
         {lead}
-        <Button className="notebook-run-all" type="button" onClick={runAll}>
+        <Button className="notebook-run-all" type="button" onClick={() => void runAll()}>
           ▶ Run all
         </Button>
         <Button
@@ -165,8 +205,8 @@ export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: R
         <div className="notebook-head">
           <h2>Notebook</h2>
           <p>
-            df is the open file. Each cell runs on its own, so cells do not share variables, and a
-            sheet filter is not applied.
+            df is the open file. Cells share variables in this session: running a cell replays the
+            cells above it first. A sheet filter is not applied.
           </p>
         </div>
         {cells.map((cell, index) => (
@@ -184,13 +224,44 @@ export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: R
                 onKeyDown={event => {
                   if (cell.kind === 'code' && event.key === 'Enter' && event.shiftKey) {
                     event.preventDefault();
-                    run(cell);
+                    void run(cell);
                   }
                 }}
               />
               {cell.kind === 'code' ? (
                 <div className="notebook-out">
-                  {cell.output ? (
+                  {cell.table && cell.table.length ? (
+                    <div className="notebook-table">
+                      <Table className="flow-table">
+                        <thead>
+                          <tr>
+                            {Object.keys(cell.table[0]).map(key => (
+                              <th key={key}>{key}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cell.table.slice(0, 20).map((row, rowIndex) => (
+                            <tr key={rowIndex}>
+                              {Object.keys(cell.table![0]).map(key => (
+                                <td key={key} data-num={typeof row[key] === 'number' || undefined}>
+                                  {row[key] == null
+                                    ? ''
+                                    : typeof row[key] === 'number'
+                                      ? Number((row[key] as number).toFixed(3)).toString()
+                                      : String(row[key])}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                      <span className="flow-muted">
+                        DataFrame · {cell.table.length} row{cell.table.length === 1 ? '' : 's'} ×{' '}
+                        {Object.keys(cell.table[0]).length} cols
+                      </span>
+                    </div>
+                  ) : cell.output ? (
                     <pre className="notebook-output">{cell.output}</pre>
                   ) : (
                     <span className="flow-muted">
@@ -201,7 +272,7 @@ export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: R
                     className="notebook-run"
                     type="button"
                     disabled={cell.running}
-                    onClick={() => run(cell)}
+                    onClick={() => void run(cell)}
                   >
                     {cell.running ? 'Running…' : 'Run'}
                   </Button>

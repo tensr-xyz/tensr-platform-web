@@ -9220,3 +9220,40 @@ select.flow-input {
   border: 1.5px solid #b0b2ac;
   background: transparent;
 }
+
+.notebook-out {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.notebook-out .notebook-run {
+  align-self: flex-end;
+}
+
+.notebook-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.notebook-table .flow-table th,
+.notebook-table .flow-table td {
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.notebook-table .flow-table th {
+  position: static;
+  background: transparent;
+  border-bottom: 1px solid var(--color-ink);
+}
+
+.notebook-table .flow-muted {
+  font-size: 11px;
+}
+
+.notebook-table td[data-num] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

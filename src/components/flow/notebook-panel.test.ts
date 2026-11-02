@@ -18,3 +18,27 @@ describe('notebook panel', () => {
     );
   });
 });
+
+describe('notebook session', () => {
+  it('replays earlier code cells silently before the current one', () => {
+    const { sessionCode } = jest.requireActual('./notebook-panel');
+    const cells = [
+      { id: 'a', kind: 'code', source: 'x = 41', output: '', running: false },
+      { id: 'b', kind: 'text', source: 'note', output: '', running: false },
+      { id: 'c', kind: 'code', source: 'x + 1', output: '', running: false },
+    ];
+    expect(sessionCode(cells, 0)).toBe('x = 41');
+    const code = sessionCode(cells, 2);
+    expect(code).toContain('redirect_stdout');
+    expect(code).toContain('exec("x = 41", globals())');
+    expect(code.endsWith('\nx + 1')).toBe(true);
+  });
+
+  it('reads a table output', () => {
+    const { notebookTable, notebookText } = jest.requireActual('./notebook-panel');
+    const output = { type: 'table', data: [{ a: 1 }] };
+    expect(notebookTable(output)).toEqual([{ a: 1 }]);
+    expect(notebookText({ output })).toBe('');
+    expect(notebookText({ output: { type: 'text', data: '42' } })).toBe('42');
+  });
+});
