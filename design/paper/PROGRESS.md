@@ -18,10 +18,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 16
-- wired: 16
+- matched: 17
+- wired: 17
 - built: 0
-- todo: 25
+- todo: 24
 - checks done: 6 passed, 1 owner QA
 
 ## Decisions
@@ -61,8 +61,8 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **1d ⌘K palette** (`3IP-0`, `1d-command-palette`) — **wired**. Search, the menu tabs, and the section list are the real analysis catalog. A result opens that analysis setup. ⌘Enter sends the name to chat. Plugins lists installed plugins. The footer names the open dataset and its row count. Empty sections say coming soon. `screen.tsx` records the layout; the sample MaxDiff copy and the 2,400-row tracker stay in Paper. Components: shadcn.
 - [x] **2b Chat empty** (`1DY1-0`, `2b-chat-empty`) — **wired**. An empty thread is the hero, six starters, and the composer. The lead is the open file's name, row count, and variable count. A starter fills the composer. It does not invent a wave, a weight, or a codeframe. No chats yet is the dashed note. Recipes are the saved list, or the save hint. @ lists columns on the open file. Attach adds a file to the v2 turn. Another project and the web stay coming soon: the tool set has no web search, and the old composer has no project-source chip. Naming a workspace filename in the message already opens that file. Add source opens Sources. A sent question still uses the thread and the output panel. `screen.tsx` records the layout; the sample W3 prompts, 2,481 respondents, and recipe step counts stay in Paper. Components: shadcn.
 - [x] **2d Project details** (`1F4C-0`, `2d-project-details`) — **wired**. Project brief, questionnaire outline, waves, and team. The brief is the latest context doc, split into objectives and audience. Edit saves a new brief the agent can read. Fielding is a coming-soon chip. Waves are the project files and their row counts. Columns are the open file. There is no client record, so deliverables link to Report. Add member picks a workspace member by name and email, with a project role. Invite by email uses the workspace invitation. `screen.tsx` records the layout; the sample energy objectives, 312 / 400, Northgate decks, and named roles stay in Paper. Components: shadcn.
-- [x] **3 Sources** (`288-0`, `3-sources`) — **wired**. Sources title, connected files, and the dataset list are the project's files and row counts. The open file is In use. Open on another file sets it active and goes to Responses. Fielding, Prolific, Qualtrics, and Decipher / Alchemer are coming soon, with no completes or quotas. Upload file adds a dataset to the project. More connectors opens Plugins. Two or more files can be stacked, and a stacked file's Review mapping opens that same fuse. Context lists the saved documents, and Add saves a brief, questionnaire, or report for the agent. `screen.tsx` records the layout; the sample Prolific completes, quota bars, Qualtrics sync, and named waves stay in Paper. Components: shadcn.
-- [ ] **3b Stack waves** (`93J-0`, `3b-stack-waves`) — **todo**. PNG only. Components: shadcn.
+- [x] **3 Sources** (`288-0`, `3-sources`) — **wired**. Sources title, connected files, and the dataset list are the project's files and row counts. The open file is In use. Open on another file sets it active and goes to Responses. Fielding, Prolific, Qualtrics, and Decipher / Alchemer are coming soon, with no completes or quotas. Upload file was checked with sources-check.csv: the file is in Connected and Datasets, 3 rows, and the page stays on Sources. More connectors opens Plugins. Two or more files can be stacked, and a stacked file's Review mapping opens that same fuse. Context lists the saved documents, and Add saves a brief, questionnaire, or report for the agent. `screen.tsx` records the layout; the sample Prolific completes, quota bars, Qualtrics sync, and named waves stay in Paper. Components: shadcn.
+- [x] **3b Stack waves** (`93J-0`, `3b-stack-waves`) — **wired**. Stack files compares two files in the project. A shared name is matched. A name on only one side, or a shared name whose value labels differ, is flagged. Add, Skip, and Treat as same are the fuse decisions. Show all lists the matched names. Stack waves creates a new dataset and leaves the originals. On sources-check.csv and likert_openends.csv, id, region, and \_row_uid matched, score was only in the csv, and the fuse added a 403-row file to the project. `screen.tsx` records the layout; the sample Q20 rename, Octavia Green code, and 182 matched stay in Paper. Components: shadcn.
 - [ ] **3c Interviews** (`17DV-0`, `3c-interviews`) — **todo**. PNG only. Components: shadcn.
 - [ ] **4b Notebook** (`5ER-0`, `4b-notebook`) — **todo**. PNG only. Components: shadcn.
 - [ ] **4e Weighting modal** (`97E-0`, `4e-weighting`) — **todo**. PNG only. Components: shadcn.
@@ -105,6 +105,7 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 
 ## Bugs found
 
+- A stacked file keeps the parent filename and shows as a raw upload. The dataset list does not return `parent_dataset_id` or `producing_operation`, so Sources cannot tell the 403-row fuse from sources-check.csv.
 - Add member asked for a user id. Fixed: the dialog lists workspace members by name and email, with an editor or viewer role, and Invite by email uses the workspace invitation.
 - A saved project brief comes back as a 280-character excerpt. A longer brief is cut the next time Details loads. The save itself keeps the full text for that visit.
 - The empty chat marked @ and Attach as coming soon. Both already exist. Fixed: @ opens the column picker for the open dataset, the same list the classic composer inserts, and Attach sends the file on the v2 stream.

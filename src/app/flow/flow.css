@@ -2941,7 +2941,38 @@ select.flow-input {
 }
 
 .sources-stack-dialog {
-  max-width: 720px;
+  max-width: 880px;
   max-height: 80vh;
   overflow: auto;
+}
+
+.stack-picks,
+.stack-counts,
+.stack-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stack-foot {
+  justify-content: flex-end;
+}
+
+.stack-foot p {
+  margin-right: auto;
+}
+
+.stack-table th {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+}
+
+.stack-table tr[data-kind='check'] {
+  background: #f6ede2;
+}
+
+.stack-table td .flow-btn,
+.stack-table td button {
+  width: auto;
 }

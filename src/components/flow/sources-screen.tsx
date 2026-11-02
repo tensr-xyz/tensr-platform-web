@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +18,7 @@ import { Skeleton } from '@/components/ui/rest';
 import { Textarea } from '@/components/ui/textarea';
 import { datasetRowId } from '@/components/flow/survey-screens';
 import { moveDatasetToProject } from '@/components/flow/move-dataset';
+import { StackWaves } from '@/components/flow/stack-waves';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
@@ -79,12 +80,10 @@ export function SourcesScreen({
   project,
   datasets,
   onChanged,
-  stack,
 }: {
   project?: FlowProject;
   datasets: SourceFile[];
   onChanged: () => void;
-  stack?: ReactNode;
 }) {
   const router = useRouter();
   const projectId = project?.id || '';
@@ -396,14 +395,12 @@ export function SourcesScreen({
 
       <Dialog open={stackOpen} onOpenChange={setStackOpen}>
         <DialogContent className="sources-stack-dialog">
-          <DialogHeader>
-            <DialogTitle>Stack files</DialogTitle>
-            <DialogDescription>
-              Accept, override, or skip each column. Save runs the fuse and opens the stacked
-              dataset.
-            </DialogDescription>
-          </DialogHeader>
-          {stack}
+          <StackWaves
+            projectId={projectId}
+            datasets={datasets}
+            onChanged={onChanged}
+            onDone={() => setStackOpen(false)}
+          />
         </DialogContent>
       </Dialog>
     </section>

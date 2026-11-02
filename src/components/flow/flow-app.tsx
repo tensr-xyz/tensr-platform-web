@@ -95,7 +95,6 @@ import {
 import { bannerHeading } from '@/lib/flow-survey';
 import { CodeFrameRail } from '@/components/flow/code-frame-rail';
 import { ColumnSpark, valueCounts } from '@/components/flow/column-spark';
-import { AddToProjectButton } from '@/components/flow/move-dataset';
 import {
   CodeFramePanel,
   datasetRowId,
@@ -472,19 +471,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
             ) : section === 'details' ? (
               <DetailsScreen project={project} datasets={datasets} />
             ) : section === 'sources' ? (
-              <SourcesScreen
-                project={project}
-                datasets={datasets}
-                onChanged={reload}
-                stack={
-                  <StackScreen
-                    projectId={projectId}
-                    datasets={datasets}
-                    embedded
-                    onChanged={reload}
-                  />
-                }
-              />
+              <SourcesScreen project={project} datasets={datasets} onChanged={reload} />
             ) : section === 'responses' ? (
               <ResponsesScreen project={project} datasets={datasets} />
             ) : section === 'tables' ? (
@@ -2449,150 +2436,6 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
       {phase === 'warming' ? <p>Warming up</p> : null}
       {phase === 'error' ? <p className="flow-error">{note}</p> : null}
     </aside>
-  );
-}
-
-function StackScreen({
-  projectId,
-  datasets,
-  embedded,
-  onChanged,
-}: {
-  projectId: string;
-  datasets: DatasetRow[];
-  embedded?: boolean;
-  onChanged?: () => void;
-}) {
-  const router = useRouter();
-  const mine = datasets.filter(row => row.project_id === projectId);
-  const [picked, setPicked] = useState<string[]>([]);
-  const [columns, setColumns] = useState<string[]>([]);
-  const [decisions, setDecisions] = useState<Record<string, 'accept' | 'override' | 'skip'>>({});
-  const [overrides, setOverrides] = useState<Record<string, string>>({});
-  const [error, setError] = useState('');
-  const [note, setNote] = useState('');
-  const firstId = picked[0] || (mine[0] ? datasetRowId(mine[0]) : '');
-
-  useEffect(() => {
-    if (!firstId) return;
-    void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${firstId}/metadata`)
-      .then(meta => {
-        const names = (meta.columns || []).map(column => column.name || '').filter(Boolean);
-        setColumns(names);
-        setDecisions(current => {
-          const next = { ...current };
-          for (const name of names) if (!next[name]) next[name] = 'accept';
-          return next;
-        });
-      })
-      .catch(() => setColumns([]));
-  }, [firstId]);
-
-  const save = () => {
-    const ids = (picked.length ? picked : mine.map(datasetRowId)).filter(Boolean);
-    if (ids.length < 2) {
-      setError('Pick at least two datasets to stack.');
-      return;
-    }
-    setError('');
-    const mappings = columns.map(column => ({
-      source_column: column,
-      target_column: decisions[column] === 'override' ? overrides[column] || column : column,
-      decision: decisions[column] || 'accept',
-      note: '',
-    }));
-    void flowJson(`/api/projects/${projectId}/wave-maps`, {
-      method: 'POST',
-      body: JSON.stringify({ sources: ids, mappings }),
-    })
-      .then(() =>
-        flowJson<{ dataset_id?: string; derived_dataset_id?: string }>(
-          '/datasets/intake/fuse-datasets',
-          {
-            method: 'POST',
-            body: JSON.stringify({
-              dataset_ids: ids,
-              wave_names: ids.map((_, index) => `wave_${index + 1}`),
-              mappings,
-            }),
-          }
-        )
-      )
-      .then(fused => {
-        const nextId = fused.derived_dataset_id || fused.dataset_id || '';
-        if (!nextId) throw new Error('The stack did not return a dataset.');
-        return flowJson(`/api/projects/${projectId}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ active_dataset_id: nextId }),
-        }).then(() => nextId);
-      })
-      .then(nextId => {
-        setNote(`Stacked dataset ${nextId}`);
-        router.push(`/flow/p/${projectId}/responses`);
-      })
-      .catch(err => setError(err instanceof Error ? err.message : 'The stack did not save'));
-  };
-
-  return (
-    <div className={embedded ? '' : 'flow-panel'}>
-      {!embedded ? <h2>Stack waves</h2> : <h2>Stack waves</h2>}
-      <p className="flow-muted">
-        Accept, override, or skip each column. Save runs the fuse and opens the stacked dataset.
-      </p>
-      <AddToProjectButton projectId={projectId} datasets={datasets} onAdded={onChanged} />
-      {mine.map(row => {
-        const id = datasetRowId(row);
-        return (
-          <label key={id} className="flow-row">
-            <Checkbox
-              checked={picked.includes(id)}
-              onCheckedChange={checked => {
-                setPicked(current =>
-                  checked === true ? [...current, id] : current.filter(item => item !== id)
-                );
-              }}
-            />
-            {row.original_filename || id}
-          </label>
-        );
-      })}
-      {columns.map(column => (
-        <div key={column} className="flow-row">
-          <span>{column}</span>
-          <ChoiceSelect
-            className="flow-input"
-            aria-label={`Decision for ${column}`}
-            value={decisions[column] || 'accept'}
-            onValueChange={value =>
-              setDecisions(current => ({
-                ...current,
-                [column]: value as 'accept' | 'override' | 'skip',
-              }))
-            }
-            options={[
-              { value: 'accept', label: 'Accept' },
-              { value: 'override', label: 'Override' },
-              { value: 'skip', label: 'Skip' },
-            ]}
-          />
-          {decisions[column] === 'override' ? (
-            <Input
-              className="flow-input"
-              aria-label={`Override ${column}`}
-              value={overrides[column] || ''}
-              onChange={event =>
-                setOverrides(current => ({ ...current, [column]: event.target.value }))
-              }
-            />
-          ) : null}
-        </div>
-      ))}
-      {error ? <p className="flow-error">{error}</p> : null}
-      {note ? <p>{note}</p> : null}
-      <Button className="flow-btn primary" type="button" onClick={save}>
-        Save
-      </Button>
-    </div>
   );
 }
 
