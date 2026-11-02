@@ -18,6 +18,7 @@ import {
   type AgentLoopResponse,
 } from '@/lib/run-agent-loop';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
+import { DetailsScreen } from '@/components/flow/details-screen';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -466,7 +467,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 }}
               />
             ) : section === 'details' ? (
-              <DetailsScreen project={project} />
+              <DetailsScreen project={project} datasets={datasets} />
             ) : section === 'sources' ? (
               <SourcesScreen projectId={projectId} datasets={datasets} onChanged={reload} />
             ) : section === 'responses' ? (
@@ -843,18 +844,6 @@ function ProjectCard({ project, datasets }: { project: FlowProject; datasets: Da
         </div>
       </Link>
     </Card>
-  );
-}
-
-function DetailsScreen({ project }: { project?: FlowProject }) {
-  return (
-    <section className="flow-panel">
-      <h2>{project?.name || 'Project'}</h2>
-      <p className="flow-muted">Folder {project?.folder || 'None'}</p>
-      <p className="flow-muted">Status {project?.status || 'active'}</p>
-      <p className="flow-muted">Edited {project?.updated_at || '—'}</p>
-      {project ? <Members projectId={project.id} /> : null}
-    </section>
   );
 }
 

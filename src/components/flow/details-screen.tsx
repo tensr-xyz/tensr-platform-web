@@ -1,0 +1,425 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { flowJson, type FlowProject } from '@/lib/flow-api';
+import type { FlowColumn } from '@/lib/flow-columns';
+import { datasetRowId } from '@/components/flow/survey-screens';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { ChoiceSelect } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/rest';
+import { Textarea } from '@/components/ui/textarea';
+
+type DetailFile = {
+  dataset_id?: string;
+  id?: string;
+  original_filename?: string;
+  n_rows?: number;
+  project_id?: string;
+};
+
+type Member = { user_id: string; role?: string };
+
+type BriefDoc = {
+  id?: string;
+  kind?: string;
+  text?: string;
+  excerpt?: string;
+  updated_at?: string;
+};
+
+export function splitBrief(text: string): { objectives: string; audience: string } {
+  const marker = text.match(/\nAudience\n/);
+  if (!marker || marker.index === undefined) {
+    return { objectives: text.replace(/^Objectives\n/, '').trim(), audience: '' };
+  }
+  return {
+    objectives: text
+      .slice(0, marker.index)
+      .replace(/^Objectives\n/, '')
+      .trim(),
+    audience: text.slice(marker.index + marker[0].length).trim(),
+  };
+}
+
+export function joinBrief(objectives: string, audience: string): string {
+  const parts = [];
+  if (objectives.trim()) parts.push(`Objectives\n${objectives.trim()}`);
+  if (audience.trim()) parts.push(`Audience\n${audience.trim()}`);
+  return parts.join('\n\n');
+}
+
+function memberMark(id: string): string {
+  const letters = id.replace(/[^a-z]/gi, '');
+  return (letters.slice(0, 2) || '·').toUpperCase();
+}
+
+function roleLabel(role?: string): string {
+  if (role === 'owner') return 'Owner';
+  if (role === 'viewer') return 'Viewer';
+  return 'Editor';
+}
+
+function columnKind(column: FlowColumn): string {
+  const measure = String(column.measure || '').trim();
+  const type = String(column.type || '').trim();
+  return measure || type || 'column';
+}
+
+function editedLabel(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return `Edited ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+}
+
+function objectiveLines(text: string): string[] {
+  return text
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+}
+
+export function DetailsScreen({
+  project,
+  datasets,
+}: {
+  project?: FlowProject;
+  datasets: DetailFile[];
+}) {
+  const projectId = project?.id || '';
+  const files = datasets.filter(row => row.project_id === projectId);
+  const active = files.find(row => datasetRowId(row) === project?.active_dataset_id) || files[0];
+  const [docs, setDocs] = useState<BriefDoc[] | null>(null);
+  const [members, setMembers] = useState<Member[] | null>(null);
+  const [columns, setColumns] = useState<FlowColumn[] | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [objectives, setObjectives] = useState('');
+  const [audience, setAudience] = useState('');
+  const [savedText, setSavedText] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [userId, setUserId] = useState('');
+  const [role, setRole] = useState('editor');
+  const [memberError, setMemberError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    setDocs(null);
+    setMembers(null);
+    void flowJson<{ docs?: BriefDoc[] }>(`/api/projects/${projectId}/context-docs`)
+      .then(page => {
+        if (!cancelled) setDocs(page.docs || []);
+      })
+      .catch(() => {
+        if (!cancelled) setDocs([]);
+      });
+    void flowJson<{ members?: Member[] }>(`/api/projects/${projectId}/members`)
+      .then(page => {
+        if (!cancelled) setMembers(page.members || []);
+      })
+      .catch(() => {
+        if (!cancelled) setMembers([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const datasetId = active ? datasetRowId(active) : '';
+  useEffect(() => {
+    if (!datasetId) {
+      setColumns([]);
+      return;
+    }
+    let cancelled = false;
+    setColumns(null);
+    void flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`)
+      .then(meta => {
+        if (!cancelled) setColumns(meta.columns || []);
+      })
+      .catch(() => {
+        if (!cancelled) setColumns([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId]);
+
+  const brief = (docs || [])
+    .filter(doc => !doc.kind || doc.kind === 'brief')
+    .sort((a, b) => String(b.updated_at || '').localeCompare(String(a.updated_at || '')))[0];
+  const briefText = savedText ?? brief?.text ?? brief?.excerpt ?? '';
+  const parts = splitBrief(briefText);
+  const ready = docs !== null && members !== null && columns !== null;
+
+  const save = () => {
+    if (!projectId || busy) return;
+    const text = joinBrief(objectives, audience);
+    if (!text.trim()) {
+      setError('Write an objective or an audience before saving.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    void flowJson<{ doc?: BriefDoc }>(`/api/projects/${projectId}/context-docs`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Project brief', text, kind: 'brief' }),
+    })
+      .then(page => {
+        setSavedText(text);
+        setDocs(current => [page.doc || { text, kind: 'brief' }, ...(current || [])]);
+        setEditing(false);
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'The brief did not save.'))
+      .finally(() => setBusy(false));
+  };
+
+  const addMember = () => {
+    if (!projectId || !userId.trim()) return;
+    setMemberError(null);
+    void flowJson<{ member?: Member }>(`/api/projects/${projectId}/members`, {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId.trim(), role }),
+    })
+      .then(page => {
+        const member = page.member || { user_id: userId.trim(), role };
+        setMembers(current => [...(current || []), member]);
+        setUserId('');
+        setAddOpen(false);
+      })
+      .catch(err =>
+        setMemberError(err instanceof Error ? err.message : 'The member was not added.')
+      );
+  };
+
+  if (!ready) {
+    return (
+      <section className="details-page">
+        <div className="details-head">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-8 w-28" />
+        </div>
+        <div className="details-body">
+          <div className="details-main">
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-40 w-full" />
+          </div>
+          <div className="details-side">
+            <Skeleton className="h-20 w-full" />
+            <Skeleton className="h-20 w-full" />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const lines = objectiveLines(parts.objectives);
+
+  return (
+    <section className="details-page">
+      <header className="details-head">
+        <div className="details-title-row">
+          <h1>Project brief</h1>
+          <span className="flow-muted">
+            {brief?.updated_at ? editedLabel(brief.updated_at) : 'No brief yet'}
+          </span>
+        </div>
+        <div className="details-head-actions">
+          <span className="details-agent">
+            <i />
+            The agent uses this brief as context in every chat
+          </span>
+          <Button
+            className="flow-btn"
+            type="button"
+            onClick={() => {
+              setObjectives(parts.objectives);
+              setAudience(parts.audience);
+              setEditing(current => !current);
+              setError(null);
+            }}
+          >
+            {editing ? 'Close' : 'Edit brief'}
+          </Button>
+        </div>
+      </header>
+      <div className="details-body">
+        <div className="details-main">
+          <div className="details-split">
+            <div>
+              <div className="flow-muted details-label">Objectives</div>
+              {editing ? (
+                <Textarea
+                  className="flow-text"
+                  value={objectives}
+                  onChange={event => setObjectives(event.target.value)}
+                  aria-label="Objectives"
+                  placeholder="One objective on each line"
+                />
+              ) : lines.length ? (
+                lines.map((line, index) => (
+                  <div key={`${index}-${line}`} className="details-objective">
+                    <span className="details-num">{index + 1}</span>
+                    <span>{line}</span>
+                  </div>
+                ))
+              ) : (
+                <p className="flow-muted">No objectives yet.</p>
+              )}
+            </div>
+            <div>
+              <div className="flow-muted details-label">Audience</div>
+              {editing ? (
+                <Textarea
+                  className="flow-text"
+                  value={audience}
+                  onChange={event => setAudience(event.target.value)}
+                  aria-label="Audience"
+                  placeholder="Who the file describes"
+                />
+              ) : (
+                <p>{parts.audience || 'No audience yet.'}</p>
+              )}
+            </div>
+          </div>
+          {editing ? (
+            <div className="flow-row">
+              <Button className="flow-btn primary" type="button" disabled={busy} onClick={save}>
+                {busy ? 'Saving' : 'Save brief'}
+              </Button>
+              {error ? <p className="flow-error">{error}</p> : null}
+            </div>
+          ) : null}
+          <div>
+            <div className="flow-muted details-label">Fieldwork</div>
+            <Badge tone="soon">Fielding coming soon</Badge>
+          </div>
+          <div>
+            <div className="details-q-head">
+              <div className="flow-muted details-label">
+                Questionnaire outline
+                {columns.length ? ` · ${columns.length} columns` : ''}
+              </div>
+              {active ? (
+                <Link href={`/flow/p/${projectId}/responses`}>
+                  Linked to {active.original_filename || 'this file'}
+                </Link>
+              ) : (
+                <Link href={`/flow/p/${projectId}/sources`}>Add a file on Sources</Link>
+              )}
+            </div>
+            {columns.length ? (
+              <div className="details-q">
+                {columns.map(column => (
+                  <div key={column.name} className="details-q-row">
+                    <span>{column.label || column.name}</span>
+                    <span className="flow-muted">{columnKind(column)}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="flow-muted">This project has no columns to outline.</p>
+            )}
+          </div>
+        </div>
+        <aside className="details-side">
+          <div>
+            <div className="flow-muted details-label">Waves</div>
+            {files.length ? (
+              files.map(file => {
+                const id = datasetRowId(file);
+                const rows = file.n_rows
+                  ? `${file.n_rows.toLocaleString('en-GB')} rows`
+                  : 'No rows';
+                return (
+                  <div key={id} className="details-wave" data-active={id === datasetId}>
+                    <span>{file.original_filename || id}</span>
+                    <span className="flow-muted">{rows}</span>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="flow-muted">Not fielded</p>
+            )}
+          </div>
+          <div>
+            <div className="flow-muted details-label">Client and deliverables</div>
+            <p className="flow-muted">No client is stored on this project.</p>
+            <Link href={`/flow/p/${projectId}/report`}>Open report</Link>
+          </div>
+          <div>
+            <div className="details-q-head">
+              <div className="flow-muted details-label">Team</div>
+              <Button className="flow-btn" type="button" onClick={() => setAddOpen(true)}>
+                Add member
+              </Button>
+            </div>
+            {members.length ? (
+              members.map(member => (
+                <div key={member.user_id} className="details-member">
+                  <Avatar className="size-6">
+                    <AvatarFallback className="bg-accent text-[10px] font-medium text-accent-foreground">
+                      {memberMark(member.user_id)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="details-member-id">{member.user_id}</span>
+                  <span className="flow-muted">{roleLabel(member.role)}</span>
+                </div>
+              ))
+            ) : (
+              <p className="flow-muted">No members yet.</p>
+            )}
+          </div>
+        </aside>
+      </div>
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add member</DialogTitle>
+            <DialogDescription>
+              Project members are added by user id. Email invites are the workspace invitation, not
+              this list.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            value={userId}
+            onChange={event => setUserId(event.target.value)}
+            aria-label="User id"
+            placeholder="User id"
+          />
+          <ChoiceSelect
+            aria-label="Role"
+            value={role}
+            onValueChange={setRole}
+            options={[
+              { value: 'editor', label: 'Editor' },
+              { value: 'viewer', label: 'Viewer' },
+            ]}
+          />
+          {memberError ? <p className="flow-error">{memberError}</p> : null}
+          <div className="flow-row">
+            <Button className="flow-btn primary" type="button" onClick={addMember}>
+              Add member
+            </Button>
+            <Button className="flow-btn" type="button" onClick={() => setAddOpen(false)}>
+              Close
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}
