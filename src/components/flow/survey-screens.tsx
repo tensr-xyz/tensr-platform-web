@@ -170,7 +170,7 @@ export function BannerGrid({
           </tbody>
         </Table>
       </div>
-      {!showQuotes && book.answered_n != null && book.respondent_n != null ? (
+      {book.answered_n != null && book.respondent_n != null ? (
         <p className="flow-muted">
           Base: answered {String(book.answered_n)} of {String(book.respondent_n)}
         </p>

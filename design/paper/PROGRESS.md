@@ -99,12 +99,15 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 - [x] A table with a significant cell and a real respondent bitset shows the letter, and Evidence lists the verbatims. On dev `c390967` (live 2026-11-02T11:10:46Z), aware_A by owns_A on the stacked file showed `100.0% A` and `50.0% B`. Evidence listed 18 respondents. Before that deploy the same letter had no bitset (`unknown_row_uids`, 6 of 12). On dev `f1ff346` (live 2026-11-02T12:08:54Z) those 18 quotes read Yes, the sav label for code 1, instead of the stored `1.0`.
 - [x] Add to project moves an existing dataset into the project, and the dataset menu has Move to project. On dev `04da3c2` (live 2026-11-02T11:44:14Z), cars_DE.sav moved into cars_EN. Sources then listed 3 files, and the stack list included cars_DE.sav. The classic dataset menu opens the same dialog and was cancelled without a second move.
 - [x] Part A on `af6696a8` — **owner QA**. Weighted trust by market with `trend=previous_wave` and one download per file; unweighted Pearson chi-square with integer df; unweighted two-variable banner with value labels; three-group means as ANOVA. Never "stream ended without a result". Left for the owner. `af6696a8` is not in the test user's account, so this session did not run it and did not answer the open trust clarification.
+- [x] likert_openends `comments` (a real open end). Haiku coding on project `9065b0ef`, derived dataset `74bac240`. Interviews proposed 11 themes: Price too high / poor value, Price increase, Cheaper alternatives elsewhere, Wants more affordable option, Friendly or helpful staff, Fast delivery, Damaged or late delivery, Good build quality, Poor build quality, Hard to reach or slow support, No substantive comment. Themes of Codes for comments by region: headings East, North, West, South (the stored values). The grid says "Base: answered 348 of 400". 42 not coded. Column letters were requested and no cell showed a letter. The code frame rail lists the same 11 themes. The East 16.0% cell (Price too high / poor value, n 13, base 81) opened Evidence on `comments` and listed 0 verbatims ("What they said · comments 0"). The sheet on the same file shows the verbatim, for example "Too expensive for what you get" beside Price too high / poor value.
 
 ## Bugs found
 
 - The dataset select on Responses logs that it changes from uncontrolled to controlled. It does not block the sheet.
 - The code frame offers numeric columns. Q7 got a "Numeric only, no comment" theme. Only text open-end columns should be codeable. Theme evidence for that frame quotes Q7 and returns no verbatims.
-- A themes banner heading shows the stored code (region 1 and 2) rather than the value label.
+- A themes banner heading shows the stored code (region 1 and 2) rather than the value label. On likert_openends the region values are already words, so the headings read East, North, West, South.
+- A coded open-end cell opens Evidence with 0 verbatims. likert_openends comments, East 16.0% (Price too high / poor value, n 13), "What they said · comments 0". The sheet on the same file has the verbatim.
+- The "No substantive comment" theme shows a count of 37 beside a total of 1.7%. The other ten theme counts match their column percents of the 348 base.
 
 ## Unfinished
 
