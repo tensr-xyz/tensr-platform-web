@@ -20,7 +20,8 @@ describe('flow survey grid', () => {
         unweighted_n: 4,
         column_unweighted_n: 12,
         provenance: { row_uid_bitset: 'bitset' },
-      }
+      },
+      'A'
     );
     expect(selected).toMatchObject({
       percent: '25.0%',
@@ -29,6 +30,7 @@ describe('flow survey grid', () => {
       weight: 'weight',
       textColumn: 'open_end',
       bitset: 'bitset',
+      letter: 'A',
     });
   });
 

@@ -35,6 +35,7 @@ export type SurveyCell = {
   weight: string;
   percent: string;
   n: string;
+  letter: string;
 };
 
 export function bannerHeading(column: BannerColumn): string {
@@ -83,7 +84,8 @@ function bitsetFrom(cell: BannerCell): string {
 export function selectionFromCell(
   book: Record<string, unknown>,
   row: BannerRow,
-  cell: BannerCell | undefined
+  cell: BannerCell | undefined,
+  letter = ''
 ): SurveyCell | null {
   if (!cell) return null;
   const bitset = bitsetFrom(cell);
@@ -98,6 +100,7 @@ export function selectionFromCell(
     weight: weight ? String(weight) : '',
     percent,
     n: count,
+    letter,
   };
 }
 

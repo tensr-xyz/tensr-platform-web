@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
@@ -35,9 +36,39 @@ export function datasetRowId(row: DatasetRow): string {
 
 let currentCell: SurveyCell | null = null;
 const cellListeners = new Set<(cell: SurveyCell | null) => void>();
+let evidenceIds: string[] = [];
+let evidenceFocus = 0;
+const evidenceListeners = new Set<() => void>();
+
+function publishEvidence() {
+  evidenceListeners.forEach(listener => listener());
+}
+
+export function setEvidenceRespondents(ids: string[]) {
+  evidenceIds = ids;
+  publishEvidence();
+}
+
+export function focusEvidenceRows() {
+  evidenceFocus += 1;
+  publishEvidence();
+}
+
+export function useEvidenceSheet(): { ids: string[]; focus: number } {
+  const [sheet, setSheet] = useState({ ids: evidenceIds, focus: evidenceFocus });
+  useEffect(() => {
+    const listener = () => setSheet({ ids: [...evidenceIds], focus: evidenceFocus });
+    evidenceListeners.add(listener);
+    return () => {
+      evidenceListeners.delete(listener);
+    };
+  }, []);
+  return sheet;
+}
 
 export function setSurveyCell(cell: SurveyCell | null) {
   currentCell = cell;
+  if (!cell) setEvidenceRespondents([]);
   cellListeners.forEach(listener => listener(cell));
 }
 
@@ -104,7 +135,7 @@ export function BannerGrid({
                         className="flow-cell"
                         type="button"
                         onClick={() => {
-                          const selected = selectionFromCell(book, row, cell);
+                          const selected = selectionFromCell(book, row, cell, letter);
                           if (selected) onSelectCell(selected);
                         }}
                       >
@@ -227,11 +258,13 @@ export function EvidencePanel({
     setSyntaxNote('');
     if (!datasetId || !cell?.bitset || !cell.textColumn) {
       setQuotes(null);
+      setEvidenceRespondents([]);
       if (cell && !cell.bitset)
         setError('This cell has no respondent bitset, so the verbatims cannot be listed.');
       return;
     }
     setError('');
+    const controller = new AbortController();
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/quotes`, {
       method: 'POST',
       body: JSON.stringify({
@@ -240,9 +273,18 @@ export function EvidencePanel({
         page: 1,
         page_size: 20,
       }),
+      signal: controller.signal,
     })
-      .then(setQuotes)
-      .catch(err => setError(err instanceof Error ? err.message : 'Could not load verbatims'));
+      .then(page => {
+        setQuotes(page);
+        const rows = (page.quotes as { respondent_id?: string }[]) || [];
+        setEvidenceRespondents(rows.map(row => String(row.respondent_id || '')).filter(Boolean));
+      })
+      .catch(err => {
+        if (controller.signal.aborted) return;
+        setError(err instanceof Error ? err.message : 'Could not load verbatims');
+      });
+    return () => controller.abort();
   }, [datasetId, cell]);
   if (!cell) {
     return (
@@ -258,7 +300,11 @@ export function EvidencePanel({
     <div className="evidence">
       <div className="evidence-lead">
         <p className="flow-muted">{cell.claim}</p>
-        <p className="evidence-percent">{cell.percent || '—'}</p>
+        <p className="evidence-percent">
+          {cell.percent || '—'}
+          <span>{cell.textColumn}</span>
+        </p>
+        {cell.letter ? <Badge className="evidence-letter">Letter {cell.letter}</Badge> : null}
       </div>
       <div className="evidence-built">
         <p className="flow-muted">How it&apos;s built</p>
@@ -282,7 +328,7 @@ export function EvidencePanel({
       {error ? <p className="flow-error">{error}</p> : null}
       <div className="evidence-said">
         <p className="flow-muted">
-          <span>What they said</span>
+          <span>What they said · {cell.textColumn}</span>
           <span>{total || shown}</span>
         </p>
         {items.map(item => (
@@ -296,6 +342,9 @@ export function EvidencePanel({
             Showing {shown} of {total}
           </p>
         ) : null}
+        <Button className="flow-btn evidence-see" type="button" onClick={() => focusEvidenceRows()}>
+          See all {total || shown} in the sheet
+        </Button>
       </div>
       <div className="evidence-actions">
         {projectId ? (

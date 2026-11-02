@@ -400,16 +400,35 @@
 .evidence {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  padding: 16px 18px 12px;
+  flex: 1;
+  min-height: 0;
+  gap: 0;
 }
 
 .evidence-percent {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
   margin: 0;
   font-size: 30px;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 32px;
+}
+
+.evidence-percent span {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--color-muted);
+}
+
+.evidence-letter {
+  align-self: flex-start;
+  margin-top: 8px;
+  border-radius: 7px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
 }
 
 .evidence-lead,
@@ -418,6 +437,18 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 14px 18px;
+}
+
+.evidence-lead,
+.evidence-built {
+  border-bottom: 1px solid var(--color-line);
+}
+
+.evidence-said {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .evidence-built p,
@@ -443,9 +474,19 @@
   font-size: 11px;
 }
 
+.evidence-see {
+  align-self: flex-start;
+  padding-left: 0;
+  color: var(--color-accent);
+  background: transparent;
+  border-color: transparent;
+}
+
 .evidence-actions {
   display: flex;
   gap: 6px;
+  padding: 12px 14px;
+  border-top: 1px solid var(--color-line);
 }
 
 .evidence-actions .flow-btn {
@@ -1188,6 +1229,10 @@ select.flow-input {
 
 .flow-table tr[data-active='true'] td {
   background: #fcfcfa;
+}
+
+.flow-table tr[data-evidence='true'] td {
+  background: var(--color-accent-soft);
 }
 
 .value-row {

@@ -55,6 +55,7 @@ import {
   EvidencePanel,
   fileToBase64,
   setSurveyCell,
+  useEvidenceSheet,
   TablesBuilder,
   ThemesPanel,
   useSurveyCell,
@@ -1609,9 +1610,15 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const [weightOpen, setWeightOpen] = useState(false);
   const [descError, setDescError] = useState<string | null>(null);
   const surveyCell = useSurveyCell();
+  const evidenceSheet = useEvidenceSheet();
+  const sheetRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (surveyCell) setSide('evidence');
   }, [surveyCell]);
+  useEffect(() => {
+    if (!evidenceSheet.focus) return;
+    sheetRef.current?.querySelector('[data-evidence="true"]')?.scrollIntoView({ block: 'nearest' });
+  }, [evidenceSheet.focus]);
   useEffect(() => {
     if (!datasetId) return;
     void flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`)
@@ -1682,6 +1689,11 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const counts = valueCounts(activeValues);
   const countTotal = activeValues.length || 1;
   const projectDatasets = datasets.filter(row => !project || row.project_id === project.id);
+  const uidIndex = names.indexOf('_row_uid');
+  const evidenceIds = new Set(evidenceSheet.ids);
+  const evidenceColumn = surveyCell?.textColumn || '';
+  const columnMarked = (name: string, index: number) =>
+    evidenceColumn ? name === evidenceColumn : index === activeIndex;
 
   const askAboutColumn = () => {
     const text = agentText.trim();
@@ -1780,6 +1792,22 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
           >
             Filters{needle || valueFilter != null ? ' 1' : ''}
           </Button>
+          {surveyCell ? (
+            <>
+              <Button
+                className="flow-btn"
+                type="button"
+                data-active
+                onClick={() => setSurveyCell(null)}
+              >
+                Evidence · {surveyCell.textColumn} · {surveyCell.n || evidenceSheet.ids.length}{' '}
+                rows ×
+              </Button>
+              <Button className="flow-btn" type="button" onClick={() => setSurveyCell(null)}>
+                Back to all
+              </Button>
+            </>
+          ) : null}
           <span className="sheet-spacer" />
           <Button className="flow-btn" type="button" onClick={() => setWeightOpen(true)}>
             Weight
@@ -1843,6 +1871,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
         ) : null}
         {tab === 'sheet' || tab === 'evidence' ? (
           <>
+            <div ref={sheetRef} className="sheet-scroll">
             <ScrollArea className="sheet-scroll">
               <Table className="flow-table">
                 <thead>
@@ -1853,10 +1882,10 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                         <Button
                           type="button"
                           className="sheet-col"
-                          data-active={column.index === activeIndex}
+                          data-active={columnMarked(column.name, column.index)}
                           onClick={() => {
                             setSelectedCol(position);
-                            setSide('variable');
+                            if (!surveyCell) setSide('variable');
                           }}
                         >
                           {column.name}
@@ -1869,10 +1898,14 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                   </tr>
                 </thead>
                 <tbody>
-                  {shownRows.map(({ row, index }) => (
+                  {shownRows.map(({ row, index }) => {
+                    const inEvidence =
+                      uidIndex >= 0 && evidenceIds.has(String(row[uidIndex] ?? ''));
+                    return (
                     <tr
                       key={index}
                       data-active={selectedRow === index}
+                      data-evidence={inEvidence || undefined}
                       onClick={() => setSelectedRow(index)}
                     >
                       <td>
@@ -1884,7 +1917,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                         <td
                           key={column.index}
                           className="sheet-cell"
-                          data-active={column.index === activeIndex}
+                          data-active={columnMarked(column.name, column.index)}
                         >
                           {row[column.index] == null || row[column.index] === 'null'
                             ? ''
@@ -1892,10 +1925,12 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                         </td>
                       ))}
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </Table>
             </ScrollArea>
+            </div>
             <div className="sheet-foot">
               <span>
                 {rowTotal} respondent{rowTotal === 1 ? '' : 's'}
@@ -1939,6 +1974,9 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
             ]}
           />
         </div>
+        {side === 'evidence' ? (
+          <EvidencePanel datasetId={datasetId} projectId={project?.id} />
+        ) : (
         <ScrollArea className="sheet-scroll">
           {side === 'variable' ? (
             <div className="output-body">
@@ -1981,10 +2019,8 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
               {agentAnswer ? <article dangerouslySetInnerHTML={{ __html: plain(agentAnswer) }} /> : null}
             </div>
           ) : null}
-          {side === 'evidence' ? (
-            <EvidencePanel datasetId={datasetId} projectId={project?.id} />
-          ) : null}
         </ScrollArea>
+        )}
       </aside>
       {anovaOpen ? (
         <AnovaModal columns={columns} datasetId={datasetId} onClose={() => setAnovaOpen(false)} />
