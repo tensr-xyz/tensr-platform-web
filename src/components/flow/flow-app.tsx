@@ -47,6 +47,15 @@ import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
 import { placePins, runDocument } from '@/components/flow/run-document';
 import { loadProjectPins, useProjectPins } from '@/components/flow/report-pins';
+import {
+  DatasetsScreen,
+  FlowSidebar,
+  LogoMark,
+  NavIcon,
+  NewProjectDialog,
+  ProjectSwitcher,
+  SearchIcon,
+} from '@/components/flow/flow-shell';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -134,6 +143,14 @@ import {
   useSurveyCell,
   WeightPanel,
 } from '@/components/flow/survey-screens';
+type FlowRecipe = {
+  name?: string;
+  recipe_id?: string;
+  version?: number;
+  ops?: unknown[];
+  created_from?: string;
+};
+
 type DatasetRow = {
   dataset_id?: string;
   id?: string;
@@ -145,62 +162,6 @@ type DatasetRow = {
   parent_dataset_id?: string | null;
   lineage_label?: string | null;
 };
-
-function PanelIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-      <rect
-        x="1.5"
-        y="2"
-        width="11"
-        height="10"
-        rx="2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-      <path d="M5 2v10" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  );
-}
-
-function SwitchIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-      <path
-        d="M3.5 4.5L6 2l2.5 2.5M3.5 7.5L6 10l2.5-2.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function SearchIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true">
-      <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M9 9l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function LogoMark() {
-  return (
-    <span className="flow-logo" aria-hidden="true">
-      <svg width="15" height="15" viewBox="0 0 48 48">
-        <rect x="4" y="5" width="12" height="12" rx="2.5" fill="#FFFFFF" />
-        <rect x="18" y="5" width="12" height="12" rx="2.5" fill="#FFFFFF" />
-        <rect x="32" y="5" width="12" height="12" rx="2.5" fill="#6FC2A6" />
-        <rect x="18" y="19" width="12" height="12" rx="2.5" fill="#FFFFFF" />
-        <rect x="18" y="33" width="12" height="12" rx="2.5" fill="#FFFFFF" />
-      </svg>
-    </span>
-  );
-}
 
 function editedAgo(value?: string | null): string {
   if (!value) return '';
@@ -262,6 +223,8 @@ function editedLabel(value?: string | null): string {
   return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+const PROJECT_PAGE = 24;
+
 const PROJECT_TABS = [
   ['chat', 'Chat'],
   ['details', 'Details'],
@@ -269,7 +232,6 @@ const PROJECT_TABS = [
   ['responses', 'Responses'],
   ['tables', 'Tables'],
   ['report', 'Report'],
-  ['clips', 'Clips'],
 ] as const;
 
 export function FlowApp({ slug }: { slug: string[] }) {
@@ -277,7 +239,12 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const pathname = usePathname();
   const { isAuthReady, isAuthenticated } = useAuth();
   const [palette, setPalette] = useState(false);
-  const [sideHidden, setSideHidden] = useState(false);
+  const [sideCollapsed, setSideCollapsed] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
+  const [projectCursor, setProjectCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [email, setEmail] = useState('');
+  const [membersReady, setMembersReady] = useState(false);
   const [pendingAsk, setPendingAsk] = useState<string | null>(null);
   const [projects, setProjects] = useState<FlowProject[]>([]);
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
@@ -308,28 +275,41 @@ export function FlowApp({ slug }: { slug: string[] }) {
     }
   }, [isAuthReady, isAuthenticated, pathname, router]);
 
+  const membersFor = useCallback(async (listed: FlowProject[]) => {
+    const memberPages = await Promise.all(
+      listed.map(project =>
+        flowJson<{ members?: { user_id: string }[] }>(`/api/projects/${project.id}/members`, {
+          signal: AbortSignal.timeout(8000),
+        })
+          .then(page => [
+            project.id,
+            (page.members || []).map(item => item.user_id).filter(Boolean),
+          ])
+          .catch(() => [project.id, []])
+      )
+    );
+    return Object.fromEntries(memberPages) as Record<string, string[]>;
+  }, []);
+
   const reload = useCallback(async () => {
     try {
       const [projectPage, folderPage, filePage] = await Promise.all([
-        flowJson<{ projects?: FlowProject[] }>('/api/projects'),
+        flowJson<{ projects?: FlowProject[]; next_cursor?: string | null }>(
+          `/api/projects?limit=${PROJECT_PAGE}`
+        ),
         flowJson<{ folders?: { id: string; name: string }[] }>('/api/project-folders'),
         flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>('/datasets/?scope=all'),
       ]);
       const listed = projectPage.projects || [];
-      const memberPages = await Promise.all(
-        listed.map(project =>
-          flowJson<{ members?: { user_id: string }[] }>(`/api/projects/${project.id}/members`, {
-            signal: AbortSignal.timeout(8000),
-          })
-            .then(page => [
-              project.id,
-              (page.members || []).map(item => item.user_id).filter(Boolean),
-            ])
-            .catch(() => [project.id, []])
-        )
-      );
-      setMembers(Object.fromEntries(memberPages));
-      setProjects(listed);
+      void membersFor(listed).then(memberMap => {
+        setMembers(current => ({ ...current, ...memberMap }));
+        setMembersReady(true);
+      });
+      setProjects(current => [
+        ...listed,
+        ...current.filter(item => !listed.some(row => row.id === item.id)),
+      ]);
+      setProjectCursor(projectPage.next_cursor || null);
       setFolders(folderPage.folders || []);
       setDatasets(Array.isArray(filePage) ? filePage : filePage.datasets || []);
       setError(null);
@@ -338,7 +318,27 @@ export function FlowApp({ slug }: { slug: string[] }) {
       setError(err instanceof Error ? err.message : 'Could not load the workspace');
       setWorkspacePhase('error');
     }
-  }, []);
+  }, [membersFor]);
+
+  const loadMoreProjects = useCallback(async () => {
+    if (!projectCursor || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await flowJson<{ projects?: FlowProject[]; next_cursor?: string | null }>(
+        `/api/projects?limit=${PROJECT_PAGE}&cursor=${encodeURIComponent(projectCursor)}`
+      );
+      const listed = page.projects || [];
+      const memberMap = await membersFor(listed);
+      setMembers(current => ({ ...current, ...memberMap }));
+      setProjects(current => [
+        ...current,
+        ...listed.filter(item => !current.some(row => row.id === item.id)),
+      ]);
+      setProjectCursor(page.next_cursor || null);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [projectCursor, loadingMore, membersFor]);
 
   useEffect(() => {
     if (isAuthenticated) void reload();
@@ -352,6 +352,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
       active_organization?: { name?: string };
     }>('/me')
       .then(page => {
+        setEmail(page.user?.email || page.email || '');
         setAccount(page.user?.name || page.user?.email || page.email || '');
         setOrgName(page.active_organization?.name || '');
       })
@@ -359,14 +360,32 @@ export function FlowApp({ slug }: { slug: string[] }) {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    window.localStorage.removeItem('tensr-classic');
+    try {
+      window.localStorage.removeItem('tensr-classic');
+      setSideCollapsed(window.localStorage.getItem('tensr-side-collapsed') === '1');
+    } catch {
+      // Storage can be unavailable; the sidebar starts expanded.
+    }
   }, []);
+
+  const collapseSide = (value: boolean) => {
+    setSideCollapsed(value);
+    try {
+      window.localStorage.setItem('tensr-side-collapsed', value ? '1' : '0');
+    } catch {
+      // The choice lasts for this visit only.
+    }
+  };
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         setPalette(open => !open);
+      }
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'n') {
+        event.preventDefault();
+        setNewOpen(true);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -376,6 +395,21 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const section = slug[0] === 'p' ? slug[2] || 'chat' : slug[0] || 'projects';
   const projectId = slug[0] === 'p' ? slug[1] : '';
   const project = projects.find(item => item.id === projectId);
+
+  useEffect(() => {
+    if (!projectId || workspacePhase !== 'ready' || projects.some(item => item.id === projectId)) {
+      return;
+    }
+    void flowJson<{ project?: FlowProject }>(`/api/projects/${projectId}`)
+      .then(page => {
+        const found = page.project;
+        if (found)
+          setProjects(current =>
+            current.some(item => item.id === found.id) ? current : [...current, found]
+          );
+      })
+      .catch(() => undefined);
+  }, [projectId, projects, workspacePhase]);
   const openDataset =
     datasets.find(
       row => row.project_id === project?.id && datasetRowId(row) === project?.active_dataset_id
@@ -405,133 +439,30 @@ export function FlowApp({ slug }: { slug: string[] }) {
     });
   }, [openDatasetId, openDataset?.original_filename]);
 
-  const displayName = account.includes('@') ? account.split('@')[0] : account;
-  const initials = (displayName || account)
-    .split(/[\s._-]/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(part => part[0]?.toUpperCase())
-    .join('');
+  const workspaceLabel =
+    orgName && account && orgName.startsWith(account)
+      ? orgName.slice(account.length).trim() || 'Workspace'
+      : orgName || '';
 
   return (
     <SubscriptionGate>
       <div className={projectId ? 'flow flow-project' : 'flow flow-home'}>
-        {projectId ? null : sideHidden ? (
-          <Button
-            className="flow-expand"
-            type="button"
-            aria-label="Show sidebar"
-            onClick={() => setSideHidden(false)}
-          >
-            <PanelIcon />
-          </Button>
-        ) : (
-          <aside className="flow-side">
-            <div className="flow-brand">
-              <LogoMark />
-              <div className="flow-brand-name">
-                <strong>Tensr</strong>
-                <em>
-                  {orgName
-                    ? ` · ${account && orgName.startsWith(account) ? orgName.slice(account.length).trim() || 'Workspace' : orgName}`
-                    : ''}
-                </em>
-              </div>
-              <Button
-                className="flow-brand-collapse"
-                type="button"
-                aria-label="Hide sidebar"
-                onClick={() => setSideHidden(true)}
-              >
-                <PanelIcon />
-              </Button>
-            </div>
-            <nav className="flow-nav">
-              <Button
-                className="flow-new"
-                type="button"
-                onClick={() => {
-                  void flowJson<{ project?: { id?: string } }>('/api/projects', {
-                    method: 'POST',
-                    body: JSON.stringify({ name: 'Untitled' }),
-                  }).then(page => {
-                    const id = page.project?.id;
-                    if (id) router.push(`/flow/p/${id}/chat`);
-                    return reload();
-                  });
-                }}
-              >
-                <span className="nav-label">
-                  <NavIcon kind="plus" /> New project
-                </span>
-                <span className="flow-k">⌘N</span>
-              </Button>
-              <Button type="button" onClick={() => setPalette(true)}>
-                <span className="nav-label">
-                  <NavIcon kind="search" /> Search
-                </span>
-                <span className="flow-k">⌘K</span>
-              </Button>
-              <Link href="/flow" data-active={section === 'projects'}>
-                <span className="nav-label">
-                  <NavIcon kind="home" /> Home
-                </span>
-              </Link>
-              <Link href="/flow" data-active="false">
-                <span className="nav-label">
-                  <NavIcon kind="data" /> Datasets
-                </span>
-                <span className="flow-k">{datasets.length}</span>
-              </Link>
-              <Link href="/flow/plugins" data-active={section === 'plugins'}>
-                <span className="nav-label">
-                  <NavIcon kind="plugin" /> Plugins
-                </span>
-              </Link>
-            </nav>
-            <div className="flow-folders">
-              <div className="folder-head">
-                <h2>Folders</h2>
-                <FolderCreate onCreated={reload} />
-              </div>
-              {folders.map((folder, index) => (
-                <Button
-                  key={folder.id}
-                  type="button"
-                  data-active={folderName === folder.name}
-                  onClick={() => {
-                    setFolderName(folder.name);
-                    router.push('/flow');
-                  }}
-                >
-                  <i data-tone={index === 0 ? 'accent' : 'mute'} />
-                  {folder.name}
-                </Button>
-              ))}
-            </div>
-            <div className="flow-user">
-              <span className="flow-avatar">{initials || '·'}</span>
-              <div>
-                <strong>{displayName || 'Signed in'}</strong>
-                <span>
-                  {orgName && account && orgName.startsWith(account)
-                    ? orgName.slice(account.length).trim() || 'Workspace'
-                    : orgName || 'Workspace'}
-                </span>
-              </div>
-              <Button
-                className="flow-user-more"
-                type="button"
-                aria-label="Classic workspace"
-                onClick={() => {
-                  window.localStorage.setItem('tensr-classic', '1');
-                  router.push('/dashboard?classic=1');
-                }}
-              >
-                ···
-              </Button>
-            </div>
-          </aside>
+        {projectId ? null : (
+          <FlowSidebar
+            collapsed={sideCollapsed}
+            onCollapse={collapseSide}
+            section={section}
+            datasetCount={datasets.filter(row => datasetRowId(row)).length}
+            folders={folders}
+            folderName={folderName}
+            account={account}
+            email={email}
+            workspace={workspaceLabel}
+            onFolder={setFolderName}
+            onNewProject={() => setNewOpen(true)}
+            onSearch={() => setPalette(true)}
+            onFoldersChanged={reload}
+          />
         )}
         <div className="flow-main">
           {projectId ? (
@@ -544,26 +475,13 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   <span className="proj-slash">/</span>
                   <div className="proj-name">
                     <i />
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button className="proj-switch" type="button" aria-label="Switch project">
-                          <strong>{project?.name || 'Project'}</strong>
-                          <SwitchIcon />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        {projects
-                          .filter(item => (item.status || 'active') !== 'archived')
-                          .map(item => (
-                            <DropdownMenuItem key={item.id} asChild>
-                              <Link href={`/flow/p/${item.id}/${section}`}>{item.name}</Link>
-                            </DropdownMenuItem>
-                          ))}
-                        <DropdownMenuItem asChild>
-                          <Link href="/flow">All projects</Link>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <ProjectSwitcher
+                      current={project}
+                      projects={projects}
+                      section={section}
+                      hasMore={Boolean(projectCursor)}
+                      onLoadMore={loadMoreProjects}
+                    />
                   </div>
                 </div>
                 <Button className="proj-search" type="button" onClick={() => setPalette(true)}>
@@ -605,9 +523,16 @@ export function FlowApp({ slug }: { slug: string[] }) {
               <PublishScreen />
             ) : section === 'plugins' ? (
               <PluginsScreen />
+            ) : section === 'datasets' && !projectId ? (
+              <DatasetsScreen
+                phase={workspacePhase}
+                datasets={datasets}
+                projects={projects}
+                onChanged={reload}
+              />
             ) : section === 'projects' || !projectId ? (
               <ProjectsScreen
-                phase={workspacePhase}
+                phase={workspacePhase === 'ready' && !membersReady ? 'loading' : workspacePhase}
                 error={error}
                 projects={projects}
                 members={members}
@@ -617,23 +542,21 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 workspace={orgName}
                 onFolder={name => setFolderName(name)}
                 onCreated={reload}
-                onCreate={() => {
-                  void flowJson<{ project?: { id?: string } }>('/api/projects', {
-                    method: 'POST',
-                    body: JSON.stringify({ name: 'Untitled' }),
-                  }).then(page => {
-                    const id = page.project?.id;
-                    if (id) router.push(`/flow/p/${id}/chat`);
-                    return reload();
-                  });
-                }}
+                hasMore={Boolean(projectCursor)}
+                loadingMore={loadingMore}
+                onLoadMore={loadMoreProjects}
+                onCreate={() => setNewOpen(true)}
               />
             ) : section === 'details' ? (
               <DetailsScreen project={project} datasets={datasets} />
             ) : section === 'sources' ? (
               <SourcesScreen project={project} datasets={datasets} onChanged={reload} />
             ) : section === 'responses' ? (
-              <ResponsesScreen project={project} datasets={datasets} />
+              <ResponsesScreen
+                project={project}
+                datasets={datasets}
+                ready={workspacePhase === 'ready'}
+              />
             ) : section === 'tables' ? (
               <TablesScreen project={project} datasets={datasets} />
             ) : section === 'report' ? (
@@ -672,6 +595,14 @@ export function FlowApp({ slug }: { slug: string[] }) {
             }}
           />
         ) : null}
+        <NewProjectDialog
+          open={newOpen}
+          onOpenChange={setNewOpen}
+          folders={folders}
+          datasets={datasets}
+          defaultFolder={folderName}
+          onCreated={reload}
+        />
         {shareOpen && projectId ? (
           <ShareDialog
             projectId={projectId}
@@ -705,93 +636,6 @@ export function FlowApp({ slug }: { slug: string[] }) {
   );
 }
 
-function FolderCreate({ onCreated }: { onCreated: () => Promise<void> }) {
-  return (
-    <Button
-      type="button"
-      aria-label="New folder"
-      onClick={() => {
-        void flowJson('/api/project-folders', {
-          method: 'POST',
-          body: JSON.stringify({ name: 'New folder' }),
-        }).then(() => onCreated());
-      }}
-    >
-      +
-    </Button>
-  );
-}
-
-function NavIcon({ kind }: { kind: 'plus' | 'search' | 'home' | 'data' | 'plugin' }) {
-  if (kind === 'plus') {
-    return (
-      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-        <path
-          d="M8 3.5v9M3.5 8h9"
-          fill="none"
-          stroke="#1B1C1A"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
-  }
-  if (kind === 'search') {
-    return (
-      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-        <circle cx="7" cy="7" r="4.5" fill="none" stroke="#6A6B66" strokeWidth="1.4" />
-        <path
-          d="M10.5 10.5L13.5 13.5"
-          fill="none"
-          stroke="#6A6B66"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
-  }
-  if (kind === 'home') {
-    return (
-      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-        <rect
-          x="2.5"
-          y="2.5"
-          width="11"
-          height="11"
-          rx="2"
-          fill="none"
-          stroke="#6A6B66"
-          strokeWidth="1.4"
-        />
-        <path d="M2.5 6.5h11M6.5 6.5v7" fill="none" stroke="#6A6B66" strokeWidth="1.4" />
-      </svg>
-    );
-  }
-  if (kind === 'data') {
-    return (
-      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-        <ellipse cx="8" cy="4" rx="5" ry="1.8" fill="none" stroke="#6A6B66" strokeWidth="1.2" />
-        <path
-          d="M3 4v8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8V4M3 8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8"
-          fill="none"
-          stroke="#6A6B66"
-          strokeWidth="1.2"
-        />
-      </svg>
-    );
-  }
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-      <path
-        d="M6 2.5h4v2a1.3 1.3 0 102.6 0h.9v4h-2a1.3 1.3 0 100 2.6h2v2.4H2.5V10.5h2a1.3 1.3 0 100-2.6h-2V4.5H6z"
-        fill="none"
-        stroke="#6A6B66"
-        strokeWidth="1.2"
-      />
-    </svg>
-  );
-}
-
 function ProjectsScreen({
   phase,
   error,
@@ -804,6 +648,9 @@ function ProjectsScreen({
   onFolder,
   onCreated,
   onCreate,
+  hasMore,
+  loadingMore,
+  onLoadMore,
 }: {
   phase: 'loading' | 'ready' | 'error';
   error: string | null;
@@ -816,7 +663,29 @@ function ProjectsScreen({
   onFolder: (name: string | null) => void;
   onCreated: () => Promise<void>;
   onCreate: () => void;
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => Promise<void>;
 }) {
+  const sentinel = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node || !hasMore || phase !== 'ready') return;
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries.some(entry => entry.isIntersecting)) void onLoadMore();
+      },
+      { rootMargin: '320px' }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, phase, onLoadMore]);
+  const moveToFolder = (projectId: string, folder: string) => {
+    void flowJson(`/api/projects/${projectId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ folder: folder || null }),
+    }).then(() => onCreated());
+  };
   const [mode, setMode] = useState<'cards' | 'table'>('cards');
   const [filter, setFilter] = useState<'active' | 'mine' | 'archived'>('active');
   const [query, setQuery] = useState('');
@@ -915,8 +784,15 @@ function ProjectsScreen({
               project={project}
               datasets={datasets}
               memberIds={members[project.id] || []}
+              folders={folders}
+              onMove={folder => moveToFolder(project.id, folder)}
             />
           ))}
+          {loadingMore
+            ? Array.from({ length: 3 }, (_, index) => (
+                <Skeleton key={`more-${index}`} className="flow-card-skeleton" />
+              ))
+            : null}
           <Button className="flow-card flow-card-new" type="button" onClick={onCreate}>
             <span className="home-plus">+</span>
             <strong>New project</strong>
@@ -966,14 +842,16 @@ function ProjectsScreen({
                         </div>
                       </td>
                       <td>
-                        {project.folder ? (
-                          <span className="folder-name">
-                            <i />
-                            {project.folder}
-                          </span>
-                        ) : (
-                          <span className="flow-muted">—</span>
-                        )}
+                        <ChoiceSelect
+                          className="row-folder"
+                          aria-label={`Folder for ${project.name}`}
+                          value={project.folder || ''}
+                          onValueChange={value => moveToFolder(project.id, value)}
+                          options={[
+                            { value: '', label: 'No folder' },
+                            ...folders.map(folder => ({ value: folder.name, label: folder.name })),
+                          ]}
+                        />
                       </td>
                       <td>
                         <Badge tone={status === 'archived' || draft ? 'draft' : 'active'}>
@@ -1007,6 +885,22 @@ function ProjectsScreen({
           )}
         </div>
       )}
+      {phase === 'ready' && hasMore ? (
+        <div ref={sentinel} className="home-more">
+          {mode === 'table' && loadingMore ? (
+            <Skeleton className="h-12 w-full" />
+          ) : (
+            <Button
+              className="flow-btn"
+              type="button"
+              disabled={loadingMore}
+              onClick={() => void onLoadMore()}
+            >
+              {loadingMore ? 'Loading…' : 'Load more projects'}
+            </Button>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1015,10 +909,14 @@ function ProjectCard({
   project,
   datasets,
   memberIds,
+  folders,
+  onMove,
 }: {
   project: FlowProject;
   datasets: DatasetRow[];
   memberIds: string[];
+  folders: { id: string; name: string }[];
+  onMove: (folder: string) => void;
 }) {
   const count = datasets.filter(row => row.project_id === project.id).length;
   const status = project.status || 'active';
@@ -1027,10 +925,36 @@ function ProjectCard({
     <Card asChild>
       <Link href={`/flow/p/${project.id}/chat`} className="flow-card">
         <div className="card-top">
-          <span className="card-folder">
-            <i />
-            {project.folder || 'No folder'}
-          </span>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                className="card-folder"
+                type="button"
+                aria-label={`Move ${project.name} to a folder`}
+                onClick={event => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                }}
+              >
+                <i />
+                {project.folder || 'No folder'}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" onClick={event => event.stopPropagation()}>
+              <DropdownMenuItem disabled className="card-folder-label">
+                Move to folder
+              </DropdownMenuItem>
+              {[{ id: '', name: '' }, ...folders].map(folder => (
+                <DropdownMenuItem
+                  key={folder.id || 'none'}
+                  onSelect={() => onMove(folder.name)}
+                  data-active={(project.folder || '') === folder.name}
+                >
+                  {folder.name || 'No folder'}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Badge tone={status === 'archived' || draft ? 'draft' : 'active'}>
             {status === 'archived' ? 'Archived' : draft ? 'Draft' : 'Active'}
           </Badge>
@@ -2312,25 +2236,29 @@ function ChatScreen({
   attachmentsRef.current = attachments;
   const askedRef = useRef<string | null>(null);
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
-  const [recipes, setRecipes] = useState<
-    { name?: string; recipe_id?: string; ops?: unknown[] }[] | null
-  >(null);
+  const [recipes, setRecipes] = useState<FlowRecipe[] | null>(null);
   const file = chatFile(project, datasets);
-  const railReady = sessions !== null && recipes !== null;
   const showThread = Boolean(sent || answer || plan || status);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
 
-  useEffect(() => {
-    if (!project) return;
-    void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
+  const chatProjectId = project?.id || '';
+  const loadRail = useCallback(() => {
+    if (!chatProjectId) return;
+    void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${chatProjectId}/sessions`, {
+      signal: AbortSignal.timeout(15000),
+    })
       .then(page => setSessions(page.sessions || []))
-      .catch(() => setSessions([]));
-    void flowJson<{ recipes?: { name?: string; recipe_id?: string }[] }>(
-      `/datasets/recipes?project_id=${project.id}`
-    )
+      .catch(() => setSessions(current => current || []));
+    void flowJson<{ recipes?: FlowRecipe[] }>(`/datasets/recipes?project_id=${chatProjectId}`, {
+      signal: AbortSignal.timeout(15000),
+    })
       .then(page => setRecipes(page.recipes || []))
-      .catch(() => setRecipes([]));
-  }, [project]);
+      .catch(() => setRecipes(current => current || []));
+  }, [chatProjectId]);
+
+  useEffect(() => {
+    loadRail();
+  }, [loadRail]);
 
   useEffect(() => {
     if (!datasetId) {
@@ -2488,6 +2416,89 @@ function ChatScreen({
       });
   };
 
+  const [recipeNote, setRecipeNote] = useState<{
+    text: string;
+    error?: boolean;
+    outputs?: boolean;
+  } | null>(null);
+  const [recipeBusy, setRecipeBusy] = useState('');
+
+  const saveRecipe = async (name: string, ids: string[]) => {
+    if (!project) return;
+    if (!ids.length) {
+      setRecipeNote({ text: 'Ask for an analysis first. Its run can then be saved as a recipe.' });
+      return;
+    }
+    setRecipeBusy('save');
+    setRecipeNote(null);
+    try {
+      const runs = await Promise.all(
+        ids.map(id =>
+          flowJson<{ op?: string; body?: Record<string, unknown> }>(`/datasets/analysis-runs/${id}`)
+        )
+      );
+      const ops = runs
+        .filter(run => run.op)
+        .map(run => ({
+          op: 'analysis',
+          analysis_type: run.op,
+          input: 'survey',
+          body: Object.fromEntries(
+            Object.entries(run.body || {}).filter(([key]) => key !== 'dataset_id')
+          ),
+        }));
+      if (!ops.length) throw new Error('This run has no steps Tensr can replay.');
+      await flowJson('/datasets/recipes', {
+        method: 'POST',
+        body: JSON.stringify({
+          project_id: project.id,
+          name: name.slice(0, 120) || 'Recipe',
+          ops: [{ op: 'import', role: 'survey' }, ...ops],
+          created_from: 'history',
+        }),
+      });
+      setRecipeNote({ text: `Saved “${name}” as a recipe. Run it on any file from Recipes.` });
+      loadRail();
+    } catch (err) {
+      setRecipeNote({
+        text: err instanceof Error ? err.message : 'The recipe did not save.',
+        error: true,
+      });
+    } finally {
+      setRecipeBusy('');
+    }
+  };
+
+  const runRecipe = async (recipe: FlowRecipe) => {
+    if (!recipe.recipe_id) return;
+    if (!datasetId) {
+      setRecipeNote({ text: 'Open a file on Sources, then run the recipe on it.', error: true });
+      return;
+    }
+    setRecipeBusy(recipe.recipe_id);
+    setRecipeNote(null);
+    try {
+      const out = await flowJson<{ run_ids?: string[]; dataset_id?: string }>(
+        `/datasets/recipes/${recipe.recipe_id}/versions/${recipe.version || 1}/run`,
+        { method: 'POST', body: JSON.stringify({ dataset_id: datasetId }) }
+      );
+      const count = out.run_ids?.length || 0;
+      setRecipeNote({
+        text: count
+          ? `Ran “${recipe.name || 'Recipe'}” on ${file?.original_filename || 'the open file'}. ${count} output${count === 1 ? '' : 's'} saved.`
+          : `Ran “${recipe.name || 'Recipe'}”. The new working version is on Sources.`,
+        outputs: count > 0,
+      });
+    } catch (err) {
+      setRecipeNote({
+        text: err instanceof Error ? err.message : 'The recipe did not run.',
+        error: true,
+      });
+    } finally {
+      setRecipeBusy('');
+    }
+  };
+
   const clearChat = () => {
     setSent('');
     setAttachedNote('');
@@ -2550,27 +2561,63 @@ function ChatScreen({
         )}
         <div className="chat-recipe-head">
           <span className="flow-muted">Recipes</span>
-          <span className="flow-muted" aria-hidden="true">
+          <Button
+            className="chat-recipe-add"
+            type="button"
+            aria-label="Save this run as a recipe"
+            title={runIds.length ? 'Save this run as a recipe' : 'Ask for an analysis first'}
+            disabled={recipeBusy === 'save'}
+            onClick={() => void saveRecipe(title, runIds)}
+          >
             +
-          </span>
+          </Button>
         </div>
         {recipes === null ? (
           <Skeleton className="h-8 w-full" />
         ) : (
           <>
-            {recipes.map(recipe => (
-              <div key={recipe.recipe_id} className="chat-recipe">
-                <span>{recipe.name || 'Recipe'}</span>
-                {Array.isArray(recipe.ops) ? (
+            {recipes.map(recipe => {
+              const steps = Array.isArray(recipe.ops)
+                ? recipe.ops.filter(step => (step as { op?: string } | null)?.op !== 'import')
+                    .length
+                : 0;
+              return (
+                <Button
+                  key={recipe.recipe_id}
+                  className="chat-recipe"
+                  type="button"
+                  disabled={Boolean(recipeBusy)}
+                  title={`Run on ${file?.original_filename || 'the open file'}`}
+                  onClick={() => void runRecipe(recipe)}
+                >
+                  <span>{recipe.name || 'Recipe'}</span>
                   <span className="chat-recipe-steps">
-                    {recipe.ops.length} step{recipe.ops.length === 1 ? '' : 's'}
+                    {recipeBusy === recipe.recipe_id
+                      ? 'Running…'
+                      : `${steps} step${steps === 1 ? '' : 's'} · Run`}
                   </span>
-                ) : null}
-              </div>
-            ))}
-            <p className="flow-muted chat-recipe-hint">Save any run as a recipe</p>
+                </Button>
+              );
+            })}
+            {recipes.length === 0 ? (
+              <p className="flow-muted chat-recipe-hint">
+                Save any run as a recipe, then run it on another file.
+              </p>
+            ) : null}
           </>
         )}
+        {recipeNote ? (
+          <p
+            className={
+              recipeNote.error ? 'flow-error chat-recipe-note' : 'flow-muted chat-recipe-note'
+            }
+          >
+            {recipeNote.text}{' '}
+            {recipeNote.outputs ? (
+              <Link href={`${projectHref}/report?pane=outputs`}>Open Outputs</Link>
+            ) : null}
+          </p>
+        ) : null}
       </aside>
       {showThread ? (
         <>
@@ -2841,11 +2888,10 @@ function ChatScreen({
                   <Button
                     className="flow-btn"
                     type="button"
-                    onClick={() =>
-                      setStatus('This run has no replayable steps to save as a recipe.')
-                    }
+                    disabled={recipeBusy === 'save'}
+                    onClick={() => void saveRecipe(title, runIds)}
                   >
-                    Save
+                    {recipeBusy === 'save' ? 'Saving…' : 'Save as recipe'}
                   </Button>
                   <Link className="flow-btn" href={`${projectHref}/report`}>
                     Add to report
@@ -2863,7 +2909,7 @@ function ChatScreen({
       ) : (
         <EmptyChat
           file={file}
-          ready={ready && railReady}
+          ready={ready}
           question={question}
           setQuestion={setQuestion}
           mode={mode}
@@ -2932,10 +2978,19 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
   );
 }
 
-function ResponsesScreen({ project, datasets }: { project?: FlowProject; datasets: DatasetRow[] }) {
+function ResponsesScreen({
+  project,
+  datasets,
+  ready = true,
+}: {
+  project?: FlowProject;
+  datasets: DatasetRow[];
+  ready?: boolean;
+}) {
   const router = useRouter();
   const [chosenId, setChosenId] = useState<string | null>(null);
-  const fallback = datasets.find(row => row.project_id === project?.id) || datasets[0];
+  const projectKey = project?.id || '';
+  const fallback = datasets.find(row => row.project_id === project?.id);
   const datasetId =
     chosenId || project?.active_dataset_id || (fallback ? datasetRowId(fallback) : '');
   const [tab, setTab] = useState<'sheet' | 'notebook' | 'evidence' | 'themes'>('sheet');
@@ -2948,7 +3003,8 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const [query, setQuery] = useState('');
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
   const [specs, setSpecs] = useState<{ id: string; label: string }[] | null>(null);
-  const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error' | 'empty'>('loading');
+  const [sheetAttempt, setSheetAttempt] = useState(0);
   const [selectedCol, setSelectedColState] = useState(0);
   const [colPicked, setColPicked] = useState(false);
   const [frameName, setFrameName] = useState('');
@@ -2980,31 +3036,41 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   }, [evidenceSheet.focus]);
   useEffect(() => {
     if (!datasetId) {
-      setSheetPhase('error');
+      setSheetPhase(ready && projectKey ? 'empty' : 'loading');
       return;
     }
+    let cancelled = false;
     setSheetPhase('loading');
-    void flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`)
-      .then(meta => {
-        const rows = meta.columns || [];
-        setColumns(rows);
-      })
-      .catch(() => setColumns([]));
-    void flowJson<{ rows?: unknown[][]; headers?: string[]; n_rows?: number }>(
-      `/datasets/${datasetId}/preview?limit=${pageSize}&offset=${pageOffset}`
-    )
-      .then(page => {
+    const load = () =>
+      Promise.all([
+        flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`).catch(() => ({
+          columns: [] as FlowColumn[],
+        })),
+        flowJson<{ rows?: unknown[][]; headers?: string[]; n_rows?: number }>(
+          `/datasets/${datasetId}/preview?limit=${pageSize}&offset=${pageOffset}`
+        ),
+      ]);
+    const wait = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms));
+    void load()
+      .catch(() => wait(1200).then(load))
+      .then(([meta, page]) => {
+        if (cancelled) return;
+        setColumns(meta.columns || []);
         setHeaders(page.headers || []);
         setPreview(page.rows || []);
         setRowTotal(page.n_rows || 0);
         setSheetPhase('ready');
       })
       .catch(() => {
+        if (cancelled) return;
         setPreview([]);
         setHeaders([]);
         setSheetPhase('error');
       });
-  }, [datasetId, pageOffset]);
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, pageOffset, ready, projectKey, sheetAttempt]);
   useEffect(() => {
     if (!project) return;
     void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
@@ -3038,6 +3104,8 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
     column => !needle || column.name.toLowerCase().includes(needle)
   );
   const shownCols = headerHits.length ? headerHits : visibleNames;
+  const columnMeta = (name: string) =>
+    columns.find(column => column.name === name || column.label === name);
   const firstSubstantive = Math.max(
     0,
     shownCols.findIndex(
@@ -3059,8 +3127,6 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
       })
       .map(column => column.index)
   );
-  const columnMeta = (name: string) =>
-    columns.find(column => column.name === name || column.label === name);
   const activeIndex = shownCols[pickedCol]?.index ?? shownCols[0]?.index ?? 0;
   const shownRows = preview
     .map((row, index) => ({ row, index }))
@@ -3385,8 +3451,37 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                 <Skeleton key={index} className="mb-2 h-8 w-full" />
               ))}
             </div>
-          ) : sheetPhase === 'error' ? (
-            <p className="flow-error">Could not load this sheet.</p>
+          ) : sheetPhase === 'empty' || sheetPhase === 'error' ? (
+            <div className="sheet-state" role={sheetPhase === 'error' ? 'alert' : undefined}>
+              <span className="sheet-state-mark" data-tone={sheetPhase}>
+                {sheetPhase === 'error' ? '!' : '+'}
+              </span>
+              <strong>
+                {sheetPhase === 'error' ? 'This file didn’t load' : 'No file in this project yet'}
+              </strong>
+              <p>
+                {sheetPhase === 'error'
+                  ? 'Tensr tried twice and couldn’t read the responses. Try again, or open another file from Sources.'
+                  : 'Upload a survey file on Sources and its responses show here.'}
+              </p>
+              <div className="sheet-state-actions">
+                {sheetPhase === 'error' ? (
+                  <Button
+                    className="flow-btn primary"
+                    type="button"
+                    onClick={() => setSheetAttempt(value => value + 1)}
+                  >
+                    Try again
+                  </Button>
+                ) : null}
+                <Link
+                  className={sheetPhase === 'error' ? 'flow-btn' : 'flow-btn primary'}
+                  href={`/flow/p/${project?.id || ''}/sources`}
+                >
+                  {sheetPhase === 'error' ? 'Open Sources' : 'Add a file'}
+                </Link>
+              </div>
+            </div>
           ) : (
             <>
               <div ref={sheetRef} className="sheet-frame">
@@ -3448,6 +3543,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                             key={index}
                             data-active={selectedRow === index}
                             data-evidence={inEvidence || undefined}
+                            data-clickable
                             onClick={() => setSelectedRow(index)}
                           >
                             <td className="sheet-rownum">
@@ -3707,6 +3803,9 @@ function ReportScreen({
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
   const [pane, setPane] = useState<'report' | 'outputs'>('report');
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('pane') === 'outputs') setPane('outputs');
+  }, []);
   const reportPins = useProjectPins(projectId, []);
 
   const templateInput = useRef<HTMLInputElement>(null);

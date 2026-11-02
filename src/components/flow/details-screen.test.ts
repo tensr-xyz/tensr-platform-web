@@ -12,8 +12,19 @@ describe('project brief', () => {
     expect(splitBrief(text)).toEqual({
       objectives: 'Track awareness\nMeasure satisfaction',
       audience: 'UK adults 18+',
+      notes: '',
     });
-    expect(splitBrief('Just a note')).toEqual({ objectives: 'Just a note', audience: '' });
+    expect(splitBrief('Just a note')).toEqual({
+      objectives: 'Just a note',
+      audience: '',
+      notes: '',
+    });
+    const full = joinBrief('Grow awareness', 'UK drivers', 'Use NET agree');
+    expect(splitBrief(full)).toEqual({
+      objectives: 'Grow awareness',
+      audience: 'UK drivers',
+      notes: 'Use NET agree',
+    });
   });
 
   it('labels a workspace member by name and email and skips people already on the project', () => {
