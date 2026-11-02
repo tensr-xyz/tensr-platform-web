@@ -10,6 +10,9 @@
   --radius-sm: 6px;
   --radius-md: 10px;
   --radius-lg: 16px;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-title: 600;
   --font: 'Suisse Intl', 'SuisseIntl', Inter, system-ui, sans-serif;
   min-height: 100vh;
   height: 100vh;
@@ -67,14 +70,14 @@
 
 .flow-brand strong {
   font-size: 14px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
 }
 
 .flow-brand em {
   font-style: normal;
   color: var(--color-muted);
   font-size: 13px;
-  font-weight: 400;
+  font-weight: var(--weight-regular);
 }
 
 .flow-nav {
@@ -149,7 +152,7 @@
 .flow-folders h2 {
   margin: 0;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   color: var(--color-muted);
 }
 
@@ -207,14 +210,14 @@
   display: grid;
   place-items: center;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   flex: none;
 }
 
 .flow-user strong {
   display: block;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .flow-user span,
@@ -242,7 +245,7 @@
 .flow-page-title {
   font-size: 30px;
   line-height: 36px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   letter-spacing: -0.02em;
   margin: 0;
 }
@@ -312,7 +315,7 @@
 .proj-brand strong {
   display: block;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
 }
 
 .proj-search {
@@ -353,7 +356,7 @@
 .proj-tabs a[data-active='true'] {
   background: var(--color-canvas);
   color: var(--color-ink);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   border-color: var(--color-line);
 }
 
@@ -411,14 +414,14 @@
   gap: 10px;
   margin: 0;
   font-size: 30px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   letter-spacing: -0.02em;
   line-height: 32px;
 }
 
 .evidence-percent span {
   font-size: 13px;
-  font-weight: 400;
+  font-weight: var(--weight-regular);
   letter-spacing: 0;
   color: var(--color-muted);
 }
@@ -504,6 +507,11 @@
   gap: 12px;
 }
 
+.flow-card-skeleton {
+  width: calc(33.33% - 11px);
+  height: 168px;
+}
+
 .flow-card {
   width: calc(33.33% - 11px);
   min-height: 168px;
@@ -514,7 +522,7 @@
 .flow-card h2,
 .flow-panel h2 {
   font-size: 18px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   margin: 0;
   letter-spacing: -0.01em;
   line-height: 22px;
@@ -576,7 +584,7 @@
   color: white;
   font: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   padding: 0 14px;
   cursor: pointer;
 }
@@ -604,7 +612,7 @@
 .home-segment button[data-active='true'] {
   background: var(--color-canvas);
   color: var(--color-ink);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   box-shadow: 0 1px 2px rgba(27, 28, 26, 0.08);
 }
 
@@ -612,7 +620,7 @@
 .mode-switch button[data-active='true'] {
   background: var(--color-well);
   color: var(--color-ink);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .home-filters-gap {
@@ -669,7 +677,7 @@
   background: var(--color-accent-soft);
   color: var(--color-accent);
   font-size: 9px;
-  font-weight: 600;
+  font-weight: var(--weight-title);
   display: grid;
   place-items: center;
 }
@@ -768,7 +776,7 @@
   padding: 8px 10px;
   border-bottom: 1px solid var(--color-line);
   white-space: nowrap;
-  font-weight: 400;
+  font-weight: var(--weight-regular);
 }
 
 .flow-table th {
@@ -777,7 +785,7 @@
   background: var(--color-well);
   color: var(--color-muted);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .flow-sheet {
@@ -927,7 +935,7 @@
   padding: 4px 8px;
   color: var(--color-ink);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .tables-chip.accent {
@@ -1005,7 +1013,7 @@
   justify-content: flex-start;
   color: var(--color-ink);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   border-bottom: 1px solid var(--color-line);
 }
 
@@ -1230,7 +1238,7 @@ select.flow-input {
   background: var(--color-canvas);
   font: inherit;
   font-size: 13px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   cursor: pointer;
 }
 
@@ -1307,7 +1315,7 @@ select.flow-input {
   margin-left: auto;
   color: var(--color-accent);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .output-body {
@@ -1340,7 +1348,7 @@ select.flow-input {
   border-radius: 4px;
   padding: 2px 6px;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
   width: fit-content;
 }
 
@@ -1450,7 +1458,7 @@ select.flow-input {
   background: transparent;
   color: var(--color-muted);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .sheet-col[data-active='true'],

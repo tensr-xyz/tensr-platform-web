@@ -45,7 +45,7 @@ import { ChoiceSelect } from '@/components/ui/select';
 import { Segmented } from '@/components/ui/segmented';
 import { Table } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea } from '@/components/ui/rest';
+import { ScrollArea, Skeleton } from '@/components/ui/rest';
 import { CodeFrameRail } from '@/components/flow/code-frame-rail';
 import { ColumnSpark, valueCounts } from '@/components/flow/column-spark';
 import { AddToProjectButton } from '@/components/flow/move-dataset';
@@ -130,6 +130,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [account, setAccount] = useState('');
   const [orgName, setOrgName] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
+  const [workspacePhase, setWorkspacePhase] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
     if (!isAuthReady) return;
@@ -149,8 +150,10 @@ export function FlowApp({ slug }: { slug: string[] }) {
       setFolders(folderPage.folders || []);
       setDatasets(Array.isArray(filePage) ? filePage : filePage.datasets || []);
       setError(null);
+      setWorkspacePhase('ready');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load the workspace');
+      setWorkspacePhase('error');
     }
   }, []);
 
@@ -371,11 +374,15 @@ export function FlowApp({ slug }: { slug: string[] }) {
             </>
           ) : null}
           <div className="flow-body">
-            {error ? <p className="flow-error">{error}</p> : null}
+            {workspacePhase === 'error' && section !== 'projects' && projectId ? (
+              <p className="flow-error">{error}</p>
+            ) : null}
             {section === 'plugins' ? (
               <PluginsScreen />
             ) : section === 'projects' || !projectId ? (
               <ProjectsScreen
+                phase={workspacePhase}
+                error={error}
                 projects={projects}
                 datasets={datasets}
                 folders={folders}
@@ -533,6 +540,8 @@ function NavIcon({ kind }: { kind: 'plus' | 'search' | 'home' | 'data' | 'plugin
 }
 
 function ProjectsScreen({
+  phase,
+  error,
   projects,
   datasets,
   folders,
@@ -542,6 +551,8 @@ function ProjectsScreen({
   onCreated,
   onCreate,
 }: {
+  phase: 'loading' | 'ready' | 'error';
+  error: string | null;
   projects: FlowProject[];
   datasets: DatasetRow[];
   folders: { id: string; name: string }[];
@@ -616,7 +627,15 @@ function ProjectsScreen({
           </Button>
         ))}
       </div>
-      {mode === 'cards' ? (
+      {phase === 'loading' ? (
+        <div className="flow-grid" aria-busy="true">
+          {Array.from({ length: 6 }, (_, index) => (
+            <Skeleton key={index} className="flow-card-skeleton" />
+          ))}
+        </div>
+      ) : phase === 'error' ? (
+        <p className="flow-error">{error || 'Could not load projects.'}</p>
+      ) : mode === 'cards' ? (
         <div className="flow-grid">
           {shown.map(project => (
             <ProjectCard key={project.id} project={project} datasets={datasets} />
@@ -769,12 +788,13 @@ function memberMark(id: string): string {
 }
 
 function Members({ projectId }: { projectId: string }) {
-  const [ids, setIds] = useState<string[]>([]);
+  const [ids, setIds] = useState<string[] | null>(null);
   useEffect(() => {
     void flowJson<{ members?: { user_id: string }[] }>(`/api/projects/${projectId}/members`)
       .then(page => setIds((page.members || []).map(item => item.user_id).filter(Boolean)))
       .catch(() => setIds([]));
   }, [projectId]);
+  if (ids === null) return <Skeleton className="h-6 w-12" />;
   if (!ids.length) return <span className="flow-muted">—</span>;
   return (
     <span className="avatars">
@@ -986,8 +1006,8 @@ function ChatScreen({
   const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
   const askedRef = useRef<string | null>(null);
-  const [sessions, setSessions] = useState<{ session_id: string }[]>([]);
-  const [recipes, setRecipes] = useState<{ name?: string; recipe_id?: string }[]>([]);
+  const [sessions, setSessions] = useState<{ session_id: string }[] | null>(null);
+  const [recipes, setRecipes] = useState<{ name?: string; recipe_id?: string }[] | null>(null);
 
   useEffect(() => {
     if (!project) return;
@@ -1138,19 +1158,29 @@ function ChatScreen({
           + New chat
         </Button>
         <div className="flow-muted chat-label">Today</div>
-        {sessions.length === 0 ? <p className="flow-muted">No saved chats yet</p> : null}
-        {sessions.map(session => (
-          <div key={session.session_id} className="chat-item">
-            {session.session_id.slice(0, 8)}
-          </div>
-        ))}
+        {sessions === null ? (
+          <Skeleton className="h-8 w-full" />
+        ) : sessions.length === 0 ? (
+          <p className="flow-muted">No saved chats yet</p>
+        ) : (
+          sessions.map(session => (
+            <div key={session.session_id} className="chat-item">
+              {session.session_id.slice(0, 8)}
+            </div>
+          ))
+        )}
         <div className="flow-muted chat-label">Recipes</div>
-        {recipes.length === 0 ? <p className="flow-muted">Save any run as a recipe</p> : null}
-        {recipes.map(recipe => (
-          <div key={recipe.recipe_id} className="chat-item">
-            {recipe.name}
-          </div>
-        ))}
+        {recipes === null ? (
+          <Skeleton className="h-8 w-full" />
+        ) : recipes.length === 0 ? (
+          <p className="flow-muted">Save any run as a recipe</p>
+        ) : (
+          recipes.map(recipe => (
+            <div key={recipe.recipe_id} className="chat-item">
+              {recipe.name}
+            </div>
+          ))
+        )}
       </aside>
       <section className="flow-thread">
         <div className="chat-column">
@@ -1597,8 +1627,9 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const [rowTotal, setRowTotal] = useState(0);
   const pageSize = 50;
   const [query, setQuery] = useState('');
-  const [sessions, setSessions] = useState<{ session_id: string }[]>([]);
-  const [specs, setSpecs] = useState<{ id: string; label: string }[]>([]);
+  const [sessions, setSessions] = useState<{ session_id: string }[] | null>(null);
+  const [specs, setSpecs] = useState<{ id: string; label: string }[] | null>(null);
+  const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [selectedCol, setSelectedCol] = useState(0);
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [side, setSide] = useState<'agent' | 'variable' | 'evidence'>('variable');
@@ -1622,7 +1653,11 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
     sheetRef.current?.querySelector('[data-evidence="true"]')?.scrollIntoView({ block: 'nearest' });
   }, [evidenceSheet.focus]);
   useEffect(() => {
-    if (!datasetId) return;
+    if (!datasetId) {
+      setSheetPhase('error');
+      return;
+    }
+    setSheetPhase('loading');
     void flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         const rows = meta.columns || [];
@@ -1636,10 +1671,12 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
         setHeaders(page.headers || []);
         setPreview(page.rows || []);
         setRowTotal(page.n_rows || 0);
+        setSheetPhase('ready');
       })
       .catch(() => {
         setPreview([]);
         setHeaders([]);
+        setSheetPhase('error');
       });
   }, [datasetId, pageOffset]);
   useEffect(() => {
@@ -1682,7 +1719,11 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
         if (text !== valueFilter) return false;
       }
       if (!needle || headerHits.length > 0) return true;
-      return row.some(cell => String(cell ?? '').toLowerCase().includes(needle));
+      return row.some(cell =>
+        String(cell ?? '')
+          .toLowerCase()
+          .includes(needle)
+      );
     });
   const activeName = names[activeIndex] || 'Variable';
   const codedColumn = columns.find(column => {
@@ -1698,6 +1739,9 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const countTotal = activeValues.length || 1;
   const projectDatasets = datasets.filter(row => !project || row.project_id === project.id);
   const uidIndex = names.indexOf('_row_uid');
+  const idIndex = names.findIndex(name =>
+    ['id', 'respondent_id', 'respid', 'respondentid'].includes(name.toLowerCase())
+  );
   const evidenceIds = new Set(evidenceSheet.ids);
   const evidenceColumn = surveyCell?.textColumn || '';
   const columnMarked = (name: string, index: number) =>
@@ -1735,21 +1779,31 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
         />
         <div>
           <div className="flow-muted">Chats</div>
-          {sessions.length === 0 ? <p className="flow-muted">No saved chats yet</p> : null}
-          {sessions.slice(0, 6).map(session => (
-            <div key={session.session_id} className="chat-item">
-              {session.session_id.slice(0, 8)}
-            </div>
-          ))}
+          {sessions === null ? (
+            <Skeleton className="h-8 w-full" />
+          ) : sessions.length === 0 ? (
+            <p className="flow-muted">No saved chats yet</p>
+          ) : (
+            sessions.slice(0, 6).map(session => (
+              <div key={session.session_id} className="chat-item">
+                {session.session_id.slice(0, 8)}
+              </div>
+            ))
+          )}
         </div>
         <div>
-          <div className="flow-muted">Saved analyses {specs.length || ''}</div>
-          {specs.length === 0 ? <p className="flow-muted">No saved tables yet</p> : null}
-          {specs.slice(0, 8).map(spec => (
-            <Link key={spec.id} href={`/flow/p/${project?.id}/tables`}>
-              {spec.label}
-            </Link>
-          ))}
+          <div className="flow-muted">Saved analyses {specs?.length || ''}</div>
+          {specs === null ? (
+            <Skeleton className="h-8 w-full" />
+          ) : specs.length === 0 ? (
+            <p className="flow-muted">No saved tables yet</p>
+          ) : (
+            specs.slice(0, 8).map(spec => (
+              <Link key={spec.id} href={`/flow/p/${project?.id}/tables`}>
+                {spec.label}
+              </Link>
+            ))
+          )}
         </div>
       </aside>
       <section className="responses-sheet">
@@ -1808,8 +1862,8 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                 data-active
                 onClick={() => setSurveyCell(null)}
               >
-                Evidence · {surveyCell.textColumn} · {surveyCell.n || evidenceSheet.ids.length}{' '}
-                rows ×
+                Evidence · {surveyCell.textColumn} · {surveyCell.n || evidenceSheet.ids.length} rows
+                ×
               </Button>
               <Button className="flow-btn" type="button" onClick={() => setSurveyCell(null)}>
                 Back to all
@@ -1887,94 +1941,111 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
           />
         ) : null}
         {tab === 'sheet' || tab === 'evidence' ? (
-          <>
-            <div ref={sheetRef} className="sheet-scroll">
-            <ScrollArea className="sheet-scroll">
-              <Table className="flow-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    {shownCols.map((column, position) => (
-                      <th key={`${column.name}-${column.index}`}>
-                        <Button
-                          type="button"
-                          className="sheet-col"
-                          data-active={columnMarked(column.name, column.index)}
-                          onClick={() => {
-                            setSelectedCol(position);
-                            if (!surveyCell) setSide('variable');
-                          }}
-                        >
-                          {column.name}
-                          {showStats ? (
-                            <ColumnSpark values={shownRows.map(({ row }) => String(row[column.index] ?? ''))} />
-                          ) : null}
-                        </Button>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {shownRows.map(({ row, index }) => {
-                    const inEvidence =
-                      uidIndex >= 0 && evidenceIds.has(String(row[uidIndex] ?? ''));
-                    return (
-                    <tr
-                      key={index}
-                      data-active={selectedRow === index}
-                      data-evidence={inEvidence || undefined}
-                      onClick={() => setSelectedRow(index)}
-                    >
-                      <td>
-                        <Button type="button" onClick={() => setSelectedRow(index)}>
-                          {pageOffset + index + 1}
-                        </Button>
-                      </td>
-                      {shownCols.map(column => (
-                        <td
-                          key={column.index}
-                          className="sheet-cell"
-                          data-active={columnMarked(column.name, column.index)}
-                        >
-                          {row[column.index] == null || row[column.index] === 'null'
-                            ? ''
-                            : String(row[column.index])}
-                        </td>
-                      ))}
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </Table>
-            </ScrollArea>
+          sheetPhase === 'loading' ? (
+            <div className="sheet-scroll" aria-busy="true">
+              {Array.from({ length: 8 }, (_, index) => (
+                <Skeleton key={index} className="mb-2 h-8 w-full" />
+              ))}
             </div>
-            <div className="sheet-foot">
-              <span>
-                {rowTotal} respondent{rowTotal === 1 ? '' : 's'}
-              </span>
-              <span>
-                {selectedRow == null ? 'No row selected' : `Row ${pageOffset + selectedRow + 1} selected`}
-              </span>
-              <span>
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  disabled={pageOffset === 0}
-                  onClick={() => setPageOffset(current => Math.max(0, current - pageSize))}
-                >
-                  Previous
-                </Button>
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  disabled={pageOffset + pageSize >= rowTotal}
-                  onClick={() => setPageOffset(current => current + pageSize)}
-                >
-                  Next
-                </Button>
-              </span>
-            </div>
-          </>
+          ) : sheetPhase === 'error' ? (
+            <p className="flow-error">Could not load this sheet.</p>
+          ) : (
+            <>
+              <div ref={sheetRef} className="sheet-scroll">
+                <ScrollArea className="sheet-scroll">
+                  <Table className="flow-table">
+                    <thead>
+                      <tr>
+                        <th>#</th>
+                        {shownCols.map((column, position) => (
+                          <th key={`${column.name}-${column.index}`}>
+                            <Button
+                              type="button"
+                              className="sheet-col"
+                              data-active={columnMarked(column.name, column.index)}
+                              onClick={() => {
+                                setSelectedCol(position);
+                                if (!surveyCell) setSide('variable');
+                              }}
+                            >
+                              {column.name}
+                              {showStats ? (
+                                <ColumnSpark
+                                  values={shownRows.map(({ row }) =>
+                                    String(row[column.index] ?? '')
+                                  )}
+                                />
+                              ) : null}
+                            </Button>
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {shownRows.map(({ row, index }) => {
+                        const inEvidence =
+                          (uidIndex >= 0 && evidenceIds.has(String(row[uidIndex] ?? ''))) ||
+                          (idIndex >= 0 && evidenceIds.has(String(row[idIndex] ?? '')));
+                        return (
+                          <tr
+                            key={index}
+                            data-active={selectedRow === index}
+                            data-evidence={inEvidence || undefined}
+                            onClick={() => setSelectedRow(index)}
+                          >
+                            <td>
+                              <Button type="button" onClick={() => setSelectedRow(index)}>
+                                {pageOffset + index + 1}
+                              </Button>
+                            </td>
+                            {shownCols.map(column => (
+                              <td
+                                key={column.index}
+                                className="sheet-cell"
+                                data-active={columnMarked(column.name, column.index)}
+                              >
+                                {row[column.index] == null || row[column.index] === 'null'
+                                  ? ''
+                                  : String(row[column.index])}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </Table>
+                </ScrollArea>
+              </div>
+              <div className="sheet-foot">
+                <span>
+                  {rowTotal} respondent{rowTotal === 1 ? '' : 's'}
+                </span>
+                <span>
+                  {selectedRow == null
+                    ? 'No row selected'
+                    : `Row ${pageOffset + selectedRow + 1} selected`}
+                </span>
+                <span>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={pageOffset === 0}
+                    onClick={() => setPageOffset(current => Math.max(0, current - pageSize))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={pageOffset + pageSize >= rowTotal}
+                    onClick={() => setPageOffset(current => current + pageSize)}
+                  >
+                    Next
+                  </Button>
+                </span>
+              </div>
+            </>
+          )
         ) : null}
       </section>
       <aside className="responses-side">
@@ -1994,64 +2065,66 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
         {side === 'evidence' ? (
           <EvidencePanel datasetId={datasetId} projectId={project?.id} />
         ) : (
-        <ScrollArea className="sheet-scroll">
-          {side === 'variable' && codedColumn ? (
-            <CodeFrameRail
-              datasetId={datasetId}
-              column={codedColumn.name}
-              title={codedColumn.label || codedColumn.name}
-              values={activeValues}
-              onFilter={value => {
-                setValueFilter(value);
-                setShowFilters(true);
-              }}
-              onUseAsBanner={() => {
-                if (project?.id) router.push(`/flow/p/${project.id}/tables`);
-              }}
-            />
-          ) : null}
-          {side === 'variable' && !codedColumn ? (
-            <div className="output-body">
-              <div className="flow-muted">On this page</div>
-              <h2>{activeName}</h2>
-              <div className="flow-muted">{counts.length} values in the loaded rows</div>
-              {counts.map(item => (
-                <Button
-                  key={item.label}
-                  type="button"
-                  className="value-row"
-                  data-active={valueFilter === (item.label === '—' ? '' : item.label)}
-                  onClick={() => {
-                    setValueFilter(item.label === '—' ? '' : item.label);
-                    setShowFilters(true);
-                  }}
-                >
-                  <span className="value-row-grid">
-                    <span>{item.label}</span>
-                    <span className="value-track">
-                      <i style={{ width: `${Math.round((item.count / countTotal) * 100)}%` }} />
-                    </span>
-                    <span>{item.count}</span>
-                  </span>
-                </Button>
-              ))}
-            </div>
-          ) : null}
-          {side === 'agent' ? (
-            <div className="output-body">
-              <Textarea
-                value={agentText}
-                placeholder={`Ask about ${activeName}`}
-                onChange={event => setAgentText(event.target.value)}
+          <ScrollArea className="sheet-scroll">
+            {side === 'variable' && codedColumn ? (
+              <CodeFrameRail
+                datasetId={datasetId}
+                column={codedColumn.name}
+                title={codedColumn.label || codedColumn.name}
+                values={activeValues}
+                onFilter={value => {
+                  setValueFilter(value);
+                  setShowFilters(true);
+                }}
+                onUseAsBanner={() => {
+                  if (project?.id) router.push(`/flow/p/${project.id}/tables`);
+                }}
               />
-              <Button className="flow-btn primary" type="button" onClick={askAboutColumn}>
-                Ask
-              </Button>
-              {agentStatus ? <p className="flow-status">{agentStatus}</p> : null}
-              {agentAnswer ? <article dangerouslySetInnerHTML={{ __html: plain(agentAnswer) }} /> : null}
-            </div>
-          ) : null}
-        </ScrollArea>
+            ) : null}
+            {side === 'variable' && !codedColumn ? (
+              <div className="output-body">
+                <div className="flow-muted">On this page</div>
+                <h2>{activeName}</h2>
+                <div className="flow-muted">{counts.length} values in the loaded rows</div>
+                {counts.map(item => (
+                  <Button
+                    key={item.label}
+                    type="button"
+                    className="value-row"
+                    data-active={valueFilter === (item.label === '—' ? '' : item.label)}
+                    onClick={() => {
+                      setValueFilter(item.label === '—' ? '' : item.label);
+                      setShowFilters(true);
+                    }}
+                  >
+                    <span className="value-row-grid">
+                      <span>{item.label}</span>
+                      <span className="value-track">
+                        <i style={{ width: `${Math.round((item.count / countTotal) * 100)}%` }} />
+                      </span>
+                      <span>{item.count}</span>
+                    </span>
+                  </Button>
+                ))}
+              </div>
+            ) : null}
+            {side === 'agent' ? (
+              <div className="output-body">
+                <Textarea
+                  value={agentText}
+                  placeholder={`Ask about ${activeName}`}
+                  onChange={event => setAgentText(event.target.value)}
+                />
+                <Button className="flow-btn primary" type="button" onClick={askAboutColumn}>
+                  Ask
+                </Button>
+                {agentStatus ? <p className="flow-status">{agentStatus}</p> : null}
+                {agentAnswer ? (
+                  <article dangerouslySetInnerHTML={{ __html: plain(agentAnswer) }} />
+                ) : null}
+              </div>
+            ) : null}
+          </ScrollArea>
         )}
       </aside>
       {anovaOpen ? (

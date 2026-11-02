@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/rest';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
@@ -161,39 +162,41 @@ export function BannerGrid({
           <tbody>
             {baseAtEnd ? null : base}
             {rows.map(row => {
-              const quotes = (row.cells || []).find(cell => cell.banner_id === 'total')?.unweighted_n;
+              const quotes = (row.cells || []).find(
+                cell => cell.banner_id === 'total'
+              )?.unweighted_n;
               return (
-              <tr key={row.id}>
-                <th>
-                  {row.label}
-                  {showQuotes && quotes != null ? (
-                    <span className="flow-muted"> {quotes}</span>
-                  ) : null}
-                </th>
-                {columns.map((column: BannerColumn) => {
-                  const cell = (row.cells || []).find(item => item.banner_id === column.id);
-                  const letter = lettersFor(letters, row.id, column.id);
-                  return (
-                    <td key={column.id}>
-                      <Button
-                        className="flow-cell"
-                        type="button"
-                        data-active={picked === `${row.id}:${column.id}`}
-                        onClick={() => {
-                          const selected = selectionFromCell(book, row, cell, letter);
-                          if (!selected) return;
-                          setPicked(`${row.id}:${column.id}`);
-                          onSelectCell(selected);
-                        }}
-                      >
-                        {cellFigure(cell, figure, digits)}
-                        {markLowBase && cell?.low_base ? ' *' : ''}
-                        {letter ? ` ${letter}` : ''}
-                      </Button>
-                    </td>
-                  );
-                })}
-              </tr>
+                <tr key={row.id}>
+                  <th>
+                    {row.label}
+                    {showQuotes && quotes != null ? (
+                      <span className="flow-muted"> {quotes}</span>
+                    ) : null}
+                  </th>
+                  {columns.map((column: BannerColumn) => {
+                    const cell = (row.cells || []).find(item => item.banner_id === column.id);
+                    const letter = lettersFor(letters, row.id, column.id);
+                    return (
+                      <td key={column.id}>
+                        <Button
+                          className="flow-cell"
+                          type="button"
+                          data-active={picked === `${row.id}:${column.id}`}
+                          onClick={() => {
+                            const selected = selectionFromCell(book, row, cell, letter);
+                            if (!selected) return;
+                            setPicked(`${row.id}:${column.id}`);
+                            onSelectCell(selected);
+                          }}
+                        >
+                          {cellFigure(cell, figure, digits)}
+                          {markLowBase && cell?.low_base ? ' *' : ''}
+                          {letter ? ` ${letter}` : ''}
+                        </Button>
+                      </td>
+                    );
+                  })}
+                </tr>
               );
             })}
             {baseAtEnd ? base : null}
@@ -229,12 +232,18 @@ export function ThemesPanel({
   const [weight, setWeight] = useState('');
   const [book, setBook] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
+  const [running, setRunning] = useState(false);
+  const [columnsReady, setColumnsReady] = useState(false);
   useEffect(() => {
-    if (!datasetId) return;
+    if (!datasetId) {
+      setColumnsReady(true);
+      return;
+    }
+    setColumnsReady(false);
     void flowJson<{ columns?: { name?: string; label?: string }[] }>(
       `/datasets/${datasetId}/metadata`
     )
-      .then(meta =>
+      .then(meta => {
         setColumns(
           (meta.columns || [])
             .map(column => ({
@@ -242,18 +251,26 @@ export function ThemesPanel({
               label: column.label || column.name || '',
             }))
             .filter(column => column.name)
-        )
-      )
-      .catch(() => setColumns([]));
+        );
+        setColumnsReady(true);
+      })
+      .catch(() => {
+        setColumns([]);
+        setError('Could not load columns.');
+        setColumnsReady(true);
+      });
   }, [datasetId]);
   const stubColumn = columns.find(column => column.name === stub);
-  const themeCount = ((book?.rows as { kind?: string }[]) || []).filter(row => row.kind !== 'net')
-    .length;
+  const themeCount = ((book?.rows as { kind?: string }[]) || []).filter(
+    row => row.kind !== 'net'
+  ).length;
   const notCoded = ((book?.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
     ?.not_coded?.unweighted_n;
   const run = () => {
     if (!datasetId || !stub) return;
     setError('');
+    setRunning(true);
+    setBook(null);
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
       body: JSON.stringify({
@@ -265,8 +282,14 @@ export function ThemesPanel({
         save: false,
       }),
     })
-      .then(setBook)
-      .catch(err => setError(err instanceof Error ? err.message : 'Themes did not run'));
+      .then(page => {
+        setBook(page);
+        setRunning(false);
+      })
+      .catch(err => {
+        setRunning(false);
+        setError(err instanceof Error ? err.message : 'Themes did not run');
+      });
   };
   return (
     <div className="themes">
@@ -342,13 +365,31 @@ export function ThemesPanel({
               ...columns.map(column => ({ value: column.name, label: column.label })),
             ]}
           />
-          <Button className="flow-btn primary" type="button" disabled={!datasetId || !stub} onClick={run}>
+          <Button
+            className="flow-btn primary"
+            type="button"
+            disabled={!datasetId || !stub}
+            onClick={run}
+          >
             Run
           </Button>
         </div>
       </div>
-      {error ? <p className="flow-error">{error}</p> : null}
-      {book ? (
+      {!columnsReady ? (
+        <div aria-busy="true">
+          <Skeleton className="mb-2 h-8 w-full" />
+          <Skeleton className="mb-2 h-8 w-full" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      ) : error ? (
+        <p className="flow-error">{error}</p>
+      ) : running ? (
+        <div aria-busy="true">
+          <Skeleton className="mb-2 h-8 w-full" />
+          <Skeleton className="mb-2 h-8 w-full" />
+          <Skeleton className="h-40 w-full" />
+        </div>
+      ) : book ? (
         <BannerGrid book={book} onSelectCell={onSelectCell} baseAtEnd showQuotes />
       ) : (
         <p className="flow-muted">Run a theme column to see the table.</p>
@@ -388,18 +429,23 @@ export function EvidencePanel({
 }) {
   const cell = useSurveyCell();
   const [quotes, setQuotes] = useState<Record<string, unknown> | null>(null);
+  const [quotePhase, setQuotePhase] = useState<'idle' | 'loading' | 'ready'>('idle');
   const [error, setError] = useState('');
   const [syntaxNote, setSyntaxNote] = useState('');
   useEffect(() => {
     setSyntaxNote('');
     if (!datasetId || !cell?.bitset || !cell.textColumn) {
       setQuotes(null);
+      setQuotePhase('idle');
       setEvidenceRespondents([]);
       if (cell && !cell.bitset)
         setError('This cell has no respondent bitset, so the verbatims cannot be listed.');
       return;
     }
     setError('');
+    setQuotes(null);
+    setQuotePhase('loading');
+    setEvidenceRespondents([]);
     const controller = new AbortController();
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/quotes`, {
       method: 'POST',
@@ -413,11 +459,19 @@ export function EvidencePanel({
     })
       .then(page => {
         setQuotes(page);
-        const rows = (page.quotes as { respondent_id?: string }[]) || [];
-        setEvidenceRespondents(rows.map(row => String(row.respondent_id || '')).filter(Boolean));
+        setQuotePhase('ready');
+        const rows = (page.quotes as { respondent_id?: string; row_uid?: string }[]) || [];
+        setEvidenceRespondents(
+          rows
+            .flatMap(row => [row.row_uid, row.respondent_id])
+            .map(value => String(value || ''))
+            .filter(Boolean)
+        );
       })
       .catch(err => {
         if (controller.signal.aborted) return;
+        setQuotes(null);
+        setQuotePhase('idle');
         setError(err instanceof Error ? err.message : 'Could not load verbatims');
       });
     return () => controller.abort();
@@ -463,24 +517,38 @@ export function EvidencePanel({
       </div>
       {error ? <p className="flow-error">{error}</p> : null}
       <div className="evidence-said">
-        <p className="flow-muted">
-          <span>What they said · {cell.textColumn}</span>
-          <span>{total || shown}</span>
-        </p>
-        {items.map(item => (
-          <article key={item.respondent_id}>
-            <p>{item.text}</p>
-            <p className="flow-muted">{item.respondent_id}</p>
-          </article>
-        ))}
-        {total > shown ? (
-          <p className="flow-muted">
-            Showing {shown} of {total}
-          </p>
-        ) : null}
-        <Button className="flow-btn evidence-see" type="button" onClick={() => focusEvidenceRows()}>
-          See all {total || shown} in the sheet
-        </Button>
+        {quotePhase === 'loading' ? (
+          <div aria-busy="true">
+            <Skeleton className="mb-2 h-4 w-40" />
+            <Skeleton className="mb-2 h-16 w-full" />
+            <Skeleton className="h-16 w-full" />
+          </div>
+        ) : (
+          <>
+            <p className="flow-muted">
+              <span>What they said · {cell.textColumn}</span>
+              <span>{total}</span>
+            </p>
+            {items.map(item => (
+              <article key={`${item.respondent_id}-${item.text}`}>
+                <p>{item.text}</p>
+                <p className="flow-muted">{item.respondent_id}</p>
+              </article>
+            ))}
+            {total > shown ? (
+              <p className="flow-muted">
+                Showing {shown} of {total}
+              </p>
+            ) : null}
+            <Button
+              className="flow-btn evidence-see"
+              type="button"
+              onClick={() => focusEvidenceRows()}
+            >
+              See all {total} in the sheet
+            </Button>
+          </>
+        )}
       </div>
       <div className="evidence-actions">
         {projectId ? (
@@ -488,7 +556,11 @@ export function EvidencePanel({
             <Link href={`/flow/p/${projectId}/tables`}>Open table</Link>
           </Button>
         ) : null}
-        <Button className="flow-btn" type="button" onClick={() => setSyntaxNote('This cell has no stored syntax.')}>
+        <Button
+          className="flow-btn"
+          type="button"
+          onClick={() => setSyntaxNote('This cell has no stored syntax.')}
+        >
           View syntax
         </Button>
         {projectId ? (
@@ -1134,15 +1206,28 @@ export function TablesBuilder({
   const [note, setNote] = useState('');
   const [ask, setAsk] = useState('');
   const [thread, setThread] = useState<{ role: 'user' | 'run'; text: string }[]>([]);
+  const [railReady, setRailReady] = useState(false);
 
   useEffect(() => {
-    if (!datasetId) return;
-    void flowJson<{ specs?: SavedSpec[] }>(`/datasets/${datasetId}/tables`)
-      .then(page => setSpecs(page.specs || []))
-      .catch(() => setSpecs([]));
-    void flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`)
-      .then(page => setBooks(page.books || []))
-      .catch(() => setBooks([]));
+    if (!datasetId) {
+      setRailReady(true);
+      return;
+    }
+    setRailReady(false);
+    let live = true;
+    void Promise.all([
+      flowJson<{ specs?: SavedSpec[] }>(`/datasets/${datasetId}/tables`).catch(() => ({
+        specs: [] as SavedSpec[],
+      })),
+      flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`).catch(() => ({
+        books: [] as SavedBook[],
+      })),
+    ]).then(([specPage, bookPage]) => {
+      if (!live) return;
+      setSpecs(specPage.specs || []);
+      setBooks(bookPage.books || []);
+      setRailReady(true);
+    });
     void flowJson<{
       columns?: { name?: string; label?: string; value_labels?: Record<string, string> }[];
       active_weight_column?: string | null;
@@ -1160,6 +1245,9 @@ export function TablesBuilder({
         );
       })
       .catch(() => setColumns([]));
+    return () => {
+      live = false;
+    };
   }, [datasetId]);
 
   const labelFor = (name: string) => columns.find(column => column.name === name)?.label || name;
@@ -1181,7 +1269,12 @@ export function TablesBuilder({
   function remember(body: Record<string, unknown>) {
     setBook(body);
     const spec = body.spec as
-      | { id?: string; label?: string; stubs?: { column?: string }[]; banners?: { column?: string; columns?: string[] }[] }
+      | {
+          id?: string;
+          label?: string;
+          stubs?: { column?: string }[];
+          banners?: { column?: string; columns?: string[] }[];
+        }
       | undefined;
     const stubColumn = spec?.stubs?.[0]?.column;
     if (stubColumn) setStub(String(stubColumn));
@@ -1274,7 +1367,9 @@ export function TablesBuilder({
         if (saved.book?.id) setBooks(current => [saved.book as SavedBook, ...current]);
         setNote('Added to a banner book.');
       })
-      .catch(err => setError(err instanceof Error ? err.message : 'Could not save the banner book'));
+      .catch(err =>
+        setError(err instanceof Error ? err.message : 'Could not save the banner book')
+      );
   }
 
   function runBook() {
@@ -1335,7 +1430,12 @@ export function TablesBuilder({
           <span>Tables</span>
           <span>{specs.length}</span>
         </div>
-        {specs.length ? (
+        {!railReady ? (
+          <div aria-busy="true">
+            <Skeleton className="mb-2 h-8 w-full" />
+            <Skeleton className="h-8 w-full" />
+          </div>
+        ) : specs.length ? (
           specs.map((spec, index) => {
             const id = spec.spec_id || spec.id || '';
             return (
@@ -1362,11 +1462,16 @@ export function TablesBuilder({
         )}
         <div className="tables-rail-head">
           <span>Banner books</span>
-          <Button className="flow-btn" type="button" onClick={addToBook} aria-label="Add to banner book">
+          <Button
+            className="flow-btn"
+            type="button"
+            onClick={addToBook}
+            aria-label="Add to banner book"
+          >
             +
           </Button>
         </div>
-        {books.length ? (
+        {!railReady ? null : books.length ? (
           books.map(item => (
             <p key={item.id} className="tables-book">
               {item.name || 'Banner book'}
@@ -1535,12 +1640,14 @@ export function TablesBuilder({
           <div className="tables-title">
             <div>
               <h2>{title}</h2>
-              <p className="flow-muted">
-                {[labelFor(stub), baseLine].filter(Boolean).join(' · ')}
-              </p>
+              <p className="flow-muted">{[labelFor(stub), baseLine].filter(Boolean).join(' · ')}</p>
             </div>
             <div className="tables-title-actions">
-              <Button className="flow-btn" type="button" onClick={() => setNote('The chart for this table is the next screen.')}>
+              <Button
+                className="flow-btn"
+                type="button"
+                onClick={() => setNote('The chart for this table is the next screen.')}
+              >
                 Chart
               </Button>
               <Button className="flow-btn" type="button" onClick={addToBook}>
@@ -1597,7 +1704,10 @@ export function TablesBuilder({
         </div>
         <div className="tables-thread">
           {thread.map((item, index) => (
-            <p key={`${item.role}-${index}`} className={item.role === 'user' ? 'tables-ask' : 'flow-muted'}>
+            <p
+              key={`${item.role}-${index}`}
+              className={item.role === 'user' ? 'tables-ask' : 'flow-muted'}
+            >
               {item.role === 'run' ? `✓ ${item.text}` : item.text}
             </p>
           ))}
