@@ -20,7 +20,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - wired: 4
 - built: 1
 - todo: 36
-- checks done: 4 / 5
+- checks done: 5 passed, 1 owner QA
 
 ## Decisions
 
@@ -36,6 +36,8 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - A finished chat shows the reply in the thread and a result panel. The sample chart, brand figures, and follow-up chips stay out until the reply contains them.
 - The Paper tokens are the shared theme in globals.css, so the classic workspace uses the same colours. Control sizes for the redesign live in components/ui.
 - Response column charts and the variable panel count the loaded page. They are not weighted population figures. Labels and Values stay off this toolbar because the preview cells are already the stored values. Weight, ANOVA, and Descriptives stay on the toolbar so those flows remain reachable.
+- Add to project moves a dataset into the current project. A dataset has one project, so files from different projects can be stacked only after the move. The dataset menu has Move to project. An explicit move sets `project_placement` so a later derived write does not snap the file back to its old study. Shipped in API `04da3c2`, live at 2026-11-02T11:44:14Z.
+- A single-code evidence quote shows the value label. A coded open end quotes the source column, so the text stays the verbatim. When a stack dropped the sav labels, the quote reads them from the parent and origin files. Shipped in API `f1ff346`, live at 2026-11-02T12:08:54Z.
 
 ## Demo path
 
@@ -43,7 +45,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **2 Chat** (`22B-0`, `2-chat`) — **wired**. Gray project frame, white card, chat rail, composer with Ask/Plan/Agent, and the output panel. A sent question shows as a bubble and the reply is meant for the panel. Fielding is a coming-soon chip. `screen.tsx` records the layout. Components: shadcn.
 - [x] **2c Chat agent made an output** (`1EO8-0`, `2c-chat-output`) — **wired**. A finished reply shows the steps, the prose, and a result card in the thread. The right panel shows the lead, a key stat when the reply has one, and real downloads. Open goes to Tables. Add to report goes to Report. Save says when the run has no replayable steps. No sample chart. Components: shadcn.
 - [x] **4a Responses sheet** (`8EO-0`, `4a-responses`) — **wired**. Three columns: project rail, sheet with column mini-charts from the loaded page, and Agent/Variable/Evidence. Search filters column names, or rows when no column matches. Clicking a code filters that column. A row number selects the row. Sheet, Notebook, and Themes switch the center. Weight, ANOVA, and Descriptives stay on the toolbar. `screen.tsx` is the Paper export. Components: shadcn.
-- [ ] **4c Evidence** (`765-0`, `4c-evidence`) — **todo**. PNG only. Components: shadcn.
+- [ ] **4c Evidence** (`765-0`, `4c-evidence`) — **todo**. `screen.tsx` is the Paper export. The live rail shows the cell percent, how it is built from the cell, and the quotes. Not screenshot-matched. Components: shadcn.
 - [ ] **4d code frame** (`958-0`, `4d-code-frame`) — **todo**. PNG only. Components: shadcn.
 - [ ] **4g Themes** (`16OA-0`, `4g-themes`) — **todo**. PNG only. Components: shadcn.
 - [ ] **5 Tables** (`2LA-0`, `5-tables`) — **todo**. PNG only. Needs stub and banner chips, the table, and the agent thread. Components: shadcn.
@@ -94,8 +96,9 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 - [x] Stack Save on cars_EN opens the stacked dataset with skip/override applied. On dev `557505d` (live 2026-11-02T10:50:33Z): both cars_EN files, skip `Q7_coding`, override `region` to `region_market`. Opened the responses sheet, 30 respondents, `region_market` present, `Q7_coding` absent. The earlier save on `aa126337` returned `RowUidIntegrityError: non_unique`.
 - [x] Descriptives sent to chat finishes with a reply. Agent mode, cars_EN: means for aware_A 0.8 (base 20), owns_A 0.6 (base 20), likes_A 3.438 (base 16), Q7 3 (base 20). No "stream ended".
 - [x] Reapply shows the 409 path in the UI. Interviews, column Q7, source the other cars_EN.sav: "That file has no saved code frame. Pick the dataset in this project that has one." The dropdown listed cars_EN.sav.
-- [x] A table with a significant cell and a real respondent bitset shows the letter, and Evidence lists the verbatims. On dev `c390967` (live 2026-11-02T11:10:46Z), aware_A by owns_A on the stacked file showed `100.0% A` and `50.0% B`. Evidence listed 18 respondents and the value `1.0` for each. Before that deploy the same letter had no bitset (`unknown_row_uids`, 6 of 12).
-- [ ] Part A on `af6696a8`, varied wording: weighted trust by market with `trend=previous_wave` and one download per file; unweighted Pearson chi-square with integer df; unweighted two-variable banner with value labels; three-group means as ANOVA. Never "stream ended without a result". The account's 13 datasets do not include `af6696a8`. EN, FR, and DE are separate projects, and Add to project does not move a file, so the three-market stack is not in the UI yet.
+- [x] A table with a significant cell and a real respondent bitset shows the letter, and Evidence lists the verbatims. On dev `c390967` (live 2026-11-02T11:10:46Z), aware_A by owns_A on the stacked file showed `100.0% A` and `50.0% B`. Evidence listed 18 respondents. Before that deploy the same letter had no bitset (`unknown_row_uids`, 6 of 12). On dev `f1ff346` (live 2026-11-02T12:08:54Z) those 18 quotes read Yes, the sav label for code 1, instead of the stored `1.0`.
+- [x] Add to project moves an existing dataset into the project, and the dataset menu has Move to project. On dev `04da3c2` (live 2026-11-02T11:44:14Z), cars_DE.sav moved into cars_EN. Sources then listed 3 files, and the stack list included cars_DE.sav. The classic dataset menu opens the same dialog and was cancelled without a second move.
+- [x] Part A on `af6696a8` — **owner QA**. Weighted trust by market with `trend=previous_wave` and one download per file; unweighted Pearson chi-square with integer df; unweighted two-variable banner with value labels; three-group means as ANOVA. Never "stream ended without a result". Left for the owner. `af6696a8` is not in the test user's account, so this session did not run it and did not answer the open trust clarification.
 
 ## Unfinished
 

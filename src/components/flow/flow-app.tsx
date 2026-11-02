@@ -47,6 +47,7 @@ import { Table } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/rest';
 import { ColumnSpark, valueCounts } from '@/components/flow/column-spark';
+import { AddToProjectButton } from '@/components/flow/move-dataset';
 import {
   CodeFramePanel,
   datasetRowId,
@@ -394,7 +395,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
             ) : section === 'details' ? (
               <DetailsScreen project={project} />
             ) : section === 'sources' ? (
-              <SourcesScreen projectId={projectId} datasets={datasets} />
+              <SourcesScreen projectId={projectId} datasets={datasets} onChanged={reload} />
             ) : section === 'responses' ? (
               <ResponsesScreen project={project} datasets={datasets} />
             ) : section === 'tables' ? (
@@ -1358,7 +1359,15 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
   );
 }
 
-function SourcesScreen({ projectId, datasets }: { projectId: string; datasets: DatasetRow[] }) {
+function SourcesScreen({
+  projectId,
+  datasets,
+  onChanged,
+}: {
+  projectId: string;
+  datasets: DatasetRow[];
+  onChanged: () => void;
+}) {
   const [docs, setDocs] = useState<{ id: string; name: string }[]>([]);
   const [name, setName] = useState('Brief');
   const [text, setText] = useState('');
@@ -1422,7 +1431,7 @@ function SourcesScreen({ projectId, datasets }: { projectId: string; datasets: D
       <section className="flow-panel">
         <h2>Stack waves</h2>
         <Link href={`/flow/p/${projectId}/sources`}>Review mapping is on the stack screen.</Link>
-        <StackScreen projectId={projectId} datasets={datasets} embedded />
+        <StackScreen projectId={projectId} datasets={datasets} embedded onChanged={onChanged} />
       </section>
     </div>
   );
@@ -1432,10 +1441,12 @@ function StackScreen({
   projectId,
   datasets,
   embedded,
+  onChanged,
 }: {
   projectId: string;
   datasets: DatasetRow[];
   embedded?: boolean;
+  onChanged?: () => void;
 }) {
   const router = useRouter();
   const mine = datasets.filter(row => row.project_id === projectId);
@@ -1513,6 +1524,7 @@ function StackScreen({
       <p className="flow-muted">
         Accept, override, or skip each column. Save runs the fuse and opens the stacked dataset.
       </p>
+      <AddToProjectButton projectId={projectId} datasets={datasets} onAdded={onChanged} />
       {mine.map(row => {
         const id = datasetRowId(row);
         return (
@@ -1969,7 +1981,9 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
               {agentAnswer ? <article dangerouslySetInnerHTML={{ __html: plain(agentAnswer) }} /> : null}
             </div>
           ) : null}
-          {side === 'evidence' ? <EvidencePanel datasetId={datasetId} /> : null}
+          {side === 'evidence' ? (
+            <EvidencePanel datasetId={datasetId} projectId={project?.id} />
+          ) : null}
         </ScrollArea>
       </aside>
       {anovaOpen ? (

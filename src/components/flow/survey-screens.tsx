@@ -6,6 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { Table } from '@/components/ui/table';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
 import {
@@ -211,10 +212,17 @@ export function ThemesPanel({
   );
 }
 
-export function EvidencePanel({ datasetId }: { datasetId?: string }) {
+export function EvidencePanel({
+  datasetId,
+  projectId,
+}: {
+  datasetId?: string;
+  projectId?: string;
+}) {
   const cell = useSurveyCell();
   const [quotes, setQuotes] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
+  const [syntaxNote, setSyntaxNote] = useState('');
   useEffect(() => {
     if (!datasetId || !cell?.bitset || !cell.textColumn) {
       setQuotes(null);
@@ -237,31 +245,73 @@ export function EvidencePanel({ datasetId }: { datasetId?: string }) {
   }, [datasetId, cell]);
   if (!cell) {
     return (
-      <div className="flow-panel">
-        <h2>Evidence</h2>
+      <div className="evidence">
         <p className="flow-muted">Select a cell in Themes or Tables to open its verbatims.</p>
       </div>
     );
   }
   const items = (quotes?.quotes as { respondent_id: string; text: string }[]) || [];
+  const total = Number(quotes?.total || 0);
+  const shown = items.length;
   return (
-    <div className="flow-panel">
-      <h2>Evidence</h2>
-      <p>{cell.claim}</p>
-      <p className="flow-muted">
-        {cell.percent || '—'} · base {cell.base || '—'} · n {cell.n || '—'} · weight{' '}
-        {cell.weight || 'none'}
-      </p>
+    <div className="evidence">
+      <div className="evidence-lead">
+        <p className="flow-muted">{cell.claim}</p>
+        <p className="evidence-percent">{cell.percent || '—'}</p>
+      </div>
+      <div className="evidence-built">
+        <p className="flow-muted">How it&apos;s built</p>
+        <p>
+          <span>Base, unweighted</span>
+          <span>{cell.base || '—'}</span>
+        </p>
+        <p>
+          <span>In this cell</span>
+          <span>{cell.n || '—'}</span>
+        </p>
+        <p>
+          <span>Weight</span>
+          <span>{cell.weight || 'none'}</span>
+        </p>
+        <p>
+          <span>Column</span>
+          <span>{cell.textColumn || '—'}</span>
+        </p>
+      </div>
       {error ? <p className="flow-error">{error}</p> : null}
-      {quotes ? <p className="flow-muted">{String(quotes.total || 0)} respondents</p> : null}
-      <ul>
+      <div className="evidence-said">
+        <p className="flow-muted">
+          <span>What they said</span>
+          <span>{total || shown}</span>
+        </p>
         {items.map(item => (
-          <li key={item.respondent_id}>
-            <span className="flow-muted">{item.respondent_id}</span>
+          <article key={item.respondent_id}>
             <p>{item.text}</p>
-          </li>
+            <p className="flow-muted">{item.respondent_id}</p>
+          </article>
         ))}
-      </ul>
+        {total > shown ? (
+          <p className="flow-muted">
+            Showing {shown} of {total}
+          </p>
+        ) : null}
+      </div>
+      <div className="evidence-actions">
+        {projectId ? (
+          <Button className="flow-btn" type="button" asChild>
+            <Link href={`/flow/p/${projectId}/tables`}>Open table</Link>
+          </Button>
+        ) : null}
+        <Button className="flow-btn" type="button" onClick={() => setSyntaxNote('This cell has no stored syntax.')}>
+          View syntax
+        </Button>
+        {projectId ? (
+          <Button className="flow-btn primary" type="button" asChild>
+            <Link href={`/flow/p/${projectId}/report`}>Cite in report</Link>
+          </Button>
+        ) : null}
+      </div>
+      {syntaxNote ? <p className="flow-muted">{syntaxNote}</p> : null}
     </div>
   );
 }
