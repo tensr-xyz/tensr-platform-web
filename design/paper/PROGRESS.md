@@ -26,7 +26,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Demo path
 
-- [ ] **1a Projects cards** (`68F-0`, `1a-projects-cards`) — **built**. Header, three-up cards, search, New project, coming-soon chip. No `screen.tsx` yet, not matched.
+- [ ] **1a Projects cards** (`68F-0`, `1a-projects-cards`) — **built**. Header, three-up cards, search, New project, coming-soon chip. `screen.tsx` not on disk yet. Resume by saving `get_jsx` for `68F-0` to `screen.tsx`, then match the sidebar icons, folder dots, and card layout. Not matched.
 - [ ] **2 Chat** (`22B-0`, `2-chat`) — **built**. One composer with Ask, Plan, and Agent. No second Ask box. No `screen.tsx` yet, not matched.
 - [ ] **2c Chat agent made an output** (`1EO8-0`, `2c-chat-output`) — **todo**. PNG only.
 - [ ] **4a Responses sheet** (`8EO-0`, `4a-responses`) — **todo**. PNG only. Needs the left rail, column mini-charts, stats row, and the Agent/Variable/Evidence panel.
