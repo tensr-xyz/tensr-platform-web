@@ -12,7 +12,12 @@ import {
   openSignedDownload,
   type ExportDownload,
 } from '@/lib/excel-download';
-import { runAgentLoop, type AgentLoopResponse } from '@/lib/run-agent-loop';
+import {
+  runAgentLoop,
+  type AgentLoopAttachment,
+  type AgentLoopResponse,
+} from '@/lib/run-agent-loop';
+import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -1854,6 +1859,11 @@ function EmptyChat({
   setMode,
   send,
   sourcesHref,
+  columns,
+  attachments,
+  onAttach,
+  onRemoveAttachment,
+  attachError,
 }: {
   file?: DatasetRow;
   ready: boolean;
@@ -1863,6 +1873,11 @@ function EmptyChat({
   setMode: (value: 'ask' | 'plan' | 'agent') => void;
   send: () => void;
   sourcesHref: string;
+  columns: string[] | null;
+  attachments: AgentLoopAttachment[];
+  onAttach: (list: FileList | null) => void;
+  onRemoveAttachment: (filename: string) => void;
+  attachError: string | null;
 }) {
   const name = file?.original_filename || 'this file';
   return (
@@ -1913,48 +1928,24 @@ function EmptyChat({
             </Link>
           )}
           <div className="chat-ask">
-            <div className="flow-composer chat-composer">
-              <Textarea
-                className="flow-text"
-                value={question}
-                onChange={event => setQuestion(event.target.value)}
-                placeholder={
-                  file
-                    ? `Ask about ${name}, or describe what you need.`
-                    : 'Add a file on Sources, then ask about it.'
-                }
-                onKeyDown={event => {
-                  if (event.key === 'Enter' && !event.shiftKey) {
-                    event.preventDefault();
-                    send();
-                  }
-                }}
-              />
-              <div className="chat-composer-row">
-                <Badge tone="soon">Attach coming soon</Badge>
-                <Badge tone="soon">@ coming soon</Badge>
-                <Segmented
-                  className="mode-switch"
-                  aria-label="Chat mode"
-                  value={mode}
-                  onValueChange={setMode}
-                  options={[
-                    { value: 'ask', label: 'Ask' },
-                    { value: 'plan', label: 'Plan' },
-                    { value: 'agent', label: '● Agent' },
-                  ]}
-                />
-                <Button
-                  className="chat-send"
-                  type="button"
-                  aria-label="Send"
-                  disabled={!question.trim()}
-                  onClick={send}
-                >
-                  ↑
-                </Button>
-              </div>
-            </div>
+            <FlowComposer
+              layout="hero"
+              value={question}
+              onChange={setQuestion}
+              onSend={send}
+              placeholder={
+                file
+                  ? `Ask about ${name}, or describe what you need. Type @ to point at a column.`
+                  : 'Add a file on Sources, then ask about it.'
+              }
+              mode={mode}
+              onMode={setMode}
+              columns={columns}
+              attachments={attachments}
+              onAttach={onAttach}
+              onRemoveAttachment={onRemoveAttachment}
+              attachError={attachError}
+            />
             <div className="chat-sources">
               <span>Can also read</span>
               <Badge tone="soon">Another project · coming soon</Badge>
@@ -1992,6 +1983,12 @@ function ChatScreen({
   const [plan, setPlan] = useState<AgentLoopResponse | null>(null);
   const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
+  const [columns, setColumns] = useState<string[] | null>(null);
+  const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [attachedNote, setAttachedNote] = useState('');
+  const attachmentsRef = useRef<AgentLoopAttachment[]>([]);
+  attachmentsRef.current = attachments;
   const askedRef = useRef<string | null>(null);
   const [sessions, setSessions] = useState<{ session_id: string }[] | null>(null);
   const [recipes, setRecipes] = useState<
@@ -2013,10 +2010,43 @@ function ChatScreen({
       .catch(() => setRecipes([]));
   }, [project]);
 
+  useEffect(() => {
+    if (!datasetId) {
+      setColumns([]);
+      return;
+    }
+    let cancelled = false;
+    setColumns(null);
+    void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${datasetId}/metadata`)
+      .then(meta => {
+        if (cancelled) return;
+        setColumns((meta.columns || []).map(column => column.name || '').filter(Boolean));
+      })
+      .catch(() => {
+        if (!cancelled) setColumns([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId]);
+
+  const attachFiles = (list: FileList | null) => {
+    void readChatAttachments(list).then(result => {
+      setAttachError(result.rejected.length ? result.rejected.join(' ') : null);
+      if (result.accepted.length) {
+        setAttachments(current => [...current, ...result.accepted]);
+      }
+    });
+  };
+
   const sendText = useCallback(
     async (text: string, nextMode: 'ask' | 'plan' | 'agent' = mode) => {
       if (!text.trim() || status === 'Warming up') return;
+      const turnFiles = attachmentsRef.current;
       setSent(text);
+      setAttachedNote(
+        turnFiles.length ? `Attached: ${turnFiles.map(item => item.filename).join(', ')}` : ''
+      );
       setQuestion('');
       setMode(nextMode);
       setPlan(null);
@@ -2031,6 +2061,7 @@ function ChatScreen({
           message: text,
           mode: nextMode,
           datasetId: datasetId || null,
+          attachments: turnFiles,
           agentVersion: 'v2',
           signal: AbortSignal.timeout(120_000),
           onProgress: progress => {
@@ -2062,6 +2093,7 @@ function ChatScreen({
           return [item as unknown as Record<string, unknown>, ...nested];
         });
         setDownloads(downloadsFromToolResults(entries));
+        if (result.status !== 'awaiting_approval') setAttachments([]);
         setStatus(null);
       } catch (err) {
         setStatus(err instanceof Error ? err.message : 'The reply did not finish. Ask again.');
@@ -2095,6 +2127,7 @@ function ChatScreen({
       message: sent,
       mode,
       datasetId: datasetId || null,
+      attachments: attachmentsRef.current,
       agentVersion: 'v2',
       sessionId: plan.session_id,
       approvedToolCalls: calls,
@@ -2120,6 +2153,7 @@ function ChatScreen({
           return [item as unknown as Record<string, unknown>, ...nested];
         });
         setDownloads(downloadsFromToolResults(entries));
+        if (result.status !== 'awaiting_approval') setAttachments([]);
         setStatus(null);
       })
       .catch(err => {
@@ -2129,12 +2163,15 @@ function ChatScreen({
 
   const clearChat = () => {
     setSent('');
+    setAttachedNote('');
     setAnswer('');
     setQuestion('');
     setPlan(null);
     setTurn(null);
     setSteps([]);
     setDownloads([]);
+    setAttachments([]);
+    setAttachError(null);
     setStatus(null);
   };
 
@@ -2192,7 +2229,12 @@ function ChatScreen({
           <section className="flow-thread">
             <div className="chat-column">
               <div className="chat-scroll">
-                {sent ? <div className="chat-bubble">{sent}</div> : null}
+                {sent ? (
+                  <div className="chat-bubble">
+                    {sent}
+                    {attachedNote ? <div className="flow-muted">{attachedNote}</div> : null}
+                  </div>
+                ) : null}
                 {steps.length > 0 ? (
                   <div className="chat-steps">
                     <div>
@@ -2254,40 +2296,23 @@ function ChatScreen({
                 {status === 'Warming up' ? <p className="flow-status">Warming up</p> : null}
                 {status && status !== 'Warming up' ? <p className="flow-error">{status}</p> : null}
               </div>
-              <div className="flow-composer">
-                <Textarea
-                  className="flow-text"
-                  value={question}
-                  onChange={event => setQuestion(event.target.value)}
-                  placeholder="Ask a follow-up..."
-                  onKeyDown={event => {
-                    if (event.key === 'Enter' && !event.shiftKey) {
-                      event.preventDefault();
-                      void send();
-                    }
-                  }}
-                />
-                <Segmented
-                  className="mode-switch"
-                  aria-label="Chat mode"
-                  value={mode}
-                  onValueChange={setMode}
-                  options={[
-                    { value: 'ask', label: 'Ask' },
-                    { value: 'plan', label: 'Plan' },
-                    { value: 'agent', label: '● Agent' },
-                  ]}
-                />
-                <Button
-                  className="chat-send"
-                  type="button"
-                  aria-label="Send"
-                  disabled={!question.trim() || status === 'Warming up'}
-                  onClick={() => void send()}
-                >
-                  ↑
-                </Button>
-              </div>
+              <FlowComposer
+                layout="thread"
+                value={question}
+                onChange={setQuestion}
+                onSend={send}
+                placeholder="Ask a follow-up... Type @ to point at a column."
+                mode={mode}
+                onMode={setMode}
+                busy={status === 'Warming up'}
+                columns={columns}
+                attachments={attachments}
+                onAttach={attachFiles}
+                onRemoveAttachment={filename =>
+                  setAttachments(current => current.filter(item => item.filename !== filename))
+                }
+                attachError={attachError}
+              />
             </div>
           </section>
           <aside className="flow-output">
@@ -2361,6 +2386,13 @@ function ChatScreen({
           setMode={setMode}
           send={send}
           sourcesHref={`${projectHref}/sources`}
+          columns={columns}
+          attachments={attachments}
+          onAttach={attachFiles}
+          onRemoveAttachment={filename =>
+            setAttachments(current => current.filter(item => item.filename !== filename))
+          }
+          attachError={attachError}
         />
       )}
     </div>
