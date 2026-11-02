@@ -161,6 +161,21 @@ export function InterviewsScreen({ projectId }: { projectId: string }) {
     );
   }
 
+  const selectedIndex = filtered.findIndex(row => row.id === selectedId);
+  const totalPassages = rows.reduce((sum, row) => sum + (row.passage_count || 0), 0);
+  const twoDigits = (value: number) => String(value).padStart(2, '0');
+  const uploaded = (value?: string) => {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? ''
+      : date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  };
+  const codedHere = (codeName: string) =>
+    (passages || []).filter(item =>
+      passageCodes(selected?.codes, item.passage_id).includes(codeName)
+    ).length;
+
   return (
     <section className="interviews-page">
       <aside className="interviews-rail">
@@ -171,11 +186,11 @@ export function InterviewsScreen({ projectId }: { projectId: string }) {
           placeholder={rows.length ? `Search ${rows.length} interviews` : 'Search interviews'}
         />
         <div className="interviews-rail-head">
-          <span className="flow-muted">Interviews</span>
+          <span className="flow-muted">Depth interviews</span>
           <span className="flow-muted">{rows.length}</span>
         </div>
         {filtered.length ? (
-          filtered.map(row => (
+          filtered.map((row, index) => (
             <Button
               key={row.id}
               className="interviews-item"
@@ -187,17 +202,19 @@ export function InterviewsScreen({ projectId }: { projectId: string }) {
                 setSpeaker('');
               }}
             >
-              <span>
-                <span className="interviews-item-name">{row.filename || 'Transcript'}</span>
-                <span className="flow-muted">
-                  {(row.codes || [])
-                    .map(item => item.code)
-                    .filter(Boolean)
-                    .slice(0, 3)
-                    .join(' · ') || `${row.passage_count || 0} passages`}
+              <span className="interviews-item-top">
+                <span className="interviews-item-name">
+                  {twoDigits(index + 1)} · {(row.filename || 'Transcript').replace(/\.[^.]+$/, '')}
                 </span>
+                <span className="flow-muted">{row.passage_count || 0}p</span>
               </span>
-              <span className="flow-muted">{row.passage_count || 0}</span>
+              <span className="interviews-item-codes">
+                {(row.codes || [])
+                  .map(item => item.code)
+                  .filter(Boolean)
+                  .slice(0, 3)
+                  .join(' · ') || `${row.passage_count || 0} passages`}
+              </span>
             </Button>
           ))
         ) : (
@@ -210,7 +227,7 @@ export function InterviewsScreen({ projectId }: { projectId: string }) {
           onClick={() => fileInput.current?.click()}
         >
           <span>{uploading ? 'Uploading…' : '+ Add transcripts'}</span>
-          <span className="flow-muted">.txt .vtt .docx. Audio is coming soon.</span>
+          <span className="flow-muted">.docx .txt .vtt. Audio is coming soon.</span>
         </Button>
         <Input
           ref={fileInput}
@@ -238,13 +255,16 @@ export function InterviewsScreen({ projectId }: { projectId: string }) {
       </aside>
       <div className="interviews-main">
         <div className="interviews-toolbar">
-          <Link href={`/flow/p/${projectId}/sources`}>← Sources</Link>
+          <Link className="interviews-back" href={`/flow/p/${projectId}/sources`}>
+            ← Sources
+          </Link>
           <Button
-            className="flow-btn"
+            className="interviews-chip"
             type="button"
             data-active={showCodes}
             onClick={() => setShowCodes(current => !current)}
           >
+            <i />
             {showCodes ? 'Codes shown' : 'Codes hidden'}
           </Button>
           {speakers.length > 1 ? (
@@ -258,106 +278,148 @@ export function InterviewsScreen({ projectId }: { projectId: string }) {
               ]}
             />
           ) : null}
-          {active?.start ? (
-            <span className="flow-muted interviews-time">{active.start}</span>
-          ) : null}
+          <span className="interviews-player" title="Audio playback is coming soon">
+            ▶ {active?.start || '0:00'} / audio soon
+          </span>
         </div>
         {selected ? (
           <div className="interviews-read">
-            <h1 className="interviews-title">{selected.filename || 'Transcript'}</h1>
-            <p className="flow-muted">
-              {selected.passage_count || 0}{' '}
-              {(selected.passage_count || 0) === 1 ? 'passage' : 'passages'}. Counts only. These are
-              not a share of the survey.
+            <p className="interviews-eyebrow">
+              Depth interview {twoDigits(selectedIndex + 1)} of {twoDigits(rows.length)}
+              {uploaded(selected.updated_at) ? ` · ${uploaded(selected.updated_at)}` : ''} ·
+              transcript
             </p>
+            <h1 className="interviews-title">
+              {(selected.filename || 'Transcript').replace(/\.[^.]+$/, '')}
+            </h1>
+            <div className="interviews-tags">
+              <span>
+                {selected.passage_count || 0}{' '}
+                {(selected.passage_count || 0) === 1 ? 'passage' : 'passages'}
+              </span>
+              <span>Counts only, not a survey share</span>
+            </div>
             {passages === null ? (
               <Skeleton className="h-40 w-full" />
             ) : (
               shown.map(item => {
                 const codes = passageCodes(selected.codes, item.passage_id);
+                const coded = showCodes && codes.length > 0;
                 return (
                   <Button
                     key={item.passage_id}
                     className="interviews-passage"
                     type="button"
                     data-active={item.passage_id === active?.passage_id}
+                    data-coded={coded || undefined}
                     onClick={() => setPassageId(item.passage_id)}
                   >
-                    <span className="interviews-stamp">{item.start || ''}</span>
-                    <span>
-                      <span className="flow-muted">{item.speaker || 'Speaker'}</span>
-                      <span>{item.text || 'Passage text is not stored on this index.'}</span>
-                      {showCodes && codes.length ? (
-                        <span className="interviews-codes">
-                          {codes.map(itemCode => (
-                            <Badge key={itemCode} tone="active">
-                              {itemCode}
-                            </Badge>
-                          ))}
-                        </span>
-                      ) : null}
+                    <span className="interviews-stamp">{item.start || '—'}</span>
+                    <span className="interviews-passage-body">
+                      <span className="interviews-speaker">{item.speaker || 'Speaker'}</span>
+                      <span className="interviews-quote">
+                        <span>{item.text || 'Passage text is not stored on this index.'}</span>
+                        {coded ? (
+                          <span className="interviews-codes">
+                            {codes.map(itemCode => (
+                              <span key={itemCode} className="interviews-code">
+                                {itemCode}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
                   </Button>
                 );
               })
             )}
+            <div className="interviews-summary" data-soon>
+              <span className="interviews-summary-label">
+                <i /> Agent summary of this interview
+              </span>
+              <p>Interview summaries are coming soon.</p>
+            </div>
           </div>
         ) : (
           <p className="flow-muted interviews-empty">Upload a transcript to read it here.</p>
         )}
         <div className="interviews-foot">
-          <span className="flow-muted">{countLabel || `${rows.length} interviews`}</span>
-          <span className="flow-muted">
-            {active?.start ? `Passage ${active.start} selected` : 'Counts only'}
+          <span>{countLabel || `${rows.length} interviews`}</span>
+          <span>{totalPassages} passages</span>
+          <span>
+            {active
+              ? `Passage ${active.start ? `${active.start} ` : ''}selected`
+              : 'No passage selected'}
           </span>
+          <span className="interviews-foot-right">Counts only</span>
         </div>
       </div>
       <aside className="interviews-side">
         <div className="interviews-side-tabs">
-          <span className="flow-muted">Evidence</span>
-          <Badge tone="soon">Audio coming soon</Badge>
+          <span>Agent</span>
+          <span>Variable</span>
+          <span data-active>Evidence</span>
         </div>
-        {active ? (
-          <>
-            <p className="flow-muted">
-              {active.speaker || 'Speaker'}
-              {active.start ? ` · ${active.start}` : ''}
-              {active.end ? `–${active.end}` : ''}
-            </p>
-            <p>{active.text}</p>
-            {showCodes && activeCodes.length ? (
-              <div className="interviews-codes">
-                {activeCodes.map(item => (
-                  <Badge key={item} tone="active">
-                    {item}
-                  </Badge>
-                ))}
+        <div className="interviews-side-body">
+          {active ? (
+            <>
+              <div className="interviews-side-block">
+                <span className="flow-muted">
+                  Selected passage{activeCodes[0] ? ` · ${activeCodes[0]}` : ''}
+                </span>
+                <div className="interviews-big">
+                  <strong>{activeCodes[0] ? codedHere(activeCodes[0]) : 0}</strong>
+                  <span>
+                    {activeCodes[0]
+                      ? `passage${codedHere(activeCodes[0]) === 1 ? '' : 's'} in this interview have this code`
+                      : 'This passage has no code yet'}
+                  </span>
+                </div>
+                <p className="interviews-note">
+                  Interviews are a count. They are not added to survey percentages.
+                </p>
               </div>
-            ) : (
-              <p className="flow-muted">This passage has no code.</p>
-            )}
-            <p className="flow-muted">
-              Interviews are a count. They are not added to survey percentages.
-            </p>
-            <Input
-              value={code}
-              onChange={event => setCode(event.target.value)}
-              aria-label="Code"
-              placeholder="Code this passage"
-            />
-            <div className="interviews-side-actions">
-              <Button className="flow-btn" type="button" onClick={saveCode}>
-                Recode
-              </Button>
-              <Link className="sources-ink" href={`/flow/p/${projectId}/report`}>
-                Cite in report
-              </Link>
-            </div>
-          </>
-        ) : (
-          <p className="flow-muted">Select a passage.</p>
-        )}
-        {error ? <p className="flow-error">{error}</p> : null}
+              <div className="interviews-side-block">
+                <span className="flow-muted">This passage</span>
+                <dl className="interviews-kv">
+                  <dt>Time</dt>
+                  <dd>
+                    {active.start || '—'}
+                    {active.end ? ` – ${active.end}` : ''}
+                  </dd>
+                  <dt>Speaker</dt>
+                  <dd>{active.speaker || '—'}</dd>
+                  <dt>Codes</dt>
+                  <dd>{activeCodes.join(', ') || 'None'}</dd>
+                </dl>
+              </div>
+              <div className="interviews-side-block">
+                <span className="flow-muted">Code this passage</span>
+                <Input
+                  value={code}
+                  onChange={event => setCode(event.target.value)}
+                  aria-label="Code"
+                  placeholder="Theme name"
+                />
+              </div>
+            </>
+          ) : (
+            <p className="flow-muted">Select a passage.</p>
+          )}
+          {error ? <p className="flow-error">{error}</p> : null}
+        </div>
+        <div className="interviews-side-actions">
+          <Button className="flow-btn" type="button" onClick={saveCode} disabled={!active}>
+            Recode
+          </Button>
+          <Button className="flow-btn" type="button" disabled title="Clips are coming soon">
+            Play clip
+          </Button>
+          <Link className="flow-btn primary" href={`/flow/p/${projectId}/report`}>
+            Cite in report
+          </Link>
+        </div>
       </aside>
     </section>
   );

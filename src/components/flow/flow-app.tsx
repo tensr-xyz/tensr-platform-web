@@ -579,7 +579,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   <Link
                     key={key}
                     href={`/flow/p/${projectId}/${key}`}
-                    data-active={section === key}
+                    data-active={section === key || (key === 'sources' && section === 'interviews')}
                   >
                     {label}
                   </Link>
