@@ -16,14 +16,9 @@ import { ChoiceSelect } from '@/components/ui/select';
 import { Table } from '@/components/ui/table';
 import { Switch } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { clearPin, savePin, useProjectPins } from '@/components/flow/report-pins';
 import { ExportDialog, copyText, figureSvg } from '@/components/flow/export-dialog';
-import {
-  documentApa,
-  readPins,
-  runDocument,
-  writePins,
-  type ReportPin,
-} from '@/components/flow/run-document';
+import { documentApa, runDocument, type ReportPin } from '@/components/flow/run-document';
 
 type Comment = {
   id: string;
@@ -59,7 +54,8 @@ export function OutputPage({
   const [exporting, setExporting] = useState(false);
   const [rerunNote, setRerunNote] = useState('');
   const [panel, setPanel] = useState<'info' | 'comments'>('info');
-  const pinned = readPins(projectId).some(pin => pin.runId === runId);
+  const pins = useProjectPins(projectId, datasetId ? [datasetId] : []);
+  const pinned = pins.some(pin => pin.runId === runId);
   const plot = figureSvg(
     document.tables.find(table => table.title === 'Group means') || document.tables[0]
   );
@@ -122,7 +118,7 @@ export function OutputPage({
   const open = comments.filter(comment => !comment.resolved);
   const roots = comments.filter(comment => !comment.parent_id);
 
-  const pin = readPins(projectId).find(item => item.runId === runId);
+  const pin = pins.find(item => item.runId === runId);
   const kind =
     (
       {
@@ -402,7 +398,9 @@ export function OutputPage({
       {adding ? (
         <AddToReport
           projectId={projectId}
+          datasetId={datasetId}
           runId={runId}
+          pinned={pinned}
           headline={document.summary.split(/(?<=[.!?])\s+/)[0] || document.title}
           support={document.summary}
           citation={document.title}
@@ -427,7 +425,9 @@ export function OutputPage({
 
 function AddToReport({
   projectId,
+  datasetId,
   runId,
+  pinned,
   headline,
   support,
   citation,
@@ -436,7 +436,9 @@ function AddToReport({
   onClose,
 }: {
   projectId: string;
+  datasetId: string;
   runId: string;
+  pinned: boolean;
   headline: string;
   support: string;
   citation: string;
@@ -451,10 +453,14 @@ function AddToReport({
   const [topline, setTopline] = useState(true);
   const [keepLive, setKeepLive] = useState(true);
 
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
+
   const save = () => {
     const pin: ReportPin = {
       id: `pin-${runId}`,
       runId,
+      datasetId,
       headline: title.trim() || headline,
       support: body.trim(),
       citation,
@@ -463,9 +469,23 @@ function AddToReport({
       topline,
       keepLive,
     };
-    const current = readPins(projectId).filter(item => item.runId !== runId);
-    writePins(projectId, [...current, pin]);
-    onClose();
+    setSaving(true);
+    setSaveError('');
+    void savePin(projectId, datasetId, pin)
+      .then(onClose)
+      .catch(err =>
+        setSaveError(err instanceof Error ? err.message : 'Could not add to the report')
+      )
+      .finally(() => setSaving(false));
+  };
+
+  const remove = () => {
+    setSaving(true);
+    setSaveError('');
+    void clearPin(projectId, datasetId, runId)
+      .then(onClose)
+      .catch(err => setSaveError(err instanceof Error ? err.message : 'Could not remove it'))
+      .finally(() => setSaving(false));
   };
 
   const rows: {
@@ -599,21 +619,28 @@ function AddToReport({
           </label>
         </div>
         <div className="pin-foot">
-          <span className="flow-muted">The output stays in Outputs too</span>
+          <span className="flow-muted">
+            {saveError ? (
+              <span className="flow-error">{saveError}</span>
+            ) : (
+              'The output stays in Outputs too'
+            )}
+          </span>
+          {pinned ? (
+            <Button className="flow-btn" type="button" disabled={saving} onClick={remove}>
+              Remove from report
+            </Button>
+          ) : null}
           <Button className="flow-btn" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button className="flow-btn primary" type="button" onClick={save}>
-            Add to report
+          <Button className="flow-btn primary" type="button" disabled={saving} onClick={save}>
+            {saving ? 'Saving…' : pinned ? 'Update' : 'Add to report'}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
   );
-}
-
-export function pinnedFindings(projectId: string) {
-  return readPins(projectId);
 }
 
 function commentWhen(iso?: string): string {

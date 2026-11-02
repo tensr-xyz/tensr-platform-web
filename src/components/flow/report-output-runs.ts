@@ -6,7 +6,10 @@ export type OutputRun = {
   status: string;
   file?: string;
   base?: number | null;
+  weightedBase?: number | null;
   weighting?: string;
+  inReport?: boolean;
+  datasetId?: string;
 };
 
 /** "aware_A × region — Unweighted, n = 30" → title, weighting note, and base. */
@@ -44,14 +47,19 @@ export function outputRuns(rows: unknown[]): OutputRun[] {
     const op = String(record.op || '');
     if (!id || !op) continue;
     const split = splitRunTitle(String(record.title || '').trim() || op.replaceAll('_', ' '));
+    const storedBase = typeof record.base_n === 'number' ? record.base_n : null;
+    const weightedBase = typeof record.weighted_base === 'number' ? record.weighted_base : null;
     runs.push({
       id,
       title: split.title,
       op,
       created_at: String(record.created_at || ''),
       status: String(record.status || 'complete'),
-      base: split.base,
+      base: storedBase,
+      weightedBase,
       weighting: split.weighting,
+      inReport: record.in_report === true,
+      datasetId: String(record.dataset_id || ''),
     });
   }
   return runs;
