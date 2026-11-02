@@ -2192,11 +2192,7 @@ function AnovaModal({
 function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: DatasetRow[] }) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
-  return (
-    <div className="flow-split tables-layout">
-      <TablesBuilder datasetId={datasetId} projectId={project?.id} />
-    </div>
-  );
+  return <TablesBuilder datasetId={datasetId} projectId={project?.id} />;
 }
 
 function ReportScreen({

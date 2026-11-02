@@ -7,6 +7,11 @@ export type BannerColumn = {
 export type BannerCell = {
   banner_id: string;
   percent?: number | null;
+  row_percent?: number | null;
+  total_percent?: number | null;
+  count?: number | null;
+  mean?: number | null;
+  low_base?: boolean;
   column_unweighted_n?: number;
   unweighted_n?: number;
   provenance?: {

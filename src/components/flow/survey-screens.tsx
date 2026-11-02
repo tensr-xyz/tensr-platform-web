@@ -17,6 +17,7 @@ import {
   efficiencyPercent,
   lettersFor,
   selectionFromCell,
+  type BannerCell,
   type BannerColumn,
   type BannerRow,
   type SigLetter,
@@ -88,21 +89,49 @@ function columnNames(columns: { name?: string }[]): string[] {
   return columns.map(column => column.name || '').filter(Boolean);
 }
 
+function cellFigure(
+  cell: BannerCell | undefined,
+  figure: 'percent' | 'row_percent' | 'total_percent' | 'count' | 'mean',
+  digits: number
+): string {
+  if (!cell) return '—';
+  if (figure === 'count') {
+    const count = cell.unweighted_n ?? cell.count;
+    return count != null ? String(count) : '—';
+  }
+  if (figure === 'mean') return cell.mean != null ? cell.mean.toFixed(digits) : '—';
+  const value =
+    figure === 'row_percent'
+      ? cell.row_percent
+      : figure === 'total_percent'
+        ? cell.total_percent
+        : cell.percent;
+  return value != null ? `${value.toFixed(digits)}%` : '—';
+}
+
 export function BannerGrid({
   book,
   onSelectCell,
   baseAtEnd = false,
   showQuotes = false,
+  showNets = false,
+  figure = 'percent',
+  digits = 1,
+  markLowBase = false,
 }: {
   book: Record<string, unknown>;
   onSelectCell: (cell: SurveyCell) => void;
   baseAtEnd?: boolean;
   showQuotes?: boolean;
+  showNets?: boolean;
+  figure?: 'percent' | 'row_percent' | 'total_percent' | 'count' | 'mean';
+  digits?: number;
+  markLowBase?: boolean;
 }) {
   const [picked, setPicked] = useState('');
   const columns = bannerColumns(book);
   const letters = (book.letters as SigLetter[]) || [];
-  const rows = ((book.rows as BannerRow[]) || []).filter(row => row.kind !== 'net');
+  const rows = ((book.rows as BannerRow[]) || []).filter(row => showNets || row.kind !== 'net');
   const notCoded = ((book.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
     ?.not_coded;
   if (!columns.length) return <p className="flow-muted">This table has no banner columns yet.</p>;
@@ -157,7 +186,8 @@ export function BannerGrid({
                           onSelectCell(selected);
                         }}
                       >
-                        {cell?.percent != null ? `${cell.percent.toFixed(1)}%` : '—'}
+                        {cellFigure(cell, figure, digits)}
+                        {markLowBase && cell?.low_base ? ' *' : ''}
                         {letter ? ` ${letter}` : ''}
                       </Button>
                     </td>
@@ -1054,6 +1084,28 @@ export function WeightPanel({
   );
 }
 
+type TableColumn = { name: string; label: string; labels: Record<string, string> };
+type SavedSpec = { spec_id?: string; id?: string; label?: string; name?: string };
+type SavedBook = { id?: string; name?: string; n_specs?: number };
+
+function scaleCodes(labels: Record<string, string> | undefined, end: 'top' | 'bottom'): string[] {
+  const scored = Object.keys(labels || {})
+    .map(code => ({ code, n: Number(code) }))
+    .filter(item => Number.isFinite(item.n))
+    .sort((a, b) => a.n - b.n);
+  const picked = end === 'bottom' ? scored.slice(0, 2) : scored.slice(-2);
+  return picked.map(item => item.code);
+}
+
+function bannerNames(spec: { banners?: { column?: string; columns?: string[] }[] } | undefined) {
+  const names: string[] = [];
+  for (const banner of spec?.banners || []) {
+    if (banner.column) names.push(String(banner.column));
+    for (const column of banner.columns || []) names.push(String(column));
+  }
+  return names.filter((name, index) => name && names.indexOf(name) === index);
+}
+
 export function TablesBuilder({
   datasetId,
   projectId,
@@ -1062,155 +1114,520 @@ export function TablesBuilder({
   projectId?: string;
 }) {
   const router = useRouter();
-  const [columns, setColumns] = useState<string[]>([]);
-  const [specs, setSpecs] = useState<
-    { spec_id?: string; id?: string; label?: string; name?: string }[]
-  >([]);
+  const [columns, setColumns] = useState<TableColumn[]>([]);
+  const [weightColumn, setWeightColumn] = useState('');
+  const [specs, setSpecs] = useState<SavedSpec[]>([]);
+  const [books, setBooks] = useState<SavedBook[]>([]);
   const [stub, setStub] = useState('');
-  const [banner, setBanner] = useState('');
+  const [banners, setBanners] = useState<string[]>([]);
   const [weight, setWeight] = useState('');
   const [statistic, setStatistic] = useState('column_proportion');
-  const [letters, setLetters] = useState(true);
+  const [digits, setDigits] = useState(0);
+  const [lettersOn, setLettersOn] = useState(true);
+  const [nest, setNest] = useState(false);
+  const [lowBase, setLowBase] = useState(true);
+  const [top2, setTop2] = useState(false);
+  const [bottom2, setBottom2] = useState(false);
+  const [meanOn, setMeanOn] = useState(false);
   const [book, setBook] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
+  const [note, setNote] = useState('');
+  const [ask, setAsk] = useState('');
+  const [thread, setThread] = useState<{ role: 'user' | 'run'; text: string }[]>([]);
 
   useEffect(() => {
     if (!datasetId) return;
-    void flowJson<{ specs?: { spec_id?: string; id?: string; label?: string; name?: string }[] }>(
-      `/datasets/${datasetId}/tables`
-    )
+    void flowJson<{ specs?: SavedSpec[] }>(`/datasets/${datasetId}/tables`)
       .then(page => setSpecs(page.specs || []))
       .catch(() => setSpecs([]));
-    void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${datasetId}/metadata`)
-      .then(meta => setColumns(columnNames(meta.columns || [])))
+    void flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`)
+      .then(page => setBooks(page.books || []))
+      .catch(() => setBooks([]));
+    void flowJson<{
+      columns?: { name?: string; label?: string; value_labels?: Record<string, string> }[];
+      active_weight_column?: string | null;
+    }>(`/datasets/${datasetId}/metadata`)
+      .then(meta => {
+        setWeightColumn(meta.active_weight_column || '');
+        setColumns(
+          (meta.columns || [])
+            .map(column => ({
+              name: column.name || '',
+              label: column.label || column.name || '',
+              labels: column.value_labels || {},
+            }))
+            .filter(column => column.name)
+        );
+      })
       .catch(() => setColumns([]));
   }, [datasetId]);
+
+  const labelFor = (name: string) => columns.find(column => column.name === name)?.label || name;
+  const figure = meanOn
+    ? 'mean'
+    : statistic === 'count'
+      ? 'count'
+      : statistic === 'row_proportion'
+        ? 'row_percent'
+        : statistic === 'total_proportion'
+          ? 'total_percent'
+          : 'percent';
 
   function openCell(cell: SurveyCell) {
     setSurveyCell(cell);
     if (projectId) router.push(`/flow/p/${projectId}/responses`);
   }
 
-  return (
-    <div className="flow-panel">
-      <h2>Table builder</h2>
-      <form
-        className="flow-row"
-        onSubmit={event => {
-          event.preventDefault();
-          if (!datasetId || !stub) return;
-          setError('');
-          void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
+  function remember(body: Record<string, unknown>) {
+    setBook(body);
+    const spec = body.spec as
+      | { id?: string; label?: string; stubs?: { column?: string }[]; banners?: { column?: string; columns?: string[] }[] }
+      | undefined;
+    const stubColumn = spec?.stubs?.[0]?.column;
+    if (stubColumn) setStub(String(stubColumn));
+    const names = bannerNames(spec);
+    if (names.length) setBanners(names);
+    const id = String(spec?.id || '');
+    if (id) {
+      setSpecs(current =>
+        current.some(item => (item.spec_id || item.id) === id)
+          ? current
+          : [{ spec_id: id, label: spec?.label || stubColumn || stub }, ...current]
+      );
+    }
+  }
+
+  function saveTable() {
+    if (!datasetId || !stub) return;
+    const column = columns.find(item => item.name === stub);
+    const nets: { label: string; values: string[] }[] = [];
+    if (top2) {
+      const values = scaleCodes(column?.labels, 'top');
+      if (values.length < 2) {
+        setError('That column has no numbered scale for a top 2 box.');
+        return;
+      }
+      nets.push({ label: 'Top 2 box', values });
+    }
+    if (bottom2) {
+      const values = scaleCodes(column?.labels, 'bottom');
+      if (values.length < 2) {
+        setError('That column has no numbered scale for a bottom 2 box.');
+        return;
+      }
+      nets.push({ label: 'Bottom 2 box', values });
+    }
+    setError('');
+    const statistics = meanOn ? [statistic, 'column_mean'] : [statistic];
+    void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
+      method: 'POST',
+      body: JSON.stringify({
+        stubs: [{ ...codedStub(stub), ...(nets.length ? { nets } : {}) }],
+        banner: banners.map(columnName => ({ column: columnName })),
+        statistics,
+        significance_display: lettersOn ? 'column_letters' : 'none',
+        nest_banners: nest,
+        low_base_threshold: lowBase ? 30 : 0,
+        suppress_low_base: false,
+        decimals: { [statistic]: digits, ...(meanOn ? { column_mean: digits } : {}) },
+        weight: weight || 'none',
+        save: true,
+      }),
+    })
+      .then(body => {
+        remember(body);
+        const across = banners.length ? banners.map(labelFor).join(', ') : 'the total';
+        setThread(current => [
+          ...current,
+          {
+            role: 'run',
+            text: `Built ${labelFor(stub)} × ${across}`,
+          },
+          {
+            role: 'run',
+            text: `${weight ? `Weighted by ${labelFor(weight)}` : 'Unweighted'}, ${
+              lettersOn ? 'sig at 95%' : 'no significance letters'
+            }`,
+          },
+        ]);
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'Could not save the table'));
+  }
+
+  function currentSpec(): Record<string, unknown> | null {
+    const spec = book?.spec;
+    return spec && typeof spec === 'object' ? (spec as Record<string, unknown>) : null;
+  }
+
+  function addToBook() {
+    const spec = currentSpec();
+    if (!datasetId || !spec) {
+      setError('Save a table before adding it to a banner book.');
+      return;
+    }
+    setError('');
+    void flowJson<{ book?: SavedBook }>(`/datasets/${datasetId}/banner-books`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Banner book', specs: [spec] }),
+    })
+      .then(saved => {
+        if (saved.book?.id) setBooks(current => [saved.book as SavedBook, ...current]);
+        setNote('Added to a banner book.');
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'Could not save the banner book'));
+  }
+
+  function runBook() {
+    const spec = currentSpec();
+    if (!datasetId || !spec) {
+      setError('Save a table before running a banner book.');
+      return;
+    }
+    setError('');
+    void flowJson<{ book?: { id?: string } }>(`/datasets/${datasetId}/banner-books`, {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Banner book', specs: [spec] }),
+    })
+      .then(saved => {
+        const bookId = saved.book?.id;
+        if (!bookId) throw new Error('The banner book was not saved.');
+        if (saved.book) setBooks(current => [saved.book as SavedBook, ...current]);
+        return flowJson<{ tables?: unknown[] }>(
+          `/datasets/${datasetId}/banner-books/${bookId}/run`,
+          {
             method: 'POST',
-            body: JSON.stringify({
-              stubs: [codedStub(stub)],
-              banner: banner ? [{ column: banner }] : [],
-              statistics: [statistic],
-              significance_display: letters ? 'column_letters' : 'none',
-              weight: weight || 'none',
-              save: true,
-            }),
-          })
-            .then(body => {
-              setBook(body);
-              const spec = body.spec as { id?: string; label?: string } | undefined;
-              const id = String(spec?.id || '');
-              if (id) {
-                setSpecs(current =>
-                  current.some(item => (item.spec_id || item.id) === id)
-                    ? current
-                    : [{ spec_id: id, label: spec?.label || stub }, ...current]
-                );
-              }
-            })
-            .catch(err =>
-              setError(err instanceof Error ? err.message : 'Could not save the table')
+            body: JSON.stringify({ target_dataset_id: datasetId, mapping: {} }),
+          }
+        );
+      })
+      .then(result => {
+        const count = result?.tables?.length ?? 0;
+        setNote(`Banner book ran on this file. ${count} table${count === 1 ? '' : 's'}.`);
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'The banner book did not run'));
+  }
+
+  const specId = String((book?.spec as { id?: string } | undefined)?.id || '');
+  const selectedIndex = specs.findIndex(item => (item.spec_id || item.id) === specId);
+  const title = book
+    ? `${selectedIndex >= 0 ? `T${selectedIndex + 1} · ` : ''}${labelFor(stub)}${
+        banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
+      }`
+    : 'Save a table';
+  const baseLine =
+    book?.answered_n != null && book?.respondent_n != null
+      ? `Base: answered ${String(book.answered_n)} of ${String(book.respondent_n)}`
+      : '';
+  const totalBase = (() => {
+    if (book?.respondent_n != null) return String(book.respondent_n);
+    const rows = (book?.rows as BannerRow[]) || [];
+    for (const row of rows) {
+      const cell = (row.cells || []).find(item => item.banner_id === 'total');
+      if (cell?.column_unweighted_n != null) return String(cell.column_unweighted_n);
+    }
+    return '';
+  })();
+
+  return (
+    <div className="flow-split tables-board">
+      <aside className="tables-rail">
+        <div className="tables-rail-head">
+          <span>Tables</span>
+          <span>{specs.length}</span>
+        </div>
+        {specs.length ? (
+          specs.map((spec, index) => {
+            const id = spec.spec_id || spec.id || '';
+            return (
+              <Button
+                key={id}
+                className="tables-saved"
+                type="button"
+                data-active={id === specId}
+                onClick={() => {
+                  void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
+                    .then(remember)
+                    .catch(err =>
+                      setError(err instanceof Error ? err.message : 'Could not open that table')
+                    );
+                }}
+              >
+                <span>T{index + 1}</span>
+                <span>{spec.label || spec.name || id}</span>
+              </Button>
             );
-        }}
-      >
-        <label>
-          Stub
-          <ChoiceSelect
-            className="flow-input"
-            aria-label="Table stub"
-            value={stub}
-            onValueChange={setStub}
-            options={[
-              { value: '', label: 'Column' },
-              ...columns.map(column => ({ value: column, label: column })),
-            ]}
-          />
-        </label>
-        <label>
-          Banner
-          <ChoiceSelect
-            className="flow-input"
-            aria-label="Table banner"
-            value={banner}
-            onValueChange={setBanner}
-            options={[
-              { value: '', label: 'None' },
-              ...columns.map(column => ({ value: column, label: column })),
-            ]}
-          />
-        </label>
-        <label>
-          Weight
-          <ChoiceSelect
-            className="flow-input"
-            aria-label="Table weight"
-            value={weight}
-            onValueChange={setWeight}
-            options={[
-              { value: '', label: 'Unweighted' },
-              ...columns.map(column => ({ value: column, label: column })),
-            ]}
-          />
-        </label>
-        <label>
-          Statistic
-          <ChoiceSelect
-            className="flow-input"
-            aria-label="Table statistic"
-            value={statistic}
-            onValueChange={setStatistic}
-            options={[
-              { value: 'column_proportion', label: 'Column %' },
-              { value: 'row_proportion', label: 'Row %' },
-              { value: 'unweighted_n', label: 'Count' },
-            ]}
-          />
-        </label>
-        <label>
-          <Checkbox checked={letters} onCheckedChange={checked => setLetters(checked === true)} />{' '}
-          Sig letters
-        </label>
-        <Button className="flow-btn primary" type="submit" disabled={!stub}>
-          Save table
-        </Button>
-      </form>
-      {error ? <p className="flow-error">{error}</p> : null}
-      <ul>
-        {specs.map(spec => {
-          const id = spec.spec_id || spec.id || '';
-          return (
-            <li key={id}>
+          })
+        ) : (
+          <p className="flow-muted">No saved tables yet</p>
+        )}
+        <div className="tables-rail-head">
+          <span>Banner books</span>
+          <Button className="flow-btn" type="button" onClick={addToBook} aria-label="Add to banner book">
+            +
+          </Button>
+        </div>
+        {books.length ? (
+          books.map(item => (
+            <p key={item.id} className="tables-book">
+              {item.name || 'Banner book'}
+              {item.n_specs != null ? ` · ${item.n_specs}` : ''}
+            </p>
+          ))
+        ) : (
+          <p className="flow-muted">No banner books yet</p>
+        )}
+      </aside>
+      <section className="tables-main">
+        <div className="tables-tools">
+          <div className="tables-line">
+            <span>Stub</span>
+            {stub ? (
+              <Button className="tables-chip accent" type="button" onClick={() => setStub('')}>
+                {labelFor(stub)} ×
+              </Button>
+            ) : null}
+            <ChoiceSelect
+              className="flow-input"
+              aria-label="Table stub"
+              value=""
+              onValueChange={value => {
+                if (value) setStub(value);
+              }}
+              options={[
+                { value: '', label: '+ Drop variable' },
+                ...columns.map(column => ({ value: column.name, label: column.label })),
+              ]}
+            />
+          </div>
+          <div className="tables-line">
+            <span>Banner</span>
+            {banners.map(name => (
+              <Button
+                key={name}
+                className="tables-chip"
+                type="button"
+                onClick={() => setBanners(current => current.filter(item => item !== name))}
+              >
+                {labelFor(name)} ×
+              </Button>
+            ))}
+            <ChoiceSelect
+              className="flow-input"
+              aria-label="Add banner"
+              value=""
+              onValueChange={value => {
+                if (!value || value === stub || banners.includes(value)) return;
+                setBanners(current => [...current, value]);
+              }}
+              options={[
+                { value: '', label: '+' },
+                ...columns
+                  .filter(column => column.name !== stub && !banners.includes(column.name))
+                  .map(column => ({ value: column.name, label: column.label })),
+              ]}
+            />
+          </div>
+          <div className="tables-line wrap">
+            <span>Show</span>
+            <div className="tables-segment">
+              {(
+                [
+                  ['count', 'Counts'],
+                  ['column_proportion', 'Column %'],
+                  ['row_proportion', 'Row %'],
+                  ['total_proportion', 'Total %'],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  className="flow-btn"
+                  type="button"
+                  data-active={statistic === value && !meanOn}
+                  onClick={() => {
+                    setStatistic(value);
+                    setMeanOn(false);
+                  }}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            <Button
+              className="flow-btn"
+              type="button"
+              onClick={() => setDigits(current => (current + 1) % 3)}
+            >
+              {digits} dp
+            </Button>
+            <Button
+              className="flow-btn"
+              type="button"
+              data-active={lettersOn}
+              onClick={() => setLettersOn(current => !current)}
+            >
+              Sig 95% · A/a letters
+            </Button>
+            <Button
+              className="flow-btn"
+              type="button"
+              data-active={nest}
+              onClick={() => setNest(current => !current)}
+            >
+              Nest banners
+            </Button>
+            <Button
+              className="flow-btn"
+              type="button"
+              data-active={lowBase}
+              onClick={() => setLowBase(current => !current)}
+            >
+              Low base &lt; 30 *
+            </Button>
+            <ChoiceSelect
+              className="flow-input"
+              aria-label="Table weight"
+              value={weight}
+              onValueChange={setWeight}
+              options={[
+                { value: '', label: 'Unweighted' },
+                ...(weightColumn ? [{ value: weightColumn, label: `Weight ${weightColumn}` }] : []),
+              ]}
+            />
+            <span className="flow-muted">Scale</span>
+            <div className="tables-segment">
+              <Button
+                className="flow-btn"
+                type="button"
+                data-active={top2}
+                onClick={() => setTop2(current => !current)}
+              >
+                Top 2 box
+              </Button>
+              <Button
+                className="flow-btn"
+                type="button"
+                data-active={bottom2}
+                onClick={() => setBottom2(current => !current)}
+              >
+                Bottom 2 box
+              </Button>
+              <Button
+                className="flow-btn"
+                type="button"
+                data-active={meanOn}
+                onClick={() => setMeanOn(current => !current)}
+              >
+                Mean
+              </Button>
+            </div>
+            <span className="flow-muted">Nets kept on re-run</span>
+            <Button className="flow-btn" type="button" onClick={runBook}>
+              Run as banner book
+            </Button>
+            <Button className="flow-btn primary" type="button" disabled={!stub} onClick={saveTable}>
+              Save table
+            </Button>
+          </div>
+        </div>
+        {error ? <p className="flow-error">{error}</p> : null}
+        {note ? <p className="flow-muted">{note}</p> : null}
+        <div className="tables-sheet">
+          <div className="tables-title">
+            <div>
+              <h2>{title}</h2>
+              <p className="flow-muted">
+                {[labelFor(stub), baseLine].filter(Boolean).join(' · ')}
+              </p>
+            </div>
+            <div className="tables-title-actions">
+              <Button className="flow-btn" type="button" onClick={() => setNote('The chart for this table is the next screen.')}>
+                Chart
+              </Button>
+              <Button className="flow-btn" type="button" onClick={addToBook}>
+                Add to book
+              </Button>
               <Button
                 className="flow-btn"
                 type="button"
                 onClick={() => {
-                  void flowJson<Record<string, unknown>>(
-                    `/datasets/${datasetId}/tables/${id}`
-                  ).then(setBook);
+                  if (!datasetId || !specId) {
+                    setError('Save the table before exporting.');
+                    return;
+                  }
+                  void downloadExport(
+                    `/datasets/${datasetId}/tables/${specId}/export.docx`,
+                    'table.docx'
+                  ).catch(err =>
+                    setError(err instanceof Error ? err.message : 'Could not export the table')
+                  );
                 }}
               >
-                {spec.label || spec.name || id}
+                Export
               </Button>
-            </li>
-          );
-        })}
-      </ul>
-      {book ? <BannerGrid book={book} onSelectCell={openCell} /> : null}
+            </div>
+          </div>
+          {book ? (
+            <BannerGrid
+              book={book}
+              onSelectCell={openCell}
+              baseAtEnd
+              showNets={
+                top2 ||
+                bottom2 ||
+                ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
+              }
+              figure={figure}
+              digits={digits}
+              markLowBase={lowBase}
+            />
+          ) : (
+            <p className="flow-muted">Choose a stub and save the table.</p>
+          )}
+        </div>
+        <div className="tables-foot">
+          <span>{totalBase ? `${totalBase} respondents` : ''}</span>
+          <span>{weight ? 'Weighted' : book ? 'Unweighted' : ''}</span>
+          <span>{specId ? 'Saved' : ''}</span>
+        </div>
+      </section>
+      <aside className="tables-agent">
+        <div className="tables-agent-head">
+          <span className="tables-dot" />
+          <span>{book ? labelFor(stub) : 'Table'}</span>
+        </div>
+        <div className="tables-thread">
+          {thread.map((item, index) => (
+            <p key={`${item.role}-${index}`} className={item.role === 'user' ? 'tables-ask' : 'flow-muted'}>
+              {item.role === 'run' ? `✓ ${item.text}` : item.text}
+            </p>
+          ))}
+          {projectId ? (
+            <Button className="flow-btn" type="button" asChild>
+              <Link href={`/flow/p/${projectId}/chat`}>Open chat</Link>
+            </Button>
+          ) : null}
+        </div>
+        <form
+          className="tables-composer"
+          onSubmit={event => {
+            event.preventDefault();
+            const text = ask.trim();
+            if (!text) return;
+            setThread(current => [...current, { role: 'user', text }]);
+            setAsk('');
+          }}
+        >
+          <Input
+            value={ask}
+            onChange={event => setAsk(event.target.value)}
+            placeholder="Ask, or tell it to change the table…"
+            aria-label="Ask about this table"
+          />
+          <Button className="flow-btn primary" type="submit">
+            Ask
+          </Button>
+        </form>
+      </aside>
     </div>
   );
 }

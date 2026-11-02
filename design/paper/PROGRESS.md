@@ -16,11 +16,11 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 7
-- wired: 7
+- matched: 8
+- wired: 8
 - built: 1
-- todo: 33
-- checks done: 5 passed, 1 owner QA
+- todo: 32
+- checks done: 6 passed, 1 owner QA
 
 ## Decisions
 
@@ -48,7 +48,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **4c Evidence** (`765-0`, `4c-evidence`) — **wired**. Opening a significant cell shows the evidence chip, highlights those rows and the column, and lists the value labels. Back to all clears it. See all scrolls the sheet. Open table and Cite in report leave the screen. The letter chip is the letter the cell carries. Labels and Values stay off the toolbar. `screen.tsx` is the Paper export. Components: shadcn.
 - [x] **4d code frame** (`958-0`, `4d-code-frame`) — **wired**. A coded column opens the theme list in the variable rail. Counts and the uncoded row are the loaded page. See all filters the sheet. Selecting a theme shows Merge and Clear. Use as banner opens Tables. The live Q7 frame is one theme, so Merge stays off. PNG is the reference. Components: shadcn.
 - [x] **4g Themes** (`16OA-0`, `4g-themes`) — **wired**. Themes runs the column as a column-% table with a split-by chip. The base sits under the themes. A cell opens Evidence and stays on Themes. Edit code frame opens the variable rail. The uncoded count is the table's not-coded figure. No agent-read sentence is invented. `screen.tsx` is the Paper export. Components: shadcn.
-- [ ] **5 Tables** (`2LA-0`, `5-tables`) — **todo**. PNG only. Needs stub and banner chips, the table, and the agent thread. Components: shadcn.
+- [x] **5 Tables** (`2LA-0`, `5-tables`) — **wired**. Stub and banner chips, the saved-table list, and a column-% table. The base sits at the end. Sig letters and the low-base mark are toggles. Save stores the table. A cell opens Evidence on Responses. The side thread records the run and does not invent a finding. Chart says the chart view is the next screen. `screen.tsx` is the Paper export. Components: shadcn.
 - [ ] **6 Report** (`2ZC-0`, `6-report`) — **built**. Three deliverable cards wired to deck, banner book, and topline. No `screen.tsx` yet, not matched. Components: shadcn.
 
 ## Rest of the app
@@ -108,6 +108,7 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 - A themes banner heading shows the stored code (region 1 and 2) rather than the value label. On likert_openends the region values are already words, so the headings read East, North, West, South.
 - A coded open-end cell opens Evidence with 0 verbatims. likert_openends comments, East 16.0% (Price too high / poor value, n 13), "What they said · comments 0". The sheet on the same file has the verbatim.
 - The "No substantive comment" theme shows a count of 37 beside a total of 1.7%. The other ten theme counts match their column percents of the 348 base.
+- agree_value by region saved Top 2 and Bottom 2 rows at 0% while those toggles were off. The table request did not ask for them.
 
 ## Unfinished
 
