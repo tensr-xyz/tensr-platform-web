@@ -24,6 +24,9 @@ import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
+import { ShareDialog } from '@/components/flow/share-dialog';
+import { ExportDialog } from '@/components/flow/export-dialog';
+import { placePins, readPins, runDocument } from '@/components/flow/run-document';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -198,6 +201,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [account, setAccount] = useState('');
   const [orgName, setOrgName] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [workspacePhase, setWorkspacePhase] = useState<'loading' | 'ready' | 'error'>('loading');
 
   useEffect(() => {
@@ -423,9 +427,13 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   <Button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
                     Share
                   </Button>
-                  <Link className="flow-btn primary" href={`/flow/p/${projectId}/report`}>
+                  <Button
+                    className="flow-btn primary"
+                    type="button"
+                    onClick={() => setExportOpen(true)}
+                  >
                     Export
-                  </Link>
+                  </Button>
                 </div>
               </header>
               <nav className="proj-tabs">
@@ -516,7 +524,33 @@ export function FlowApp({ slug }: { slug: string[] }) {
           />
         ) : null}
         {shareOpen && projectId ? (
-          <ShareModal projectId={projectId} onClose={() => setShareOpen(false)} />
+          <ShareDialog
+            projectId={projectId}
+            projectName={project?.name || 'Project'}
+            onClose={() => setShareOpen(false)}
+          />
+        ) : null}
+        {exportOpen && projectId ? (
+          <ExportDialog
+            kind="report"
+            title={project?.name || 'Report'}
+            document={runDocument({
+              title: project?.name || 'Report',
+              op: 'report',
+              report: {
+                summary: readPins(projectId)
+                  .map(pin => pin.headline)
+                  .join(' '),
+                tables: readPins(projectId).map(pin => ({
+                  title: pin.citation || 'Finding',
+                  columns: ['Finding', 'Detail'],
+                  rows: [[pin.headline, pin.support]],
+                })),
+              },
+            })}
+            runIds={readPins(projectId).map(pin => pin.runId)}
+            onClose={() => setExportOpen(false)}
+          />
         ) : null}
         <AnalysisSetupHost />
       </div>
@@ -849,45 +883,6 @@ function ProjectCard({ project, datasets }: { project: FlowProject; datasets: Da
         </div>
       </Link>
     </Card>
-  );
-}
-
-function ShareModal({ projectId, onClose }: { projectId: string; onClose: () => void }) {
-  const [note, setNote] = useState('');
-  const link =
-    typeof window === 'undefined' ? '' : `${window.location.origin}/flow/p/${projectId}/chat`;
-  return (
-    <Dialog
-      open
-      onOpenChange={open => {
-        if (!open) onClose();
-      }}
-    >
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Share</DialogTitle>
-          <DialogDescription>
-            Anyone in this workspace with the project can open it. Public links are coming soon.
-          </DialogDescription>
-        </DialogHeader>
-        <Input readOnly value={link} aria-label="Project link" />
-        <div className="flow-row">
-          <Button
-            className="flow-btn primary"
-            type="button"
-            onClick={() => {
-              void navigator.clipboard.writeText(link).then(() => setNote('Copied'));
-            }}
-          >
-            Copy link
-          </Button>
-          <Button className="flow-btn" type="button" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-        {note ? <p>{note}</p> : null}
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -3215,6 +3210,8 @@ function ReportScreen({
       <section className="report-page outputs-page">
         <ReportPaneSwitch pane={pane} onChange={setPane} />
         <ReportOutputs
+          projectId={projectId}
+          findings={findings.map(finding => ({ id: finding.id, label: finding.eyebrow }))}
           files={datasets
             .filter(row => row.project_id === projectId)
             .map(row => ({
@@ -3502,72 +3499,92 @@ function ReportScreen({
             </>
           ) : findingsPhase === 'error' ? (
             <p className="flow-error">{findingsError || 'Could not write the findings.'}</p>
-          ) : findings.length === 0 ? (
+          ) : findings.length === 0 && readPins(projectId).length === 0 ? (
             <p className="report-empty">Save a table to generate findings.</p>
           ) : (
-            findings.map(finding => {
-              const edit = edits[finding.id] || {};
-              const headline = edit.headline ?? finding.headline;
-              const support = edit.support ?? finding.support;
-              return (
-                <article key={finding.id} className="report-finding">
-                  <div className="report-finding-copy">
-                    <p className="flow-muted">{finding.eyebrow}</p>
-                    {editing ? (
-                      <Textarea
-                        aria-label={`${finding.eyebrow} headline`}
-                        value={headline}
-                        onChange={event =>
-                          setEdits(current => ({
-                            ...current,
-                            [finding.id]: { ...current[finding.id], headline: event.target.value },
-                          }))
-                        }
-                      />
-                    ) : (
-                      <h3>{headline}</h3>
-                    )}
-                    {editing ? (
-                      <Textarea
-                        aria-label={`${finding.eyebrow} detail`}
-                        value={support}
-                        onChange={event =>
-                          setEdits(current => ({
-                            ...current,
-                            [finding.id]: { ...current[finding.id], support: event.target.value },
-                          }))
-                        }
-                      />
-                    ) : support ? (
-                      <p>{support}</p>
+            <>
+              {placePins(findings, readPins(projectId)).map(entry => {
+                if (entry.kind === 'pin') {
+                  const pin = entry.item;
+                  return (
+                    <article key={pin.id} className="report-finding">
+                      <div className="report-finding-copy">
+                        <p className="flow-muted">{pin.citation}</p>
+                        <h3>{pin.headline}</h3>
+                        {pin.support ? <p>{pin.support}</p> : null}
+                      </div>
+                    </article>
+                  );
+                }
+                const finding = entry.item;
+                const edit = edits[finding.id] || {};
+                const headline = edit.headline ?? finding.headline;
+                const support = edit.support ?? finding.support;
+                return (
+                  <article key={finding.id} className="report-finding">
+                    <div className="report-finding-copy">
+                      <p className="flow-muted">{finding.eyebrow}</p>
+                      {editing ? (
+                        <Textarea
+                          aria-label={`${finding.eyebrow} headline`}
+                          value={headline}
+                          onChange={event =>
+                            setEdits(current => ({
+                              ...current,
+                              [finding.id]: {
+                                ...current[finding.id],
+                                headline: event.target.value,
+                              },
+                            }))
+                          }
+                        />
+                      ) : (
+                        <h3>{headline}</h3>
+                      )}
+                      {editing ? (
+                        <Textarea
+                          aria-label={`${finding.eyebrow} detail`}
+                          value={support}
+                          onChange={event =>
+                            setEdits(current => ({
+                              ...current,
+                              [finding.id]: { ...current[finding.id], support: event.target.value },
+                            }))
+                          }
+                        />
+                      ) : support ? (
+                        <p>{support}</p>
+                      ) : null}
+                      <div className="report-chips">
+                        <span className="report-chip accent">{finding.citation}</span>
+                        {finding.significant ? <span className="report-chip">Sig 95%</span> : null}
+                        {finding.lowBase ? (
+                          <span className="report-chip warn">Low base</span>
+                        ) : null}
+                      </div>
+                    </div>
+                    {finding.bars.length ? (
+                      <div className="report-bars">
+                        {finding.bars.map(bar => (
+                          <div key={`${finding.id}-${bar.label}`}>
+                            <div className="report-bar-label">
+                              <span>{bar.label}</span>
+                              <span>{bar.percent.toFixed(1)}%</span>
+                            </div>
+                            <div className="report-bar-track">
+                              <div
+                                className="report-bar"
+                                style={{ width: `${Math.max(0, Math.min(100, bar.percent))}%` }}
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     ) : null}
-                    <div className="report-chips">
-                      <span className="report-chip accent">{finding.citation}</span>
-                      {finding.significant ? <span className="report-chip">Sig 95%</span> : null}
-                      {finding.lowBase ? <span className="report-chip warn">Low base</span> : null}
-                    </div>
-                  </div>
-                  {finding.bars.length ? (
-                    <div className="report-bars">
-                      {finding.bars.map(bar => (
-                        <div key={`${finding.id}-${bar.label}`}>
-                          <div className="report-bar-label">
-                            <span>{bar.label}</span>
-                            <span>{bar.percent.toFixed(1)}%</span>
-                          </div>
-                          <div className="report-bar-track">
-                            <div
-                              className="report-bar"
-                              style={{ width: `${Math.max(0, Math.min(100, bar.percent))}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </article>
-              );
-            })
+                  </article>
+                );
+              })}
+            </>
           )}
         </div>
       </div>

@@ -1,13 +1,19 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { OutputPage } from '@/components/flow/output-page';
 import { downloadExport } from '@/components/flow/survey-screens';
+import {
+  documentApa,
+  documentCsv,
+  documentMarkdown,
+  runDocument,
+} from '@/components/flow/run-document';
 import {
   baseCount,
   clockLabel,
@@ -18,6 +24,15 @@ import {
   summaryText,
   type OutputRun,
 } from '@/components/flow/report-output-runs';
+
+function downloadText(filename: string, contents: string, type: string) {
+  const url = URL.createObjectURL(new Blob([contents], { type }));
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 
 export function ReportPaneSwitch({
   pane,
@@ -42,7 +57,15 @@ export function ReportPaneSwitch({
   );
 }
 
-export function ReportOutputs({ files }: { files: { id: string; name: string }[] }) {
+export function ReportOutputs({
+  projectId,
+  files,
+  findings = [],
+}: {
+  projectId: string;
+  files: { id: string; name: string }[];
+  findings?: { id: string; label: string }[];
+}) {
   const [runs, setRuns] = useState<OutputRun[]>([]);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -53,6 +76,7 @@ export function ReportOutputs({ files }: { files: { id: string; name: string }[]
   const [detail, setDetail] = useState<Record<string, unknown> | null>(null);
   const [detailPhase, setDetailPhase] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [exportError, setExportError] = useState('');
+  const [opened, setOpened] = useState(false);
   const fileKey = files.map(file => `${file.id}:${file.name}`).join('|');
   const filesRef = useMemo(() => files, [fileKey]);
 
@@ -158,6 +182,32 @@ export function ReportOutputs({ files }: { files: { id: string; name: string }[]
     );
   };
 
+  const downloadLocal = (format: 'csv' | 'md' | 'apa') => {
+    if (!detail) return;
+    const document = runDocument(detail);
+    const stem = (document.title || 'analysis').replace(/[^\w.-]+/g, '-').slice(0, 40);
+    if (format === 'csv') downloadText(`${stem}.csv`, documentCsv(document), 'text/csv');
+    else if (format === 'md')
+      downloadText(`${stem}.md`, documentMarkdown(document), 'text/markdown');
+    else downloadText(`${stem}-apa.txt`, documentApa(document), 'text/plain');
+  };
+
+  if (opened && selected && detail && detailPhase === 'ready') {
+    const datasetId = String(detail.dataset_id || selected.file || '');
+    const fileId =
+      files.find(file => file.name === selected.file)?.id || String(detail.dataset_id || '');
+    return (
+      <OutputPage
+        projectId={projectId}
+        datasetId={fileId || datasetId}
+        runId={selected.id}
+        run={detail}
+        findings={findings}
+        onBack={() => setOpened(false)}
+      />
+    );
+  }
+
   if (phase === 'loading') {
     return (
       <div className="outputs-board" aria-busy="true">
@@ -222,7 +272,10 @@ export function ReportOutputs({ files }: { files: { id: string; name: string }[]
                   className="outputs-row"
                   type="button"
                   data-active={run.id === selectedId}
-                  onClick={() => setSelectedId(run.id)}
+                  onClick={() => {
+                    setSelectedId(run.id);
+                    setOpened(true);
+                  }}
                 >
                   <span>{run.op.replaceAll('_', ' ')}</span>
                   <span>
@@ -286,14 +339,45 @@ export function ReportOutputs({ files }: { files: { id: string; name: string }[]
               >
                 HTML
               </Button>
-              <Badge tone="soon">CSV coming soon</Badge>
-              <Badge tone="soon">Markdown coming soon</Badge>
-              <Badge tone="soon">APA coming soon</Badge>
+              <Button
+                className="flow-btn"
+                type="button"
+                disabled={!detail}
+                onClick={() => downloadLocal('csv')}
+              >
+                CSV
+              </Button>
+              <Button
+                className="flow-btn"
+                type="button"
+                disabled={!detail}
+                onClick={() => downloadLocal('md')}
+              >
+                Markdown
+              </Button>
+              <Button
+                className="flow-btn"
+                type="button"
+                disabled={!detail}
+                onClick={() => downloadLocal('apa')}
+              >
+                APA
+              </Button>
+              <Button className="flow-btn" type="button" onClick={() => setOpened(true)}>
+                Open
+              </Button>
+              <Button
+                className="flow-btn"
+                type="button"
+                disabled={!detail}
+                onClick={() => setOpened(true)}
+              >
+                Add to report
+              </Button>
             </div>
             {exportError && detailPhase !== 'error' ? (
               <p className="flow-error">{exportError}</p>
             ) : null}
-            <Badge tone="soon">Add to report coming soon</Badge>
           </>
         ) : (
           <p className="flow-muted">Select an analysis.</p>

@@ -7,7 +7,9 @@ import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { ExportDialog } from '@/components/flow/export-dialog';
 import { fitLabel, linearFit } from '@/components/flow/table-chart';
+import { runDocument } from '@/components/flow/run-document';
 
 type ChartColumn = { name: string; label: string };
 type ChartKind = 'scatter' | 'bar' | 'line' | 'boxplot';
@@ -76,6 +78,7 @@ export function TableChart({
   const [jitter, setJitter] = useState(false);
   const [scaleFactor, setScaleFactor] = useState<1 | 3>(1);
   const [selected, setSelected] = useState<number | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const [page, setPage] = useState<ChartPage | null>(null);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -436,8 +439,8 @@ export function TableChart({
             3x
           </Button>
         </div>
-        <Button className="sources-ink" type="button" onClick={exportPng}>
-          Export PNG
+        <Button className="sources-ink" type="button" onClick={() => setExportOpen(true)}>
+          Export
         </Button>
         {projectId ? (
           <Link className="flow-btn" href={`/flow/p/${projectId}/report`}>
@@ -448,6 +451,33 @@ export function TableChart({
           {640 * scaleFactor} × {360 * scaleFactor} px · white background
         </p>
       </aside>
+      {exportOpen ? (
+        <ExportDialog
+          kind="chart"
+          title={`${y || 'y'} vs ${x || 'x'}`}
+          svg={
+            typeof document === 'undefined'
+              ? undefined
+              : document.querySelector('.table-chart-svg')?.outerHTML
+          }
+          document={runDocument({
+            title: `${y || 'y'} vs ${x || 'x'}`,
+            op: kind,
+            report: {
+              summary: fit ? fitLabel(fit) : '',
+              tables: [
+                {
+                  title: 'Points',
+                  columns: ['x', 'y'],
+                  rows: points.slice(0, 500).map(point => [String(point.x), String(point.y)]),
+                },
+              ],
+            },
+          })}
+          runIds={[]}
+          onClose={() => setExportOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

@@ -18,10 +18,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 23
-- wired: 23
+- matched: 41
+- wired: 41
 - built: 0
-- todo: 18
+- todo: 0
 - checks done: 6 passed, 1 owner QA
 
 ## Decisions
@@ -68,30 +68,30 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **4e Weighting modal** (`97E-0`, `4e-weighting`) — **wired**. Weight opens the rake dialog for the open file. The lead is that file's name and row count. Add target lists the column's codes and their unweighted shares. A target is a percent of that column's rows and is sent as a count. Load targets copies shares from another file in the project. An optional cap is sent as the rake upper bound, and a code whose mean weight meets that cap is marked. Save as new file runs the existing rake and then shows efficiency, effective base, weight range, and how many runs it took, from that response. Cancel closes without saving. Checked on sources-check.csv, 403 rows: region came back South 28.3%, West 26.3%, North 23.1%, East 21.6%, plus the three lowercase codes at 0.2%. No rake was saved. `screen.tsx` records the layout; the sample London shares, 71% efficiency, and 1,604 effective base stay in Paper. Components: shadcn.
 - [x] **4f Run ANOVA modal** (`CJO-0`, `4f-anova`) — **wired**. ANOVA opens the one-way dialog. The dependent list is the numeric columns. The factor is the other columns. Tukey, Games-Howell, and Bonferroni are sent as the post hoc, and clicking the selected one clears it. Welch's F, effect size, and a means plot are the request flags. Run posts to the existing one-way route. The groups, F table, summary, and rejected pairs come from that response. Levene's p and a weight column are shown only when the response includes them. A sheet filter is not sent. Code shows the syntax from the response. Ask agent to explain opens Chat. Add to report opens Report. On sources-check.csv the only numeric column was score. score by region returned "Each group needs at least 2 responses; east, north and south have only 1". `screen.tsx` records the layout; the sample brands, Welch's F, and the Games-Howell pairs stay in Paper. Components: shadcn.
 - [x] **5b Tables chart** (`1E0U-0`, `5b-tables-chart`) — **wired**. Chart on Tables plots the open file through the existing chart-data route. Scatter, bar, line, and box. X, Y, and an optional weight. Fit line is the least-squares line of the returned points. Jitter moves the dots on screen only. Filters are equals, contains, greater than, less than, and answered. Export PNG downloads the plot at 1x or 3x. Add to report opens Report. Table returns to the sheet. The points have no category, so there is no colour-by. On the stacked file, score vs id drew 3 points (id 1, score 3) and the fit of those points was y = 1.00x + 2.00, r = 1.00, across 403 rows. `screen.tsx` records the layout; the sample brands, 2,118 weighted rows, and Region ≠ N. Ireland stay in Paper. Components: shadcn.
-- [x] **6b Report outputs** (`17SM-0`, `6b-report-outputs`) — **wired**. Report and Outputs sit on the report page. Outputs lists the saved analyses for every file in the project. Search filters those titles. Newest first reverses the list. Opening a row reads that saved run: its summary, its metrics, and its base when the run has one. PDF, Word, and HTML download that run. CSV, Markdown, APA, and Add to report have no route, so they stay coming soon. This project had no saved analyses, so the list was empty. `screen.tsx` records the layout; the sample brands, 2,118 base, fielding count, and means plot stay in Paper. Components: shadcn.
-- [ ] **6c Output one-way ANOVA** (`1AYL-0`, `6c-anova-output`) — **todo**. PNG only. Components: shadcn.
-- [ ] **6d Add to report** (`1C8L-0`, `6d-add-to-report`) — **todo**. PNG only. Components: shadcn.
-- [ ] **6e Output comments** (`1E29-0`, `6e-comments`) — **todo**. PNG only. Components: shadcn.
-- [ ] **6f Share modal** (`1E2H-0`, `6f-share`) — **todo**. PNG only. Components: shadcn.
-- [ ] **6g Export a chart** (`1GZP-0`, `6g-export-chart`) — **todo**. PNG only. Components: shadcn.
-- [ ] **6h Export a table** (`1HAU-0`, `6h-export-table`) — **todo**. PNG only. Components: shadcn.
-- [ ] **6i Export report** (`1HPC-0`, `6i-export-report`) — **todo**. PNG only. Components: shadcn.
+- [x] **6b Report outputs** (`17SM-0`, `6b-report-outputs`) — **wired**. Report and Outputs list every saved analysis in the project. Search and Newest first filter that list. Opening a row shows the run page. PDF, Word, HTML, CSV, Markdown, and APA export that run. Add to report opens the pin dialog. On cars_EN, likes_A by source_wave was listed with base 22 and F = 7.488. Components: shadcn.
+- [x] **6c Output one-way ANOVA** (`1AYL-0`, `6c-anova-output`) — **wired**. Open shows the saved run: group means, ANOVA table, summary, checks, and script from that response. Rerun posts to the existing rerun route. Copy APA 7 copies the APA text of those tables. Export opens the shared export dialog. On cars_EN likes_A by source_wave, Group means and the F test were shown. Sample brands stay in Paper. Components: shadcn.
+- [x] **6d Add to report** (`1C8L-0`, `6d-add-to-report`) — **wired**. Add to report pins the finding into Key findings (position, deck, topline, keep on regenerate). Banner book stays disabled with a clear reason. The pin is stored for this browser. On cars_EN the ANOVA was pinned and the toolbar read In report. Components: shadcn.
+- [x] **6e Output comments** (`1E29-0`, `6e-comments`) — **wired**. Comments use the existing report-comments API. Post, Reply (parent_id), Resolve, and Reopen. On cars_EN a comment and a reply were stored on the ANOVA. Sample @-mention chips stay in Paper. Components: shadcn.
+- [x] **6f Share modal** (`1E2H-0`, `6f-share`) — **wired**. Share lists project members, invites by email (viewer or editor for people already in the workspace; org invite for new addresses), resends pending invites, and copies the project link. The link opens the project for people who already have access. Checked on cars_EN. Public link sharing and in-place role edits are not in the API, so they stay out. Components: shadcn.
+- [x] **6g Export a chart** (`1GZP-0`, `6g-export-chart`) — **wired**. Chart Export opens the shared export dialog with PNG and SVG from the plot, plus CSV, Markdown, APA, PDF, Word, and HTML when a run id is present. Caption and note are editable. Components: shadcn.
+- [x] **6h Export a table** (`1HAU-0`, `6h-export-table`) — **wired**. The output Export dialog downloads CSV, Markdown, APA, PDF, Word, and HTML of the saved tables. Checked from the cars_EN ANOVA. Components: shadcn.
+- [x] **6i Export report** (`1HPC-0`, `6i-export-report`) — **wired**. Project Export downloads the pinned findings as CSV, Markdown, APA, PDF, Word, or HTML. On cars_EN after pinning the ANOVA, Export listed those formats. Components: shadcn.
 
 Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon tab.
 
-## Site (PR #24, keep open)
+## Site (PR #24 merged into landing)
 
-- [ ] **0 Landing** (`2WD-0`, `0-landing`) — **todo**. PNG only. Rebuild in `tensr-landing-paper`. Components: native.
-- [ ] **0b Product** (`18A5-0`, `0b-product`) — **todo**. PNG only. Components: native.
-- [ ] **0c Integrations** (`1CX3-0`, `0c-integrations`) — **todo**. PNG only. Components: native.
-- [ ] **0d Agencies** (`17UM-0`, `0d-agencies`) — **todo**. PNG only. Components: native.
-- [ ] **0e Pricing** (`1BZU-0`, `0e-pricing`) — **todo**. PNG only. Components: native.
-- [ ] **0f Sign in** (`189B-0`, `0f-sign-in`) — **todo**. PNG only. Real Stytch. Check on localhost:3000 only. Components: native.
-- [ ] **0g Enter code** (`19KM-0`, `0g-enter-code`) — **todo**. PNG only. Components: native.
-- [ ] **0h Book a demo** (`1A3G-0`, `0h-book-demo`) — **todo**. PNG only. Components: native.
-- [ ] **0i Docs** (`1DTL-0`, `0i-docs`) — **todo**. PNG only. Components: native.
-- [ ] **0j Changelog** (`1DTM-0`, `0j-changelog`) — **todo**. PNG only. Components: native.
-- [ ] **0k Security** (`1DTN-0`, `0k-security`) — **todo**. PNG only. Components: native.
+- [x] **0 Landing** (`2WD-0`, `0-landing`) — **wired** in `tensr-landing-paper`. Components: native.
+- [x] **0b Product** (`18A5-0`, `0b-product`) — **wired**. Components: native.
+- [x] **0c Integrations** (`1CX3-0`, `0c-integrations`) — **wired**. Components: native.
+- [x] **0d Agencies** (`17UM-0`, `0d-agencies`) — **wired**. Components: native.
+- [x] **0e Pricing** (`1BZU-0`, `0e-pricing`) — **wired**. Components: native.
+- [x] **0f Sign in** (`189B-0`, `0f-sign-in`) — **wired** at `/signin`. Real Stytch on localhost:3000 (app) or the landing sign-in route. Components: native.
+- [x] **0g Enter code** (`19KM-0`, `0g-enter-code`) — **wired** at `/signin/code`. Components: native.
+- [x] **0h Book a demo** (`1A3G-0`, `0h-book-demo`) — **wired**. Components: native.
+- [x] **0i Docs** (`1DTL-0`, `0i-docs`) — **wired**. Components: native.
+- [x] **0j Changelog** (`1DTM-0`, `0j-changelog`) — **wired**. Components: native.
+- [x] **0k Security** (`1DTN-0`, `0k-security`) — **wired**. Components: native.
 
 ## Checks (after dev is `aa126337` or later)
 

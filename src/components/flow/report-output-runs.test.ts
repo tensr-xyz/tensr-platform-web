@@ -25,6 +25,7 @@ describe('report outputs', () => {
     };
     expect(summaryText(run)).toBe('Score differs by region.');
     expect(baseCount(run)).toBe(403);
+    expect(baseCount({ report: { meta: { rows_dataset: 30 } }, result: { n_used: 22 } })).toBe(22);
     expect(baseCount({ result: { n_used: 3 } })).toBe(3);
     expect(baseCount({})).toBeNull();
   });

@@ -53,11 +53,11 @@ export function clockLabel(iso: string): string {
 }
 
 export function baseCount(run: Record<string, unknown>): number | null {
+  const result = run.result as { n_used?: unknown; n_rows?: unknown } | undefined;
+  if (typeof result?.n_used === 'number' && Number.isFinite(result.n_used)) return result.n_used;
   const report = run.report as { meta?: { rows_dataset?: unknown } } | undefined;
   const rows = report?.meta?.rows_dataset;
   if (typeof rows === 'number' && Number.isFinite(rows)) return rows;
-  const result = run.result as { n_used?: unknown; n_rows?: unknown } | undefined;
-  if (typeof result?.n_used === 'number' && Number.isFinite(result.n_used)) return result.n_used;
   if (typeof result?.n_rows === 'number' && Number.isFinite(result.n_rows)) return result.n_rows;
   return null;
 }
