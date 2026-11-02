@@ -206,138 +206,182 @@ export function WeightPanel({
       }}
     >
       <DialogContent className="weight-dialog">
-        <DialogHeader>
-          {lead ? <p className="flow-muted weight-lead">{lead}</p> : null}
-          <DialogTitle className="weight-title">Weight to targets</DialogTitle>
-          <DialogDescription>{RAKE_COPY}</DialogDescription>
-        </DialogHeader>
-        <p className="flow-muted weight-lead">
-          The new file adds a _weight column. Targets are a percent of that column&apos;s rows, sent
-          as counts.
-        </p>
-        {groups.map(group => (
-          <section key={group.column} className="weight-group">
-            <h3>{group.column}</h3>
-            <div className="weight-row weight-head-row">
-              <span>Code</span>
-              <span>Unweighted</span>
-              <span>Target</span>
-              <span>Weighted</span>
-              <span>Weight</span>
+        <div className="weight-top">
+          <DialogHeader>
+            {lead ? <p className="weight-lead">{lead}</p> : null}
+            <DialogTitle className="weight-title">Weight to targets</DialogTitle>
+            <DialogDescription className="weight-copy">{RAKE_COPY}</DialogDescription>
+          </DialogHeader>
+          <div className="weight-versions-head">
+            <span>Weight variable · _weight</span>
+            <span>Targets are a percent of each column&apos;s rows, sent as counts</span>
+          </div>
+          <div className="weight-versions">
+            <div className="weight-version">
+              <i />
+              <div>
+                <strong>{openFile?.original_filename || 'Open file'}</strong>
+                <span>Current file · stays as it is</span>
+              </div>
             </div>
-            {group.codes.map(code => {
-              const margin = marginFor(diagnostics?.margins, group.column, code.code);
-              const mean = margin ? categoryMeanWeight(margin.achieved, code.count) : '';
-              const capped = mean && Number(cap) > 0 && Number(mean) >= Number(cap);
-              return (
-                <div key={code.code} className="weight-row" data-capped={capped ? 'true' : 'false'}>
-                  <span>{code.code}</span>
-                  <span className="flow-muted">{shareLabel(code.percentage)}</span>
-                  <Input
-                    aria-label={`Target percent ${group.column} ${code.code}`}
-                    value={percents[group.column]?.[code.code] || ''}
-                    onChange={event => setPercent(group.column, code.code, event.target.value)}
-                  />
-                  <span>{margin ? achievedShare(margin.achieved, group.total) : ''}</span>
-                  <span>{mean}</span>
-                </div>
-              );
-            })}
-          </section>
-        ))}
-        {diagnostics ? (
-          <div className="weight-stats">
-            <div>
-              <span className="flow-muted">Efficiency</span>
-              <span className="weight-figure">
-                {efficiencyPercent(diagnostics.weighting_efficiency) || '—'}
-              </span>
-            </div>
-            <div>
-              <span className="flow-muted">Effective base</span>
-              <span className="weight-figure">
-                {Number.isFinite(Number(diagnostics.kish_ess))
-                  ? Number(diagnostics.kish_ess).toLocaleString('en-GB', {
-                      maximumFractionDigits: 1,
-                    })
-                  : '—'}
-              </span>
-            </div>
-            <div>
-              <span className="flow-muted">Weight range</span>
-              <span className="weight-figure">
-                {Number.isFinite(Number(diagnostics.min_weight)) &&
-                Number.isFinite(Number(diagnostics.max_weight))
-                  ? `${Number(diagnostics.min_weight).toFixed(2)} to ${Number(diagnostics.max_weight).toFixed(2)}`
-                  : '—'}
-              </span>
-            </div>
-            <div>
-              <span className="flow-muted">Converged</span>
-              <span className="weight-figure">
-                {diagnostics.converged && diagnostics.iterations
-                  ? `${diagnostics.iterations} runs`
-                  : '—'}
-              </span>
+            <div className="weight-version" data-active>
+              <i />
+              <div>
+                <strong>{savedName || 'New weighted file'}</strong>
+                <span>This rake · adds a _weight column</span>
+              </div>
+              <span className="weight-new">New</span>
             </div>
           </div>
+          <p className="weight-note">Nothing is overwritten. Outputs keep the file they ran on.</p>
+        </div>
+        <div className="weight-table">
+          <div className="weight-row weight-head-row">
+            <span>Variable · code</span>
+            <span>Unweighted</span>
+            <span>Target</span>
+            <span>Weighted</span>
+            <span>Weight</span>
+          </div>
+          {groups.length === 0 ? (
+            <p className="weight-empty">Add a target variable below to set its shares.</p>
+          ) : null}
+          {groups.map(group => (
+            <section key={group.column} className="weight-group">
+              <h3>{group.column}</h3>
+              {group.codes.map(code => {
+                const margin = marginFor(diagnostics?.margins, group.column, code.code);
+                const mean = margin ? categoryMeanWeight(margin.achieved, code.count) : '';
+                const capped = mean && Number(cap) > 0 && Number(mean) >= Number(cap);
+                return (
+                  <div
+                    key={code.code}
+                    className="weight-row"
+                    data-capped={capped ? 'true' : 'false'}
+                  >
+                    <span>
+                      {code.code}
+                      {capped ? ` · capped at ${cap}` : ''}
+                    </span>
+                    <span className="weight-muted">{shareLabel(code.percentage)}</span>
+                    <span className="weight-target">
+                      <Input
+                        aria-label={`Target percent ${group.column} ${code.code}`}
+                        value={percents[group.column]?.[code.code] || ''}
+                        onChange={event => setPercent(group.column, code.code, event.target.value)}
+                      />
+                      %
+                    </span>
+                    <span>{margin ? achievedShare(margin.achieved, group.total) : '—'}</span>
+                    <span>{mean || '—'}</span>
+                  </div>
+                );
+              })}
+            </section>
+          ))}
+        </div>
+        <div className="weight-stats">
+          <div>
+            <span>Efficiency</span>
+            <strong>
+              {diagnostics ? efficiencyPercent(diagnostics.weighting_efficiency) || '—' : '—'}
+            </strong>
+          </div>
+          <div>
+            <span>Effective base</span>
+            <strong>
+              {diagnostics && Number.isFinite(Number(diagnostics.kish_ess))
+                ? Number(diagnostics.kish_ess).toLocaleString('en-GB', {
+                    maximumFractionDigits: 1,
+                  })
+                : '—'}
+            </strong>
+          </div>
+          <div>
+            <span>Weight range</span>
+            <strong>
+              {diagnostics &&
+              Number.isFinite(Number(diagnostics.min_weight)) &&
+              Number.isFinite(Number(diagnostics.max_weight))
+                ? `${Number(diagnostics.min_weight).toFixed(2)} to ${Number(diagnostics.max_weight).toFixed(2)}`
+                : '—'}
+            </strong>
+          </div>
+          <div>
+            <span>Converged</span>
+            <strong>
+              {diagnostics?.converged && diagnostics.iterations
+                ? `${diagnostics.iterations} runs`
+                : '—'}
+            </strong>
+          </div>
+        </div>
+        {savedName || diagnostics?.missing_category_warning || error ? (
+          <div className="weight-messages">
+            {savedName ? (
+              <p className="flow-muted">
+                Saved as {savedName}. The file you raked stays in the project.
+              </p>
+            ) : null}
+            {diagnostics?.missing_category_warning ? (
+              <p className="flow-muted">{diagnostics.missing_category_warning}</p>
+            ) : null}
+            {error ? <p className="flow-error">{error}</p> : null}
+          </div>
         ) : null}
-        {savedName ? (
-          <p className="flow-muted">
-            Saved as {savedName}. The file you raked stays in the project.
-          </p>
-        ) : null}
-        {diagnostics?.missing_category_warning ? (
-          <p className="flow-muted">{diagnostics.missing_category_warning}</p>
-        ) : null}
-        {error ? <p className="flow-error">{error}</p> : null}
         <div className="weight-foot">
           <ChoiceSelect
+            className="weight-link"
             aria-label="Add target column"
             value={addColumn}
-            onValueChange={setAddColumn}
+            onValueChange={value => {
+              setAddColumn(value);
+            }}
             options={[
-              { value: '', label: 'Variable' },
+              { value: '', label: '+ Add target' },
               ...columns
                 .filter(column => !isInternalColumn(column))
                 .filter(column => !groups.some(group => group.column === column))
                 .map(column => ({ value: column, label: column })),
             ]}
           />
-          <Button className="flow-btn" type="button" onClick={addTarget} disabled={!addColumn}>
-            Add target
-          </Button>
+          {addColumn ? (
+            <Button className="weight-text" type="button" onClick={addTarget}>
+              Add
+            </Button>
+          ) : null}
           <ChoiceSelect
+            className="weight-link"
             aria-label="Load targets from"
             value={sourceDataset}
             onValueChange={setSourceDataset}
             options={[
-              { value: '', label: 'Dataset in this project' },
+              { value: '', label: 'Load targets from…' },
               ...datasets
                 .filter(row => rowId(row) && rowId(row) !== datasetId)
                 .map(row => ({ value: rowId(row), label: row.original_filename || rowId(row) })),
             ]}
           />
-          <Button
-            className="flow-btn"
-            type="button"
-            onClick={loadTargets}
-            disabled={!sourceDataset}
-          >
-            Load targets
-          </Button>
-          <Input
-            aria-label="Weight cap"
-            value={cap}
-            placeholder="Cap"
-            onChange={event => setCap(event.target.value)}
-          />
+          {sourceDataset ? (
+            <Button className="weight-text" type="button" onClick={loadTargets}>
+              Load
+            </Button>
+          ) : null}
+          <span className="weight-cap">
+            Cap
+            <Input
+              aria-label="Weight cap"
+              value={cap}
+              placeholder="none"
+              onChange={event => setCap(event.target.value)}
+            />
+          </span>
           <span className="sheet-spacer" />
           <Button className="flow-btn" type="button" onClick={onClose}>
             Cancel
           </Button>
           <Button
-            className="sources-ink"
+            className="flow-btn primary"
             type="button"
             disabled={!datasetId || busy}
             onClick={save}
