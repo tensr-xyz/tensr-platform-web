@@ -61,27 +61,49 @@ type BriefDoc = {
   text?: string;
   excerpt?: string;
   updated_at?: string;
+  updated_by?: string | null;
 };
 
-export function splitBrief(text: string): { objectives: string; audience: string } {
-  const marker = text.match(/\nAudience\n/);
-  if (!marker || marker.index === undefined) {
-    return { objectives: text.replace(/^Objectives\n/, '').trim(), audience: '' };
-  }
-  return {
-    objectives: text
-      .slice(0, marker.index)
-      .replace(/^Objectives\n/, '')
-      .trim(),
-    audience: text.slice(marker.index + marker[0].length).trim(),
-  };
+const BRIEF_SECTIONS = ['Objectives', 'Audience', 'Notes'] as const;
+
+export function splitBrief(text: string): { objectives: string; audience: string; notes: string } {
+  const out = { objectives: '', audience: '', notes: '' };
+  const pattern = /(^|\n)(Objectives|Audience|Notes)\n/g;
+  const marks = [...text.matchAll(pattern)];
+  if (!marks.length) return { ...out, objectives: text.trim() };
+  const lead = text.slice(0, marks[0].index).trim();
+  if (lead) out.objectives = lead;
+  marks.forEach((mark, index) => {
+    const start = (mark.index || 0) + mark[0].length;
+    const end = index + 1 < marks.length ? marks[index + 1].index : text.length;
+    const key = mark[2].toLowerCase() as keyof typeof out;
+    const value = text.slice(start, end).trim();
+    out[key] = out[key] ? `${out[key]}\n${value}` : value;
+  });
+  return out;
 }
 
-export function joinBrief(objectives: string, audience: string): string {
-  const parts = [];
-  if (objectives.trim()) parts.push(`Objectives\n${objectives.trim()}`);
-  if (audience.trim()) parts.push(`Audience\n${audience.trim()}`);
-  return parts.join('\n\n');
+export function joinBrief(objectives: string, audience: string, notes = ''): string {
+  const values = [objectives, audience, notes];
+  return BRIEF_SECTIONS.map((label, index) =>
+    values[index].trim() ? `${label}\n${values[index].trim()}` : ''
+  )
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function PencilIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true">
+      <path
+        d="M9.5 2.5l2 2L5 11H3V9z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 function memberMark(id: string): string {
@@ -141,6 +163,7 @@ export function DetailsScreen({
   const [editing, setEditing] = useState(false);
   const [objectives, setObjectives] = useState('');
   const [audience, setAudience] = useState('');
+  const [notes, setNotes] = useState('');
   const [savedText, setSavedText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -269,9 +292,9 @@ export function DetailsScreen({
 
   const save = () => {
     if (!projectId || busy) return;
-    const text = joinBrief(objectives, audience);
+    const text = joinBrief(objectives, audience, notes);
     if (!text.trim()) {
-      setError('Write an objective or an audience before saving.');
+      setError('Write an objective, an audience or a note before saving.');
       return;
     }
     setBusy(true);
@@ -282,7 +305,10 @@ export function DetailsScreen({
     })
       .then(page => {
         setSavedText(text);
-        setDocs(current => [page.doc || { text, kind: 'brief' }, ...(current || [])]);
+        setDocs(current => [
+          page.doc || { text, kind: 'brief', updated_at: new Date().toISOString() },
+          ...(current || []),
+        ]);
         setEditing(false);
       })
       .catch(err => setError(err instanceof Error ? err.message : 'The brief did not save.'))
@@ -361,6 +387,13 @@ export function DetailsScreen({
   }
 
   const lines = objectiveLines(parts.objectives);
+  const startEdit = () => {
+    setObjectives(parts.objectives);
+    setAudience(parts.audience);
+    setNotes(parts.notes);
+    setEditing(true);
+    setError(null);
+  };
 
   return (
     <section className="details-page">
@@ -368,33 +401,62 @@ export function DetailsScreen({
         <div className="details-title-row">
           <h1>Project brief</h1>
           <span className="flow-muted">
-            {brief?.updated_at ? editedLabel(brief.updated_at) : 'No brief yet'}
+            {brief?.updated_at
+              ? `${editedLabel(brief.updated_at)}${brief.updated_by ? ` by ${brief.updated_by}` : ''}`
+              : 'No brief yet'}
           </span>
         </div>
         <div className="details-head-actions">
-          <span className="details-agent">
-            <i />
-            The agent uses this brief as context in every chat
-          </span>
-          <Button
-            className="flow-btn"
-            type="button"
-            onClick={() => {
-              setObjectives(parts.objectives);
-              setAudience(parts.audience);
-              setEditing(current => !current);
-              setError(null);
-            }}
-          >
-            {editing ? 'Close' : 'Edit brief'}
-          </Button>
+          {editing ? (
+            <>
+              <Button
+                className="flow-btn"
+                type="button"
+                disabled={busy}
+                onClick={() => setEditing(false)}
+              >
+                Cancel
+              </Button>
+              <Button className="flow-btn primary" type="button" disabled={busy} onClick={save}>
+                {busy ? 'Saving…' : 'Save brief'}
+              </Button>
+            </>
+          ) : (
+            <Button className="flow-btn primary details-edit" type="button" onClick={startEdit}>
+              <PencilIcon /> Edit brief
+            </Button>
+          )}
         </div>
       </header>
+      <p className="details-explainer">
+        <i />
+        The agent reads this brief before every answer, so objectives, audience and notes shape what
+        it runs and how it writes up results.
+      </p>
       <div className="details-body">
         <div className="details-main">
           <div className="details-split">
             <div>
               <div className="flow-muted details-label">Objectives</div>
+              {!editing ? (
+                <Button
+                  className="details-editable"
+                  type="button"
+                  aria-label="Edit objectives"
+                  onClick={startEdit}
+                >
+                  {lines.length ? (
+                    lines.map((line, index) => (
+                      <div key={`${index}-${line}`} className="details-objective">
+                        <span className="details-num">{index + 1}</span>
+                        <span>{line}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <span className="flow-muted">Add the questions this study should answer.</span>
+                  )}
+                </Button>
+              ) : null}
               {editing ? (
                 <Textarea
                   className="flow-text"
@@ -403,16 +465,7 @@ export function DetailsScreen({
                   aria-label="Objectives"
                   placeholder="One objective on each line"
                 />
-              ) : lines.length ? (
-                lines.map((line, index) => (
-                  <div key={`${index}-${line}`} className="details-objective">
-                    <span className="details-num">{index + 1}</span>
-                    <span>{line}</span>
-                  </div>
-                ))
-              ) : (
-                <p className="flow-muted">No objectives yet.</p>
-              )}
+              ) : null}
             </div>
             <div>
               <div className="flow-muted details-label">Audience</div>
@@ -426,7 +479,16 @@ export function DetailsScreen({
                 />
               ) : (
                 <>
-                  <p className="details-audience">{parts.audience || 'No audience yet.'}</p>
+                  <Button
+                    className="details-editable"
+                    type="button"
+                    aria-label="Edit audience"
+                    onClick={startEdit}
+                  >
+                    <span className={parts.audience ? 'details-audience' : 'flow-muted'}>
+                      {parts.audience || 'Add who the respondents are.'}
+                    </span>
+                  </Button>
                   {active ? (
                     <div className="details-tags">
                       {active.n_rows ? (
@@ -439,14 +501,30 @@ export function DetailsScreen({
               )}
             </div>
           </div>
-          {editing ? (
-            <div className="flow-row">
-              <Button className="flow-btn primary" type="button" disabled={busy} onClick={save}>
-                {busy ? 'Saving' : 'Save brief'}
+          <div>
+            <div className="flow-muted details-label">Notes</div>
+            {editing ? (
+              <Textarea
+                className="flow-text"
+                value={notes}
+                onChange={event => setNotes(event.target.value)}
+                aria-label="Notes"
+                placeholder="Anything the agent should know: client terms, nets to use, caveats"
+              />
+            ) : (
+              <Button
+                className="details-editable"
+                type="button"
+                aria-label="Edit notes"
+                onClick={startEdit}
+              >
+                <span className={parts.notes ? 'details-notes' : 'flow-muted'}>
+                  {parts.notes || 'Add client terms, nets to use, or caveats for the agent.'}
+                </span>
               </Button>
-              {error ? <p className="flow-error">{error}</p> : null}
-            </div>
-          ) : null}
+            )}
+          </div>
+          {error ? <p className="flow-error">{error}</p> : null}
           <div>
             <div className="flow-muted details-label">Fieldwork · coming soon</div>
             <div className="details-fieldwork" data-soon>

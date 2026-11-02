@@ -9631,3 +9631,222 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .flow-card .card-folder:hover {
   background: var(--color-well);
 }
+
+/* QA round 3. Recipes save and run from the chat rail. */
+.flow-rail .chat-recipe {
+  width: 100%;
+  height: auto;
+  justify-content: flex-start;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-ink);
+  text-align: left;
+}
+
+.flow-rail .chat-recipe:hover:not(:disabled) {
+  background: #ecece7;
+}
+
+.flow-rail .chat-recipe > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-recipe-add {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.chat-recipe-add:hover:not(:disabled) {
+  background: #ecece7;
+  color: var(--color-ink);
+}
+
+.chat-recipe-note {
+  margin: 6px 8px 0;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.chat-recipe-note a {
+  color: var(--color-accent);
+}
+
+/* QA round 3. The brief reads as editable. */
+.details-explainer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 28px 12px;
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.details-explainer i {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  flex: none;
+}
+
+.details-edit {
+  gap: 6px;
+}
+
+.flow-btn.details-editable,
+.details-editable {
+  width: 100%;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 6px;
+  margin: 0 -8px;
+  padding: 6px 8px;
+  border: 1px dashed transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+  text-align: left;
+  white-space: normal;
+}
+
+.details-editable:hover {
+  border-color: var(--color-line);
+  background: var(--color-well);
+}
+
+.details-notes {
+  white-space: pre-wrap;
+}
+
+.details-head:has(+ .details-explainer) {
+  border-bottom: 0;
+  padding-bottom: 8px;
+}
+
+/* QA round 3. Sources in three plain sections, connectors in one row. */
+.sources-drop {
+  width: 100%;
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 24px 16px;
+  border: 1px dashed var(--color-line);
+  border-radius: 10px;
+  background: var(--color-canvas);
+}
+
+.sources-drop:hover:not(:disabled) {
+  border-color: var(--color-accent);
+}
+
+.sources-actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.sources-none {
+  margin: 0;
+  font-size: 13px;
+}
+
+.sources-soon-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0 4px;
+  border-top: 1px solid var(--color-line);
+  font-size: 12px;
+}
+
+.sources-soon-chip {
+  padding: 3px 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  color: var(--color-muted);
+}
+
+.sources-soon-more {
+  margin-left: auto;
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+.sources-block-head {
+  flex-wrap: wrap;
+  row-gap: 2px;
+}
+
+.sources-block-head h2 {
+  flex: 1;
+}
+
+.sources-block-head p {
+  order: 3;
+  flex-basis: 100%;
+  margin: 0;
+  text-align: left;
+}
+
+/* QA round 3. Responses empty and error states. */
+.sheet-state {
+  margin: 48px auto;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 28px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-canvas);
+  text-align: center;
+}
+
+.sheet-state strong {
+  font-size: 15px;
+}
+
+.sheet-state p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.sheet-state-mark {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 15px;
+}
+
+.sheet-state-mark[data-tone='error'] {
+  background: #f6ede2;
+  color: var(--color-warn, #9a5b1e);
+}
+
+.sheet-state-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}

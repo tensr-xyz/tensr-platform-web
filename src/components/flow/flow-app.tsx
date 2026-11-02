@@ -143,6 +143,14 @@ import {
   useSurveyCell,
   WeightPanel,
 } from '@/components/flow/survey-screens';
+type FlowRecipe = {
+  name?: string;
+  recipe_id?: string;
+  version?: number;
+  ops?: unknown[];
+  created_from?: string;
+};
+
 type DatasetRow = {
   dataset_id?: string;
   id?: string;
@@ -236,6 +244,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [projectCursor, setProjectCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [email, setEmail] = useState('');
+  const [membersReady, setMembersReady] = useState(false);
   const [pendingAsk, setPendingAsk] = useState<string | null>(null);
   const [projects, setProjects] = useState<FlowProject[]>([]);
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
@@ -292,8 +301,10 @@ export function FlowApp({ slug }: { slug: string[] }) {
         flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>('/datasets/?scope=all'),
       ]);
       const listed = projectPage.projects || [];
-      const memberMap = await membersFor(listed);
-      setMembers(current => ({ ...current, ...memberMap }));
+      void membersFor(listed).then(memberMap => {
+        setMembers(current => ({ ...current, ...memberMap }));
+        setMembersReady(true);
+      });
       setProjects(current => [
         ...listed,
         ...current.filter(item => !listed.some(row => row.id === item.id)),
@@ -521,7 +532,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
               />
             ) : section === 'projects' || !projectId ? (
               <ProjectsScreen
-                phase={workspacePhase}
+                phase={workspacePhase === 'ready' && !membersReady ? 'loading' : workspacePhase}
                 error={error}
                 projects={projects}
                 members={members}
@@ -541,7 +552,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
             ) : section === 'sources' ? (
               <SourcesScreen project={project} datasets={datasets} onChanged={reload} />
             ) : section === 'responses' ? (
-              <ResponsesScreen project={project} datasets={datasets} />
+              <ResponsesScreen
+                project={project}
+                datasets={datasets}
+                ready={workspacePhase === 'ready'}
+              />
             ) : section === 'tables' ? (
               <TablesScreen project={project} datasets={datasets} />
             ) : section === 'report' ? (
@@ -2221,25 +2236,29 @@ function ChatScreen({
   attachmentsRef.current = attachments;
   const askedRef = useRef<string | null>(null);
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
-  const [recipes, setRecipes] = useState<
-    { name?: string; recipe_id?: string; ops?: unknown[] }[] | null
-  >(null);
+  const [recipes, setRecipes] = useState<FlowRecipe[] | null>(null);
   const file = chatFile(project, datasets);
-  const railReady = sessions !== null && recipes !== null;
   const showThread = Boolean(sent || answer || plan || status);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
 
-  useEffect(() => {
-    if (!project) return;
-    void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
+  const chatProjectId = project?.id || '';
+  const loadRail = useCallback(() => {
+    if (!chatProjectId) return;
+    void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${chatProjectId}/sessions`, {
+      signal: AbortSignal.timeout(15000),
+    })
       .then(page => setSessions(page.sessions || []))
-      .catch(() => setSessions([]));
-    void flowJson<{ recipes?: { name?: string; recipe_id?: string }[] }>(
-      `/datasets/recipes?project_id=${project.id}`
-    )
+      .catch(() => setSessions(current => current || []));
+    void flowJson<{ recipes?: FlowRecipe[] }>(`/datasets/recipes?project_id=${chatProjectId}`, {
+      signal: AbortSignal.timeout(15000),
+    })
       .then(page => setRecipes(page.recipes || []))
-      .catch(() => setRecipes([]));
-  }, [project]);
+      .catch(() => setRecipes(current => current || []));
+  }, [chatProjectId]);
+
+  useEffect(() => {
+    loadRail();
+  }, [loadRail]);
 
   useEffect(() => {
     if (!datasetId) {
@@ -2397,6 +2416,89 @@ function ChatScreen({
       });
   };
 
+  const [recipeNote, setRecipeNote] = useState<{
+    text: string;
+    error?: boolean;
+    outputs?: boolean;
+  } | null>(null);
+  const [recipeBusy, setRecipeBusy] = useState('');
+
+  const saveRecipe = async (name: string, ids: string[]) => {
+    if (!project) return;
+    if (!ids.length) {
+      setRecipeNote({ text: 'Ask for an analysis first. Its run can then be saved as a recipe.' });
+      return;
+    }
+    setRecipeBusy('save');
+    setRecipeNote(null);
+    try {
+      const runs = await Promise.all(
+        ids.map(id =>
+          flowJson<{ op?: string; body?: Record<string, unknown> }>(`/datasets/analysis-runs/${id}`)
+        )
+      );
+      const ops = runs
+        .filter(run => run.op)
+        .map(run => ({
+          op: 'analysis',
+          analysis_type: run.op,
+          input: 'survey',
+          body: Object.fromEntries(
+            Object.entries(run.body || {}).filter(([key]) => key !== 'dataset_id')
+          ),
+        }));
+      if (!ops.length) throw new Error('This run has no steps Tensr can replay.');
+      await flowJson('/datasets/recipes', {
+        method: 'POST',
+        body: JSON.stringify({
+          project_id: project.id,
+          name: name.slice(0, 120) || 'Recipe',
+          ops: [{ op: 'import', role: 'survey' }, ...ops],
+          created_from: 'history',
+        }),
+      });
+      setRecipeNote({ text: `Saved “${name}” as a recipe. Run it on any file from Recipes.` });
+      loadRail();
+    } catch (err) {
+      setRecipeNote({
+        text: err instanceof Error ? err.message : 'The recipe did not save.',
+        error: true,
+      });
+    } finally {
+      setRecipeBusy('');
+    }
+  };
+
+  const runRecipe = async (recipe: FlowRecipe) => {
+    if (!recipe.recipe_id) return;
+    if (!datasetId) {
+      setRecipeNote({ text: 'Open a file on Sources, then run the recipe on it.', error: true });
+      return;
+    }
+    setRecipeBusy(recipe.recipe_id);
+    setRecipeNote(null);
+    try {
+      const out = await flowJson<{ run_ids?: string[]; dataset_id?: string }>(
+        `/datasets/recipes/${recipe.recipe_id}/versions/${recipe.version || 1}/run`,
+        { method: 'POST', body: JSON.stringify({ dataset_id: datasetId }) }
+      );
+      const count = out.run_ids?.length || 0;
+      setRecipeNote({
+        text: count
+          ? `Ran “${recipe.name || 'Recipe'}” on ${file?.original_filename || 'the open file'}. ${count} output${count === 1 ? '' : 's'} saved.`
+          : `Ran “${recipe.name || 'Recipe'}”. The new working version is on Sources.`,
+        outputs: count > 0,
+      });
+    } catch (err) {
+      setRecipeNote({
+        text: err instanceof Error ? err.message : 'The recipe did not run.',
+        error: true,
+      });
+    } finally {
+      setRecipeBusy('');
+    }
+  };
+
   const clearChat = () => {
     setSent('');
     setAttachedNote('');
@@ -2459,27 +2561,63 @@ function ChatScreen({
         )}
         <div className="chat-recipe-head">
           <span className="flow-muted">Recipes</span>
-          <span className="flow-muted" aria-hidden="true">
+          <Button
+            className="chat-recipe-add"
+            type="button"
+            aria-label="Save this run as a recipe"
+            title={runIds.length ? 'Save this run as a recipe' : 'Ask for an analysis first'}
+            disabled={recipeBusy === 'save'}
+            onClick={() => void saveRecipe(title, runIds)}
+          >
             +
-          </span>
+          </Button>
         </div>
         {recipes === null ? (
           <Skeleton className="h-8 w-full" />
         ) : (
           <>
-            {recipes.map(recipe => (
-              <div key={recipe.recipe_id} className="chat-recipe">
-                <span>{recipe.name || 'Recipe'}</span>
-                {Array.isArray(recipe.ops) ? (
+            {recipes.map(recipe => {
+              const steps = Array.isArray(recipe.ops)
+                ? recipe.ops.filter(step => (step as { op?: string } | null)?.op !== 'import')
+                    .length
+                : 0;
+              return (
+                <Button
+                  key={recipe.recipe_id}
+                  className="chat-recipe"
+                  type="button"
+                  disabled={Boolean(recipeBusy)}
+                  title={`Run on ${file?.original_filename || 'the open file'}`}
+                  onClick={() => void runRecipe(recipe)}
+                >
+                  <span>{recipe.name || 'Recipe'}</span>
                   <span className="chat-recipe-steps">
-                    {recipe.ops.length} step{recipe.ops.length === 1 ? '' : 's'}
+                    {recipeBusy === recipe.recipe_id
+                      ? 'Running…'
+                      : `${steps} step${steps === 1 ? '' : 's'} · Run`}
                   </span>
-                ) : null}
-              </div>
-            ))}
-            <p className="flow-muted chat-recipe-hint">Save any run as a recipe</p>
+                </Button>
+              );
+            })}
+            {recipes.length === 0 ? (
+              <p className="flow-muted chat-recipe-hint">
+                Save any run as a recipe, then run it on another file.
+              </p>
+            ) : null}
           </>
         )}
+        {recipeNote ? (
+          <p
+            className={
+              recipeNote.error ? 'flow-error chat-recipe-note' : 'flow-muted chat-recipe-note'
+            }
+          >
+            {recipeNote.text}{' '}
+            {recipeNote.outputs ? (
+              <Link href={`${projectHref}/report?pane=outputs`}>Open Outputs</Link>
+            ) : null}
+          </p>
+        ) : null}
       </aside>
       {showThread ? (
         <>
@@ -2750,11 +2888,10 @@ function ChatScreen({
                   <Button
                     className="flow-btn"
                     type="button"
-                    onClick={() =>
-                      setStatus('This run has no replayable steps to save as a recipe.')
-                    }
+                    disabled={recipeBusy === 'save'}
+                    onClick={() => void saveRecipe(title, runIds)}
                   >
-                    Save
+                    {recipeBusy === 'save' ? 'Saving…' : 'Save as recipe'}
                   </Button>
                   <Link className="flow-btn" href={`${projectHref}/report`}>
                     Add to report
@@ -2772,7 +2909,7 @@ function ChatScreen({
       ) : (
         <EmptyChat
           file={file}
-          ready={ready && railReady}
+          ready={ready}
           question={question}
           setQuestion={setQuestion}
           mode={mode}
@@ -2841,10 +2978,19 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
   );
 }
 
-function ResponsesScreen({ project, datasets }: { project?: FlowProject; datasets: DatasetRow[] }) {
+function ResponsesScreen({
+  project,
+  datasets,
+  ready = true,
+}: {
+  project?: FlowProject;
+  datasets: DatasetRow[];
+  ready?: boolean;
+}) {
   const router = useRouter();
   const [chosenId, setChosenId] = useState<string | null>(null);
-  const fallback = datasets.find(row => row.project_id === project?.id) || datasets[0];
+  const projectKey = project?.id || '';
+  const fallback = datasets.find(row => row.project_id === project?.id);
   const datasetId =
     chosenId || project?.active_dataset_id || (fallback ? datasetRowId(fallback) : '');
   const [tab, setTab] = useState<'sheet' | 'notebook' | 'evidence' | 'themes'>('sheet');
@@ -2857,7 +3003,8 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const [query, setQuery] = useState('');
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
   const [specs, setSpecs] = useState<{ id: string; label: string }[] | null>(null);
-  const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error' | 'empty'>('loading');
+  const [sheetAttempt, setSheetAttempt] = useState(0);
   const [selectedCol, setSelectedColState] = useState(0);
   const [colPicked, setColPicked] = useState(false);
   const [frameName, setFrameName] = useState('');
@@ -2889,31 +3036,41 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   }, [evidenceSheet.focus]);
   useEffect(() => {
     if (!datasetId) {
-      setSheetPhase('error');
+      setSheetPhase(ready && projectKey ? 'empty' : 'loading');
       return;
     }
+    let cancelled = false;
     setSheetPhase('loading');
-    void flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`)
-      .then(meta => {
-        const rows = meta.columns || [];
-        setColumns(rows);
-      })
-      .catch(() => setColumns([]));
-    void flowJson<{ rows?: unknown[][]; headers?: string[]; n_rows?: number }>(
-      `/datasets/${datasetId}/preview?limit=${pageSize}&offset=${pageOffset}`
-    )
-      .then(page => {
+    const load = () =>
+      Promise.all([
+        flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`).catch(() => ({
+          columns: [] as FlowColumn[],
+        })),
+        flowJson<{ rows?: unknown[][]; headers?: string[]; n_rows?: number }>(
+          `/datasets/${datasetId}/preview?limit=${pageSize}&offset=${pageOffset}`
+        ),
+      ]);
+    const wait = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms));
+    void load()
+      .catch(() => wait(1200).then(load))
+      .then(([meta, page]) => {
+        if (cancelled) return;
+        setColumns(meta.columns || []);
         setHeaders(page.headers || []);
         setPreview(page.rows || []);
         setRowTotal(page.n_rows || 0);
         setSheetPhase('ready');
       })
       .catch(() => {
+        if (cancelled) return;
         setPreview([]);
         setHeaders([]);
         setSheetPhase('error');
       });
-  }, [datasetId, pageOffset]);
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, pageOffset, ready, projectKey, sheetAttempt]);
   useEffect(() => {
     if (!project) return;
     void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
@@ -3294,8 +3451,37 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                 <Skeleton key={index} className="mb-2 h-8 w-full" />
               ))}
             </div>
-          ) : sheetPhase === 'error' ? (
-            <p className="flow-error">Could not load this sheet.</p>
+          ) : sheetPhase === 'empty' || sheetPhase === 'error' ? (
+            <div className="sheet-state" role={sheetPhase === 'error' ? 'alert' : undefined}>
+              <span className="sheet-state-mark" data-tone={sheetPhase}>
+                {sheetPhase === 'error' ? '!' : '+'}
+              </span>
+              <strong>
+                {sheetPhase === 'error' ? 'This file didn’t load' : 'No file in this project yet'}
+              </strong>
+              <p>
+                {sheetPhase === 'error'
+                  ? 'Tensr tried twice and couldn’t read the responses. Try again, or open another file from Sources.'
+                  : 'Upload a survey file on Sources and its responses show here.'}
+              </p>
+              <div className="sheet-state-actions">
+                {sheetPhase === 'error' ? (
+                  <Button
+                    className="flow-btn primary"
+                    type="button"
+                    onClick={() => setSheetAttempt(value => value + 1)}
+                  >
+                    Try again
+                  </Button>
+                ) : null}
+                <Link
+                  className={sheetPhase === 'error' ? 'flow-btn' : 'flow-btn primary'}
+                  href={`/flow/p/${project?.id || ''}/sources`}
+                >
+                  {sheetPhase === 'error' ? 'Open Sources' : 'Add a file'}
+                </Link>
+              </div>
+            </div>
           ) : (
             <>
               <div ref={sheetRef} className="sheet-frame">
@@ -3617,6 +3803,9 @@ function ReportScreen({
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
   const [pane, setPane] = useState<'report' | 'outputs'>('report');
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('pane') === 'outputs') setPane('outputs');
+  }, []);
   const reportPins = useProjectPins(projectId, []);
 
   const templateInput = useRef<HTMLInputElement>(null);

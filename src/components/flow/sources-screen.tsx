@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -183,6 +183,30 @@ export function SourcesScreen({
     );
   }
 
+  const uploads = files.filter(file => !file.parent_dataset_id);
+  const versions = files.filter(file => file.parent_dataset_id);
+  const versionNote = (file: SourceFile) => {
+    const label = sourceFileNote(file);
+    const made = label.charAt(0).toUpperCase() + label.slice(1);
+    const parent = datasets.find(row => datasetRowId(row) === file.parent_dataset_id);
+    return parent ? `${made} from ${sourceFileName(parent)}` : made;
+  };
+  const fileRow = (file: SourceFile, note: string, action: ReactNode) => {
+    const id = datasetRowId(file);
+    const inUse = id === project?.active_dataset_id;
+    return (
+      <div key={id} className="sources-dataset" data-active={inUse}>
+        <span className="sources-kind">{fileMark(sourceFileName(file))}</span>
+        <span>
+          <span className="sources-file-name">{sourceFileName(file)}</span>
+          <span className="flow-muted">{note}</span>
+        </span>
+        <span className="flow-muted sources-rows">{sourceRowCount(file)}</span>
+        {inUse ? <span className="sources-in-use">In use</span> : action}
+      </div>
+    );
+  };
+
   return (
     <section className="sources-page">
       <div className="sources-wrap">
@@ -190,136 +214,54 @@ export function SourcesScreen({
           <div>
             <h1 className="sources-title">Sources</h1>
             <p className="flow-muted sources-lede">
-              Where this project&apos;s data comes from. Tensr reads from your survey and panel
-              tools, it doesn&apos;t replace them.
+              Everything this project works from: your files, the versions Tensr made from them, and
+              the documents the agent reads.
             </p>
           </div>
           <Button
             className="sources-ink"
             type="button"
-            onClick={() =>
-              document.getElementById('sources-connect')?.scrollIntoView({ behavior: 'smooth' })
-            }
+            disabled={uploading}
+            onClick={() => fileInput.current?.click()}
           >
-            + Connect source
+            {uploading ? 'Uploading…' : '+ Upload file'}
           </Button>
         </div>
 
-        <div className="sources-field" data-soon>
-          <div className="sources-field-main">
-            <div className="sources-field-head">
-              <div className="sources-field-who">
-                <span className="sources-field-mark">P</span>
-                <div>
-                  <strong>Panel fielding</strong>
-                  <span>Connect Prolific to field this project from here</span>
-                </div>
-              </div>
-              <span className="sources-soon">Coming soon</span>
-            </div>
-            <div>
-              <div className="sources-field-count">
-                <strong>—</strong>
-                <span>completes · fielding is coming soon</span>
-              </div>
-              <div className="sources-field-bar" />
-            </div>
-            <div className="sources-field-stats">
-              {['Median time', 'Screened out', 'Flagged by checks', 'Spent'].map(label => (
-                <div key={label}>
-                  <span>{label}</span>
-                  <strong>—</strong>
-                </div>
-              ))}
-            </div>
-            <div className="sources-field-actions">
-              {['Sync now', 'Connection settings', 'Open in Prolific ↗'].map(label => (
-                <Button key={label} className="flow-btn" type="button" disabled>
-                  {label}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <div className="sources-field-quotas">
-            <div className="sources-field-quota-head">
-              <span>Quotas</span>
-              <span>filled / target</span>
-            </div>
-            <p>Quotas show here once a panel is connected.</p>
-          </div>
-        </div>
-
         <div className="sources-block">
-          <h2>Connected</h2>
-          {files.length ? (
-            <div className="sources-connected">
-              {files.map(file => {
-                const id = datasetRowId(file);
-                return (
-                  <div key={id} className="sources-file">
-                    <span className="sources-mark">
-                      <svg width="15" height="15" viewBox="0 0 14 14" aria-hidden="true">
-                        <rect
-                          x="2"
-                          y="2"
-                          width="10"
-                          height="10"
-                          rx="2"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.2"
-                        />
-                        <path d="M2 5.5h10M5.5 5.5V12" stroke="currentColor" strokeWidth="1.2" />
-                      </svg>
-                    </span>
-                    <span className="sources-file-copy">
-                      <span className="sources-file-name">{sourceFileName(file)}</span>
-                      <span className="flow-muted">
-                        Uploaded · {sourceRowCount(file)}
-                        {id === project?.active_dataset_id ? ' · in use' : ''}
-                      </span>
-                    </span>
-                  </div>
-                );
-              })}
+          <div className="sources-block-head">
+            <h2>Your data</h2>
+            <p className="flow-muted">
+              Files you uploaded. Open one to analyse it; the agent and Tables use the file in use.
+            </p>
+          </div>
+          {uploads.length ? (
+            <div className="sources-datasets">
+              {uploads.map(file =>
+                fileRow(
+                  file,
+                  'Uploaded',
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => openFile(datasetRowId(file))}
+                  >
+                    Open
+                  </Button>
+                )
+              )}
             </div>
           ) : (
-            <p className="flow-muted">No files in this project yet.</p>
-          )}
-        </div>
-
-        <div className="sources-block" id="sources-connect">
-          <h2>Connect a source</h2>
-          <div className="sources-connectors">
-            <div className="sources-connector">
-              <span>Prolific</span>
-              <span className="flow-muted">Status, quotas, participant IDs</span>
-              <span className="sources-soon">Coming soon</span>
-            </div>
-            <div className="sources-connector">
-              <span>Qualtrics</span>
-              <span className="flow-muted">Live sync responses</span>
-              <span className="sources-soon">Coming soon</span>
-            </div>
-            <div className="sources-connector">
-              <span>Decipher / Alchemer</span>
-              <span className="flow-muted">Import by survey ID</span>
-              <span className="sources-soon">Coming soon</span>
-            </div>
             <Button
-              className="sources-connector"
+              className="sources-drop"
               type="button"
               disabled={uploading}
               onClick={() => fileInput.current?.click()}
             >
-              <span>{uploading ? 'Uploading…' : 'Upload file'}</span>
+              <strong>{uploading ? 'Uploading…' : 'Upload your first file'}</strong>
               <span className="flow-muted">.sav .dta CSV Excel Triple-S Parquet</span>
             </Button>
-            <Link className="sources-connector sources-more" href="/flow/plugins">
-              <span>More connectors</span>
-              <span className="flow-muted">Browse in Plugins</span>
-            </Link>
-          </div>
+          )}
           <Input
             ref={fileInput}
             className="sources-file-input"
@@ -336,10 +278,9 @@ export function SourcesScreen({
 
         <div className="sources-block">
           <div className="sources-block-head">
-            <h2>Datasets</h2>
+            <h2>Working versions</h2>
             <p className="flow-muted">
-              Join or stack two files, fuse three or more. Export any as .sav with an .sps weight
-              file.
+              Stacked, weighted or coded copies Tensr made. Your uploads stay unchanged.
             </p>
             {files.length >= 2 ? (
               <Button className="flow-btn" type="button" onClick={() => setStackOpen(true)}>
@@ -347,44 +288,42 @@ export function SourcesScreen({
               </Button>
             ) : null}
           </div>
-          {files.length ? (
+          {versions.length ? (
             <div className="sources-datasets">
-              {files.map(file => {
-                const id = datasetRowId(file);
-                const inUse = id === project?.active_dataset_id;
-                return (
-                  <div key={id} className="sources-dataset" data-active={inUse}>
-                    <i />
-                    <span>
-                      <span className="sources-file-name">{sourceFileName(file)}</span>
-                      <span className="flow-muted">{sourceFileNote(file)}</span>
-                    </span>
-                    <span className="flow-muted sources-rows">{sourceRowCount(file)}</span>
-                    {inUse ? (
-                      <span className="sources-in-use">In use</span>
-                    ) : file.parent_dataset_id ? (
+              {versions.map(file =>
+                fileRow(
+                  file,
+                  versionNote(file),
+                  <span className="sources-actions">
+                    {/stack|merge|join|fuse/i.test(sourceFileNote(file)) ? (
                       <Button className="flow-btn" type="button" onClick={() => setStackOpen(true)}>
                         Review mapping
                       </Button>
-                    ) : (
-                      <Button className="flow-btn" type="button" onClick={() => openFile(id)}>
-                        Open
-                      </Button>
-                    )}
-                  </div>
-                );
-              })}
+                    ) : null}
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => openFile(datasetRowId(file))}
+                    >
+                      Open
+                    </Button>
+                  </span>
+                )
+              )}
             </div>
           ) : (
-            <p className="flow-muted">Upload a file to start a dataset.</p>
+            <p className="flow-muted sources-none">
+              None yet. Stacking waves, weighting or coding open ends creates one here.
+            </p>
           )}
         </div>
 
         <div className="sources-block">
           <div className="sources-block-head">
-            <h2>Context</h2>
+            <h2>Context for the agent</h2>
             <p className="flow-muted">
-              The agent reads these before it answers. They aren&apos;t analysed as data.
+              Questionnaires, briefs and past reports. The agent reads them; they aren&apos;t
+              analysed as data.
             </p>
           </div>
           <div className="sources-docs">
@@ -398,11 +337,24 @@ export function SourcesScreen({
               </div>
             ))}
             <Button className="sources-add" type="button" onClick={() => setAddOpen(true)}>
-              + Add
+              + Add document
             </Button>
           </div>
         </div>
+
         {error ? <p className="flow-error">{error}</p> : null}
+
+        <div className="sources-soon-row">
+          <span className="flow-muted">Coming soon</span>
+          {['Prolific fielding', 'Qualtrics sync', 'Decipher / Alchemer'].map(label => (
+            <span key={label} className="sources-soon-chip" data-soon>
+              {label}
+            </span>
+          ))}
+          <Link className="sources-soon-more" href="/flow/plugins">
+            More connectors in Plugins →
+          </Link>
+        </div>
       </div>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
