@@ -120,6 +120,22 @@ function editedAgo(value?: string | null): string {
   return `Edited ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
 }
 
+function editedWhen(value?: string | null): string {
+  const label = editedAgo(value).replace(/^Edited /, '');
+  return label || '—';
+}
+
+function projectFiles(projectId: string, datasets: DatasetRow[]): DatasetRow[] {
+  return datasets.filter(row => row.project_id === projectId);
+}
+
+function responseLabel(files: DatasetRow[]): string {
+  if (!files.length) return 'Not fielded';
+  const rows = files.reduce((sum, row) => sum + (row.n_rows || 0), 0);
+  if (rows > 0) return `${rows.toLocaleString('en-GB')} rows`;
+  return `${files.length} file${files.length === 1 ? '' : 's'}`;
+}
+
 function editedLabel(value?: string | null): string {
   if (!value) return '';
   const date = new Date(value);
@@ -586,14 +602,21 @@ function ProjectsScreen({
   const [mode, setMode] = useState<'cards' | 'table'>('cards');
   const [filter, setFilter] = useState<'active' | 'mine' | 'archived'>('active');
   const [query, setQuery] = useState('');
-  const shown = projects.filter(project => {
-    const status = project.status || 'active';
-    if (folderName && (project.folder || '') !== folderName) return false;
-    if (filter === 'archived') return status === 'archived';
-    if (status === 'archived') return false;
-    if (query && !project.name.toLowerCase().includes(query.toLowerCase())) return false;
-    return true;
-  });
+  const [newestFirst, setNewestFirst] = useState(true);
+  const shown = projects
+    .filter(project => {
+      const status = project.status || 'active';
+      if (folderName && (project.folder || '') !== folderName) return false;
+      if (filter === 'archived') return status === 'archived';
+      if (status === 'archived') return false;
+      if (query && !project.name.toLowerCase().includes(query.toLowerCase())) return false;
+      return true;
+    })
+    .sort((left, right) => {
+      const a = new Date(left.updated_at || 0).getTime();
+      const b = new Date(right.updated_at || 0).getTime();
+      return newestFirst ? b - a : a - b;
+    });
   return (
     <div className="home-page">
       <div className="home-head">
@@ -649,11 +672,19 @@ function ProjectsScreen({
         ))}
       </div>
       {phase === 'loading' ? (
-        <div className="flow-grid" aria-busy="true">
-          {Array.from({ length: 6 }, (_, index) => (
-            <Skeleton key={index} className="flow-card-skeleton" />
-          ))}
-        </div>
+        mode === 'table' ? (
+          <div className="project-table" aria-busy="true">
+            {Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} className="h-12 w-full" />
+            ))}
+          </div>
+        ) : (
+          <div className="flow-grid" aria-busy="true">
+            {Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} className="flow-card-skeleton" />
+            ))}
+          </div>
+        )
       ) : phase === 'error' ? (
         <p className="flow-error">{error || 'Could not load projects.'}</p>
       ) : mode === 'cards' ? (
@@ -670,48 +701,82 @@ function ProjectsScreen({
           </Button>
         </div>
       ) : (
-        <Table className="flow-table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Folder</th>
-              <th>Edited</th>
-              <th>People</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map(project => (
-              <tr key={project.id}>
-                <td>
-                  <Link href={`/flow/p/${project.id}/chat`}>{project.name}</Link>
-                </td>
-                <td>{project.folder || '—'}</td>
-                <td>{project.updated_at || '—'}</td>
-                <td>
-                  <Members projectId={project.id} />
-                </td>
-                <td>
-                  {project.status || 'active'}
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    onClick={() => {
-                      void flowJson(`/api/projects/${project.id}`, {
-                        method: 'PATCH',
-                        body: JSON.stringify({
-                          status: project.status === 'archived' ? 'active' : 'archived',
-                        }),
-                      }).then(() => onCreated());
-                    }}
-                  >
-                    {project.status === 'archived' ? 'Restore' : 'Archive'}
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+        <div className="project-table">
+          {shown.length === 0 ? (
+            <p className="report-empty">No projects in this view.</p>
+          ) : (
+            <Table className="flow-table">
+              <thead>
+                <tr>
+                  <th>Project</th>
+                  <th>Folder</th>
+                  <th>Status</th>
+                  <th>Responses</th>
+                  <th>People</th>
+                  <th className="edited">
+                    <Button
+                      className="table-sort"
+                      type="button"
+                      onClick={() => setNewestFirst(current => !current)}
+                    >
+                      Edited {newestFirst ? '↓' : '↑'}
+                    </Button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {shown.map(project => {
+                  const files = projectFiles(project.id, datasets);
+                  const status = project.status || 'active';
+                  const draft = files.length === 0;
+                  return (
+                    <tr key={project.id}>
+                      <td>
+                        <Link className="project-name" href={`/flow/p/${project.id}/chat`}>
+                          {project.name}
+                        </Link>
+                      </td>
+                      <td>
+                        {project.folder ? (
+                          <span className="folder-name">
+                            <i />
+                            {project.folder}
+                          </span>
+                        ) : (
+                          <span className="flow-muted">—</span>
+                        )}
+                      </td>
+                      <td>
+                        <Badge tone={status === 'archived' || draft ? 'draft' : 'active'}>
+                          {status === 'archived' ? 'Archived' : draft ? 'Draft' : 'Active'}
+                        </Badge>
+                        <Button
+                          className="flow-btn"
+                          type="button"
+                          onClick={() => {
+                            void flowJson(`/api/projects/${project.id}`, {
+                              method: 'PATCH',
+                              body: JSON.stringify({
+                                status: status === 'archived' ? 'active' : 'archived',
+                              }),
+                            }).then(() => onCreated());
+                          }}
+                        >
+                          {status === 'archived' ? 'Restore' : 'Archive'}
+                        </Button>
+                      </td>
+                      <td>{responseLabel(files)}</td>
+                      <td>
+                        <Members projectId={project.id} />
+                      </td>
+                      <td className="edited">{editedWhen(project.updated_at)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          )}
+        </div>
       )}
     </div>
   );
