@@ -51,7 +51,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **4d code frame** (`958-0`, `4d-code-frame`) — **wired**. A coded column opens the theme list in the variable rail. Counts and the uncoded row are the loaded page. See all filters the sheet. Selecting a theme shows Merge and Clear. Use as banner opens Tables. The live Q7 frame is one theme, so Merge stays off. PNG is the reference. Components: shadcn.
 - [x] **4g Themes** (`16OA-0`, `4g-themes`) — **wired**. Themes runs the column as a column-% table with a split-by chip. The base sits under the themes. A cell opens Evidence and stays on Themes. Edit code frame opens the variable rail. The uncoded count is the table's not-coded figure. No agent-read sentence is invented. `screen.tsx` is the Paper export. Components: shadcn.
 - [x] **5 Tables** (`2LA-0`, `5-tables`) — **wired**. Stub and banner chips, the saved-table list, and a column-% table. The base sits at the end. Sig letters and the low-base mark are toggles. Save stores the table. A cell opens Evidence on Responses. The side thread records the run and does not invent a finding. Chart says the chart view is the next screen. `screen.tsx` is the Paper export. Components: shadcn.
-- [x] **6 Report** (`2ZC-0`, `6-report`) — **wired**. White report card, Overview menu, and the three deliverable cards. The title is the project name. The meta line is the saved-table count and fielding coming soon. Key findings stay empty until a report has written findings. Client deck download returned a file. Filter, Segments, and Edit are on the toolbar and do not apply a cut. `screen.tsx` is the Paper export. Components: shadcn.
+- [x] **6 Report** (`2ZC-0`, `6-report`) — **wired**. White report card, Overview menu, and the three deliverable cards. The title is the project name. The meta line is the saved-table count and fielding coming soon. Key findings come from each saved table through synthesize-report, with the table and row citation and a chart of those cells. Regenerate writes them again. Filter applies a row cut, Segments applies a banner-column cut, and Edit changes the finding text. A control with nothing to cut stays off the toolbar. Client deck download returned a file. `screen.tsx` is the Paper export. Components: shadcn.
 
 ## Rest of the app
 
@@ -105,6 +105,7 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 
 ## Bugs found
 
+- Report key findings were empty, and Filter, Segments, and Edit did nothing. Fixed: each saved table is written through synthesize-report, with its table and row citation. Filter and Segments cut the rows or the banner column, and Edit changes the text.
 - The dataset select on Responses logs that it changes from uncontrolled to controlled. It does not block the sheet.
 - The code frame offers numeric columns. Q7 got a "Numeric only, no comment" theme. Only text open-end columns should be codeable. Theme evidence for that frame quotes Q7 and returns no verbatims.
 - A themes banner heading shows the stored code (region 1 and 2) rather than the value label. On likert_openends the region values are already words, so the headings read East, North, West, South.

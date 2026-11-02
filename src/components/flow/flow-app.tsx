@@ -50,9 +50,23 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
   ScrollArea,
   Skeleton,
 } from '@/components/ui/rest';
+import {
+  analysisReportForTable,
+  findingFromTable,
+  reportTableFromBook,
+  segmentChoices,
+  valueRows,
+  type ReportFinding,
+  type ReportTable,
+  type RowCut,
+} from '@/lib/flow-report';
+import { bannerHeading } from '@/lib/flow-survey';
 import { CodeFrameRail } from '@/components/flow/code-frame-rail';
 import { ColumnSpark, valueCounts } from '@/components/flow/column-spark';
 import { AddToProjectButton } from '@/components/flow/move-dataset';
@@ -2291,17 +2305,78 @@ function ReportScreen({
     { id: string; label: string; spec: Record<string, unknown> }[]
   >([]);
   const [picked, setPicked] = useState<string[]>([]);
+  const [tables, setTables] = useState<ReportTable[]>([]);
+  const [findings, setFindings] = useState<ReportFinding[]>([]);
+  const [findingsPhase, setFindingsPhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [findingsError, setFindingsError] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [edits, setEdits] = useState<Record<string, { headline?: string; support?: string }>>({});
+  const [segmentId, setSegmentId] = useState<string | null>(null);
+  const [rowCut, setRowCut] = useState<RowCut[] | null>(null);
+  const [filterDraft, setFilterDraft] = useState<RowCut[]>([]);
   const [template, setTemplate] = useState('');
   const [templateName, setTemplateName] = useState('');
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
 
+  const writeFindings = useCallback(
+    async (nextTables: ReportTable[], nextSegment: string | null, nextCut: RowCut[] | null) => {
+      if (!datasetId || !nextTables.length) {
+        setFindings([]);
+        setFindingsPhase('ready');
+        setFindingsError('');
+        return;
+      }
+      setFindingsPhase('loading');
+      setFindingsError('');
+      setEditing(false);
+      try {
+        const written = await Promise.all(
+          nextTables.map(async table => {
+            const report = analysisReportForTable(table, nextSegment, nextCut);
+            const body = {
+              report,
+              dataset_id: datasetId,
+              user_question: 'What do these saved table rows show?',
+            };
+            let markdown = '';
+            try {
+              const page = await flowJson<{ markdown?: string }>('/assistant/synthesize-report', {
+                method: 'POST',
+                body: JSON.stringify({ ...body, use_llm: true }),
+              });
+              markdown = page.markdown || '';
+            } catch {
+              const page = await flowJson<{ markdown?: string }>('/assistant/synthesize-report', {
+                method: 'POST',
+                body: JSON.stringify({ ...body, use_llm: false }),
+              });
+              markdown = page.markdown || '';
+            }
+            return findingFromTable(table, markdown, nextSegment, nextCut);
+          })
+        );
+        setFindings(written);
+        setEdits({});
+        setFindingsPhase('ready');
+      } catch (err) {
+        setFindings([]);
+        setFindingsError(err instanceof Error ? err.message : 'Could not write the findings.');
+        setFindingsPhase('error');
+      }
+    },
+    [datasetId]
+  );
+
   useEffect(() => {
     if (!datasetId) {
       setSpecs([]);
       setPicked([]);
+      setTables([]);
+      setFindings([]);
       setPhase('ready');
+      setFindingsPhase('ready');
       return;
     }
     let live = true;
@@ -2313,18 +2388,31 @@ function ReportScreen({
       .then(async page => {
         const rows = page.specs || [];
         const loaded = await Promise.all(
-          rows.map(async row => {
+          rows.map(async (row, index) => {
             const id = row.spec_id || row.id || '';
-            const detail = await flowJson<{ spec?: Record<string, unknown> }>(
+            const detail = await flowJson<Record<string, unknown>>(
               `/datasets/${datasetId}/tables/${id}`
             );
-            return { id, label: row.label || row.name || id, spec: detail.spec || {} };
+            const label = row.label || row.name || id;
+            const spec = (detail.spec as Record<string, unknown>) || {};
+            return {
+              id,
+              label,
+              spec,
+              table: reportTableFromBook(id, label, index + 1, detail),
+            };
           })
         );
         if (!live) return;
         const ready = loaded.filter(row => row.id);
-        setSpecs(ready);
+        setSpecs(ready.map(row => ({ id: row.id, label: row.label, spec: row.spec })));
         setPicked(ready.map(row => row.id));
+        const nextTables = ready.map(row => row.table);
+        setTables(nextTables);
+        setSegmentId(null);
+        setRowCut(null);
+        await writeFindings(nextTables, null, null);
+        if (!live) return;
         setPhase('ready');
       })
       .catch(err => {
@@ -2335,7 +2423,7 @@ function ReportScreen({
     return () => {
       live = false;
     };
-  }, [datasetId]);
+  }, [datasetId, writeFindings]);
 
   const selected = specs.filter(row => picked.includes(row.id));
 
@@ -2461,15 +2549,121 @@ function ReportScreen({
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="report-toolbar-actions">
-          <Button className="flow-btn" type="button">
-            Filter
-          </Button>
-          <Button className="flow-btn" type="button">
-            Segments
-          </Button>
-          <Button className="flow-btn" type="button">
-            Edit
-          </Button>
+          {tables.some(table => valueRows(table).length) ? (
+            <Popover
+              onOpenChange={open => {
+                if (!open) return;
+                setFilterDraft(
+                  rowCut ||
+                    tables.flatMap(table =>
+                      valueRows(table).map(item => ({ tableId: table.id, number: item.number }))
+                    )
+                );
+              }}
+            >
+              <PopoverTrigger asChild>
+                <Button className="flow-btn" type="button" data-active={rowCut != null}>
+                  Filter{rowCut ? ` ${rowCut.length}` : ''}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="report-filter" align="end">
+                {tables.flatMap(table =>
+                  valueRows(table).map(item => {
+                    const checked = filterDraft.some(
+                      row => row.tableId === table.id && row.number === item.number
+                    );
+                    const name =
+                      tables.length > 1
+                        ? `T${table.index} ${item.row.label}`
+                        : item.row.label || `Row ${item.number}`;
+                    return (
+                      <label key={`${table.id}-${item.number}`}>
+                        <Checkbox
+                          checked={checked}
+                          onCheckedChange={value => {
+                            const next = { tableId: table.id, number: item.number };
+                            setFilterDraft(current => {
+                              const without = current.filter(
+                                row => !(row.tableId === next.tableId && row.number === next.number)
+                              );
+                              return value === true ? [...without, next] : without;
+                            });
+                          }}
+                        />
+                        {item.number}. {name}
+                      </label>
+                    );
+                  })
+                )}
+                <div className="report-filter-actions">
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => {
+                      setRowCut(null);
+                      void writeFindings(tables, segmentId, null);
+                    }}
+                  >
+                    All rows
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={!filterDraft.length}
+                    onClick={() => {
+                      setRowCut(filterDraft);
+                      void writeFindings(tables, segmentId, filterDraft);
+                    }}
+                  >
+                    Apply
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : null}
+          {segmentChoices(tables).length ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="flow-btn" type="button" data-active={segmentId != null}>
+                  Segments
+                  {segmentId
+                    ? ` · ${bannerHeading(segmentChoices(tables).find(column => column.id === segmentId) || { id: segmentId })}`
+                    : ''}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setSegmentId(null);
+                    void writeFindings(tables, null, rowCut);
+                  }}
+                >
+                  All segments
+                </DropdownMenuItem>
+                {segmentChoices(tables).map(column => (
+                  <DropdownMenuItem
+                    key={column.id}
+                    onSelect={() => {
+                      setSegmentId(column.id);
+                      void writeFindings(tables, column.id, rowCut);
+                    }}
+                  >
+                    {bannerHeading(column)}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+          {findings.length ? (
+            <Button
+              className="flow-btn"
+              type="button"
+              data-active={editing}
+              onClick={() => setEditing(current => !current)}
+            >
+              Edit
+            </Button>
+          ) : null}
         </div>
       </div>
       <div className="report-sheet">
@@ -2568,8 +2762,93 @@ function ReportScreen({
           </label>
         </div>
         <div className="report-findings">
-          <h2>Key findings</h2>
-          <p className="report-empty">This report has no written findings yet.</p>
+          <div className="report-head">
+            <h2>Key findings</h2>
+            {tables.length ? (
+              <Button
+                className="flow-btn"
+                type="button"
+                disabled={findingsPhase === 'loading'}
+                onClick={() => void writeFindings(tables, segmentId, rowCut)}
+              >
+                Regenerate
+              </Button>
+            ) : null}
+          </div>
+          {findingsPhase === 'loading' ? (
+            <>
+              <Skeleton className="h-36 w-full" />
+              <Skeleton className="h-36 w-full" />
+            </>
+          ) : findingsPhase === 'error' ? (
+            <p className="flow-error">{findingsError || 'Could not write the findings.'}</p>
+          ) : findings.length === 0 ? (
+            <p className="report-empty">Save a table to generate findings.</p>
+          ) : (
+            findings.map(finding => {
+              const edit = edits[finding.id] || {};
+              const headline = edit.headline ?? finding.headline;
+              const support = edit.support ?? finding.support;
+              return (
+                <article key={finding.id} className="report-finding">
+                  <div className="report-finding-copy">
+                    <p className="flow-muted">{finding.eyebrow}</p>
+                    {editing ? (
+                      <Textarea
+                        aria-label={`${finding.eyebrow} headline`}
+                        value={headline}
+                        onChange={event =>
+                          setEdits(current => ({
+                            ...current,
+                            [finding.id]: { ...current[finding.id], headline: event.target.value },
+                          }))
+                        }
+                      />
+                    ) : (
+                      <h3>{headline}</h3>
+                    )}
+                    {editing ? (
+                      <Textarea
+                        aria-label={`${finding.eyebrow} detail`}
+                        value={support}
+                        onChange={event =>
+                          setEdits(current => ({
+                            ...current,
+                            [finding.id]: { ...current[finding.id], support: event.target.value },
+                          }))
+                        }
+                      />
+                    ) : support ? (
+                      <p>{support}</p>
+                    ) : null}
+                    <div className="report-chips">
+                      <span className="report-chip accent">{finding.citation}</span>
+                      {finding.significant ? <span className="report-chip">Sig 95%</span> : null}
+                      {finding.lowBase ? <span className="report-chip warn">Low base</span> : null}
+                    </div>
+                  </div>
+                  {finding.bars.length ? (
+                    <div className="report-bars">
+                      {finding.bars.map(bar => (
+                        <div key={`${finding.id}-${bar.label}`}>
+                          <div className="report-bar-label">
+                            <span>{bar.label}</span>
+                            <span>{bar.percent.toFixed(1)}%</span>
+                          </div>
+                          <div className="report-bar-track">
+                            <div
+                              className="report-bar"
+                              style={{ width: `${Math.max(0, Math.min(100, bar.percent))}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })
+          )}
         </div>
       </div>
     </section>
