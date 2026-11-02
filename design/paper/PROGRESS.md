@@ -18,10 +18,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 18
-- wired: 18
+- matched: 19
+- wired: 19
 - built: 0
-- todo: 23
+- todo: 22
 - checks done: 6 passed, 1 owner QA
 
 ## Decisions
@@ -64,7 +64,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **3 Sources** (`288-0`, `3-sources`) — **wired**. Sources title, connected files, and the dataset list are the project's files and row counts. The open file is In use. Open on another file sets it active and goes to Responses. Fielding, Prolific, Qualtrics, and Decipher / Alchemer are coming soon, with no completes or quotas. Upload file was checked with sources-check.csv: the file is in Connected and Datasets, 3 rows, and the page stays on Sources. More connectors opens Plugins. Two or more files can be stacked, and a stacked file's Review mapping opens that same fuse. Context lists the saved documents, and Add saves a brief, questionnaire, or report for the agent. `screen.tsx` records the layout; the sample Prolific completes, quota bars, Qualtrics sync, and named waves stay in Paper. Components: shadcn.
 - [x] **3b Stack waves** (`93J-0`, `3b-stack-waves`) — **wired**. Stack files compares two files in the project. A shared name is matched. A name on only one side, or a shared name whose value labels differ, is flagged. Add, Skip, and Treat as same are the fuse decisions. Show all lists the matched names. Stack waves creates a new dataset and leaves the originals. On sources-check.csv and likert_openends.csv, id, region, and \_row_uid matched, score was only in the csv, and the fuse added a 403-row file to the project. `screen.tsx` records the layout; the sample Q20 rename, Octavia Green code, and 182 matched stay in Paper. Components: shadcn.
 - [x] **3c Interviews** (`17DV-0`, `3c-interviews`) — **wired**. The rail is the project's transcripts. Search filters the filename. Add transcripts uploads a .txt, .vtt, or .docx. Audio is coming soon. Opening one shows the stored passages, speaker, and text. Recode saves a code on the selected passage. Codes shown hides those chips. A speaker filter appears when the transcript has more than one speaker. Evidence shows that passage and says interviews are a count, not a survey percent. Cite in report opens Report. There is no stored duration, survey link, or agent summary, so those sample figures stay out. Checked with interview-check.txt: one passage, then the code Bill. `screen.tsx` records the layout; the sample speakers, 24%, and the agent summary stay in Paper. Components: shadcn.
-- [ ] **4b Notebook** (`5ER-0`, `4b-notebook`) — **todo**. PNG only. Components: shadcn.
+- [x] **4b Notebook** (`5ER-0`, `4b-notebook`) — **wired**. Sheet, Notebook, and Themes stay the Responses switch. The notebook is code and text cells on the open file. Run and Run all post each code cell to the existing Python executor. Cells do not share variables, and a sheet filter is not applied. + Code and + Text add a cell. Export .py and Export .ipynb download the cells that were typed. The variable rail and saved analyses stay beside it. There is no stored Python version and no ordinal result, so those sample figures stay out. `df.head()` on the stacked file returned "Code execution timed out after 18s". `screen.tsx` records the layout; the sample crosstab, ordinal coefficients, and T15 stay in Paper. Components: shadcn.
 - [ ] **4e Weighting modal** (`97E-0`, `4e-weighting`) — **todo**. PNG only. Components: shadcn.
 - [ ] **4f Run ANOVA modal** (`CJO-0`, `4f-anova`) — **todo**. PNG only. Components: shadcn.
 - [ ] **5b Tables chart** (`1E0U-0`, `5b-tables-chart`) — **todo**. PNG only. Components: shadcn.
@@ -118,6 +118,7 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 - A themes banner heading shows the stored code (region 1 and 2) rather than the value label. On likert_openends the region values are already words, so the headings read East, North, West, South.
 - The "No substantive comment" theme shows a count of 37 beside a total of 1.7%. The other ten theme counts match their column percents of the 348 base.
 - agree_value by region saved Top 2 and Bottom 2 rows at 0% while those toggles were off. The table request did not ask for them.
+- Notebook `df.head()` on the stacked file returned "Code execution timed out after 18s". The cell showed that error. The executor limit was not changed.
 
 ## Unfinished
 

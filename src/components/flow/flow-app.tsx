@@ -21,6 +21,7 @@ import { FlowComposer, readChatAttachments } from '@/components/flow/chat-compos
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { SourcesScreen } from '@/components/flow/sources-screen';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
+import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -2746,7 +2747,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
             ) : null}
           </div>
         ) : null}
-        {tab === 'notebook' ? <Notebook datasetId={datasetId} /> : null}
+        {tab === 'notebook' ? <FlowNotebook datasetId={datasetId} /> : null}
         {tab === 'themes' ? (
           <ThemesPanel
             datasetId={datasetId}
@@ -2970,60 +2971,6 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
           }}
         />
       ) : null}
-    </div>
-  );
-}
-
-function notebookText(result: {
-  stdout?: string | null;
-  output?: unknown;
-  error?: string | null;
-}): string {
-  if (typeof result.error === 'string' && result.error) return result.error;
-  if (typeof result.stdout === 'string' && result.stdout) return result.stdout;
-  if (typeof result.output === 'string') return result.output;
-  if (result.output == null) return '';
-  try {
-    return JSON.stringify(result.output, null, 2);
-  } catch {
-    return 'The notebook returned a value that could not be shown.';
-  }
-}
-
-function Notebook({ datasetId }: { datasetId?: string }) {
-  const [code, setCode] = useState('df.head()');
-  const [output, setOutput] = useState('');
-  return (
-    <div className="flow-panel">
-      <h2>Notebook</h2>
-      <p className="flow-muted">
-        Read-only on the open dataset. Publishing a table is the only write-back.
-      </p>
-      <Textarea
-        className="flow-text"
-        value={code}
-        onChange={event => setCode(event.target.value)}
-      />
-      <Button
-        className="flow-btn"
-        type="button"
-        onClick={() => {
-          void flowJson<{ stdout?: string | null; output?: unknown; error?: string | null }>(
-            '/api/execute/python',
-            {
-              method: 'POST',
-              body: JSON.stringify({ code, dataset_id: datasetId, save_as_dataset: false }),
-            }
-          )
-            .then(result => setOutput(notebookText(result)))
-            .catch(err =>
-              setOutput(err instanceof Error ? err.message : 'The notebook could not run')
-            );
-        }}
-      >
-        Run
-      </Button>
-      <pre>{output}</pre>
     </div>
   );
 }
