@@ -79,3 +79,24 @@ describe('question kind', () => {
     expect(questionKind({ name: 'weight', type: 'numeric' }, [0.8, 1.2, 1.1])).toBe('numeric');
   });
 });
+
+describe('id columns', () => {
+  it('skips respondent ids by name or by every value being distinct', () => {
+    const { isIdColumn } = jest.requireActual('./flow-columns');
+    expect(isIdColumn('Respondent id')).toBe(true);
+    expect(isIdColumn('resp_id')).toBe(true);
+    expect(isIdColumn('ID')).toBe(true);
+    expect(isIdColumn('_row_uid')).toBe(true);
+    expect(isIdColumn('serial_no')).toBe(true);
+    expect(isIdColumn('region')).toBe(false);
+    expect(isIdColumn('paid')).toBe(false);
+    const distinct = Array.from({ length: 30 }, (_, index) => index + 1);
+    expect(isIdColumn('code', distinct)).toBe(true);
+    expect(
+      isIdColumn(
+        'likes',
+        distinct.map(value => value % 5)
+      )
+    ).toBe(false);
+  });
+});

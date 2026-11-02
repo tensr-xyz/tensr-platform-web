@@ -6,7 +6,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
-import { dependentColumns, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
+import {
+  dependentColumns,
+  isIdColumn,
+  isInternalColumn,
+  type FlowColumn,
+} from '@/lib/flow-columns';
 import {
   downloadsFromToolResults,
   openSignedDownload,
@@ -40,7 +45,8 @@ import { AnovaModal } from '@/components/flow/anova-modal';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
-import { placePins, readPins, runDocument } from '@/components/flow/run-document';
+import { placePins, runDocument } from '@/components/flow/run-document';
+import { loadProjectPins, useProjectPins } from '@/components/flow/report-pins';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -210,15 +216,9 @@ function editedAgo(value?: string | null): string {
   return `Edited ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
 }
 
-function isIdColumn(name: string): boolean {
-  const lowered = name.trim().toLowerCase();
-  return (
-    isInternalColumn(name) ||
-    ['id', 'respid', 'respondentid', 'respondent_id', 'resp_id', 'uuid', 'record'].includes(
-      lowered
-    ) ||
-    lowered.endsWith('_id')
-  );
+function isNumberValue(value: unknown): boolean {
+  if (typeof value === 'number') return Number.isFinite(value);
+  return typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value.trim());
 }
 
 function isNumericColumn(column?: FlowColumn): boolean {
@@ -290,6 +290,16 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [workspacePhase, setWorkspacePhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  const routeProjectId = slug[0] === 'p' ? slug[1] || '' : '';
+  const exportPins = useProjectPins(
+    routeProjectId,
+    exportOpen
+      ? datasets
+          .filter(row => row.project_id === routeProjectId)
+          .map(row => datasetRowId(row))
+          .filter(Boolean)
+      : []
+  );
 
   useEffect(() => {
     if (!isAuthReady) return;
@@ -677,17 +687,15 @@ export function FlowApp({ slug }: { slug: string[] }) {
               title: project?.name || 'Report',
               op: 'report',
               report: {
-                summary: readPins(projectId)
-                  .map(pin => pin.headline)
-                  .join(' '),
-                tables: readPins(projectId).map(pin => ({
+                summary: exportPins.map(pin => pin.headline).join(' '),
+                tables: exportPins.map(pin => ({
                   title: pin.citation || 'Finding',
                   columns: ['Finding', 'Detail'],
                   rows: [[pin.headline, pin.support]],
                 })),
               },
             })}
-            runIds={readPins(projectId).map(pin => pin.runId)}
+            runIds={exportPins.map(pin => pin.runId)}
             onClose={() => setExportOpen(false)}
           />
         ) : null}
@@ -3032,9 +3040,25 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const shownCols = headerHits.length ? headerHits : visibleNames;
   const firstSubstantive = Math.max(
     0,
-    shownCols.findIndex(column => !isIdColumn(column.name))
+    shownCols.findIndex(
+      column =>
+        !isIdColumn(
+          column.name,
+          preview.map(row => row[column.index])
+        ) && !isIdColumn(columnMeta(column.name)?.name || '', [])
+    )
   );
   const pickedCol = colPicked ? selectedCol : firstSubstantive;
+  const numericColumns = new Set(
+    shownCols
+      .filter(column => {
+        const values = preview
+          .map(row => row[column.index])
+          .filter(value => value != null && value !== '' && value !== 'null');
+        return values.length > 0 && values.every(isNumberValue);
+      })
+      .map(column => column.index)
+  );
   const columnMeta = (name: string) =>
     columns.find(column => column.name === name || column.label === name);
   const activeIndex = shownCols[pickedCol]?.index ?? shownCols[0]?.index ?? 0;
@@ -3374,7 +3398,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                         {shownCols.map((column, position) => (
                           <th
                             key={`${column.name}-${column.index}`}
-                            data-numeric={isNumericColumn(columnMeta(column.name)) || undefined}
+                            data-numeric={numericColumns.has(column.index) || undefined}
                           >
                             <Button
                               type="button"
@@ -3435,7 +3459,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                               <td
                                 key={column.index}
                                 className="sheet-cell"
-                                data-numeric={isNumericColumn(columnMeta(column.name)) || undefined}
+                                data-numeric={isNumberValue(row[column.index]) || undefined}
                                 data-active={columnMarked(column.name, column.index)}
                               >
                                 {row[column.index] == null || row[column.index] === 'null'
@@ -3683,6 +3707,7 @@ function ReportScreen({
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
   const [pane, setPane] = useState<'report' | 'outputs'>('report');
+  const reportPins = useProjectPins(projectId, []);
 
   const templateInput = useRef<HTMLInputElement>(null);
 
@@ -3741,6 +3766,14 @@ function ReportScreen({
         const ready = loaded.filter(row => row.id);
         setSpecs(ready.map(row => ({ id: row.id, label: row.label, spec: row.spec })));
         setPicked(ready.map(row => row.id));
+        await loadProjectPins(
+          projectId,
+          datasets
+            .filter(row => row.project_id === projectId)
+            .map(row => datasetRowId(row))
+            .filter(Boolean)
+        ).catch(() => []);
+        if (!live) return;
         const nextTables = distinctTables(ready.map(row => row.table));
         setTables(nextTables);
         setSegmentId(null);
@@ -4149,11 +4182,11 @@ function ReportScreen({
             </>
           ) : findingsPhase === 'error' ? (
             <p className="flow-error">{findingsError || 'Could not write the findings.'}</p>
-          ) : findings.length === 0 && readPins(projectId).length === 0 ? (
+          ) : findings.length === 0 && reportPins.length === 0 ? (
             <p className="report-empty">Save a table to generate findings.</p>
           ) : (
             <>
-              {placePins(findings, readPins(projectId)).map(entry => {
+              {placePins(findings, reportPins).map(entry => {
                 if (entry.kind === 'pin') {
                   const pin = entry.item;
                   return (

@@ -7,7 +7,12 @@ import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
 import { OutputPage } from '@/components/flow/output-page';
-import { readPins } from '@/components/flow/run-document';
+import {
+  pinsFromRuns,
+  setProjectPins,
+  useProjectPins,
+  type RunSummary,
+} from '@/components/flow/report-pins';
 import { downloadExport } from '@/components/flow/survey-screens';
 import {
   documentApa,
@@ -93,27 +98,21 @@ export function ReportOutputs({
     let live = true;
     setPhase('loading');
     setError('');
+    const rawRuns: RunSummary[] = [];
     void Promise.all(
       filesRef.map(async file => {
         const page = await flowJson<{ runs?: unknown[] }>(`/datasets/${file.id}/runs`);
+        rawRuns.push(...((page.runs || []) as RunSummary[]));
         return outputRuns(page.runs || []).map(run => ({ ...run, file: file.name }));
       })
     )
       .then(async pages => {
         if (!live) return;
+        setProjectPins(projectId, pinsFromRuns(rawRuns));
         const sorted = pages
           .flat()
           .sort((left, right) => right.created_at.localeCompare(left.created_at));
-        const next = await Promise.all(
-          sorted.map(async (run, index) => {
-            if (run.base != null || index >= 40) return run;
-            const full = await flowJson<Record<string, unknown>>(
-              `/datasets/analysis-runs/${run.id}`
-            ).catch(() => null);
-            return full ? { ...run, base: baseCount(full) } : run;
-          })
-        );
-        if (!live) return;
+        const next = sorted;
         setRuns(next);
         setSelectedId(current =>
           next.some(run => run.id === current) ? current : next[0]?.id || ''
@@ -129,7 +128,7 @@ export function ReportOutputs({
     return () => {
       live = false;
     };
-  }, [fileKey, filesRef]);
+  }, [fileKey, filesRef, projectId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -157,12 +156,8 @@ export function ReportOutputs({
     };
   }, [selectedId]);
 
-  const pinnedRuns = useMemo(
-    () => new Set(readPins(projectId).map(pin => pin.runId)),
-    // Pins are read again whenever the run list changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [projectId, runs]
-  );
+  const pins = useProjectPins(projectId, []);
+  const pinnedRuns = useMemo(() => new Set(pins.map(pin => pin.runId)), [pins]);
   const stateOf = (run: OutputRun) => runState(run.status, pinnedRuns.has(run.id));
   const counts = useMemo(() => {
     const order = ['Saved', 'In report', 'Draft'] as const;
@@ -368,7 +363,16 @@ export function ReportOutputs({
                     <span className="outputs-kind">{kindLabel(run.op)}</span>
                     <span className="outputs-title">
                       <strong>{run.title}</strong>
-                      <span>{[run.file, run.weighting].filter(Boolean).join(' · ')}</span>
+                      <span>
+                        {[
+                          run.file,
+                          run.weightedBase != null
+                            ? `Weighted base ${run.weightedBase.toLocaleString('en-GB')}`
+                            : run.weighting,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
                     </span>
                     <span className="outputs-base">
                       {run.base != null ? run.base.toLocaleString('en-GB') : '—'}

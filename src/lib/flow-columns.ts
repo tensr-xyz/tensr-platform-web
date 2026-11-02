@@ -106,3 +106,25 @@ export function questionKind(
   if (seen.length && unique <= 12 && unique < seen.length / 2) return 'single';
   return 'open';
 }
+
+/** A respondent or record id: by name, or because every loaded value is different. */
+export function isIdColumn(name: string, values: unknown[] = []): boolean {
+  if (!name.trim()) return false;
+  if (isInternalColumn(name)) return true;
+  const key = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+  if (
+    /^(resp|respondent|record|case|response|participant|panel|user|row|serial|unique)?(id|uuid|no|number|serial)$/.test(
+      key
+    ) ||
+    /(^|[_\s-])id$/i.test(name.trim())
+  ) {
+    return true;
+  }
+  const seen = values
+    .map(value => (value == null ? '' : String(value).trim()))
+    .filter(value => value !== '' && value !== 'null');
+  return seen.length >= 20 && new Set(seen).size === seen.length;
+}

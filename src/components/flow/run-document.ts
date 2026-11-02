@@ -186,6 +186,7 @@ export function documentApa(document: RunDocument): string {
 export type ReportPin = {
   id: string;
   runId: string;
+  datasetId?: string;
   headline: string;
   support: string;
   citation: string;

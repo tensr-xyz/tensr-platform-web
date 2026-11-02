@@ -53,3 +53,26 @@ describe('output titles and states', () => {
     expect(runState('failed', false)).toBe('Draft');
   });
 });
+
+describe('run record fields', () => {
+  it('reads base and In report from the run record, not the title', () => {
+    const { outputRuns } = jest.requireActual('./report-output-runs');
+    const [run] = outputRuns([
+      {
+        id: 'r1',
+        op: 'banner_table',
+        title: 'aware_A × region — Unweighted, n = 999',
+        base_n: 30,
+        weighted_base: 28.4,
+        in_report: true,
+        dataset_id: 'd1',
+      },
+    ]);
+    expect(run.base).toBe(30);
+    expect(run.weightedBase).toBe(28.4);
+    expect(run.inReport).toBe(true);
+    expect(run.title).toBe('aware_A × region');
+    const [bare] = outputRuns([{ id: 'r2', op: 'descriptives', title: 'x — n = 12' }]);
+    expect(bare.base).toBeNull();
+  });
+});
