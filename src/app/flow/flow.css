@@ -607,7 +607,7 @@
   gap: 16px;
 }
 
-.report-cards article {
+.report-cards > div {
   border: 1px solid var(--color-line);
   border-radius: 16px;
   padding: 16px;

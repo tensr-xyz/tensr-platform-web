@@ -21,6 +21,30 @@ import {
 import { getAllAnalysisItems, type AnalysisItem } from '@/configs/analysis-config/utils';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { ChoiceSelect } from '@/components/ui/select';
+import { Segmented } from '@/components/ui/segmented';
+import { Table } from '@/components/ui/table';
+import { Textarea } from '@/components/ui/textarea';
 import {
   CodeFramePanel,
   datasetRowId,
@@ -215,7 +239,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
               </div>
             </div>
             <nav className="flow-nav">
-              <button
+              <Button
                 className="flow-new"
                 type="button"
                 onClick={() => {
@@ -233,13 +257,13 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   <NavIcon kind="plus" /> New project
                 </span>
                 <span className="flow-k">⌘N</span>
-              </button>
-              <button type="button" onClick={() => setPalette(true)}>
+              </Button>
+              <Button type="button" onClick={() => setPalette(true)}>
                 <span className="nav-label">
                   <NavIcon kind="search" /> Search
                 </span>
                 <span className="flow-k">⌘K</span>
-              </button>
+              </Button>
               <Link href="/flow" data-active={section === 'projects'}>
                 <span className="nav-label">
                   <NavIcon kind="home" /> Home
@@ -263,7 +287,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 <FolderCreate onCreated={reload} />
               </div>
               {folders.map((folder, index) => (
-                <button
+                <Button
                   key={folder.id}
                   type="button"
                   data-active={folderName === folder.name}
@@ -274,7 +298,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 >
                   <i data-tone={index === 0 ? 'accent' : 'mute'} />
                   {folder.name}
-                </button>
+                </Button>
               ))}
             </div>
             <div className="flow-user">
@@ -287,7 +311,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                     : orgName || 'Workspace'}
                 </span>
               </div>
-              <button
+              <Button
                 className="flow-btn"
                 type="button"
                 aria-label="Classic workspace"
@@ -297,7 +321,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 }}
               >
                 ···
-              </button>
+              </Button>
             </div>
           </aside>
         )}
@@ -315,14 +339,14 @@ export function FlowApp({ slug }: { slug: string[] }) {
                     <strong>{project?.name || 'Project'}</strong>
                   </div>
                 </div>
-                <button className="proj-search" type="button" onClick={() => setPalette(true)}>
+                <Button className="proj-search" type="button" onClick={() => setPalette(true)}>
                   Search analyses <span className="flow-k">⌘K</span>
-                </button>
+                </Button>
                 <div className="proj-actions">
-                  <span className="proj-chip">Fielding coming soon</span>
-                  <button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
+                  <Badge tone="soon">Fielding coming soon</Badge>
+                  <Button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
                     Share
-                  </button>
+                  </Button>
                   <Link className="flow-btn primary" href={`/flow/p/${projectId}/report`}>
                     Export
                   </Link>
@@ -418,7 +442,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
 
 function FolderCreate({ onCreated }: { onCreated: () => Promise<void> }) {
   return (
-    <button
+    <Button
       type="button"
       aria-label="New folder"
       onClick={() => {
@@ -429,7 +453,7 @@ function FolderCreate({ onCreated }: { onCreated: () => Promise<void> }) {
       }}
     >
       +
-    </button>
+    </Button>
   );
 }
 
@@ -437,7 +461,13 @@ function NavIcon({ kind }: { kind: 'plus' | 'search' | 'home' | 'data' | 'plugin
   if (kind === 'plus') {
     return (
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-        <path d="M8 3.5v9M3.5 8h9" fill="none" stroke="#1B1C1A" strokeWidth="1.5" strokeLinecap="round" />
+        <path
+          d="M8 3.5v9M3.5 8h9"
+          fill="none"
+          stroke="#1B1C1A"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
       </svg>
     );
   }
@@ -445,14 +475,29 @@ function NavIcon({ kind }: { kind: 'plus' | 'search' | 'home' | 'data' | 'plugin
     return (
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
         <circle cx="7" cy="7" r="4.5" fill="none" stroke="#6A6B66" strokeWidth="1.4" />
-        <path d="M10.5 10.5L13.5 13.5" fill="none" stroke="#6A6B66" strokeWidth="1.4" strokeLinecap="round" />
+        <path
+          d="M10.5 10.5L13.5 13.5"
+          fill="none"
+          stroke="#6A6B66"
+          strokeWidth="1.4"
+          strokeLinecap="round"
+        />
       </svg>
     );
   }
   if (kind === 'home') {
     return (
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-        <rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="#6A6B66" strokeWidth="1.4" />
+        <rect
+          x="2.5"
+          y="2.5"
+          width="11"
+          height="11"
+          rx="2"
+          fill="none"
+          stroke="#6A6B66"
+          strokeWidth="1.4"
+        />
         <path d="M2.5 6.5h11M6.5 6.5v7" fill="none" stroke="#6A6B66" strokeWidth="1.4" />
       </svg>
     );
@@ -461,13 +506,23 @@ function NavIcon({ kind }: { kind: 'plus' | 'search' | 'home' | 'data' | 'plugin
     return (
       <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
         <ellipse cx="8" cy="4" rx="5" ry="1.8" fill="none" stroke="#6A6B66" strokeWidth="1.2" />
-        <path d="M3 4v8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8V4M3 8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8" fill="none" stroke="#6A6B66" strokeWidth="1.2" />
+        <path
+          d="M3 4v8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8V4M3 8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8"
+          fill="none"
+          stroke="#6A6B66"
+          strokeWidth="1.2"
+        />
       </svg>
     );
   }
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-      <path d="M6 2.5h4v2a1.3 1.3 0 102.6 0h.9v4h-2a1.3 1.3 0 100 2.6h2v2.4H2.5V10.5h2a1.3 1.3 0 100-2.6h-2V4.5H6z" fill="none" stroke="#6A6B66" strokeWidth="1.2" />
+      <path
+        d="M6 2.5h4v2a1.3 1.3 0 102.6 0h.9v4h-2a1.3 1.3 0 100 2.6h2v2.4H2.5V10.5h2a1.3 1.3 0 100-2.6h-2V4.5H6z"
+        fill="none"
+        stroke="#6A6B66"
+        strokeWidth="1.2"
+      />
     </svg>
   );
 }
@@ -511,42 +566,41 @@ function ProjectsScreen({
         </div>
         <div className="home-head-actions">
           <label className="home-search">
-            <input
+            <Input
               value={query}
               placeholder="Search projects"
               onChange={event => setQuery(event.target.value)}
             />
           </label>
-          <button className="home-new" type="button" onClick={onCreate}>
+          <Button className="home-new" type="button" onClick={onCreate}>
             + New project
-          </button>
+          </Button>
         </div>
       </div>
       <div className="home-filters">
-        <div className="home-segment">
-          <button type="button" data-active={mode === 'cards'} onClick={() => setMode('cards')}>
-            Cards
-          </button>
-          <button type="button" data-active={mode === 'table'} onClick={() => setMode('table')}>
-            Table
-          </button>
-        </div>
-        <select
+        <Segmented
+          className="home-segment"
+          aria-label="Project layout"
+          value={mode}
+          onValueChange={setMode}
+          options={[
+            { value: 'cards', label: 'Cards' },
+            { value: 'table', label: 'Table' },
+          ]}
+        />
+        <ChoiceSelect
           className="home-folder"
           aria-label="Folder"
           value={folderName || ''}
-          onChange={event => onFolder(event.target.value || null)}
-        >
-          <option value="">All folders</option>
-          {folders.map(folder => (
-            <option key={folder.id} value={folder.name}>
-              {folder.name}
-            </option>
-          ))}
-        </select>
+          onValueChange={value => onFolder(value || null)}
+          options={[
+            { value: '', label: 'All folders' },
+            ...folders.map(folder => ({ value: folder.name, label: folder.name })),
+          ]}
+        />
         <span className="home-filters-gap" />
         {(['active', 'mine', 'archived'] as const).map(item => (
-          <button
+          <Button
             key={item}
             className="home-filter"
             type="button"
@@ -554,7 +608,7 @@ function ProjectsScreen({
             onClick={() => setFilter(item)}
           >
             {item[0].toUpperCase() + item.slice(1)}
-          </button>
+          </Button>
         ))}
       </div>
       {mode === 'cards' ? (
@@ -562,14 +616,16 @@ function ProjectsScreen({
           {shown.map(project => (
             <ProjectCard key={project.id} project={project} datasets={datasets} />
           ))}
-          <button className="flow-card flow-card-new" type="button" onClick={onCreate}>
+          <Button className="flow-card flow-card-new" type="button" onClick={onCreate}>
             <span className="home-plus">+</span>
             <strong>New project</strong>
-            <span className="flow-muted">Recruit on Prolific, sync Qualtrics or drop in a .sav</span>
-          </button>
+            <span className="flow-muted">
+              Recruit on Prolific, sync Qualtrics or drop in a .sav
+            </span>
+          </Button>
         </div>
       ) : (
-        <table className="flow-table">
+        <Table className="flow-table">
           <thead>
             <tr>
               <th>Name</th>
@@ -592,7 +648,7 @@ function ProjectsScreen({
                 </td>
                 <td>
                   {project.status || 'active'}
-                  <button
+                  <Button
                     className="flow-btn"
                     type="button"
                     onClick={() => {
@@ -605,12 +661,12 @@ function ProjectsScreen({
                     }}
                   >
                     {project.status === 'archived' ? 'Restore' : 'Archive'}
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       )}
     </div>
   );
@@ -621,31 +677,33 @@ function ProjectCard({ project, datasets }: { project: FlowProject; datasets: Da
   const status = project.status || 'active';
   const draft = count === 0;
   return (
-    <Link href={`/flow/p/${project.id}/chat`} className="flow-card">
-      <div className="card-top">
-        <span className="card-folder">
-          <i />
-          {project.folder || 'No folder'}
-        </span>
-        <span className={draft ? 'flow-pill' : 'flow-pill live'}>
-          {status === 'archived' ? 'Archived' : draft ? 'Draft' : 'Active'}
-        </span>
-      </div>
-      <div>
-        <h2>{project.name}</h2>
-        <div className="flow-muted">
-          {count} dataset{count === 1 ? '' : 's'}
+    <Card asChild>
+      <Link href={`/flow/p/${project.id}/chat`} className="flow-card">
+        <div className="card-top">
+          <span className="card-folder">
+            <i />
+            {project.folder || 'No folder'}
+          </span>
+          <Badge tone={status === 'archived' || draft ? 'draft' : 'active'}>
+            {status === 'archived' ? 'Archived' : draft ? 'Draft' : 'Active'}
+          </Badge>
         </div>
-      </div>
-      <div className="card-chips">
-        <span>{count === 0 ? 'Not fielded' : `${count} file${count === 1 ? '' : 's'}`}</span>
-        <span className="flow-soon">Fielding coming soon</span>
-      </div>
-      <div className="card-foot">
-        <Members projectId={project.id} />
-        <span className="flow-muted">{editedAgo(project.updated_at)}</span>
-      </div>
-    </Link>
+        <div>
+          <h2>{project.name}</h2>
+          <div className="flow-muted">
+            {count} dataset{count === 1 ? '' : 's'}
+          </div>
+        </div>
+        <div className="card-chips">
+          <Badge>{count === 0 ? 'Not fielded' : `${count} file${count === 1 ? '' : 's'}`}</Badge>
+          <Badge tone="soon">Fielding coming soon</Badge>
+        </div>
+        <div className="card-foot">
+          <Members projectId={project.id} />
+          <span className="flow-muted">{editedAgo(project.updated_at)}</span>
+        </div>
+      </Link>
+    </Card>
   );
 }
 
@@ -666,15 +724,22 @@ function ShareModal({ projectId, onClose }: { projectId: string; onClose: () => 
   const link =
     typeof window === 'undefined' ? '' : `${window.location.origin}/flow/p/${projectId}/chat`;
   return (
-    <div className="flow-modal">
-      <div>
-        <h2>Share</h2>
-        <p className="flow-muted">
-          Anyone in this workspace with the project can open it. Public links are coming soon.
-        </p>
-        <input className="flow-input" readOnly value={link} aria-label="Project link" />
+    <Dialog
+      open
+      onOpenChange={open => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Share</DialogTitle>
+          <DialogDescription>
+            Anyone in this workspace with the project can open it. Public links are coming soon.
+          </DialogDescription>
+        </DialogHeader>
+        <Input readOnly value={link} aria-label="Project link" />
         <div className="flow-row">
-          <button
+          <Button
             className="flow-btn primary"
             type="button"
             onClick={() => {
@@ -682,14 +747,14 @@ function ShareModal({ projectId, onClose }: { projectId: string; onClose: () => 
             }}
           >
             Copy link
-          </button>
-          <button className="flow-btn" type="button" onClick={onClose}>
+          </Button>
+          <Button className="flow-btn" type="button" onClick={onClose}>
             Close
-          </button>
+          </Button>
         </div>
         {note ? <p>{note}</p> : null}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -709,7 +774,11 @@ function Members({ projectId }: { projectId: string }) {
   return (
     <span className="avatars">
       {ids.slice(0, 3).map(id => (
-        <span key={id}>{memberMark(id)}</span>
+        <Avatar key={id} className="size-6">
+          <AvatarFallback className="bg-accent text-[10px] font-medium text-accent-foreground">
+            {memberMark(id)}
+          </AvatarFallback>
+        </Avatar>
       ))}
     </span>
   );
@@ -729,7 +798,7 @@ function PluginsScreen() {
   const shown = rows.filter(row => (row.name || '').toLowerCase().includes(query.toLowerCase()));
   return (
     <div>
-      <input
+      <Input
         className="flow-input"
         style={{ maxWidth: 280, marginBottom: 16 }}
         value={query}
@@ -738,11 +807,11 @@ function PluginsScreen() {
       />
       <div className="flow-grid">
         {shown.map(row => (
-          <article key={row.id || row.name} className="flow-card">
+          <Card key={row.id || row.name} className="flow-card">
             <h2>{row.name}</h2>
             <p className="flow-muted">{row.summary || 'Installed from the plugin catalog.'}</p>
-            <span className="flow-soon">Ratings coming soon</span>
-          </article>
+            <Badge tone="soon">Ratings coming soon</Badge>
+          </Card>
         ))}
       </div>
     </div>
@@ -782,50 +851,54 @@ function Palette({
 
   return (
     <div className="flow-palette" onClick={onClose}>
-      <div onClick={event => event.stopPropagation()}>
-        <input
-          className="flow-input"
+      <Command
+        shouldFilter={false}
+        className="rounded-[16px] border border-border bg-popover"
+        onClick={event => event.stopPropagation()}
+        onKeyDown={event => {
+          if (event.key === 'ArrowDown') {
+            event.preventDefault();
+            setIndex(current => Math.min(current + 1, analyses.length - 1));
+          } else if (event.key === 'ArrowUp') {
+            event.preventDefault();
+            setIndex(current => Math.max(current - 1, 0));
+          } else if (event.key === 'Enter' && chosen) {
+            event.preventDefault();
+            if (event.metaKey || event.ctrlKey) onAsk(chosen.name);
+            else openSetup(chosen);
+          } else if (event.key === 'Escape') {
+            onClose();
+          }
+        }}
+      >
+        <CommandInput
           autoFocus
           value={query}
           placeholder="Search analyses"
-          onChange={event => {
-            setQuery(event.target.value);
+          onValueChange={value => {
+            setQuery(value);
             setIndex(0);
           }}
-          onKeyDown={event => {
-            if (event.key === 'ArrowDown') {
-              event.preventDefault();
-              setIndex(current => Math.min(current + 1, analyses.length - 1));
-            } else if (event.key === 'ArrowUp') {
-              event.preventDefault();
-              setIndex(current => Math.max(current - 1, 0));
-            } else if (event.key === 'Enter' && chosen) {
-              event.preventDefault();
-              if (event.metaKey || event.ctrlKey) onAsk(chosen.name);
-              else openSetup(chosen);
-            } else if (event.key === 'Escape') {
-              onClose();
-            }
-          }}
         />
-        {analyses.map((item, itemIndex) => (
-          <button
-            key={`${item.section}-${item.name}`}
-            className="flow-pick"
-            type="button"
-            data-active={item.name === chosen?.name && itemIndex === index}
-            onClick={() => openSetup(item)}
-            onDoubleClick={() => onAsk(item.name)}
-          >
-            {item.name}
-            <span className="flow-muted"> {item.section}</span>
-          </button>
-        ))}
+        <CommandList>
+          <CommandEmpty>No analyses</CommandEmpty>
+          {analyses.map((item, itemIndex) => (
+            <CommandItem
+              key={`${item.section}-${item.name}`}
+              value={item.name}
+              data-active={item.name === chosen?.name && itemIndex === index}
+              onSelect={() => openSetup(item)}
+            >
+              {item.name}
+              <span className="flow-muted"> {item.section}</span>
+            </CommandItem>
+          ))}
+        </CommandList>
         <p className="flow-muted">
           {datasetId ? 'Dataset open' : 'No dataset open'} · Enter opens setup. ⌘Enter asks the
           agent.
         </p>
-      </div>
+      </Command>
     </div>
   );
 }
@@ -851,7 +924,12 @@ function replyLines(result: AgentLoopResponse): string[] {
 function replyTitle(answer: string): string {
   const lines = answer
     .split('\n')
-    .map(row => row.replace(/^#+\s*/, '').replace(/[*_`]/g, '').trim())
+    .map(row =>
+      row
+        .replace(/^#+\s*/, '')
+        .replace(/[*_`]/g, '')
+        .trim()
+    )
     .filter(Boolean);
   if (lines.length < 2) return 'Result';
   return lines[0].slice(0, 90);
@@ -863,9 +941,7 @@ function replyLead(answer: string): string {
 }
 
 function replyStat(answer: string): string | null {
-  const line = answer
-    .split('\n')
-    .find(row => /p\s*[<=>]|F\s*\(|χ|chi-square|η²|eta/.test(row));
+  const line = answer.split('\n').find(row => /p\s*[<=>]|F\s*\(|χ|chi-square|η²|eta/.test(row));
   return line ? line.replace(/[#*`]/g, '').trim() : null;
 }
 
@@ -1005,7 +1081,8 @@ function ChatScreen({
       agentVersion: 'v2',
       sessionId: plan.session_id,
       approvedToolCalls: calls,
-      approvedBatch: batch && typeof batch.mac === 'string' ? { batch: batch.batch, mac: batch.mac } : null,
+      approvedBatch:
+        batch && typeof batch.mac === 'string' ? { batch: batch.batch, mac: batch.mac } : null,
       signal: AbortSignal.timeout(120_000),
       onDelta: chunk => {
         setAnswer(current => current + chunk);
@@ -1052,9 +1129,9 @@ function ChatScreen({
   return (
     <div className="flow-split">
       <aside className="flow-rail">
-        <button className="chat-new" type="button" onClick={clearChat}>
+        <Button className="chat-new" type="button" onClick={clearChat}>
           + New chat
-        </button>
+        </Button>
         <div className="flow-muted chat-label">Today</div>
         {sessions.length === 0 ? <p className="flow-muted">No saved chats yet</p> : null}
         {sessions.map(session => (
@@ -1072,103 +1149,100 @@ function ChatScreen({
       </aside>
       <section className="flow-thread">
         <div className="chat-column">
-        <div className="chat-scroll">
-          {sent ? <div className="chat-bubble">{sent}</div> : null}
-          {steps.length > 0 ? (
-            <div className="chat-steps">
-              <div>
-                Ran {steps.length} {steps.length === 1 ? 'step' : 'steps'}
-              </div>
-              {steps.map(step => (
-                <div key={step}>{step}</div>
-              ))}
-            </div>
-          ) : null}
-          {answer && !plan ? (
-            <article className="chat-prose" dangerouslySetInnerHTML={{ __html: plain(answer) }} />
-          ) : null}
-          {plan ? (
-            <div className="chat-plan">
-              <strong>Waiting for approval · Plan</strong>
-              <div dangerouslySetInnerHTML={{ __html: plain(answer) }} />
-              <div className="flow-row">
-                <button className="flow-btn primary" type="button" onClick={approve}>
-                  Approve
-                </button>
-                <button className="flow-btn" type="button" onClick={() => setPlan(null)}>
-                  Edit plan
-                </button>
-              </div>
-            </div>
-          ) : null}
-          {answer && !plan ? (
-            <div className="chat-result">
-              <div className="chat-result-top">
+          <div className="chat-scroll">
+            {sent ? <div className="chat-bubble">{sent}</div> : null}
+            {steps.length > 0 ? (
+              <div className="chat-steps">
                 <div>
-                  <strong>{title}</strong>
-                  <div className="flow-muted">
-                    {kind} · Output
-                  </div>
+                  Ran {steps.length} {steps.length === 1 ? 'step' : 'steps'}
                 </div>
-                <span className="chat-viewing">Viewing</span>
+                {steps.map(step => (
+                  <div key={step}>{step}</div>
+                ))}
               </div>
-              <div className="chat-result-actions">
-                <Link className="flow-btn primary" href={`${projectHref}/tables`}>
-                  Open
-                </Link>
-                <Link className="flow-btn" href={`${projectHref}/report`}>
-                  Add to report
-                </Link>
-                {downloads[0] ? (
-                  <button
-                    className="flow-btn"
-                    type="button"
-                    onClick={() => void openSignedDownload(downloads[0])}
-                  >
-                    Download {downloads[0].filename}
-                  </button>
-                ) : null}
+            ) : null}
+            {answer && !plan ? (
+              <article className="chat-prose" dangerouslySetInnerHTML={{ __html: plain(answer) }} />
+            ) : null}
+            {plan ? (
+              <div className="chat-plan">
+                <strong>Waiting for approval · Plan</strong>
+                <div dangerouslySetInnerHTML={{ __html: plain(answer) }} />
+                <div className="flow-row">
+                  <Button className="flow-btn primary" type="button" onClick={approve}>
+                    Approve
+                  </Button>
+                  <Button className="flow-btn" type="button" onClick={() => setPlan(null)}>
+                    Edit plan
+                  </Button>
+                </div>
               </div>
-            </div>
-          ) : null}
-          {status === 'Warming up' ? <p className="flow-status">Warming up</p> : null}
-          {status && status !== 'Warming up' ? <p className="flow-error">{status}</p> : null}
-        </div>
-        <div className="flow-composer">
-          <textarea
-            className="flow-text"
-            value={question}
-            onChange={event => setQuestion(event.target.value)}
-            placeholder="Ask a follow-up..."
-            onKeyDown={event => {
-              if (event.key === 'Enter' && !event.shiftKey) {
-                event.preventDefault();
-                void send();
-              }
-            }}
-          />
-          <div className="mode-switch">
-            {(['ask', 'plan', 'agent'] as const).map(item => (
-              <button
-                key={item}
-                type="button"
-                data-active={mode === item}
-                onClick={() => setMode(item)}
-              >
-                {item === 'agent' ? '● Agent' : item[0].toUpperCase() + item.slice(1)}
-              </button>
-            ))}
+            ) : null}
+            {answer && !plan ? (
+              <div className="chat-result">
+                <div className="chat-result-top">
+                  <div>
+                    <strong>{title}</strong>
+                    <div className="flow-muted">{kind} · Output</div>
+                  </div>
+                  <span className="chat-viewing">Viewing</span>
+                </div>
+                <div className="chat-result-actions">
+                  <Link className="flow-btn primary" href={`${projectHref}/tables`}>
+                    Open
+                  </Link>
+                  <Link className="flow-btn" href={`${projectHref}/report`}>
+                    Add to report
+                  </Link>
+                  {downloads[0] ? (
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => void openSignedDownload(downloads[0])}
+                    >
+                      Download {downloads[0].filename}
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+            {status === 'Warming up' ? <p className="flow-status">Warming up</p> : null}
+            {status && status !== 'Warming up' ? <p className="flow-error">{status}</p> : null}
           </div>
-          <button
-            className="chat-send"
-            type="button"
-            aria-label="Send"
-            disabled={status === 'Warming up'}
-            onClick={() => void send()}
-          >
-            ↑
-          </button>
-        </div>
+          <div className="flow-composer">
+            <Textarea
+              className="flow-text"
+              value={question}
+              onChange={event => setQuestion(event.target.value)}
+              placeholder="Ask a follow-up..."
+              onKeyDown={event => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  void send();
+                }
+              }}
+            />
+            <Segmented
+              className="mode-switch"
+              aria-label="Chat mode"
+              value={mode}
+              onValueChange={setMode}
+              options={[
+                { value: 'ask', label: 'Ask' },
+                { value: 'plan', label: 'Plan' },
+                { value: 'agent', label: '● Agent' },
+              ]}
+            />
+            <Button
+              className="chat-send"
+              type="button"
+              aria-label="Send"
+              disabled={status === 'Warming up'}
+              onClick={() => void send()}
+            >
+              ↑
+            </Button>
+          </div>
         </div>
       </section>
       <aside className="flow-output">
@@ -1196,29 +1270,27 @@ function ChatScreen({
                   <div className="flow-muted">Export</div>
                   <div className="flow-row">
                     {downloads.map(file => (
-                      <button
+                      <Button
                         key={file.key}
                         className="flow-btn"
                         type="button"
                         onClick={() => void openSignedDownload(file)}
                       >
                         {file.filename}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
               ) : null}
             </div>
             <div className="output-foot">
-              <button
+              <Button
                 className="flow-btn"
                 type="button"
-                onClick={() =>
-                  setStatus('This run has no replayable steps to save as a recipe.')
-                }
+                onClick={() => setStatus('This run has no replayable steps to save as a recipe.')}
               >
                 Save
-              </button>
+              </Button>
               <Link className="flow-btn" href={`${projectHref}/report`}>
                 Add to report
               </Link>
@@ -1265,19 +1337,19 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
   return (
     <aside className="flow-output">
       <h2>Ask</h2>
-      <textarea
+      <Textarea
         className="flow-text"
         value={question}
         onChange={event => setQuestion(event.target.value)}
       />
-      <button
+      <Button
         className="flow-btn"
         type="button"
         disabled={phase === 'warming'}
         onClick={() => void ask()}
       >
         Ask about the open table
-      </button>
+      </Button>
       {phase === 'warming' ? <p>Warming up</p> : null}
       {phase === 'error' ? <p className="flow-error">{note}</p> : null}
     </aside>
@@ -1315,18 +1387,18 @@ function SourcesScreen({ projectId, datasets }: { projectId: string; datasets: D
         {docs.map(doc => (
           <div key={doc.id}>{doc.name}</div>
         ))}
-        <input
+        <Input
           className="flow-input"
           value={name}
           onChange={event => setName(event.target.value)}
         />
-        <textarea
+        <Textarea
           className="flow-text"
           value={text}
           onChange={event => setText(event.target.value)}
           placeholder="Questionnaire or brief"
         />
-        <button
+        <Button
           className="flow-btn primary"
           type="button"
           onClick={() => {
@@ -1343,7 +1415,7 @@ function SourcesScreen({ projectId, datasets }: { projectId: string; datasets: D
           }}
         >
           Save for the agent
-        </button>
+        </Button>
       </section>
       <section className="flow-panel">
         <h2>Stack waves</h2>
@@ -1443,12 +1515,11 @@ function StackScreen({
         const id = datasetRowId(row);
         return (
           <label key={id} className="flow-row">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={picked.includes(id)}
-              onChange={event => {
+              onCheckedChange={checked => {
                 setPicked(current =>
-                  event.target.checked ? [...current, id] : current.filter(item => item !== id)
+                  checked === true ? [...current, id] : current.filter(item => item !== id)
                 );
               }}
             />
@@ -1459,23 +1530,24 @@ function StackScreen({
       {columns.map(column => (
         <div key={column} className="flow-row">
           <span>{column}</span>
-          <select
+          <ChoiceSelect
             className="flow-input"
             aria-label={`Decision for ${column}`}
             value={decisions[column] || 'accept'}
-            onChange={event =>
+            onValueChange={value =>
               setDecisions(current => ({
                 ...current,
-                [column]: event.target.value as 'accept' | 'override' | 'skip',
+                [column]: value as 'accept' | 'override' | 'skip',
               }))
             }
-          >
-            <option value="accept">Accept</option>
-            <option value="override">Override</option>
-            <option value="skip">Skip</option>
-          </select>
+            options={[
+              { value: 'accept', label: 'Accept' },
+              { value: 'override', label: 'Override' },
+              { value: 'skip', label: 'Skip' },
+            ]}
+          />
           {decisions[column] === 'override' ? (
-            <input
+            <Input
               className="flow-input"
               aria-label={`Override ${column}`}
               value={overrides[column] || ''}
@@ -1488,9 +1560,9 @@ function StackScreen({
       ))}
       {error ? <p className="flow-error">{error}</p> : null}
       {note ? <p>{note}</p> : null}
-      <button className="flow-btn primary" type="button" onClick={save}>
+      <Button className="flow-btn primary" type="button" onClick={save}>
         Save
-      </button>
+      </Button>
     </div>
   );
 }
@@ -1538,28 +1610,28 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   return (
     <div>
       <div className="flow-tabs" style={{ marginBottom: 12 }}>
-        {(['sheet', 'notebook', 'evidence', 'themes'] as const).map(item => (
-          <button
-            key={item}
-            className="flow-chip"
-            type="button"
-            data-active={tab === item}
-            onClick={() => setTab(item)}
-          >
-            {item}
-          </button>
-        ))}
-        <button className="flow-btn" type="button" onClick={() => setWeightOpen(true)}>
+        <Segmented
+          aria-label="Response view"
+          value={tab}
+          onValueChange={setTab}
+          options={[
+            { value: 'sheet', label: 'Sheet' },
+            { value: 'notebook', label: 'Notebook' },
+            { value: 'evidence', label: 'Evidence' },
+            { value: 'themes', label: 'Themes' },
+          ]}
+        />
+        <Button className="flow-btn" type="button" onClick={() => setWeightOpen(true)}>
           Weight
-        </button>
-        <button className="flow-btn" type="button" onClick={() => setAnovaOpen(true)}>
+        </Button>
+        <Button className="flow-btn" type="button" onClick={() => setAnovaOpen(true)}>
           ANOVA
-        </button>
+        </Button>
       </div>
       {tab === 'sheet' ? (
         <div>
           <div className="flow-table-wrap flow-sheet">
-            <table className="flow-table">
+            <Table className="flow-table">
               <thead>
                 <tr>
                   {(headers.length
@@ -1579,7 +1651,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </Table>
           </div>
           <div className="flow-paging">
             <span>
@@ -1588,25 +1660,25 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                 : `${pageOffset + 1}–${Math.min(pageOffset + preview.length, rowTotal)} of ${rowTotal}`}
             </span>
             <span>
-              <button
+              <Button
                 className="flow-btn"
                 type="button"
                 disabled={pageOffset === 0}
                 onClick={() => setPageOffset(current => Math.max(0, current - pageSize))}
               >
                 Previous
-              </button>{' '}
-              <button
+              </Button>{' '}
+              <Button
                 className="flow-btn"
                 type="button"
                 disabled={pageOffset + pageSize >= rowTotal}
                 onClick={() => setPageOffset(current => current + pageSize)}
               >
                 Next
-              </button>
+              </Button>
             </span>
           </div>
-          <button
+          <Button
             className="flow-btn"
             type="button"
             onClick={() => {
@@ -1621,7 +1693,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
             }}
           >
             Descriptives
-          </button>
+          </Button>
           {descError ? <p className="flow-error">{descError}</p> : null}
         </div>
       ) : null}
@@ -1682,12 +1754,12 @@ function Notebook({ datasetId }: { datasetId?: string }) {
       <p className="flow-muted">
         Read-only on the open dataset. Publishing a table is the only write-back.
       </p>
-      <textarea
+      <Textarea
         className="flow-text"
         value={code}
         onChange={event => setCode(event.target.value)}
       />
-      <button
+      <Button
         className="flow-btn"
         type="button"
         onClick={() => {
@@ -1705,7 +1777,7 @@ function Notebook({ datasetId }: { datasetId?: string }) {
         }}
       >
         Run
-      </button>
+      </Button>
       <pre>{output}</pre>
     </div>
   );
@@ -1731,29 +1803,23 @@ function AnovaModal({
         <h2>ANOVA</h2>
         <label>
           Dependent
-          <select
+          <ChoiceSelect
             className="flow-input"
             value={dependent}
-            onChange={event => setDependent(event.target.value)}
-          >
-            {options.map(name => (
-              <option key={name}>{name}</option>
-            ))}
-          </select>
+            onValueChange={setDependent}
+            options={[...options.map(name => ({ value: name, label: name }))]}
+          />
         </label>
         <label>
           Group
-          <select
+          <ChoiceSelect
             className="flow-input"
             value={group}
-            onChange={event => setGroup(event.target.value)}
-          >
-            {groups.map(name => (
-              <option key={name}>{name}</option>
-            ))}
-          </select>
+            onValueChange={setGroup}
+            options={[...groups.map(name => ({ value: name, label: name }))]}
+          />
         </label>
-        <button
+        <Button
           className="flow-btn primary"
           type="button"
           onClick={() => {
@@ -1770,7 +1836,7 @@ function AnovaModal({
           }}
         >
           Run
-        </button>
+        </Button>
         {message ? <p>{message}</p> : null}
       </div>
     </div>
@@ -1909,13 +1975,13 @@ function ReportScreen({
       {error ? <p className="flow-error">{error}</p> : null}
       {note ? <p>{note}</p> : null}
       <div className="report-cards">
-        <article>
-          <span>PPTX</span>
+        <Card>
+          <Badge>PPTX</Badge>
           <strong>Client deck</strong>
           <p>From the saved tables</p>
           <label>
             Template
-            <input
+            <Input
               type="file"
               accept=".pptx"
               onChange={event => {
@@ -1928,35 +1994,35 @@ function ReportScreen({
               }}
             />
           </label>
-          <button
+          <Button
             type="button"
             onClick={() => void deck().catch(err => setError(String(err.message || err)))}
           >
             Download
-          </button>
-        </article>
-        <article>
-          <span>XLSX</span>
+          </Button>
+        </Card>
+        <Card>
+          <Badge>XLSX</Badge>
           <strong>Banner book</strong>
           <p>Every saved table</p>
-          <button
+          <Button
             type="button"
             onClick={() => void bannerBook().catch(err => setError(String(err.message || err)))}
           >
             Download
-          </button>
-        </article>
-        <article>
-          <span>DOCX</span>
+          </Button>
+        </Card>
+        <Card>
+          <Badge>DOCX</Badge>
           <strong>Topline summary</strong>
           <p>The first saved table</p>
-          <button
+          <Button
             type="button"
             onClick={() => void topline().catch(err => setError(String(err.message || err)))}
           >
             Download
-          </button>
-        </article>
+          </Button>
+        </Card>
       </div>
     </div>
   );
@@ -2014,21 +2080,20 @@ function InterviewsScreen({
         <p>{label}</p>
         <label>
           Theme
-          <select
+          <ChoiceSelect
             className="flow-input"
             value={theme}
-            onChange={event => setTheme(event.target.value)}
-          >
-            <option value="">All themes</option>
-            {themes.map(item => (
-              <option key={item}>{item}</option>
-            ))}
-          </select>
+            onValueChange={setTheme}
+            options={[
+              { value: '', label: 'All themes' },
+              ...themes.map(item => ({ value: item, label: item })),
+            ]}
+          />
         </label>
         <p className="flow-muted">
           Counts only. These passages are not added to survey percentages. No audio.
         </p>
-        <input
+        <Input
           type="file"
           accept=".txt,.vtt,.docx"
           onChange={event => {
@@ -2061,15 +2126,15 @@ function InterviewsScreen({
                 <span>
                   {passage.speaker || 'Speaker'} {passage.start || ''}–{passage.end || ''}
                 </span>
-                <input
+                <Input
                   className="flow-input"
                   value={code}
                   placeholder="Code"
                   onChange={event => setCode(event.target.value)}
                 />
-                <button className="flow-btn" type="submit">
+                <Button className="flow-btn" type="submit">
                   Code passage
-                </button>
+                </Button>
               </form>
             ))}
           </div>

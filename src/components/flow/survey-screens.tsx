@@ -1,6 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { ChoiceSelect } from '@/components/ui/select';
+import { Table } from '@/components/ui/table';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
 import {
@@ -67,7 +72,7 @@ export function BannerGrid({
   return (
     <div>
       <div style={{ overflowX: 'auto' }}>
-        <table className="flow-table">
+        <Table className="flow-table">
           <thead>
             <tr>
               <th />
@@ -94,7 +99,7 @@ export function BannerGrid({
                   const letter = lettersFor(letters, row.id, column.id);
                   return (
                     <td key={column.id}>
-                      <button
+                      <Button
                         className="flow-cell"
                         type="button"
                         onClick={() => {
@@ -104,14 +109,14 @@ export function BannerGrid({
                       >
                         {cell?.percent != null ? `${cell.percent.toFixed(1)}%` : '—'}
                         {letter ? ` ${letter}` : ''}
-                      </button>
+                      </Button>
                     </td>
                   );
                 })}
               </tr>
             ))}
           </tbody>
-        </table>
+        </Table>
       </div>
       {book.answered_n != null && book.respondent_n != null ? (
         <p className="flow-muted">
@@ -148,33 +153,34 @@ export function ThemesPanel({
     <div className="flow-panel">
       <h2>Themes</h2>
       <div className="flow-row">
-        <select className="flow-input" value={stub} onChange={event => setStub(event.target.value)}>
-          <option value="">Theme column</option>
-          {columns.map(column => (
-            <option key={column}>{column}</option>
-          ))}
-        </select>
-        <select
+        <ChoiceSelect
+          className="flow-input"
+          value={stub}
+          onValueChange={setStub}
+          options={[
+            { value: '', label: 'Theme column' },
+            ...columns.map(column => ({ value: column, label: column })),
+          ]}
+        />
+        <ChoiceSelect
           className="flow-input"
           value={banner}
-          onChange={event => setBanner(event.target.value)}
-        >
-          <option value="">Banner</option>
-          {columns.map(column => (
-            <option key={column}>{column}</option>
-          ))}
-        </select>
-        <select
+          onValueChange={setBanner}
+          options={[
+            { value: '', label: 'Banner' },
+            ...columns.map(column => ({ value: column, label: column })),
+          ]}
+        />
+        <ChoiceSelect
           className="flow-input"
           value={weight}
-          onChange={event => setWeight(event.target.value)}
-        >
-          <option value="">Unweighted</option>
-          {columns.map(column => (
-            <option key={column}>{column}</option>
-          ))}
-        </select>
-        <button
+          onValueChange={setWeight}
+          options={[
+            { value: '', label: 'Unweighted' },
+            ...columns.map(column => ({ value: column, label: column })),
+          ]}
+        />
+        <Button
           className="flow-btn primary"
           type="button"
           disabled={!datasetId || !stub}
@@ -197,7 +203,7 @@ export function ThemesPanel({
           }}
         >
           Run themes
-        </button>
+        </Button>
       </div>
       {error ? <p className="flow-error">{error}</p> : null}
       {book ? <BannerGrid book={book} onSelectCell={onSelectCell} /> : null}
@@ -366,19 +372,18 @@ export function CodeFramePanel({
   return (
     <div className="flow-panel">
       <h2>Code frame</h2>
-      <select
+      <ChoiceSelect
         className="flow-input"
         aria-label="Open-end column"
         value={textColumn}
-        onChange={event => setTextColumn(event.target.value)}
-      >
-        <option value="">Open-end column</option>
-        {columns.map(column => (
-          <option key={column}>{column}</option>
-        ))}
-      </select>
+        onValueChange={setTextColumn}
+        options={[
+          { value: '', label: 'Open-end column' },
+          ...columns.map(column => ({ value: column, label: column })),
+        ]}
+      />
       <div className="flow-row">
-        <button
+        <Button
           className="flow-btn"
           type="button"
           onClick={() => {
@@ -389,8 +394,8 @@ export function CodeFramePanel({
           }}
         >
           Propose
-        </button>
-        <button
+        </Button>
+        <Button
           className="flow-btn"
           type="button"
           disabled={!textColumn}
@@ -409,9 +414,9 @@ export function CodeFramePanel({
           }}
         >
           Code with keywords
-        </button>
+        </Button>
         {schemaOnly ? null : (
-          <button
+          <Button
             className="flow-btn primary"
             type="button"
             disabled={!textColumn}
@@ -429,7 +434,7 @@ export function CodeFramePanel({
             }}
           >
             Code with Haiku
-          </button>
+          </Button>
         )}
       </div>
       {schemaOnly ? (
@@ -442,31 +447,28 @@ export function CodeFramePanel({
         {codes.map(code => (
           <li key={code.id} className="flow-row">
             <label>
-              <input
-                type="checkbox"
+              <Checkbox
                 checked={selected.includes(code.id)}
-                onChange={event => {
+                onCheckedChange={checked => {
                   setSelected(current =>
-                    event.target.checked
-                      ? [...current, code.id]
-                      : current.filter(id => id !== code.id)
+                    checked === true ? [...current, code.id] : current.filter(id => id !== code.id)
                   );
                 }}
               />{' '}
               {code.label} <span className="flow-muted">{code.id}</span>
             </label>
-            <button
+            <Button
               className="flow-btn"
               type="button"
               onClick={() => setSplit({ id: code.id, left: '', right: '' })}
             >
               Split
-            </button>
+            </Button>
           </li>
         ))}
       </ul>
       {selected.length > 1 ? (
-        <button
+        <Button
           className="flow-btn"
           type="button"
           onClick={() => {
@@ -488,7 +490,7 @@ export function CodeFramePanel({
           }}
         >
           Merge
-        </button>
+        </Button>
       ) : null}
       {split ? (
         <form
@@ -522,21 +524,21 @@ export function CodeFramePanel({
               .catch(err => setError(err instanceof Error ? err.message : 'Split failed'));
           }}
         >
-          <input
+          <Input
             className="flow-input"
             placeholder="First theme"
             value={split.left}
             onChange={event => setSplit({ ...split, left: event.target.value })}
           />
-          <input
+          <Input
             className="flow-input"
             placeholder="Second theme"
             value={split.right}
             onChange={event => setSplit({ ...split, right: event.target.value })}
           />
-          <button className="flow-btn" type="submit">
+          <Button className="flow-btn" type="submit">
             Split {split.id}
-          </button>
+          </Button>
         </form>
       ) : null}
       {progress ? (
@@ -568,16 +570,16 @@ export function CodeFramePanel({
               .catch(err => setError(err instanceof Error ? err.message : 'Rename failed'));
           }}
         >
-          <input
+          <Input
             className="flow-input"
             aria-label="New theme label"
             placeholder="New label"
             value={rename}
             onChange={event => setRename(event.target.value)}
           />
-          <button className="flow-btn" type="submit">
+          <Button className="flow-btn" type="submit">
             Rename
-          </button>
+          </Button>
         </form>
       ) : null}
       <form
@@ -618,24 +620,24 @@ export function CodeFramePanel({
             });
         }}
       >
-        <select
+        <ChoiceSelect
           className="flow-input"
           aria-label="Reapply dataset"
           value={sourceDataset}
-          onChange={event => setSourceDataset(event.target.value)}
-        >
-          <option value="">Dataset in this project</option>
-          {datasets
-            .filter(dataset => datasetRowId(dataset) && datasetRowId(dataset) !== datasetId)
-            .map(dataset => (
-              <option key={datasetRowId(dataset)} value={datasetRowId(dataset)}>
-                {dataset.original_filename || datasetRowId(dataset)}
-              </option>
-            ))}
-        </select>
-        <button className="flow-btn" type="submit" disabled={!sourceDataset || !textColumn}>
+          onValueChange={setSourceDataset}
+          options={[
+            { value: '', label: 'Dataset in this project' },
+            ...datasets
+              .filter(dataset => datasetRowId(dataset) && datasetRowId(dataset) !== datasetId)
+              .map(dataset => ({
+                value: datasetRowId(dataset),
+                label: dataset.original_filename || datasetRowId(dataset),
+              })),
+          ]}
+        />
+        <Button className="flow-btn" type="submit" disabled={!sourceDataset || !textColumn}>
           Reapply
-        </button>
+        </Button>
       </form>
     </div>
   );
@@ -707,46 +709,40 @@ export function WeightPanel({
         <ul>
           {targets.map((row, index) => (
             <li key={index} className="flow-row">
-              <select
+              <ChoiceSelect
                 className="flow-input"
                 aria-label={`Target column ${index + 1}`}
                 value={row.column}
-                onChange={event => updateTarget(index, { column: event.target.value, code: '' })}
-              >
-                {columns.map(item => (
-                  <option key={item}>{item}</option>
-                ))}
-              </select>
-              <select
+                onValueChange={value => updateTarget(index, { column: value, code: '' })}
+                options={columns.map(item => ({ value: item, label: item }))}
+              />
+              <ChoiceSelect
                 className="flow-input"
                 aria-label={`Target code ${index + 1}`}
                 value={row.code}
-                onChange={event => updateTarget(index, { code: event.target.value })}
-              >
-                <option value="">Code</option>
-                {(codeOptions[row.column] || []).map(code => (
-                  <option key={code} value={code}>
-                    {code}
-                  </option>
-                ))}
-              </select>
-              <input
+                onValueChange={value => updateTarget(index, { code: value })}
+                options={[
+                  { value: '', label: 'Code' },
+                  ...(codeOptions[row.column] || []).map(code => ({ value: code, label: code })),
+                ]}
+              />
+              <Input
                 className="flow-input"
                 aria-label={`Target percent ${index + 1}`}
                 value={row.percent}
                 onChange={event => updateTarget(index, { percent: event.target.value })}
               />
-              <button
+              <Button
                 className="flow-btn"
                 type="button"
                 onClick={() => setTargets(current => current.filter((_, i) => i !== index))}
               >
                 Remove
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
-        <button
+        <Button
           className="flow-btn"
           type="button"
           onClick={() =>
@@ -754,22 +750,22 @@ export function WeightPanel({
           }
         >
           Add target
-        </button>
-        <select
+        </Button>
+        <ChoiceSelect
           className="flow-input"
           aria-label="Load targets from"
           value={sourceDataset}
-          onChange={event => setSourceDataset(event.target.value)}
-        >
-          <option value="">Dataset in this project</option>
-          {datasets
-            .filter(dataset => datasetRowId(dataset) && datasetRowId(dataset) !== datasetId)
-            .map(dataset => (
-              <option key={datasetRowId(dataset)} value={datasetRowId(dataset)}>
-                {dataset.original_filename || datasetRowId(dataset)}
-              </option>
-            ))}
-        </select>
+          onValueChange={setSourceDataset}
+          options={[
+            { value: '', label: 'Dataset in this project' },
+            ...datasets
+              .filter(dataset => datasetRowId(dataset) && datasetRowId(dataset) !== datasetId)
+              .map(dataset => ({
+                value: datasetRowId(dataset),
+                label: dataset.original_filename || datasetRowId(dataset),
+              })),
+          ]}
+        />
         {error ? <p className="flow-error">{error}</p> : null}
         {result ? (
           <p>
@@ -781,7 +777,7 @@ export function WeightPanel({
           </p>
         ) : null}
         <div className="flow-row">
-          <button
+          <Button
             className="flow-btn"
             type="button"
             onClick={() => {
@@ -815,8 +811,8 @@ export function WeightPanel({
             }}
           >
             Load targets
-          </button>
-          <button
+          </Button>
+          <Button
             className="flow-btn primary"
             type="button"
             disabled={!datasetId}
@@ -842,10 +838,10 @@ export function WeightPanel({
             }}
           >
             Rake
-          </button>
-          <button className="flow-btn" type="button" onClick={onClose}>
+          </Button>
+          <Button className="flow-btn" type="button" onClick={onClose}>
             Close
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -928,70 +924,64 @@ export function TablesBuilder({
       >
         <label>
           Stub
-          <select
+          <ChoiceSelect
             className="flow-input"
             aria-label="Table stub"
             value={stub}
-            onChange={event => setStub(event.target.value)}
-          >
-            <option value="">Column</option>
-            {columns.map(column => (
-              <option key={column}>{column}</option>
-            ))}
-          </select>
+            onValueChange={setStub}
+            options={[
+              { value: '', label: 'Column' },
+              ...columns.map(column => ({ value: column, label: column })),
+            ]}
+          />
         </label>
         <label>
           Banner
-          <select
+          <ChoiceSelect
             className="flow-input"
             aria-label="Table banner"
             value={banner}
-            onChange={event => setBanner(event.target.value)}
-          >
-            <option value="">None</option>
-            {columns.map(column => (
-              <option key={column}>{column}</option>
-            ))}
-          </select>
+            onValueChange={setBanner}
+            options={[
+              { value: '', label: 'None' },
+              ...columns.map(column => ({ value: column, label: column })),
+            ]}
+          />
         </label>
         <label>
           Weight
-          <select
+          <ChoiceSelect
             className="flow-input"
             aria-label="Table weight"
             value={weight}
-            onChange={event => setWeight(event.target.value)}
-          >
-            <option value="">Unweighted</option>
-            {columns.map(column => (
-              <option key={column}>{column}</option>
-            ))}
-          </select>
+            onValueChange={setWeight}
+            options={[
+              { value: '', label: 'Unweighted' },
+              ...columns.map(column => ({ value: column, label: column })),
+            ]}
+          />
         </label>
         <label>
           Statistic
-          <select
+          <ChoiceSelect
             className="flow-input"
             aria-label="Table statistic"
             value={statistic}
-            onChange={event => setStatistic(event.target.value)}
-          >
-            <option value="column_proportion">Column %</option>
-            <option value="row_proportion">Row %</option>
-            <option value="unweighted_n">Count</option>
-          </select>
+            onValueChange={setStatistic}
+            options={[
+              { value: 'column_proportion', label: 'Column %' },
+              { value: 'row_proportion', label: 'Row %' },
+              { value: 'unweighted_n', label: 'Count' },
+            ]}
+          />
         </label>
         <label>
-          <input
-            type="checkbox"
-            checked={letters}
-            onChange={event => setLetters(event.target.checked)}
-          />{' '}
+          <Checkbox checked={letters} onCheckedChange={checked => setLetters(checked === true)} />{' '}
           Sig letters
         </label>
-        <button className="flow-btn primary" type="submit" disabled={!stub}>
+        <Button className="flow-btn primary" type="submit" disabled={!stub}>
           Save table
-        </button>
+        </Button>
       </form>
       {error ? <p className="flow-error">{error}</p> : null}
       <ul>
@@ -999,7 +989,7 @@ export function TablesBuilder({
           const id = spec.spec_id || spec.id || '';
           return (
             <li key={id}>
-              <button
+              <Button
                 className="flow-btn"
                 type="button"
                 onClick={() => {
@@ -1009,7 +999,7 @@ export function TablesBuilder({
                 }}
               >
                 {spec.label || spec.name || id}
-              </button>
+              </Button>
             </li>
           );
         })}
