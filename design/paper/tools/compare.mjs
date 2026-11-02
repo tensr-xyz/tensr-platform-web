@@ -1,7 +1,8 @@
 // Paper side-by-side for one Flow screen, on localhost:3000 only.
 //
 //   node design/paper/tools/compare.mjs signin
-//     Opens Chromium on /login. Sign in; the session is saved to design/paper/tools/.auth.json.
+//     Signs in on /login as the Stytch sandbox user (sandbox@stytch.com, code 000000) and saves
+//     the session to design/paper/tools/.auth.json. FLOW_TEST_EMAIL / FLOW_TEST_CODE override.
 //
 //   node design/paper/tools/compare.mjs <screen-folder> <path>
 //     e.g. 6-report /flow/p/<project-id>/report
@@ -19,15 +20,28 @@ const base = 'http://localhost:3000';
 const viewport = { width: 1440, height: 900 };
 
 async function signin() {
-  const browser = await chromium.launch({ headless: false });
+  // Stytch test environment: the sandbox address always accepts code 000000.
+  const email = process.env.FLOW_TEST_EMAIL || 'sandbox@stytch.com';
+  const code = process.env.FLOW_TEST_CODE || '000000';
+  const browser = await chromium.launch({ headless: !process.argv.includes('--headed') });
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
   await page.goto(`${base}/login?returnTo=%2Fflow`);
-  await page.waitForURL(url => url.pathname.startsWith('/flow'), { timeout: 30 * 60 * 1000 });
+  await page
+    .getByPlaceholder(/email address/i)
+    .first()
+    .fill(email);
+  await page
+    .getByRole('button', { name: /^(continue|send code)$/i })
+    .first()
+    .click();
+  await page.getByPlaceholder(/verification code/i).fill(code);
+  await page.getByRole('button', { name: /^sign in$/i }).click();
+  await page.waitForURL(url => url.pathname.startsWith('/flow'), { timeout: 120_000 });
   await page.waitForTimeout(3000);
   await context.storageState({ path: auth });
   await browser.close();
-  console.log(`Saved ${auth}`);
+  console.log(`Saved ${auth} for ${email}`);
 }
 
 async function compare(folder, route) {
