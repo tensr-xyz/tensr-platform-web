@@ -1,10 +1,9 @@
 'use client';
 import { Input } from '@/components/atoms/input';
 import { Button } from '@/components/atoms/button';
-import { Card } from '@/components/atoms/card';
 import { useRouter, useSearchParams } from 'next/navigation';
 import React, { FormEvent, useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Eye, EyeOff, Mail } from 'lucide-react';
+
 import { useAuth } from '@/hooks/api/use-auth';
 import {
   redeemStoredInvitation,
@@ -20,6 +19,7 @@ import { dumpAuthTrace, authTrace } from '@/lib/auth-trace';
 import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
 import { storeSession } from '@/utils/auth';
 import Link from 'next/link';
+import './signin.css';
 import Image from 'next/image';
 import posthog from 'posthog-js';
 
@@ -393,318 +393,249 @@ const LoginTemplate = () => {
     }
   };
 
+  const providers = [
+    { key: 'google', mark: 'G', label: 'Google', loading: isGoogleLoading, run: handleGoogleOAuth },
+    {
+      key: 'microsoft',
+      mark: 'M',
+      label: 'Microsoft',
+      loading: isMicrosoftLoading,
+      run: handleMicrosoftOAuth,
+    },
+    {
+      key: 'github',
+      mark: 'GH',
+      label: 'GitHub',
+      loading: isGitHubLoading,
+      run: handleGitHubOAuth,
+    },
+  ];
+  const digits = Array.from({ length: 6 }, (_, index) => verificationCode[index] || '');
+
   return (
-    <div className="min-h-screen flex flex-col p-4 bg-background relative">
-      {/* Logo in top left */}
-      <div className="absolute top-6 left-6">
-        <div className="relative w-32 h-8">
-          <Image
-            src="/tensr_logo_light.png"
-            alt="Tensr Logo"
-            fill
-            className="object-contain dark:hidden"
-            unoptimized
-          />
-          <Image
-            src="/tensr_logo_dark.png"
-            alt="Tensr Logo"
-            fill
-            className="object-contain hidden dark:block"
-            unoptimized
-          />
-        </div>
-      </div>
+    <div className="signin">
+      <section className="signin-pane">
+        <header className="signin-head">
+          <a href="https://tensr.xyz" className="signin-logo" aria-label="Tensr">
+            <svg width="24" height="24" viewBox="0 0 48 48" aria-hidden="true">
+              <rect x="4" y="5" width="12" height="12" rx="2.5" fill="#23463B" />
+              <rect x="18" y="5" width="12" height="12" rx="2.5" fill="#23463B" />
+              <rect x="32" y="5" width="12" height="12" rx="2.5" fill="#6FC2A6" />
+              <rect x="18" y="19" width="12" height="12" rx="2.5" fill="#23463B" />
+              <rect x="18" y="33" width="12" height="12" rx="2.5" fill="#23463B" />
+            </svg>
+            <span>tensr</span>
+          </a>
+          <a href="https://tensr.xyz" className="signin-back">
+            Back to site
+          </a>
+        </header>
 
-      {/* Main Content - Centered */}
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-full max-w-[440px] min-w-[320px]">
-          {/* Welcome Text - Left Aligned */}
-          <div className="flex flex-col mb-8">
-            <div className="text-2xl font-medium text-left">Welcome to Tensr</div>
-            <div className="text-2xl font-medium text-left text-muted-foreground">
-              The new way to analyse data
-            </div>
-          </div>
-
-          {/* Card */}
-          <Card className="p-6">
-            {needsEmail && !isVerifying ? (
-              <form
-                onSubmit={event => {
-                  event.preventDefault();
-                  void handleAttachEmail();
+        <div className="signin-card">
+          {needsEmail && !isVerifying ? (
+            <form
+              onSubmit={event => {
+                event.preventDefault();
+                void handleAttachEmail();
+              }}
+              className="signin-form"
+            >
+              <h1>Add your email</h1>
+              <p className="signin-lede">
+                We will send a code to this address. If a Tensr account already uses it, you will
+                sign into that account.
+              </p>
+              <label className="signin-label" htmlFor="attach-email">
+                Work email
+              </label>
+              <Input
+                id="attach-email"
+                className="signin-input"
+                type="email"
+                autoComplete="email"
+                placeholder="Email address"
+                value={email}
+                onChange={event => setEmail(event.target.value)}
+                required
+              />
+              <Button type="submit" className="signin-primary" disabled={formBusy}>
+                {isSendingCode ? 'Sending code...' : 'Send code'}
+              </Button>
+            </form>
+          ) : !isVerifying ? (
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                handleEmailSubmit();
+              }}
+              className="signin-form"
+              noValidate
+            >
+              <h1>Sign in to Tensr</h1>
+              <p className="signin-lede">
+                Pick up where you left off. No password, we&apos;ll send you a code.
+              </p>
+              <div className="signin-oauth">
+                {providers.map(provider => (
+                  <Button
+                    key={provider.key}
+                    type="button"
+                    className="signin-provider"
+                    onClick={provider.run}
+                    disabled={formBusy}
+                  >
+                    <span className="signin-mark" aria-hidden="true">
+                      {provider.mark}
+                    </span>
+                    {provider.loading ? 'Continuing...' : `Continue with ${provider.label}`}
+                  </Button>
+                ))}
+              </div>
+              <div className="signin-or">
+                <span />
+                or
+                <span />
+              </div>
+              <label htmlFor="email" className="signin-label">
+                Work email
+              </label>
+              <Input
+                id="email"
+                className="signin-input"
+                type="email"
+                placeholder="you@agency.co.uk"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && email && !formBusy) {
+                    e.preventDefault();
+                    handleEmailSubmit();
+                  }
                 }}
-                className="space-y-4"
-              >
-                <div className="space-y-1 text-left">
-                  <p className="text-sm font-medium text-foreground">
-                    Add an email to finish signing in
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    We will send a code to this address. If a Tensr account already uses it, you
-                    will sign into that account.
-                  </p>
-                </div>
+                disabled={formBusy}
+                autoFocus
+                required
+              />
+              <Button type="submit" disabled={formBusy} className="signin-primary">
+                {isSendingCode ? 'Sending...' : 'Email me a code'}
+                {isSendingCode ? null : <span aria-hidden="true">→</span>}
+              </Button>
+              <p className="signin-new">
+                New here? <Link href="/signup">Start a 30-day free trial</Link>
+              </p>
+              <p className="signin-terms">
+                By continuing you agree to our{' '}
+                <Link
+                  href="https://tensr-1.gitbook.io/tensr/legal-policies/terms-of-service"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  Terms
+                </Link>{' '}
+                and{' '}
+                <Link
+                  href="https://tensr-1.gitbook.io/tensr/legal-policies/privacy-policy"
+                  rel="noopener noreferrer"
+                  target="_blank"
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </p>
+            </form>
+          ) : (
+            <form onSubmit={handleVerificationSubmit} className="signin-form">
+              <h1>Check your email</h1>
+              <p className="signin-lede">
+                We sent a 6-digit code to <span className="signin-ink">{email}</span>. It expires in
+                10 minutes.
+              </p>
+              <label htmlFor="code" className="signin-label">
+                6-digit code
+              </label>
+              <div className="signin-code">
                 <Input
-                  type="email"
-                  autoComplete="email"
-                  placeholder="Email address"
-                  value={email}
-                  onChange={event => setEmail(event.target.value)}
+                  id="code"
+                  className="signin-code-input"
+                  type="text"
+                  value={verificationCode}
+                  onChange={e => setVerificationCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  disabled={formBusy}
+                  autoFocus
                   required
+                  autoComplete="one-time-code"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
+                  maxLength={6}
                 />
-                <Button type="submit" className="w-full" disabled={formBusy}>
-                  {isSendingCode ? 'Sending code...' : 'Send code'}
-                </Button>
-              </form>
-            ) : !isVerifying ? (
-              <form
-                onSubmit={e => {
-                  e.preventDefault();
-                  handleEmailSubmit();
-                }}
-                className="flex flex-col gap-5"
-                noValidate
-              >
-                {/* OAuth Buttons */}
-                <div className="flex flex-col gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full h-10 justify-start gap-3"
-                    onClick={handleGoogleOAuth}
-                    disabled={formBusy}
-                  >
-                    <svg
-                      fill="none"
-                      height="15"
-                      viewBox="0 0 16 16"
-                      width="15"
-                      xmlns="http://www.w3.org/2000/svg"
+                <div className="signin-boxes" aria-hidden="true">
+                  {digits.map((digit, index) => (
+                    <span
+                      key={index}
+                      data-active={index === Math.min(verificationCode.length, 5) || undefined}
                     >
-                      <g>
-                        <path
-                          d="M15.83 8.18C15.83 7.65333 15.7833 7.15333 15.7033 6.66667H8.17V9.67333H12.4833C12.29 10.66 11.7233 11.4933 10.8833 12.06V14.06H13.4567C14.9633 12.6667 15.83 10.6133 15.83 8.18Z"
-                          fill="#4285F4"
-                        />
-                        <path
-                          d="M8.17 16C10.33 16 12.1367 15.28 13.4567 14.06L10.8833 12.06C10.1633 12.54 9.25 12.8333 8.17 12.8333C6.08334 12.8333 4.31667 11.4267 3.68334 9.52667H1.03V11.5867C2.34334 14.2 5.04334 16 8.17 16Z"
-                          fill="#34A853"
-                        />
-                        <path
-                          d="M3.68334 9.52667C3.51667 9.04667 3.43 8.53333 3.43 8C3.43 7.46667 3.52334 6.95334 3.68334 6.47334V4.41334H1.03C0.483335 5.49334 0.170002 6.70667 0.170002 8C0.170002 9.29333 0.483335 10.5067 1.03 11.5867L3.68334 9.52667Z"
-                          fill="#FBBC05"
-                        />
-                        <path
-                          d="M8.17 3.16667C9.35 3.16667 10.4033 3.57334 11.2367 4.36667L13.5167 2.08667C12.1367 0.793334 10.33 0 8.17 0C5.04334 0 2.34334 1.8 1.03 4.41334L3.68334 6.47334C4.31667 4.57334 6.08334 3.16667 8.17 3.16667Z"
-                          fill="#EA4335"
-                        />
-                      </g>
-                    </svg>
-                    <span className="text-sm">
-                      {isGoogleLoading ? 'Continuing...' : 'Continue with Google'}
+                      {digit ||
+                        (index === verificationCode.length ? <i className="signin-caret" /> : null)}
                     </span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full h-10 justify-start gap-3"
-                    onClick={handleMicrosoftOAuth}
-                    disabled={formBusy}
-                  >
-                    <svg width="15" height="15" viewBox="0 0 16 16" aria-hidden>
-                      <path fill="#F35325" d="M1 1h6.5v6.5H1z" />
-                      <path fill="#81BC06" d="M8.5 1H15v6.5H8.5z" />
-                      <path fill="#05A6F0" d="M1 8.5h6.5V15H1z" />
-                      <path fill="#FFBA08" d="M8.5 8.5H15V15H8.5z" />
-                    </svg>
-                    <span className="text-sm">
-                      {isMicrosoftLoading ? 'Continuing...' : 'Continue with Microsoft'}
-                    </span>
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full h-10 justify-start gap-3"
-                    onClick={handleGitHubOAuth}
-                    disabled={formBusy}
-                  >
-                    <svg
-                      fill="none"
-                      height="16"
-                      viewBox="0 0 15 15"
-                      width="16"
-                      xmlns="http://www.w3.org/2000/svg"
-                    >
-                      <path
-                        clipRule="evenodd"
-                        d="M7.49933 0.25C3.49635 0.25 0.25 3.49593 0.25 7.50024C0.25 10.703 2.32715 13.4206 5.2081 14.3797C5.57084 14.446 5.70302 14.2222 5.70302 14.0299C5.70302 13.8576 5.69679 13.4019 5.69323 12.797C3.67661 13.235 3.25112 11.825 3.25112 11.825C2.92132 10.9874 2.44599 10.7644 2.44599 10.7644C1.78773 10.3149 2.49584 10.3238 2.49584 10.3238C3.22353 10.375 3.60629 11.0711 3.60629 11.0711C4.25298 12.1788 5.30335 11.8588 5.71638 11.6732C5.78225 11.205 5.96962 10.8854 6.17658 10.7043C4.56675 10.5209 2.87415 9.89918 2.87415 7.12104C2.87415 6.32925 3.15677 5.68257 3.62053 5.17563C3.54576 4.99226 3.29697 4.25521 3.69174 3.25691C3.69174 3.25691 4.30015 3.06196 5.68522 3.99973C6.26337 3.83906 6.8838 3.75895 7.50022 3.75583C8.1162 3.75895 8.73619 3.83906 9.31523 3.99973C10.6994 3.06196 11.3069 3.25691 11.3069 3.25691C11.7026 4.25521 11.4538 4.99226 11.3795 5.17563C11.8441 5.68257 12.1245 6.32925 12.1245 7.12104C12.1245 9.9063 10.4292 10.5192 8.81452 10.6985C9.07444 10.9224 9.30633 11.3648 9.30633 12.0413C9.30633 13.0102 9.29742 13.7922 9.29742 14.0299C9.29742 14.2239 9.42828 14.4496 9.79591 14.3788C12.6746 13.4179 14.75 10.7025 14.75 7.50024C14.75 3.49593 11.5036 0.25 7.49933 0.25Z"
-                        fillRule="evenodd"
-                        fill="currentColor"
-                      />
-                    </svg>
-                    <span className="text-sm">
-                      {isGitHubLoading ? 'Continuing...' : 'Continue with GitHub'}
-                    </span>
-                  </Button>
-                </div>
-
-                {/* Separator */}
-                <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-border" />
-                  </div>
-                  <div className="relative flex justify-center text-xs text-muted-foreground">
-                    <span className="bg-card px-2">OR</span>
-                  </div>
-                </div>
-
-                {/* Email Form */}
-                <div className="flex flex-col gap-5">
-                  <div className="flex flex-col gap-2">
-                    <label htmlFor="email" className="text-sm font-semibold">
-                      Email
-                    </label>
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="Your email address"
-                      value={email}
-                      onChange={e => setEmail(e.target.value)}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' && email && !formBusy) {
-                          e.preventDefault();
-                          handleEmailSubmit();
-                        }
-                      }}
-                      disabled={formBusy}
-                      autoFocus
-                      required
-                      className="h-10"
-                    />
-                  </div>
-                  <Button type="submit" disabled={formBusy} className="w-full h-10">
-                    {isSendingCode ? 'Sending...' : 'Continue'}
-                  </Button>
-                </div>
-              </form>
-            ) : (
-              <div className="flex flex-col gap-5">
-                {/* Verification Form */}
-                <form onSubmit={handleVerificationSubmit} className="flex flex-col gap-5">
-                  <div className="flex flex-col gap-2 flex-grow">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="email-display" className="text-sm font-semibold">
-                        Email
-                      </label>
-                    </div>
-                    <Input
-                      id="email-display"
-                      type="text"
-                      value={email}
-                      readOnly
-                      className="h-10 bg-muted"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Code sent to <span className="font-medium text-foreground">{email}</span>. If
-                      that is not your address, go back and correct it.
-                    </p>
-                  </div>
-
-                  {codeNotice ? (
-                    <p className="text-sm text-muted-foreground" role="status">
-                      {codeNotice}
-                    </p>
-                  ) : null}
-
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center justify-between">
-                      <label htmlFor="code" className="text-sm font-semibold">
-                        Verification Code
-                      </label>
-                      <Button
-                        size="compact"
-                        type="button"
-                        variant="link"
-                        onClick={handleResendEmail}
-                        className="h-auto px-0 text-xs text-muted-foreground hover:text-foreground disabled:no-underline"
-                        disabled={formBusy || !resendReady}
-                      >
-                        {isSendingCode
-                          ? 'Sending...'
-                          : resendReady
-                            ? 'Resend code'
-                            : 'Resend code in 30s'}
-                      </Button>
-                    </div>
-                    <div className="relative">
-                      <Input
-                        id="code"
-                        type="text"
-                        placeholder="Enter verification code"
-                        value={verificationCode}
-                        onChange={e => setVerificationCode(e.target.value)}
-                        disabled={formBusy}
-                        autoFocus
-                        required
-                        className="h-10 pr-10"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                      />
-                    </div>
-                  </div>
-
-                  <Button type="submit" disabled={formBusy} className="w-full h-10">
-                    {isVerifyingCode ? 'Verifying...' : 'Sign in'}
-                  </Button>
-                </form>
-
-                {/* Back Button - Under Sign in */}
-                <div className="flex justify-center">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleBackToLogin}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    <ArrowLeft className="h-4 w-4 mr-1" />
-                    Go back
-                  </Button>
+                  ))}
                 </div>
               </div>
-            )}
-
-            {/* Error Message */}
-            {(error || authError) && (
-              <div className="mt-4 text-sm text-destructive">{error || authError}</div>
-            )}
-          </Card>
+              <Button type="submit" disabled={formBusy} className="signin-primary">
+                {isVerifyingCode ? 'Verifying...' : 'Verify'}
+                {isVerifyingCode ? null : <span aria-hidden="true">→</span>}
+              </Button>
+              <div className="signin-row">
+                <Button
+                  type="button"
+                  className="signin-resend"
+                  onClick={handleResendEmail}
+                  disabled={formBusy || !resendReady}
+                >
+                  {isSendingCode
+                    ? 'Sending...'
+                    : resendReady
+                      ? 'Resend code'
+                      : 'Resend code in 0:30'}
+                </Button>
+                <Button type="button" className="signin-link" onClick={handleBackToLogin}>
+                  Use a different email
+                </Button>
+              </div>
+              <p className="signin-help" role="status">
+                {codeNotice || 'Can’t find it? Check your spam or promotions folder.'}
+              </p>
+            </form>
+          )}
+          {error || authError ? <p className="signin-error">{error || authError}</p> : null}
         </div>
-      </div>
 
-      {/* Footer - Bottom of screen */}
-      <div className="w-full flex justify-center">
-        <small className="text-sm text-center text-muted-foreground max-w-[340px]">
-          <Link
-            href="https://tensr-1.gitbook.io/tensr/legal-policies/terms-of-service"
-            rel="noopener noreferrer"
-            target="_blank"
-            className="hover:underline"
-          >
-            Terms of Service
-          </Link>{' '}
-          and{' '}
-          <Link
-            href="https://tensr-1.gitbook.io/tensr/legal-policies/privacy-policy"
-            rel="noopener noreferrer"
-            target="_blank"
-            className="hover:underline"
-          >
-            Privacy Policy
-          </Link>
-        </small>
-      </div>
+        <footer className="signin-foot">
+          <span>© 2026 Tensr · Made in Preston</span>
+          <span>
+            <Link
+              href="https://tensr-1.gitbook.io/tensr/legal-policies/terms-of-service"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Terms
+            </Link>
+            <Link
+              href="https://tensr-1.gitbook.io/tensr/legal-policies/privacy-policy"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              Privacy
+            </Link>
+          </span>
+        </footer>
+      </section>
+      <aside className="signin-side" aria-hidden="true">
+        <Image src="/login-preview.png" alt="" width={656} height={600} unoptimized priority />
+        <div className="signin-side-copy">
+          <p className="signin-side-title">Every number, traced to the people behind it.</p>
+          <p>Encrypted at rest. Your data is never used to train models.</p>
+        </div>
+      </aside>
     </div>
   );
 };

@@ -9,7 +9,8 @@
 //     Screenshots the live page at 1440x900 and writes design/paper/<screen-folder>/compare.png
 //     with the live screen on the left and Paper's screen.png on the right.
 //     --ask "<question>" sends a chat question first and waits for the reply.
-//     --click <selector>, --pick "<aria label>|<option>", --wait <selector> run in order first.
+//     --anon captures signed out (the login screens).
+//     --fill "<selector>|<text>", --click <selector>, --pick "<aria label>|<option>", --wait <selector> run in order first.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,12 +47,12 @@ async function signin() {
   console.log(`Saved ${auth} for ${email}`);
 }
 
-async function compare(folder, route, ask, steps = []) {
-  if (!fs.existsSync(auth)) throw new Error('Run "signin" first.');
+async function compare(folder, route, ask, steps = [], anon = false) {
+  if (!anon && !fs.existsSync(auth)) throw new Error('Run "signin" first.');
   const reference = path.join(paper, folder, 'screen.png');
   if (!fs.existsSync(reference)) throw new Error(`No ${reference}`);
   const browser = await chromium.launch();
-  const context = await browser.newContext({ viewport, storageState: auth });
+  const context = await browser.newContext(anon ? { viewport } : { viewport, storageState: auth });
   const page = await context.newPage();
   await page.goto(`${base}${route}`, { waitUntil: 'networkidle' });
   // Flow pages render inside .flow once auth and the workspace are ready; /login has its own form.
@@ -68,6 +69,9 @@ async function compare(folder, route, ask, steps = []) {
       const [label, option] = value.split('|');
       await page.getByLabel(label, { exact: true }).first().click();
       await page.getByRole('option', { name: option, exact: true }).first().click();
+    } else if (kind === '--fill') {
+      const [selector, text] = value.split('|');
+      await page.locator(selector).first().fill(text);
     } else if (kind === '--wait') {
       await page.waitForSelector(value, { timeout: 120_000 });
     }
@@ -105,9 +109,9 @@ const askAt = rest.indexOf('--ask');
 const ask = askAt >= 0 ? rest[askAt + 1] : '';
 const steps = [];
 for (let index = 0; index < rest.length - 1; index += 1) {
-  if (['--click', '--pick', '--wait'].includes(rest[index]))
+  if (['--click', '--pick', '--wait', '--fill'].includes(rest[index]))
     steps.push([rest[index], rest[index + 1]]);
 }
 if (command === 'signin') await signin();
-else if (command && route) await compare(command, route, ask, steps);
+else if (command && route) await compare(command, route, ask, steps, rest.includes('--anon'));
 else console.log('Usage: compare.mjs signin | compare.mjs <screen-folder> <path>');
