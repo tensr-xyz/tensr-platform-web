@@ -10,6 +10,8 @@ const customJestConfig = {
   setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   testEnvironment: 'jsdom',
   moduleNameMapper: {
+    '^react-markdown$': '<rootDir>/src/test-stubs/react-markdown.tsx',
+    '^remark-gfm$': '<rootDir>/src/test-stubs/remark-gfm.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@/components/(.*)$': '<rootDir>/src/components/$1',
     '^@/stores/(.*)$': '<rootDir>/src/stores/$1',
