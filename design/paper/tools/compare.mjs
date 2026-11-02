@@ -52,9 +52,15 @@ async function compare(folder, route) {
   const context = await browser.newContext({ viewport, storageState: auth });
   const page = await context.newPage();
   await page.goto(`${base}${route}`, { waitUntil: 'networkidle' });
+  // Flow pages render inside .flow once auth and the workspace are ready; /login has its own form.
+  await page.waitForSelector(route.startsWith('/flow') ? '.flow-main' : 'form', {
+    timeout: 60_000,
+  });
   await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'), null, {
     timeout: 60_000,
   });
+  // The Next.js dev badge is not part of the app.
+  await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
   await page.waitForTimeout(500);
   const live = await page.screenshot();
   const sheet = await browser.newPage({ viewport: { width: 2 * 1440 + 24, height: 900 } });

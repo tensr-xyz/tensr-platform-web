@@ -36,7 +36,7 @@
   flex: none;
   background: var(--color-well);
   border-right: 1px solid var(--color-line);
-  padding: 14px 10px;
+  padding: 18px 10px 14px;
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -49,6 +49,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 6px;
+  margin-bottom: 5px;
 }
 
 .flow-logo {
@@ -98,6 +99,7 @@
   border-radius: 8px;
   padding: 8px;
   font-size: 14px;
+  line-height: 18px;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
@@ -118,7 +120,7 @@
 .flow-nav .flow-new {
   border: 1px solid var(--color-line);
   background: var(--color-canvas);
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 }
 
 .flow-k {
@@ -236,7 +238,7 @@
 }
 
 .flow-home .flow-body {
-  padding: 44px 56px 48px;
+  padding: 50px 56px 48px;
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -567,7 +569,7 @@
 .home-page {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 18px;
 }
 
 .home-head,
@@ -691,6 +693,10 @@
 
 .card-chips {
   flex-wrap: wrap;
+}
+
+.card-chips > * {
+  font-weight: var(--weight-regular);
 }
 
 .card-chips span {
@@ -3672,9 +3678,49 @@ select.flow-input {
 .interviews-item,
 .interviews-add,
 .interviews-passage,
-.outputs-row,
-.flow-nav button {
+.outputs-row {
   justify-content: flex-start;
+}
+
+.flow-folders .folder-head button {
+  width: auto;
+  margin-left: auto;
+  padding: 0 2px;
+  justify-content: center;
+}
+
+.home-folder {
+  width: auto;
+  flex: none;
+  gap: 6px;
+  height: 30px;
+}
+
+.flow-user-more {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 4px 6px;
+}
+
+.flow-brand-collapse {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 4px;
+}
+
+.flow-expand {
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 20;
+  border: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  padding: 6px;
 }
 
 .side-tabs {

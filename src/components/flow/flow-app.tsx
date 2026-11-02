@@ -132,6 +132,24 @@ type DatasetRow = {
   lineage_label?: string | null;
 };
 
+function PanelIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <rect
+        x="1.5"
+        y="2"
+        width="11"
+        height="10"
+        rx="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+      />
+      <path d="M5 2v10" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
 function SwitchIcon() {
   return (
     <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
@@ -222,6 +240,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const pathname = usePathname();
   const { isAuthReady, isAuthenticated } = useAuth();
   const [palette, setPalette] = useState(false);
+  const [sideHidden, setSideHidden] = useState(false);
   const [pendingAsk, setPendingAsk] = useState<string | null>(null);
   const [projects, setProjects] = useState<FlowProject[]>([]);
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
@@ -350,7 +369,16 @@ export function FlowApp({ slug }: { slug: string[] }) {
   return (
     <SubscriptionGate>
       <div className={projectId ? 'flow flow-project' : 'flow flow-home'}>
-        {projectId ? null : (
+        {projectId ? null : sideHidden ? (
+          <Button
+            className="flow-expand"
+            type="button"
+            aria-label="Show sidebar"
+            onClick={() => setSideHidden(false)}
+          >
+            <PanelIcon />
+          </Button>
+        ) : (
           <aside className="flow-side">
             <div className="flow-brand">
               <LogoMark />
@@ -362,6 +390,14 @@ export function FlowApp({ slug }: { slug: string[] }) {
                     : ''}
                 </em>
               </div>
+              <Button
+                className="flow-brand-collapse"
+                type="button"
+                aria-label="Hide sidebar"
+                onClick={() => setSideHidden(true)}
+              >
+                <PanelIcon />
+              </Button>
             </div>
             <nav className="flow-nav">
               <Button
@@ -437,7 +473,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 </span>
               </div>
               <Button
-                className="flow-btn"
+                className="flow-user-more"
                 type="button"
                 aria-label="Classic workspace"
                 onClick={() => {
