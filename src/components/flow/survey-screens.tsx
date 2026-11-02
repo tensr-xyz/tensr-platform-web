@@ -13,6 +13,8 @@ import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
 import { openEndColumns, pickerColumns, themeColumns, type FlowColumn } from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
+import { FlowMarkdown } from '@/components/flow/flow-markdown';
+import { runAgentLoop } from '@/lib/run-agent-loop';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import {
   bannerColumns,
@@ -112,6 +114,17 @@ function cellFigure(
   return value != null ? `${value.toFixed(digits)}%` : '—';
 }
 
+function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[] {
+  const groups: { label: string; span: number }[] = [];
+  for (const column of columns) {
+    const label = column.id === 'total' ? '' : String(column.codes?.[0]?.column || '');
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) last.span += 1;
+    else groups.push({ label, span: 1 });
+  }
+  return groups;
+}
+
 export function BannerGrid({
   book,
   onSelectCell,
@@ -134,6 +147,7 @@ export function BannerGrid({
   const [picked, setPicked] = useState('');
   const columns = bannerColumns(book);
   const letters = (book.letters as SigLetter[]) || [];
+  const lettersShown = String(book.significance_display || 'column_letters') !== 'none';
   const rows = ((book.rows as BannerRow[]) || []).filter(row => showNets || row.kind !== 'net');
   const notCoded = ((book.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
     ?.not_coded;
@@ -152,12 +166,35 @@ export function BannerGrid({
   return (
     <div>
       <div style={{ overflowX: 'auto' }}>
-        <Table className="flow-table">
+        <Table className="flow-table banner-grid">
           <thead>
+            {bannerGroups(columns).some(group => group.label) ? (
+              <tr className="grid-groups">
+                <th />
+                {bannerGroups(columns).map((group, index) => (
+                  <th key={`${group.label}-${index}`} colSpan={group.span}>
+                    {group.label ? <span>{group.label}</span> : null}
+                  </th>
+                ))}
+              </tr>
+            ) : null}
             <tr>
-              <th>{showQuotes ? 'Theme' : ''}</th>
+              <th>
+                {showQuotes
+                  ? 'Theme'
+                  : String(
+                      ((book.stubs as { label?: string; column?: string }[]) || [])[0]?.label ||
+                        ((book.stubs as { column?: string }[]) || [])[0]?.column ||
+                        ''
+                    )}
+              </th>
               {columns.map(column => (
-                <th key={column.id}>{bannerHeading(column)}</th>
+                <th key={column.id}>
+                  {bannerHeading(column)}
+                  {column.letter_slot && lettersShown ? (
+                    <span className="grid-slot"> {column.letter_slot}</span>
+                  ) : null}
+                </th>
               ))}
             </tr>
           </thead>
@@ -193,7 +230,7 @@ export function BannerGrid({
                         >
                           {cellFigure(cell, figure, digits)}
                           {markLowBase && cell?.low_base ? ' *' : ''}
-                          {letter ? ` ${letter}` : ''}
+                          {letter ? <span className="grid-letter"> {letter}</span> : null}
                         </Button>
                       </td>
                     );
@@ -1020,7 +1057,8 @@ export function TablesBuilder({
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [ask, setAsk] = useState('');
-  const [thread, setThread] = useState<{ role: 'user' | 'run'; text: string }[]>([]);
+  const [thread, setThread] = useState<{ role: 'user' | 'run' | 'reply'; text: string }[]>([]);
+  const [asking, setAsking] = useState(false);
   const [railReady, setRailReady] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
 
@@ -1038,10 +1076,19 @@ export function TablesBuilder({
       flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`).catch(() => ({
         books: [] as SavedBook[],
       })),
-    ]).then(([specPage, bookPage]) => {
+    ]).then(async ([specPage, bookPage]) => {
       if (!live) return;
-      setSpecs(specPage.specs || []);
+      const saved = specPage.specs || [];
+      setSpecs(saved);
       setBooks(bookPage.books || []);
+      const firstId = saved[0]?.spec_id || saved[0]?.id;
+      if (firstId) {
+        const opened = await flowJson<Record<string, unknown>>(
+          `/datasets/${datasetId}/tables/${firstId}`
+        ).catch(() => null);
+        if (!live) return;
+        if (opened) remember(opened);
+      }
       setRailReady(true);
     });
     void flowJson<{
@@ -1161,6 +1208,21 @@ export function TablesBuilder({
         ]);
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Could not save the table'));
+  }
+
+  function matchesSaved(): boolean {
+    const spec = currentSpec() as {
+      stubs?: { column?: string }[];
+      banners?: { column?: string; columns?: string[] }[];
+    } | null;
+    if (!spec) return false;
+    const savedStub = String(spec.stubs?.[0]?.column || '');
+    const savedBanners = bannerNames(spec);
+    return (
+      savedStub === stub &&
+      savedBanners.length === banners.length &&
+      savedBanners.every((name, index) => name === banners[index])
+    );
   }
 
   function currentSpec(): Record<string, unknown> | null {
@@ -1456,16 +1518,8 @@ export function TablesBuilder({
                   </Button>
                 </div>
                 <span className="flow-muted">Nets kept on re-run</span>
-                <Button className="flow-btn" type="button" onClick={runBook}>
-                  Run as banner book
-                </Button>
-                <Button
-                  className="flow-btn primary"
-                  type="button"
-                  disabled={!stub}
-                  onClick={saveTable}
-                >
-                  Save table
+                <Button className="flow-btn tables-run-book" type="button" onClick={runBook}>
+                  Run as banner book →
                 </Button>
               </div>
             </div>
@@ -1480,14 +1534,11 @@ export function TablesBuilder({
                   </p>
                 </div>
                 <div className="tables-title-actions">
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    data-active
-                    onClick={() => setView('table')}
-                  >
-                    Table
-                  </Button>
+                  {stub && !matchesSaved() ? (
+                    <Button className="flow-btn primary" type="button" onClick={saveTable}>
+                      Save table
+                    </Button>
+                  ) : null}
                   <Button className="flow-btn" type="button" onClick={() => setView('chart')}>
                     Chart
                   </Button>
@@ -1514,7 +1565,13 @@ export function TablesBuilder({
                   </Button>
                 </div>
               </div>
-              {book ? (
+              {!railReady ? (
+                <div aria-busy="true">
+                  <Skeleton className="mb-2 h-8 w-full" />
+                  <Skeleton className="mb-2 h-8 w-full" />
+                  <Skeleton className="h-48 w-full" />
+                </div>
+              ) : book ? (
                 <BannerGrid
                   book={book}
                   onSelectCell={openCell}
@@ -1544,28 +1601,54 @@ export function TablesBuilder({
               <span>{book ? labelFor(stub) : 'Table'}</span>
             </div>
             <div className="tables-thread">
-              {thread.map((item, index) => (
-                <p
-                  key={`${item.role}-${index}`}
-                  className={item.role === 'user' ? 'tables-ask' : 'flow-muted'}
-                >
-                  {item.role === 'run' ? `✓ ${item.text}` : item.text}
-                </p>
-              ))}
-              {projectId ? (
-                <Button className="flow-btn" type="button" asChild>
-                  <Link href={`/flow/p/${projectId}/chat`}>Open chat</Link>
-                </Button>
-              ) : null}
+              {thread.map((item, index) =>
+                item.role === 'reply' ? (
+                  <FlowMarkdown key={`reply-${index}`} className="tables-reply">
+                    {item.text}
+                  </FlowMarkdown>
+                ) : (
+                  <p
+                    key={`${item.role}-${index}`}
+                    className={item.role === 'user' ? 'tables-ask' : 'flow-muted'}
+                  >
+                    {item.role === 'run' ? `✓ ${item.text}` : item.text}
+                  </p>
+                )
+              )}
+              {asking ? <p className="flow-status">Warming up</p> : null}
             </div>
             <form
               className="tables-composer"
               onSubmit={event => {
                 event.preventDefault();
                 const text = ask.trim();
-                if (!text) return;
+                if (!text || asking) return;
                 setThread(current => [...current, { role: 'user', text }]);
                 setAsk('');
+                setAsking(true);
+                void runAgentLoop({
+                  message: text,
+                  mode: 'agent',
+                  datasetId: datasetId || null,
+                  agentVersion: 'v2',
+                  signal: AbortSignal.timeout(120_000),
+                })
+                  .then(result =>
+                    setThread(current => [
+                      ...current,
+                      { role: 'reply', text: result.answer_markdown || 'No answer came back.' },
+                    ])
+                  )
+                  .catch(err =>
+                    setThread(current => [
+                      ...current,
+                      {
+                        role: 'run',
+                        text: err instanceof Error ? err.message : 'The reply did not finish.',
+                      },
+                    ])
+                  )
+                  .finally(() => setAsking(false));
               }}
             >
               <Input
@@ -1574,9 +1657,20 @@ export function TablesBuilder({
                 placeholder="Ask, or tell it to change the table…"
                 aria-label="Ask about this table"
               />
-              <Button className="flow-btn primary" type="submit">
-                Ask
-              </Button>
+              <div className="tables-composer-row">
+                <span className="tables-agent-chip">Agent</span>
+                {selectedIndex >= 0 ? (
+                  <span className="flow-muted">@T{selectedIndex + 1}</span>
+                ) : null}
+                <Button
+                  className="chat-send"
+                  type="submit"
+                  aria-label="Ask"
+                  disabled={asking || !ask.trim()}
+                >
+                  ↑
+                </Button>
+              </div>
             </form>
           </aside>
         </>

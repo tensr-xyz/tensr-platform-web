@@ -1640,7 +1640,7 @@ select.flow-input {
 .flow-cell {
   background: transparent;
   border: 0;
-  color: var(--color-accent);
+  color: var(--color-ink);
   font: inherit;
   cursor: pointer;
   padding: 0;
@@ -4133,4 +4133,154 @@ select.flow-input {
 .flow-table th[data-numeric] .sheet-col {
   align-items: flex-end;
   margin-left: auto;
+}
+
+.tables-segment .flow-btn {
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.tables-line > .flow-btn,
+.tables-line .flow-input {
+  height: 26px;
+  padding: 0 9px;
+  font-size: 12px;
+}
+
+.tables-line > .flow-btn:not([data-active='true']) {
+  color: var(--color-ink);
+}
+
+.tables-line .flow-input {
+  border-style: dashed;
+  color: var(--color-muted);
+  background: transparent;
+}
+
+.tables-run-book {
+  margin-left: auto;
+}
+
+.tables-composer {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+}
+
+.tables-composer input {
+  border: 0;
+  padding: 0;
+  height: 22px;
+  box-shadow: none;
+}
+
+.tables-composer-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.tables-composer-row .chat-send {
+  margin-left: auto;
+}
+
+.tables-agent-chip {
+  padding: 2px 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+}
+
+.tables-reply {
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.banner-grid th,
+.banner-grid td {
+  padding: 7px 8px;
+  font-size: 13px;
+}
+
+.banner-grid thead th {
+  position: static;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+  border-bottom: 1px solid var(--color-ink);
+  vertical-align: bottom;
+}
+
+.banner-grid thead th:not(:first-child),
+.banner-grid td {
+  text-align: right;
+}
+
+.banner-grid tbody th {
+  position: static;
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 13px;
+  font-weight: var(--weight-regular);
+}
+
+.banner-grid .flow-cell {
+  font-variant-numeric: tabular-nums;
+}
+
+.grid-slot {
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: var(--weight-regular);
+}
+
+.grid-letter {
+  color: var(--color-accent);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+}
+
+.banner-grid tbody tr:last-child th,
+.banner-grid tbody tr:last-child td {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.tables-foot {
+  justify-content: flex-start;
+  gap: 18px;
+}
+
+.tables-foot > span:last-child {
+  margin-left: auto;
+}
+
+.tables-rail-head .flow-btn {
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 0 4px;
+}
+
+.banner-grid thead tr.grid-groups th {
+  border-bottom: 0;
+  padding-bottom: 0;
+  text-align: center;
+  color: var(--color-muted);
+  font-weight: var(--weight-regular);
+}
+
+.banner-grid thead tr.grid-groups th span {
+  display: block;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-line);
 }
