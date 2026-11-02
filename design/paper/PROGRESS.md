@@ -8,9 +8,9 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 0
-- wired: 0
-- built: 3
+- matched: 1
+- wired: 1
+- built: 2
 - todo: 38
 - checks done: 0 / 5
 
@@ -22,11 +22,13 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - Member marks use letters from the id. The first two characters of a uuid rendered as a number.
 - Blank-equivalent answers are not themes. Shipped in API `aa126337`.
 - A stack error returns its type and message. Shipped in API `aa126337`. Confirm the cars_EN save only after that deploy is live.
-- Workspace label is the real organization name. Initials come from the signed-in account.
+- Workspace label is the real organization name. The sidebar shows the part of that name after the email. The footer name is the part of the email before @. Initials come from that name.
+- The folder plus creates a folder named "New folder". The artboard has no name field.
+- Fielding cards use a coming-soon chip instead of a progress bar with sample completes.
 
 ## Demo path
 
-- [ ] **1a Projects cards** (`68F-0`, `1a-projects-cards`) — **built**. Header, three-up cards, search, New project, coming-soon chip. `screen.tsx` not on disk yet. Resume by saving `get_jsx` for `68F-0` to `screen.tsx`, then match the sidebar icons, folder dots, and card layout. Not matched.
+- [x] **1a Projects cards** (`68F-0`, `1a-projects-cards`) — **wired**. Sidebar icons, three-up cards, search, Cards/Table, and New project match the artboard apart from live names and the coming-soon chip. Search filters. Table view lists the same projects. `screen.tsx` keeps the layout classes; the icon paths stay in Paper.
 - [ ] **2 Chat** (`22B-0`, `2-chat`) — **built**. One composer with Ask, Plan, and Agent. No second Ask box. No `screen.tsx` yet, not matched.
 - [ ] **2c Chat agent made an output** (`1EO8-0`, `2c-chat-output`) — **todo**. PNG only.
 - [ ] **4a Responses sheet** (`8EO-0`, `4a-responses`) — **todo**. PNG only. Needs the left rail, column mini-charts, stats row, and the Agent/Variable/Evidence panel.

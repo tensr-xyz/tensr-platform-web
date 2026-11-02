@@ -51,8 +51,11 @@
 .flow-logo {
   width: 24px;
   height: 24px;
-  display: block;
+  display: grid;
+  place-items: center;
   flex: none;
+  border-radius: 6px;
+  background: var(--color-ink);
 }
 
 .flow-brand-name {
@@ -85,16 +88,23 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 10px;
   border: 0;
   background: transparent;
   color: var(--color-ink);
   border-radius: 8px;
-  padding: 7px 8px;
-  font-size: 13px;
+  padding: 8px;
+  font-size: 14px;
   text-align: left;
   text-decoration: none;
   cursor: pointer;
+}
+
+.nav-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
 }
 
 .flow-nav a[data-active='true'],
@@ -119,8 +129,25 @@
   gap: 2px;
 }
 
+.folder-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px 6px;
+}
+
+.folder-head button {
+  width: auto;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  padding: 0;
+  cursor: pointer;
+  font-size: 14px;
+}
+
 .flow-folders h2 {
-  margin: 0 8px 4px;
+  margin: 0;
   font-size: 12px;
   font-weight: 500;
   color: var(--color-muted);
@@ -128,15 +155,29 @@
 
 .flow-folders button {
   display: flex;
+  align-items: center;
+  gap: 10px;
   width: 100%;
   border: 0;
   background: transparent;
   color: var(--color-ink);
   border-radius: 8px;
   padding: 7px 8px;
-  font-size: 13px;
+  font-size: 14px;
   text-align: left;
   cursor: pointer;
+}
+
+.flow-folders button i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: #9a9a93;
+  flex: none;
+}
+
+.flow-folders button i[data-tone='accent'] {
+  background: var(--color-accent);
 }
 
 .flow-folders button[data-active='true'] {
@@ -152,8 +193,9 @@
   margin-top: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
+  gap: 10px;
+  padding: 14px 8px 8px;
+  border-top: 1px solid var(--color-line);
 }
 
 .flow-avatar {
@@ -350,10 +392,11 @@
 
 .flow-card h2,
 .flow-panel h2 {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 600;
   margin: 0;
   letter-spacing: -0.01em;
+  line-height: 22px;
 }
 
 .flow-card-new {

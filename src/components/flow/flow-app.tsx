@@ -44,14 +44,15 @@ type DatasetRow = {
 
 function LogoMark() {
   return (
-    <svg className="flow-logo" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true">
-      <rect width="48" height="48" rx="8" fill="#1B1C1A" />
-      <rect x="8" y="8" width="12" height="12" rx="2" fill="#FFFFFF" />
-      <rect x="24" y="8" width="12" height="12" rx="2" fill="#6FC2A6" />
-      <rect x="8" y="24" width="12" height="12" rx="2" fill="#FFFFFF" />
-      <rect x="24" y="24" width="12" height="12" rx="2" fill="#FFFFFF" />
-      <rect x="24" y="32" width="12" height="8" rx="2" fill="#FFFFFF" />
-    </svg>
+    <span className="flow-logo" aria-hidden="true">
+      <svg width="15" height="15" viewBox="0 0 48 48">
+        <rect x="4" y="5" width="12" height="12" rx="2.5" fill="#FFFFFF" />
+        <rect x="18" y="5" width="12" height="12" rx="2.5" fill="#FFFFFF" />
+        <rect x="32" y="5" width="12" height="12" rx="2.5" fill="#6FC2A6" />
+        <rect x="18" y="19" width="12" height="12" rx="2.5" fill="#FFFFFF" />
+        <rect x="18" y="33" width="12" height="12" rx="2.5" fill="#FFFFFF" />
+      </svg>
+    </span>
   );
 }
 
@@ -189,8 +190,9 @@ export function FlowApp({ slug }: { slug: string[] }) {
     });
   }, [openDatasetId, openDataset?.original_filename]);
 
-  const initials = account
-    .split(/[\s@]/)
+  const displayName = account.includes('@') ? account.split('@')[0] : account;
+  const initials = (displayName || account)
+    .split(/[\s._-]/)
     .filter(Boolean)
     .slice(0, 2)
     .map(part => part[0]?.toUpperCase())
@@ -205,7 +207,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
               <LogoMark />
               <div className="flow-brand-name">
                 <strong>Tensr</strong>
-                <em>{orgName ? ` · ${orgName}` : ''}</em>
+                <em>
+                  {orgName
+                    ? ` · ${account && orgName.startsWith(account) ? orgName.slice(account.length).trim() || 'Workspace' : orgName}`
+                    : ''}
+                </em>
               </div>
             </div>
             <nav className="flow-nav">
@@ -223,25 +229,40 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   });
                 }}
               >
-                New project <span className="flow-k">⌘N</span>
+                <span className="nav-label">
+                  <NavIcon kind="plus" /> New project
+                </span>
+                <span className="flow-k">⌘N</span>
               </button>
               <button type="button" onClick={() => setPalette(true)}>
-                Search <span className="flow-k">⌘K</span>
+                <span className="nav-label">
+                  <NavIcon kind="search" /> Search
+                </span>
+                <span className="flow-k">⌘K</span>
               </button>
               <Link href="/flow" data-active={section === 'projects'}>
-                Home
+                <span className="nav-label">
+                  <NavIcon kind="home" /> Home
+                </span>
               </Link>
               <Link href="/flow" data-active="false">
-                Datasets <span className="flow-k">{datasets.length}</span>
+                <span className="nav-label">
+                  <NavIcon kind="data" /> Datasets
+                </span>
+                <span className="flow-k">{datasets.length}</span>
               </Link>
               <Link href="/flow/plugins" data-active={section === 'plugins'}>
-                Plugins
+                <span className="nav-label">
+                  <NavIcon kind="plugin" /> Plugins
+                </span>
               </Link>
             </nav>
             <div className="flow-folders">
-              <h2>Folders</h2>
-              <FolderCreate onCreated={reload} />
-              {folders.map(folder => (
+              <div className="folder-head">
+                <h2>Folders</h2>
+                <FolderCreate onCreated={reload} />
+              </div>
+              {folders.map((folder, index) => (
                 <button
                   key={folder.id}
                   type="button"
@@ -251,6 +272,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                     router.push('/flow');
                   }}
                 >
+                  <i data-tone={index === 0 ? 'accent' : 'mute'} />
                   {folder.name}
                 </button>
               ))}
@@ -258,7 +280,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
             <div className="flow-user">
               <span className="flow-avatar">{initials || '·'}</span>
               <div>
-                <strong>{account || 'Signed in'}</strong>
+                <strong>{displayName || 'Signed in'}</strong>
                 <span>
                   {orgName && account && orgName.startsWith(account)
                     ? orgName.slice(account.length).trim() || 'Workspace'
@@ -394,28 +416,58 @@ export function FlowApp({ slug }: { slug: string[] }) {
 }
 
 function FolderCreate({ onCreated }: { onCreated: () => Promise<void> }) {
-  const [name, setName] = useState('');
   return (
-    <form
-      onSubmit={event => {
-        event.preventDefault();
-        if (!name.trim()) return;
+    <button
+      type="button"
+      aria-label="New folder"
+      onClick={() => {
         void flowJson('/api/project-folders', {
           method: 'POST',
-          body: JSON.stringify({ name }),
-        }).then(() => {
-          setName('');
-          return onCreated();
-        });
+          body: JSON.stringify({ name: 'New folder' }),
+        }).then(() => onCreated());
       }}
     >
-      <input
-        className="flow-input"
-        value={name}
-        placeholder="New folder"
-        onChange={event => setName(event.target.value)}
-      />
-    </form>
+      +
+    </button>
+  );
+}
+
+function NavIcon({ kind }: { kind: 'plus' | 'search' | 'home' | 'data' | 'plugin' }) {
+  if (kind === 'plus') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+        <path d="M8 3.5v9M3.5 8h9" fill="none" stroke="#1B1C1A" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (kind === 'search') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+        <circle cx="7" cy="7" r="4.5" fill="none" stroke="#6A6B66" strokeWidth="1.4" />
+        <path d="M10.5 10.5L13.5 13.5" fill="none" stroke="#6A6B66" strokeWidth="1.4" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (kind === 'home') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+        <rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="#6A6B66" strokeWidth="1.4" />
+        <path d="M2.5 6.5h11M6.5 6.5v7" fill="none" stroke="#6A6B66" strokeWidth="1.4" />
+      </svg>
+    );
+  }
+  if (kind === 'data') {
+    return (
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+        <ellipse cx="8" cy="4" rx="5" ry="1.8" fill="none" stroke="#6A6B66" strokeWidth="1.2" />
+        <path d="M3 4v8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8V4M3 8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8" fill="none" stroke="#6A6B66" strokeWidth="1.2" />
+      </svg>
+    );
+  }
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M6 2.5h4v2a1.3 1.3 0 102.6 0h.9v4h-2a1.3 1.3 0 100 2.6h2v2.4H2.5V10.5h2a1.3 1.3 0 100-2.6h-2V4.5H6z" fill="none" stroke="#6A6B66" strokeWidth="1.2" />
+    </svg>
   );
 }
 
@@ -512,7 +564,7 @@ function ProjectsScreen({
           <button className="flow-card flow-card-new" type="button" onClick={onCreate}>
             <span className="home-plus">+</span>
             <strong>New project</strong>
-            <span className="flow-muted">Drop in a .sav, or start an empty project</span>
+            <span className="flow-muted">Recruit on Prolific, sync Qualtrics or drop in a .sav</span>
           </button>
         </div>
       ) : (
@@ -559,10 +611,6 @@ function ProjectsScreen({
           </tbody>
         </table>
       )}
-      <p className="flow-muted">
-        New projects start from a .sav, .csv, or .xlsx. Recruiting on Prolific and live Qualtrics
-        sync are coming soon. Fielding targets are not shown.
-      </p>
     </div>
   );
 }
