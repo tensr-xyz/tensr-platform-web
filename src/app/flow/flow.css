@@ -917,7 +917,7 @@
   flex-direction: column;
   gap: 14px;
   border-top: 1px solid var(--color-line);
-  padding-top: 16px;
+  padding-top: 26px;
 }
 
 .report-template {
@@ -4283,4 +4283,15 @@ select.flow-input {
   display: block;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--color-line);
+}
+
+.report-cards .report-template-link {
+  width: auto;
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: inherit;
 }

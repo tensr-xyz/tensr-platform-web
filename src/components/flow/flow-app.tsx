@@ -3780,7 +3780,16 @@ function ReportScreen({
               </div>
               <div>
                 <h3>Client deck</h3>
-                <p>{templateName || 'Saved tables'}</p>
+                <p>
+                  {templateName ? `${templateName} · ` : 'Default layout · '}
+                  <Button
+                    className="report-template-link"
+                    type="button"
+                    onClick={() => templateInput.current?.click()}
+                  >
+                    {templateName ? 'Change' : 'Use a template'}
+                  </Button>
+                </p>
               </div>
               <Button type="button" disabled={busy !== ''} onClick={() => run('deck', deck)}>
                 Download
@@ -3818,63 +3827,28 @@ function ReportScreen({
               </Button>
             </Card>
           </div>
-          <div className="report-template">
-            <Button
-              className="flow-btn"
-              type="button"
-              onClick={() => templateInput.current?.click()}
-            >
-              {templateName ? 'Change deck template' : 'Use a deck template'}
-            </Button>
-            <span className="flow-muted">
-              {templateName || 'Optional .pptx. The client deck uses its layouts.'}
-            </span>
-            {templateName ? (
-              <Button
-                className="flow-btn"
-                type="button"
-                onClick={() => {
-                  setTemplate('');
-                  setTemplateName('');
-                  if (templateInput.current) templateInput.current.value = '';
-                }}
-              >
-                Remove
-              </Button>
-            ) : null}
-            <Input
-              ref={templateInput}
-              className="sr-only"
-              type="file"
-              accept=".pptx"
-              aria-label="Deck template"
-              tabIndex={-1}
-              onChange={event => {
-                const file = event.target.files?.[0];
-                if (!file) {
-                  setTemplate('');
-                  setTemplateName('');
-                  return;
-                }
-                setTemplateName(file.name);
-                void fileToBase64(file).then(setTemplate);
-              }}
-            />
-          </div>
+          <Input
+            ref={templateInput}
+            className="sr-only"
+            type="file"
+            accept=".pptx"
+            aria-label="Deck template"
+            tabIndex={-1}
+            onChange={event => {
+              const file = event.target.files?.[0];
+              if (!file) {
+                setTemplate('');
+                setTemplateName('');
+                return;
+              }
+              setTemplateName(file.name);
+              void fileToBase64(file).then(setTemplate);
+            }}
+          />
         </div>
         <div className="report-findings">
           <div className="report-head">
             <h2>Key findings</h2>
-            {tables.length ? (
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={findingsPhase === 'loading'}
-                onClick={() => writeFindings(tables, segmentId, rowCut)}
-              >
-                Regenerate
-              </Button>
-            ) : null}
           </div>
           {findingsPhase === 'loading' ? (
             <>
