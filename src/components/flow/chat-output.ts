@@ -85,7 +85,7 @@ function first(body: Record<string, unknown>, keys: string[]): string {
 }
 
 const BASE_SENTENCE =
-  /^(the weighted base for this table is|minimum base|no column is under that base|a column is under that base|base:|unweighted, n =|base \d)/i;
+  /^(the weighted base for this table is|minimum base|no column is under that base|a column is under that base|base:|unweighted, n =|base \d|(un)?weighted\.?$)/i;
 const FILE_LINE = /^(excel workbook|spss syntax|r syntax):/i;
 
 function proseLines(answer: string): string[] {
@@ -162,7 +162,7 @@ export function outputBaseNote(answer: string): string {
   const kept: string[] = [];
   for (const line of proseLines(answer)) {
     for (const sentence of sentences(line)) {
-      if (!isBaseSentence(sentence) || /^base \d/i.test(sentence)) continue;
+      if (!isBaseSentence(sentence) || /^(base \d|(un)?weighted\.?$)/i.test(sentence)) continue;
       const clean = sentence.replace(/\.{2,}$/, '.');
       const key = clean.replace(/[.\s]+$/, '').toLowerCase();
       if (seen.has(key)) continue;
@@ -242,4 +242,37 @@ export function outputChecks(
     }
   }
   return checks;
+}
+
+/** Markdown table blocks in the answer, in order. The panel shows them; the thread keeps the prose. */
+export function answerTables(answer: string): string {
+  const blocks: string[] = [];
+  let current: string[] = [];
+  for (const line of answer.split('\n')) {
+    if (line.trim().startsWith('|')) {
+      current.push(line);
+      continue;
+    }
+    if (current.length) blocks.push(current.join('\n'));
+    current = [];
+  }
+  if (current.length) blocks.push(current.join('\n'));
+  return blocks.join('\n\n');
+}
+
+export function answerWithoutTables(answer: string): string {
+  return answer
+    .split('\n')
+    .filter(line => !line.trim().startsWith('|'))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** Respondent count from the base note, for the trace line. */
+export function baseCount(note: string): string {
+  const weighted = note.match(/\(unweighted (\d[\d,]*)\)/i);
+  if (weighted) return weighted[1];
+  const plain = note.match(/n = (\d[\d,]*)/i);
+  return plain ? plain[1] : '';
 }

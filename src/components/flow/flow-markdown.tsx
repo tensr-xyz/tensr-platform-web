@@ -36,7 +36,7 @@ const components: Components = {
   thead: ({ children }) => <TableHeader>{children}</TableHeader>,
   tbody: ({ children }) => <TableBody>{children}</TableBody>,
   tr: ({ children }) => <TableRow>{children}</TableRow>,
-  th: ({ children }) => <TableHead>{children}</TableHead>,
+  th: ({ children }) => <TableHead>{children === 'Stub' ? '' : children}</TableHead>,
   td: ({ children }) => <TableCell>{children}</TableCell>,
 };
 

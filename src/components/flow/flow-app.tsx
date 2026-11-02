@@ -19,7 +19,10 @@ import {
 } from '@/lib/run-agent-loop';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import {
+  answerTables,
   answerWithoutBase,
+  answerWithoutTables,
+  baseCount,
   outputBaseNote,
   outputChecks,
   outputKind,
@@ -2280,12 +2283,19 @@ function ChatScreen({
     setStatus(null);
   };
 
+  const kind = outputKind(turn?.tool_results);
   const title = outputTitle(turn?.tool_results, answer);
   const takeaway = outputTakeaway(answer);
   const baseNote = outputBaseNote(answer);
   const stat = outputStat(turn?.tool_results, answer, takeaway);
   const runIds = outputRunIds(turn?.tool_results);
   const checks = outputChecks(turn?.tool_results);
+  const tables = answerTables(answer);
+  const thread = answerWithoutBase(panelOpen && tables ? answerWithoutTables(answer) : answer);
+  const tableMode = kind === 'Crosstab' && Boolean(tables);
+  const ledger = (turn?.turn_state?.ledger || {}) as { weight?: string | null };
+  const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
+  const respondents = baseCount(baseNote);
   const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
     const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
     void downloadExport(`/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
@@ -2293,7 +2303,6 @@ function ChatScreen({
       body: JSON.stringify({ run_ids: runIds }),
     }).catch(() => setStatus(`The ${label} export did not finish. Try again.`));
   };
-  const kind = outputKind(turn?.tool_results);
 
   return (
     <div
@@ -2395,7 +2404,7 @@ function ChatScreen({
                   </div>
                 ) : null}
                 {answer && !plan ? (
-                  <FlowMarkdown className="chat-prose">{answerWithoutBase(answer)}</FlowMarkdown>
+                  <FlowMarkdown className="chat-prose">{thread}</FlowMarkdown>
                 ) : null}
                 {plan ? (
                   <div className="chat-plan">
@@ -2473,7 +2482,61 @@ function ChatScreen({
             </div>
           </section>
           <aside className="flow-output" hidden={!panelOpen}>
-            {answer && !plan ? (
+            {answer && !plan && tableMode ? (
+              <>
+                <div className="output-tabs">
+                  <span className="output-tab">T1 {title}</span>
+                  {runIds.length ? (
+                    <Button
+                      className="flow-btn output-tab-export"
+                      type="button"
+                      onClick={() => exportRun('pdf', 'PDF')}
+                    >
+                      Export
+                    </Button>
+                  ) : null}
+                  <Button
+                    className="output-close"
+                    type="button"
+                    aria-label="Close output"
+                    onClick={() => setPanelOpen(false)}
+                  >
+                    ×
+                  </Button>
+                </div>
+                <div className="output-body output-table-body">
+                  <div>
+                    <h2>{title}</h2>
+                    {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
+                  </div>
+                  <div className="report-chips">
+                    <span className="report-chip">
+                      Weight <span className="ink">{ledger.weight || 'none'}</span>
+                    </span>
+                    {lettered ? (
+                      <span className="report-chip">
+                        Sig <span className="ink">95%, letters</span>
+                      </span>
+                    ) : null}
+                  </div>
+                  <FlowMarkdown className="output-table">{tables}</FlowMarkdown>
+                  {lettered ? (
+                    <p className="flow-muted output-base">
+                      Letters show the value is significantly higher than that column at 95%.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="output-trace">
+                  <span>
+                    {respondents
+                      ? `Traced to ${respondents} respondents`
+                      : 'Traced to the open file'}
+                    {file?.original_filename ? ` in ${file.original_filename}` : ''}
+                  </span>
+                  <Link href={`${projectHref}/tables`}>Open in Tables</Link>
+                </div>
+              </>
+            ) : answer && !plan ? (
               <>
                 <div className="output-lead">
                   <div className="output-kicker">
@@ -2493,6 +2556,7 @@ function ChatScreen({
                 </div>
                 <div className="output-body">
                   {takeaway ? <div className="output-takeaway">{takeaway}</div> : null}
+                  {tables ? <FlowMarkdown className="output-table">{tables}</FlowMarkdown> : null}
                   {stat ? (
                     <div>
                       <div className="flow-muted">Key stat</div>
