@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { mapApiInvitation } from '@/lib/organization-invitations';
-import type { FlowColumn } from '@/lib/flow-columns';
+import { pickerColumns, type FlowColumn } from '@/lib/flow-columns';
 import { datasetRowId } from '@/components/flow/survey-screens';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,7 @@ type DetailFile = {
   id?: string;
   original_filename?: string;
   n_rows?: number;
+  updated_at?: string | null;
   project_id?: string;
 };
 
@@ -95,9 +96,17 @@ function roleLabel(role?: string): string {
 }
 
 function columnKind(column: FlowColumn): string {
-  const measure = String(column.measure || '').trim();
-  const type = String(column.type || '').trim();
-  return measure || type || 'column';
+  const name = column.name;
+  if (name.endsWith('_codes')) return 'open';
+  const type = String(column.type || '').toLowerCase();
+  const labels = Object.keys(column.value_labels || {});
+  if (labels.length >= 5 && labels.every(code => /^\d+(\.0)?$/.test(code))) {
+    return `scale ${Math.min(...labels.map(Number))}-${Math.max(...labels.map(Number))}`;
+  }
+  if (['string', 'text'].includes(type)) return labels.length ? 'single' : 'open';
+  if (['numeric', 'number', 'float', 'integer', 'double'].includes(type))
+    return labels.length ? 'single' : 'numeric';
+  return type || 'single';
 }
 
 function editedLabel(value?: string): string {
@@ -127,6 +136,7 @@ export function DetailsScreen({
   const [docs, setDocs] = useState<BriefDoc[] | null>(null);
   const [members, setMembers] = useState<Member[] | null>(null);
   const [columns, setColumns] = useState<FlowColumn[] | null>(null);
+  const [weightName, setWeightName] = useState('');
   const [editing, setEditing] = useState(false);
   const [objectives, setObjectives] = useState('');
   const [audience, setAudience] = useState('');
@@ -203,9 +213,13 @@ export function DetailsScreen({
     }
     let cancelled = false;
     setColumns(null);
-    void flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`)
+    void flowJson<{ columns?: FlowColumn[]; active_weight_column?: string | null }>(
+      `/datasets/${datasetId}/metadata`
+    )
       .then(meta => {
-        if (!cancelled) setColumns(meta.columns || []);
+        if (cancelled) return;
+        setColumns(meta.columns || []);
+        setWeightName(meta.active_weight_column || '');
       })
       .catch(() => {
         if (!cancelled) setColumns([]);
@@ -221,6 +235,7 @@ export function DetailsScreen({
   const briefText = savedText ?? brief?.text ?? brief?.excerpt ?? '';
   const parts = splitBrief(briefText);
   const ready = docs !== null && members !== null && columns !== null;
+  const outline = pickerColumns(columns || []);
 
   const save = () => {
     if (!projectId || busy) return;
@@ -380,7 +395,17 @@ export function DetailsScreen({
                   placeholder="Who the file describes"
                 />
               ) : (
-                <p>{parts.audience || 'No audience yet.'}</p>
+                <>
+                  <p className="details-audience">{parts.audience || 'No audience yet.'}</p>
+                  {active ? (
+                    <div className="details-tags">
+                      {active.n_rows ? (
+                        <span>{active.n_rows.toLocaleString('en-GB')} respondents</span>
+                      ) : null}
+                      {weightName ? <span>{weightName}</span> : null}
+                    </div>
+                  ) : null}
+                </>
               )}
             </div>
           </div>
@@ -393,10 +418,21 @@ export function DetailsScreen({
             </div>
           ) : null}
           <div>
+            <div className="flow-muted details-label">Fieldwork · coming soon</div>
+            <div className="details-fieldwork" data-soon>
+              {['Panel', 'Target', 'Dates', 'Progress'].map(label => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <strong>{label === 'Panel' ? 'Panel fielding is coming soon' : '—'}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
             <div className="details-q-head">
               <div className="flow-muted details-label">
                 Questionnaire outline
-                {columns.length ? ` · ${columns.length} columns` : ''}
+                {outline.length ? ` · ${outline.length} questions` : ''}
               </div>
               {active ? (
                 <Link href={`/flow/p/${projectId}/responses`}>
@@ -406,14 +442,23 @@ export function DetailsScreen({
                 <Link href={`/flow/p/${projectId}/sources`}>Add a file on Sources</Link>
               )}
             </div>
-            {columns.length ? (
+            {outline.length ? (
               <div className="details-q">
-                {columns.map(column => (
-                  <div key={column.name} className="details-q-row">
-                    <span>{column.label || column.name}</span>
-                    <span className="flow-muted">{columnKind(column)}</span>
-                  </div>
-                ))}
+                {outline.map((column, index) => {
+                  const kind = columnKind(column);
+                  return (
+                    <div key={column.name} className="details-q-row">
+                      <span className="details-q-num">Q{index + 1}</span>
+                      <span className="details-q-name">{column.label || column.name}</span>
+                      <span
+                        className="details-q-kind"
+                        data-kind={kind.startsWith('scale') ? 'scale' : kind}
+                      >
+                        {kind}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="flow-muted">This project has no columns to outline.</p>
@@ -431,8 +476,18 @@ export function DetailsScreen({
                   : 'No rows';
                 return (
                   <div key={id} className="details-wave" data-active={id === datasetId}>
-                    <span>{file.original_filename || id}</span>
-                    <span className="flow-muted">{rows}</span>
+                    <i />
+                    <span className="details-wave-name">{file.original_filename || id}</span>
+                    <span className="flow-muted">
+                      {id === datasetId
+                        ? 'current'
+                        : editedLabel(file.updated_at || undefined).replace('Edited ', '')}
+                    </span>
+                    <span className="details-wave-n">
+                      {rows.replace(' rows', '') && file.n_rows
+                        ? `n = ${file.n_rows.toLocaleString('en-GB')}`
+                        : rows}
+                    </span>
                   </div>
                 );
               })
@@ -442,14 +497,29 @@ export function DetailsScreen({
           </div>
           <div>
             <div className="flow-muted details-label">Client and deliverables</div>
-            <p className="flow-muted">No client is stored on this project.</p>
-            <Link href={`/flow/p/${projectId}/report`}>Open report</Link>
+            <div className="details-client" data-soon>
+              <span className="details-client-mark">—</span>
+              <div>
+                <strong>No client yet</strong>
+                <span>Client records are coming soon</span>
+              </div>
+            </div>
+            {[
+              ['Client deck', 'PowerPoint · default layout'],
+              ['Banner book', 'Excel · 95% letters'],
+              ['Topline', 'Word · first saved table'],
+            ].map(([name, detail]) => (
+              <Link key={name} className="details-deliverable" href={`/flow/p/${projectId}/report`}>
+                <span>{name}</span>
+                <span className="flow-muted">{detail}</span>
+              </Link>
+            ))}
           </div>
           <div>
             <div className="details-q-head">
               <div className="flow-muted details-label">Team</div>
-              <Button className="flow-btn" type="button" onClick={() => setAddOpen(true)}>
-                Add member
+              <Button className="details-invite" type="button" onClick={() => setAddOpen(true)}>
+                + Invite
               </Button>
             </div>
             {members.length ? (
@@ -459,7 +529,7 @@ export function DetailsScreen({
                 return (
                   <div key={member.user_id} className="details-member">
                     <Avatar className="size-6">
-                      <AvatarFallback className="bg-accent text-[10px] font-medium text-accent-foreground">
+                      <AvatarFallback className="bg-[#D9E6E0] text-[9px] font-medium text-[#1e6b58]">
                         {memberMark(person?.name || member.user_id)}
                       </AvatarFallback>
                     </Avatar>
