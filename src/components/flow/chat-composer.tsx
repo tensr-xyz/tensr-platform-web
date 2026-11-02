@@ -145,6 +145,16 @@ export function FlowComposer({
             </div>
           ) : null}
           {attachError ? <p className="flow-error">{attachError}</p> : null}
+          {layout === 'thread' ? (
+            <Button
+              className="chat-tool chat-tool-lead"
+              type="button"
+              aria-label="Attach a file"
+              onClick={() => fileRef.current?.click()}
+            >
+              +
+            </Button>
+          ) : null}
           <Textarea
             className="flow-text"
             value={value}
@@ -162,14 +172,16 @@ export function FlowComposer({
             }}
           />
           <div className="chat-composer-row">
-            <Button
-              className="chat-tool"
-              type="button"
-              aria-label="Attach a file"
-              onClick={() => fileRef.current?.click()}
-            >
-              +
-            </Button>
+            {layout === 'hero' ? (
+              <Button
+                className="chat-tool"
+                type="button"
+                aria-label="Attach a file"
+                onClick={() => fileRef.current?.click()}
+              >
+                +
+              </Button>
+            ) : null}
             <Input
               ref={fileRef}
               className="hidden"
@@ -183,7 +195,7 @@ export function FlowComposer({
               }}
             />
             <Button
-              className="chat-tool"
+              className={layout === 'hero' ? 'chat-tool' : 'chat-tool hidden'}
               type="button"
               aria-label="Insert a column"
               onClick={() => {

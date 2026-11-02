@@ -8,6 +8,7 @@
 //     e.g. 6-report /flow/p/<project-id>/report
 //     Screenshots the live page at 1440x900 and writes design/paper/<screen-folder>/compare.png
 //     with the live screen on the left and Paper's screen.png on the right.
+//     --ask "<question>" sends a chat question first and waits for the reply.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +45,7 @@ async function signin() {
   console.log(`Saved ${auth} for ${email}`);
 }
 
-async function compare(folder, route) {
+async function compare(folder, route, ask) {
   if (!fs.existsSync(auth)) throw new Error('Run "signin" first.');
   const reference = path.join(paper, folder, 'screen.png');
   if (!fs.existsSync(reference)) throw new Error(`No ${reference}`);
@@ -59,6 +60,11 @@ async function compare(folder, route) {
   await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'), null, {
     timeout: 60_000,
   });
+  if (ask) {
+    await page.locator('.flow-composer textarea').first().fill(ask);
+    await page.getByRole('button', { name: 'Send' }).click();
+    await page.waitForSelector('.chat-result, .flow-error', { timeout: 240_000 });
+  }
   // A skeleton that never clears is a finding, so capture anyway after 30s.
   await page
     .waitForFunction(() => !document.querySelector('.animate-pulse'), null, { timeout: 30_000 })
@@ -81,7 +87,9 @@ async function compare(folder, route) {
   console.log(`Wrote ${out}`);
 }
 
-const [command, route] = process.argv.slice(2);
+const [command, route, ...rest] = process.argv.slice(2);
+const askAt = rest.indexOf('--ask');
+const ask = askAt >= 0 ? rest[askAt + 1] : '';
 if (command === 'signin') await signin();
-else if (command && route) await compare(command, route);
+else if (command && route) await compare(command, route, ask);
 else console.log('Usage: compare.mjs signin | compare.mjs <screen-folder> <path>');

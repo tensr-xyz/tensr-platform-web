@@ -21,6 +21,10 @@ import { FlowComposer, readChatAttachments } from '@/components/flow/chat-compos
 import {
   answerWithoutBase,
   outputBaseNote,
+  outputChecks,
+  outputKind,
+  outputRunIds,
+  outputStat,
   outputTakeaway,
   outputTitle,
 } from '@/components/flow/chat-output';
@@ -1864,24 +1868,6 @@ function replyLines(result: AgentLoopResponse): string[] {
     .filter(Boolean);
 }
 
-function replyStat(answer: string): string | null {
-  const line = answer.split('\n').find(row => /p\s*[<=>]|F\s*\(|χ|chi-square|η²|eta/.test(row));
-  return line ? line.replace(/[#*`]/g, '').trim() : null;
-}
-
-function replyKind(result: AgentLoopResponse | null): string {
-  for (const item of result?.tool_results || []) {
-    const args = item.args || {};
-    const nested = item.result || {};
-    const type = args.analysis_type || nested.analysis_type || item.name;
-    if (typeof type === 'string' && type.trim()) {
-      const label = type.replaceAll('_', ' ');
-      if (!['run analysis', 'finish', 'count'].includes(label)) return label;
-    }
-  }
-  return 'Output';
-}
-
 function chatFile(
   project: FlowProject | undefined,
   datasets: DatasetRow[]
@@ -2094,6 +2080,8 @@ function ChatScreen({
   const [plan, setPlan] = useState<AgentLoopResponse | null>(null);
   const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
+  const [stepsOpen, setStepsOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(true);
   const [columns, setColumns] = useState<string[] | null>(null);
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -2168,6 +2156,7 @@ function ChatScreen({
       setPlan(null);
       setTurn(null);
       setSteps([]);
+      setPanelOpen(true);
       setDownloads([]);
       setStatus('Warming up');
       setAnswer('');
@@ -2294,11 +2283,24 @@ function ChatScreen({
   const title = outputTitle(turn?.tool_results, answer);
   const takeaway = outputTakeaway(answer);
   const baseNote = outputBaseNote(answer);
-  const kind = replyKind(turn);
-  const stat = replyStat(answer);
+  const stat = outputStat(turn?.tool_results, answer, takeaway);
+  const runIds = outputRunIds(turn?.tool_results);
+  const checks = outputChecks(turn?.tool_results);
+  const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
+    const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
+    void downloadExport(`/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
+      method: 'POST',
+      body: JSON.stringify({ run_ids: runIds }),
+    }).catch(() => setStatus(`The ${label} export did not finish. Try again.`));
+  };
+  const kind = outputKind(turn?.tool_results);
 
   return (
-    <div className={showThread ? 'flow-split' : 'flow-split chat-empty'}>
+    <div
+      className={
+        showThread ? (panelOpen ? 'flow-split' : 'flow-split no-output') : 'flow-split chat-empty'
+      }
+    >
       <aside className="flow-rail">
         <Button className="chat-new" type="button" onClick={clearChat}>
           <NavIcon kind="plus" /> New chat
@@ -2355,12 +2357,41 @@ function ChatScreen({
                 ) : null}
                 {steps.length > 0 ? (
                   <div className="chat-steps">
-                    <div>
+                    <Button
+                      className="chat-steps-head"
+                      type="button"
+                      aria-expanded={stepsOpen}
+                      onClick={() => setStepsOpen(current => !current)}
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                        <path
+                          d="M2.5 6.5l2.2 2.2L9.5 3.5"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                       Ran {steps.length} {steps.length === 1 ? 'step' : 'steps'}
-                    </div>
-                    {steps.map(step => (
-                      <div key={step}>{step}</div>
-                    ))}
+                      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                        <path
+                          d={stepsOpen ? 'M3 4l2 2 2-2' : 'M4 3l2 2-2 2'}
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </Button>
+                    {stepsOpen ? (
+                      <div className="chat-steps-list">
+                        {steps.map(step => (
+                          <div key={step}>{step}</div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 {answer && !plan ? (
@@ -2383,6 +2414,17 @@ function ChatScreen({
                 {answer && !plan ? (
                   <div className="chat-result">
                     <div className="chat-result-top">
+                      <span className="chat-result-icon" aria-hidden="true">
+                        <svg width="14" height="14" viewBox="0 0 14 14">
+                          <path
+                            d="M3 11V7M6 11V4M9 11V6M12 11V3"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.3"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </span>
                       <div>
                         <strong>{title}</strong>
                         <div className="flow-muted">{kind} · Output</div>
@@ -2430,13 +2472,21 @@ function ChatScreen({
               />
             </div>
           </section>
-          <aside className="flow-output">
+          <aside className="flow-output" hidden={!panelOpen}>
             {answer && !plan ? (
               <>
                 <div className="output-lead">
                   <div className="output-kicker">
                     <span className="output-badge">{kind}</span>
                     <span className="flow-muted">Agent chat</span>
+                    <Button
+                      className="output-close"
+                      type="button"
+                      aria-label="Close output"
+                      onClick={() => setPanelOpen(false)}
+                    >
+                      ×
+                    </Button>
                   </div>
                   <h2>{title}</h2>
                   {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
@@ -2449,14 +2499,47 @@ function ChatScreen({
                       <div>{stat}</div>
                     </div>
                   ) : null}
+                  {checks.length ? (
+                    <div>
+                      <div className="flow-muted">Checks</div>
+                      <div className="report-chips">
+                        {checks.map(check => (
+                          <span
+                            key={check.label}
+                            className={check.warn ? 'report-chip warn' : 'report-chip'}
+                          >
+                            {check.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   <div>
                     <div className="flow-muted">Used in</div>
                     <span className="output-badge">This chat · not in the report yet</span>
                   </div>
-                  {downloads.length > 0 ? (
-                    <div>
+                  {downloads.length > 0 || runIds.length > 0 ? (
+                    <div className="output-export">
                       <div className="flow-muted">Export</div>
                       <div className="flow-row">
+                        {runIds.length
+                          ? (
+                              [
+                                ['pdf', 'PDF'],
+                                ['docx', 'Word'],
+                                ['html', 'HTML'],
+                              ] as const
+                            ).map(([format, label]) => (
+                              <Button
+                                key={format}
+                                className="flow-btn output-format"
+                                type="button"
+                                onClick={() => exportRun(format, label)}
+                              >
+                                {label}
+                              </Button>
+                            ))
+                          : null}
                         {downloads.map(file => (
                           <Button
                             key={file.key}

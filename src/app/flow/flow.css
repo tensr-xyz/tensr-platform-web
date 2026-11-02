@@ -419,9 +419,9 @@
 }
 
 .flow-btn.primary {
-  background: var(--color-accent);
+  background: var(--color-ink);
   color: white;
-  border-color: var(--color-accent);
+  border-color: var(--color-ink);
 }
 
 .flow-grid {
@@ -3787,4 +3787,91 @@ select.flow-input {
 
 .flow-composer .flow-text::placeholder {
   color: var(--color-muted);
+}
+
+.flow-split.no-output {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.chat-steps-head {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.chat-steps-head svg:first-child {
+  color: var(--color-accent);
+}
+
+.chat-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-left: 5px;
+  padding-left: 14px;
+  border-left: 1px solid var(--color-line);
+}
+
+.chat-result-icon {
+  width: 32px;
+  height: 32px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: var(--color-well);
+  color: var(--color-accent);
+}
+
+.output-close {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 16px;
+  line-height: 16px;
+  padding: 2px 4px;
+}
+
+.flow-composer:not(.chat-composer) {
+  flex-wrap: nowrap;
+}
+
+.flow-composer:not(.chat-composer) .chat-composer-row {
+  flex: none;
+}
+
+.chat-tool-lead {
+  flex: none;
+  border: 0;
+  background: transparent;
+}
+
+.flow-composer:not(.chat-composer) {
+  padding: 6px 8px 6px 6px;
+}
+
+.flow-composer:not(.chat-composer) .flow-text {
+  min-height: 28px;
+  height: 28px;
+  padding: 5px 4px;
+}
+
+.output-export .flow-row {
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.output-format {
+  height: 24px;
+  padding: 0 8px;
+  font-size: 12px;
 }
