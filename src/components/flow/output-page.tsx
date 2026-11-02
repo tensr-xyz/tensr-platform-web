@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ChoiceSelect } from '@/components/ui/select';
+import { Table } from '@/components/ui/table';
 import { flowJson } from '@/lib/flow-api';
 import { ExportDialog, copyText, figureSvg } from '@/components/flow/export-dialog';
 import {
@@ -57,6 +58,7 @@ export function OutputPage({
   const [adding, setAdding] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [rerunNote, setRerunNote] = useState('');
+  const [panel, setPanel] = useState<'info' | 'comments'>('info');
   const pinned = readPins(projectId).some(pin => pin.runId === runId);
   const plot = figureSvg(
     document.tables.find(table => table.title === 'Group means') || document.tables[0]
@@ -120,139 +122,282 @@ export function OutputPage({
   const open = comments.filter(comment => !comment.resolved);
   const roots = comments.filter(comment => !comment.parent_id);
 
+  const pin = readPins(projectId).find(item => item.runId === runId);
+  const kind =
+    (
+      {
+        anova_oneway: 'ANOVA · Compare means',
+        banner_table: 'Crosstab',
+        descriptives: 'Descriptives',
+        chi_square: 'Chi-square',
+      } as Record<string, string>
+    )[document.op] || document.op.replaceAll('_', ' ');
+  const [answer, ...rest] = document.summary.split(/(?<=[.!?])\s+/);
+  const when = document.createdAt
+    ? new Date(document.createdAt).toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '';
+
   return (
     <div className="output-page">
       <div className="output-toolbar">
-        <Button className="flow-btn" type="button" onClick={onBack}>
-          Outputs
-        </Button>
-        <span>{document.title}</span>
-        <Button className="flow-btn" type="button" onClick={rerun}>
-          Rerun
-        </Button>
-        <Button className="flow-btn" type="button" asChild>
-          <Link href={`/flow/p/${projectId}/chat`}>Ask agent</Link>
-        </Button>
-        <Button
-          className="flow-btn"
-          type="button"
-          onClick={() => void copyText(documentApa(document))}
-        >
-          Copy APA 7
-        </Button>
-        <Button className="flow-btn" type="button" onClick={() => setAdding(true)}>
-          {pinned ? 'In report' : 'Add to report'}
-        </Button>
-        <Button className="flow-btn primary" type="button" onClick={() => setExporting(true)}>
-          Export
-        </Button>
+        <div className="output-crumbs">
+          <Button className="output-crumb" type="button" onClick={onBack}>
+            ‹ Report
+          </Button>
+          <span>/</span>
+          <Button className="output-crumb" type="button" onClick={onBack}>
+            Outputs
+          </Button>
+          <span>/</span>
+          <strong>{document.title}</strong>
+        </div>
+        <div className="output-actions">
+          <Button className="flow-btn" type="button" onClick={rerun}>
+            ↻ Rerun
+          </Button>
+          <Button className="flow-btn" type="button" asChild>
+            <Link href={`/flow/p/${projectId}/chat`}>Ask agent</Link>
+          </Button>
+          <Button
+            className="flow-btn"
+            type="button"
+            data-active={panel === 'comments'}
+            onClick={() => setPanel(current => (current === 'comments' ? 'info' : 'comments'))}
+          >
+            Comments{open.length ? ` · ${open.length}` : ''}
+          </Button>
+          <Button
+            className="flow-btn"
+            type="button"
+            onClick={() => void copyText(documentApa(document))}
+          >
+            Copy APA 7
+          </Button>
+          <Button className="flow-btn" type="button" onClick={() => setAdding(true)}>
+            {pinned ? 'In report' : 'Add to report'}
+          </Button>
+          <Button
+            className="flow-btn primary output-export-btn"
+            type="button"
+            onClick={() => setExporting(true)}
+          >
+            Export <span>PDF · CSV · Markdown · DOCX</span>
+          </Button>
+        </div>
       </div>
       <div className="output-body">
         <article className="output-doc">
-          <p className="flow-muted">
-            {document.op.replaceAll('_', ' ')}
-            {pinned ? ' · In report' : ''}
-          </p>
-          <h2>{document.title}</h2>
-          <p className="flow-muted">
-            {document.base != null ? `Base ${document.base}` : 'Base is not on this run'}
+          <div className="output-badges">
+            <span className="output-badge-kind">{kind}</span>
+            <span className="output-badge-saved">Saved</span>
+            {pinned ? <span className="output-badge-in">In report</span> : null}
+          </div>
+          <h1>{document.title}</h1>
+          <p className="output-meta">
+            {[when, document.base != null ? `n = ${document.base}` : '']
+              .filter(Boolean)
+              .join('  |  ')}
           </p>
           {document.summary ? (
-            <p>{document.summary}</p>
+            <div className="output-answer">
+              <span>Answer</span>
+              <p className="output-answer-lead">{answer}</p>
+              {rest.length ? <p className="output-answer-rest">{rest.join(' ')}</p> : null}
+            </div>
           ) : (
             <p className="flow-muted">This run has no stored summary.</p>
           )}
-          {document.tables.map(table => (
-            <section key={table.title}>
-              <h3>{table.title}</h3>
-              <div className="output-table">
-                <div className="outputs-row">
-                  {table.columns.map(column => (
-                    <span key={column}>{column}</span>
-                  ))}
+          {document.tables
+            .filter(table => !/syntax/i.test(table.title))
+            .map((table, index) => (
+              <section key={table.title} className="output-section">
+                <div className="output-section-head">
+                  <h2>{table.title}</h2>
                 </div>
-                {table.rows.map(row => (
-                  <div key={row.join('|')} className="outputs-row">
-                    {row.map((cell, index) => (
-                      <span key={`${cell}-${index}`}>{cell}</span>
-                    ))}
-                  </div>
+                <div className={index === 0 && plot ? 'output-split' : undefined}>
+                  <Table className="flow-table output-grid">
+                    <thead>
+                      <tr>
+                        {table.columns.map(column => (
+                          <th key={column}>{column}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {table.rows.map(row => (
+                        <tr key={row.join('|')}>
+                          {row.map((cell, cellIndex) => (
+                            <td key={`${cell}-${cellIndex}`}>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </Table>
+                  {index === 0 && plot ? (
+                    <div className="output-plot" dangerouslySetInnerHTML={{ __html: plot }} />
+                  ) : null}
+                </div>
+              </section>
+            ))}
+          {document.checks.length ? (
+            <section className="output-section">
+              <h2>Checks</h2>
+              <div className="output-checks">
+                {document.checks.map(check => (
+                  <span key={check}>{check}</span>
                 ))}
               </div>
-            </section>
-          ))}
-          {plot ? <div className="output-plot" dangerouslySetInnerHTML={{ __html: plot }} /> : null}
-          {document.checks.length ? (
-            <section>
-              <h3>Checks</h3>
-              {document.checks.map(check => (
-                <p key={check}>{check}</p>
-              ))}
-            </section>
-          ) : null}
-          {document.script ? (
-            <section>
-              <h3>Script</h3>
-              <pre className="output-script">{document.script}</pre>
             </section>
           ) : null}
           {rerunNote ? <p className="flow-muted">{rerunNote}</p> : null}
         </article>
-        <aside className="output-comments">
-          <p>
-            Comments <span className="flow-muted">{open.length} open</span>
-          </p>
-          {roots.map(comment => (
-            <div key={comment.id} className="output-comment">
-              <p>
-                {comment.author_name || 'Someone'}{' '}
-                <span className="flow-muted">{commentWhen(comment.created_at)}</span>
-              </p>
-              <p>{comment.text}</p>
-              <div className="outputs-export">
-                <Button className="flow-btn" type="button" onClick={() => resolve(comment)}>
-                  {comment.resolved ? 'Reopen' : 'Resolve'}
-                </Button>
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() => {
-                    setReplyTo(comment.id);
-                    setDraft(current =>
-                      current ? current : `@${comment.author_name || 'Someone'} `
-                    );
-                  }}
+        {panel === 'info' ? (
+          <aside className="output-side">
+            <div className="output-card">
+              <span className="output-card-label">Used in</span>
+              {pin ? (
+                <div className="output-used">
+                  <strong>Report · Key findings</strong>
+                  <span>{pin.headline}</span>
+                </div>
+              ) : (
+                <p className="flow-muted">Not in the report yet.</p>
+              )}
+            </div>
+            <div className="output-card">
+              <span className="output-card-label">Versions</span>
+              <div className="output-version">
+                <i />
+                <div>
+                  <strong>This run{when ? ` · ${when}` : ''}</strong>
+                  <span>{document.base != null ? `n = ${document.base}` : 'Saved run'}</span>
+                </div>
+                <span className="output-current">Current</span>
+              </div>
+              <div className="output-auto">
+                <div>
+                  <strong>Auto-rerun on new waves</strong>
+                  <span>Coming soon</span>
+                </div>
+              </div>
+            </div>
+            {document.script ? (
+              <div className="output-card">
+                <div className="output-card-head">
+                  <span className="output-card-label">Script</span>
+                  <Button
+                    className="output-link"
+                    type="button"
+                    onClick={() => void copyText(document.script)}
+                  >
+                    Copy
+                  </Button>
+                </div>
+                <pre className="output-script">{document.script}</pre>
+                <span className="flow-muted output-script-note">
+                  Runs the same in RStudio or a Tensr notebook.
+                </span>
+              </div>
+            ) : null}
+            {document.base != null ? (
+              <div className="output-card output-traced">Traced to {document.base} respondents</div>
+            ) : null}
+          </aside>
+        ) : (
+          <aside className="output-comments">
+            <div className="output-comments-head">
+              <strong>Comments</strong>
+              <span>{open.length} open</span>
+              <Button className="output-link" type="button" onClick={() => setPanel('info')}>
+                ×
+              </Button>
+            </div>
+            <div className="output-comments-list">
+              {roots.length === 0 ? (
+                <p className="flow-muted output-comments-empty">No comments yet.</p>
+              ) : null}
+              {roots.map(comment => (
+                <div
+                  key={comment.id}
+                  className="output-comment"
+                  data-resolved={comment.resolved || undefined}
                 >
-                  Reply
+                  <div className="output-comment-top">
+                    <span className="output-avatar">
+                      {(comment.author_name || 'S').slice(0, 2).toUpperCase()}
+                    </span>
+                    <div>
+                      <p>
+                        <strong>{comment.author_name || 'Someone'}</strong>{' '}
+                        <span className="flow-muted">{commentWhen(comment.created_at)}</span>
+                      </p>
+                      <p>{comment.text}</p>
+                    </div>
+                    <Button
+                      className="output-resolve"
+                      type="button"
+                      onClick={() => resolve(comment)}
+                    >
+                      {comment.resolved ? 'Reopen' : '✓ Resolve'}
+                    </Button>
+                  </div>
+                  {comments
+                    .filter(reply => reply.parent_id === comment.id)
+                    .map(reply => (
+                      <div key={reply.id} className="output-reply">
+                        <span className="output-avatar">
+                          {(reply.author_name || 'S').slice(0, 2).toUpperCase()}
+                        </span>
+                        <p>
+                          <strong>{reply.author_name || 'Someone'}</strong>{' '}
+                          <span className="flow-muted">{commentWhen(reply.created_at)}</span>
+                          <br />
+                          {reply.text}
+                        </p>
+                      </div>
+                    ))}
+                  <Button
+                    className="output-reply-btn"
+                    type="button"
+                    onClick={() => {
+                      setReplyTo(comment.id);
+                      setDraft(current =>
+                        current ? current : `@${comment.author_name || 'Someone'} `
+                      );
+                    }}
+                  >
+                    Reply
+                  </Button>
+                </div>
+              ))}
+            </div>
+            <div className="output-compose">
+              <Textarea
+                aria-label="Comment"
+                value={draft}
+                placeholder={replyTo ? 'Reply to this comment' : 'Comment on this output'}
+                onChange={event => setDraft(event.target.value)}
+              />
+              <div className="output-compose-row">
+                <span className="flow-muted">{replyTo ? 'Replying' : 'On this output'}</span>
+                {replyTo ? (
+                  <Button className="output-link" type="button" onClick={() => setReplyTo(null)}>
+                    Cancel
+                  </Button>
+                ) : null}
+                <Button className="flow-btn primary" type="button" onClick={post}>
+                  {replyTo ? 'Reply' : 'Comment'}
                 </Button>
               </div>
-              {comments
-                .filter(reply => reply.parent_id === comment.id)
-                .map(reply => (
-                  <p key={reply.id} className="output-reply">
-                    {reply.author_name || 'Someone'}: {reply.text}
-                  </p>
-                ))}
+              {commentError ? <p className="flow-error">{commentError}</p> : null}
             </div>
-          ))}
-          <Textarea
-            aria-label="Comment"
-            value={draft}
-            placeholder={replyTo ? 'Reply to this comment' : 'Comment on this output'}
-            onChange={event => setDraft(event.target.value)}
-          />
-          <div className="outputs-export">
-            {replyTo ? (
-              <Button className="flow-btn" type="button" onClick={() => setReplyTo(null)}>
-                Cancel reply
-              </Button>
-            ) : null}
-            <Button className="flow-btn primary" type="button" onClick={post}>
-              {replyTo ? 'Reply' : 'Comment'}
-            </Button>
-          </div>
-          {commentError ? <p className="flow-error">{commentError}</p> : null}
-        </aside>
+          </aside>
+        )}
       </div>
       {adding ? (
         <AddToReport
