@@ -724,7 +724,7 @@ export function NewProjectDialog({
       if (choice === 'existing' && !existing) throw new Error('Pick a dataset, or skip for now.');
       const page = await flowJson<{ project?: { id?: string } }>('/api/projects', {
         method: 'POST',
-        body: JSON.stringify({ name: name.trim(), folder: folder || null }),
+        body: JSON.stringify({ name: name.trim(), folder: folder || null, keep_empty: true }),
       });
       const id = page.project?.id;
       if (!id) throw new Error('The project did not save.');

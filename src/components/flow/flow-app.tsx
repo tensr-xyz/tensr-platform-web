@@ -3104,6 +3104,8 @@ function ResponsesScreen({
     column => !needle || column.name.toLowerCase().includes(needle)
   );
   const shownCols = headerHits.length ? headerHits : visibleNames;
+  const columnMeta = (name: string) =>
+    columns.find(column => column.name === name || column.label === name);
   const firstSubstantive = Math.max(
     0,
     shownCols.findIndex(
@@ -3125,8 +3127,6 @@ function ResponsesScreen({
       })
       .map(column => column.index)
   );
-  const columnMeta = (name: string) =>
-    columns.find(column => column.name === name || column.label === name);
   const activeIndex = shownCols[pickedCol]?.index ?? shownCols[0]?.index ?? 0;
   const shownRows = preview
     .map((row, index) => ({ row, index }))
