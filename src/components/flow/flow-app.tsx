@@ -23,6 +23,7 @@ import { SourcesScreen } from '@/components/flow/sources-screen';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
+import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -3017,6 +3018,7 @@ function ReportScreen({
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
+  const [pane, setPane] = useState<'report' | 'outputs'>('report');
 
   const writeFindings = useCallback(
     async (nextTables: ReportTable[], nextSegment: string | null, nextCut: RowCut[] | null) => {
@@ -3208,9 +3210,27 @@ function ReportScreen({
     setNote('Topline downloaded.');
   };
 
+  if (pane === 'outputs') {
+    return (
+      <section className="report-page outputs-page">
+        <ReportPaneSwitch pane={pane} onChange={setPane} />
+        <ReportOutputs
+          files={datasets
+            .filter(row => row.project_id === projectId)
+            .map(row => ({
+              id: datasetRowId(row),
+              name: row.original_filename || datasetRowId(row),
+            }))
+            .filter(file => file.id)}
+        />
+      </section>
+    );
+  }
+
   if (phase === 'loading') {
     return (
       <section className="report-page" aria-busy="true" aria-label="Report">
+        <ReportPaneSwitch pane={pane} onChange={setPane} />
         <div className="report-loading">
           <Skeleton className="h-6 w-72" />
           <Skeleton className="h-10 w-96" />
@@ -3228,6 +3248,7 @@ function ReportScreen({
   if (phase === 'error') {
     return (
       <section className="report-page">
+        <ReportPaneSwitch pane={pane} onChange={setPane} />
         <p className="flow-error">{error || 'Could not load this report.'}</p>
       </section>
     );
@@ -3235,6 +3256,7 @@ function ReportScreen({
 
   return (
     <section className="report-page">
+      <ReportPaneSwitch pane={pane} onChange={setPane} />
       <div className="report-toolbar">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

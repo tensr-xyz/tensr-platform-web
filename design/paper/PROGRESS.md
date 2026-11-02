@@ -18,10 +18,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 22
-- wired: 22
+- matched: 23
+- wired: 23
 - built: 0
-- todo: 19
+- todo: 18
 - checks done: 6 passed, 1 owner QA
 
 ## Decisions
@@ -68,7 +68,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **4e Weighting modal** (`97E-0`, `4e-weighting`) — **wired**. Weight opens the rake dialog for the open file. The lead is that file's name and row count. Add target lists the column's codes and their unweighted shares. A target is a percent of that column's rows and is sent as a count. Load targets copies shares from another file in the project. An optional cap is sent as the rake upper bound, and a code whose mean weight meets that cap is marked. Save as new file runs the existing rake and then shows efficiency, effective base, weight range, and how many runs it took, from that response. Cancel closes without saving. Checked on sources-check.csv, 403 rows: region came back South 28.3%, West 26.3%, North 23.1%, East 21.6%, plus the three lowercase codes at 0.2%. No rake was saved. `screen.tsx` records the layout; the sample London shares, 71% efficiency, and 1,604 effective base stay in Paper. Components: shadcn.
 - [x] **4f Run ANOVA modal** (`CJO-0`, `4f-anova`) — **wired**. ANOVA opens the one-way dialog. The dependent list is the numeric columns. The factor is the other columns. Tukey, Games-Howell, and Bonferroni are sent as the post hoc, and clicking the selected one clears it. Welch's F, effect size, and a means plot are the request flags. Run posts to the existing one-way route. The groups, F table, summary, and rejected pairs come from that response. Levene's p and a weight column are shown only when the response includes them. A sheet filter is not sent. Code shows the syntax from the response. Ask agent to explain opens Chat. Add to report opens Report. On sources-check.csv the only numeric column was score. score by region returned "Each group needs at least 2 responses; east, north and south have only 1". `screen.tsx` records the layout; the sample brands, Welch's F, and the Games-Howell pairs stay in Paper. Components: shadcn.
 - [x] **5b Tables chart** (`1E0U-0`, `5b-tables-chart`) — **wired**. Chart on Tables plots the open file through the existing chart-data route. Scatter, bar, line, and box. X, Y, and an optional weight. Fit line is the least-squares line of the returned points. Jitter moves the dots on screen only. Filters are equals, contains, greater than, less than, and answered. Export PNG downloads the plot at 1x or 3x. Add to report opens Report. Table returns to the sheet. The points have no category, so there is no colour-by. On the stacked file, score vs id drew 3 points (id 1, score 3) and the fit of those points was y = 1.00x + 2.00, r = 1.00, across 403 rows. `screen.tsx` records the layout; the sample brands, 2,118 weighted rows, and Region ≠ N. Ireland stay in Paper. Components: shadcn.
-- [ ] **6b Report outputs** (`17SM-0`, `6b-report-outputs`) — **todo**. PNG only. Components: shadcn.
+- [x] **6b Report outputs** (`17SM-0`, `6b-report-outputs`) — **wired**. Report and Outputs sit on the report page. Outputs lists the saved analyses for every file in the project. Search filters those titles. Newest first reverses the list. Opening a row reads that saved run: its summary, its metrics, and its base when the run has one. PDF, Word, and HTML download that run. CSV, Markdown, APA, and Add to report have no route, so they stay coming soon. This project had no saved analyses, so the list was empty. `screen.tsx` records the layout; the sample brands, 2,118 base, fielding count, and means plot stay in Paper. Components: shadcn.
 - [ ] **6c Output one-way ANOVA** (`1AYL-0`, `6c-anova-output`) — **todo**. PNG only. Components: shadcn.
 - [ ] **6d Add to report** (`1C8L-0`, `6d-add-to-report`) — **todo**. PNG only. Components: shadcn.
 - [ ] **6e Output comments** (`1E29-0`, `6e-comments`) — **todo**. PNG only. Components: shadcn.
