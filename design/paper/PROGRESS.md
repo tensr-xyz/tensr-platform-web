@@ -157,6 +157,6 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 
 ## Unfinished
 
-- compare.png for all 41 screens. It needs a signed-in session on localhost:3000. `node <scratchpad>/signin.mjs <state.json>` opens Chromium for a one-time sign-in and saves the session for Playwright screenshots.
+- compare.png for all 41 screens. It needs a signed-in session on localhost:3000: run `node design/paper/tools/compare.mjs signin` once, then `node design/paper/tools/compare.mjs <screen-folder> <path>` per screen.
 
 - `scripts/strip_stored_nominal_nets.py` and `strip_signed_session_urls` were not run. No dev AWS credentials in this session.
