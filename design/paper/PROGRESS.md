@@ -18,10 +18,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 13
-- wired: 13
+- matched: 14
+- wired: 14
 - built: 0
-- todo: 28
+- todo: 27
 - checks done: 6 passed, 1 owner QA
 
 ## Decisions
@@ -59,7 +59,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **1c Plugins** (`3IQ-0`, `1c-plugins`) — **wired**. Marketplace header, search, and the category pills. The catalog is `GET /plugins`. A card shows the real name, description, language, author, and version. Ratings stay "coming soon". A download count appears only when the catalog has one. Category pills match tags. Your team is the signed-in author. My plugins is the install list. Install calls the install route. Publish opens the existing upload page until the publish screen is this shell. The live catalog is Column Summary, which this check installed. `screen.tsx` records the layout; the sample stars and install counts stay in Paper. Components: shadcn.
 - [x] **1e Publish a plugin** (`1E37-0`, `1e-publish-plugin`) — **wired**. Author header, your plugins, and a new manifest. The list is `GET /creator/plugins`. Name, version, description, entry point, and a zip submit through `POST /plugins/upload`. TypeScript and JavaScript submit. Python and R are coming-soon chips and cannot be selected. Pricing is free or a monthly GBP price. Stripe Connect does not pin a currency; checkout uses the currency stored on the plugin. Review lines come from the plugin status and scan result. Earnings are purchases, customers, and this month, with no chart. There is no draft save. The in-page editor and the sandbox test are coming soon. The signed-in author has no plugins, so the list is empty and the figures are 0. `screen.tsx` records the layout; the sample source, review story, and payout chart stay in Paper. Components: shadcn.
 - [x] **1d ⌘K palette** (`3IP-0`, `1d-command-palette`) — **wired**. Search, the menu tabs, and the section list are the real analysis catalog. A result opens that analysis setup. ⌘Enter sends the name to chat. Plugins lists installed plugins. The footer names the open dataset and its row count. Empty sections say coming soon. `screen.tsx` records the layout; the sample MaxDiff copy and the 2,400-row tracker stay in Paper. Components: shadcn.
-- [ ] **2b Chat empty** (`1DY1-0`, `2b-chat-empty`) — **todo**. PNG only. Components: shadcn.
+- [x] **2b Chat empty** (`1DY1-0`, `2b-chat-empty`) — **wired**. An empty thread is the hero, six starters, and the composer. The lead is the open file's name, row count, and variable count. A starter fills the composer. It does not invent a wave, a weight, or a codeframe. No chats yet is the dashed note. Recipes are the saved list, or the save hint. Attach, @, another project, and the web are coming soon. Add source opens Sources. A sent question still uses the thread and the output panel. `screen.tsx` records the layout; the sample W3 prompts, 2,481 respondents, and recipe step counts stay in Paper. Components: shadcn.
 - [ ] **2d Project details** (`1F4C-0`, `2d-project-details`) — **todo**. PNG only. Components: shadcn.
 - [ ] **3 Sources** (`288-0`, `3-sources`) — **todo**. PNG only. Components: shadcn.
 - [ ] **3b Stack waves** (`93J-0`, `3b-stack-waves`) — **todo**. PNG only. Components: shadcn.

@@ -107,6 +107,7 @@ type DatasetRow = {
   id?: string;
   original_filename?: string;
   n_rows?: number;
+  n_cols?: number;
   project_id?: string;
   updated_at?: string;
 };
@@ -484,6 +485,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
               <ChatScreen
                 project={project}
                 datasets={datasets}
+                ready={workspacePhase === 'ready'}
                 pendingAsk={pendingAsk}
                 onAsked={() => setPendingAsk(null)}
               />
@@ -1788,14 +1790,194 @@ function replyKind(result: AgentLoopResponse | null): string {
   return 'Output';
 }
 
+function chatFile(
+  project: FlowProject | undefined,
+  datasets: DatasetRow[]
+): DatasetRow | undefined {
+  if (!project) return undefined;
+  const files = projectFiles(project.id, datasets);
+  return files.find(row => datasetRowId(row) === project.active_dataset_id) || files[0];
+}
+
+function chatLead(file?: DatasetRow): string {
+  if (!file) return 'This project has no file yet. Add one on Sources, then ask about it.';
+  const name = file.original_filename || 'this file';
+  const parts = [
+    file.n_rows ? `${file.n_rows.toLocaleString('en-GB')} rows` : '',
+    file.n_cols ? `${file.n_cols.toLocaleString('en-GB')} variables` : '',
+  ].filter(Boolean);
+  return parts.length ? `I've read ${name}: ${parts.join(', ')}.` : `I've read ${name}.`;
+}
+
+function chatStarters(file: DatasetRow): { title: string; detail: string; prompt: string }[] {
+  const name = file.original_filename || 'this file';
+  return [
+    {
+      title: `Summarise ${name}`,
+      detail: 'Row count and the columns in this file',
+      prompt: `Summarise ${name}.`,
+    },
+    {
+      title: 'Which columns are categorical?',
+      detail: 'A short list from this file',
+      prompt: `Which columns in ${name} are categorical?`,
+    },
+    {
+      title: 'Find the open-end columns',
+      detail: 'Text columns that can be coded',
+      prompt: `Which columns in ${name} look like open ends?`,
+    },
+    {
+      title: 'Run descriptives',
+      detail: 'Means for the numeric columns',
+      prompt: `Run descriptives on the numeric columns in ${name}.`,
+    },
+    {
+      title: 'Draft a column-percent table',
+      detail: 'One stub and one banner from this file',
+      prompt: `Draft a column percent table from ${name}.`,
+    },
+    {
+      title: 'What should I look at first?',
+      detail: 'A short read of this file',
+      prompt: `What should I look at first in ${name}?`,
+    },
+  ];
+}
+
+function EmptyChat({
+  file,
+  ready,
+  question,
+  setQuestion,
+  mode,
+  setMode,
+  send,
+  sourcesHref,
+}: {
+  file?: DatasetRow;
+  ready: boolean;
+  question: string;
+  setQuestion: (value: string) => void;
+  mode: 'ask' | 'plan' | 'agent';
+  setMode: (value: 'ask' | 'plan' | 'agent') => void;
+  send: () => void;
+  sourcesHref: string;
+}) {
+  const name = file?.original_filename || 'this file';
+  return (
+    <section className="flow-thread chat-stage">
+      {!ready ? (
+        <div className="chat-hero">
+          <Skeleton className="h-6 w-28" />
+          <Skeleton className="h-10 w-full max-w-md" />
+          <Skeleton className="h-4 w-full max-w-lg" />
+          <div className="chat-starters">
+            {Array.from({ length: 6 }, (_, index) => (
+              <Skeleton key={index} className="h-24 w-full" />
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="chat-hero">
+          <div className="chat-kicker">
+            <i />
+            Tensr agent
+          </div>
+          <div className="chat-hero-copy">
+            <h1>What do you want to find out?</h1>
+            <p>{chatLead(file)}</p>
+          </div>
+          {file ? (
+            <div className="chat-starters">
+              {chatStarters(file).map(starter => (
+                <Button
+                  key={starter.prompt}
+                  className="chat-starter whitespace-normal items-start h-auto"
+                  type="button"
+                  onClick={() => setQuestion(starter.prompt)}
+                >
+                  <span className="chat-starter-mark">
+                    {starter.title.replace(/^[^A-Za-z]+/, '')[0]}
+                  </span>
+                  <span className="chat-starter-copy">
+                    <strong>{starter.title}</strong>
+                    <span>{starter.detail}</span>
+                  </span>
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <Link className="flow-btn" href={sourcesHref}>
+              Open sources
+            </Link>
+          )}
+          <div className="chat-ask">
+            <div className="flow-composer chat-composer">
+              <Textarea
+                className="flow-text"
+                value={question}
+                onChange={event => setQuestion(event.target.value)}
+                placeholder={
+                  file
+                    ? `Ask about ${name}, or describe what you need.`
+                    : 'Add a file on Sources, then ask about it.'
+                }
+                onKeyDown={event => {
+                  if (event.key === 'Enter' && !event.shiftKey) {
+                    event.preventDefault();
+                    send();
+                  }
+                }}
+              />
+              <div className="chat-composer-row">
+                <Badge tone="soon">Attach coming soon</Badge>
+                <Badge tone="soon">@ coming soon</Badge>
+                <Segmented
+                  className="mode-switch"
+                  aria-label="Chat mode"
+                  value={mode}
+                  onValueChange={setMode}
+                  options={[
+                    { value: 'ask', label: 'Ask' },
+                    { value: 'plan', label: 'Plan' },
+                    { value: 'agent', label: '● Agent' },
+                  ]}
+                />
+                <Button
+                  className="chat-send"
+                  type="button"
+                  aria-label="Send"
+                  disabled={!question.trim()}
+                  onClick={send}
+                >
+                  ↑
+                </Button>
+              </div>
+            </div>
+            <div className="chat-sources">
+              <span>Can also read</span>
+              <Badge tone="soon">Another project · coming soon</Badge>
+              <Badge tone="soon">The web · coming soon</Badge>
+              <Link href={sourcesHref}>+ Add source</Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ChatScreen({
   project,
   datasets,
+  ready,
   pendingAsk,
   onAsked,
 }: {
   project?: FlowProject;
   datasets: DatasetRow[];
+  ready: boolean;
   pendingAsk?: string | null;
   onAsked?: () => void;
 }) {
@@ -1812,7 +1994,12 @@ function ChatScreen({
   const [steps, setSteps] = useState<string[]>([]);
   const askedRef = useRef<string | null>(null);
   const [sessions, setSessions] = useState<{ session_id: string }[] | null>(null);
-  const [recipes, setRecipes] = useState<{ name?: string; recipe_id?: string }[] | null>(null);
+  const [recipes, setRecipes] = useState<
+    { name?: string; recipe_id?: string; ops?: unknown[] }[] | null
+  >(null);
+  const file = chatFile(project, datasets);
+  const showThread = Boolean(sent || answer || plan || status);
+  const projectHref = project ? `/flow/p/${project.id}` : '/flow';
 
   useEffect(() => {
     if (!project) return;
@@ -1954,19 +2141,21 @@ function ChatScreen({
   const title = replyTitle(answer);
   const kind = replyKind(turn);
   const stat = replyStat(answer);
-  const projectHref = project ? `/flow/p/${project.id}` : '/flow';
 
   return (
-    <div className="flow-split">
+    <div className={showThread ? 'flow-split' : 'flow-split chat-empty'}>
       <aside className="flow-rail">
         <Button className="chat-new" type="button" onClick={clearChat}>
           + New chat
         </Button>
-        <div className="flow-muted chat-label">Today</div>
+        <div className="flow-muted chat-label">Chats</div>
         {sessions === null ? (
-          <Skeleton className="h-8 w-full" />
+          <Skeleton className="h-16 w-full" />
         ) : sessions.length === 0 ? (
-          <p className="flow-muted">No saved chats yet</p>
+          <div className="chat-empty-note">
+            <div>No chats yet</div>
+            <p>Your first question starts one. Every run is also kept in Outputs.</p>
+          </div>
         ) : (
           sessions.map(session => (
             <div key={session.session_id} className="chat-item">
@@ -1974,175 +2163,206 @@ function ChatScreen({
             </div>
           ))
         )}
-        <div className="flow-muted chat-label">Recipes</div>
+        <div className="chat-recipe-head">
+          <span className="flow-muted">Recipes</span>
+          <span className="flow-muted" aria-hidden="true">
+            +
+          </span>
+        </div>
         {recipes === null ? (
           <Skeleton className="h-8 w-full" />
-        ) : recipes.length === 0 ? (
-          <p className="flow-muted">Save any run as a recipe</p>
         ) : (
-          recipes.map(recipe => (
-            <div key={recipe.recipe_id} className="chat-item">
-              {recipe.name}
-            </div>
-          ))
+          <>
+            {recipes.map(recipe => (
+              <div key={recipe.recipe_id} className="chat-recipe">
+                <span>{recipe.name || 'Recipe'}</span>
+                {Array.isArray(recipe.ops) ? (
+                  <span className="chat-recipe-steps">
+                    {recipe.ops.length} step{recipe.ops.length === 1 ? '' : 's'}
+                  </span>
+                ) : null}
+              </div>
+            ))}
+            <p className="flow-muted chat-recipe-hint">Save any run as a recipe</p>
+          </>
         )}
       </aside>
-      <section className="flow-thread">
-        <div className="chat-column">
-          <div className="chat-scroll">
-            {sent ? <div className="chat-bubble">{sent}</div> : null}
-            {steps.length > 0 ? (
-              <div className="chat-steps">
-                <div>
-                  Ran {steps.length} {steps.length === 1 ? 'step' : 'steps'}
-                </div>
-                {steps.map(step => (
-                  <div key={step}>{step}</div>
-                ))}
-              </div>
-            ) : null}
-            {answer && !plan ? (
-              <article className="chat-prose" dangerouslySetInnerHTML={{ __html: plain(answer) }} />
-            ) : null}
-            {plan ? (
-              <div className="chat-plan">
-                <strong>Waiting for approval · Plan</strong>
-                <div dangerouslySetInnerHTML={{ __html: plain(answer) }} />
-                <div className="flow-row">
-                  <Button className="flow-btn primary" type="button" onClick={approve}>
-                    Approve
-                  </Button>
-                  <Button className="flow-btn" type="button" onClick={() => setPlan(null)}>
-                    Edit plan
-                  </Button>
-                </div>
-              </div>
-            ) : null}
-            {answer && !plan ? (
-              <div className="chat-result">
-                <div className="chat-result-top">
-                  <div>
-                    <strong>{title}</strong>
-                    <div className="flow-muted">{kind} · Output</div>
+      {showThread ? (
+        <>
+          <section className="flow-thread">
+            <div className="chat-column">
+              <div className="chat-scroll">
+                {sent ? <div className="chat-bubble">{sent}</div> : null}
+                {steps.length > 0 ? (
+                  <div className="chat-steps">
+                    <div>
+                      Ran {steps.length} {steps.length === 1 ? 'step' : 'steps'}
+                    </div>
+                    {steps.map(step => (
+                      <div key={step}>{step}</div>
+                    ))}
                   </div>
-                  <span className="chat-viewing">Viewing</span>
+                ) : null}
+                {answer && !plan ? (
+                  <article
+                    className="chat-prose"
+                    dangerouslySetInnerHTML={{ __html: plain(answer) }}
+                  />
+                ) : null}
+                {plan ? (
+                  <div className="chat-plan">
+                    <strong>Waiting for approval · Plan</strong>
+                    <div dangerouslySetInnerHTML={{ __html: plain(answer) }} />
+                    <div className="flow-row">
+                      <Button className="flow-btn primary" type="button" onClick={approve}>
+                        Approve
+                      </Button>
+                      <Button className="flow-btn" type="button" onClick={() => setPlan(null)}>
+                        Edit plan
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+                {answer && !plan ? (
+                  <div className="chat-result">
+                    <div className="chat-result-top">
+                      <div>
+                        <strong>{title}</strong>
+                        <div className="flow-muted">{kind} · Output</div>
+                      </div>
+                      <span className="chat-viewing">Viewing</span>
+                    </div>
+                    <div className="chat-result-actions">
+                      <Link className="flow-btn primary" href={`${projectHref}/tables`}>
+                        Open
+                      </Link>
+                      <Link className="flow-btn" href={`${projectHref}/report`}>
+                        Add to report
+                      </Link>
+                      {downloads[0] ? (
+                        <Button
+                          className="flow-btn"
+                          type="button"
+                          onClick={() => void openSignedDownload(downloads[0])}
+                        >
+                          Download {downloads[0].filename}
+                        </Button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+                {status === 'Warming up' ? <p className="flow-status">Warming up</p> : null}
+                {status && status !== 'Warming up' ? <p className="flow-error">{status}</p> : null}
+              </div>
+              <div className="flow-composer">
+                <Textarea
+                  className="flow-text"
+                  value={question}
+                  onChange={event => setQuestion(event.target.value)}
+                  placeholder="Ask a follow-up..."
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' && !event.shiftKey) {
+                      event.preventDefault();
+                      void send();
+                    }
+                  }}
+                />
+                <Segmented
+                  className="mode-switch"
+                  aria-label="Chat mode"
+                  value={mode}
+                  onValueChange={setMode}
+                  options={[
+                    { value: 'ask', label: 'Ask' },
+                    { value: 'plan', label: 'Plan' },
+                    { value: 'agent', label: '● Agent' },
+                  ]}
+                />
+                <Button
+                  className="chat-send"
+                  type="button"
+                  aria-label="Send"
+                  disabled={!question.trim() || status === 'Warming up'}
+                  onClick={() => void send()}
+                >
+                  ↑
+                </Button>
+              </div>
+            </div>
+          </section>
+          <aside className="flow-output">
+            {answer && !plan ? (
+              <>
+                <div className="output-body">
+                  <div className="output-kicker">
+                    <span className="output-badge">{kind}</span>
+                    <span className="flow-muted">Agent chat</span>
+                  </div>
+                  <h2>{title}</h2>
+                  <div className="output-takeaway">{replyLead(answer)}</div>
+                  {stat ? (
+                    <div>
+                      <div className="flow-muted">Key stat</div>
+                      <div>{stat}</div>
+                    </div>
+                  ) : null}
+                  <div>
+                    <div className="flow-muted">Used in</div>
+                    <span className="output-badge">This chat · not in the report yet</span>
+                  </div>
+                  {downloads.length > 0 ? (
+                    <div>
+                      <div className="flow-muted">Export</div>
+                      <div className="flow-row">
+                        {downloads.map(file => (
+                          <Button
+                            key={file.key}
+                            className="flow-btn"
+                            type="button"
+                            onClick={() => void openSignedDownload(file)}
+                          >
+                            {file.filename}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="chat-result-actions">
-                  <Link className="flow-btn primary" href={`${projectHref}/tables`}>
-                    Open
-                  </Link>
+                <div className="output-foot">
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() =>
+                      setStatus('This run has no replayable steps to save as a recipe.')
+                    }
+                  >
+                    Save
+                  </Button>
                   <Link className="flow-btn" href={`${projectHref}/report`}>
                     Add to report
                   </Link>
-                  {downloads[0] ? (
-                    <Button
-                      className="flow-btn"
-                      type="button"
-                      onClick={() => void openSignedDownload(downloads[0])}
-                    >
-                      Download {downloads[0].filename}
-                    </Button>
-                  ) : null}
+                  <Link className="flow-btn primary output-open" href={`${projectHref}/tables`}>
+                    Open
+                  </Link>
                 </div>
-              </div>
-            ) : null}
-            {status === 'Warming up' ? <p className="flow-status">Warming up</p> : null}
-            {status && status !== 'Warming up' ? <p className="flow-error">{status}</p> : null}
-          </div>
-          <div className="flow-composer">
-            <Textarea
-              className="flow-text"
-              value={question}
-              onChange={event => setQuestion(event.target.value)}
-              placeholder="Ask a follow-up..."
-              onKeyDown={event => {
-                if (event.key === 'Enter' && !event.shiftKey) {
-                  event.preventDefault();
-                  void send();
-                }
-              }}
-            />
-            <Segmented
-              className="mode-switch"
-              aria-label="Chat mode"
-              value={mode}
-              onValueChange={setMode}
-              options={[
-                { value: 'ask', label: 'Ask' },
-                { value: 'plan', label: 'Plan' },
-                { value: 'agent', label: '● Agent' },
-              ]}
-            />
-            <Button
-              className="chat-send"
-              type="button"
-              aria-label="Send"
-              disabled={status === 'Warming up'}
-              onClick={() => void send()}
-            >
-              ↑
-            </Button>
-          </div>
-        </div>
-      </section>
-      <aside className="flow-output">
-        {answer && !plan ? (
-          <>
-            <div className="output-body">
-              <div className="output-kicker">
-                <span className="output-badge">{kind}</span>
-                <span className="flow-muted">Agent chat</span>
-              </div>
-              <h2>{title}</h2>
-              <div className="output-takeaway">{replyLead(answer)}</div>
-              {stat ? (
-                <div>
-                  <div className="flow-muted">Key stat</div>
-                  <div>{stat}</div>
-                </div>
-              ) : null}
-              <div>
-                <div className="flow-muted">Used in</div>
-                <span className="output-badge">This chat · not in the report yet</span>
-              </div>
-              {downloads.length > 0 ? (
-                <div>
-                  <div className="flow-muted">Export</div>
-                  <div className="flow-row">
-                    {downloads.map(file => (
-                      <Button
-                        key={file.key}
-                        className="flow-btn"
-                        type="button"
-                        onClick={() => void openSignedDownload(file)}
-                      >
-                        {file.filename}
-                      </Button>
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-            <div className="output-foot">
-              <Button
-                className="flow-btn"
-                type="button"
-                onClick={() => setStatus('This run has no replayable steps to save as a recipe.')}
-              >
-                Save
-              </Button>
-              <Link className="flow-btn" href={`${projectHref}/report`}>
-                Add to report
-              </Link>
-              <Link className="flow-btn primary output-open" href={`${projectHref}/tables`}>
-                Open
-              </Link>
-            </div>
-          </>
-        ) : (
-          <p className="flow-muted output-empty">An output from this chat lands here.</p>
-        )}
-      </aside>
+              </>
+            ) : (
+              <p className="flow-muted output-empty">An output from this chat lands here.</p>
+            )}
+          </aside>
+        </>
+      ) : (
+        <EmptyChat
+          file={file}
+          ready={ready}
+          question={question}
+          setQuestion={setQuestion}
+          mode={mode}
+          setMode={setMode}
+          send={send}
+          sourcesHref={`${projectHref}/sources`}
+        />
+      )}
     </div>
   );
 }
