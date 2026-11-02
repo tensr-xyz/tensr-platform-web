@@ -191,8 +191,8 @@ export function SourcesScreen({
           <div>
             <h1 className="sources-title">Sources</h1>
             <p className="flow-muted">
-              Where this project's data comes from. Tensr reads from your survey and panel tools, it
-              doesn't replace them.
+              Where this project&apos;s data comes from. Tensr reads from your survey and panel
+              tools, it doesn&apos;t replace them.
             </p>
           </div>
           <Button
@@ -335,7 +335,7 @@ export function SourcesScreen({
           <div className="sources-block-head">
             <h2>Context</h2>
             <p className="flow-muted">
-              The agent reads these before it answers. They aren't analysed as data.
+              The agent reads these before it answers. They aren&apos;t analysed as data.
             </p>
           </div>
           <div className="sources-docs">
