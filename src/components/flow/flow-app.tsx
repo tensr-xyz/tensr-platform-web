@@ -55,6 +55,20 @@ function LogoMark() {
   );
 }
 
+function editedAgo(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const minutes = Math.round((Date.now() - date.getTime()) / 60000);
+  if (minutes < 1) return 'Edited just now';
+  if (minutes < 60) return `Edited ${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 36) return hours < 24 ? `Edited ${hours}h ago` : 'Edited yesterday';
+  const days = Math.round(hours / 24);
+  if (days < 14) return `Edited ${days} days ago`;
+  return `Edited ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+}
+
 function editedLabel(value?: string | null): string {
   if (!value) return '';
   const date = new Date(value);
@@ -195,7 +209,20 @@ export function FlowApp({ slug }: { slug: string[] }) {
               </div>
             </div>
             <nav className="flow-nav">
-              <button className="flow-new" type="button" onClick={() => router.push('/flow')}>
+              <button
+                className="flow-new"
+                type="button"
+                onClick={() => {
+                  void flowJson<{ project?: { id?: string } }>('/api/projects', {
+                    method: 'POST',
+                    body: JSON.stringify({ name: 'Untitled' }),
+                  }).then(page => {
+                    const id = page.project?.id;
+                    if (id) router.push(`/flow/p/${id}/chat`);
+                    return reload();
+                  });
+                }}
+              >
                 New project <span className="flow-k">⌘N</span>
               </button>
               <button type="button" onClick={() => setPalette(true)}>
@@ -260,13 +287,9 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   <Link href="/flow" aria-label="Projects">
                     <LogoMark />
                   </Link>
-                  <div>
+                  <div className="proj-name">
+                    <i />
                     <strong>{project?.name || 'Project'}</strong>
-                    <span className="flow-muted">
-                      {project?.updated_at
-                        ? `Edited ${editedLabel(project.updated_at)}`
-                        : 'Project'}
-                    </span>
                   </div>
                 </div>
                 <button className="proj-search" type="button" onClick={() => setPalette(true)}>
@@ -303,8 +326,21 @@ export function FlowApp({ slug }: { slug: string[] }) {
               <ProjectsScreen
                 projects={projects}
                 datasets={datasets}
+                folders={folders}
                 folderName={folderName}
+                workspace={orgName}
+                onFolder={name => setFolderName(name)}
                 onCreated={reload}
+                onCreate={() => {
+                  void flowJson<{ project?: { id?: string } }>('/api/projects', {
+                    method: 'POST',
+                    body: JSON.stringify({ name: 'Untitled' }),
+                  }).then(page => {
+                    const id = page.project?.id;
+                    if (id) router.push(`/flow/p/${id}/chat`);
+                    return reload();
+                  });
+                }}
               />
             ) : section === 'details' ? (
               <DetailsScreen project={project} />
@@ -386,18 +422,25 @@ function FolderCreate({ onCreated }: { onCreated: () => Promise<void> }) {
 function ProjectsScreen({
   projects,
   datasets,
+  folders,
   folderName,
+  workspace,
+  onFolder,
   onCreated,
+  onCreate,
 }: {
   projects: FlowProject[];
   datasets: DatasetRow[];
+  folders: { id: string; name: string }[];
   folderName: string | null;
+  workspace: string;
+  onFolder: (name: string | null) => void;
   onCreated: () => Promise<void>;
+  onCreate: () => void;
 }) {
   const [mode, setMode] = useState<'cards' | 'table'>('cards');
   const [filter, setFilter] = useState<'active' | 'mine' | 'archived'>('active');
   const [query, setQuery] = useState('');
-  const [name, setName] = useState('');
   const shown = projects.filter(project => {
     const status = project.status || 'active';
     if (folderName && (project.folder || '') !== folderName) return false;
@@ -407,29 +450,52 @@ function ProjectsScreen({
     return true;
   });
   return (
-    <div>
-      <h1 className="flow-page-title">{folderName || 'Projects'}</h1>
-      <div className="flow-toolbar">
-        <button
-          className="flow-chip"
-          type="button"
-          data-active={mode === 'cards'}
-          onClick={() => setMode('cards')}
+    <div className="home-page">
+      <div className="home-head">
+        <div>
+          <div className="flow-muted">{workspace ? `${workspace} workspace` : 'Workspace'}</div>
+          <h1 className="flow-page-title">{folderName || 'Projects'}</h1>
+        </div>
+        <div className="home-head-actions">
+          <label className="home-search">
+            <input
+              value={query}
+              placeholder="Search projects"
+              onChange={event => setQuery(event.target.value)}
+            />
+          </label>
+          <button className="home-new" type="button" onClick={onCreate}>
+            + New project
+          </button>
+        </div>
+      </div>
+      <div className="home-filters">
+        <div className="home-segment">
+          <button type="button" data-active={mode === 'cards'} onClick={() => setMode('cards')}>
+            Cards
+          </button>
+          <button type="button" data-active={mode === 'table'} onClick={() => setMode('table')}>
+            Table
+          </button>
+        </div>
+        <select
+          className="home-folder"
+          aria-label="Folder"
+          value={folderName || ''}
+          onChange={event => onFolder(event.target.value || null)}
         >
-          Cards
-        </button>
-        <button
-          className="flow-chip"
-          type="button"
-          data-active={mode === 'table'}
-          onClick={() => setMode('table')}
-        >
-          Table
-        </button>
+          <option value="">All folders</option>
+          {folders.map(folder => (
+            <option key={folder.id} value={folder.name}>
+              {folder.name}
+            </option>
+          ))}
+        </select>
+        <span className="home-filters-gap" />
         {(['active', 'mine', 'archived'] as const).map(item => (
           <button
             key={item}
-            className="flow-chip"
+            className="home-filter"
             type="button"
             data-active={filter === item}
             onClick={() => setFilter(item)}
@@ -437,42 +503,17 @@ function ProjectsScreen({
             {item[0].toUpperCase() + item.slice(1)}
           </button>
         ))}
-        <input
-          className="flow-input"
-          style={{ maxWidth: 220 }}
-          value={query}
-          placeholder="Search projects"
-          onChange={event => setQuery(event.target.value)}
-        />
       </div>
-      <form
-        onSubmit={event => {
-          event.preventDefault();
-          void flowJson('/api/projects', {
-            method: 'POST',
-            body: JSON.stringify({ name: name || 'Untitled' }),
-          }).then(() => {
-            setName('');
-            return onCreated();
-          });
-        }}
-        style={{ marginBottom: 16, display: 'flex', gap: 8 }}
-      >
-        <input
-          className="flow-input"
-          value={name}
-          placeholder="Project name"
-          onChange={event => setName(event.target.value)}
-        />
-        <button className="flow-btn primary" type="submit">
-          Create
-        </button>
-      </form>
       {mode === 'cards' ? (
         <div className="flow-grid">
           {shown.map(project => (
             <ProjectCard key={project.id} project={project} datasets={datasets} />
           ))}
+          <button className="flow-card flow-card-new" type="button" onClick={onCreate}>
+            <span className="home-plus">+</span>
+            <strong>New project</strong>
+            <span className="flow-muted">Drop in a .sav, or start an empty project</span>
+          </button>
         </div>
       ) : (
         <table className="flow-table">
@@ -529,15 +570,32 @@ function ProjectsScreen({
 function ProjectCard({ project, datasets }: { project: FlowProject; datasets: DatasetRow[] }) {
   const count = datasets.filter(row => row.project_id === project.id).length;
   const status = project.status || 'active';
+  const draft = count === 0;
   return (
     <Link href={`/flow/p/${project.id}/chat`} className="flow-card">
-      <span className={status === 'active' ? 'flow-pill live' : 'flow-pill'}>{status}</span>
-      <h2>{project.name}</h2>
-      <div className="flow-muted">{project.folder || 'No folder'}</div>
-      <div>
-        {count} dataset{count === 1 ? '' : 's'}
+      <div className="card-top">
+        <span className="card-folder">
+          <i />
+          {project.folder || 'No folder'}
+        </span>
+        <span className={draft ? 'flow-pill' : 'flow-pill live'}>
+          {status === 'archived' ? 'Archived' : draft ? 'Draft' : 'Active'}
+        </span>
       </div>
-      <div className="flow-muted">{editedLabel(project.updated_at)}</div>
+      <div>
+        <h2>{project.name}</h2>
+        <div className="flow-muted">
+          {count} dataset{count === 1 ? '' : 's'}
+        </div>
+      </div>
+      <div className="card-chips">
+        <span>{count === 0 ? 'Not fielded' : `${count} file${count === 1 ? '' : 's'}`}</span>
+        <span className="flow-soon">Fielding coming soon</span>
+      </div>
+      <div className="card-foot">
+        <Members projectId={project.id} />
+        <span className="flow-muted">{editedAgo(project.updated_at)}</span>
+      </div>
     </Link>
   );
 }
@@ -586,18 +644,26 @@ function ShareModal({ projectId, onClose }: { projectId: string; onClose: () => 
   );
 }
 
+function memberMark(id: string): string {
+  const letters = id.replace(/[^a-z]/gi, '');
+  return (letters.slice(0, 2) || '·').toUpperCase();
+}
+
 function Members({ projectId }: { projectId: string }) {
-  const [label, setLabel] = useState('…');
+  const [ids, setIds] = useState<string[]>([]);
   useEffect(() => {
     void flowJson<{ members?: { user_id: string }[] }>(`/api/projects/${projectId}/members`)
-      .then(page =>
-        setLabel(
-          (page.members || []).map(item => item.user_id.slice(0, 2).toUpperCase()).join(' ') || '—'
-        )
-      )
-      .catch(() => setLabel('—'));
+      .then(page => setIds((page.members || []).map(item => item.user_id).filter(Boolean)))
+      .catch(() => setIds([]));
   }, [projectId]);
-  return <span>{label}</span>;
+  if (!ids.length) return <span className="flow-muted">—</span>;
+  return (
+    <span className="avatars">
+      {ids.slice(0, 3).map(id => (
+        <span key={id}>{memberMark(id)}</span>
+      ))}
+    </span>
+  );
 }
 
 function PluginsScreen() {
@@ -729,6 +795,7 @@ function ChatScreen({
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
   const [question, setQuestion] = useState('');
+  const [mode, setMode] = useState<'ask' | 'plan' | 'agent'>('agent');
   const [answer, setAnswer] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [downloads, setDownloads] = useState<ExportDownload[]>([]);
@@ -749,16 +816,17 @@ function ChatScreen({
   }, [project]);
 
   const sendText = useCallback(
-    async (text: string) => {
+    async (text: string, nextMode: 'ask' | 'plan' | 'agent' = mode) => {
       if (!text.trim() || status === 'Warming up') return;
       setQuestion(text);
+      setMode(nextMode);
       setStatus('Warming up');
       setAnswer('');
       let draft = '';
       try {
         const result = await runAgentLoop({
           message: text,
-          mode: 'agent',
+          mode: nextMode,
           datasetId: datasetId || null,
           agentVersion: 'v2',
           signal: AbortSignal.timeout(120_000),
@@ -788,7 +856,7 @@ function ChatScreen({
         setStatus(err instanceof Error ? err.message : 'The reply did not finish. Ask again.');
       }
     },
-    [datasetId, status]
+    [datasetId, mode, status]
   );
 
   useEffect(() => {
@@ -797,7 +865,7 @@ function ChatScreen({
     const handle = window.setTimeout(() => {
       askedRef.current = text;
       onAsked?.();
-      void sendText(text);
+      void sendText(text, 'agent');
     }, 0);
     return () => window.clearTimeout(handle);
   }, [pendingAsk, onAsked, sendText]);
@@ -840,8 +908,20 @@ function ChatScreen({
             className="flow-text"
             value={question}
             onChange={event => setQuestion(event.target.value)}
-            placeholder="Ask about this project"
+            placeholder="Ask a follow-up..."
           />
+          <div className="mode-switch">
+            {(['ask', 'plan', 'agent'] as const).map(item => (
+              <button
+                key={item}
+                type="button"
+                data-active={mode === item}
+                onClick={() => setMode(item)}
+              >
+                {item[0].toUpperCase() + item.slice(1)}
+              </button>
+            ))}
+          </div>
           <button
             className="flow-btn primary"
             type="button"
@@ -852,7 +932,19 @@ function ChatScreen({
           </button>
         </div>
       </section>
-      <SidePanel datasetId={datasetId} />
+      <aside className="flow-output">
+        <p className="flow-muted">An output from this chat lands here.</p>
+        {downloads.map(file => (
+          <button
+            key={file.key}
+            className="flow-btn"
+            type="button"
+            onClick={() => void openSignedDownload(file)}
+          >
+            {file.filename}
+          </button>
+        ))}
+      </aside>
     </div>
   );
 }
@@ -1403,9 +1495,8 @@ function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: 
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
   return (
-    <div className="flow-split">
+    <div className="flow-split tables-layout">
       <TablesBuilder datasetId={datasetId} projectId={project?.id} />
-      <SidePanel datasetId={datasetId} />
     </div>
   );
 }
@@ -1517,62 +1608,69 @@ function ReportScreen({
   };
 
   return (
-    <div className="flow-panel">
-      <h2>Report</h2>
-      <p className="flow-muted">Deck, banner book, and topline come from the saved tables.</p>
-      {specs.map(row => (
-        <label key={row.id} className="flow-row">
-          <input
-            type="checkbox"
-            checked={picked.includes(row.id)}
-            onChange={event =>
-              setPicked(current =>
-                event.target.checked ? [...current, row.id] : current.filter(id => id !== row.id)
-              )
-            }
-          />
-          {row.label}
-        </label>
-      ))}
-      <label>
-        PowerPoint template
-        <input
-          type="file"
-          accept=".pptx"
-          onChange={event => {
-            const file = event.target.files?.[0];
-            if (!file) {
-              setTemplate('');
-              return;
-            }
-            void fileToBase64(file).then(setTemplate);
-          }}
-        />
-      </label>
+    <div className="report-page">
+      <p className="flow-soon">Up to date · regenerates from saved tables</p>
+      <h1>{project?.name || 'Report'}</h1>
+      <p className="flow-muted">
+        {selected.length} saved table{selected.length === 1 ? '' : 's'} · Fielding coming soon
+      </p>
+      <div className="report-head">
+        <div>
+          <h2>Deliverables</h2>
+          <p className="flow-muted">Built from this project&apos;s saved tables.</p>
+        </div>
+      </div>
       {error ? <p className="flow-error">{error}</p> : null}
       {note ? <p>{note}</p> : null}
-      <div className="flow-row">
-        <button
-          className="flow-btn primary"
-          type="button"
-          onClick={() => void deck().catch(err => setError(String(err.message || err)))}
-        >
-          Deck
-        </button>
-        <button
-          className="flow-btn"
-          type="button"
-          onClick={() => void bannerBook().catch(err => setError(String(err.message || err)))}
-        >
-          Banner book
-        </button>
-        <button
-          className="flow-btn"
-          type="button"
-          onClick={() => void topline().catch(err => setError(String(err.message || err)))}
-        >
-          Topline
-        </button>
+      <div className="report-cards">
+        <article>
+          <span>PPTX</span>
+          <strong>Client deck</strong>
+          <p>From the saved tables</p>
+          <label>
+            Template
+            <input
+              type="file"
+              accept=".pptx"
+              onChange={event => {
+                const file = event.target.files?.[0];
+                if (!file) {
+                  setTemplate('');
+                  return;
+                }
+                void fileToBase64(file).then(setTemplate);
+              }}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => void deck().catch(err => setError(String(err.message || err)))}
+          >
+            Download
+          </button>
+        </article>
+        <article>
+          <span>XLSX</span>
+          <strong>Banner book</strong>
+          <p>Every saved table</p>
+          <button
+            type="button"
+            onClick={() => void bannerBook().catch(err => setError(String(err.message || err)))}
+          >
+            Download
+          </button>
+        </article>
+        <article>
+          <span>DOCX</span>
+          <strong>Topline summary</strong>
+          <p>The first saved table</p>
+          <button
+            type="button"
+            onClick={() => void topline().catch(err => setError(String(err.message || err)))}
+          >
+            Download
+          </button>
+        </article>
       </div>
     </div>
   );
