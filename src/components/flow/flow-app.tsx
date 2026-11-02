@@ -3846,8 +3846,8 @@ function ReportScreen({
   if (pane === 'outputs') {
     return (
       <section className="report-page outputs-page">
-        <ReportPaneSwitch pane={pane} onChange={setPane} />
         <ReportOutputs
+          lead={<ReportPaneSwitch pane={pane} onChange={setPane} />}
           projectId={projectId}
           findings={findings.map(finding => ({ id: finding.id, label: finding.eyebrow }))}
           files={datasets

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Segmented } from '@/components/ui/segmented';
@@ -61,10 +61,12 @@ export function ReportOutputs({
   projectId,
   files,
   findings = [],
+  lead,
 }: {
   projectId: string;
   files: { id: string; name: string }[];
   findings?: { id: string; label: string }[];
+  lead?: ReactNode;
 }) {
   const [runs, setRuns] = useState<OutputRun[]>([]);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -222,167 +224,236 @@ export function ReportOutputs({
     return <p className="flow-error">{error || 'Could not load saved analyses.'}</p>;
   }
 
+  const kindLabel = (op: string) => {
+    const known: Record<string, string> = {
+      anova_oneway: 'ANOVA',
+      banner_table: 'Crosstab',
+      descriptives: 'Descriptives',
+      chi_square: 'Chi-square',
+      frequencies: 'Frequencies',
+      linear_regression: 'Regression',
+      ttest_independent: 't-test',
+    };
+    return known[op] || op.replaceAll('_', ' ');
+  };
+
   return (
-    <div className="outputs-board">
-      <aside className="outputs-filters">
-        <p className="flow-muted">Status</p>
-        <Button
-          className="flow-btn"
-          type="button"
-          data-active={status === 'all'}
-          onClick={() => setStatus('all')}
-        >
-          All outputs {runs.length}
-        </Button>
-        {counts.map(item => (
-          <Button
-            key={item.status}
-            className="flow-btn"
-            type="button"
-            data-active={status === item.status}
-            onClick={() => setStatus(item.status)}
-          >
-            {item.status} {item.count}
-          </Button>
-        ))}
-        <p className="flow-muted outputs-note">
-          Every finished analysis in this project is listed here. Open one to read the saved
-          summary.
-        </p>
-      </aside>
-      <div className="outputs-list">
-        <div className="outputs-list-tools">
+    <div className="outputs-shell">
+      <div className="outputs-top">
+        {lead}
+        <span className="sheet-spacer" />
+        <label className="outputs-search">
+          <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true">
+            <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.3" />
+            <path d="M9 9l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
           <Input
             value={query}
             onChange={event => setQuery(event.target.value)}
             placeholder="Search outputs"
             aria-label="Search outputs"
           />
-          <Button className="flow-btn" type="button" onClick={() => setOldest(current => !current)}>
-            {oldest ? 'Oldest first' : 'Newest first'}
-          </Button>
-        </div>
-        {groups.length ? (
-          groups.map(group => (
-            <section key={group.label}>
-              <p className="flow-muted">{group.label}</p>
-              {group.runs.map(run => (
-                <Button
-                  key={run.id}
-                  className="outputs-row"
-                  type="button"
-                  data-active={run.id === selectedId}
-                  onClick={() => {
-                    setSelectedId(run.id);
-                    setOpened(true);
-                  }}
-                >
-                  <span>{run.op.replaceAll('_', ' ')}</span>
-                  <span>
-                    {run.title}
-                    {run.file ? ` · ${run.file}` : ''}
-                  </span>
-                  <span>{clockLabel(run.created_at)}</span>
-                  <span>{run.status}</span>
-                </Button>
-              ))}
-            </section>
-          ))
-        ) : (
-          <p className="flow-muted">
-            {runs.length
-              ? 'No analyses match this search.'
-              : 'No saved analyses in this project yet. Run one from Tables, Responses, or Chat.'}
-          </p>
-        )}
+        </label>
+        <Button className="flow-btn" type="button" onClick={() => setOldest(current => !current)}>
+          {oldest ? 'Oldest first' : 'Newest first'}
+        </Button>
+        <Button
+          className="flow-btn"
+          type="button"
+          disabled
+          title="Selecting several outputs is coming soon"
+        >
+          Select
+        </Button>
       </div>
-      <aside className="outputs-detail">
-        {selected ? (
-          <>
-            <p className="flow-muted">{selected.op.replaceAll('_', ' ')}</p>
-            <h2>{selected.title}</h2>
-            <p className="flow-muted">
-              {selected.status}
-              {base != null ? ` · base ${base}` : ''}
-              {selected.created_at ? ` · ${clockLabel(selected.created_at)}` : ''}
-            </p>
-            {detailPhase === 'loading' ? <Skeleton className="outputs-skeleton" /> : null}
-            {detailPhase === 'error' ? <p className="flow-error">{exportError}</p> : null}
-            {summary ? <p>{summary}</p> : null}
-            {metrics.map(metric => (
-              <p key={metric.label}>
-                {metric.label}: {metric.value}
-              </p>
-            ))}
-            {!summary && detailPhase === 'ready' ? (
-              <p className="flow-muted">This run has no stored summary.</p>
-            ) : null}
-            <div className="outputs-export">
-              <Button
-                className="flow-btn"
-                type="button"
-                onClick={() => download('pdf', 'analysis.pdf')}
-              >
-                PDF
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                onClick={() => download('docx', 'analysis.docx')}
-              >
-                Word
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                onClick={() => download('html', 'analysis.html')}
-              >
-                HTML
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={!detail}
-                onClick={() => downloadLocal('csv')}
-              >
-                CSV
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={!detail}
-                onClick={() => downloadLocal('md')}
-              >
-                Markdown
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={!detail}
-                onClick={() => downloadLocal('apa')}
-              >
-                APA
-              </Button>
-              <Button className="flow-btn" type="button" onClick={() => setOpened(true)}>
-                Open
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={!detail}
-                onClick={() => setOpened(true)}
-              >
-                Add to report
-              </Button>
+      <div className="outputs-board">
+        <aside className="outputs-filters">
+          <p className="outputs-label">Status</p>
+          <Button
+            className="outputs-filter"
+            type="button"
+            data-active={status === 'all'}
+            onClick={() => setStatus('all')}
+          >
+            <span>All outputs</span>
+            <span>{runs.length}</span>
+          </Button>
+          {counts.map(item => (
+            <Button
+              key={item.status}
+              className="outputs-filter"
+              type="button"
+              data-active={status === item.status}
+              onClick={() => setStatus(item.status)}
+            >
+              <span>
+                <i data-status={item.status} />
+                {item.status[0].toUpperCase() + item.status.slice(1)}
+              </span>
+              <span>{item.count}</span>
+            </Button>
+          ))}
+          <p className="outputs-label">Ran from</p>
+          <p className="outputs-soon">Agent chat, dialogs, notebook and ⌘K · filters coming soon</p>
+          <span className="sheet-spacer" />
+          <div className="outputs-howto">
+            <strong>How outputs work</strong>
+            <span>
+              Every finished analysis in this project is kept here. Add to report puts it in the
+              curated report and deliverables.
+            </span>
+          </div>
+        </aside>
+        <div className="outputs-list">
+          <div className="outputs-list-head">
+            <div>
+              <h2>Outputs</h2>
+              <p>Every analysis you run on this project&apos;s files is kept here.</p>
             </div>
-            {exportError && detailPhase !== 'error' ? (
-              <p className="flow-error">{exportError}</p>
-            ) : null}
-          </>
-        ) : (
-          <p className="flow-muted">Select an analysis.</p>
-        )}
-      </aside>
+          </div>
+          <div className="outputs-cols">
+            <span />
+            <span>File</span>
+            <span>Ran</span>
+            <span>Status</span>
+          </div>
+          {groups.length ? (
+            groups.map(group => (
+              <section key={group.label}>
+                <p className="outputs-day">{group.label}</p>
+                {group.runs.map(run => (
+                  <Button
+                    key={run.id}
+                    className="outputs-row"
+                    type="button"
+                    data-active={run.id === selectedId}
+                    onClick={() => setSelectedId(run.id)}
+                    onDoubleClick={() => {
+                      setSelectedId(run.id);
+                      setOpened(true);
+                    }}
+                  >
+                    <span className="outputs-kind">{kindLabel(run.op)}</span>
+                    <span className="outputs-title">
+                      <strong>{run.title}</strong>
+                    </span>
+                    <span className="outputs-file">{run.file || '—'}</span>
+                    <span className="outputs-time">{clockLabel(run.created_at)}</span>
+                    <span className="outputs-status" data-status={run.status}>
+                      {run.status}
+                    </span>
+                  </Button>
+                ))}
+              </section>
+            ))
+          ) : (
+            <p className="flow-muted">
+              {runs.length
+                ? 'No analyses match this search.'
+                : 'No saved analyses in this project yet. Run one from Tables, Responses, or Chat.'}
+            </p>
+          )}
+        </div>
+        <aside className="outputs-detail">
+          {selected ? (
+            <>
+              <div className="outputs-detail-body">
+                <p className="outputs-detail-meta">
+                  <span className="outputs-kind">{kindLabel(selected.op)}</span>
+                  {selected.file ? ` ${selected.file}` : ''}
+                  {selected.created_at ? ` · ${clockLabel(selected.created_at)}` : ''}
+                </p>
+                <h2>{selected.title}</h2>
+                <p className="flow-muted outputs-detail-sub">
+                  {[selected.status, base != null ? `n = ${base}` : ''].filter(Boolean).join(' · ')}
+                </p>
+                {detailPhase === 'loading' ? <Skeleton className="outputs-skeleton" /> : null}
+                {detailPhase === 'error' ? <p className="flow-error">{exportError}</p> : null}
+                {summary ? <p className="outputs-summary">{summary}</p> : null}
+                {metrics.length ? (
+                  <div className="outputs-block">
+                    <span className="outputs-label">Key stat</span>
+                    {metrics.slice(0, 3).map(metric => (
+                      <p key={metric.label}>
+                        {metric.label}: {metric.value}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+                {!summary && detailPhase === 'ready' ? (
+                  <p className="flow-muted">This run has no stored summary.</p>
+                ) : null}
+                <div className="outputs-export">
+                  <span className="outputs-label">Export</span>
+                  <Button
+                    className="outputs-fmt"
+                    type="button"
+                    onClick={() => download('pdf', 'analysis.pdf')}
+                  >
+                    PDF
+                  </Button>
+                  <Button
+                    className="outputs-fmt"
+                    type="button"
+                    onClick={() => download('docx', 'analysis.docx')}
+                  >
+                    Word
+                  </Button>
+                  <Button
+                    className="outputs-fmt"
+                    type="button"
+                    onClick={() => download('html', 'analysis.html')}
+                  >
+                    HTML
+                  </Button>
+                  <Button
+                    className="outputs-fmt"
+                    type="button"
+                    disabled={!detail}
+                    onClick={() => downloadLocal('csv')}
+                  >
+                    CSV
+                  </Button>
+                  <Button
+                    className="outputs-fmt"
+                    type="button"
+                    disabled={!detail}
+                    onClick={() => downloadLocal('md')}
+                  >
+                    Markdown
+                  </Button>
+                  <Button
+                    className="outputs-fmt"
+                    type="button"
+                    disabled={!detail}
+                    onClick={() => downloadLocal('apa')}
+                  >
+                    APA 7
+                  </Button>
+                </div>
+                {exportError && detailPhase !== 'error' ? (
+                  <p className="flow-error">{exportError}</p>
+                ) : null}
+              </div>
+              <div className="outputs-detail-foot">
+                <Button
+                  className="flow-btn"
+                  type="button"
+                  disabled={!detail}
+                  onClick={() => setOpened(true)}
+                >
+                  Add to report
+                </Button>
+                <Button className="flow-btn primary" type="button" onClick={() => setOpened(true)}>
+                  Open
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="flow-muted outputs-detail-body">Select an analysis.</p>
+          )}
+        </aside>
+      </div>
     </div>
   );
 }
