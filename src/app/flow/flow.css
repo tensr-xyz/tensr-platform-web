@@ -4379,3 +4379,22 @@ select.flow-input {
   font-size: 14px;
   line-height: 20px;
 }
+
+.responses-sheet > .sheet-toolbar {
+  overflow: hidden;
+  min-width: 0;
+}
+
+.sheet-analyse {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sheet-evidence-chip {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: inline-block;
+  white-space: nowrap;
+}

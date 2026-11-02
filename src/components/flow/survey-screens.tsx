@@ -610,8 +610,13 @@ export function EvidencePanel({
             </p>
             {items.map(item => (
               <article key={`${item.respondent_id}-${item.text}`}>
-                <p>{item.text}</p>
-                <p className="flow-muted">{item.respondent_id}</p>
+                <p>“{String(item.text).trim()}”</p>
+                <p className="flow-muted">
+                  Respondent{' '}
+                  {/^[0-9a-f-]{20,}$/i.test(String(item.respondent_id))
+                    ? String(item.respondent_id).slice(0, 8)
+                    : item.respondent_id}
+                </p>
               </article>
             ))}
             {total > shown ? (

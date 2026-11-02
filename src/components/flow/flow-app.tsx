@@ -2944,7 +2944,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
       <section className="responses-sheet">
         <div className="sheet-toolbar">
           <ChoiceSelect
-            className="w-[180px] shrink-0"
+            className="w-[150px] shrink-0"
             aria-label="Dataset"
             value={datasetId || ''}
             onValueChange={nextId => {
@@ -2992,7 +2992,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                 Stats
               </Button>
               <Button
-                className="flow-btn"
+                className={surveyCell ? 'flow-btn hidden' : 'flow-btn'}
                 type="button"
                 data-active={showFilters}
                 onClick={() => setShowFilters(current => !current)}
@@ -3011,7 +3011,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
               {surveyCell ? (
                 <>
                   <Button
-                    className="flow-btn"
+                    className="flow-btn sheet-evidence-chip"
                     type="button"
                     data-active
                     onClick={() => setSurveyCell(null)}
@@ -3025,29 +3025,44 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                 </>
               ) : null}
               <span className="sheet-spacer" />
-              <Button className="flow-btn" type="button" onClick={() => setWeightOpen(true)}>
-                Weight
-              </Button>
-              <Button className="flow-btn" type="button" onClick={() => setAnovaOpen(true)}>
-                ANOVA
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                onClick={() => {
-                  if (!datasetId) return;
-                  setDescError(null);
-                  void flowFetch(`/datasets/${datasetId}/analyze/descriptives`, {
-                    method: 'POST',
-                    body: JSON.stringify({ columns: dependentColumns(columns).slice(0, 1) }),
-                  }).then(async response => {
-                    if (!response.ok) setDescError(await response.text());
-                    else setDescError(null);
-                  });
-                }}
-              >
-                Descriptives
-              </Button>
+              {surveyCell ? null : (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button className="flow-btn sheet-analyse" type="button">
+                      Analyse
+                      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                        <path
+                          d="M3 4l2 2 2-2"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onSelect={() => setWeightOpen(true)}>Weight</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setAnovaOpen(true)}>ANOVA</DropdownMenuItem>
+                    <DropdownMenuItem
+                      onSelect={() => {
+                        if (!datasetId) return;
+                        setDescError(null);
+                        void flowFetch(`/datasets/${datasetId}/analyze/descriptives`, {
+                          method: 'POST',
+                          body: JSON.stringify({ columns: dependentColumns(columns).slice(0, 1) }),
+                        }).then(async response => {
+                          if (!response.ok) setDescError(await response.text());
+                          else setDescError(null);
+                        });
+                      }}
+                    >
+                      Descriptives
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
             </>
           )}
         </div>
