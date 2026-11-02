@@ -2022,3 +2022,157 @@ select.flow-input {
   color: var(--color-muted);
   font-size: 12px;
 }
+
+.plugins-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.plugins-head,
+.plugins-actions,
+.plugins-tools,
+.plugin-kicker,
+.plugin-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plugins-head {
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.plugins-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.plugins-title {
+  margin: 4px 0 0;
+  font-size: 30px;
+  line-height: 36px;
+  font-weight: var(--weight-medium);
+  letter-spacing: -0.02em;
+}
+
+.plugins-lead {
+  max-width: 640px;
+  margin: 6px 0 0;
+}
+
+.plugins-actions .flow-btn[data-active='true'] {
+  background: var(--color-well);
+}
+
+.plugin-search input {
+  width: 320px;
+}
+
+.plugin-pill {
+  border: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.plugin-pill[data-active='true'] {
+  background: var(--color-ink);
+  color: var(--color-canvas);
+  border-color: transparent;
+}
+
+.plugin-features,
+.plugin-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.plugin-features {
+  grid-template-columns: 1fr 1fr;
+}
+
+.plugin-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.plugin-feature,
+.plugin-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.plugin-feature {
+  gap: 14px;
+  padding: 20px;
+  border: 0;
+  background: var(--color-accent-soft);
+}
+
+.plugin-feature.team {
+  background: #f3ece0;
+}
+
+.plugin-tile {
+  padding: 16px;
+  border-radius: 12px;
+}
+
+.plugin-name,
+.plugin-tile-name,
+.plugin-install,
+.plugin-installed {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.plugin-name {
+  font-size: 20px;
+  line-height: 24px;
+  font-weight: var(--weight-medium);
+  color: var(--color-ink);
+}
+
+.plugin-tile-name {
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+  color: var(--color-ink);
+}
+
+.plugin-install,
+.plugin-installed {
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+  color: var(--color-accent);
+}
+
+.plugin-spacer {
+  flex: 1;
+}
+
+.plugin-skeleton {
+  height: 180px;
+  border-radius: 14px;
+}
+
+.plugin-detail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}

@@ -18,10 +18,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 10
-- wired: 10
+- matched: 11
+- wired: 11
 - built: 0
-- todo: 31
+- todo: 30
 - checks done: 6 passed, 1 owner QA
 
 ## Decisions
@@ -34,7 +34,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - A stack error returns its type and message. Shipped in API `aa126337`. Repeated row ids are rewritten on the fuse path in API `557505d`, live at 2026-11-02T10:50:33Z. The cars_EN save opened a 30-row file with `region_market` and without `Q7_coding`.
 - Workspace label is the real organization name. The sidebar shows the part of that name after the email. The footer name is the part of the email before @. Initials come from that name.
 - The folder plus creates a folder named "New folder". The artboard has no name field.
-- Fielding cards use a coming-soon chip instead of a progress bar with sample completes. The projects table uses the same rule: Responses is the loaded row count, or "Not fielded".
+- Fielding cards use a coming-soon chip instead of a progress bar with sample completes. The projects table uses the same rule: Responses is the loaded row count, or "Not fielded". Plugin ratings use the same chip. A download count is shown only when the catalog record has one.
 - A finished chat shows the reply in the thread and a result panel. The sample chart, brand figures, and follow-up chips stay out until the reply contains them.
 - The Paper tokens are the shared theme in globals.css, so the classic workspace uses the same colours. Control sizes for the redesign live in components/ui.
 - Response column charts and the variable panel count the loaded page. They are not weighted population figures. Labels and Values stay off this toolbar because the preview cells are already the stored values. Weight, ANOVA, and Descriptives stay on the toolbar so those flows remain reachable.
@@ -56,7 +56,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 ## Rest of the app
 
 - [x] **1b Projects table** (`6E7-0`, `1b-projects-table`) — **wired**. Table columns are Project, Folder, Status, Responses, People, and Edited. Status is Active, Draft, or Archived. Responses is the file row count, or "Not fielded" when the project has no files. There is no fielding bar and no sample completes. Edited sorts newest or oldest. Search still filters the rows. A name opens the project chat. Archive stays in the status cell. `screen.tsx` records the layout; the sample Fielding, Analysing, Report ready, and Delivered pills stay in Paper. Components: shadcn.
-- [ ] **1c Plugins** (`3IQ-0`, `1c-plugins`) — **todo**. PNG only. Components: shadcn.
+- [x] **1c Plugins** (`3IQ-0`, `1c-plugins`) — **wired**. Marketplace header, search, and the category pills. The catalog is `GET /plugins`. A card shows the real name, description, language, author, and version. Ratings stay "coming soon". A download count appears only when the catalog has one. Category pills match tags. Your team is the signed-in author. My plugins is the install list. Install calls the install route. Publish opens the existing upload page until the publish screen is this shell. The live catalog is Column Summary, which this check installed. `screen.tsx` records the layout; the sample stars and install counts stay in Paper. Components: shadcn.
 - [ ] **1e Publish a plugin** (`1E37-0`, `1e-publish-plugin`) — **todo**. PNG only. Components: shadcn.
 - [ ] **1d ⌘K palette** (`3IP-0`, `1d-command-palette`) — **todo**. PNG only. Enter opens setup. ⌘Enter sends the analysis name to chat. Components: shadcn.
 - [ ] **2b Chat empty** (`1DY1-0`, `2b-chat-empty`) — **todo**. PNG only. Components: shadcn.

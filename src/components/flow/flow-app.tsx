@@ -66,6 +66,16 @@ import {
   type ReportTable,
   type RowCut,
 } from '@/lib/flow-report';
+import {
+  installCount,
+  installErrorMessage,
+  isEditorsPick,
+  PLUGIN_CATEGORIES,
+  pluginByline,
+  pluginMatches,
+  type FlowPlugin,
+  type PluginCategory,
+} from '@/lib/flow-plugins';
 import { bannerHeading } from '@/lib/flow-survey';
 import { CodeFrameRail } from '@/components/flow/code-frame-rail';
 import { ColumnSpark, valueCounts } from '@/components/flow/column-spark';
@@ -896,36 +906,270 @@ function Members({ projectId }: { projectId: string }) {
 }
 
 function PluginsScreen() {
-  const [rows, setRows] = useState<{ id?: string; name?: string; summary?: string }[]>([]);
+  const { user } = useAuth();
+  const userIds = [user?.userId, user?.id].filter((id): id is string => Boolean(id));
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [plugins, setPlugins] = useState<FlowPlugin[]>([]);
+  const [installed, setInstalled] = useState<Set<string>>(new Set());
   const [query, setQuery] = useState('');
+  const [category, setCategory] = useState<PluginCategory>('All');
+  const [mine, setMine] = useState(false);
+  const [detail, setDetail] = useState<FlowPlugin | null>(null);
+  const [installing, setInstalling] = useState<string | null>(null);
+  const [installError, setInstallError] = useState<string | null>(null);
+
   useEffect(() => {
-    void flowJson<{
-      plugins?: { id?: string; name?: string; summary?: string }[];
-      items?: { id?: string; name?: string; summary?: string }[];
-    }>('/plugins')
-      .then(page => setRows(page.plugins || page.items || []))
-      .catch(() => setRows([]));
+    let cancelled = false;
+    void Promise.all([
+      flowJson<{ items?: FlowPlugin[] }>('/plugins?limit=100'),
+      flowJson<{ items?: { pluginId?: string }[] }>('/plugins/installed').catch(() => ({
+        items: [],
+      })),
+    ])
+      .then(([catalog, installs]) => {
+        if (cancelled) return;
+        setPlugins(catalog.items || []);
+        setInstalled(
+          new Set(
+            (installs.items || [])
+              .map(row => row.pluginId)
+              .filter((id): id is string => Boolean(id))
+          )
+        );
+        setPhase('ready');
+      })
+      .catch(reason => {
+        if (cancelled) return;
+        setError(reason instanceof Error ? reason.message : 'Could not load plugins.');
+        setPhase('error');
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
-  const shown = rows.filter(row => (row.name || '').toLowerCase().includes(query.toLowerCase()));
+
+  const shown = plugins.filter(plugin =>
+    pluginMatches(plugin, { category, query, mine, installed, userIds })
+  );
+  const featured = category === 'All' && !query && !mine ? shown.slice(0, 2) : [];
+  const rest = category === 'All' && !query && !mine ? shown.slice(2) : shown;
+
+  const install = (plugin: FlowPlugin) => {
+    setInstalling(plugin.pluginId);
+    setInstallError(null);
+    void flowJson(`/plugins/${plugin.pluginId}/install`, { method: 'POST' })
+      .then(() => {
+        setInstalled(current => new Set(current).add(plugin.pluginId));
+      })
+      .catch(reason => setInstallError(installErrorMessage(reason)))
+      .finally(() => setInstalling(null));
+  };
+
   return (
-    <div>
-      <Input
-        className="flow-input"
-        style={{ maxWidth: 280, marginBottom: 16 }}
-        value={query}
-        placeholder="Search plugins"
-        onChange={event => setQuery(event.target.value)}
-      />
-      <div className="flow-grid">
-        {shown.map(row => (
-          <Card key={row.id || row.name} className="flow-card">
-            <h2>{row.name}</h2>
-            <p className="flow-muted">{row.summary || 'Installed from the plugin catalog.'}</p>
-            <Badge tone="soon">Ratings coming soon</Badge>
-          </Card>
+    <div className="plugins-page">
+      <div className="plugins-head">
+        <div>
+          <div className="plugins-eyebrow">Plugin marketplace</div>
+          <h1 className="plugins-title">Plugins</h1>
+          <p className="flow-muted plugins-lead">
+            Add methods and checks your team uses. They show up in ⌘K, the agent can call them, and
+            every run stays traceable.
+          </p>
+        </div>
+        <div className="plugins-actions">
+          <Button
+            className="flow-btn"
+            type="button"
+            data-active={mine}
+            onClick={() => setMine(current => !current)}
+          >
+            My plugins{phase === 'ready' ? ` · ${installed.size}` : ''}
+          </Button>
+          <Link className="home-new" href="/plugins/upload">
+            + Publish
+          </Link>
+        </div>
+      </div>
+      <div className="plugins-tools">
+        <label className="home-search plugin-search">
+          <Input
+            value={query}
+            placeholder="Search plugins"
+            onChange={event => setQuery(event.target.value)}
+          />
+        </label>
+        {PLUGIN_CATEGORIES.map(item => (
+          <Button
+            key={item}
+            className="plugin-pill"
+            type="button"
+            data-active={category === item}
+            onClick={() => setCategory(item)}
+          >
+            {item}
+          </Button>
         ))}
       </div>
+      {phase === 'loading' ? (
+        <div className="plugin-features" aria-busy="true">
+          <Skeleton className="plugin-skeleton" />
+          <Skeleton className="plugin-skeleton" />
+        </div>
+      ) : phase === 'error' ? (
+        <p className="flow-error">{error || 'Could not load plugins.'}</p>
+      ) : shown.length === 0 ? (
+        <p className="report-empty">No plugins in this view.</p>
+      ) : (
+        <>
+          {featured.length > 0 ? (
+            <div className="plugin-features">
+              {featured.map(plugin => (
+                <PluginFeature
+                  key={plugin.pluginId}
+                  plugin={plugin}
+                  installed={installed.has(plugin.pluginId)}
+                  team={Boolean(plugin.authorId && userIds.includes(plugin.authorId))}
+                  busy={installing === plugin.pluginId}
+                  onOpen={() => setDetail(plugin)}
+                  onInstall={() => install(plugin)}
+                />
+              ))}
+            </div>
+          ) : null}
+          {rest.length > 0 ? (
+            <div className="plugin-grid">
+              {rest.map(plugin => (
+                <PluginTile
+                  key={plugin.pluginId}
+                  plugin={plugin}
+                  installed={installed.has(plugin.pluginId)}
+                  busy={installing === plugin.pluginId}
+                  onOpen={() => setDetail(plugin)}
+                  onInstall={() => install(plugin)}
+                />
+              ))}
+            </div>
+          ) : null}
+          {installError ? <p className="flow-error">{installError}</p> : null}
+        </>
+      )}
+      <Dialog open={detail !== null} onOpenChange={open => !open && setDetail(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{detail?.name || 'Plugin'}</DialogTitle>
+            <DialogDescription>
+              {detail ? pluginByline(detail) || 'Plugin' : 'Plugin'}
+            </DialogDescription>
+          </DialogHeader>
+          {detail ? (
+            <div className="plugin-detail">
+              <p>{detail.description || 'No description.'}</p>
+              <p className="flow-muted">
+                {detail.version ? `v${detail.version}` : 'Version unavailable'}
+                {installCount(detail) ? ` · ${installCount(detail)}` : ''}
+              </p>
+              <Badge tone="soon">Ratings coming soon</Badge>
+              {installed.has(detail.pluginId) ? (
+                <Badge tone="active">Installed</Badge>
+              ) : (
+                <Button
+                  className="flow-btn primary"
+                  type="button"
+                  disabled={installing === detail.pluginId}
+                  onClick={() => install(detail)}
+                >
+                  {installing === detail.pluginId ? 'Installing' : 'Install'}
+                </Button>
+              )}
+              {installError ? <p className="flow-error">{installError}</p> : null}
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+function PluginFeature({
+  plugin,
+  installed,
+  team,
+  busy,
+  onOpen,
+  onInstall,
+}: {
+  plugin: FlowPlugin;
+  installed: boolean;
+  team: boolean;
+  busy: boolean;
+  onOpen: () => void;
+  onInstall: () => void;
+}) {
+  const count = installCount(plugin);
+  return (
+    <Card className={team ? 'plugin-feature team' : 'plugin-feature'}>
+      <div className="plugin-kicker">
+        {isEditorsPick(plugin) ? <Badge tone="active">Editor&apos;s pick</Badge> : null}
+        {team ? <Badge tone="warn">Your team</Badge> : null}
+        <span className="flow-muted">{pluginByline(plugin)}</span>
+      </div>
+      <Button className="plugin-name" type="button" onClick={onOpen}>
+        {plugin.name}
+      </Button>
+      <p className="flow-muted">{plugin.description}</p>
+      <div className="plugin-foot">
+        <Badge tone="soon">Ratings coming soon</Badge>
+        {count ? <span className="flow-muted">{count}</span> : null}
+        {plugin.version ? <span className="flow-muted">v{plugin.version}</span> : null}
+        <span className="plugin-spacer" />
+        {installed ? (
+          <Badge tone="active">Installed</Badge>
+        ) : (
+          <Button className="flow-btn primary" type="button" disabled={busy} onClick={onInstall}>
+            {busy ? 'Installing' : 'Install'}
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function PluginTile({
+  plugin,
+  installed,
+  busy,
+  onOpen,
+  onInstall,
+}: {
+  plugin: FlowPlugin;
+  installed: boolean;
+  busy: boolean;
+  onOpen: () => void;
+  onInstall: () => void;
+}) {
+  const count = installCount(plugin);
+  const tag = (plugin.tags || [])[0];
+  return (
+    <Card className="plugin-tile">
+      <Button className="plugin-tile-name" type="button" onClick={onOpen}>
+        {plugin.name}
+      </Button>
+      <p className="flow-muted">{plugin.description}</p>
+      <div className="plugin-foot">
+        {tag ? <span className="flow-muted">{tag}</span> : null}
+        <Badge tone="soon">Ratings coming soon</Badge>
+        {count ? <span className="flow-muted">{count}</span> : null}
+        <span className="plugin-spacer" />
+        {installed ? (
+          <span className="plugin-installed">Installed</span>
+        ) : (
+          <Button className="plugin-install" type="button" disabled={busy} onClick={onInstall}>
+            {busy ? 'Installing' : 'Install'}
+          </Button>
+        )}
+      </div>
+    </Card>
   );
 }
 
