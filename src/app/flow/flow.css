@@ -8633,7 +8633,7 @@ select.flow-input {
 }
 
 .xp-number {
-  font-weight: 700;
+  font-weight: var(--weight-title);
 }
 
 .xp-title {
