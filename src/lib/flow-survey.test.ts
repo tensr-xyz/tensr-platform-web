@@ -1,6 +1,17 @@
-import { codedStub, efficiencyPercent, selectionFromCell } from './flow-survey';
+import { bannerHeading, codedStub, efficiencyPercent, selectionFromCell } from './flow-survey';
 
 describe('flow survey grid', () => {
+  it('prefers the value label over a stored banner code', () => {
+    expect(
+      bannerHeading({
+        id: 'region=1',
+        label: 'East',
+        codes: [{ code: '1' }],
+      })
+    ).toBe('East');
+    expect(bannerHeading({ id: 'region=1', codes: [{ code: '1' }] })).toBe('1');
+  });
+
   it('treats a coded open end as a multi-response stub', () => {
     expect(codedStub('open_end_codes')).toEqual({
       column: 'open_end_codes',

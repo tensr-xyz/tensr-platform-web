@@ -44,9 +44,13 @@ export type SurveyCell = {
 };
 
 export function bannerHeading(column: BannerColumn): string {
+  const label = column.label || column.id;
+  if (label && label !== column.id) {
+    const split = label.indexOf('=');
+    return split >= 0 ? label.slice(split + 1) : label;
+  }
   const code = column.codes?.[0]?.code;
   if (code != null && String(code).trim()) return String(code);
-  const label = column.label || column.id;
   const split = label.indexOf('=');
   return split >= 0 ? label.slice(split + 1) : label;
 }

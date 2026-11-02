@@ -35,9 +35,12 @@ export function ChoiceSelect({
     label: option.label,
   }));
   const current = value === '' ? EMPTY : value;
+  if (current && !items.some(item => item.value === current)) {
+    items.unshift({ value: current, label: value || placeholder || 'Selected' });
+  }
   return (
     <Select
-      value={items.some(item => item.value === current) ? current : undefined}
+      value={current}
       onValueChange={next => onValueChange(next === EMPTY ? '' : next)}
       disabled={disabled}
     >

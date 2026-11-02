@@ -1,4 +1,4 @@
-import { dependentColumns } from './flow-columns';
+import { dependentColumns, openEndColumns } from './flow-columns';
 
 describe('ANOVA dependent columns', () => {
   it('keeps a numeric companion when the preview type is text and id is the only numeric type', () => {
@@ -16,5 +16,19 @@ describe('ANOVA dependent columns', () => {
     expect(dependentColumns([{ name: 'satisfaction', type: 'string', measure: 'scale' }])).toEqual([
       'satisfaction',
     ]);
+  });
+});
+
+describe('code frame open ends', () => {
+  it('keeps text columns and drops numeric and already-coded ones', () => {
+    expect(
+      openEndColumns([
+        { name: 'comments', type: 'string' },
+        { name: 'Q7', type: 'numeric' },
+        { name: 'agree_value', type: 'string', measure: 'ordinal' },
+        { name: 'comments_codes', type: 'string' },
+        { name: 'region', type: 'string', measure: 'nominal' },
+      ])
+    ).toEqual(['comments', 'region']);
   });
 });

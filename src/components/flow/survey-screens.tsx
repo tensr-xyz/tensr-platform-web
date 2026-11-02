@@ -11,6 +11,7 @@ import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
+import { openEndColumns, type FlowColumn } from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import {
@@ -622,8 +623,8 @@ export function CodeFramePanel({
 
   useEffect(() => {
     if (!datasetId) return;
-    void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${datasetId}/metadata`)
-      .then(meta => setColumns(columnNames(meta.columns || [])))
+    void flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`)
+      .then(meta => setColumns(openEndColumns(meta.columns || [])))
       .catch(() => setColumns([]));
   }, [datasetId]);
 
@@ -1112,7 +1113,7 @@ export function TablesBuilder({
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
       body: JSON.stringify({
-        stubs: [{ ...codedStub(stub), ...(nets.length ? { nets } : {}) }],
+        stubs: [{ ...codedStub(stub), nets }],
         banner: banners.map(columnName => ({ column: columnName })),
         statistics,
         significance_display: lettersOn ? 'column_letters' : 'none',
@@ -1461,17 +1462,12 @@ export function TablesBuilder({
                   <Button
                     className="flow-btn"
                     type="button"
-                    data-active={view === 'table'}
+                    data-active
                     onClick={() => setView('table')}
                   >
                     Table
                   </Button>
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    data-active={view === 'chart'}
-                    onClick={() => setView('chart')}
-                  >
+                  <Button className="flow-btn" type="button" onClick={() => setView('chart')}>
                     Chart
                   </Button>
                   <Button className="flow-btn" type="button" onClick={addToBook}>

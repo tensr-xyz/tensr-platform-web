@@ -100,14 +100,15 @@ export function runDocument(run: Record<string, unknown>): RunDocument {
     seen.add(note.trim());
     checks.push(note.trim());
   };
+  const noteList = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
   const assumptions = report.assumption_checks as
     | { notes?: unknown; warnings?: unknown }
     | undefined;
-  for (const note of assumptions?.notes || []) addCheck(note);
-  for (const note of assumptions?.warnings || []) addCheck(note);
+  for (const note of noteList(assumptions?.notes)) addCheck(note);
+  for (const note of noteList(assumptions?.warnings)) addCheck(note);
   const trust = report.trust as { notes?: unknown; warnings?: unknown } | undefined;
-  for (const note of trust?.notes || []) addCheck(note);
-  for (const note of trust?.warnings || []) addCheck(note);
+  for (const note of noteList(trust?.notes)) addCheck(note);
+  for (const note of noteList(trust?.warnings)) addCheck(note);
   const repro = report.reproducibility as { r_script?: unknown; python?: unknown } | undefined;
   const script =
     typeof repro?.r_script === 'string'

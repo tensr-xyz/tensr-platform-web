@@ -74,7 +74,9 @@ export function MoveToProjectDialog({
         <DialogHeader>
           <DialogTitle>Move to project</DialogTitle>
           <DialogDescription>
-            {datasetName ? `${datasetName} joins the project you pick` : 'The file joins the project you pick'}{' '}
+            {datasetName
+              ? `${datasetName} joins the project you pick`
+              : 'The file joins the project you pick'}{' '}
             and can be stacked with the files already there.
           </DialogDescription>
         </DialogHeader>

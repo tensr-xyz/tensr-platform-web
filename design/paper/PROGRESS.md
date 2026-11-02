@@ -105,20 +105,20 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 
 ## Bugs found
 
-- A stacked file keeps the parent filename and shows as a raw upload. The dataset list does not return `parent_dataset_id` or `producing_operation`, so Sources cannot tell the 403-row fuse from sources-check.csv.
+- A stacked file keeps the parent filename and shows as a raw upload. Fixed: `/datasets/` returns `parent_dataset_id`, `producing_operation`, and `lineage_label`, so Sources can mark a fuse as Stacked.
 - Add member asked for a user id. Fixed: the dialog lists workspace members by name and email, with an editor or viewer role, and Invite by email uses the workspace invitation.
-- A saved project brief comes back as a 280-character excerpt. A longer brief is cut the next time Details loads. The save itself keeps the full text for that visit.
+- A saved project brief comes back as a 280-character excerpt. Fixed: context docs return full `text` as well as `excerpt`, so Details reloads the whole brief.
 - The empty chat marked @ and Attach as coming soon. Both already exist. Fixed: @ opens the column picker for the open dataset, the same list the classic composer inserts, and Attach sends the file on the v2 stream.
 - Another project and the web were checked before leaving them as coming soon. The assistant tools do not include web search. The classic composer does not attach another project. A filename already in the workspace is opened when the message names it.
 - Publish let you pick Python or R and then blocked submit. Fixed: those languages are a coming-soon chip and cannot be selected.
 - Plugin prices were labeled USD. Stripe Connect does not require USD. Checkout charges the currency stored on the plugin, and the rest of the product is GBP, so the price is GBP.
 - Report key findings were empty, and Filter, Segments, and Edit did nothing. Fixed: each saved table is written through synthesize-report, with its table and row citation. Filter and Segments cut the rows or the banner column, and Edit changes the text.
-- The dataset select on Responses logs that it changes from uncontrolled to controlled. It does not block the sheet.
-- The code frame offers numeric columns. Q7 got a "Numeric only, no comment" theme. Only text open-end columns should be codeable. Theme evidence for that frame quotes Q7 and returns no verbatims.
-- A themes banner heading shows the stored code (region 1 and 2) rather than the value label. On likert_openends the region values are already words, so the headings read East, North, West, South.
-- The "No substantive comment" theme shows a count of 37 beside a total of 1.7%. The other ten theme counts match their column percents of the 348 base.
-- agree_value by region saved Top 2 and Bottom 2 rows at 0% while those toggles were off. The table request did not ask for them.
-- High priority. Notebook `df.head()` on the stacked file timed out after 18s. The remote cell budget was 18s inside a 22s executor; each cell starts a fresh Python that imports pandas and reads the CSV, and the datasets route also wrote an unused temp CSV before the invoke. Fixing: skip that unused write, raise the cell budget to 22s and the executor Lambda to 28s (HTTP still 29s), and show "Loading data…" on the first run. Needs API deploy.
+- The dataset select on Responses logs that it changes from uncontrolled to controlled. Fixed: ChoiceSelect always stays controlled and keeps a temporary option while the list loads.
+- The code frame offers numeric columns. Q7 got a "Numeric only, no comment" theme. Fixed: the open-end picker keeps text columns only and drops numeric, scale, and `*_codes` columns.
+- A themes banner heading shows the stored code (region 1 and 2) rather than the value label. Fixed: `bannerHeading` prefers the value label; codes are the fallback.
+- The "No substantive comment" theme shows a count of 37 beside a total of 1.7%. Fixed: theme cell n intersects the answered base, so the quote count matches the percent.
+- agree_value by region saved Top 2 and Bottom 2 rows at 0% while those toggles were off. Fixed: Flow always sends `nets` (empty when toggles are off); an explicit empty list skips auto Top/Bottom 2.
+- High priority. Notebook `df.head()` on the stacked file timed out after 18s. Fixed in API `2891d5e` (#294): skip the unused CSV write, cell budget 22s, executor Lambda 28s. Web shows "Loading data…" on the first run. Deploy-dev in progress.
 
 ## Unfinished
 

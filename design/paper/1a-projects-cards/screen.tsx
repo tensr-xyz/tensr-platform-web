@@ -8,7 +8,9 @@ export function PaperProjectsCards() {
         <div className="flex items-center justify-between py-1 px-2">
           <div className="flex items-center gap-2.5">
             <div className="flex items-center justify-center shrink-0 rounded-sm bg-ink size-6" />
-            <div className="text-[14px] tracking-[-0.01em] font-[600] leading-4.5 text-ink">Tensr</div>
+            <div className="text-[14px] tracking-[-0.01em] font-[600] leading-4.5 text-ink">
+              Tensr
+            </div>
             <div className="text-[13px] leading-4 text-muted">· Skopos</div>
           </div>
         </div>
@@ -55,7 +57,9 @@ export function PaperProjectsCards() {
         <div className="flex items-end justify-between">
           <div className="flex flex-col gap-1">
             <div className="text-[13px] leading-4 text-muted">Skopos workspace</div>
-            <div className="text-[30px] tracking-[-0.02em] font-[600] leading-9 text-ink">Projects</div>
+            <div className="text-[30px] tracking-[-0.02em] font-[600] leading-9 text-ink">
+              Projects
+            </div>
           </div>
           <div className="flex gap-2">
             <div className="flex items-center w-55 h-9 px-3 rounded-[8px] gap-2 border border-solid border-line">
@@ -68,7 +72,9 @@ export function PaperProjectsCards() {
         </div>
         <div className="flex flex-wrap gap-4">
           <div className="w-[calc(33.33%-11px)] flex flex-col p-5 rounded-[14px] gap-4 bg-canvas border border-solid border-line">
-            <div className="text-[18px] tracking-[-0.01em] font-[600] leading-5.5 text-black">Brand tracker W4</div>
+            <div className="text-[18px] tracking-[-0.01em] font-[600] leading-5.5 text-black">
+              Brand tracker W4
+            </div>
           </div>
           <div className="w-[calc(33.33%-11px)] flex flex-col items-center justify-center p-5 rounded-[14px] gap-2 bg-well border border-dashed border-line">
             <div className="text-[15px] font-[500] leading-4.5 text-black">New project</div>

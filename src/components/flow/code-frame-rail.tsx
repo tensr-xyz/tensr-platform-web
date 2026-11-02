@@ -63,9 +63,9 @@ export function CodeFrameRail({
     setSelected(current => (checked ? [...current, id] : current.filter(item => item !== id)));
   };
 
-  const edit = (body: Record<string, unknown>) => {
-    if (!datasetId) return Promise.reject(new Error('Open a dataset before editing the frame.'));
-    return flowJson(`/datasets/${datasetId}/open-end/frame`, {
+  const edit = async (body: Record<string, unknown>): Promise<void> => {
+    if (!datasetId) throw new Error('Open a dataset before editing the frame.');
+    await flowJson(`/datasets/${datasetId}/open-end/frame`, {
       method: 'POST',
       body: JSON.stringify({ code_column: column, ...body }),
     });
@@ -98,7 +98,11 @@ export function CodeFrameRail({
                   aria-label={code.label}
                   onCheckedChange={value => toggle(code.id, value === true)}
                 />
-                <Button type="button" className="code-frame-name" onClick={() => setOpenId(open ? '' : code.id)}>
+                <Button
+                  type="button"
+                  className="code-frame-name"
+                  onClick={() => setOpenId(open ? '' : code.id)}
+                >
                   {code.label}
                 </Button>
                 <span>{percent(code.count)}</span>
@@ -203,9 +207,7 @@ export function CodeFrameRail({
         {blank ? (
           <p className="code-frame-blank">
             <span>Not coded yet</span>
-            <span>
-              {blank} · Review
-            </span>
+            <span>{blank} · Review</span>
           </p>
         ) : null}
       </div>
