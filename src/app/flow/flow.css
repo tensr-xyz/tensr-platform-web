@@ -9331,15 +9331,21 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 }
 
 /* QA round 3. Collapsed sidebar is an icon rail. */
-.flow-side.flow-rail {
+.flow-side.flow-side-rail {
   width: 56px;
   padding: 14px 8px;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
+  background: var(--color-well);
+  overflow: visible;
 }
 
-.flow-rail button,
-.flow-rail a {
+.flow-side-rail .rail-expand {
+  color: var(--color-muted);
+}
+
+.flow-side-rail button,
+.flow-side-rail a {
   width: 36px;
   height: 36px;
   display: grid;
@@ -9351,13 +9357,13 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   color: var(--color-muted);
 }
 
-.flow-rail button:hover,
-.flow-rail a:hover,
-.flow-rail [data-active='true'] {
+.flow-side-rail button:hover,
+.flow-side-rail a:hover,
+.flow-side-rail [data-active='true'] {
   background: #ecece7;
 }
 
-.flow-rail .rail-logo:hover {
+.flow-side-rail .rail-logo:hover {
   background: transparent;
   opacity: 0.85;
 }
@@ -9379,7 +9385,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   display: none;
 }
 
-.flow-rail .rail-user {
+.flow-side-rail .rail-user {
   margin-top: auto;
 }
 

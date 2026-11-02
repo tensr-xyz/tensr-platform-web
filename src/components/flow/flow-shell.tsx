@@ -269,7 +269,7 @@ export function FlowSidebar({
   if (collapsed) {
     return (
       <TooltipProvider delayDuration={150}>
-        <aside className="flow-side flow-rail" aria-label="Sidebar">
+        <aside className="flow-side flow-side-rail" aria-label="Sidebar">
           <RailTip label="Show sidebar">
             <Button
               className="rail-logo"
@@ -278,6 +278,16 @@ export function FlowSidebar({
               onClick={() => onCollapse(false)}
             >
               <LogoMark />
+            </Button>
+          </RailTip>
+          <RailTip label="Expand sidebar">
+            <Button
+              className="rail-expand"
+              type="button"
+              aria-label="Expand sidebar"
+              onClick={() => onCollapse(false)}
+            >
+              <PanelIcon />
             </Button>
           </RailTip>
           <nav className="rail-nav">
