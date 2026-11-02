@@ -248,9 +248,12 @@
 }
 
 .flow-body {
-  padding: 16px 20px 32px;
+  padding: 0 12px 12px;
   overflow: auto;
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .flow-project {
@@ -264,8 +267,25 @@
 .proj-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 14px 20px 8px;
+  gap: 12px;
+  padding: 12px 16px 6px;
+}
+
+.proj-slash {
+  color: #c4c3bd;
+  font-size: 14px;
+}
+
+.proj-chip {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 13px;
 }
 
 .proj-brand {
@@ -296,14 +316,17 @@
 }
 
 .proj-search {
-  flex: 1;
+  margin-left: auto;
+  height: 32px;
   border: 1px solid var(--color-line);
   background: var(--color-canvas);
-  border-radius: 10px;
-  padding: 8px 12px;
+  border-radius: 8px;
+  padding: 0 10px;
   color: var(--color-muted);
   text-align: left;
   cursor: pointer;
+  font: inherit;
+  font-size: 13px;
 }
 
 .proj-actions {
@@ -321,15 +344,17 @@
 .proj-tabs a {
   color: var(--color-muted);
   text-decoration: none;
-  font-size: 13px;
-  padding: 6px 10px;
+  font-size: 14px;
+  padding: 7px 14px;
   border-radius: 8px;
+  border: 1px solid transparent;
 }
 
 .proj-tabs a[data-active='true'] {
   background: var(--color-canvas);
   color: var(--color-ink);
   font-weight: 500;
+  border-color: var(--color-line);
 }
 
 .flow-toolbar {
@@ -677,10 +702,14 @@
 
 .flow-split {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 560px;
+  grid-template-columns: 220px minmax(0, 1fr) 520px;
   gap: 0;
-  min-height: calc(100vh - 140px);
-  margin: -22px -28px -28px;
+  min-height: 0;
+  flex: 1;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  overflow: hidden;
 }
 
 .tables-layout {
@@ -689,16 +718,17 @@
 }
 
 .flow-rail {
-  background: var(--color-well);
+  background: var(--color-canvas);
   border-right: 1px solid var(--color-line);
-  padding: 14px 12px;
+  padding: 14px 10px;
+  overflow: auto;
 }
 
 .flow-thread,
 .flow-output {
   background: var(--color-canvas);
   padding: 16px;
-  min-height: 420px;
+  min-height: 0;
 }
 
 .flow-output {
@@ -857,6 +887,74 @@ select.flow-input {
   min-height: 40px;
   padding: 4px;
   resize: none;
+  flex: 1;
+}
+
+.chat-new {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.chat-label {
+  padding: 14px 8px 6px;
+}
+
+.chat-item {
+  padding: 7px 8px;
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.chat-scroll {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  align-items: flex-end;
+}
+
+.chat-bubble {
+  max-width: 380px;
+  background: var(--color-well);
+  border-radius: 14px;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.chat-plan {
+  align-self: stretch;
+  background: var(--color-well);
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.chat-send {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 15px;
+  background: var(--color-line);
+  color: white;
+  cursor: pointer;
+}
+
+.output-head {
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-line);
+  margin-bottom: 12px;
 }
 
 .flow-paging {

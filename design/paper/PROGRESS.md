@@ -8,9 +8,9 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 1
-- wired: 1
-- built: 2
+- matched: 2
+- wired: 2
+- built: 1
 - todo: 38
 - checks done: 0 / 5
 
@@ -29,7 +29,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 ## Demo path
 
 - [x] **1a Projects cards** (`68F-0`, `1a-projects-cards`) — **wired**. Sidebar icons, three-up cards, search, Cards/Table, and New project match the artboard apart from live names and the coming-soon chip. Search filters. Table view lists the same projects. `screen.tsx` keeps the layout classes; the icon paths stay in Paper.
-- [ ] **2 Chat** (`22B-0`, `2-chat`) — **built**. One composer with Ask, Plan, and Agent. No second Ask box. No `screen.tsx` yet, not matched.
+- [x] **2 Chat** (`22B-0`, `2-chat`) — **wired**. Gray project frame, white card, chat rail, composer with Ask/Plan/Agent, and the output panel. A sent question shows as a bubble and the reply is meant for the panel. Fielding is a coming-soon chip. `screen.tsx` records the layout.
 - [ ] **2c Chat agent made an output** (`1EO8-0`, `2c-chat-output`) — **todo**. PNG only.
 - [ ] **4a Responses sheet** (`8EO-0`, `4a-responses`) — **todo**. PNG only. Needs the left rail, column mini-charts, stats row, and the Agent/Variable/Evidence panel.
 - [ ] **4c Evidence** (`765-0`, `4c-evidence`) — **todo**. PNG only.

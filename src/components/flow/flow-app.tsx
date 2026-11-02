@@ -12,7 +12,7 @@ import {
   openSignedDownload,
   type ExportDownload,
 } from '@/lib/excel-download';
-import { runAgentLoop } from '@/lib/run-agent-loop';
+import { runAgentLoop, type AgentLoopResponse } from '@/lib/run-agent-loop';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -309,16 +309,17 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   <Link href="/flow" aria-label="Projects">
                     <LogoMark />
                   </Link>
+                  <span className="proj-slash">/</span>
                   <div className="proj-name">
                     <i />
                     <strong>{project?.name || 'Project'}</strong>
                   </div>
                 </div>
                 <button className="proj-search" type="button" onClick={() => setPalette(true)}>
-                  Search analyses
+                  Search analyses <span className="flow-k">⌘K</span>
                 </button>
                 <div className="proj-actions">
-                  <span className="flow-soon">Fielding coming soon</span>
+                  <span className="proj-chip">Fielding coming soon</span>
                   <button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
                     Share
                   </button>
@@ -843,10 +844,12 @@ function ChatScreen({
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
   const [question, setQuestion] = useState('');
+  const [sent, setSent] = useState('');
   const [mode, setMode] = useState<'ask' | 'plan' | 'agent'>('agent');
   const [answer, setAnswer] = useState('');
   const [status, setStatus] = useState<string | null>(null);
   const [downloads, setDownloads] = useState<ExportDownload[]>([]);
+  const [plan, setPlan] = useState<AgentLoopResponse | null>(null);
   const askedRef = useRef<string | null>(null);
   const [sessions, setSessions] = useState<{ session_id: string }[]>([]);
   const [recipes, setRecipes] = useState<{ name?: string; recipe_id?: string }[]>([]);
@@ -866,8 +869,10 @@ function ChatScreen({
   const sendText = useCallback(
     async (text: string, nextMode: 'ask' | 'plan' | 'agent' = mode) => {
       if (!text.trim() || status === 'Warming up') return;
-      setQuestion(text);
+      setSent(text);
+      setQuestion('');
       setMode(nextMode);
+      setPlan(null);
       setStatus('Warming up');
       setAnswer('');
       let draft = '';
@@ -890,6 +895,7 @@ function ChatScreen({
           },
         });
         setAnswer(result.answer_markdown || '');
+        setPlan(result.status === 'awaiting_approval' ? result : null);
         const entries = (result.tool_results || []).flatMap(item => {
           const nested =
             item.result && typeof item.result === 'object'
@@ -898,7 +904,6 @@ function ChatScreen({
           return [item as unknown as Record<string, unknown>, ...nested];
         });
         setDownloads(downloadsFromToolResults(entries));
-        setQuestion('');
         setStatus(null);
       } catch (err) {
         setStatus(err instanceof Error ? err.message : 'The reply did not finish. Ask again.');
@@ -920,43 +925,108 @@ function ChatScreen({
 
   const send = () => void sendText(question);
 
+  const approve = () => {
+    if (!plan || !sent) return;
+    const batch =
+      plan.pending_approvals && !Array.isArray(plan.pending_approvals)
+        ? plan.pending_approvals
+        : null;
+    const calls = Array.isArray(plan.pending_approvals) ? plan.pending_approvals : null;
+    setStatus('Warming up');
+    void runAgentLoop({
+      message: sent,
+      mode,
+      datasetId: datasetId || null,
+      agentVersion: 'v2',
+      sessionId: plan.session_id,
+      approvedToolCalls: calls,
+      approvedBatch: batch && typeof batch.mac === 'string' ? { batch: batch.batch, mac: batch.mac } : null,
+      signal: AbortSignal.timeout(120_000),
+      onDelta: chunk => {
+        setAnswer(current => current + chunk);
+        setStatus(null);
+      },
+    })
+      .then(result => {
+        setAnswer(result.answer_markdown || '');
+        setPlan(result.status === 'awaiting_approval' ? result : null);
+        const entries = (result.tool_results || []).flatMap(item => {
+          const nested =
+            item.result && typeof item.result === 'object'
+              ? [item.result as Record<string, unknown>]
+              : [];
+          return [item as unknown as Record<string, unknown>, ...nested];
+        });
+        setDownloads(downloadsFromToolResults(entries));
+        setStatus(null);
+      })
+      .catch(err => {
+        setStatus(err instanceof Error ? err.message : 'The plan did not run.');
+      });
+  };
+
+  const clearChat = () => {
+    setSent('');
+    setAnswer('');
+    setQuestion('');
+    setPlan(null);
+    setDownloads([]);
+    setStatus(null);
+  };
+
   return (
     <div className="flow-split">
       <aside className="flow-rail">
-        <div className="flow-muted">Chats</div>
+        <button className="chat-new" type="button" onClick={clearChat}>
+          + New chat
+        </button>
+        <div className="flow-muted chat-label">Today</div>
         {sessions.length === 0 ? <p className="flow-muted">No saved chats yet</p> : null}
         {sessions.map(session => (
-          <div key={session.session_id}>{session.session_id.slice(0, 8)}</div>
+          <div key={session.session_id} className="chat-item">
+            {session.session_id.slice(0, 8)}
+          </div>
         ))}
-        <div className="flow-muted">Recipes</div>
+        <div className="flow-muted chat-label">Recipes</div>
+        {recipes.length === 0 ? <p className="flow-muted">Save any run as a recipe</p> : null}
         {recipes.map(recipe => (
-          <div key={recipe.recipe_id}>{recipe.name}</div>
+          <div key={recipe.recipe_id} className="chat-item">
+            {recipe.name}
+          </div>
         ))}
       </aside>
       <section className="flow-thread">
-        {answer ? (
-          <article dangerouslySetInnerHTML={{ __html: plain(answer) }} />
-        ) : (
-          <p className="flow-muted">Ask about this project. The reply stays in this thread.</p>
-        )}
-        {downloads.map(file => (
-          <button
-            key={file.key}
-            className="flow-btn"
-            type="button"
-            onClick={() => void openSignedDownload(file)}
-          >
-            {file.filename}
-          </button>
-        ))}
-        {status === 'Warming up' ? <p className="flow-status">Warming up</p> : null}
-        {status && status !== 'Warming up' ? <p className="flow-error">{status}</p> : null}
+        <div className="chat-scroll">
+          {sent ? <div className="chat-bubble">{sent}</div> : null}
+          {plan ? (
+            <div className="chat-plan">
+              <strong>Waiting for approval · Plan</strong>
+              <div dangerouslySetInnerHTML={{ __html: plain(answer) }} />
+              <div className="flow-row">
+                <button className="flow-btn primary" type="button" onClick={approve}>
+                  Approve
+                </button>
+                <button className="flow-btn" type="button" onClick={() => setPlan(null)}>
+                  Edit plan
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {status === 'Warming up' ? <p className="flow-status">Warming up</p> : null}
+          {status && status !== 'Warming up' ? <p className="flow-error">{status}</p> : null}
+        </div>
         <div className="flow-composer">
           <textarea
             className="flow-text"
             value={question}
             onChange={event => setQuestion(event.target.value)}
             placeholder="Ask a follow-up..."
+            onKeyDown={event => {
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                void send();
+              }
+            }}
           />
           <div className="mode-switch">
             {(['ask', 'plan', 'agent'] as const).map(item => (
@@ -966,22 +1036,30 @@ function ChatScreen({
                 data-active={mode === item}
                 onClick={() => setMode(item)}
               >
-                {item[0].toUpperCase() + item.slice(1)}
+                {item === 'agent' ? '● Agent' : item[0].toUpperCase() + item.slice(1)}
               </button>
             ))}
           </div>
           <button
-            className="flow-btn primary"
+            className="chat-send"
             type="button"
+            aria-label="Send"
             disabled={status === 'Warming up'}
             onClick={() => void send()}
           >
-            Send
+            ↑
           </button>
         </div>
       </section>
       <aside className="flow-output">
-        <p className="flow-muted">An output from this chat lands here.</p>
+        <div className="output-head">
+          <strong>{sent || 'Output'}</strong>
+        </div>
+        {answer ? (
+          <article dangerouslySetInnerHTML={{ __html: plain(answer) }} />
+        ) : (
+          <p className="flow-muted">An output from this chat lands here.</p>
+        )}
         {downloads.map(file => (
           <button
             key={file.key}
