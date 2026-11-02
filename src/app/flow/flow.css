@@ -1031,6 +1031,146 @@ select.flow-input {
   padding: 16px 20px;
 }
 
+.responses-layout {
+  display: grid;
+  grid-template-columns: 244px minmax(0, 1fr) 320px;
+  flex: 1;
+  min-height: 0;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.responses-rail {
+  background: var(--color-well);
+  border-right: 1px solid var(--color-line);
+  padding: 12px 10px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.responses-sheet,
+.responses-side {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.responses-side {
+  border-left: 1px solid var(--color-line);
+}
+
+.sheet-toolbar,
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--color-line);
+  flex-wrap: nowrap;
+}
+
+.sheet-foot {
+  border-bottom: 0;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-well);
+  margin-top: auto;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.sheet-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.column-spark {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 10px;
+}
+
+.column-spark i {
+  display: block;
+  width: 3px;
+  border-radius: 1px;
+  background: #b4c3bc;
+}
+
+.sheet-spacer {
+  flex: 1;
+}
+
+.sheet-toolbar .flow-btn[data-active='true'] {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border-color: transparent;
+}
+
+.sheet-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 88px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sheet-col[data-active='true'],
+.sheet-cell[data-active='true'] {
+  background: var(--color-accent-soft);
+}
+
+.flow-table tr[data-active='true'] td {
+  background: #fcfcfa;
+}
+
+.value-row {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.value-row[data-active='true'] {
+  background: var(--color-accent-soft);
+  border-radius: 6px;
+}
+
+.value-row-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px 36px;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  font-size: 13px;
+}
+
+.value-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-well);
+  overflow: hidden;
+}
+
+.value-track i {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+
 .chat-bubble {
   align-self: flex-end;
   max-width: 440px;

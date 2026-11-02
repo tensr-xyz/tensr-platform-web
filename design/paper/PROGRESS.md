@@ -16,10 +16,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 3
-- wired: 3
+- matched: 4
+- wired: 4
 - built: 1
-- todo: 37
+- todo: 36
 - checks done: 0 / 5
 
 ## Decisions
@@ -35,13 +35,14 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - Fielding cards use a coming-soon chip instead of a progress bar with sample completes.
 - A finished chat shows the reply in the thread and a result panel. The sample chart, brand figures, and follow-up chips stay out until the reply contains them.
 - The Paper tokens are the shared theme in globals.css, so the classic workspace uses the same colours. Control sizes for the redesign live in components/ui.
+- Response column charts and the variable panel count the loaded page. They are not weighted population figures. Labels and Values stay off this toolbar because the preview cells are already the stored values. Weight, ANOVA, and Descriptives stay on the toolbar so those flows remain reachable.
 
 ## Demo path
 
 - [x] **1a Projects cards** (`68F-0`, `1a-projects-cards`) — **wired**. Sidebar icons, three-up cards, search, Cards/Table, and New project match the artboard apart from live names and the coming-soon chip. Search filters. Table view lists the same projects. `screen.tsx` keeps the layout classes; the icon paths stay in Paper. Components: shadcn.
 - [x] **2 Chat** (`22B-0`, `2-chat`) — **wired**. Gray project frame, white card, chat rail, composer with Ask/Plan/Agent, and the output panel. A sent question shows as a bubble and the reply is meant for the panel. Fielding is a coming-soon chip. `screen.tsx` records the layout. Components: shadcn.
 - [x] **2c Chat agent made an output** (`1EO8-0`, `2c-chat-output`) — **wired**. A finished reply shows the steps, the prose, and a result card in the thread. The right panel shows the lead, a key stat when the reply has one, and real downloads. Open goes to Tables. Add to report goes to Report. Save says when the run has no replayable steps. No sample chart. Components: shadcn.
-- [ ] **4a Responses sheet** (`8EO-0`, `4a-responses`) — **todo**. PNG only. Needs the left rail, column mini-charts, stats row, and the Agent/Variable/Evidence panel. Components: shadcn.
+- [x] **4a Responses sheet** (`8EO-0`, `4a-responses`) — **wired**. Three columns: project rail, sheet with column mini-charts from the loaded page, and Agent/Variable/Evidence. Search filters column names, or rows when no column matches. Clicking a code filters that column. A row number selects the row. Sheet, Notebook, and Themes switch the center. Weight, ANOVA, and Descriptives stay on the toolbar. `screen.tsx` is the Paper export. Components: shadcn.
 - [ ] **4c Evidence** (`765-0`, `4c-evidence`) — **todo**. PNG only. Components: shadcn.
 - [ ] **4d code frame** (`958-0`, `4d-code-frame`) — **todo**. PNG only. Components: shadcn.
 - [ ] **4g Themes** (`16OA-0`, `4g-themes`) — **todo**. PNG only. Components: shadcn.
