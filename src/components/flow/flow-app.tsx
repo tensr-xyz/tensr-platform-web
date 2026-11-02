@@ -1913,20 +1913,23 @@ function Palette({
           }
         }}
       >
-        <CommandInput
-          autoFocus
-          value={query}
-          placeholder="Search analyses"
-          onValueChange={value => {
-            setQuery(value);
-            setIndex(0);
-          }}
-        />
+        <div className="palette-input">
+          <CommandInput
+            autoFocus
+            value={query}
+            placeholder="Search analyses"
+            onValueChange={value => {
+              setQuery(value);
+              setIndex(0);
+            }}
+          />
+          <span className="palette-esc">esc</span>
+        </div>
         <div className="palette-tabs">
           {PALETTE_TAB_ORDER.map(key => (
             <Button
               key={key}
-              className="plugin-pill"
+              className="palette-tab"
               type="button"
               data-active={tab === key}
               onClick={() => {
@@ -1939,7 +1942,7 @@ function Palette({
             </Button>
           ))}
           <Button
-            className="plugin-pill"
+            className="palette-tab palette-tab-plugins"
             type="button"
             data-active={tab === PLUGINS_TAB_VALUE}
             onClick={() => {
@@ -1948,7 +1951,8 @@ function Palette({
               setIndex(0);
             }}
           >
-            Plugins{plugins.length ? ` ${plugins.length}` : ''}
+            Plugins
+            {plugins.length ? <span className="palette-count">{plugins.length}</span> : null}
           </Button>
         </div>
         <div className={tab === PLUGINS_TAB_VALUE ? 'palette-body plugins' : 'palette-body'}>
@@ -1967,11 +1971,12 @@ function Palette({
                     data-active={rowIndex === index}
                     onClick={() => onAsk(plugin.name)}
                   >
-                    <span className="palette-mark">{paletteMark(plugin.name)}</span>
-                    <span>
+                    <span className="palette-mark plugin">P</span>
+                    <span className="palette-copy">
                       <strong>{plugin.name}</strong>
-                      <span className="flow-muted"> Installed plugin</span>
+                      <span>Plugin · installed in this workspace</span>
                     </span>
+                    {rowIndex === index ? <span className="palette-enter">↵</span> : null}
                   </Button>
                 ))
               )}
@@ -2000,32 +2005,36 @@ function Palette({
                 {analyses.length === 0 ? (
                   <p className="flow-soon">Coming soon</p>
                 ) : (
-                  analyses.map((item, rowIndex) => (
-                    <Button
-                      key={item.name}
-                      className="palette-hit"
-                      type="button"
-                      data-active={rowIndex === index}
-                      onClick={() => {
-                        setIndex(rowIndex);
-                        onClose();
-                        const store = useAnalysisSetupStore.getState();
-                        if (isDialogMenuItem(item.name)) {
-                          store.openDialog(item.name);
-                          return;
-                        }
-                        const op = getAnalysisOpForMenuName(item.name);
-                        if (op) store.openSetupFromPalette(op);
-                        else store.openUnavailable(item.name);
-                      }}
-                    >
-                      <span className="palette-mark">{paletteMark(item.name)}</span>
-                      <span>
-                        <strong>{item.name}</strong>
-                        {item.hint ? <span className="flow-muted"> {item.hint}</span> : null}
-                      </span>
-                    </Button>
-                  ))
+                  <>
+                    <p className="palette-label">{query ? 'Best match' : activeSection}</p>
+                    {analyses.map((item, rowIndex) => (
+                      <Button
+                        key={item.name}
+                        className="palette-hit"
+                        type="button"
+                        data-active={rowIndex === index}
+                        onClick={() => {
+                          setIndex(rowIndex);
+                          onClose();
+                          const store = useAnalysisSetupStore.getState();
+                          if (isDialogMenuItem(item.name)) {
+                            store.openDialog(item.name);
+                            return;
+                          }
+                          const op = getAnalysisOpForMenuName(item.name);
+                          if (op) store.openSetupFromPalette(op);
+                          else store.openUnavailable(item.name);
+                        }}
+                      >
+                        <span className="palette-mark">{paletteMark(item.name)}</span>
+                        <span className="palette-copy">
+                          <strong>{item.name}</strong>
+                          {item.hint ? <span>{item.hint}</span> : null}
+                        </span>
+                        {rowIndex === index ? <span className="palette-enter">↵</span> : null}
+                      </Button>
+                    ))}
+                  </>
                 )}
               </div>
             </>
@@ -2033,8 +2042,8 @@ function Palette({
         </div>
         <p className="palette-foot">
           <span>↑↓ navigate</span>
-          <span>Enter opens setup</span>
-          <span>⌘Enter asks the agent</span>
+          <span>↵ open dialog</span>
+          <span>⌘↵ ask the agent to run it</span>
           <span className="plugin-spacer" />
           <span>
             {dataset
