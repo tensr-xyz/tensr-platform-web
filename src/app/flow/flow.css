@@ -3350,3 +3350,32 @@ select.flow-input {
 .anova-foot {
   margin-top: 8px;
 }
+
+.table-chart-plot,
+.table-chart-settings {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.table-chart-settings {
+  border-left: 1px solid var(--color-line);
+  background: var(--color-canvas);
+}
+
+.table-chart-svg {
+  width: 100%;
+  height: auto;
+  background: var(--color-canvas);
+}
+
+.table-chart-skeleton {
+  height: 360px;
+}
+
+.table-chart-foot {
+  margin-top: auto;
+}

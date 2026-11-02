@@ -12,8 +12,12 @@ describe('anova result', () => {
 
   it('counts pairs the test did not reject and reads an API error', () => {
     expect(countedPairs([{ reject: true }, { reject: false }, { reject: false }]).other).toBe(2);
-    expect(anovaError(new Error('{"detail":"Need at least two groups"}'))).toBe(
-      'Need at least two groups'
-    );
+    expect(
+      anovaError(
+        new Error(
+          '{"detail":"Need at least two groups with at least 2 observations each (excluded: east (n=1), north (n=1), south (n=1))"}'
+        )
+      )
+    ).toBe('Each group needs at least 2 responses; east, north and south have only 1');
   });
 });

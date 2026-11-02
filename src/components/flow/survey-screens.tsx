@@ -11,6 +11,7 @@ import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
+import { TableChart } from '@/components/flow/table-chart-panel';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import {
   bannerColumns,
@@ -1002,6 +1003,7 @@ export function TablesBuilder({
   const [ask, setAsk] = useState('');
   const [thread, setThread] = useState<{ role: 'user' | 'run'; text: string }[]>([]);
   const [railReady, setRailReady] = useState(false);
+  const [view, setView] = useState<'table' | 'chart'>('table');
 
   useEffect(() => {
     if (!datasetId) {
@@ -1277,262 +1279,291 @@ export function TablesBuilder({
           <p className="flow-muted">No banner books yet</p>
         )}
       </aside>
-      <section className="tables-main">
-        <div className="tables-tools">
-          <div className="tables-line">
-            <span>Stub</span>
-            {stub ? (
-              <Button className="tables-chip accent" type="button" onClick={() => setStub('')}>
-                {labelFor(stub)} ×
-              </Button>
-            ) : null}
-            <ChoiceSelect
-              className="flow-input"
-              aria-label="Table stub"
-              value=""
-              onValueChange={value => {
-                if (value) setStub(value);
-              }}
-              options={[
-                { value: '', label: '+ Drop variable' },
-                ...columns.map(column => ({ value: column.name, label: column.label })),
-              ]}
-            />
-          </div>
-          <div className="tables-line">
-            <span>Banner</span>
-            {banners.map(name => (
-              <Button
-                key={name}
-                className="tables-chip"
-                type="button"
-                onClick={() => setBanners(current => current.filter(item => item !== name))}
-              >
-                {labelFor(name)} ×
-              </Button>
-            ))}
-            <ChoiceSelect
-              className="flow-input"
-              aria-label="Add banner"
-              value=""
-              onValueChange={value => {
-                if (!value || value === stub || banners.includes(value)) return;
-                setBanners(current => [...current, value]);
-              }}
-              options={[
-                { value: '', label: '+' },
-                ...columns
-                  .filter(column => column.name !== stub && !banners.includes(column.name))
-                  .map(column => ({ value: column.name, label: column.label })),
-              ]}
-            />
-          </div>
-          <div className="tables-line wrap">
-            <span>Show</span>
-            <div className="tables-segment">
-              {(
-                [
-                  ['count', 'Counts'],
-                  ['column_proportion', 'Column %'],
-                  ['row_proportion', 'Row %'],
-                  ['total_proportion', 'Total %'],
-                ] as const
-              ).map(([value, label]) => (
+      {view === 'chart' ? (
+        <TableChart
+          datasetId={datasetId}
+          projectId={projectId}
+          columns={columns}
+          onShowTable={() => setView('table')}
+        />
+      ) : (
+        <>
+          <section className="tables-main">
+            <div className="tables-tools">
+              <div className="tables-line">
+                <span>Stub</span>
+                {stub ? (
+                  <Button className="tables-chip accent" type="button" onClick={() => setStub('')}>
+                    {labelFor(stub)} ×
+                  </Button>
+                ) : null}
+                <ChoiceSelect
+                  className="flow-input"
+                  aria-label="Table stub"
+                  value=""
+                  onValueChange={value => {
+                    if (value) setStub(value);
+                  }}
+                  options={[
+                    { value: '', label: '+ Drop variable' },
+                    ...columns.map(column => ({ value: column.name, label: column.label })),
+                  ]}
+                />
+              </div>
+              <div className="tables-line">
+                <span>Banner</span>
+                {banners.map(name => (
+                  <Button
+                    key={name}
+                    className="tables-chip"
+                    type="button"
+                    onClick={() => setBanners(current => current.filter(item => item !== name))}
+                  >
+                    {labelFor(name)} ×
+                  </Button>
+                ))}
+                <ChoiceSelect
+                  className="flow-input"
+                  aria-label="Add banner"
+                  value=""
+                  onValueChange={value => {
+                    if (!value || value === stub || banners.includes(value)) return;
+                    setBanners(current => [...current, value]);
+                  }}
+                  options={[
+                    { value: '', label: '+' },
+                    ...columns
+                      .filter(column => column.name !== stub && !banners.includes(column.name))
+                      .map(column => ({ value: column.name, label: column.label })),
+                  ]}
+                />
+              </div>
+              <div className="tables-line wrap">
+                <span>Show</span>
+                <div className="tables-segment">
+                  {(
+                    [
+                      ['count', 'Counts'],
+                      ['column_proportion', 'Column %'],
+                      ['row_proportion', 'Row %'],
+                      ['total_proportion', 'Total %'],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <Button
+                      key={value}
+                      className="flow-btn"
+                      type="button"
+                      data-active={statistic === value && !meanOn}
+                      onClick={() => {
+                        setStatistic(value);
+                        setMeanOn(false);
+                      }}
+                    >
+                      {label}
+                    </Button>
+                  ))}
+                </div>
                 <Button
-                  key={value}
                   className="flow-btn"
                   type="button"
-                  data-active={statistic === value && !meanOn}
-                  onClick={() => {
-                    setStatistic(value);
-                    setMeanOn(false);
-                  }}
+                  onClick={() => setDigits(current => (current + 1) % 3)}
                 >
-                  {label}
+                  {digits} dp
                 </Button>
-              ))}
+                <Button
+                  className="flow-btn"
+                  type="button"
+                  data-active={lettersOn}
+                  onClick={() => setLettersOn(current => !current)}
+                >
+                  Sig 95% · A/a letters
+                </Button>
+                <Button
+                  className="flow-btn"
+                  type="button"
+                  data-active={nest}
+                  onClick={() => setNest(current => !current)}
+                >
+                  Nest banners
+                </Button>
+                <Button
+                  className="flow-btn"
+                  type="button"
+                  data-active={lowBase}
+                  onClick={() => setLowBase(current => !current)}
+                >
+                  Low base &lt; 30 *
+                </Button>
+                <ChoiceSelect
+                  className="flow-input"
+                  aria-label="Table weight"
+                  value={weight}
+                  onValueChange={setWeight}
+                  options={[
+                    { value: '', label: 'Unweighted' },
+                    ...(weightColumn
+                      ? [{ value: weightColumn, label: `Weight ${weightColumn}` }]
+                      : []),
+                  ]}
+                />
+                <span className="flow-muted">Scale</span>
+                <div className="tables-segment">
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    data-active={top2}
+                    onClick={() => setTop2(current => !current)}
+                  >
+                    Top 2 box
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    data-active={bottom2}
+                    onClick={() => setBottom2(current => !current)}
+                  >
+                    Bottom 2 box
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    data-active={meanOn}
+                    onClick={() => setMeanOn(current => !current)}
+                  >
+                    Mean
+                  </Button>
+                </div>
+                <span className="flow-muted">Nets kept on re-run</span>
+                <Button className="flow-btn" type="button" onClick={runBook}>
+                  Run as banner book
+                </Button>
+                <Button
+                  className="flow-btn primary"
+                  type="button"
+                  disabled={!stub}
+                  onClick={saveTable}
+                >
+                  Save table
+                </Button>
+              </div>
             </div>
-            <Button
-              className="flow-btn"
-              type="button"
-              onClick={() => setDigits(current => (current + 1) % 3)}
-            >
-              {digits} dp
-            </Button>
-            <Button
-              className="flow-btn"
-              type="button"
-              data-active={lettersOn}
-              onClick={() => setLettersOn(current => !current)}
-            >
-              Sig 95% · A/a letters
-            </Button>
-            <Button
-              className="flow-btn"
-              type="button"
-              data-active={nest}
-              onClick={() => setNest(current => !current)}
-            >
-              Nest banners
-            </Button>
-            <Button
-              className="flow-btn"
-              type="button"
-              data-active={lowBase}
-              onClick={() => setLowBase(current => !current)}
-            >
-              Low base &lt; 30 *
-            </Button>
-            <ChoiceSelect
-              className="flow-input"
-              aria-label="Table weight"
-              value={weight}
-              onValueChange={setWeight}
-              options={[
-                { value: '', label: 'Unweighted' },
-                ...(weightColumn ? [{ value: weightColumn, label: `Weight ${weightColumn}` }] : []),
-              ]}
-            />
-            <span className="flow-muted">Scale</span>
-            <div className="tables-segment">
-              <Button
-                className="flow-btn"
-                type="button"
-                data-active={top2}
-                onClick={() => setTop2(current => !current)}
-              >
-                Top 2 box
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                data-active={bottom2}
-                onClick={() => setBottom2(current => !current)}
-              >
-                Bottom 2 box
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                data-active={meanOn}
-                onClick={() => setMeanOn(current => !current)}
-              >
-                Mean
-              </Button>
-            </div>
-            <span className="flow-muted">Nets kept on re-run</span>
-            <Button className="flow-btn" type="button" onClick={runBook}>
-              Run as banner book
-            </Button>
-            <Button className="flow-btn primary" type="button" disabled={!stub} onClick={saveTable}>
-              Save table
-            </Button>
-          </div>
-        </div>
-        {error ? <p className="flow-error">{error}</p> : null}
-        {note ? <p className="flow-muted">{note}</p> : null}
-        <div className="tables-sheet">
-          <div className="tables-title">
-            <div>
-              <h2>{title}</h2>
-              <p className="flow-muted">{[labelFor(stub), baseLine].filter(Boolean).join(' · ')}</p>
-            </div>
-            <div className="tables-title-actions">
-              <Button
-                className="flow-btn"
-                type="button"
-                onClick={() => setNote('The chart for this table is the next screen.')}
-              >
-                Chart
-              </Button>
-              <Button className="flow-btn" type="button" onClick={addToBook}>
-                Add to book
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                onClick={() => {
-                  if (!datasetId || !specId) {
-                    setError('Save the table before exporting.');
-                    return;
+            {error ? <p className="flow-error">{error}</p> : null}
+            {note ? <p className="flow-muted">{note}</p> : null}
+            <div className="tables-sheet">
+              <div className="tables-title">
+                <div>
+                  <h2>{title}</h2>
+                  <p className="flow-muted">
+                    {[labelFor(stub), baseLine].filter(Boolean).join(' · ')}
+                  </p>
+                </div>
+                <div className="tables-title-actions">
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    data-active={view === 'table'}
+                    onClick={() => setView('table')}
+                  >
+                    Table
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    data-active={view === 'chart'}
+                    onClick={() => setView('chart')}
+                  >
+                    Chart
+                  </Button>
+                  <Button className="flow-btn" type="button" onClick={addToBook}>
+                    Add to book
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => {
+                      if (!datasetId || !specId) {
+                        setError('Save the table before exporting.');
+                        return;
+                      }
+                      void downloadExport(
+                        `/datasets/${datasetId}/tables/${specId}/export.docx`,
+                        'table.docx'
+                      ).catch(err =>
+                        setError(err instanceof Error ? err.message : 'Could not export the table')
+                      );
+                    }}
+                  >
+                    Export
+                  </Button>
+                </div>
+              </div>
+              {book ? (
+                <BannerGrid
+                  book={book}
+                  onSelectCell={openCell}
+                  baseAtEnd
+                  showNets={
+                    top2 ||
+                    bottom2 ||
+                    ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
                   }
-                  void downloadExport(
-                    `/datasets/${datasetId}/tables/${specId}/export.docx`,
-                    'table.docx'
-                  ).catch(err =>
-                    setError(err instanceof Error ? err.message : 'Could not export the table')
-                  );
-                }}
-              >
-                Export
-              </Button>
+                  figure={figure}
+                  digits={digits}
+                  markLowBase={lowBase}
+                />
+              ) : (
+                <p className="flow-muted">Choose a stub and save the table.</p>
+              )}
             </div>
-          </div>
-          {book ? (
-            <BannerGrid
-              book={book}
-              onSelectCell={openCell}
-              baseAtEnd
-              showNets={
-                top2 ||
-                bottom2 ||
-                ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
-              }
-              figure={figure}
-              digits={digits}
-              markLowBase={lowBase}
-            />
-          ) : (
-            <p className="flow-muted">Choose a stub and save the table.</p>
-          )}
-        </div>
-        <div className="tables-foot">
-          <span>{totalBase ? `${totalBase} respondents` : ''}</span>
-          <span>{weight ? 'Weighted' : book ? 'Unweighted' : ''}</span>
-          <span>{specId ? 'Saved' : ''}</span>
-        </div>
-      </section>
-      <aside className="tables-agent">
-        <div className="tables-agent-head">
-          <span className="tables-dot" />
-          <span>{book ? labelFor(stub) : 'Table'}</span>
-        </div>
-        <div className="tables-thread">
-          {thread.map((item, index) => (
-            <p
-              key={`${item.role}-${index}`}
-              className={item.role === 'user' ? 'tables-ask' : 'flow-muted'}
+            <div className="tables-foot">
+              <span>{totalBase ? `${totalBase} respondents` : ''}</span>
+              <span>{weight ? 'Weighted' : book ? 'Unweighted' : ''}</span>
+              <span>{specId ? 'Saved' : ''}</span>
+            </div>
+          </section>
+          <aside className="tables-agent">
+            <div className="tables-agent-head">
+              <span className="tables-dot" />
+              <span>{book ? labelFor(stub) : 'Table'}</span>
+            </div>
+            <div className="tables-thread">
+              {thread.map((item, index) => (
+                <p
+                  key={`${item.role}-${index}`}
+                  className={item.role === 'user' ? 'tables-ask' : 'flow-muted'}
+                >
+                  {item.role === 'run' ? `✓ ${item.text}` : item.text}
+                </p>
+              ))}
+              {projectId ? (
+                <Button className="flow-btn" type="button" asChild>
+                  <Link href={`/flow/p/${projectId}/chat`}>Open chat</Link>
+                </Button>
+              ) : null}
+            </div>
+            <form
+              className="tables-composer"
+              onSubmit={event => {
+                event.preventDefault();
+                const text = ask.trim();
+                if (!text) return;
+                setThread(current => [...current, { role: 'user', text }]);
+                setAsk('');
+              }}
             >
-              {item.role === 'run' ? `✓ ${item.text}` : item.text}
-            </p>
-          ))}
-          {projectId ? (
-            <Button className="flow-btn" type="button" asChild>
-              <Link href={`/flow/p/${projectId}/chat`}>Open chat</Link>
-            </Button>
-          ) : null}
-        </div>
-        <form
-          className="tables-composer"
-          onSubmit={event => {
-            event.preventDefault();
-            const text = ask.trim();
-            if (!text) return;
-            setThread(current => [...current, { role: 'user', text }]);
-            setAsk('');
-          }}
-        >
-          <Input
-            value={ask}
-            onChange={event => setAsk(event.target.value)}
-            placeholder="Ask, or tell it to change the table…"
-            aria-label="Ask about this table"
-          />
-          <Button className="flow-btn primary" type="submit">
-            Ask
-          </Button>
-        </form>
-      </aside>
+              <Input
+                value={ask}
+                onChange={event => setAsk(event.target.value)}
+                placeholder="Ask, or tell it to change the table…"
+                aria-label="Ask about this table"
+              />
+              <Button className="flow-btn primary" type="submit">
+                Ask
+              </Button>
+            </form>
+          </aside>
+        </>
+      )}
     </div>
   );
 }

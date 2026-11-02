@@ -31,15 +31,47 @@ export function pairText(row: AnovaPair): string {
   return [compared, amount, pPhrase(row['p-adj'])].filter(Boolean).join(' · ');
 }
 
+export function readableAnovaError(detail: string): string {
+  const limited = detail.match(
+    /^Need at least two groups with at least (\d+) observations each \(excluded: (.+)\)$/
+  );
+  if (limited) {
+    const minimum = limited[1];
+    const groups = [...limited[2].matchAll(/([^,]+?) \(n=(\d+)\)/g)].map(match => ({
+      name: match[1].trim(),
+      n: match[2],
+    }));
+    if (groups.length) {
+      const names = groups.map(group => group.name);
+      const counts = [...new Set(groups.map(group => group.n))];
+      const joined =
+        names.length <= 1
+          ? names[0] || ''
+          : names.length === 2
+            ? `${names[0]} and ${names[1]}`
+            : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+      if (counts.length === 1) {
+        const verb = names.length === 1 ? 'has' : 'have';
+        return `Each group needs at least ${minimum} responses; ${joined} ${verb} only ${counts[0]}`;
+      }
+      return `Each group needs at least ${minimum} responses; ${groups
+        .map(group => `${group.name} has ${group.n}`)
+        .join(', ')}`;
+    }
+  }
+  if (detail === 'Need at least two groups') return 'Choose a factor with at least two groups.';
+  return detail;
+}
+
 export function anovaError(err: unknown): string {
   const raw = err instanceof Error ? err.message : 'ANOVA did not run';
   try {
     const body = JSON.parse(raw) as { detail?: unknown };
-    if (typeof body.detail === 'string') return body.detail;
+    if (typeof body.detail === 'string') return readableAnovaError(body.detail);
   } catch {
-    return raw;
+    return readableAnovaError(raw);
   }
-  return raw;
+  return readableAnovaError(raw);
 }
 
 export function countedPairs(rows: AnovaPair[] | undefined): {
