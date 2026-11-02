@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { mapApiInvitation } from '@/lib/organization-invitations';
-import { pickerColumns, type FlowColumn } from '@/lib/flow-columns';
+import { pickerColumns, questionKind, type FlowColumn } from '@/lib/flow-columns';
 import { datasetRowId } from '@/components/flow/survey-screens';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -137,6 +137,7 @@ export function DetailsScreen({
   const [members, setMembers] = useState<Member[] | null>(null);
   const [columns, setColumns] = useState<FlowColumn[] | null>(null);
   const [weightName, setWeightName] = useState('');
+  const [kinds, setKinds] = useState<Record<string, string>>({});
   const [editing, setEditing] = useState(false);
   const [objectives, setObjectives] = useState('');
   const [audience, setAudience] = useState('');
@@ -213,11 +214,38 @@ export function DetailsScreen({
     }
     let cancelled = false;
     setColumns(null);
-    void flowJson<{ columns?: FlowColumn[]; active_weight_column?: string | null }>(
-      `/datasets/${datasetId}/metadata`
-    )
-      .then(meta => {
+    void Promise.all([
+      flowJson<{
+        columns?: FlowColumn[];
+        active_weight_column?: string | null;
+        multiple_response_sets?: { columns?: string[]; variables?: string[] }[] | null;
+      }>(`/datasets/${datasetId}/metadata`),
+      flowJson<{ rows?: unknown[][]; headers?: string[] }>(
+        `/datasets/${datasetId}/preview?limit=200&offset=0`
+      ).catch(() => ({ rows: [], headers: [] })),
+    ])
+      .then(([meta, page]) => {
         if (cancelled) return;
+        const headers = page.headers || [];
+        const rows = page.rows || [];
+        const multi = new Set(
+          (meta.multiple_response_sets || []).flatMap(set => [
+            ...(set.columns || []),
+            ...(set.variables || []),
+          ])
+        );
+        const kinds: Record<string, string> = {};
+        for (const column of meta.columns || []) {
+          const index = headers.findIndex(
+            header => header === column.name || header === column.label
+          );
+          kinds[column.name] = questionKind(
+            column,
+            index >= 0 ? rows.map(row => row[index]) : [],
+            multi
+          );
+        }
+        setKinds(kinds);
         setColumns(meta.columns || []);
         setWeightName(meta.active_weight_column || '');
       })
@@ -235,7 +263,9 @@ export function DetailsScreen({
   const briefText = savedText ?? brief?.text ?? brief?.excerpt ?? '';
   const parts = splitBrief(briefText);
   const ready = docs !== null && members !== null && columns !== null;
-  const outline = pickerColumns(columns || []);
+  const outline = pickerColumns(columns || []).filter(
+    column => column.name !== weightName && column.name.toLowerCase() !== 'weight'
+  );
 
   const save = () => {
     if (!projectId || busy) return;
@@ -445,7 +475,7 @@ export function DetailsScreen({
             {outline.length ? (
               <div className="details-q">
                 {outline.map((column, index) => {
-                  const kind = columnKind(column);
+                  const kind = kinds[column.name] || columnKind(column);
                   return (
                     <div key={column.name} className="details-q-row">
                       <span className="details-q-num">Q{index + 1}</span>

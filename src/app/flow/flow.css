@@ -9257,3 +9257,12 @@ select.flow-input {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+
+.details-q-kind[data-kind=\"multi\"] {
+  background: #ecebf5;
+  color: #4b4580;
+}
+
+.details-q-kind[data-kind=\"numeric\"] {
+  background: var(--color-well);
+}

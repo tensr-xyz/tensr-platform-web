@@ -61,3 +61,21 @@ describe('picker columns', () => {
     ]);
   });
 });
+
+describe('question kind', () => {
+  it('reads the type from labels, values, and response sets', () => {
+    const { questionKind } = jest.requireActual('./flow-columns');
+    expect(questionKind({ name: 'aware', type: 'numeric' }, [0, 1, 1, 0])).toBe('single');
+    expect(questionKind({ name: 'likes', type: 'numeric' }, [1, 2, 5, 4, 3])).toBe('scale 1-5');
+    expect(questionKind({ name: 'nps', type: 'numeric' }, [0, 7, 10, 9, 3])).toBe('scale 0-10');
+    expect(questionKind({ name: 'region', type: 'numeric' }, [1, 2, 2, 1])).toBe('single');
+    expect(questionKind({ name: 'wave', type: 'string' }, ['a', 'b', 'a', 'b', 'a'])).toBe(
+      'single'
+    );
+    expect(questionKind({ name: 'why', type: 'string' }, ['too dear', 'staff', 'slow'])).toBe(
+      'open'
+    );
+    expect(questionKind({ name: 'q5_1', type: 'numeric' }, [1], new Set(['q5_1']))).toBe('multi');
+    expect(questionKind({ name: 'weight', type: 'numeric' }, [0.8, 1.2, 1.1])).toBe('numeric');
+  });
+});

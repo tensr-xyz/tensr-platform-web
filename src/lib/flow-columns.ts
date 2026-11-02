@@ -74,3 +74,35 @@ export function themeColumns(
       return { value: column.name, label: label || column.name.replace(/_codes$/, '') };
     });
 }
+
+/** The question type for an outline pill: single, multi, scale with its range, numeric, or open. */
+export function questionKind(
+  column: FlowColumn & { coded_multi?: boolean },
+  values: unknown[],
+  multiNames: Set<string> = new Set()
+): string {
+  if (column.coded_multi || multiNames.has(column.name)) return 'multi';
+  const labels = Object.keys(column.value_labels || {});
+  const seen = values
+    .map(value => (value == null ? '' : String(value).trim()))
+    .filter(value => value !== '' && value !== 'null' && value !== 'nan');
+  const numbers = seen.map(Number).filter(value => Number.isFinite(value));
+  const codes = labels.length ? labels.map(Number).filter(Number.isFinite) : numbers;
+  const integers = codes.length > 0 && codes.every(value => Number.isInteger(value));
+  const distinct = new Set(codes).size;
+  const type = String(column.type || '').toLowerCase();
+  if (integers && numbers.length === seen.length) {
+    const min = Math.min(...codes);
+    const max = Math.max(...codes);
+    if ((min === 0 || min === 1) && distinct <= 2 && max <= 1) return 'single';
+    if ((min === 0 || min === 1) && (max === 5 || max === 7 || max === 10) && distinct >= 3) {
+      return `scale ${min}-${max}`;
+    }
+    if (distinct <= 12) return 'single';
+  }
+  if (labels.length) return 'single';
+  if (['numeric', 'number', 'float', 'integer', 'double'].includes(type)) return 'numeric';
+  const unique = new Set(seen).size;
+  if (seen.length && unique <= 12 && unique < seen.length / 2) return 'single';
+  return 'open';
+}
