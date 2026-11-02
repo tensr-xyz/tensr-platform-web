@@ -18,10 +18,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 17
-- wired: 17
+- matched: 18
+- wired: 18
 - built: 0
-- todo: 24
+- todo: 23
 - checks done: 6 passed, 1 owner QA
 
 ## Decisions
@@ -63,7 +63,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **2d Project details** (`1F4C-0`, `2d-project-details`) — **wired**. Project brief, questionnaire outline, waves, and team. The brief is the latest context doc, split into objectives and audience. Edit saves a new brief the agent can read. Fielding is a coming-soon chip. Waves are the project files and their row counts. Columns are the open file. There is no client record, so deliverables link to Report. Add member picks a workspace member by name and email, with a project role. Invite by email uses the workspace invitation. `screen.tsx` records the layout; the sample energy objectives, 312 / 400, Northgate decks, and named roles stay in Paper. Components: shadcn.
 - [x] **3 Sources** (`288-0`, `3-sources`) — **wired**. Sources title, connected files, and the dataset list are the project's files and row counts. The open file is In use. Open on another file sets it active and goes to Responses. Fielding, Prolific, Qualtrics, and Decipher / Alchemer are coming soon, with no completes or quotas. Upload file was checked with sources-check.csv: the file is in Connected and Datasets, 3 rows, and the page stays on Sources. More connectors opens Plugins. Two or more files can be stacked, and a stacked file's Review mapping opens that same fuse. Context lists the saved documents, and Add saves a brief, questionnaire, or report for the agent. `screen.tsx` records the layout; the sample Prolific completes, quota bars, Qualtrics sync, and named waves stay in Paper. Components: shadcn.
 - [x] **3b Stack waves** (`93J-0`, `3b-stack-waves`) — **wired**. Stack files compares two files in the project. A shared name is matched. A name on only one side, or a shared name whose value labels differ, is flagged. Add, Skip, and Treat as same are the fuse decisions. Show all lists the matched names. Stack waves creates a new dataset and leaves the originals. On sources-check.csv and likert_openends.csv, id, region, and \_row_uid matched, score was only in the csv, and the fuse added a 403-row file to the project. `screen.tsx` records the layout; the sample Q20 rename, Octavia Green code, and 182 matched stay in Paper. Components: shadcn.
-- [ ] **3c Interviews** (`17DV-0`, `3c-interviews`) — **todo**. PNG only. Components: shadcn.
+- [x] **3c Interviews** (`17DV-0`, `3c-interviews`) — **wired**. The rail is the project's transcripts. Search filters the filename. Add transcripts uploads a .txt, .vtt, or .docx. Audio is coming soon. Opening one shows the stored passages, speaker, and text. Recode saves a code on the selected passage. Codes shown hides those chips. A speaker filter appears when the transcript has more than one speaker. Evidence shows that passage and says interviews are a count, not a survey percent. Cite in report opens Report. There is no stored duration, survey link, or agent summary, so those sample figures stay out. Checked with interview-check.txt: one passage, then the code Bill. `screen.tsx` records the layout; the sample speakers, 24%, and the agent summary stay in Paper. Components: shadcn.
 - [ ] **4b Notebook** (`5ER-0`, `4b-notebook`) — **todo**. PNG only. Components: shadcn.
 - [ ] **4e Weighting modal** (`97E-0`, `4e-weighting`) — **todo**. PNG only. Components: shadcn.
 - [ ] **4f Run ANOVA modal** (`CJO-0`, `4f-anova`) — **todo**. PNG only. Components: shadcn.

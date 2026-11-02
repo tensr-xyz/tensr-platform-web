@@ -20,6 +20,7 @@ import {
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { SourcesScreen } from '@/components/flow/sources-screen';
+import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -96,7 +97,6 @@ import { bannerHeading } from '@/lib/flow-survey';
 import { CodeFrameRail } from '@/components/flow/code-frame-rail';
 import { ColumnSpark, valueCounts } from '@/components/flow/column-spark';
 import {
-  CodeFramePanel,
   datasetRowId,
   downloadExport,
   EvidencePanel,
@@ -479,7 +479,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
             ) : section === 'report' ? (
               <ReportScreen projectId={projectId} project={project} datasets={datasets} />
             ) : section === 'interviews' ? (
-              <InterviewsScreen projectId={projectId} project={project} datasets={datasets} />
+              <InterviewsScreen projectId={projectId} />
             ) : section === 'clips' ? (
               <section className="flow-panel">
                 <h2>Clips</h2>
@@ -3657,126 +3657,6 @@ function ReportScreen({
         </div>
       </div>
     </section>
-  );
-}
-
-function InterviewsScreen({
-  projectId,
-  project,
-  datasets,
-}: {
-  projectId: string;
-  project?: FlowProject;
-  datasets: DatasetRow[];
-}) {
-  const datasetId =
-    project?.active_dataset_id || datasets.find(row => row.project_id === projectId)?.dataset_id;
-  const [label, setLabel] = useState('');
-  const [themes, setThemes] = useState<string[]>([]);
-  const [theme, setTheme] = useState('');
-  const [rows, setRows] = useState<
-    {
-      id: string;
-      filename?: string;
-      passage_count?: number;
-      passages_index?: { passage_id: string; speaker?: string; start?: string; end?: string }[];
-    }[]
-  >([]);
-  const [code, setCode] = useState('');
-  const load = useCallback(() => {
-    const query = theme ? `?theme=${encodeURIComponent(theme)}` : '';
-    void flowJson<{
-      interviews?: {
-        id: string;
-        filename?: string;
-        passage_count?: number;
-        passages_index?: { passage_id: string; speaker?: string; start?: string; end?: string }[];
-      }[];
-      themes?: string[];
-      count_label?: string;
-    }>(`/api/projects/${projectId}/interviews${query}`)
-      .then(page => {
-        setRows(page.interviews || []);
-        setThemes(page.themes || []);
-        setLabel(page.count_label || '');
-      })
-      .catch(err => setLabel(err instanceof Error ? err.message : 'Could not load interviews'));
-  }, [projectId, theme]);
-  useEffect(() => {
-    load();
-  }, [load]);
-  return (
-    <div className="flow-split">
-      <div className="flow-panel">
-        <h2>Interviews</h2>
-        <p>{label}</p>
-        <label>
-          Theme
-          <ChoiceSelect
-            className="flow-input"
-            value={theme}
-            onValueChange={setTheme}
-            options={[
-              { value: '', label: 'All themes' },
-              ...themes.map(item => ({ value: item, label: item })),
-            ]}
-          />
-        </label>
-        <p className="flow-muted">
-          Counts only. These passages are not added to survey percentages. No audio.
-        </p>
-        <Input
-          type="file"
-          accept=".txt,.vtt,.docx"
-          onChange={event => {
-            const file = event.target.files?.[0];
-            if (!file) return;
-            const body = new FormData();
-            body.append('upload', file);
-            void flowFetch(`/api/projects/${projectId}/interviews`, { method: 'POST', body }).then(
-              () => load()
-            );
-          }}
-        />
-        {rows.map(row => (
-          <div key={row.id}>
-            <div>
-              {row.filename} · {row.passage_count} passages
-            </div>
-            {(row.passages_index || []).slice(0, 8).map(passage => (
-              <form
-                key={passage.passage_id}
-                onSubmit={event => {
-                  event.preventDefault();
-                  if (!code.trim()) return;
-                  void flowJson(`/api/projects/${projectId}/interviews/${row.id}/codes`, {
-                    method: 'POST',
-                    body: JSON.stringify({ passage_id: passage.passage_id, code }),
-                  }).then(() => load());
-                }}
-              >
-                <span>
-                  {passage.speaker || 'Speaker'} {passage.start || ''}–{passage.end || ''}
-                </span>
-                <Input
-                  className="flow-input"
-                  value={code}
-                  placeholder="Code"
-                  onChange={event => setCode(event.target.value)}
-                />
-                <Button className="flow-btn" type="submit">
-                  Code passage
-                </Button>
-              </form>
-            ))}
-          </div>
-        ))}
-      </div>
-      <CodeFramePanel
-        datasetId={datasetId}
-        datasets={datasets.filter(row => row.project_id === projectId)}
-      />
-    </div>
   );
 }
 
