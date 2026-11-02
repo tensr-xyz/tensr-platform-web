@@ -174,7 +174,12 @@ export function StackWaves({
   const rightFile = files.find(file => datasetRowId(file) === rightId);
   const leftName = leftFile?.original_filename || 'First file';
   const rightName = rightFile?.original_filename || 'Second file';
-  const rows = leftCols && rightCols ? compareWaves(leftCols, rightCols, leftName, rightName) : [];
+  const visibleCols = (list: typeof leftCols) =>
+    (list || []).filter(column => !String(column.name || '').startsWith('_'));
+  const rows =
+    leftCols && rightCols
+      ? compareWaves(visibleCols(leftCols), visibleCols(rightCols), leftName, rightName)
+      : [];
   const counts = waveCounts(rows);
   const visible = showAll ? rows : rows.filter(row => row.kind !== 'matched');
   const ready = leftCols !== null && rightCols !== null;
@@ -230,7 +235,7 @@ export function StackWaves({
           Stack {leftName} + {rightName}
         </DialogTitle>
         <DialogDescription>
-          Columns with the same name stack together. Check the ones that do not.
+          Columns with the same name stack together. Check the exceptions below.
         </DialogDescription>
       </DialogHeader>
       {files.length > 2 ? (
@@ -325,23 +330,25 @@ export function StackWaves({
           ) : (
             <p className="flow-muted">Every column name matches.</p>
           )}
+        </>
+      )}
+      {error ? <p className="flow-error">{error}</p> : null}
+      <div className="stack-foot">
+        {ready && files.length >= 2 ? (
           <Button
-            className="flow-btn"
+            className="stack-show-all"
             type="button"
             onClick={() => setShowAll(current => !current)}
           >
             {showAll ? 'Show exceptions' : `Show all ${rows.length} mappings`}
           </Button>
-        </>
-      )}
-      {error ? <p className="flow-error">{error}</p> : null}
-      <div className="stack-foot">
-        <p className="flow-muted">Creates a new dataset. The original files stay as they are.</p>
+        ) : null}
+        <p className="flow-muted">Creates a new dataset, originals untouched</p>
         <Button className="flow-btn" type="button" onClick={onDone}>
           Cancel
         </Button>
         <Button
-          className="sources-ink"
+          className="flow-btn primary"
           type="button"
           disabled={busy || files.length < 2 || leftId === rightId}
           onClick={stack}

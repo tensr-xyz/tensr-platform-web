@@ -1,3 +1,6 @@
+/* Dialogs and popovers portal to body, outside .flow; they read the same tokens. */
+body:has(.flow) [role='dialog'],
+body:has(.flow) [data-radix-popper-content-wrapper],
 .flow {
   --color-canvas: #ffffff;
   --color-well: #f6f6f3;
@@ -14,6 +17,9 @@
   --weight-medium: 500;
   --weight-title: 600;
   --font: 'Suisse Intl', 'SuisseIntl', Inter, system-ui, sans-serif;
+}
+
+.flow {
   min-height: 100vh;
   height: 100vh;
   display: flex;
@@ -5825,4 +5831,97 @@ select.flow-input {
   margin: 6px 0 0;
   font-size: 14px;
   line-height: 18px;
+}
+
+/* 3b Stack waves, from the Paper export. */
+.sources-stack-dialog {
+  width: min(830px, 94vw);
+  max-width: 830px !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  overflow: hidden;
+}
+
+.sources-stack-dialog > div:first-child {
+  padding: 22px 24px 0;
+}
+
+.sources-stack-dialog .stack-picks {
+  padding: 8px 24px 0;
+}
+
+.sources-stack-dialog .stack-picks button[role='combobox'] {
+  height: 28px;
+  width: auto;
+  font-size: 12px;
+}
+
+.sources-stack-dialog .stack-counts {
+  padding: 12px 24px 14px;
+}
+
+.sources-stack-dialog .stack-counts > * {
+  border-radius: 999px;
+}
+
+.sources-stack-dialog .stack-table {
+  margin: 0;
+}
+
+.stack-table thead th {
+  height: auto;
+  padding: 10px 12px 10px 24px;
+  background: var(--color-well);
+  color: var(--color-muted);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: var(--weight-medium);
+}
+
+.stack-table tbody td {
+  padding: 12px 12px 12px 24px;
+  border-bottom: 1px solid var(--color-line);
+  font-size: 13px;
+}
+
+.stack-table tbody td:first-child,
+.stack-table tbody td:nth-child(2) {
+  font-weight: var(--weight-medium);
+}
+
+.stack-table tbody td:nth-child(3) {
+  color: var(--color-muted);
+  font-weight: var(--weight-regular);
+}
+
+.stack-table tr[data-kind='check'] {
+  background: transparent;
+}
+
+.stack-table button[role='combobox'] {
+  height: 26px;
+  width: auto;
+  min-width: 0;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.sources-stack-dialog .stack-foot {
+  padding: 14px 24px;
+}
+
+.stack-foot .stack-show-all {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 13px;
+}
+
+.sources-stack-dialog .stack-foot p {
+  margin: 0 0 0 auto;
+  font-size: 12px;
 }
