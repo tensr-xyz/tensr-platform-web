@@ -153,6 +153,7 @@ export function AnovaModal({
             </DialogDescription>
           </div>
           <Segmented
+            className="anova-view"
             aria-label="ANOVA view"
             value={view}
             onValueChange={setView}
@@ -194,7 +195,8 @@ export function AnovaModal({
                     <Button
                       key={option.value}
                       type="button"
-                      className={postHoc === option.value ? 'sources-ink' : 'flow-btn'}
+                      className="anova-pill"
+                      data-active={postHoc === option.value}
                       aria-pressed={postHoc === option.value}
                       onClick={() =>
                         setPostHoc(current => (current === option.value ? 'none' : option.value))
@@ -205,6 +207,7 @@ export function AnovaModal({
                   ))}
                 </div>
               </div>
+              <span className="flow-muted anova-label">Report</span>
               <label className="anova-check">
                 <Checkbox checked={welch} onCheckedChange={checked => setWelch(checked === true)} />
                 <span>Welch&apos;s F</span>
@@ -221,7 +224,7 @@ export function AnovaModal({
                   checked={meansPlot}
                   onCheckedChange={checked => setMeansPlot(checked === true)}
                 />
-                <span>Means plot</span>
+                <span>Means plot with 95% CI</span>
               </label>
               {result?.levene_test ? (
                 <p className="flow-muted">
@@ -244,8 +247,8 @@ export function AnovaModal({
                 </p>
               ) : (
                 <>
-                  <p className="flow-muted">
-                    n = {formatStat(result.n_used, 0)}
+                  <p className="anova-live">
+                    <i /> Result · n = {formatStat(result.n_used, 0)}
                     {result.weight?.column ? ' weighted' : ''}
                   </p>
                   {envelope?.report?.summary ? (
@@ -326,6 +329,21 @@ export function AnovaModal({
           </div>
         )}
         <div className="anova-foot">
+          {syntax ? (
+            <span className="anova-syntax">
+              <code>
+                {syntax.split('\n').find(line => line.trim() && !line.trim().startsWith('#')) ||
+                  syntax}
+              </code>
+              <Button
+                className="anova-copy"
+                type="button"
+                onClick={() => void navigator.clipboard?.writeText(syntax)}
+              >
+                Copy
+              </Button>
+            </span>
+          ) : null}
           {projectId ? (
             <Link className="flow-btn" href={`/flow/p/${projectId}/chat`}>
               Ask agent to explain
@@ -340,7 +358,7 @@ export function AnovaModal({
           <Button className="flow-btn" type="button" onClick={onClose}>
             Cancel
           </Button>
-          <Button className="sources-ink" type="button" disabled={busy} onClick={run}>
+          <Button className="flow-btn primary" type="button" disabled={busy} onClick={run}>
             {busy ? 'Running…' : 'Run'}
           </Button>
         </div>
