@@ -162,7 +162,7 @@ export default function PluginUploadForm() {
       ? {
           model: values.pricingModel || 'one-time',
           price: Number(values.price),
-          currency: 'usd',
+          currency: 'gbp',
           subscriptionInterval:
             values.pricingModel === 'subscription' ? values.subscriptionInterval : undefined,
           trialDays:
@@ -668,7 +668,7 @@ export default function PluginUploadForm() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel className={labelClass}>
-                          Price (USD)
+                          Price (GBP)
                           {pricingModel === 'subscription' ? ' per interval' : ''}
                         </FormLabel>
                         <FormControl>

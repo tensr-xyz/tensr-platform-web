@@ -2,7 +2,9 @@ import {
   installCount,
   installErrorMessage,
   languageAccepted,
+  PLUGIN_CURRENCY,
   pluginByline,
+  pluginLanguageChoices,
   pluginMatches,
   reviewLines,
   type FlowPlugin,
@@ -58,6 +60,12 @@ describe('plugin catalog cuts', () => {
   it('accepts the languages the upload route stores and reports a real review state', () => {
     expect(languageAccepted('typescript')).toBe(true);
     expect(languageAccepted('python')).toBe(false);
+    expect(
+      pluginLanguageChoices()
+        .filter(item => item.soon)
+        .map(item => item.id)
+    ).toEqual(['python', 'r']);
+    expect(PLUGIN_CURRENCY).toBe('gbp');
     expect(reviewLines({ status: 'PENDING', scanResults: { passed: true } })).toEqual([
       'Static scan passed',
       'Manual review pending',

@@ -86,6 +86,17 @@ export const PLUGIN_LANGUAGES = [
   { id: 'typescript', label: 'TypeScript' },
 ] as const;
 
+/** Stripe Connect does not pin a currency. Checkout uses this value. */
+export const PLUGIN_CURRENCY = 'gbp';
+
+export function pluginLanguageChoices(): { id: string; label: string; soon: boolean }[] {
+  return PLUGIN_LANGUAGES.map(item => ({
+    id: item.id,
+    label: item.label,
+    soon: !languageAccepted(item.id),
+  }));
+}
+
 export function reviewLines(plugin: {
   status?: string;
   reviewNotes?: string;

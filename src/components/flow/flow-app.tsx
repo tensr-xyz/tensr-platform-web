@@ -74,8 +74,9 @@ import {
   isEditorsPick,
   languageAccepted,
   PLUGIN_CATEGORIES,
-  PLUGIN_LANGUAGES,
+  PLUGIN_CURRENCY,
   pluginByline,
+  pluginLanguageChoices,
   pluginMatches,
   reviewLines,
   type FlowPlugin,
@@ -1260,7 +1261,8 @@ function PublishScreen() {
       setName(plugin.name || '');
       setVersion(plugin.version || '0.1.0');
       setDescription(plugin.description || '');
-      setLanguage((plugin.language || 'typescript').toLowerCase());
+      const storedLanguage = (plugin.language || 'typescript').toLowerCase();
+      setLanguage(languageAccepted(storedLanguage) ? storedLanguage : 'typescript');
       setEntryPoint(plugin.entryPoint || 'dist/index.js');
       setPaid(Boolean(plugin.isPaid));
       setPrice(plugin.pricing?.price != null ? String(plugin.pricing.price) : '');
@@ -1285,7 +1287,7 @@ function PublishScreen() {
     if (paid && price) {
       body.append('pricingModel', 'subscription');
       body.append('price', price);
-      body.append('currency', 'usd');
+      body.append('currency', PLUGIN_CURRENCY);
       body.append('subscriptionInterval', 'monthly');
     }
     setBusy(true);
@@ -1313,12 +1315,7 @@ function PublishScreen() {
             call it.
           </p>
         </div>
-        <Button
-          className="home-new"
-          type="button"
-          disabled={busy || !languageAccepted(language)}
-          onClick={submit}
-        >
+        <Button className="home-new" type="button" disabled={busy} onClick={submit}>
           {busy ? 'Submitting' : 'Submit for review'}
         </Button>
       </div>
@@ -1388,24 +1385,24 @@ function PublishScreen() {
             <div className="publish-field publish-wide">
               Language
               <div className="plugins-tools">
-                {PLUGIN_LANGUAGES.map(item => (
-                  <Button
-                    key={item.id}
-                    className="plugin-pill"
-                    type="button"
-                    data-active={language === item.id}
-                    onClick={() => setLanguage(item.id)}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
+                {pluginLanguageChoices().map(item =>
+                  item.soon ? (
+                    <Badge key={item.id} tone="soon">
+                      {item.label} · coming soon
+                    </Badge>
+                  ) : (
+                    <Button
+                      key={item.id}
+                      className="plugin-pill"
+                      type="button"
+                      data-active={language === item.id}
+                      onClick={() => setLanguage(item.id)}
+                    >
+                      {item.label}
+                    </Button>
+                  )
+                )}
               </div>
-              {languageAccepted(language) ? null : (
-                <p className="flow-muted">
-                  {language === 'r' ? 'R' : 'Python'} is not accepted yet. Submit TypeScript or
-                  JavaScript.
-                </p>
-              )}
             </div>
             <label className="publish-field">
               Entry point
@@ -1457,7 +1454,7 @@ function PublishScreen() {
               </RadioGroup>
               {paid ? (
                 <label className="publish-field">
-                  Price per month (USD)
+                  Price per month (GBP)
                   <Input value={price} onChange={event => setPrice(event.target.value)} />
                 </label>
               ) : null}
@@ -1475,7 +1472,10 @@ function PublishScreen() {
                     <span className="flow-muted"> Customers</span>
                   </span>
                   <span>
-                    {stats.monthlyRevenue}
+                    {stats.monthlyRevenue.toLocaleString('en-GB', {
+                      style: 'currency',
+                      currency: 'GBP',
+                    })}
                     <span className="flow-muted"> This month</span>
                   </span>
                 </div>
