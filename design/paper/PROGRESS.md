@@ -16,10 +16,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 5
-- wired: 5
+- matched: 6
+- wired: 6
 - built: 1
-- todo: 35
+- todo: 34
 - checks done: 5 passed, 1 owner QA
 
 ## Decisions
@@ -46,7 +46,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **2c Chat agent made an output** (`1EO8-0`, `2c-chat-output`) — **wired**. A finished reply shows the steps, the prose, and a result card in the thread. The right panel shows the lead, a key stat when the reply has one, and real downloads. Open goes to Tables. Add to report goes to Report. Save says when the run has no replayable steps. No sample chart. Components: shadcn.
 - [x] **4a Responses sheet** (`8EO-0`, `4a-responses`) — **wired**. Three columns: project rail, sheet with column mini-charts from the loaded page, and Agent/Variable/Evidence. Search filters column names, or rows when no column matches. Clicking a code filters that column. A row number selects the row. Sheet, Notebook, and Themes switch the center. Weight, ANOVA, and Descriptives stay on the toolbar. `screen.tsx` is the Paper export. Components: shadcn.
 - [x] **4c Evidence** (`765-0`, `4c-evidence`) — **wired**. Opening a significant cell shows the evidence chip, highlights those rows and the column, and lists the value labels. Back to all clears it. See all scrolls the sheet. Open table and Cite in report leave the screen. The letter chip is the letter the cell carries. Labels and Values stay off the toolbar. `screen.tsx` is the Paper export. Components: shadcn.
-- [ ] **4d code frame** (`958-0`, `4d-code-frame`) — **todo**. PNG only. Components: shadcn.
+- [x] **4d code frame** (`958-0`, `4d-code-frame`) — **wired**. A coded column opens the theme list in the variable rail. Counts and the uncoded row are the loaded page. See all filters the sheet. Selecting a theme shows Merge and Clear. Use as banner opens Tables. The live Q7 frame is one theme, so Merge stays off. PNG is the reference. Components: shadcn.
 - [ ] **4g Themes** (`16OA-0`, `4g-themes`) — **todo**. PNG only. Components: shadcn.
 - [ ] **5 Tables** (`2LA-0`, `5-tables`) — **todo**. PNG only. Needs stub and banner chips, the table, and the agent thread. Components: shadcn.
 - [ ] **6 Report** (`2ZC-0`, `6-report`) — **built**. Three deliverable cards wired to deck, banner book, and topline. No `screen.tsx` yet, not matched. Components: shadcn.

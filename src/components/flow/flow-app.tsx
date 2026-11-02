@@ -46,6 +46,7 @@ import { Segmented } from '@/components/ui/segmented';
 import { Table } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/rest';
+import { CodeFrameRail } from '@/components/flow/code-frame-rail';
 import { ColumnSpark, valueCounts } from '@/components/flow/column-spark';
 import { AddToProjectButton } from '@/components/flow/move-dataset';
 import {
@@ -1583,6 +1584,7 @@ function StackScreen({
 }
 
 function ResponsesScreen({ project, datasets }: { project?: FlowProject; datasets: DatasetRow[] }) {
+  const router = useRouter();
   const [chosenId, setChosenId] = useState<string | null>(null);
   const fallback = datasets.find(row => row.project_id === project?.id) || datasets[0];
   const datasetId =
@@ -1683,6 +1685,12 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
       return row.some(cell => String(cell ?? '').toLowerCase().includes(needle));
     });
   const activeName = names[activeIndex] || 'Variable';
+  const codedColumn = columns.find(column => {
+    const matches = column.name === activeName || column.label === activeName;
+    const coded =
+      column.name.endsWith('_codes') || String(column.label || '').startsWith('Codes for');
+    return matches && coded;
+  });
   const activeValues = preview.map(row =>
     row[activeIndex] == null || row[activeIndex] === 'null' ? '' : String(row[activeIndex])
   );
@@ -1978,7 +1986,22 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
           <EvidencePanel datasetId={datasetId} projectId={project?.id} />
         ) : (
         <ScrollArea className="sheet-scroll">
-          {side === 'variable' ? (
+          {side === 'variable' && codedColumn ? (
+            <CodeFrameRail
+              datasetId={datasetId}
+              column={codedColumn.name}
+              title={codedColumn.label || codedColumn.name}
+              values={activeValues}
+              onFilter={value => {
+                setValueFilter(value);
+                setShowFilters(true);
+              }}
+              onUseAsBanner={() => {
+                if (project?.id) router.push(`/flow/p/${project.id}/tables`);
+              }}
+            />
+          ) : null}
+          {side === 'variable' && !codedColumn ? (
             <div className="output-body">
               <div className="flow-muted">On this page</div>
               <h2>{activeName}</h2>
