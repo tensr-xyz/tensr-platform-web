@@ -75,6 +75,32 @@ export function pluginMatches(
   return (plugin.tags || []).some(tag => tag.toLowerCase() === options.category.toLowerCase());
 }
 
+export function languageAccepted(language: string): boolean {
+  return language === 'typescript' || language === 'javascript';
+}
+
+export const PLUGIN_LANGUAGES = [
+  { id: 'python', label: 'Python' },
+  { id: 'r', label: 'R' },
+  { id: 'javascript', label: 'JavaScript' },
+  { id: 'typescript', label: 'TypeScript' },
+] as const;
+
+export function reviewLines(plugin: {
+  status?: string;
+  reviewNotes?: string;
+  scanResults?: { passed?: boolean };
+}): string[] {
+  const lines: string[] = [];
+  if (typeof plugin.scanResults?.passed === 'boolean') {
+    lines.push(plugin.scanResults.passed ? 'Static scan passed' : 'Static scan failed');
+  }
+  if (plugin.status === 'APPROVED') lines.push('Published');
+  else if (plugin.status === 'PENDING') lines.push('Manual review pending');
+  else if (plugin.status === 'REJECTED') lines.push(plugin.reviewNotes || 'Rejected');
+  return lines;
+}
+
 export function installErrorMessage(error: unknown): string {
   const text = error instanceof Error ? error.message : '';
   try {

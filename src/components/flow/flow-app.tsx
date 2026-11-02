@@ -53,6 +53,8 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  RadioGroup,
+  RadioGroupItem,
   ScrollArea,
   Skeleton,
 } from '@/components/ui/rest';
@@ -70,9 +72,12 @@ import {
   installCount,
   installErrorMessage,
   isEditorsPick,
+  languageAccepted,
   PLUGIN_CATEGORIES,
+  PLUGIN_LANGUAGES,
   pluginByline,
   pluginMatches,
+  reviewLines,
   type FlowPlugin,
   type PluginCategory,
 } from '@/lib/flow-plugins';
@@ -424,7 +429,9 @@ export function FlowApp({ slug }: { slug: string[] }) {
             {workspacePhase === 'error' && section !== 'projects' && projectId ? (
               <p className="flow-error">{error}</p>
             ) : null}
-            {section === 'plugins' ? (
+            {section === 'plugins' && slug[1] === 'publish' ? (
+              <PublishScreen />
+            ) : section === 'plugins' ? (
               <PluginsScreen />
             ) : section === 'projects' || !projectId ? (
               <ProjectsScreen
@@ -986,7 +993,7 @@ function PluginsScreen() {
           >
             My plugins{phase === 'ready' ? ` · ${installed.size}` : ''}
           </Button>
-          <Link className="home-new" href="/plugins/upload">
+          <Link className="home-new" href="/flow/plugins/publish">
             + Publish
           </Link>
         </div>
@@ -1170,6 +1177,316 @@ function PluginTile({
         )}
       </div>
     </Card>
+  );
+}
+
+function PublishScreen() {
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState<string | null>(null);
+  const [plugins, setPlugins] = useState<
+    { pluginId: string; name?: string; status?: string; version?: string }[]
+  >([]);
+  const [stats, setStats] = useState<{
+    totalDownloads: number;
+    totalCustomers: number;
+    monthlyRevenue: number;
+  } | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [version, setVersion] = useState('0.1.0');
+  const [description, setDescription] = useState('');
+  const [language, setLanguage] = useState('typescript');
+  const [entryPoint, setEntryPoint] = useState('dist/index.js');
+  const [paid, setPaid] = useState(false);
+  const [price, setPrice] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const [review, setReview] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    setPhase('loading');
+    void Promise.all([
+      flowJson<{ pluginId: string; name?: string; status?: string }[]>('/creator/plugins'),
+      flowJson<{
+        totalDownloads: number;
+        totalCustomers: number;
+        monthlyRevenue: number;
+      }>('/creator/stats').catch(() => null),
+    ])
+      .then(([rows, figures]) => {
+        setPlugins(Array.isArray(rows) ? rows : []);
+        setStats(figures);
+        setPhase('ready');
+      })
+      .catch(reason => {
+        setError(reason instanceof Error ? reason.message : 'Could not load your plugins.');
+        setPhase('error');
+      });
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const blank = () => {
+    setSelectedId(null);
+    setName('');
+    setVersion('0.1.0');
+    setDescription('');
+    setLanguage('typescript');
+    setEntryPoint('dist/index.js');
+    setPaid(false);
+    setPrice('');
+    setFile(null);
+    setReview([]);
+    setMessage(null);
+  };
+
+  const choose = (pluginId: string) => {
+    setSelectedId(pluginId);
+    setFile(null);
+    setMessage(null);
+    void flowJson<
+      FlowPlugin & {
+        status?: string;
+        reviewNotes?: string;
+        entryPoint?: string;
+        scanResults?: { passed?: boolean };
+        isPaid?: boolean;
+        pricing?: { price?: number };
+      }
+    >(`/plugins/${pluginId}`).then(plugin => {
+      setName(plugin.name || '');
+      setVersion(plugin.version || '0.1.0');
+      setDescription(plugin.description || '');
+      setLanguage((plugin.language || 'typescript').toLowerCase());
+      setEntryPoint(plugin.entryPoint || 'dist/index.js');
+      setPaid(Boolean(plugin.isPaid));
+      setPrice(plugin.pricing?.price != null ? String(plugin.pricing.price) : '');
+      setReview(reviewLines(plugin));
+    });
+  };
+
+  const submit = () => {
+    if (!file) {
+      setMessage('Choose a .zip to submit.');
+      return;
+    }
+    if (!languageAccepted(language)) return;
+    const body = new FormData();
+    body.append('file', file);
+    body.append('name', name || file.name.replace(/\.zip$/i, ''));
+    body.append('version', version || '0.1.0');
+    body.append('description', description);
+    body.append('entryPoint', entryPoint || 'dist/index.js');
+    body.append('language', language);
+    body.append('isPaid', paid ? 'true' : 'false');
+    if (paid && price) {
+      body.append('pricingModel', 'subscription');
+      body.append('price', price);
+      body.append('currency', 'usd');
+      body.append('subscriptionInterval', 'monthly');
+    }
+    setBusy(true);
+    setMessage(null);
+    void flowFetch('/plugins/upload', { method: 'POST', body })
+      .then(async response => {
+        const text = await response.text();
+        if (!response.ok) throw new Error(installErrorMessage(new Error(text)));
+        setMessage('Submitted for review.');
+        setFile(null);
+        load();
+      })
+      .catch(reason => setMessage(installErrorMessage(reason)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="publish-page">
+      <div className="plugins-head">
+        <div>
+          <div className="plugins-eyebrow">Plugins / Author</div>
+          <h1 className="plugins-title">Publish a plugin</h1>
+          <p className="flow-muted plugins-lead">
+            Write it in TypeScript or JavaScript. Once approved it shows up in ⌘K and the agent can
+            call it.
+          </p>
+        </div>
+        <Button
+          className="home-new"
+          type="button"
+          disabled={busy || !languageAccepted(language)}
+          onClick={submit}
+        >
+          {busy ? 'Submitting' : 'Submit for review'}
+        </Button>
+      </div>
+      {phase === 'loading' ? (
+        <div className="publish-grid" aria-busy="true">
+          <Skeleton className="plugin-skeleton" />
+          <Skeleton className="plugin-skeleton" />
+          <Skeleton className="plugin-skeleton" />
+        </div>
+      ) : phase === 'error' ? (
+        <p className="flow-error">{error || 'Could not load your plugins.'}</p>
+      ) : (
+        <div className="publish-grid">
+          <div className="publish-list">
+            <div className="plugin-foot">
+              <span className="flow-muted">Your plugins</span>
+              <span className="plugin-spacer" />
+              <Button className="plugin-install" type="button" onClick={blank}>
+                + New
+              </Button>
+            </div>
+            {plugins.length === 0 ? <p className="flow-muted">No plugins yet.</p> : null}
+            {plugins.map(plugin => (
+              <Button
+                key={plugin.pluginId}
+                className="publish-row"
+                type="button"
+                data-active={selectedId === plugin.pluginId}
+                onClick={() => choose(plugin.pluginId)}
+              >
+                <strong>{plugin.name || 'Plugin'}</strong>
+                <span className="flow-muted">
+                  {plugin.status === 'APPROVED'
+                    ? 'Published'
+                    : plugin.status === 'PENDING'
+                      ? 'In review'
+                      : plugin.status === 'REJECTED'
+                        ? 'Rejected'
+                        : plugin.status || 'Draft'}
+                </span>
+              </Button>
+            ))}
+          </div>
+          <div className="publish-form">
+            <div className="plugin-foot">
+              <span>Manifest</span>
+              <span className="plugin-spacer" />
+              <span className="flow-muted">plugin.toml</span>
+            </div>
+            <div className="publish-pair">
+              <label className="publish-field">
+                Name
+                <Input value={name} onChange={event => setName(event.target.value)} />
+              </label>
+              <label className="publish-field">
+                Version
+                <Input value={version} onChange={event => setVersion(event.target.value)} />
+              </label>
+            </div>
+            <label className="publish-field publish-wide">
+              Description
+              <Textarea
+                value={description}
+                onChange={event => setDescription(event.target.value)}
+              />
+            </label>
+            <div className="publish-field publish-wide">
+              Language
+              <div className="plugins-tools">
+                {PLUGIN_LANGUAGES.map(item => (
+                  <Button
+                    key={item.id}
+                    className="plugin-pill"
+                    type="button"
+                    data-active={language === item.id}
+                    onClick={() => setLanguage(item.id)}
+                  >
+                    {item.label}
+                  </Button>
+                ))}
+              </div>
+              {languageAccepted(language) ? null : (
+                <p className="flow-muted">
+                  {language === 'r' ? 'R' : 'Python'} is not accepted yet. Submit TypeScript or
+                  JavaScript.
+                </p>
+              )}
+            </div>
+            <label className="publish-field">
+              Entry point
+              <Input value={entryPoint} onChange={event => setEntryPoint(event.target.value)} />
+            </label>
+            <label className="publish-field publish-wide">
+              Plugin zip
+              <Input
+                type="file"
+                accept=".zip,application/zip"
+                aria-label="Plugin zip"
+                onChange={event => setFile(event.target.files?.[0] || null)}
+              />
+              <span className="flow-muted">
+                {file ? file.name : 'The source is the zip. An in-page editor is coming soon.'}
+              </span>
+            </label>
+            <p className="flow-muted">Permissions are read from the manifest inside the zip.</p>
+            <p className="flow-soon">Sandbox test coming soon</p>
+            {message ? <p className="flow-muted">{message}</p> : null}
+          </div>
+          <div className="publish-side">
+            <Card className="plugin-tile">
+              <span>Review</span>
+              {review.length === 0 ? (
+                <p className="flow-muted">Submit a zip to start review.</p>
+              ) : (
+                review.map(line => (
+                  <p key={line} className="flow-muted">
+                    {line}
+                  </p>
+                ))
+              )}
+            </Card>
+            <Card className="plugin-tile">
+              <span>Pricing</span>
+              <RadioGroup
+                value={paid ? 'subscription' : 'free'}
+                onValueChange={value => setPaid(value === 'subscription')}
+              >
+                <label className="plugin-foot">
+                  <RadioGroupItem value="free" />
+                  Free
+                </label>
+                <label className="plugin-foot">
+                  <RadioGroupItem value="subscription" />
+                  Subscription
+                </label>
+              </RadioGroup>
+              {paid ? (
+                <label className="publish-field">
+                  Price per month (USD)
+                  <Input value={price} onChange={event => setPrice(event.target.value)} />
+                </label>
+              ) : null}
+            </Card>
+            <Card className="plugin-tile">
+              <span>Earnings</span>
+              {stats ? (
+                <div className="plugin-foot">
+                  <span>
+                    {stats.totalDownloads}
+                    <span className="flow-muted"> Purchases</span>
+                  </span>
+                  <span>
+                    {stats.totalCustomers}
+                    <span className="flow-muted"> Customers</span>
+                  </span>
+                  <span>
+                    {stats.monthlyRevenue}
+                    <span className="flow-muted"> This month</span>
+                  </span>
+                </div>
+              ) : (
+                <p className="flow-soon">Coming soon</p>
+              )}
+            </Card>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

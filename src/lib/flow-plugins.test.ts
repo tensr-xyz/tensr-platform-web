@@ -1,8 +1,10 @@
 import {
   installCount,
   installErrorMessage,
+  languageAccepted,
   pluginByline,
   pluginMatches,
+  reviewLines,
   type FlowPlugin,
 } from './flow-plugins';
 
@@ -51,5 +53,15 @@ describe('plugin catalog cuts', () => {
     expect(installErrorMessage(new Error('{"detail":"Purchase required"}'))).toBe(
       'Purchase required'
     );
+  });
+
+  it('accepts the languages the upload route stores and reports a real review state', () => {
+    expect(languageAccepted('typescript')).toBe(true);
+    expect(languageAccepted('python')).toBe(false);
+    expect(reviewLines({ status: 'PENDING', scanResults: { passed: true } })).toEqual([
+      'Static scan passed',
+      'Manual review pending',
+    ]);
+    expect(reviewLines({ status: 'APPROVED' })).toEqual(['Published']);
   });
 });
