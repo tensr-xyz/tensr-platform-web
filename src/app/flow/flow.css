@@ -9163,3 +9163,60 @@ select.flow-input {
   font-size: 11px;
   line-height: 15px;
 }
+
+.outputs-cols,
+.outputs-shell .outputs-row {
+  grid-template-columns: 82px minmax(0, 1fr) 64px 56px 128px;
+}
+
+.outputs-cols {
+  grid-template-columns: minmax(0, 1fr) 64px 56px 128px;
+}
+
+.outputs-cols span:nth-child(2),
+.outputs-base {
+  text-align: right;
+}
+
+.outputs-title {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.outputs-title > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.outputs-base {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.outputs-states {
+  display: flex;
+  gap: 4px;
+}
+
+.outputs-status[data-state='Saved'] {
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.outputs-status[data-state='Draft'] {
+  background: var(--color-well);
+  color: var(--color-muted);
+}
+
+.outputs-filter i[data-status='In report'] {
+  background: var(--color-accent);
+}
+
+.outputs-filter i[data-status='Draft'] {
+  border: 1.5px solid #b0b2ac;
+  background: transparent;
+}

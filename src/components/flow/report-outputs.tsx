@@ -7,6 +7,7 @@ import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
 import { OutputPage } from '@/components/flow/output-page';
+import { readPins } from '@/components/flow/run-document';
 import { downloadExport } from '@/components/flow/survey-screens';
 import {
   documentApa,
@@ -16,6 +17,7 @@ import {
 } from '@/components/flow/run-document';
 import {
   baseCount,
+  runState,
   clockLabel,
   dayLabel,
   metricLines,
@@ -97,11 +99,21 @@ export function ReportOutputs({
         return outputRuns(page.runs || []).map(run => ({ ...run, file: file.name }));
       })
     )
-      .then(pages => {
+      .then(async pages => {
         if (!live) return;
-        const next = pages
+        const sorted = pages
           .flat()
           .sort((left, right) => right.created_at.localeCompare(left.created_at));
+        const next = await Promise.all(
+          sorted.map(async (run, index) => {
+            if (run.base != null || index >= 40) return run;
+            const full = await flowJson<Record<string, unknown>>(
+              `/datasets/analysis-runs/${run.id}`
+            ).catch(() => null);
+            return full ? { ...run, base: baseCount(full) } : run;
+          })
+        );
+        if (!live) return;
         setRuns(next);
         setSelectedId(current =>
           next.some(run => run.id === current) ? current : next[0]?.id || ''
@@ -145,16 +157,36 @@ export function ReportOutputs({
     };
   }, [selectedId]);
 
-  const counts = useMemo(() => statusCounts(runs), [runs]);
+  const pinnedRuns = useMemo(
+    () => new Set(readPins(projectId).map(pin => pin.runId)),
+    // Pins are read again whenever the run list changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [projectId, runs]
+  );
+  const stateOf = (run: OutputRun) => runState(run.status, pinnedRuns.has(run.id));
+  const counts = useMemo(() => {
+    const order = ['Saved', 'In report', 'Draft'] as const;
+    return order.map(status => ({
+      status: status as string,
+      count: runs.filter(
+        run => stateOf(run) === status || (status === 'Saved' && stateOf(run) === 'In report')
+      ).length,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runs, pinnedRuns]);
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const matched = runs.filter(run => {
-      if (status !== 'all' && run.status !== status) return false;
+      if (status !== 'all') {
+        const state = stateOf(run);
+        if (status === 'Saved' ? state === 'Draft' : state !== status) return false;
+      }
       if (!needle) return true;
       return `${run.title} ${run.op}`.toLowerCase().includes(needle);
     });
     return oldest ? [...matched].reverse() : matched;
-  }, [oldest, query, runs, status]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [oldest, query, runs, status, pinnedRuns]);
   const groups = useMemo(() => {
     const order: string[] = [];
     const buckets = new Map<string, OutputRun[]>();
@@ -288,7 +320,7 @@ export function ReportOutputs({
             >
               <span>
                 <i data-status={item.status} />
-                {item.status[0].toUpperCase() + item.status.slice(1)}
+                {item.status}
               </span>
               <span>{item.count}</span>
             </Button>
@@ -313,7 +345,7 @@ export function ReportOutputs({
           </div>
           <div className="outputs-cols">
             <span />
-            <span>File</span>
+            <span>Base n</span>
             <span>Ran</span>
             <span>Status</span>
           </div>
@@ -336,11 +368,21 @@ export function ReportOutputs({
                     <span className="outputs-kind">{kindLabel(run.op)}</span>
                     <span className="outputs-title">
                       <strong>{run.title}</strong>
+                      <span>{[run.file, run.weighting].filter(Boolean).join(' · ')}</span>
                     </span>
-                    <span className="outputs-file">{run.file || '—'}</span>
+                    <span className="outputs-base">
+                      {run.base != null ? run.base.toLocaleString('en-GB') : '—'}
+                    </span>
                     <span className="outputs-time">{clockLabel(run.created_at)}</span>
-                    <span className="outputs-status" data-status={run.status}>
-                      {run.status}
+                    <span className="outputs-states">
+                      <span className="outputs-status" data-state={stateOf(run)}>
+                        {stateOf(run)}
+                      </span>
+                      {stateOf(run) === 'In report' ? (
+                        <span className="outputs-status" data-state="Saved">
+                          Saved
+                        </span>
+                      ) : null}
                     </span>
                   </Button>
                 ))}
@@ -365,7 +407,13 @@ export function ReportOutputs({
                 </p>
                 <h2>{selected.title}</h2>
                 <p className="flow-muted outputs-detail-sub">
-                  {[selected.status, base != null ? `n = ${base}` : ''].filter(Boolean).join(' · ')}
+                  {[
+                    stateOf(selected),
+                    base != null || selected.base != null ? `n = ${base ?? selected.base}` : '',
+                    selected.weighting,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </p>
                 {detailPhase === 'loading' ? <Skeleton className="outputs-skeleton" /> : null}
                 {detailPhase === 'error' ? <p className="flow-error">{exportError}</p> : null}

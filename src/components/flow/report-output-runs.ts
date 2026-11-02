@@ -5,7 +5,35 @@ export type OutputRun = {
   created_at: string;
   status: string;
   file?: string;
+  base?: number | null;
+  weighting?: string;
 };
+
+/** "aware_A × region — Unweighted, n = 30" → title, weighting note, and base. */
+export function splitRunTitle(raw: string): {
+  title: string;
+  weighting: string;
+  base: number | null;
+} {
+  const [head, ...rest] = raw.split(' — ');
+  const tail = rest.join(' — ');
+  const match = tail.match(/n\s*=\s*([\d,]+)/i);
+  const weighting = tail
+    .replace(/,?\s*n\s*=\s*[\d,]+/i, '')
+    .replace(/[,\s]+$/, '')
+    .trim();
+  return {
+    title: head.trim(),
+    weighting,
+    base: match ? Number(match[1].replace(/,/g, '')) : null,
+  };
+}
+
+/** The chip a run shows: In report when pinned, Saved once complete, otherwise Draft. */
+export function runState(status: string, pinned: boolean): 'In report' | 'Saved' | 'Draft' {
+  if (pinned) return 'In report';
+  return status === 'complete' ? 'Saved' : 'Draft';
+}
 
 export function outputRuns(rows: unknown[]): OutputRun[] {
   const runs: OutputRun[] = [];
@@ -15,13 +43,15 @@ export function outputRuns(rows: unknown[]): OutputRun[] {
     const id = String(record.id || '');
     const op = String(record.op || '');
     if (!id || !op) continue;
-    const title = String(record.title || '').trim() || op.replaceAll('_', ' ');
+    const split = splitRunTitle(String(record.title || '').trim() || op.replaceAll('_', ' '));
     runs.push({
       id,
-      title,
+      title: split.title,
       op,
       created_at: String(record.created_at || ''),
       status: String(record.status || 'complete'),
+      base: split.base,
+      weighting: split.weighting,
     });
   }
   return runs;

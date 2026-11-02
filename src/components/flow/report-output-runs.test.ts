@@ -30,3 +30,26 @@ describe('report outputs', () => {
     expect(baseCount({})).toBeNull();
   });
 });
+
+describe('output titles and states', () => {
+  it('moves weighting and base out of the title', () => {
+    const { splitRunTitle } = jest.requireActual('./report-output-runs');
+    expect(splitRunTitle('aware_A × region_market — Unweighted, n = 30')).toEqual({
+      title: 'aware_A × region_market',
+      weighting: 'Unweighted',
+      base: 30,
+    });
+    expect(splitRunTitle('likes_A by region')).toEqual({
+      title: 'likes_A by region',
+      weighting: '',
+      base: null,
+    });
+  });
+
+  it('reads In report, Saved, or Draft from real state', () => {
+    const { runState } = jest.requireActual('./report-output-runs');
+    expect(runState('complete', true)).toBe('In report');
+    expect(runState('complete', false)).toBe('Saved');
+    expect(runState('failed', false)).toBe('Draft');
+  });
+});
