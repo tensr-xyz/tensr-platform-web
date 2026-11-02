@@ -8205,3 +8205,207 @@ select.flow-input {
   right: 28px;
   bottom: 26px;
 }
+
+/* 6d Add to report, from the Paper export. */
+.pin-dialog {
+  width: min(600px, 94vw);
+  max-width: 600px !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  overflow: hidden;
+}
+
+.pin-dialog .pin-head {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+}
+
+.pin-eyebrow {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.pin-dialog .pin-head h2 {
+  font-size: 17px;
+  font-weight: var(--weight-medium);
+}
+
+.pin-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 14px 20px;
+}
+
+.pin-label {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.pin-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.pin-pair label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.pin-pair button[role='combobox'] {
+  height: 30px;
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.pin-list {
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+}
+
+.pin-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+
+.pin-row + .pin-row {
+  border-top: 1px solid var(--color-line);
+}
+
+.pin-row[data-disabled] {
+  color: var(--color-muted);
+}
+
+.pin-row-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.pin-row-copy strong {
+  font-weight: var(--weight-regular);
+}
+
+.pin-row-copy span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.pin-ext {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--color-well);
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.pin-finding-head {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 4px;
+}
+
+.pin-drafted {
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 11px;
+}
+
+.pin-finding {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-accent);
+  border-radius: 10px;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.pin-finding textarea {
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  resize: none;
+  box-shadow: none;
+}
+
+.pin-headline {
+  font-size: 16px !important;
+  line-height: 22px;
+  font-weight: var(--weight-medium);
+}
+
+.pin-support {
+  color: var(--color-muted);
+  font-size: 13px !important;
+  line-height: 19px;
+}
+
+.pin-chips {
+  display: flex;
+  gap: 6px;
+}
+
+.pin-chip {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--color-well);
+  font-size: 11px;
+}
+
+.pin-chip.accent {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-weight: var(--weight-medium);
+}
+
+.pin-live {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--color-well);
+}
+
+.pin-live > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.pin-live strong {
+  font-size: 13px;
+  font-weight: var(--weight-regular);
+}
+
+.pin-live span span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.pin-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--color-line);
+  font-size: 12px;
+}
+
+.pin-foot .flow-muted {
+  margin-right: auto;
+}

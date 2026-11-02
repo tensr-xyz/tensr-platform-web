@@ -9,12 +9,12 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ChoiceSelect } from '@/components/ui/select';
 import { Table } from '@/components/ui/table';
+import { Switch } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
 import { ExportDialog, copyText, figureSvg } from '@/components/flow/export-dialog';
 import {
@@ -468,63 +468,145 @@ function AddToReport({
     onClose();
   };
 
+  const rows: {
+    key: string;
+    title: string;
+    detail: string;
+    ext: string;
+    checked: boolean;
+    set?: (v: boolean) => void;
+  }[] = [
+    {
+      key: 'deck',
+      title: 'Client deck',
+      detail: 'Adds this finding to the report export the deck is built with',
+      ext: '.PPTX',
+      checked: deck,
+      set: setDeck,
+    },
+    {
+      key: 'topline',
+      title: 'Topline summary',
+      detail: 'Adds the finding as a plain-English paragraph',
+      ext: '.DOCX',
+      checked: topline,
+      set: setTopline,
+    },
+    {
+      key: 'banner',
+      title: 'Banner book',
+      detail: crosstab
+        ? 'Export the saved table from Tables'
+        : 'Not available for this output, banner books hold crosstabs only',
+      ext: '.XLSX',
+      checked: false,
+    },
+  ];
+
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="pin-dialog">
+        <DialogHeader className="pin-head">
+          <p className="pin-eyebrow">{citation}</p>
           <DialogTitle>Add to report</DialogTitle>
-          <DialogDescription>{citation}</DialogDescription>
+          <DialogDescription className="sr-only">
+            Choose where this finding goes and edit its wording.
+          </DialogDescription>
         </DialogHeader>
-        <label className="flow-muted">
-          Position
-          <ChoiceSelect
-            aria-label="Position in the report"
-            value={afterId}
-            onValueChange={setAfterId}
-            options={[
-              { value: 'start', label: 'Start of key findings' },
-              ...findings.map(finding => ({ value: finding.id, label: `After ${finding.label}` })),
-              { value: 'end', label: 'End of key findings' },
-            ]}
-          />
-        </label>
-        <label className="flow-check">
-          <Checkbox checked={deck} onCheckedChange={value => setDeck(value === true)} />
-          Client deck. This finding is included in the report export. The PowerPoint deck is still
-          built from saved tables.
-        </label>
-        <label className="flow-check">
-          <Checkbox checked={topline} onCheckedChange={value => setTopline(value === true)} />
-          Topline. This finding is included in the report export. The Word topline is still the
-          first saved table.
-        </label>
-        <label className="flow-check">
-          <Checkbox checked={false} disabled />
-          Banner book.{' '}
-          {crosstab ? 'Export the saved table from Tables.' : 'This output is not a crosstab.'}
-        </label>
-        <Textarea
-          aria-label="Finding"
-          value={title}
-          onChange={event => setTitle(event.target.value)}
-        />
-        <Textarea
-          aria-label="Finding detail"
-          value={body}
-          onChange={event => setBody(event.target.value)}
-        />
-        <label className="flow-check">
-          <Checkbox checked={keepLive} onCheckedChange={value => setKeepLive(value === true)} />
-          Keep this finding when key findings are regenerated.
-        </label>
-        <DialogFooter>
+        <div className="pin-body">
+          <span className="pin-label">Destination</span>
+          <div className="pin-pair">
+            <label>
+              <span>Report section</span>
+              <ChoiceSelect
+                aria-label="Report section"
+                value="key"
+                onValueChange={() => undefined}
+                options={[{ value: 'key', label: 'Key findings' }]}
+              />
+            </label>
+            <label>
+              <span>Position</span>
+              <ChoiceSelect
+                aria-label="Position in the report"
+                value={afterId}
+                onValueChange={setAfterId}
+                options={[
+                  { value: 'start', label: 'Start' },
+                  ...findings.map(finding => ({
+                    value: finding.id,
+                    label: `After ${finding.label}`,
+                  })),
+                  { value: 'end', label: 'End' },
+                ]}
+              />
+            </label>
+          </div>
+          <span className="pin-label">Also add to deliverables</span>
+          <div className="pin-list">
+            {rows.map(row => (
+              <label key={row.key} className="pin-row" data-disabled={!row.set || undefined}>
+                <Checkbox
+                  checked={row.checked}
+                  disabled={!row.set}
+                  onCheckedChange={value => row.set?.(value === true)}
+                />
+                <span className="pin-row-copy">
+                  <strong>{row.title}</strong>
+                  <span>{row.detail}</span>
+                </span>
+                <span className="pin-ext">{row.ext}</span>
+              </label>
+            ))}
+          </div>
+          <div className="pin-finding-head">
+            <span className="pin-label">
+              Finding · {String(findings.length + 1).padStart(2, '0')}
+            </span>
+            <span className="pin-drafted">Drafted from the output, edit freely</span>
+          </div>
+          <div className="pin-finding">
+            <Textarea
+              className="pin-headline"
+              aria-label="Finding"
+              rows={2}
+              value={title}
+              onChange={event => setTitle(event.target.value)}
+            />
+            <Textarea
+              className="pin-support"
+              aria-label="Finding detail"
+              rows={2}
+              value={body}
+              onChange={event => setBody(event.target.value)}
+            />
+            <div className="pin-chips">
+              <span className="pin-chip accent">{citation}</span>
+            </div>
+          </div>
+          <label className="pin-live">
+            <span>
+              <strong>Keep this finding</strong>
+              <span>
+                Stays in key findings when they are regenerated. Your edits to the wording are kept.
+              </span>
+            </span>
+            <Switch
+              checked={keepLive}
+              onCheckedChange={setKeepLive}
+              aria-label="Keep this finding"
+            />
+          </label>
+        </div>
+        <div className="pin-foot">
+          <span className="flow-muted">The output stays in Outputs too</span>
           <Button className="flow-btn" type="button" onClick={onClose}>
             Cancel
           </Button>
           <Button className="flow-btn primary" type="button" onClick={save}>
             Add to report
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
