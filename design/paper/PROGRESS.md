@@ -20,7 +20,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - wired: 4
 - built: 1
 - todo: 36
-- checks done: 0 / 5
+- checks done: 3 / 5
 
 ## Decisions
 
@@ -29,7 +29,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - A project with files is "Active". A project with none is "Draft".
 - Member marks use letters from the id. The first two characters of a uuid rendered as a number.
 - Blank-equivalent answers are not themes. Shipped in API `aa126337`.
-- A stack error returns its type and message. Shipped in API `aa126337`. Confirm the cars_EN save only after that deploy is live.
+- A stack error returns its type and message. Shipped in API `aa126337`. Repeated row ids are rewritten on the fuse path in API `557505d`, live at 2026-11-02T10:50:33Z. The cars_EN save opened a 30-row file with `region_market` and without `Q7_coding`.
 - Workspace label is the real organization name. The sidebar shows the part of that name after the email. The footer name is the part of the email before @. Initials come from that name.
 - The folder plus creates a folder named "New folder". The artboard has no name field.
 - Fielding cards use a coming-soon chip instead of a progress bar with sample completes.
@@ -91,11 +91,11 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 
 ## Checks (after dev is `aa126337` or later)
 
-- [ ] Stack Save on cars_EN opens the stacked dataset with skip/override applied.
-- [ ] Descriptives sent to chat finishes with a reply.
-- [ ] Reapply shows the 409 "frame from another dataset" path in the UI.
-- [ ] A table with a significant cell and a real respondent bitset shows the letter, and Evidence lists the verbatims.
-- [ ] Part A on `af6696a8`, varied wording: weighted trust by market with `trend=previous_wave` and one download per file; unweighted Pearson chi-square with integer df; unweighted two-variable banner with value labels; three-group means as ANOVA. Never "stream ended without a result".
+- [x] Stack Save on cars_EN opens the stacked dataset with skip/override applied. On dev `557505d` (live 2026-11-02T10:50:33Z): both cars_EN files, skip `Q7_coding`, override `region` to `region_market`. Opened the responses sheet, 30 respondents, `region_market` present, `Q7_coding` absent. The earlier save on `aa126337` returned `RowUidIntegrityError: non_unique`.
+- [x] Descriptives sent to chat finishes with a reply. Agent mode, cars_EN: means for aware_A 0.8 (base 20), owns_A 0.6 (base 20), likes_A 3.438 (base 16), Q7 3 (base 20). No "stream ended".
+- [x] Reapply shows the 409 path in the UI. Interviews, column Q7, source the other cars_EN.sav: "That file has no saved code frame. Pick the dataset in this project that has one." The dropdown listed cars_EN.sav.
+- [ ] A table with a significant cell and a real respondent bitset shows the letter, and Evidence lists the verbatims. aware_A by owns_A showed `100.0% a` and `50.0% b`. Evidence said the cell has no respondent bitset (`unknown_row_uids`, 6 of 12, origin order length 10 on `2d889562`). Fix merged as API `c390967` (PR #290). Retest after that deploy-dev completes.
+- [ ] Part A on `af6696a8`, varied wording: weighted trust by market with `trend=previous_wave` and one download per file; unweighted Pearson chi-square with integer df; unweighted two-variable banner with value labels; three-group means as ANOVA. Never "stream ended without a result". The account's 13 datasets do not include `af6696a8`. EN, FR, and DE are separate projects, and Add to project does not move a file, so the three-market stack is not in the UI yet.
 
 ## Unfinished
 
