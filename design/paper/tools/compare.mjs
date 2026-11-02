@@ -59,6 +59,11 @@ async function compare(folder, route) {
   await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'), null, {
     timeout: 60_000,
   });
+  // A skeleton that never clears is a finding, so capture anyway after 30s.
+  await page
+    .waitForFunction(() => !document.querySelector('.animate-pulse'), null, { timeout: 30_000 })
+    .catch(() => console.log('A skeleton was still showing after 30s.'));
+  await page.waitForLoadState('networkidle');
   // The Next.js dev badge is not part of the app.
   await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
   await page.waitForTimeout(500);

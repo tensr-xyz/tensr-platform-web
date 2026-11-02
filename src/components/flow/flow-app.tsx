@@ -1901,6 +1901,30 @@ function chatLead(file?: DatasetRow): string {
   return parts.length ? `I've read ${name}: ${parts.join(', ')}.` : `I've read ${name}.`;
 }
 
+const STARTER_ICONS = [
+  'M2 3h10v8H2zM2 6h10M6 3v8',
+  'M3 3.5h8M3 7h8M3 10.5h5',
+  'M2.5 4h9M2.5 7h6M2.5 10h7.5',
+  'M3 11V7M6 11V4M9 11V6M12 11V3',
+  'M2 3h10v8H2zM2 6h10M2 8.5h10M5.5 3v8',
+  'M7 2.5a4.5 4.5 0 1 1 0 9 4.5 4.5 0 0 1 0-9zM7 5v2.5l1.5 1',
+];
+
+function StarterIcon({ index }: { index: number }) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+      <path
+        d={STARTER_ICONS[index % STARTER_ICONS.length]}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function chatStarters(file: DatasetRow): { title: string; detail: string; prompt: string }[] {
   const name = file.original_filename || 'this file';
   return [
@@ -1982,17 +2006,17 @@ function EmptyChat({
         </div>
       ) : (
         <div className="chat-hero">
-          <div className="chat-kicker">
-            <i />
-            Tensr agent
-          </div>
           <div className="chat-hero-copy">
+            <div className="chat-kicker">
+              <i />
+              Tensr agent
+            </div>
             <h1>What do you want to find out?</h1>
             <p>{chatLead(file)}</p>
           </div>
           {file ? (
             <div className="chat-starters">
-              {chatStarters(file).map(starter => (
+              {chatStarters(file).map((starter, index) => (
                 <Button
                   key={starter.prompt}
                   className="chat-starter whitespace-normal items-start h-auto"
@@ -2000,7 +2024,7 @@ function EmptyChat({
                   onClick={() => setQuestion(starter.prompt)}
                 >
                   <span className="chat-starter-mark">
-                    {starter.title.replace(/^[^A-Za-z]+/, '')[0]}
+                    <StarterIcon index={index} />
                   </span>
                   <span className="chat-starter-copy">
                     <strong>{starter.title}</strong>
@@ -2082,6 +2106,7 @@ function ChatScreen({
     { name?: string; recipe_id?: string; ops?: unknown[] }[] | null
   >(null);
   const file = chatFile(project, datasets);
+  const railReady = sessions !== null && recipes !== null;
   const showThread = Boolean(sent || answer || plan || status);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
 
@@ -2276,7 +2301,7 @@ function ChatScreen({
     <div className={showThread ? 'flow-split' : 'flow-split chat-empty'}>
       <aside className="flow-rail">
         <Button className="chat-new" type="button" onClick={clearChat}>
-          + New chat
+          <NavIcon kind="plus" /> New chat
         </Button>
         <div className="flow-muted chat-label">Chats</div>
         {sessions === null ? (
@@ -2472,7 +2497,7 @@ function ChatScreen({
       ) : (
         <EmptyChat
           file={file}
-          ready={ready}
+          ready={ready && railReady}
           question={question}
           setQuestion={setQuestion}
           mode={mode}

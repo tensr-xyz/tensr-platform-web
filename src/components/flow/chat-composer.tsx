@@ -114,7 +114,15 @@ export function FlowComposer({
       options={[
         { value: 'ask', label: 'Ask' },
         { value: 'plan', label: 'Plan' },
-        { value: 'agent', label: '● Agent' },
+        {
+          value: 'agent',
+          label: (
+            <>
+              <i className="mode-dot" aria-hidden="true" />
+              Agent
+            </>
+          ),
+        },
       ]}
     />
   );
@@ -185,6 +193,9 @@ export function FlowComposer({
             >
               @
             </Button>
+            {layout === 'hero' ? (
+              <span className="chat-composer-hint">Attach a file or mention a column with @</span>
+            ) : null}
             {modes}
             <Button
               className="chat-send"
