@@ -45,7 +45,14 @@ import { ChoiceSelect } from '@/components/ui/select';
 import { Segmented } from '@/components/ui/segmented';
 import { Table } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { ScrollArea, Skeleton } from '@/components/ui/rest';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  ScrollArea,
+  Skeleton,
+} from '@/components/ui/rest';
 import { CodeFrameRail } from '@/components/flow/code-frame-rail';
 import { ColumnSpark, valueCounts } from '@/components/flow/column-spark';
 import { AddToProjectButton } from '@/components/flow/move-dataset';
@@ -2279,16 +2286,27 @@ function ReportScreen({
 }) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === projectId)?.dataset_id;
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [specs, setSpecs] = useState<
     { id: string; label: string; spec: Record<string, unknown> }[]
   >([]);
   const [picked, setPicked] = useState<string[]>([]);
-  const [template, setTemplate] = useState<string>('');
+  const [template, setTemplate] = useState('');
+  const [templateName, setTemplateName] = useState('');
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
+  const [busy, setBusy] = useState('');
 
   useEffect(() => {
-    if (!datasetId) return;
+    if (!datasetId) {
+      setSpecs([]);
+      setPicked([]);
+      setPhase('ready');
+      return;
+    }
+    let live = true;
+    setPhase('loading');
+    setError('');
     void flowJson<{ specs?: { spec_id?: string; id?: string; label?: string; name?: string }[] }>(
       `/datasets/${datasetId}/tables`
     )
@@ -2303,10 +2321,20 @@ function ReportScreen({
             return { id, label: row.label || row.name || id, spec: detail.spec || {} };
           })
         );
-        setSpecs(loaded.filter(row => row.id));
-        setPicked(loaded.map(row => row.id).filter(Boolean));
+        if (!live) return;
+        const ready = loaded.filter(row => row.id);
+        setSpecs(ready);
+        setPicked(ready.map(row => row.id));
+        setPhase('ready');
       })
-      .catch(err => setError(err instanceof Error ? err.message : 'Could not load saved tables'));
+      .catch(err => {
+        if (!live) return;
+        setError(err instanceof Error ? err.message : 'Could not load saved tables');
+        setPhase('error');
+      });
+    return () => {
+      live = false;
+    };
   }, [datasetId]);
 
   const selected = specs.filter(row => picked.includes(row.id));
@@ -2330,6 +2358,26 @@ function ReportScreen({
     if (!created.export_id) throw new Error('The deck export did not return a file.');
     await downloadExport(`/exports/${created.export_id}`, created.filename || 'deck.pptx');
     setNote('Deck downloaded.');
+  };
+
+  const run = (name: string, action: () => Promise<void>) => {
+    setBusy(name);
+    void action()
+      .catch(err => setError(String(err instanceof Error ? err.message : err)))
+      .finally(() => setBusy(''));
+  };
+
+  const generate = async () => {
+    if (!datasetId || !selected.length) {
+      setError('Save a table before generating the report.');
+      return;
+    }
+    setError('');
+    setNote('');
+    await deck();
+    await bannerBook();
+    await topline();
+    setNote('Deck, banner book, and topline downloaded.');
   };
 
   const bannerBook = async () => {
@@ -2374,72 +2422,157 @@ function ReportScreen({
     setNote('Topline downloaded.');
   };
 
+  if (phase === 'loading') {
+    return (
+      <section className="report-page" aria-busy="true" aria-label="Report">
+        <div className="report-loading">
+          <Skeleton className="h-6 w-72" />
+          <Skeleton className="h-10 w-96" />
+          <div className="report-loading-cards">
+            <Skeleton className="h-40" />
+            <Skeleton className="h-40" />
+            <Skeleton className="h-40" />
+          </div>
+          <Skeleton className="h-24" />
+        </div>
+      </section>
+    );
+  }
+
+  if (phase === 'error') {
+    return (
+      <section className="report-page">
+        <p className="flow-error">{error || 'Could not load this report.'}</p>
+      </section>
+    );
+  }
+
   return (
-    <div className="report-page">
-      <p className="flow-soon">Up to date · regenerates from saved tables</p>
-      <h1>{project?.name || 'Report'}</h1>
-      <p className="flow-muted">
-        {selected.length} saved table{selected.length === 1 ? '' : 's'} · Fielding coming soon
-      </p>
-      <div className="report-head">
-        <div>
-          <h2>Deliverables</h2>
-          <p className="flow-muted">Built from this project&apos;s saved tables.</p>
+    <section className="report-page">
+      <div className="report-toolbar">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button className="flow-btn" type="button">
+              Overview
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem>Overview</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <div className="report-toolbar-actions">
+          <Button className="flow-btn" type="button">
+            Filter
+          </Button>
+          <Button className="flow-btn" type="button">
+            Segments
+          </Button>
+          <Button className="flow-btn" type="button">
+            Edit
+          </Button>
         </div>
       </div>
-      {error ? <p className="flow-error">{error}</p> : null}
-      {note ? <p>{note}</p> : null}
-      <div className="report-cards">
-        <Card>
-          <Badge>PPTX</Badge>
-          <strong>Client deck</strong>
-          <p>From the saved tables</p>
-          <label>
-            Template
+      <div className="report-sheet">
+        <div className="report-lead">
+          <p className="report-eyebrow">Up to date · regenerates as responses arrive</p>
+          <h1>{project?.name || 'Report'}</h1>
+          <p className="report-meta">
+            <span className="ink">
+              {specs.length} saved table{specs.length === 1 ? '' : 's'}
+            </span>
+            <span>|</span>
+            <span>Fielding coming soon</span>
+          </p>
+        </div>
+        <div className="report-block">
+          <div className="report-head">
+            <div>
+              <h2>Deliverables</h2>
+              <p className="flow-muted">
+                Built from this project&apos;s tables, in the client&apos;s template
+              </p>
+            </div>
+            <Button
+              className="flow-btn"
+              type="button"
+              disabled={busy !== ''}
+              onClick={() => run('generate', generate)}
+            >
+              Generate
+            </Button>
+          </div>
+          {error ? <p className="flow-error">{error}</p> : null}
+          {note ? <p className="flow-muted">{note}</p> : null}
+          <div className="report-cards">
+            <Card>
+              <div className="report-tags">
+                <span>.PPTX</span>
+              </div>
+              <div>
+                <h3>Client deck</h3>
+                <p>{templateName || 'Saved tables'}</p>
+              </div>
+              <Button type="button" disabled={busy !== ''} onClick={() => run('deck', deck)}>
+                Download
+              </Button>
+            </Card>
+            <Card>
+              <div className="report-tags">
+                <span>.XLSX</span>
+                <span>
+                  {specs.length} table{specs.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div>
+                <h3>Banner book</h3>
+                <p>Every saved table</p>
+              </div>
+              <Button
+                type="button"
+                disabled={busy !== ''}
+                onClick={() => run('banner', bannerBook)}
+              >
+                Download
+              </Button>
+            </Card>
+            <Card>
+              <div className="report-tags">
+                <span>.DOCX</span>
+              </div>
+              <div>
+                <h3>Topline summary</h3>
+                <p>The first saved table</p>
+              </div>
+              <Button type="button" disabled={busy !== ''} onClick={() => run('topline', topline)}>
+                Download
+              </Button>
+            </Card>
+          </div>
+          <label className="report-template">
+            Deck template
             <Input
               type="file"
               accept=".pptx"
+              aria-label="Deck template"
               onChange={event => {
                 const file = event.target.files?.[0];
                 if (!file) {
                   setTemplate('');
+                  setTemplateName('');
                   return;
                 }
+                setTemplateName(file.name);
                 void fileToBase64(file).then(setTemplate);
               }}
             />
           </label>
-          <Button
-            type="button"
-            onClick={() => void deck().catch(err => setError(String(err.message || err)))}
-          >
-            Download
-          </Button>
-        </Card>
-        <Card>
-          <Badge>XLSX</Badge>
-          <strong>Banner book</strong>
-          <p>Every saved table</p>
-          <Button
-            type="button"
-            onClick={() => void bannerBook().catch(err => setError(String(err.message || err)))}
-          >
-            Download
-          </Button>
-        </Card>
-        <Card>
-          <Badge>DOCX</Badge>
-          <strong>Topline summary</strong>
-          <p>The first saved table</p>
-          <Button
-            type="button"
-            onClick={() => void topline().catch(err => setError(String(err.message || err)))}
-          >
-            Download
-          </Button>
-        </Card>
+        </div>
+        <div className="report-findings">
+          <h2>Key findings</h2>
+          <p className="report-empty">This report has no written findings yet.</p>
+        </div>
       </div>
-    </div>
+    </section>
   );
 }
 

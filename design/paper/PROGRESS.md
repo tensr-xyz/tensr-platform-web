@@ -18,9 +18,9 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 8
-- wired: 8
-- built: 1
+- matched: 9
+- wired: 9
+- built: 0
 - todo: 32
 - checks done: 6 passed, 1 owner QA
 
@@ -51,7 +51,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **4d code frame** (`958-0`, `4d-code-frame`) — **wired**. A coded column opens the theme list in the variable rail. Counts and the uncoded row are the loaded page. See all filters the sheet. Selecting a theme shows Merge and Clear. Use as banner opens Tables. The live Q7 frame is one theme, so Merge stays off. PNG is the reference. Components: shadcn.
 - [x] **4g Themes** (`16OA-0`, `4g-themes`) — **wired**. Themes runs the column as a column-% table with a split-by chip. The base sits under the themes. A cell opens Evidence and stays on Themes. Edit code frame opens the variable rail. The uncoded count is the table's not-coded figure. No agent-read sentence is invented. `screen.tsx` is the Paper export. Components: shadcn.
 - [x] **5 Tables** (`2LA-0`, `5-tables`) — **wired**. Stub and banner chips, the saved-table list, and a column-% table. The base sits at the end. Sig letters and the low-base mark are toggles. Save stores the table. A cell opens Evidence on Responses. The side thread records the run and does not invent a finding. Chart says the chart view is the next screen. `screen.tsx` is the Paper export. Components: shadcn.
-- [ ] **6 Report** (`2ZC-0`, `6-report`) — **built**. Three deliverable cards wired to deck, banner book, and topline. No `screen.tsx` yet, not matched. Components: shadcn.
+- [x] **6 Report** (`2ZC-0`, `6-report`) — **wired**. White report card, Overview menu, and the three deliverable cards. The title is the project name. The meta line is the saved-table count and fielding coming soon. Key findings stay empty until a report has written findings. Client deck download returned a file. Filter, Segments, and Edit are on the toolbar and do not apply a cut. `screen.tsx` is the Paper export. Components: shadcn.
 
 ## Rest of the app
 
