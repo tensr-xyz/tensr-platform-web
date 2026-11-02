@@ -81,3 +81,39 @@ export function outputBaseNote(answer: string): string {
   }
   return kept.join(' ');
 }
+
+/** The thread copy of the answer: the base sentences move to the panel note. Tables stay. */
+export function answerWithoutBase(answer: string): string {
+  const kept: string[] = [];
+  for (const line of answer.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('|')) {
+      kept.push(line);
+      continue;
+    }
+    const rest = sentences(trimmed).filter(sentence => !isBaseSentence(sentence));
+    if (rest.length) kept.push(rest.join(' '));
+  }
+  return kept
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** Plain lines written one under another stay on separate lines when rendered. */
+export function keepLineBreaks(text: string): string {
+  const lines = text.split('\n');
+  const out: string[] = [];
+  let fenced = false;
+  const plain = (line: string) => {
+    const trimmed = line.trim();
+    return Boolean(trimmed) && !/^(\||[-*+]\s|\d+[.)]\s|#|>)/.test(trimmed);
+  };
+  lines.forEach((line, index) => {
+    if (line.trim().startsWith('```')) fenced = !fenced;
+    out.push(line);
+    const next = lines[index + 1];
+    if (!fenced && next !== undefined && plain(line) && plain(next)) out.push('');
+  });
+  return out.join('\n');
+}

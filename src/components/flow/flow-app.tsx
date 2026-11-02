@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
-import { dependentColumns, type FlowColumn } from '@/lib/flow-columns';
+import { dependentColumns, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
 import {
   downloadsFromToolResults,
   openSignedDownload,
@@ -18,7 +18,12 @@ import {
   type AgentLoopResponse,
 } from '@/lib/run-agent-loop';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
-import { outputBaseNote, outputTakeaway, outputTitle } from '@/components/flow/chat-output';
+import {
+  answerWithoutBase,
+  outputBaseNote,
+  outputTakeaway,
+  outputTitle,
+} from '@/components/flow/chat-output';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { SourcesScreen } from '@/components/flow/sources-screen';
@@ -1996,7 +2001,11 @@ function ChatScreen({
     void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         if (cancelled) return;
-        setColumns((meta.columns || []).map(column => column.name || '').filter(Boolean));
+        setColumns(
+          (meta.columns || [])
+            .map(column => column.name || '')
+            .filter(name => name && !isInternalColumn(name))
+        );
       })
       .catch(() => {
         if (!cancelled) setColumns([]);
@@ -2224,7 +2233,7 @@ function ChatScreen({
                   </div>
                 ) : null}
                 {answer && !plan ? (
-                  <FlowMarkdown className="chat-prose">{answer}</FlowMarkdown>
+                  <FlowMarkdown className="chat-prose">{answerWithoutBase(answer)}</FlowMarkdown>
                 ) : null}
                 {plan ? (
                   <div className="chat-plan">

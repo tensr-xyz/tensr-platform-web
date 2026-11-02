@@ -32,3 +32,32 @@ describe('code frame open ends', () => {
     ).toEqual(['comments', 'region']);
   });
 });
+
+describe('picker columns', () => {
+  it('drops row ids, coding scratch, and stored codes', () => {
+    const { pickerColumns, isInternalColumn } = jest.requireActual('./flow-columns');
+    expect(
+      pickerColumns([
+        { name: '_row_uid' },
+        { name: 'comments_coding' },
+        { name: 'comments_codes' },
+        { name: 'region' },
+      ]).map((column: { name: string }) => column.name)
+    ).toEqual(['region']);
+    expect(isInternalColumn('source_wave')).toBe(false);
+  });
+
+  it('offers coded open ends by their open-end name', () => {
+    const { themeColumns } = jest.requireActual('./flow-columns');
+    expect(
+      themeColumns([
+        { name: 'comments_codes', label: 'Codes for comments' },
+        { name: 'Q7_codes' },
+        { name: 'region', label: 'Region' },
+      ])
+    ).toEqual([
+      { value: 'comments_codes', label: 'comments' },
+      { value: 'Q7_codes', label: 'Q7' },
+    ]);
+  });
+});

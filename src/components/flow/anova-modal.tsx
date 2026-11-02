@@ -14,7 +14,7 @@ import {
 import { ChoiceSelect } from '@/components/ui/select';
 import { Segmented } from '@/components/ui/segmented';
 import { flowJson } from '@/lib/flow-api';
-import { dependentColumns, type FlowColumn } from '@/lib/flow-columns';
+import { dependentColumns, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
 import {
   anovaError,
   countedPairs,
@@ -80,10 +80,13 @@ export function AnovaModal({
   projectId?: string;
   onClose: () => void;
 }) {
-  const outcomes = useMemo(() => dependentColumns(columns), [columns]);
+  const outcomes = useMemo(
+    () => dependentColumns(columns).filter(name => !isInternalColumn(name)),
+    [columns]
+  );
   const factors = columns
     .map(column => column.name)
-    .filter(name => name && !outcomes.includes(name));
+    .filter(name => name && !isInternalColumn(name) && !outcomes.includes(name));
   const [dependent, setDependent] = useState(outcomes[0] || '');
   const [group, setGroup] = useState(factors[0] || '');
   const [postHoc, setPostHoc] = useState<PostHoc>('none');

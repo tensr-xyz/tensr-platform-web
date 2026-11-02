@@ -11,7 +11,7 @@ import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
-import { openEndColumns, type FlowColumn } from '@/lib/flow-columns';
+import { openEndColumns, pickerColumns, themeColumns, type FlowColumn } from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import {
@@ -228,7 +228,9 @@ export function ThemesPanel({
   onSelectCell: (cell: SurveyCell) => void;
   onEditFrame?: (column: string) => void;
 }) {
-  const [columns, setColumns] = useState<{ name: string; label: string }[]>([]);
+  const [columns, setColumns] = useState<
+    { name: string; label: string; type?: string; measure?: string }[]
+  >([]);
   const [stub, setStub] = useState('');
   const [banner, setBanner] = useState('');
   const [weight, setWeight] = useState('');
@@ -242,15 +244,17 @@ export function ThemesPanel({
       return;
     }
     setColumnsReady(false);
-    void flowJson<{ columns?: { name?: string; label?: string }[] }>(
-      `/datasets/${datasetId}/metadata`
-    )
+    void flowJson<{
+      columns?: { name?: string; label?: string; type?: string; measure?: string }[];
+    }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         setColumns(
           (meta.columns || [])
             .map(column => ({
               name: column.name || '',
               label: column.label || column.name || '',
+              type: column.type,
+              measure: column.measure,
             }))
             .filter(column => column.name)
         );
@@ -263,6 +267,10 @@ export function ThemesPanel({
       });
   }, [datasetId]);
   const stubColumn = columns.find(column => column.name === stub);
+  const themes = themeColumns(columns);
+  const stubLabel = themes.find(item => item.value === stub)?.label || stubColumn?.label || stub;
+  const openEnds = openEndColumns(pickerColumns(columns));
+  const frameColumn = stub || themes[0]?.value || openEnds[0] || '';
   const themeCount = ((book?.rows as { kind?: string }[]) || []).filter(
     row => row.kind !== 'net'
   ).length;
@@ -298,14 +306,14 @@ export function ThemesPanel({
       <div className="themes-tools">
         {book ? (
           <Button className="flow-btn" type="button" data-active onClick={() => setBook(null)}>
-            {stubColumn?.label || stub} · {themeCount} theme{themeCount === 1 ? '' : 's'} ×
+            {stubLabel} · {themeCount} theme{themeCount === 1 ? '' : 's'} ×
           </Button>
         ) : null}
         <Button
           className="flow-btn"
           type="button"
-          disabled={!stub}
-          onClick={() => onEditFrame?.(stub)}
+          disabled={!frameColumn}
+          onClick={() => onEditFrame?.(frameColumn)}
         >
           Edit code frame
         </Button>
@@ -320,14 +328,14 @@ export function ThemesPanel({
           }}
           options={[
             { value: '', label: 'Unweighted' },
-            ...columns.map(column => ({ value: column.name, label: column.label })),
+            ...pickerColumns(columns).map(column => ({ value: column.name, label: column.label })),
           ]}
         />
       </div>
       <div className="themes-head">
         <div>
-          <p className="flow-muted">Open end{stub ? ` · ${stub}` : ''}</p>
-          <h2>{stubColumn?.label || 'Choose a theme column'}</h2>
+          <p className="flow-muted">Open end{stub ? ` · ${stubLabel}` : ''}</p>
+          <h2>{stub ? stubLabel : 'Choose a theme'}</h2>
           <p className="flow-muted">
             {book
               ? `${themeCount} theme${themeCount === 1 ? '' : 's'} · ${weight ? `weighted ${weight}` : 'unweighted'} · column %`
@@ -335,25 +343,26 @@ export function ThemesPanel({
           </p>
         </div>
         <div className="themes-split">
-          <span className="flow-muted">Split by</span>
-          {banner ? (
-            <Button className="flow-btn" type="button" data-active onClick={() => setBanner('')}>
-              {columns.find(column => column.name === banner)?.label || banner} ×
-            </Button>
-          ) : null}
+          <span className="flow-muted">Theme</span>
           <ChoiceSelect
             className="flow-input"
-            aria-label="Theme column"
+            aria-label="Theme"
             value={stub}
             onValueChange={value => {
               setStub(value);
               setBook(null);
             }}
             options={[
-              { value: '', label: 'Theme column' },
-              ...columns.map(column => ({ value: column.name, label: column.label })),
+              { value: '', label: themes.length ? 'Choose a theme' : 'No coded open end yet' },
+              ...themes,
             ]}
           />
+          <span className="flow-muted">Split by</span>
+          {banner ? (
+            <Button className="flow-btn" type="button" data-active onClick={() => setBanner('')}>
+              {columns.find(column => column.name === banner)?.label || banner} ×
+            </Button>
+          ) : null}
           <ChoiceSelect
             className="flow-input"
             aria-label="Banner"
@@ -364,7 +373,10 @@ export function ThemesPanel({
             }}
             options={[
               { value: '', label: '+' },
-              ...columns.map(column => ({ value: column.name, label: column.label })),
+              ...pickerColumns(columns).map(column => ({
+                value: column.name,
+                label: column.label,
+              })),
             ]}
           />
           <Button
@@ -394,7 +406,7 @@ export function ThemesPanel({
       ) : book ? (
         <BannerGrid book={book} onSelectCell={onSelectCell} baseAtEnd showQuotes />
       ) : (
-        <p className="flow-muted">Run a theme column to see the table.</p>
+        <p className="flow-muted">Choose a theme and run it to see the table.</p>
       )}
       {notCoded != null ? (
         <p className="themes-uncoded">
@@ -403,9 +415,15 @@ export function ThemesPanel({
       ) : null}
       <div className="themes-links">
         {projectId ? (
-          <Button className="flow-btn primary" type="button" asChild>
-            <Link href={`/flow/p/${projectId}/report`}>Add to report</Link>
-          </Button>
+          book ? (
+            <Button className="flow-btn primary" type="button" asChild>
+              <Link href={`/flow/p/${projectId}/report`}>Add to report</Link>
+            </Button>
+          ) : (
+            <Button className="flow-btn primary" type="button" disabled>
+              Add to report
+            </Button>
+          )
         ) : null}
         {projectId ? (
           <Button className="flow-btn" type="button" asChild>
@@ -624,7 +642,7 @@ export function CodeFramePanel({
   useEffect(() => {
     if (!datasetId) return;
     void flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`)
-      .then(meta => setColumns(openEndColumns(meta.columns || [])))
+      .then(meta => setColumns(openEndColumns(pickerColumns(meta.columns || []))))
       .catch(() => setColumns([]));
   }, [datasetId]);
 
@@ -1307,7 +1325,10 @@ export function TablesBuilder({
                   }}
                   options={[
                     { value: '', label: '+ Drop variable' },
-                    ...columns.map(column => ({ value: column.name, label: column.label })),
+                    ...pickerColumns(columns).map(column => ({
+                      value: column.name,
+                      label: column.label,
+                    })),
                   ]}
                 />
               </div>
@@ -1333,7 +1354,7 @@ export function TablesBuilder({
                   }}
                   options={[
                     { value: '', label: '+' },
-                    ...columns
+                    ...pickerColumns(columns)
                       .filter(column => column.name !== stub && !banners.includes(column.name))
                       .map(column => ({ value: column.name, label: column.label })),
                   ]}

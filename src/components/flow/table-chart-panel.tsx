@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { pickerColumns } from '@/lib/flow-columns';
 import { ExportDialog } from '@/components/flow/export-dialog';
 import { fitLabel, linearFit } from '@/components/flow/table-chart';
 import { runDocument } from '@/components/flow/run-document';
@@ -128,7 +129,7 @@ export function TableChart({
   const chart = page?.chart;
   const points = chart?.points || [];
   const fit = kind === 'scatter' && fitOn ? linearFit(points) : null;
-  const options = columns.map(column => ({
+  const options = pickerColumns(columns).map(column => ({
     value: column.name,
     label: column.label || column.name,
   }));

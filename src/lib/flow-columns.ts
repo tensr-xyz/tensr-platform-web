@@ -47,3 +47,29 @@ export function openEndColumns(columns: FlowColumn[]): string[] {
     .filter(column => column.name && isOpenEndColumn(column))
     .map(column => column.name);
 }
+
+/** System columns stay out of every picker: row ids, coding scratch, and stored theme codes. */
+export function isInternalColumn(name: string): boolean {
+  const trimmed = name.trim();
+  return (
+    !trimmed || trimmed.startsWith('_') || trimmed.endsWith('_coding') || trimmed.endsWith('_codes')
+  );
+}
+
+export function pickerColumns<T extends { name: string }>(columns: T[]): T[] {
+  return columns.filter(column => !isInternalColumn(column.name));
+}
+
+/** Coded open ends for the Theme picker. The value is the stored codes column, the label its open end. */
+export function themeColumns(
+  columns: { name: string; label?: string | null }[]
+): { value: string; label: string }[] {
+  return columns
+    .filter(column => column.name.endsWith('_codes'))
+    .map(column => {
+      const label = String(column.label || '')
+        .replace(/^Codes for\s+/i, '')
+        .trim();
+      return { value: column.name, label: label || column.name.replace(/_codes$/, '') };
+    });
+}

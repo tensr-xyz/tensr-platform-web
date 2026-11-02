@@ -12,6 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { flowJson } from '@/lib/flow-api';
+import { isInternalColumn } from '@/lib/flow-columns';
 import { efficiencyPercent } from '@/lib/flow-survey';
 import { RAKE_COPY } from '@/lib/rake-weights';
 import {
@@ -298,6 +299,7 @@ export function WeightPanel({
             options={[
               { value: '', label: 'Variable' },
               ...columns
+                .filter(column => !isInternalColumn(column))
                 .filter(column => !groups.some(group => group.column === column))
                 .map(column => ({ value: column, label: column })),
             ]}

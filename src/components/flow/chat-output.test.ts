@@ -1,4 +1,10 @@
-import { outputBaseNote, outputTakeaway, outputTitle } from './chat-output';
+import {
+  answerWithoutBase,
+  keepLineBreaks,
+  outputBaseNote,
+  outputTakeaway,
+  outputTitle,
+} from './chat-output';
 
 const answer = [
   'The weighted base for this table is 312.8 (unweighted 318). No group differs significantly from the one before it; Top 2 is cars_EN 51%, cars_DE 47%, cars_FR 51%.',
@@ -46,5 +52,18 @@ describe('chat output panel', () => {
     expect(outputBaseNote(answer)).toBe(
       'The weighted base for this table is 312.8 (unweighted 318). Minimum base 30. No column is under that base.'
     );
+  });
+
+  it('keeps the base out of the thread and the table in it', () => {
+    const thread = answerWithoutBase(answer);
+    expect(thread).not.toMatch(/weighted base|Minimum base|under that base|^base \d/im);
+    expect(thread).toContain('| Top 2 | 50.0% | 51.0% | 47.0% | 51.0% |');
+    expect(thread.split('\n')[0]).toMatch(/^No group differs significantly/);
+  });
+
+  it('puts each download on its own line', () => {
+    const text = keepLineBreaks('Excel workbook: banner.xlsx\nSPSS syntax: tracker.sps');
+    expect(text).toBe('Excel workbook: banner.xlsx\n\nSPSS syntax: tracker.sps');
+    expect(keepLineBreaks('| a |\n| --- |\n- one\n- two')).toBe('| a |\n| --- |\n- one\n- two');
   });
 });
