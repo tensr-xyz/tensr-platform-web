@@ -321,7 +321,9 @@ export function SpecDrivenSetup({
               onChange={value => onChange(param.name, value)}
               schema={schema}
               preview={preview}
-              revealSelectionError={spec.key === 'descriptives' ? revealSelectionError : undefined}
+              revealSelectionError={
+                spec.key === 'descriptives' ? revealSelectionError : undefined
+              }
             />
           ))}
         </div>

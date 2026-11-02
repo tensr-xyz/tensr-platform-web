@@ -127,7 +127,9 @@ function pickSpecInputs(
     }
     const paramType = specFor(analysisKey)?.params.find(item => item.name === key)?.type;
     const looksLikeColumns =
-      names.some(name => typeByName.has(name)) || paramType === 'column' || paramType === 'columns';
+      names.some(name => typeByName.has(name)) ||
+      paramType === 'column' ||
+      paramType === 'columns';
     if (looksLikeColumns) {
       for (const name of names) pushVariable(label, name);
       continue;
