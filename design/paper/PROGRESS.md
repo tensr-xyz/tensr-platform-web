@@ -100,8 +100,8 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 - [x] **0c Integrations** (`1CX3-0`, `0c-integrations`) — **built** (wired, not matched). Components: native.
 - [x] **0d Agencies** (`17UM-0`, `0d-agencies`) — **built** (wired, not matched). Components: native.
 - [x] **0e Pricing** (`1BZU-0`, `0e-pricing`) — **built** (wired, not matched). Components: native.
-- [x] **0f Sign in** (`189B-0`, `0f-sign-in`) — **built** (wired, not matched) at `/signin`. Real Stytch on localhost:3000 (app) or the landing sign-in route. Components: native.
-- [x] **0g Enter code** (`19KM-0`, `0g-enter-code`) — **built** (wired, not matched) at `/signin/code`. Components: native.
+- [x] **0f Sign in** (`189B-0`, `0f-sign-in`) — **matched**, wired at the app's `/login` on localhost:3000, rebuilt from the artboard: cream card, outlined Google, Microsoft, and GitHub buttons, Work email, Email me a code, trial and terms lines, and the green preview pane. Real Stytch OTP and OAuth. `compare.png` matches.
+- [x] **0g Enter code** (`19KM-0`, `0g-enter-code`) — **matched**, wired at `/login` after the email step: six code boxes over one OTP input, Verify, Resend with a 0:30 hold, and Use a different email. The help line shows the send notice. `compare.png` differs only in the email address.
 - [x] **0h Book a demo** (`1A3G-0`, `0h-book-demo`) — **built** (wired, not matched). Components: native.
 - [x] **0i Docs** (`1DTL-0`, `0i-docs`) — **built** (wired, not matched). Components: native.
 - [x] **0j Changelog** (`1DTM-0`, `0j-changelog`) — **built** (wired, not matched). Components: native.
