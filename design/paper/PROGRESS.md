@@ -20,7 +20,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - wired: 4
 - built: 1
 - todo: 36
-- checks done: 3 / 5
+- checks done: 4 / 5
 
 ## Decisions
 
@@ -94,7 +94,7 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 - [x] Stack Save on cars_EN opens the stacked dataset with skip/override applied. On dev `557505d` (live 2026-11-02T10:50:33Z): both cars_EN files, skip `Q7_coding`, override `region` to `region_market`. Opened the responses sheet, 30 respondents, `region_market` present, `Q7_coding` absent. The earlier save on `aa126337` returned `RowUidIntegrityError: non_unique`.
 - [x] Descriptives sent to chat finishes with a reply. Agent mode, cars_EN: means for aware_A 0.8 (base 20), owns_A 0.6 (base 20), likes_A 3.438 (base 16), Q7 3 (base 20). No "stream ended".
 - [x] Reapply shows the 409 path in the UI. Interviews, column Q7, source the other cars_EN.sav: "That file has no saved code frame. Pick the dataset in this project that has one." The dropdown listed cars_EN.sav.
-- [ ] A table with a significant cell and a real respondent bitset shows the letter, and Evidence lists the verbatims. aware_A by owns_A showed `100.0% a` and `50.0% b`. Evidence said the cell has no respondent bitset (`unknown_row_uids`, 6 of 12, origin order length 10 on `2d889562`). Fix merged as API `c390967` (PR #290). Retest after that deploy-dev completes.
+- [x] A table with a significant cell and a real respondent bitset shows the letter, and Evidence lists the verbatims. On dev `c390967` (live 2026-11-02T11:10:46Z), aware_A by owns_A on the stacked file showed `100.0% A` and `50.0% B`. Evidence listed 18 respondents and the value `1.0` for each. Before that deploy the same letter had no bitset (`unknown_row_uids`, 6 of 12).
 - [ ] Part A on `af6696a8`, varied wording: weighted trust by market with `trend=previous_wave` and one download per file; unweighted Pearson chi-square with integer df; unweighted two-variable banner with value labels; three-group means as ANOVA. Never "stream ended without a result". The account's 13 datasets do not include `af6696a8`. EN, FR, and DE are separate projects, and Add to project does not move a file, so the three-market stack is not in the UI yet.
 
 ## Unfinished
