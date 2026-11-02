@@ -18,10 +18,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 19
-- wired: 19
+- matched: 20
+- wired: 20
 - built: 0
-- todo: 22
+- todo: 21
 - checks done: 6 passed, 1 owner QA
 
 ## Decisions
@@ -65,7 +65,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **3b Stack waves** (`93J-0`, `3b-stack-waves`) — **wired**. Stack files compares two files in the project. A shared name is matched. A name on only one side, or a shared name whose value labels differ, is flagged. Add, Skip, and Treat as same are the fuse decisions. Show all lists the matched names. Stack waves creates a new dataset and leaves the originals. On sources-check.csv and likert_openends.csv, id, region, and \_row_uid matched, score was only in the csv, and the fuse added a 403-row file to the project. `screen.tsx` records the layout; the sample Q20 rename, Octavia Green code, and 182 matched stay in Paper. Components: shadcn.
 - [x] **3c Interviews** (`17DV-0`, `3c-interviews`) — **wired**. The rail is the project's transcripts. Search filters the filename. Add transcripts uploads a .txt, .vtt, or .docx. Audio is coming soon. Opening one shows the stored passages, speaker, and text. Recode saves a code on the selected passage. Codes shown hides those chips. A speaker filter appears when the transcript has more than one speaker. Evidence shows that passage and says interviews are a count, not a survey percent. Cite in report opens Report. There is no stored duration, survey link, or agent summary, so those sample figures stay out. Checked with interview-check.txt: one passage, then the code Bill. `screen.tsx` records the layout; the sample speakers, 24%, and the agent summary stay in Paper. Components: shadcn.
 - [x] **4b Notebook** (`5ER-0`, `4b-notebook`) — **wired**. Sheet, Notebook, and Themes stay the Responses switch. The notebook is code and text cells on the open file. Run and Run all post each code cell to the existing Python executor. Cells do not share variables, and a sheet filter is not applied. + Code and + Text add a cell. Export .py and Export .ipynb download the cells that were typed. The variable rail and saved analyses stay beside it. There is no stored Python version and no ordinal result, so those sample figures stay out. `df.head()` on the stacked file returned "Code execution timed out after 18s". `screen.tsx` records the layout; the sample crosstab, ordinal coefficients, and T15 stay in Paper. Components: shadcn.
-- [ ] **4e Weighting modal** (`97E-0`, `4e-weighting`) — **todo**. PNG only. Components: shadcn.
+- [x] **4e Weighting modal** (`97E-0`, `4e-weighting`) — **wired**. Weight opens the rake dialog for the open file. The lead is that file's name and row count. Add target lists the column's codes and their unweighted shares. A target is a percent of that column's rows and is sent as a count. Load targets copies shares from another file in the project. An optional cap is sent as the rake upper bound, and a code whose mean weight meets that cap is marked. Save as new file runs the existing rake and then shows efficiency, effective base, weight range, and how many runs it took, from that response. Cancel closes without saving. Checked on sources-check.csv, 403 rows: region came back South 28.3%, West 26.3%, North 23.1%, East 21.6%, plus the three lowercase codes at 0.2%. No rake was saved. `screen.tsx` records the layout; the sample London shares, 71% efficiency, and 1,604 effective base stay in Paper. Components: shadcn.
 - [ ] **4f Run ANOVA modal** (`CJO-0`, `4f-anova`) — **todo**. PNG only. Components: shadcn.
 - [ ] **5b Tables chart** (`1E0U-0`, `5b-tables-chart`) — **todo**. PNG only. Components: shadcn.
 - [ ] **6b Report outputs** (`17SM-0`, `6b-report-outputs`) — **todo**. PNG only. Components: shadcn.

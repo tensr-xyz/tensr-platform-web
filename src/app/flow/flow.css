@@ -3189,3 +3189,70 @@ select.flow-input {
   font-size: 12px;
   line-height: 1.45;
 }
+
+.weight-dialog {
+  width: min(760px, calc(100vw - 48px));
+  max-width: 760px;
+}
+
+.weight-lead {
+  margin: 0;
+}
+
+.weight-title {
+  font-weight: var(--weight-title);
+}
+
+.weight-group h3 {
+  margin: 12px 0 6px;
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+}
+
+.weight-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 90px 90px 90px 70px;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 13px;
+}
+
+.weight-row[data-capped='true'] {
+  background: #f6ede2;
+  color: var(--color-warn);
+}
+
+.weight-head-row {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.weight-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--color-well);
+  border-radius: 10px;
+}
+
+.weight-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.weight-figure {
+  font-size: 18px;
+  font-weight: var(--weight-title);
+}
+
+.weight-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
