@@ -9,6 +9,7 @@
 //     Screenshots the live page at 1440x900 and writes design/paper/<screen-folder>/compare.png
 //     with the live screen on the left and Paper's screen.png on the right.
 //     --ask "<question>" sends a chat question first and waits for the reply.
+//     --click <selector>, --pick "<aria label>|<option>", --wait <selector> run in order first.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,7 +46,7 @@ async function signin() {
   console.log(`Saved ${auth} for ${email}`);
 }
 
-async function compare(folder, route, ask) {
+async function compare(folder, route, ask, steps = []) {
   if (!fs.existsSync(auth)) throw new Error('Run "signin" first.');
   const reference = path.join(paper, folder, 'screen.png');
   if (!fs.existsSync(reference)) throw new Error(`No ${reference}`);
@@ -60,6 +61,18 @@ async function compare(folder, route, ask) {
   await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'), null, {
     timeout: 60_000,
   });
+  for (const [kind, value] of steps) {
+    if (kind === '--click') {
+      await page.locator(value).first().click();
+    } else if (kind === '--pick') {
+      const [label, option] = value.split('|');
+      await page.getByLabel(label, { exact: true }).first().click();
+      await page.getByRole('option', { name: option, exact: true }).first().click();
+    } else if (kind === '--wait') {
+      await page.waitForSelector(value, { timeout: 120_000 });
+    }
+    await page.waitForTimeout(600);
+  }
   if (ask) {
     await page.locator('.flow-composer textarea').first().fill(ask);
     await page.getByRole('button', { name: 'Send' }).click();
@@ -90,6 +103,11 @@ async function compare(folder, route, ask) {
 const [command, route, ...rest] = process.argv.slice(2);
 const askAt = rest.indexOf('--ask');
 const ask = askAt >= 0 ? rest[askAt + 1] : '';
+const steps = [];
+for (let index = 0; index < rest.length - 1; index += 1) {
+  if (['--click', '--pick', '--wait'].includes(rest[index]))
+    steps.push([rest[index], rest[index + 1]]);
+}
 if (command === 'signin') await signin();
-else if (command && route) await compare(command, route, ask);
+else if (command && route) await compare(command, route, ask, steps);
 else console.log('Usage: compare.mjs signin | compare.mjs <screen-folder> <path>');

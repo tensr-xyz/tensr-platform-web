@@ -2973,79 +2973,83 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
               { value: 'themes', label: 'Themes' },
             ]}
           />
-          <Button
-            className="flow-btn"
-            type="button"
-            data-active={showStats}
-            onClick={() => setShowStats(current => !current)}
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <path
-                d="M2 10V6M5 10V3M8 10V5M11 10V2"
-                stroke="currentColor"
-                strokeWidth="1.3"
-                strokeLinecap="round"
-              />
-            </svg>
-            Stats
-          </Button>
-          <Button
-            className="flow-btn"
-            type="button"
-            data-active={showFilters}
-            onClick={() => setShowFilters(current => !current)}
-          >
-            <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-              <path
-                d="M1.5 2h9L7 6.5V10L5 9V6.5z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.2"
-                strokeLinejoin="round"
-              />
-            </svg>
-            Filters{needle || valueFilter != null ? ' 1' : ''}
-          </Button>
-          {surveyCell ? (
+          {tab === 'themes' || tab === 'notebook' ? null : (
             <>
               <Button
                 className="flow-btn"
                 type="button"
-                data-active
-                onClick={() => setSurveyCell(null)}
+                data-active={showStats}
+                onClick={() => setShowStats(current => !current)}
               >
-                Evidence · {surveyCell.textColumn} · {surveyCell.n || evidenceSheet.ids.length} rows
-                ×
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                  <path
+                    d="M2 10V6M5 10V3M8 10V5M11 10V2"
+                    stroke="currentColor"
+                    strokeWidth="1.3"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                Stats
               </Button>
-              <Button className="flow-btn" type="button" onClick={() => setSurveyCell(null)}>
-                Back to all
+              <Button
+                className="flow-btn"
+                type="button"
+                data-active={showFilters}
+                onClick={() => setShowFilters(current => !current)}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                  <path
+                    d="M1.5 2h9L7 6.5V10L5 9V6.5z"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Filters{needle || valueFilter != null ? ' 1' : ''}
+              </Button>
+              {surveyCell ? (
+                <>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    data-active
+                    onClick={() => setSurveyCell(null)}
+                  >
+                    Evidence · {surveyCell.textColumn} · {surveyCell.n || evidenceSheet.ids.length}{' '}
+                    rows ×
+                  </Button>
+                  <Button className="flow-btn" type="button" onClick={() => setSurveyCell(null)}>
+                    Back to all
+                  </Button>
+                </>
+              ) : null}
+              <span className="sheet-spacer" />
+              <Button className="flow-btn" type="button" onClick={() => setWeightOpen(true)}>
+                Weight
+              </Button>
+              <Button className="flow-btn" type="button" onClick={() => setAnovaOpen(true)}>
+                ANOVA
+              </Button>
+              <Button
+                className="flow-btn"
+                type="button"
+                onClick={() => {
+                  if (!datasetId) return;
+                  setDescError(null);
+                  void flowFetch(`/datasets/${datasetId}/analyze/descriptives`, {
+                    method: 'POST',
+                    body: JSON.stringify({ columns: dependentColumns(columns).slice(0, 1) }),
+                  }).then(async response => {
+                    if (!response.ok) setDescError(await response.text());
+                    else setDescError(null);
+                  });
+                }}
+              >
+                Descriptives
               </Button>
             </>
-          ) : null}
-          <span className="sheet-spacer" />
-          <Button className="flow-btn" type="button" onClick={() => setWeightOpen(true)}>
-            Weight
-          </Button>
-          <Button className="flow-btn" type="button" onClick={() => setAnovaOpen(true)}>
-            ANOVA
-          </Button>
-          <Button
-            className="flow-btn"
-            type="button"
-            onClick={() => {
-              if (!datasetId) return;
-              setDescError(null);
-              void flowFetch(`/datasets/${datasetId}/analyze/descriptives`, {
-                method: 'POST',
-                body: JSON.stringify({ columns: dependentColumns(columns).slice(0, 1) }),
-              }).then(async response => {
-                if (!response.ok) setDescError(await response.text());
-                else setDescError(null);
-              });
-            }}
-          >
-            Descriptives
-          </Button>
+          )}
         </div>
         {descError ? <p className="flow-error">{descError}</p> : null}
         {showFilters ? (

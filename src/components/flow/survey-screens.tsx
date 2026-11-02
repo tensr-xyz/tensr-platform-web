@@ -166,7 +166,9 @@ export function BannerGrid({
   return (
     <div>
       <div style={{ overflowX: 'auto' }}>
-        <Table className="flow-table banner-grid">
+        <Table
+          className={showQuotes ? 'flow-table banner-grid theme-grid' : 'flow-table banner-grid'}
+        >
           <thead>
             {bannerGroups(columns).some(group => group.label) ? (
               <tr className="grid-groups">
@@ -338,6 +340,13 @@ export function ThemesPanel({
         setError(err instanceof Error ? err.message : 'Themes did not run');
       });
   };
+  useEffect(() => {
+    if (!stub || !datasetId) return;
+    run();
+    // run reads stub, banner and weight; it reruns when any of them changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stub, banner, weight, datasetId]);
+
   return (
     <div className="themes">
       <div className="themes-tools">
@@ -356,7 +365,7 @@ export function ThemesPanel({
         </Button>
         <span className="sheet-spacer" />
         <ChoiceSelect
-          className="flow-input"
+          className="flow-input themes-weight"
           aria-label="Weight"
           value={weight}
           onValueChange={value => {
@@ -401,9 +410,9 @@ export function ThemesPanel({
             </Button>
           ) : null}
           <ChoiceSelect
-            className="flow-input"
+            className="flow-input themes-add"
             aria-label="Banner"
-            value={banner}
+            value=""
             onValueChange={value => {
               setBanner(value);
               setBook(null);
@@ -416,14 +425,6 @@ export function ThemesPanel({
               })),
             ]}
           />
-          <Button
-            className="flow-btn primary"
-            type="button"
-            disabled={!datasetId || !stub}
-            onClick={run}
-          >
-            Run
-          </Button>
         </div>
       </div>
       {!columnsReady ? (
@@ -441,36 +442,57 @@ export function ThemesPanel({
           <Skeleton className="h-40 w-full" />
         </div>
       ) : book ? (
-        <BannerGrid book={book} onSelectCell={onSelectCell} baseAtEnd showQuotes />
+        <BannerGrid book={book} onSelectCell={onSelectCell} baseAtEnd showQuotes digits={0} />
       ) : (
         <p className="flow-muted">Choose a theme and run it to see the table.</p>
       )}
-      {notCoded != null ? (
-        <p className="themes-uncoded">
-          {notCoded} not coded. These answers are not in the table until they have a theme.
-        </p>
-      ) : null}
-      <div className="themes-links">
-        {projectId ? (
-          book ? (
-            <Button className="flow-btn primary" type="button" asChild>
-              <Link href={`/flow/p/${projectId}/report`}>Add to report</Link>
+      <div className="themes-cards">
+        <div className="themes-links">
+          {book ? (
+            <p className="themes-summary">
+              {themeCount} theme{themeCount === 1 ? '' : 's'} on {stubLabel}
+              {banner
+                ? ` by ${columns.find(column => column.name === banner)?.label || banner}`
+                : ''}
+              {book.answered_n != null ? ` · ${String(book.answered_n)} answered` : ''}
+            </p>
+          ) : null}
+          {projectId ? (
+            book ? (
+              <Button className="flow-btn primary" type="button" asChild>
+                <Link href={`/flow/p/${projectId}/report`}>Add to report</Link>
+              </Button>
+            ) : (
+              <Button className="flow-btn primary" type="button" disabled>
+                Add to report
+              </Button>
+            )
+          ) : null}
+          {projectId ? (
+            <Button className="flow-btn" type="button" asChild>
+              <Link href={`/flow/p/${projectId}/interviews`}>Open interviews</Link>
             </Button>
-          ) : (
-            <Button className="flow-btn primary" type="button" disabled>
-              Add to report
+          ) : null}
+          {projectId ? (
+            <Button className="flow-btn" type="button" asChild>
+              <Link href={`/flow/p/${projectId}/tables`}>Use as banner</Link>
             </Button>
-          )
-        ) : null}
-        {projectId ? (
-          <Button className="flow-btn" type="button" asChild>
-            <Link href={`/flow/p/${projectId}/interviews`}>Open interviews</Link>
-          </Button>
-        ) : null}
-        {projectId ? (
-          <Button className="flow-btn" type="button" asChild>
-            <Link href={`/flow/p/${projectId}/tables`}>Use as banner</Link>
-          </Button>
+          ) : null}
+        </div>
+        {notCoded != null ? (
+          <div className="themes-uncoded">
+            <strong>{notCoded}</strong>
+            <span>answers have no theme yet. They are not in the table until they have one.</span>
+            {onEditFrame ? (
+              <Button
+                className="themes-review"
+                type="button"
+                onClick={() => onEditFrame(frameColumn)}
+              >
+                Review {notCoded} →
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
     </div>

@@ -4295,3 +4295,87 @@ select.flow-input {
   color: var(--color-accent);
   font-size: inherit;
 }
+
+.themes-weight {
+  width: auto;
+  max-width: 180px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.themes-add {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  justify-content: center;
+  border-style: dashed;
+  color: var(--color-muted);
+}
+
+.themes-add > svg {
+  display: none;
+}
+
+.themes-cards {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px;
+  gap: 12px;
+  align-items: stretch;
+}
+
+.themes-cards .themes-links {
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  padding: 16px;
+  align-items: flex-end;
+}
+
+.themes-uncoded {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 12px;
+  padding: 16px;
+  background: #f6ede2;
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.themes-uncoded strong {
+  color: var(--color-warn);
+  font-size: 22px;
+  line-height: 26px;
+  font-weight: var(--weight-title);
+}
+
+.themes-review {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-warn);
+  font-weight: var(--weight-medium);
+}
+
+.theme-grid tbody th,
+.theme-grid tbody td:nth-of-type(1) .flow-cell {
+  font-weight: var(--weight-medium);
+}
+
+.theme-grid tbody tr:last-child th,
+.theme-grid tbody tr:last-child td .flow-cell {
+  font-weight: var(--weight-regular);
+}
+
+.themes-cards .themes-links {
+  flex-wrap: wrap;
+  align-content: space-between;
+}
+
+.themes-summary {
+  width: 100%;
+  margin: 0 0 12px;
+  font-size: 14px;
+  line-height: 20px;
+}
