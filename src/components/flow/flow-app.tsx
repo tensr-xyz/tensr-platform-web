@@ -2943,7 +2943,9 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [selectedCol, setSelectedColState] = useState(0);
   const [colPicked, setColPicked] = useState(false);
+  const [frameName, setFrameName] = useState('');
   const setSelectedCol = (index: number) => {
+    setFrameName('');
     setColPicked(true);
     setSelectedColState(index);
   };
@@ -3052,12 +3054,24 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
       );
     });
   const activeName = names[activeIndex] || 'Variable';
-  const codedColumn = columns.find(column => {
-    const matches = column.name === activeName || column.label === activeName;
-    const coded =
-      column.name.endsWith('_codes') || String(column.label || '').startsWith('Codes for');
-    return matches && coded;
-  });
+  const isCoded = (column: FlowColumn) =>
+    column.name.endsWith('_codes') || String(column.label || '').startsWith('Codes for');
+  const codedColumn =
+    (frameName
+      ? columns.find(column => column.name === frameName && isCoded(column))
+      : undefined) ||
+    columns.find(column => {
+      const matches = column.name === activeName || column.label === activeName;
+      return matches && isCoded(column);
+    });
+  const columnValues = (column?: FlowColumn) => {
+    if (!column) return [];
+    const index = names.findIndex(name => name === column.name || name === column.label);
+    if (index < 0) return [];
+    return preview.map(row =>
+      row[index] == null || row[index] === 'null' ? '' : String(row[index])
+    );
+  };
   const activeValues = preview.map(row =>
     row[activeIndex] == null || row[activeIndex] === 'null' ? '' : String(row[activeIndex])
   );
@@ -3326,12 +3340,16 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
               setSide('evidence');
             }}
             onEditFrame={column => {
+              setFrameName(column);
               const match = columns.find(item => item.name === column);
               const header = match?.label || column;
               const position = shownCols.findIndex(
                 item => item.name === header || item.name === column
               );
-              if (position >= 0) setSelectedCol(position);
+              if (position >= 0) {
+                setColPicked(true);
+                setSelectedColState(position);
+              }
               setSide('variable');
             }}
           />
@@ -3503,8 +3521,15 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
               <CodeFrameRail
                 datasetId={datasetId}
                 column={codedColumn.name}
-                title={codedColumn.label || codedColumn.name}
-                values={activeValues}
+                title={codedColumn.name.replace(/_codes$/, '')}
+                question={
+                  columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
+                    ?.label || ''
+                }
+                values={columnValues(codedColumn)}
+                texts={columnValues(
+                  columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
+                )}
                 onFilter={value => {
                   setValueFilter(value);
                   setShowFilters(true);

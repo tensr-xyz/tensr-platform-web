@@ -6479,3 +6479,138 @@ select.flow-input {
   display: flex;
   flex-direction: column;
 }
+
+/* 4d code frame, from the Paper artboard. */
+.code-frame-head h2 {
+  font-size: 18px;
+  line-height: 22px;
+  font-weight: var(--weight-medium);
+}
+
+.code-frame-head p {
+  margin: 0;
+  font-size: 12px;
+}
+
+.code-frame-list {
+  padding: 4px 12px;
+  gap: 0;
+}
+
+.code-frame-row {
+  min-height: 22px;
+  padding: 0 6px;
+  font-size: 13px;
+}
+
+.code-frame-row.is-on {
+  background: var(--color-accent-soft);
+}
+
+.code-frame .code-frame-name {
+  flex: 1;
+  height: 22px;
+  padding: 0;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  font-size: 13px;
+  text-align: left;
+}
+
+.code-frame-caret {
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.code-frame-open {
+  padding: 6px;
+  background: var(--color-well);
+}
+
+.code-frame-open .code-frame-row {
+  padding: 0;
+}
+
+.code-frame-open .code-frame-name {
+  font-weight: var(--weight-medium);
+}
+
+.code-frame-quote {
+  margin: 6px 0 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--color-canvas);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.code-frame .code-frame-actions {
+  justify-content: flex-start;
+  gap: 12px;
+  margin-top: 6px;
+}
+
+.code-frame .code-frame-actions button {
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.code-frame .code-frame-bar {
+  margin-top: auto;
+  padding: 8px 10px;
+  background: var(--color-ink);
+  color: #fff;
+  font-size: 12px;
+}
+
+.code-frame .code-frame-bar button {
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid #ffffff40;
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+}
+
+.code-frame .code-frame-bar button:first-of-type {
+  margin-left: auto;
+  border-color: #fff;
+  background: #fff;
+  color: var(--color-ink);
+}
+
+.code-frame .code-frame-foot {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  padding: 10px;
+  border-top: 1px solid var(--color-line);
+}
+
+.code-frame .code-frame-foot button {
+  height: 30px;
+  padding: 0 6px;
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+  background: var(--color-canvas);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.code-frame .code-frame-row {
+  min-height: 32px;
+}
+
+.code-frame .code-frame-foot {
+  margin-top: auto;
+}
+
+.code-frame .code-frame-bar + .code-frame-foot {
+  margin-top: 0;
+}

@@ -10,6 +10,7 @@
 //     with the live screen on the left and Paper's screen.png on the right.
 //     --ask "<question>" sends a chat question first and waits for the reply.
 //     --anon captures signed out (the login screens).
+//     --crop <selector> captures one element (for artboards that are a single panel).
 //     --fill "<selector>|<text>", --click <selector>, --pick "<aria label>|<option>", --wait <selector> run in order first.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -47,7 +48,7 @@ async function signin() {
   console.log(`Saved ${auth} for ${email}`);
 }
 
-async function compare(folder, route, ask, steps = [], anon = false) {
+async function compare(folder, route, ask, steps = [], anon = false, crop = '') {
   if (!anon && !fs.existsSync(auth)) throw new Error('Run "signin" first.');
   const reference = path.join(paper, folder, 'screen.png');
   if (!fs.existsSync(reference)) throw new Error(`No ${reference}`);
@@ -90,14 +91,18 @@ async function compare(folder, route, ask, steps = [], anon = false) {
   // The Next.js dev badge is not part of the app.
   await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
   await page.waitForTimeout(500);
-  const live = await page.screenshot();
-  const sheet = await browser.newPage({ viewport: { width: 2 * 1440 + 24, height: 900 } });
+  const live = crop ? await page.locator(crop).first().screenshot() : await page.screenshot();
   const img = buf => `data:image/png;base64,${buf.toString('base64')}`;
-  await sheet.setContent(`
-    <body style="margin:0;display:flex;gap:24px;background:#c4c3bd">
-      <img src="${img(live)}" width="1440" height="900">
-      <img src="${img(fs.readFileSync(reference))}" width="1440" style="height:900px;object-fit:cover;object-position:top">
-    </body>`);
+  const sheet = await browser.newPage({ viewport: { width: 2 * 1440 + 24, height: 900 } });
+  await sheet.setContent(
+    crop
+      ? `<body style="margin:0;display:flex;gap:24px;align-items:flex-start;background:#c4c3bd">
+          <img src="${img(live)}"><img src="${img(fs.readFileSync(reference))}"></body>`
+      : `<body style="margin:0;display:flex;gap:24px;background:#c4c3bd">
+          <img src="${img(live)}" width="1440" height="900">
+          <img src="${img(fs.readFileSync(reference))}" width="1440" style="height:900px;object-fit:cover;object-position:top">
+        </body>`
+  );
   const out = path.join(paper, folder, 'compare.png');
   await sheet.screenshot({ path: out, fullPage: true });
   await browser.close();
@@ -113,5 +118,14 @@ for (let index = 0; index < rest.length - 1; index += 1) {
     steps.push([rest[index], rest[index + 1]]);
 }
 if (command === 'signin') await signin();
-else if (command && route) await compare(command, route, ask, steps, rest.includes('--anon'));
-else console.log('Usage: compare.mjs signin | compare.mjs <screen-folder> <path>');
+else if (command && route) {
+  const cropAt = rest.indexOf('--crop');
+  await compare(
+    command,
+    route,
+    ask,
+    steps,
+    rest.includes('--anon'),
+    cropAt >= 0 ? rest[cropAt + 1] : ''
+  );
+} else console.log('Usage: compare.mjs signin | compare.mjs <screen-folder> <path>');

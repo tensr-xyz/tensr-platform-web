@@ -29,14 +29,18 @@ export function CodeFrameRail({
   datasetId,
   column,
   title,
+  question = '',
   values,
+  texts = [],
   onFilter,
   onUseAsBanner,
 }: {
   datasetId?: string;
   column: string;
   title: string;
+  question?: string;
   values: string[];
+  texts?: string[];
   onFilter?: (value: string) => void;
   onUseAsBanner?: () => void;
 }) {
@@ -80,7 +84,7 @@ export function CodeFrameRail({
           Open end · coded · {codes.length} theme{codes.length === 1 ? '' : 's'}
         </p>
         <h2>{title}</h2>
-        <p className="flow-muted">On this page</p>
+        {question && question !== title ? <p className="flow-muted">{question}</p> : null}
       </div>
       <div className="code-frame-meta">
         <span>Code frame</span>
@@ -103,6 +107,7 @@ export function CodeFrameRail({
                   className="code-frame-name"
                   onClick={() => setOpenId(open ? '' : code.id)}
                 >
+                  {open ? <span className="code-frame-caret">▾</span> : null}
                   {code.label}
                 </Button>
                 <span>{percent(code.count)}</span>
@@ -112,6 +117,26 @@ export function CodeFrameRail({
                   <div className="code-frame-track">
                     <i style={{ width: percent(code.count) }} />
                   </div>
+                  {values
+                    .map((value, index) => ({ value, text: texts[index] || '' }))
+                    .filter(
+                      item =>
+                        item.text.trim() &&
+                        item.value
+                          .split('|')
+                          .map(part => part.trim())
+                          .includes(code.label)
+                    )
+                    .filter(
+                      (item, index, list) =>
+                        list.findIndex(other => other.text.trim() === item.text.trim()) === index
+                    )
+                    .slice(0, 2)
+                    .map(item => (
+                      <p key={item.text} className="code-frame-quote">
+                        “{item.text.trim()}”
+                      </p>
+                    ))}
                   <div className="code-frame-actions">
                     <Button type="button" onClick={() => onFilter?.(code.label)}>
                       See all {code.count}
