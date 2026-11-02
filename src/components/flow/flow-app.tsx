@@ -132,6 +132,30 @@ type DatasetRow = {
   lineage_label?: string | null;
 };
 
+function SwitchIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+      <path
+        d="M3.5 4.5L6 2l2.5 2.5M3.5 7.5L6 10l2.5-2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function SearchIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 14 14" aria-hidden="true">
+      <circle cx="6" cy="6" r="4" fill="none" stroke="currentColor" strokeWidth="1.3" />
+      <path d="M9 9l3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function LogoMark() {
   return (
     <span className="flow-logo" aria-hidden="true">
@@ -437,11 +461,32 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   <span className="proj-slash">/</span>
                   <div className="proj-name">
                     <i />
-                    <strong>{project?.name || 'Project'}</strong>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button className="proj-switch" type="button" aria-label="Switch project">
+                          <strong>{project?.name || 'Project'}</strong>
+                          <SwitchIcon />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        {projects
+                          .filter(item => (item.status || 'active') !== 'archived')
+                          .map(item => (
+                            <DropdownMenuItem key={item.id} asChild>
+                              <Link href={`/flow/p/${item.id}/${section}`}>{item.name}</Link>
+                            </DropdownMenuItem>
+                          ))}
+                        <DropdownMenuItem asChild>
+                          <Link href="/flow">All projects</Link>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
                 <Button className="proj-search" type="button" onClick={() => setPalette(true)}>
-                  Search analyses <span className="flow-k">⌘K</span>
+                  <SearchIcon />
+                  <span className="proj-search-label">Search analyses</span>
+                  <span className="flow-k">⌘K</span>
                 </Button>
                 <div className="proj-actions">
                   <Button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
@@ -718,9 +763,11 @@ function ProjectsScreen({
         </div>
         <div className="home-head-actions">
           <label className="home-search">
+            <SearchIcon />
             <Input
               value={query}
               placeholder="Search projects"
+              aria-label="Search projects"
               onChange={event => setQuery(event.target.value)}
             />
           </label>
@@ -2894,7 +2941,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
       <aside className="responses-side">
         <div className="sheet-toolbar">
           <Segmented
-            className="home-segment"
+            className="side-tabs"
             aria-label="Response panel"
             value={side}
             onValueChange={setSide}
@@ -3207,7 +3254,6 @@ function ReportScreen({
   if (phase === 'loading') {
     return (
       <section className="report-page" aria-busy="true" aria-label="Report">
-        <ReportPaneSwitch pane={pane} onChange={setPane} />
         <div className="report-loading">
           <Skeleton className="h-6 w-72" />
           <Skeleton className="h-10 w-96" />
@@ -3225,7 +3271,6 @@ function ReportScreen({
   if (phase === 'error') {
     return (
       <section className="report-page">
-        <ReportPaneSwitch pane={pane} onChange={setPane} />
         <p className="flow-error">{error || 'Could not load this report.'}</p>
       </section>
     );
@@ -3233,16 +3278,34 @@ function ReportScreen({
 
   return (
     <section className="report-page">
-      <ReportPaneSwitch pane={pane} onChange={setPane} />
       <div className="report-toolbar">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button className="flow-btn" type="button">
+            <Button className="flow-btn report-view" type="button">
+              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+                <path
+                  d="M2 3h8M2 6h8M2 9h8"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                />
+              </svg>
               Overview
+              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
+                <path
+                  d="M3 4l2 2 2-2"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent>
+          <DropdownMenuContent align="start">
             <DropdownMenuItem>Overview</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => setPane('outputs')}>Outputs</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <div className="report-toolbar-actions">

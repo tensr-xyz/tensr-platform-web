@@ -314,12 +314,29 @@
 
 .proj-brand strong {
   display: block;
-  font-size: 14px;
-  font-weight: var(--weight-title);
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+  color: var(--color-ink);
+}
+
+.proj-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
 }
 
 .proj-search {
   margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   height: 32px;
   border: 1px solid var(--color-line);
   background: var(--color-canvas);
@@ -330,6 +347,16 @@
   cursor: pointer;
   font: inherit;
   font-size: 13px;
+}
+
+.proj-search-label {
+  width: 150px;
+  line-height: 16px;
+}
+
+.proj-search .flow-k {
+  font-size: 11px;
+  line-height: 14px;
 }
 
 .proj-actions {
@@ -572,8 +599,22 @@
   padding: 0 12px;
 }
 
+.home-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.home-search svg {
+  position: absolute;
+  left: 12px;
+  color: var(--color-muted);
+  pointer-events: none;
+}
+
 .home-search input {
   width: 220px;
+  padding-left: 33px;
 }
 
 .home-new {
@@ -706,7 +747,19 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100%;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.report-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-view svg {
+  color: var(--color-muted);
 }
 
 .report-toolbar {
@@ -838,6 +891,10 @@
 
 .report-cards button {
   margin-top: auto;
+  width: 100%;
+  display: inline-flex;
+  justify-content: center;
+  text-align: center;
   border: 0;
   border-radius: 8px;
   background: var(--color-well);
@@ -3578,4 +3635,53 @@ select.flow-input {
 .share-dialog,
 .export-dialog {
   max-width: 640px;
+}
+
+/* Rows and list items built on Button keep their content at the start. */
+.flow-folders button,
+.proj-search,
+.palette-section,
+.palette-hit,
+.flow-pick,
+.chat-starter,
+.chat-new,
+.code-frame-name,
+.value-row,
+.plugin-name,
+.plugin-tile-name,
+.publish-row,
+.sources-connector,
+.sources-add,
+.interviews-item,
+.interviews-add,
+.interviews-passage,
+.outputs-row,
+.flow-nav button {
+  justify-content: flex-start;
+}
+
+.side-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.side-tabs button {
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.side-tabs button[data-active='true'] {
+  background: var(--color-well);
+  color: var(--color-ink);
+  font-weight: var(--weight-medium);
 }
