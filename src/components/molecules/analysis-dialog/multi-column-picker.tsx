@@ -84,8 +84,7 @@ export function MultiColumnPicker({
     minSelected === 1
       ? `Select at least one ${noun}.`
       : `Select at least ${minSelected} ${noun === 'variable' ? 'variables' : 'columns'}.`;
-  const showMinError =
-    revealSelectionError === undefined ? true : revealSelectionError || touched;
+  const showMinError = revealSelectionError === undefined ? true : revealSelectionError || touched;
 
   const emptyMessage = showEmptyIncludesAll
     ? 'Leave empty to include all applicable columns'

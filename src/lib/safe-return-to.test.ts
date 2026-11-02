@@ -2,22 +2,23 @@ import { safeReturnTo } from './safe-return-to';
 
 describe('safeReturnTo', () => {
   it('falls back for missing, relative, or protocol-relative values', () => {
-    expect(safeReturnTo(null)).toBe('/dashboard');
-    expect(safeReturnTo(undefined)).toBe('/dashboard');
-    expect(safeReturnTo('')).toBe('/dashboard');
-    expect(safeReturnTo('https://evil.example')).toBe('/dashboard');
-    expect(safeReturnTo('//evil.example')).toBe('/dashboard');
+    expect(safeReturnTo(null)).toBe('/flow');
+    expect(safeReturnTo(undefined)).toBe('/flow');
+    expect(safeReturnTo('')).toBe('/flow');
+    expect(safeReturnTo('https://evil.example')).toBe('/flow');
+    expect(safeReturnTo('//evil.example')).toBe('/flow');
   });
 
   it('rejects auth and dead signup routes', () => {
-    expect(safeReturnTo('/sign-up')).toBe('/dashboard');
-    expect(safeReturnTo('/register')).toBe('/dashboard');
-    expect(safeReturnTo('/login')).toBe('/dashboard');
-    expect(safeReturnTo('/login?foo=1')).toBe('/dashboard');
+    expect(safeReturnTo('/sign-up')).toBe('/flow');
+    expect(safeReturnTo('/register')).toBe('/flow');
+    expect(safeReturnTo('/login')).toBe('/flow');
+    expect(safeReturnTo('/login?foo=1')).toBe('/flow');
   });
 
   it('allows known app destinations including query strings', () => {
     expect(safeReturnTo('/dashboard')).toBe('/dashboard');
+    expect(safeReturnTo('/flow/p/abc/chat')).toBe('/flow/p/abc/chat');
     expect(safeReturnTo('/workspace/collaborate?session=abc')).toBe(
       '/workspace/collaborate?session=abc'
     );
@@ -27,8 +28,8 @@ describe('safeReturnTo', () => {
   });
 
   it('rejects unknown paths', () => {
-    expect(safeReturnTo('/unknown')).toBe('/dashboard');
-    expect(safeReturnTo('/')).toBe('/dashboard');
+    expect(safeReturnTo('/unknown')).toBe('/flow');
+    expect(safeReturnTo('/')).toBe('/flow');
   });
 
   it('supports a custom fallback', () => {

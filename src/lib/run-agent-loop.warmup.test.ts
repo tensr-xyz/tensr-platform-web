@@ -37,7 +37,11 @@ describe('runAgentLoop cold start', () => {
   it('retries once when the stream ends without a result', async () => {
     progress.mockReset();
     stream
-      .mockRejectedValueOnce(new Error('Agent loop stream ended without a result'))
+      .mockRejectedValueOnce(
+        Object.assign(new Error('The reply did not finish. Ask again.'), {
+          name: 'AgentStreamClosed',
+        })
+      )
       .mockResolvedValueOnce({ status: 'ok', mode: 'agent' });
     const pending = runAgentLoop({ message: 'table', mode: 'agent', onProgress: progress });
     await jest.advanceTimersByTimeAsync(1000);

@@ -22,10 +22,10 @@ import { apiClient } from '@/lib/api-client';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import type { CreatorPluginSummary, CreatorStats } from '@/types/plugin';
 
-function formatUsd(amount: number): string {
-  return amount.toLocaleString('en-US', {
+function formatGbp(amount: number): string {
+  return amount.toLocaleString('en-GB', {
     style: 'currency',
-    currency: 'USD',
+    currency: 'GBP',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
@@ -166,7 +166,7 @@ function PluginRow({ plugin }: { plugin: CreatorPluginSummary }) {
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Sales</div>
         </div>
         <div className="text-right">
-          <div className="font-mono tabular-nums">{formatUsd(plugin.revenue)}</div>
+          <div className="font-mono tabular-nums">{formatGbp(plugin.revenue)}</div>
           <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Revenue</div>
         </div>
       </div>
@@ -272,8 +272,8 @@ export default function CreatorDashboard() {
       <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-4">
         <StatCard label="Plugins" value={String(stats.totalPlugins)} icon={TrendingUp} />
         <StatCard label="Sales" value={String(stats.totalDownloads)} icon={Download} />
-        <StatCard label="Total revenue" value={formatUsd(stats.totalRevenue)} icon={DollarSign} />
-        <StatCard label="Last 30 days" value={formatUsd(stats.monthlyRevenue)} icon={Users} />
+        <StatCard label="Total revenue" value={formatGbp(stats.totalRevenue)} icon={DollarSign} />
+        <StatCard label="Last 30 days" value={formatGbp(stats.monthlyRevenue)} icon={Users} />
       </div>
 
       <Card>

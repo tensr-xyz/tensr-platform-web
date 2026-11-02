@@ -52,6 +52,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Project, ProjectStatus } from '@/types/project';
 import { cn } from '@/utils';
 import { Input } from '@/components/atoms/input';
+import { MoveToProjectDialog } from '@/components/flow/move-dataset';
 
 type DisplayStatus = 'Active' | 'Completed' | 'Archived';
 
@@ -71,6 +72,7 @@ interface ProjectsTableProps {
   onExport?: (id: string) => void;
   onShare?: (id: string) => void;
   onRename?: (id: string) => void;
+  onMoved?: () => void;
   deletingId?: string | null;
   searchQuery?: string;
   onSearchChange?: (value: string) => void;
@@ -115,6 +117,7 @@ export const ProjectsTable = ({
   onExport,
   onShare,
   onRename,
+  onMoved,
   deletingId,
   searchQuery,
   onSearchChange,
@@ -129,6 +132,7 @@ export const ProjectsTable = ({
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [moveTarget, setMoveTarget] = useState<{ id: string; name: string } | null>(null);
 
   const filteredData = useMemo(
     () => data.filter(p => statusFilterFn(p, statusFilter)),
@@ -324,6 +328,14 @@ export const ProjectsTable = ({
                 }}
               >
                 Share dataset
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={e => {
+                  e.stopPropagation();
+                  setMoveTarget({ id: project.projectId, name: project.projectName });
+                }}
+              >
+                Move to project
               </DropdownMenuItem>
               {onRename ? (
                 <DropdownMenuItem
@@ -522,6 +534,15 @@ export const ProjectsTable = ({
           </Button>
         </div>
       </div>
+      <MoveToProjectDialog
+        datasetId={moveTarget?.id || ''}
+        datasetName={moveTarget?.name}
+        open={Boolean(moveTarget)}
+        onOpenChange={open => {
+          if (!open) setMoveTarget(null);
+        }}
+        onMoved={onMoved}
+      />
     </div>
   );
 };

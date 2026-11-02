@@ -27,6 +27,13 @@ describe('proxy (edge session gate)', () => {
     process.env = { ...originalEnv };
   });
 
+  it('sends a signed-out flow visit to login and keeps the return path', () => {
+    expect(validateStytchSession(request('/flow/p/abc/chat'))).toEqual({
+      kind: 'redirect',
+      url: 'https://app.tensr.test/login?returnTo=%2Fflow%2Fp%2Fabc%2Fchat',
+    });
+  });
+
   it('redirects to /login with returnTo (including query) when there is no session cookie', () => {
     expect(validateStytchSession(request('/workspace/abc?tab=data'))).toEqual({
       kind: 'redirect',
@@ -60,7 +67,13 @@ describe('proxy (edge session gate)', () => {
 
   it('protects every app area but not /login', () => {
     expect(config.matcher).toEqual(
-      expect.arrayContaining(['/dashboard/:path*', '/workspace/:path*', '/subscription'])
+      expect.arrayContaining([
+        '/dashboard/:path*',
+        '/flow',
+        '/flow/:path*',
+        '/workspace/:path*',
+        '/subscription',
+      ])
     );
     expect(config.matcher.some(m => m.startsWith('/login'))).toBe(false);
   });

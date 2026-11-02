@@ -128,7 +128,7 @@ describe('LoginTemplate', () => {
     expect(screen.getByRole('button', { name: /continue with microsoft/i })).toBeEnabled();
     expect(screen.getByRole('button', { name: /continue with github/i })).toBeEnabled();
     expect(screen.getByLabelText(/email/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^continue$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /email me a code/i })).toBeInTheDocument();
   });
 
   describe('OAuth start', () => {
@@ -243,7 +243,7 @@ describe('LoginTemplate', () => {
   describe('email OTP', () => {
     it('requires an email before sending a code', async () => {
       render(<LoginTemplate />);
-      fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /email me a code/i }));
       expect(await screen.findByText('Please enter an email address')).toBeInTheDocument();
       expect(mockInitiateAuth).not.toHaveBeenCalled();
     });
@@ -255,9 +255,9 @@ describe('LoginTemplate', () => {
       fireEvent.change(screen.getByLabelText(/email/i), {
         target: { value: '  Ada@Example.COM ' },
       });
-      fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /email me a code/i }));
 
-      expect(await screen.findByLabelText(/verification code/i)).toBeInTheDocument();
+      expect(await screen.findByLabelText(/6-digit code/i)).toBeInTheDocument();
       expect(mockInitiateAuth).toHaveBeenCalledWith('ada@example.com');
     });
 
@@ -266,30 +266,30 @@ describe('LoginTemplate', () => {
       render(<LoginTemplate />);
 
       fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'nope' } });
-      fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
+      fireEvent.click(screen.getByRole('button', { name: /email me a code/i }));
 
       expect(await screen.findByText('Please enter a valid email address.')).toBeInTheDocument();
-      expect(screen.queryByLabelText(/verification code/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/6-digit code/i)).not.toBeInTheDocument();
     });
 
     async function goToCodeStep() {
       mockInitiateAuth.mockResolvedValue({ methodId: 'email-123' });
       render(<LoginTemplate />);
       fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'ada@example.com' } });
-      fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
-      await screen.findByLabelText(/verification code/i);
+      fireEvent.click(screen.getByRole('button', { name: /email me a code/i }));
+      await screen.findByLabelText(/6-digit code/i);
       expect(screen.getByText(/codes can take a minute/i)).toBeInTheDocument();
-      expect(screen.getByText(/code sent to/i)).toBeInTheDocument();
+      expect(screen.getByText(/we sent a 6-digit code to/i)).toBeInTheDocument();
     }
 
     it('verifies the code with the methodId from the send step', async () => {
       mockVerifyAuth.mockResolvedValue({ success: true });
       await goToCodeStep();
 
-      fireEvent.change(screen.getByLabelText(/verification code/i), {
+      fireEvent.change(screen.getByLabelText(/6-digit code/i), {
         target: { value: '123456' },
       });
-      fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^verify/i }));
 
       await waitFor(() => {
         expect(mockVerifyAuth).toHaveBeenCalledWith('ada@example.com', '123456', 'email-123');
@@ -304,13 +304,13 @@ describe('LoginTemplate', () => {
       });
       await goToCodeStep();
 
-      fireEvent.change(screen.getByLabelText(/verification code/i), {
+      fireEvent.change(screen.getByLabelText(/6-digit code/i), {
         target: { value: '000000' },
       });
-      fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+      fireEvent.click(screen.getByRole('button', { name: /^verify/i }));
 
       expect(await screen.findByText(/that code is incorrect or has expired/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /sign in/i })).toBeEnabled();
+      expect(screen.getByRole('button', { name: /^verify/i })).toBeEnabled();
     });
 
     it('resends a code and uses the new methodId', async () => {
@@ -320,17 +320,17 @@ describe('LoginTemplate', () => {
         mockVerifyAuth.mockResolvedValue({ success: true });
         await goToCodeStep();
 
-        expect(screen.getByRole('button', { name: /resend code in 30s/i })).toBeDisabled();
+        expect(screen.getByRole('button', { name: /resend code in 0:30/i })).toBeDisabled();
         await act(async () => {
           jest.advanceTimersByTime(30_000);
         });
         fireEvent.click(screen.getByRole('button', { name: /^resend code$/i }));
         await waitFor(() => expect(mockResend).toHaveBeenCalledWith('ada@example.com'));
 
-        fireEvent.change(screen.getByLabelText(/verification code/i), {
+        fireEvent.change(screen.getByLabelText(/6-digit code/i), {
           target: { value: '123456' },
         });
-        fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+        fireEvent.click(screen.getByRole('button', { name: /^verify/i }));
 
         await waitFor(() => {
           expect(mockVerifyAuth).toHaveBeenCalledWith('ada@example.com', '123456', 'email-456');
@@ -342,9 +342,9 @@ describe('LoginTemplate', () => {
 
     it('"Go back" returns to the email step', async () => {
       await goToCodeStep();
-      fireEvent.click(screen.getByRole('button', { name: /go back/i }));
+      fireEvent.click(screen.getByRole('button', { name: /use a different email/i }));
       expect(screen.getByRole('button', { name: /continue with google/i })).toBeInTheDocument();
-      expect(screen.queryByLabelText(/verification code/i)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/6-digit code/i)).not.toBeInTheDocument();
     });
   });
 
@@ -384,7 +384,7 @@ describe('LoginTemplate', () => {
         entitlements: { plan_code: 'pro' },
       };
       render(<LoginTemplate />);
-      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/flow'));
     });
 
     it('waits for /me entitlements before redirecting (null is unresolved, not unpaid)', async () => {
@@ -420,7 +420,7 @@ describe('LoginTemplate', () => {
       await waitFor(() => expect(mockRedeemStoredReferral).toHaveBeenCalled());
       expect(mockPush).not.toHaveBeenCalled();
       finishRedeem(null);
-      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/flow'));
     });
   });
 });

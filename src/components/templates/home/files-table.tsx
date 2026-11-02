@@ -39,6 +39,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/molecules/table';
+import { MoveToProjectDialog } from '@/components/flow/move-dataset';
 
 interface FileItem {
   fileId: string;
@@ -70,6 +71,7 @@ export const FilesTable = ({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [rowSelection, setRowSelection] = useState({});
+  const [moveTarget, setMoveTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Function to format date
   const formatDate = (dateString: string | undefined): string => {
@@ -253,7 +255,14 @@ export const FilesTable = ({
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={e => e.stopPropagation()}>Download file</DropdownMenuItem>
               <DropdownMenuItem onClick={e => e.stopPropagation()}>Share file</DropdownMenuItem>
-              <DropdownMenuItem onClick={e => e.stopPropagation()}>Add to project</DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={e => {
+                  e.stopPropagation();
+                  setMoveTarget({ id: file.fileId, name: file.fileName });
+                }}
+              >
+                Move to project
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={e => e.stopPropagation()} className="text-red-600">
                 Delete file
@@ -440,6 +449,15 @@ export const FilesTable = ({
           </Button>
         </div>
       </div>
+      <MoveToProjectDialog
+        datasetId={moveTarget?.id || ''}
+        datasetName={moveTarget?.name}
+        open={Boolean(moveTarget)}
+        onOpenChange={open => {
+          if (!open) setMoveTarget(null);
+        }}
+        onMoved={onRefresh}
+      />
     </div>
   );
 };

@@ -1,0 +1,55 @@
+import { baseCount, dayLabel, outputRuns, statusCounts, summaryText } from './report-output-runs';
+
+describe('report outputs', () => {
+  it('keeps saved runs and counts the statuses the list actually returned', () => {
+    const runs = outputRuns([
+      {
+        id: 'a',
+        op: 'anova_oneway',
+        title: 'score by region',
+        created_at: '2026-11-02T14:02:00Z',
+        status: 'complete',
+      },
+      { id: '', op: 'crosstab', title: 'dropped' },
+      { id: 'b', op: 'crosstab', title: '', created_at: '2026-11-01T10:00:00Z' },
+    ]);
+    expect(runs.map(run => run.title)).toEqual(['score by region', 'crosstab']);
+    expect(statusCounts(runs)).toEqual([{ status: 'complete', count: 2 }]);
+    expect(dayLabel('2026-11-02T14:02:00Z', new Date('2026-11-02T18:00:00Z'))).toBe('Today');
+    expect(dayLabel('2026-11-01T10:00:00Z', new Date('2026-11-02T18:00:00Z'))).toBe('Yesterday');
+  });
+
+  it('reads the base and summary from the saved run', () => {
+    const run = {
+      report: { summary: 'Score differs by region.', meta: { rows_dataset: 403 } },
+    };
+    expect(summaryText(run)).toBe('Score differs by region.');
+    expect(baseCount(run)).toBe(403);
+    expect(baseCount({ report: { meta: { rows_dataset: 30 } }, result: { n_used: 22 } })).toBe(22);
+    expect(baseCount({ result: { n_used: 3 } })).toBe(3);
+    expect(baseCount({})).toBeNull();
+  });
+});
+
+describe('output titles and states', () => {
+  it('moves weighting and base out of the title', () => {
+    const { splitRunTitle } = jest.requireActual('./report-output-runs');
+    expect(splitRunTitle('aware_A × region_market — Unweighted, n = 30')).toEqual({
+      title: 'aware_A × region_market',
+      weighting: 'Unweighted',
+      base: 30,
+    });
+    expect(splitRunTitle('likes_A by region')).toEqual({
+      title: 'likes_A by region',
+      weighting: '',
+      base: null,
+    });
+  });
+
+  it('reads In report, Saved, or Draft from real state', () => {
+    const { runState } = jest.requireActual('./report-output-runs');
+    expect(runState('complete', true)).toBe('In report');
+    expect(runState('complete', false)).toBe('Saved');
+    expect(runState('failed', false)).toBe('Draft');
+  });
+});

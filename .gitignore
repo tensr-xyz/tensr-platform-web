@@ -50,3 +50,5 @@ next-env.d.ts
 .claude/
 
 .eslintcache
+
+design/paper/tools/.auth.json
