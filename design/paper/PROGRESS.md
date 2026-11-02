@@ -27,7 +27,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 ## Decisions
 
 - New project creates an untitled project and opens it. The artboard has a button and a dashed card, and no name field.
-- Fielding, live Qualtrics, Decipher, Alchemer, plugin ratings, and clips render as "coming soon". No sample completes.
+- Fielding, live Qualtrics, Decipher, Alchemer, plugin ratings, and clips render as "coming soon". No sample completes. The fielding chip is on Sources only: not on project cards, the project bar, Details, or the Report meta line.
 - A project with files is "Active". A project with none is "Draft".
 - Member marks use letters from the id. The first two characters of a uuid rendered as a number.
 - Blank-equivalent answers are not themes. Shipped in API `aa126337`.
@@ -119,6 +119,16 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 - The "No substantive comment" theme shows a count of 37 beside a total of 1.7%. Fixed: theme cell n intersects the answered base, so the quote count matches the percent.
 - agree_value by region saved Top 2 and Bottom 2 rows at 0% while those toggles were off. Fixed: Flow always sends `nets` (empty when toggles are off); an explicit empty list skips auto Top/Bottom 2.
 - High priority. Notebook `df.head()` on the stacked file timed out after 18s. Fixed in API `2891d5e` (#294): skip the unused CSV write, cell budget 22s, executor Lambda 28s. Web shows "Loading data…" on the first run. Deploy-dev in progress.
+
+- Owner QA, chat on cars_EN + DE + FR ("compare liking of brand A across the three markets, weighted, each market against the one before, one-line takeaway and the Excel"):
+  - Markdown tables showed as raw pipes in the thread and the panel. Fixed: `FlowMarkdown` (remark-gfm, the shared Table) renders chat answers, plans, and the Responses agent panel.
+  - The panel title was the base sentence. Fixed: the API puts a `title` on banner results (variable labels, "… by source file"), and the panel uses it. The takeaway skips base sentences, and the base is one small note.
+  - "No column is under that base." was written twice, the second with "..". Fixed in the API: a doubled period is one period, and a repeated sentence is dropped whatever its end punctuation.
+  - Banner headers read `cars_ENA`. Fixed in the API: the letter sits apart, `cars_EN (A)`, and a cell reads `80.0% B`.
+  - No takeaway, and "the table has no significance markers". Fixed in the API: a `previous_wave` table opens with one trend line from the result, either "No group differs significantly from the one before it; Top 2 is cars_EN 51%, …" or "FR differs significantly from DE; …". `tests/test_trend_previous_wave_markers.py` checks that the weighted trend test gives a letter when a step differs and none when it does not.
+  - Narration and repeated sheet lists. Fixed in the API: one line per download (`Excel workbook: banner.xlsx`, `SPSS syntax: tracker.sps`). The prompt stops describing sheets, narrating steps, or asking the user to check labels against a column.
+  - Chats in the rails showed a session id. Fixed: the API stores a title from the first question (older sessions read it from their state), and both rails show it.
+  - The Responses pager sat over the bottom of the table. Fixed: the sheet scrolls inside a bounded frame above the footer bar.
 
 ## Unfinished
 
