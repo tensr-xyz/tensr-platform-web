@@ -2372,14 +2372,16 @@ function ChatScreen({
           <aside className="flow-output">
             {answer && !plan ? (
               <>
-                <div className="output-body">
+                <div className="output-lead">
                   <div className="output-kicker">
                     <span className="output-badge">{kind}</span>
                     <span className="flow-muted">Agent chat</span>
                   </div>
                   <h2>{title}</h2>
-                  {takeaway ? <div className="output-takeaway">{takeaway}</div> : null}
                   {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
+                </div>
+                <div className="output-body">
+                  {takeaway ? <div className="output-takeaway">{takeaway}</div> : null}
                   {stat ? (
                     <div>
                       <div className="flow-muted">Key stat</div>
