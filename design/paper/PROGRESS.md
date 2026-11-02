@@ -18,10 +18,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 20
-- wired: 20
+- matched: 21
+- wired: 21
 - built: 0
-- todo: 21
+- todo: 20
 - checks done: 6 passed, 1 owner QA
 
 ## Decisions
@@ -66,7 +66,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **3c Interviews** (`17DV-0`, `3c-interviews`) — **wired**. The rail is the project's transcripts. Search filters the filename. Add transcripts uploads a .txt, .vtt, or .docx. Audio is coming soon. Opening one shows the stored passages, speaker, and text. Recode saves a code on the selected passage. Codes shown hides those chips. A speaker filter appears when the transcript has more than one speaker. Evidence shows that passage and says interviews are a count, not a survey percent. Cite in report opens Report. There is no stored duration, survey link, or agent summary, so those sample figures stay out. Checked with interview-check.txt: one passage, then the code Bill. `screen.tsx` records the layout; the sample speakers, 24%, and the agent summary stay in Paper. Components: shadcn.
 - [x] **4b Notebook** (`5ER-0`, `4b-notebook`) — **wired**. Sheet, Notebook, and Themes stay the Responses switch. The notebook is code and text cells on the open file. Run and Run all post each code cell to the existing Python executor. Cells do not share variables, and a sheet filter is not applied. + Code and + Text add a cell. Export .py and Export .ipynb download the cells that were typed. The variable rail and saved analyses stay beside it. There is no stored Python version and no ordinal result, so those sample figures stay out. `df.head()` on the stacked file returned "Code execution timed out after 18s". `screen.tsx` records the layout; the sample crosstab, ordinal coefficients, and T15 stay in Paper. Components: shadcn.
 - [x] **4e Weighting modal** (`97E-0`, `4e-weighting`) — **wired**. Weight opens the rake dialog for the open file. The lead is that file's name and row count. Add target lists the column's codes and their unweighted shares. A target is a percent of that column's rows and is sent as a count. Load targets copies shares from another file in the project. An optional cap is sent as the rake upper bound, and a code whose mean weight meets that cap is marked. Save as new file runs the existing rake and then shows efficiency, effective base, weight range, and how many runs it took, from that response. Cancel closes without saving. Checked on sources-check.csv, 403 rows: region came back South 28.3%, West 26.3%, North 23.1%, East 21.6%, plus the three lowercase codes at 0.2%. No rake was saved. `screen.tsx` records the layout; the sample London shares, 71% efficiency, and 1,604 effective base stay in Paper. Components: shadcn.
-- [ ] **4f Run ANOVA modal** (`CJO-0`, `4f-anova`) — **todo**. PNG only. Components: shadcn.
+- [x] **4f Run ANOVA modal** (`CJO-0`, `4f-anova`) — **wired**. ANOVA opens the one-way dialog. The dependent list is the numeric columns. The factor is the other columns. Tukey, Games-Howell, and Bonferroni are sent as the post hoc, and clicking the selected one clears it. Welch's F, effect size, and a means plot are the request flags. Run posts to the existing one-way route. The groups, F table, summary, and rejected pairs come from that response. Levene's p and a weight column are shown only when the response includes them. A sheet filter is not sent. Code shows the syntax from the response. Ask agent to explain opens Chat. Add to report opens Report. On sources-check.csv the only numeric column was score. score by region returned "Need at least two groups with at least 2 observations each (excluded: east (n=1), north (n=1), south (n=1))". `screen.tsx` records the layout; the sample brands, Welch's F, and the Games-Howell pairs stay in Paper. Components: shadcn.
 - [ ] **5b Tables chart** (`1E0U-0`, `5b-tables-chart`) — **todo**. PNG only. Components: shadcn.
 - [ ] **6b Report outputs** (`17SM-0`, `6b-report-outputs`) — **todo**. PNG only. Components: shadcn.
 - [ ] **6c Output one-way ANOVA** (`1AYL-0`, `6c-anova-output`) — **todo**. PNG only. Components: shadcn.

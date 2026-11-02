@@ -22,6 +22,7 @@ import { DetailsScreen } from '@/components/flow/details-screen';
 import { SourcesScreen } from '@/components/flow/sources-screen';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
+import { AnovaModal } from '@/components/flow/anova-modal';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -2955,7 +2956,12 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
         )}
       </aside>
       {anovaOpen ? (
-        <AnovaModal columns={columns} datasetId={datasetId} onClose={() => setAnovaOpen(false)} />
+        <AnovaModal
+          columns={columns}
+          datasetId={datasetId}
+          projectId={project?.id}
+          onClose={() => setAnovaOpen(false)}
+        />
       ) : null}
       {weightOpen ? (
         <WeightPanel
@@ -2971,66 +2977,6 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
           }}
         />
       ) : null}
-    </div>
-  );
-}
-
-function AnovaModal({
-  columns,
-  datasetId,
-  onClose,
-}: {
-  columns: FlowColumn[];
-  datasetId?: string;
-  onClose: () => void;
-}) {
-  const options = useMemo(() => dependentColumns(columns), [columns]);
-  const groups = columns.map(column => column.name).filter(name => name && !options.includes(name));
-  const [dependent, setDependent] = useState(options[0] || '');
-  const [group, setGroup] = useState(groups[0] || '');
-  const [message, setMessage] = useState<string | null>(null);
-  return (
-    <div className="flow-palette" onClick={onClose}>
-      <div onClick={event => event.stopPropagation()}>
-        <h2>ANOVA</h2>
-        <label>
-          Dependent
-          <ChoiceSelect
-            className="flow-input"
-            value={dependent}
-            onValueChange={setDependent}
-            options={[...options.map(name => ({ value: name, label: name }))]}
-          />
-        </label>
-        <label>
-          Group
-          <ChoiceSelect
-            className="flow-input"
-            value={group}
-            onValueChange={setGroup}
-            options={[...groups.map(name => ({ value: name, label: name }))]}
-          />
-        </label>
-        <Button
-          className="flow-btn primary"
-          type="button"
-          onClick={() => {
-            if (!datasetId || !dependent || !group) {
-              setMessage('Choose a dependent column and a group.');
-              return;
-            }
-            void flowFetch(`/datasets/${datasetId}/analyze/anova_oneway`, {
-              method: 'POST',
-              body: JSON.stringify({ value_column: dependent, group_column: group }),
-            }).then(async response =>
-              setMessage(response.ok ? 'ANOVA ran.' : await response.text())
-            );
-          }}
-        >
-          Run
-        </Button>
-        {message ? <p>{message}</p> : null}
-      </div>
     </div>
   );
 }
