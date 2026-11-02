@@ -702,7 +702,7 @@
 
 .flow-split {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 520px;
+  grid-template-columns: 220px minmax(0, 1fr) 440px;
   gap: 0;
   min-height: 0;
   flex: 1;
@@ -733,6 +733,8 @@
 
 .flow-output {
   border-left: 1px solid var(--color-line);
+  padding: 0;
+  overflow: hidden;
 }
 
 .flow-thread,
@@ -915,17 +917,123 @@ select.flow-input {
   font-size: 13px;
 }
 
+.chat-column {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+}
+
 .chat-scroll {
   flex: 1;
   overflow: auto;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  align-items: flex-end;
+  align-items: stretch;
+  padding-top: 8px;
+}
+
+.chat-steps,
+.chat-prose,
+.chat-plan,
+.chat-result {
+  align-self: stretch;
+}
+
+.chat-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.chat-prose {
+  font-size: 15px;
+  line-height: 24px;
+}
+
+.chat-result {
+  border: 1px solid var(--color-accent);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chat-result-top,
+.chat-result-actions,
+.output-kicker,
+.output-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-viewing {
+  margin-left: auto;
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.output-body {
+  flex: 1;
+  overflow: auto;
+  padding: 16px 20px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.output-body h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+}
+
+.output-takeaway {
+  background: var(--color-accent-soft);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.output-badge {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  width: fit-content;
+}
+
+.output-foot {
+  padding: 12px 20px;
+  border-top: 1px solid var(--color-line);
+  background: #fcfcfa;
+}
+
+.output-open {
+  margin-left: auto;
+}
+
+.output-empty {
+  padding: 16px 20px;
 }
 
 .chat-bubble {
-  max-width: 380px;
+  align-self: flex-end;
+  max-width: 440px;
   background: var(--color-well);
   border-radius: 14px;
   padding: 10px 14px;

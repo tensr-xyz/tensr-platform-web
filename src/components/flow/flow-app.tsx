@@ -830,6 +830,58 @@ function Palette({
   );
 }
 
+function replyLines(result: AgentLoopResponse): string[] {
+  const summary = result.execution_summary?.trim();
+  if (summary) {
+    return summary
+      .split('\n')
+      .map(line => line.replace(/^[\s\-*•]+/, '').trim())
+      .filter(Boolean);
+  }
+  return (result.tool_trace || [])
+    .map(item => {
+      const message = item.message || item.summary;
+      if (typeof message === 'string' && message.trim()) return message.trim();
+      const name = item.name || item.tool;
+      return typeof name === 'string' ? name.replaceAll('_', ' ') : '';
+    })
+    .filter(Boolean);
+}
+
+function replyTitle(answer: string): string {
+  const lines = answer
+    .split('\n')
+    .map(row => row.replace(/^#+\s*/, '').replace(/[*_`]/g, '').trim())
+    .filter(Boolean);
+  if (lines.length < 2) return 'Result';
+  return lines[0].slice(0, 90);
+}
+
+function replyLead(answer: string): string {
+  const block = answer.split(/\n\s*\n/)[0] || answer;
+  return block.replace(/[#*`]/g, '').trim();
+}
+
+function replyStat(answer: string): string | null {
+  const line = answer
+    .split('\n')
+    .find(row => /p\s*[<=>]|F\s*\(|χ|chi-square|η²|eta/.test(row));
+  return line ? line.replace(/[#*`]/g, '').trim() : null;
+}
+
+function replyKind(result: AgentLoopResponse | null): string {
+  for (const item of result?.tool_results || []) {
+    const args = item.args || {};
+    const nested = item.result || {};
+    const type = args.analysis_type || nested.analysis_type || item.name;
+    if (typeof type === 'string' && type.trim()) {
+      const label = type.replaceAll('_', ' ');
+      if (!['run analysis', 'finish', 'count'].includes(label)) return label;
+    }
+  }
+  return 'Output';
+}
+
 function ChatScreen({
   project,
   datasets,
@@ -850,6 +902,8 @@ function ChatScreen({
   const [status, setStatus] = useState<string | null>(null);
   const [downloads, setDownloads] = useState<ExportDownload[]>([]);
   const [plan, setPlan] = useState<AgentLoopResponse | null>(null);
+  const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
+  const [steps, setSteps] = useState<string[]>([]);
   const askedRef = useRef<string | null>(null);
   const [sessions, setSessions] = useState<{ session_id: string }[]>([]);
   const [recipes, setRecipes] = useState<{ name?: string; recipe_id?: string }[]>([]);
@@ -873,6 +927,9 @@ function ChatScreen({
       setQuestion('');
       setMode(nextMode);
       setPlan(null);
+      setTurn(null);
+      setSteps([]);
+      setDownloads([]);
       setStatus('Warming up');
       setAnswer('');
       let draft = '';
@@ -883,6 +940,11 @@ function ChatScreen({
           datasetId: datasetId || null,
           agentVersion: 'v2',
           signal: AbortSignal.timeout(120_000),
+          onProgress: progress => {
+            const line = progress.message || progress.step;
+            if (!line) return;
+            setSteps(current => (current.includes(line) ? current : [...current, line]));
+          },
           onDelta: chunk => {
             draft += chunk;
             setAnswer(draft);
@@ -896,6 +958,9 @@ function ChatScreen({
         });
         setAnswer(result.answer_markdown || '');
         setPlan(result.status === 'awaiting_approval' ? result : null);
+        setTurn(result.status === 'awaiting_approval' ? null : result);
+        const traced = replyLines(result);
+        if (traced.length) setSteps(traced);
         const entries = (result.tool_results || []).flatMap(item => {
           const nested =
             item.result && typeof item.result === 'object'
@@ -950,6 +1015,9 @@ function ChatScreen({
       .then(result => {
         setAnswer(result.answer_markdown || '');
         setPlan(result.status === 'awaiting_approval' ? result : null);
+        setTurn(result.status === 'awaiting_approval' ? null : result);
+        const traced = replyLines(result);
+        if (traced.length) setSteps(traced);
         const entries = (result.tool_results || []).flatMap(item => {
           const nested =
             item.result && typeof item.result === 'object'
@@ -970,9 +1038,16 @@ function ChatScreen({
     setAnswer('');
     setQuestion('');
     setPlan(null);
+    setTurn(null);
+    setSteps([]);
     setDownloads([]);
     setStatus(null);
   };
+
+  const title = replyTitle(answer);
+  const kind = replyKind(turn);
+  const stat = replyStat(answer);
+  const projectHref = project ? `/flow/p/${project.id}` : '/flow';
 
   return (
     <div className="flow-split">
@@ -996,8 +1071,22 @@ function ChatScreen({
         ))}
       </aside>
       <section className="flow-thread">
+        <div className="chat-column">
         <div className="chat-scroll">
           {sent ? <div className="chat-bubble">{sent}</div> : null}
+          {steps.length > 0 ? (
+            <div className="chat-steps">
+              <div>
+                Ran {steps.length} {steps.length === 1 ? 'step' : 'steps'}
+              </div>
+              {steps.map(step => (
+                <div key={step}>{step}</div>
+              ))}
+            </div>
+          ) : null}
+          {answer && !plan ? (
+            <article className="chat-prose" dangerouslySetInnerHTML={{ __html: plain(answer) }} />
+          ) : null}
           {plan ? (
             <div className="chat-plan">
               <strong>Waiting for approval · Plan</strong>
@@ -1009,6 +1098,36 @@ function ChatScreen({
                 <button className="flow-btn" type="button" onClick={() => setPlan(null)}>
                   Edit plan
                 </button>
+              </div>
+            </div>
+          ) : null}
+          {answer && !plan ? (
+            <div className="chat-result">
+              <div className="chat-result-top">
+                <div>
+                  <strong>{title}</strong>
+                  <div className="flow-muted">
+                    {kind} · Output
+                  </div>
+                </div>
+                <span className="chat-viewing">Viewing</span>
+              </div>
+              <div className="chat-result-actions">
+                <Link className="flow-btn primary" href={`${projectHref}/tables`}>
+                  Open
+                </Link>
+                <Link className="flow-btn" href={`${projectHref}/report`}>
+                  Add to report
+                </Link>
+                {downloads[0] ? (
+                  <button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => void openSignedDownload(downloads[0])}
+                  >
+                    Download {downloads[0].filename}
+                  </button>
+                ) : null}
               </div>
             </div>
           ) : null}
@@ -1050,26 +1169,67 @@ function ChatScreen({
             ↑
           </button>
         </div>
+        </div>
       </section>
       <aside className="flow-output">
-        <div className="output-head">
-          <strong>{sent || 'Output'}</strong>
-        </div>
-        {answer ? (
-          <article dangerouslySetInnerHTML={{ __html: plain(answer) }} />
+        {answer && !plan ? (
+          <>
+            <div className="output-body">
+              <div className="output-kicker">
+                <span className="output-badge">{kind}</span>
+                <span className="flow-muted">Agent chat</span>
+              </div>
+              <h2>{title}</h2>
+              <div className="output-takeaway">{replyLead(answer)}</div>
+              {stat ? (
+                <div>
+                  <div className="flow-muted">Key stat</div>
+                  <div>{stat}</div>
+                </div>
+              ) : null}
+              <div>
+                <div className="flow-muted">Used in</div>
+                <span className="output-badge">This chat · not in the report yet</span>
+              </div>
+              {downloads.length > 0 ? (
+                <div>
+                  <div className="flow-muted">Export</div>
+                  <div className="flow-row">
+                    {downloads.map(file => (
+                      <button
+                        key={file.key}
+                        className="flow-btn"
+                        type="button"
+                        onClick={() => void openSignedDownload(file)}
+                      >
+                        {file.filename}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            <div className="output-foot">
+              <button
+                className="flow-btn"
+                type="button"
+                onClick={() =>
+                  setStatus('This run has no replayable steps to save as a recipe.')
+                }
+              >
+                Save
+              </button>
+              <Link className="flow-btn" href={`${projectHref}/report`}>
+                Add to report
+              </Link>
+              <Link className="flow-btn primary output-open" href={`${projectHref}/tables`}>
+                Open
+              </Link>
+            </div>
+          </>
         ) : (
-          <p className="flow-muted">An output from this chat lands here.</p>
+          <p className="flow-muted output-empty">An output from this chat lands here.</p>
         )}
-        {downloads.map(file => (
-          <button
-            key={file.key}
-            className="flow-btn"
-            type="button"
-            onClick={() => void openSignedDownload(file)}
-          >
-            {file.filename}
-          </button>
-        ))}
       </aside>
     </div>
   );

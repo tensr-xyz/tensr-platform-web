@@ -8,10 +8,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 2
-- wired: 2
+- matched: 3
+- wired: 3
 - built: 1
-- todo: 38
+- todo: 37
 - checks done: 0 / 5
 
 ## Decisions
@@ -25,12 +25,13 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - Workspace label is the real organization name. The sidebar shows the part of that name after the email. The footer name is the part of the email before @. Initials come from that name.
 - The folder plus creates a folder named "New folder". The artboard has no name field.
 - Fielding cards use a coming-soon chip instead of a progress bar with sample completes.
+- A finished chat shows the reply in the thread and a result panel. The sample chart, brand figures, and follow-up chips stay out until the reply contains them.
 
 ## Demo path
 
 - [x] **1a Projects cards** (`68F-0`, `1a-projects-cards`) — **wired**. Sidebar icons, three-up cards, search, Cards/Table, and New project match the artboard apart from live names and the coming-soon chip. Search filters. Table view lists the same projects. `screen.tsx` keeps the layout classes; the icon paths stay in Paper.
 - [x] **2 Chat** (`22B-0`, `2-chat`) — **wired**. Gray project frame, white card, chat rail, composer with Ask/Plan/Agent, and the output panel. A sent question shows as a bubble and the reply is meant for the panel. Fielding is a coming-soon chip. `screen.tsx` records the layout.
-- [ ] **2c Chat agent made an output** (`1EO8-0`, `2c-chat-output`) — **todo**. PNG only.
+- [x] **2c Chat agent made an output** (`1EO8-0`, `2c-chat-output`) — **wired**. A finished reply shows the steps, the prose, and a result card in the thread. The right panel shows the lead, a key stat when the reply has one, and real downloads. Open goes to Tables. Add to report goes to Report. Save says when the run has no replayable steps. No sample chart.
 - [ ] **4a Responses sheet** (`8EO-0`, `4a-responses`) — **todo**. PNG only. Needs the left rail, column mini-charts, stats row, and the Agent/Variable/Evidence panel.
 - [ ] **4c Evidence** (`765-0`, `4c-evidence`) — **todo**. PNG only.
 - [ ] **4d code frame** (`958-0`, `4d-code-frame`) — **todo**. PNG only.
