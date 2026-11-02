@@ -7,7 +7,6 @@ import { mapApiInvitation } from '@/lib/organization-invitations';
 import type { FlowColumn } from '@/lib/flow-columns';
 import { datasetRowId } from '@/components/flow/survey-screens';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -393,10 +392,6 @@ export function DetailsScreen({
               {error ? <p className="flow-error">{error}</p> : null}
             </div>
           ) : null}
-          <div>
-            <div className="flow-muted details-label">Fieldwork</div>
-            <Badge tone="soon">Fielding coming soon</Badge>
-          </div>
           <div>
             <div className="details-q-head">
               <div className="flow-muted details-label">

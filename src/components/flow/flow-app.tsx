@@ -18,6 +18,8 @@ import {
   type AgentLoopResponse,
 } from '@/lib/run-agent-loop';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
+import { outputBaseNote, outputTakeaway, outputTitle } from '@/components/flow/chat-output';
+import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { SourcesScreen } from '@/components/flow/sources-screen';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
@@ -423,7 +425,6 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   Search analyses <span className="flow-k">⌘K</span>
                 </Button>
                 <div className="proj-actions">
-                  <Badge tone="soon">Fielding coming soon</Badge>
                   <Button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
                     Share
                   </Button>
@@ -875,7 +876,6 @@ function ProjectCard({ project, datasets }: { project: FlowProject; datasets: Da
         </div>
         <div className="card-chips">
           <Badge>{count === 0 ? 'Not fielded' : `${count} file${count === 1 ? '' : 's'}`}</Badge>
-          <Badge tone="soon">Fielding coming soon</Badge>
         </div>
         <div className="card-foot">
           <Members projectId={project.id} />
@@ -1729,6 +1729,12 @@ function Palette({
   );
 }
 
+type FlowSession = { session_id: string; title?: string; updated_at?: string };
+
+function chatTitle(session: FlowSession): string {
+  return session.title?.trim() || 'Untitled chat';
+}
+
 function replyLines(result: AgentLoopResponse): string[] {
   const summary = result.execution_summary?.trim();
   if (summary) {
@@ -1745,25 +1751,6 @@ function replyLines(result: AgentLoopResponse): string[] {
       return typeof name === 'string' ? name.replaceAll('_', ' ') : '';
     })
     .filter(Boolean);
-}
-
-function replyTitle(answer: string): string {
-  const lines = answer
-    .split('\n')
-    .map(row =>
-      row
-        .replace(/^#+\s*/, '')
-        .replace(/[*_`]/g, '')
-        .trim()
-    )
-    .filter(Boolean);
-  if (lines.length < 2) return 'Result';
-  return lines[0].slice(0, 90);
-}
-
-function replyLead(answer: string): string {
-  const block = answer.split(/\n\s*\n/)[0] || answer;
-  return block.replace(/[#*`]/g, '').trim();
 }
 
 function replyStat(answer: string): string | null {
@@ -1979,7 +1966,7 @@ function ChatScreen({
   const attachmentsRef = useRef<AgentLoopAttachment[]>([]);
   attachmentsRef.current = attachments;
   const askedRef = useRef<string | null>(null);
-  const [sessions, setSessions] = useState<{ session_id: string }[] | null>(null);
+  const [sessions, setSessions] = useState<FlowSession[] | null>(null);
   const [recipes, setRecipes] = useState<
     { name?: string; recipe_id?: string; ops?: unknown[] }[] | null
   >(null);
@@ -1989,7 +1976,7 @@ function ChatScreen({
 
   useEffect(() => {
     if (!project) return;
-    void flowJson<{ sessions?: { session_id: string }[] }>(`/api/projects/${project.id}/sessions`)
+    void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
       .then(page => setSessions(page.sessions || []))
       .catch(() => setSessions([]));
     void flowJson<{ recipes?: { name?: string; recipe_id?: string }[] }>(
@@ -2164,7 +2151,9 @@ function ChatScreen({
     setStatus(null);
   };
 
-  const title = replyTitle(answer);
+  const title = outputTitle(turn?.tool_results, answer);
+  const takeaway = outputTakeaway(answer);
+  const baseNote = outputBaseNote(answer);
   const kind = replyKind(turn);
   const stat = replyStat(answer);
 
@@ -2185,7 +2174,7 @@ function ChatScreen({
         ) : (
           sessions.map(session => (
             <div key={session.session_id} className="chat-item">
-              {session.session_id.slice(0, 8)}
+              {chatTitle(session)}
             </div>
           ))
         )}
@@ -2235,15 +2224,12 @@ function ChatScreen({
                   </div>
                 ) : null}
                 {answer && !plan ? (
-                  <article
-                    className="chat-prose"
-                    dangerouslySetInnerHTML={{ __html: plain(answer) }}
-                  />
+                  <FlowMarkdown className="chat-prose">{answer}</FlowMarkdown>
                 ) : null}
                 {plan ? (
                   <div className="chat-plan">
                     <strong>Waiting for approval · Plan</strong>
-                    <div dangerouslySetInnerHTML={{ __html: plain(answer) }} />
+                    <FlowMarkdown>{answer}</FlowMarkdown>
                     <div className="flow-row">
                       <Button className="flow-btn primary" type="button" onClick={approve}>
                         Approve
@@ -2313,7 +2299,8 @@ function ChatScreen({
                     <span className="flow-muted">Agent chat</span>
                   </div>
                   <h2>{title}</h2>
-                  <div className="output-takeaway">{replyLead(answer)}</div>
+                  {takeaway ? <div className="output-takeaway">{takeaway}</div> : null}
+                  {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
                   {stat ? (
                     <div>
                       <div className="flow-muted">Key stat</div>
@@ -2451,7 +2438,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const [rowTotal, setRowTotal] = useState(0);
   const pageSize = 50;
   const [query, setQuery] = useState('');
-  const [sessions, setSessions] = useState<{ session_id: string }[] | null>(null);
+  const [sessions, setSessions] = useState<FlowSession[] | null>(null);
   const [specs, setSpecs] = useState<{ id: string; label: string }[] | null>(null);
   const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [selectedCol, setSelectedCol] = useState(0);
@@ -2505,7 +2492,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   }, [datasetId, pageOffset]);
   useEffect(() => {
     if (!project) return;
-    void flowJson<{ sessions?: { session_id: string }[] }>(`/api/projects/${project.id}/sessions`)
+    void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
       .then(page => setSessions(page.sessions || []))
       .catch(() => setSessions([]));
   }, [project]);
@@ -2610,7 +2597,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
           ) : (
             sessions.slice(0, 6).map(session => (
               <div key={session.session_id} className="chat-item">
-                {session.session_id.slice(0, 8)}
+                {chatTitle(session)}
               </div>
             ))
           )}
@@ -2775,7 +2762,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
             <p className="flow-error">Could not load this sheet.</p>
           ) : (
             <>
-              <div ref={sheetRef} className="sheet-scroll">
+              <div ref={sheetRef} className="sheet-frame">
                 <ScrollArea className="sheet-scroll">
                   <Table className="flow-table">
                     <thead>
@@ -2943,9 +2930,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
                   Ask
                 </Button>
                 {agentStatus ? <p className="flow-status">{agentStatus}</p> : null}
-                {agentAnswer ? (
-                  <article dangerouslySetInnerHTML={{ __html: plain(agentAnswer) }} />
-                ) : null}
+                {agentAnswer ? <FlowMarkdown>{agentAnswer}</FlowMarkdown> : null}
               </div>
             ) : null}
           </ScrollArea>
@@ -3391,8 +3376,6 @@ function ReportScreen({
             <span className="ink">
               {specs.length} saved table{specs.length === 1 ? '' : 's'}
             </span>
-            <span>|</span>
-            <span>Fielding coming soon</span>
           </p>
         </div>
         <div className="report-block">
@@ -3590,10 +3573,4 @@ function ReportScreen({
       </div>
     </section>
   );
-}
-
-function plain(markdown: string): string {
-  return markdown
-    .replace(/[&<>]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[char] || char)
-    .replace(/\n/g, '<br/>');
 }

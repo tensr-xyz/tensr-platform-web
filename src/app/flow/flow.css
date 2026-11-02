@@ -2035,6 +2035,9 @@ select.flow-input {
   padding: 7px 8px;
   border-radius: 7px;
   font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .chat-column {
@@ -2127,6 +2130,61 @@ select.flow-input {
   line-height: 20px;
 }
 
+.output-base {
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.flow-md {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  min-width: 0;
+}
+
+.flow-md-p,
+.flow-md-heading {
+  margin: 0;
+}
+
+.flow-md-heading,
+.flow-md-strong {
+  font-weight: var(--weight-medium);
+}
+
+.flow-md-list {
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+}
+
+.flow-md-ordered {
+  list-style: decimal;
+}
+
+.flow-md-link {
+  color: var(--color-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.flow-md-table {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+}
+
+.flow-md-table .flow-table th {
+  position: static;
+}
+
+.flow-md-table .flow-table tr:last-child td {
+  border-bottom: 0;
+}
+
 .output-badge {
   background: var(--color-accent-soft);
   color: var(--color-accent);
@@ -2206,6 +2264,20 @@ select.flow-input {
 .sheet-scroll {
   flex: 1;
   min-height: 0;
+}
+
+.sheet-frame {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.sheet-foot > span:last-child {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
 }
 
 .column-spark {
