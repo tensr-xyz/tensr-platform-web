@@ -1424,6 +1424,16 @@ export function TablesBuilder({
           projectId={projectId}
           columns={columns}
           onShowTable={() => setView('table')}
+          tables={specs.map(item => ({
+            id: item.spec_id || item.id || '',
+            label: item.label || item.name || '',
+          }))}
+          onOpenTable={id => {
+            setView('table');
+            void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
+              .then(remember)
+              .catch(() => undefined);
+          }}
         />
       ) : (
         <>
