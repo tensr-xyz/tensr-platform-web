@@ -9266,3 +9266,368 @@ select.flow-input {
 .details-q-kind[data-kind=\"numeric\"] {
   background: var(--color-well);
 }
+
+/* QA round 3. Every clickable element shows the pointer. */
+.flow
+  :is(
+    button,
+    a[href],
+    summary,
+    label[for],
+    [role='button'],
+    [role='tab'],
+    [role='menuitem'],
+    [role='option'],
+    [role='switch'],
+    [role='checkbox'],
+    [role='radio'],
+    [data-clickable]
+  ):not(:disabled):not([aria-disabled='true']):not([data-soon]),
+body:has(.flow)
+  :is([role='dialog'], [data-radix-popper-content-wrapper])
+  :is(
+    button,
+    a[href],
+    [role='button'],
+    [role='tab'],
+    [role='menuitem'],
+    [role='menuitemcheckbox'],
+    [role='menuitemradio'],
+    [role='option'],
+    [role='checkbox'],
+    [role='radio'],
+    [data-clickable]
+  ):not(:disabled):not([aria-disabled='true']):not([data-soon]) {
+  cursor: pointer;
+}
+
+/* QA round 3. The analyses palette fills about 70% of the viewport. */
+.flow-palette {
+  padding-top: 12vh;
+}
+
+.flow-palette .palette-card {
+  height: 70vh;
+  max-height: 70vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.flow-palette .palette-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.flow-palette .palette-sections,
+.flow-palette .palette-results {
+  max-height: none;
+  height: 100%;
+}
+
+/* QA round 3. Bold tags read as medium unless a Paper-matched rule sets the title weight. */
+.flow :where(strong, b, th),
+body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where(strong, b, th) {
+  font-weight: var(--weight-medium);
+}
+
+/* QA round 3. Collapsed sidebar is an icon rail. */
+.flow-side.flow-rail {
+  width: 56px;
+  padding: 14px 8px;
+  align-items: center;
+  gap: 14px;
+}
+
+.flow-rail button,
+.flow-rail a {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.flow-rail button:hover,
+.flow-rail a:hover,
+.flow-rail [data-active='true'] {
+  background: #ecece7;
+}
+
+.flow-rail .rail-logo:hover {
+  background: transparent;
+  opacity: 0.85;
+}
+
+.rail-nav,
+.rail-folders {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.rail-folders {
+  padding-top: 12px;
+  border-top: 1px solid var(--color-line);
+}
+
+.rail-folders:empty {
+  display: none;
+}
+
+.flow-rail .rail-user {
+  margin-top: auto;
+}
+
+.folder-new {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 2px 4px;
+}
+
+.folder-empty {
+  margin: 0;
+  padding: 2px 8px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.flow-user-menu {
+  min-width: 220px;
+}
+
+.flow-user-menu-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 8px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.flow-user-menu-head strong {
+  font-size: 13px;
+}
+
+.flow-user-menu-head span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+/* QA round 3. Project switcher: recent eight, search, load more. */
+.proj-switcher {
+  width: 300px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.proj-switcher-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--color-line);
+  color: var(--color-muted);
+}
+
+.proj-switcher-search input {
+  border: 0;
+  box-shadow: none;
+  height: 36px;
+  padding: 0;
+}
+
+.proj-switcher-label {
+  padding: 6px 8px 2px;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.proj-switcher-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.proj-switcher-list a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 6px;
+  color: var(--color-ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.proj-switcher-list a i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--color-line);
+  flex: none;
+}
+
+.proj-switcher-list a[data-active='true'] i {
+  background: var(--color-accent);
+}
+
+.proj-switcher-list a:hover,
+.proj-switcher-list a[data-active='true'] {
+  background: var(--color-well);
+}
+
+.proj-switcher-empty {
+  margin: 0;
+  padding: 8px;
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.proj-switcher-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 4px 2px;
+  border-top: 1px solid var(--color-line);
+}
+
+.proj-switcher-all {
+  color: var(--color-accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+/* QA round 3. New project dialog. */
+.new-project-dialog {
+  max-width: 480px;
+}
+
+.new-project-fields,
+.new-project-data {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.new-project-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.new-project-field > span {
+  color: var(--color-muted);
+}
+
+.new-project-data {
+  gap: 8px;
+}
+
+.flow-btn.new-project-choice,
+.new-project-choice {
+  height: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-canvas);
+  text-align: left;
+  white-space: normal;
+}
+
+.new-project-choice strong {
+  font-size: 13px;
+}
+
+.new-project-choice span {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.new-project-choice[data-active='true'] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.new-project-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.new-project-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* QA round 3. Datasets list and project paging. */
+.datasets-table .datasets-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.datasets-project {
+  color: var(--color-ink);
+  text-decoration: none;
+}
+
+.datasets-project:hover {
+  color: var(--color-accent);
+}
+
+.datasets-skeleton {
+  height: 48px;
+  border-radius: 8px;
+  background: var(--color-well);
+  margin-bottom: 6px;
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+.datasets-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 56px 16px;
+  border: 1px dashed var(--color-line);
+  border-radius: 10px;
+}
+
+.home-more {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0 24px;
+}
+
+.row-folder {
+  min-width: 140px;
+}
+
+.flow-card .card-folder {
+  height: auto;
+  padding: 2px 6px;
+  margin-left: -6px;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+}
+
+.flow-card .card-folder:hover {
+  background: var(--color-well);
+}

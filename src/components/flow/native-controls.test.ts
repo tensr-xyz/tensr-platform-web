@@ -65,4 +65,25 @@ describe('flow controls', () => {
     }
     expect(hits).toEqual([]);
   });
+
+  it('resets bold tags to medium, so Tables and other screens never fall back to 700', () => {
+    const css = readFileSync('src/app/flow/flow.css', 'utf8');
+    expect(css).toMatch(
+      /\.flow :where\(strong, b, th\)[^{]*\{\s*font-weight: var\(--weight-medium\);/
+    );
+  });
+
+  it('keeps the Tables screen to the weights in its Paper export', () => {
+    const css = readFileSync('src/app/flow/flow.css', 'utf8');
+    const titled = [
+      ...css.matchAll(/([^{}]+)\{[^{}]*font-weight:\s*var\(--weight-title\)[^{}]*\}/g),
+    ]
+      .map(match => match[1].trim())
+      .filter(selector => /\b(tables|tb|tc|banner|stub)-/.test(selector));
+    const paper = readFileSync('design/paper/5-tables/screen.tsx', 'utf8');
+    const allowed = paper.includes('font-[600]')
+      ? titled.filter(item => /tables-title|tc-title/.test(item))
+      : [];
+    expect(titled.filter(item => !allowed.includes(item))).toEqual([]);
+  });
 });
