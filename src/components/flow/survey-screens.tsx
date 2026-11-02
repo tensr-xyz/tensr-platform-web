@@ -91,41 +91,56 @@ function columnNames(columns: { name?: string }[]): string[] {
 export function BannerGrid({
   book,
   onSelectCell,
+  baseAtEnd = false,
+  showQuotes = false,
 }: {
   book: Record<string, unknown>;
   onSelectCell: (cell: SurveyCell) => void;
+  baseAtEnd?: boolean;
+  showQuotes?: boolean;
 }) {
+  const [picked, setPicked] = useState('');
   const columns = bannerColumns(book);
   const letters = (book.letters as SigLetter[]) || [];
   const rows = ((book.rows as BannerRow[]) || []).filter(row => row.kind !== 'net');
   const notCoded = ((book.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
     ?.not_coded;
   if (!columns.length) return <p className="flow-muted">This table has no banner columns yet.</p>;
+  const base = (
+    <tr>
+      <th>Base</th>
+      {columns.map(column => {
+        const sample = rows
+          .flatMap(row => row.cells || [])
+          .find(cell => cell.banner_id === column.id);
+        return <td key={column.id}>{sample?.column_unweighted_n ?? '—'}</td>;
+      })}
+    </tr>
+  );
   return (
     <div>
       <div style={{ overflowX: 'auto' }}>
         <Table className="flow-table">
           <thead>
             <tr>
-              <th />
+              <th>{showQuotes ? 'Theme' : ''}</th>
               {columns.map(column => (
                 <th key={column.id}>{bannerHeading(column)}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <th>Base</th>
-              {columns.map(column => {
-                const sample = rows
-                  .flatMap(row => row.cells || [])
-                  .find(cell => cell.banner_id === column.id);
-                return <td key={column.id}>{sample?.column_unweighted_n ?? '—'}</td>;
-              })}
-            </tr>
-            {rows.map(row => (
+            {baseAtEnd ? null : base}
+            {rows.map(row => {
+              const quotes = (row.cells || []).find(cell => cell.banner_id === 'total')?.unweighted_n;
+              return (
               <tr key={row.id}>
-                <th>{row.label}</th>
+                <th>
+                  {row.label}
+                  {showQuotes && quotes != null ? (
+                    <span className="flow-muted"> {quotes}</span>
+                  ) : null}
+                </th>
                 {columns.map((column: BannerColumn) => {
                   const cell = (row.cells || []).find(item => item.banner_id === column.id);
                   const letter = lettersFor(letters, row.id, column.id);
@@ -134,9 +149,12 @@ export function BannerGrid({
                       <Button
                         className="flow-cell"
                         type="button"
+                        data-active={picked === `${row.id}:${column.id}`}
                         onClick={() => {
                           const selected = selectionFromCell(book, row, cell, letter);
-                          if (selected) onSelectCell(selected);
+                          if (!selected) return;
+                          setPicked(`${row.id}:${column.id}`);
+                          onSelectCell(selected);
                         }}
                       >
                         {cell?.percent != null ? `${cell.percent.toFixed(1)}%` : '—'}
@@ -146,16 +164,18 @@ export function BannerGrid({
                   );
                 })}
               </tr>
-            ))}
+              );
+            })}
+            {baseAtEnd ? base : null}
           </tbody>
         </Table>
       </div>
-      {book.answered_n != null && book.respondent_n != null ? (
+      {!showQuotes && book.answered_n != null && book.respondent_n != null ? (
         <p className="flow-muted">
           Base: answered {String(book.answered_n)} of {String(book.respondent_n)}
         </p>
       ) : null}
-      {notCoded?.unweighted_n != null ? (
+      {!showQuotes && notCoded?.unweighted_n != null ? (
         <p className="flow-muted">Not coded: {notCoded.unweighted_n}</p>
       ) : null}
     </div>
@@ -164,12 +184,16 @@ export function BannerGrid({
 
 export function ThemesPanel({
   datasetId,
+  projectId,
   onSelectCell,
+  onEditFrame,
 }: {
   datasetId?: string;
+  projectId?: string;
   onSelectCell: (cell: SurveyCell) => void;
+  onEditFrame?: (column: string) => void;
 }) {
-  const [columns, setColumns] = useState<string[]>([]);
+  const [columns, setColumns] = useState<{ name: string; label: string }[]>([]);
   const [stub, setStub] = useState('');
   const [banner, setBanner] = useState('');
   const [weight, setWeight] = useState('');
@@ -177,68 +201,150 @@ export function ThemesPanel({
   const [error, setError] = useState('');
   useEffect(() => {
     if (!datasetId) return;
-    void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${datasetId}/metadata`)
-      .then(meta => setColumns(columnNames(meta.columns || [])))
+    void flowJson<{ columns?: { name?: string; label?: string }[] }>(
+      `/datasets/${datasetId}/metadata`
+    )
+      .then(meta =>
+        setColumns(
+          (meta.columns || [])
+            .map(column => ({
+              name: column.name || '',
+              label: column.label || column.name || '',
+            }))
+            .filter(column => column.name)
+        )
+      )
       .catch(() => setColumns([]));
   }, [datasetId]);
+  const stubColumn = columns.find(column => column.name === stub);
+  const themeCount = ((book?.rows as { kind?: string }[]) || []).filter(row => row.kind !== 'net')
+    .length;
+  const notCoded = ((book?.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
+    ?.not_coded?.unweighted_n;
+  const run = () => {
+    if (!datasetId || !stub) return;
+    setError('');
+    void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
+      method: 'POST',
+      body: JSON.stringify({
+        stubs: [codedStub(stub)],
+        banner: banner ? [{ column: banner }] : [],
+        statistics: ['column_proportion'],
+        significance_display: 'column_letters',
+        weight: weight || 'none',
+        save: false,
+      }),
+    })
+      .then(setBook)
+      .catch(err => setError(err instanceof Error ? err.message : 'Themes did not run'));
+  };
   return (
-    <div className="flow-panel">
-      <h2>Themes</h2>
-      <div className="flow-row">
+    <div className="themes">
+      <div className="themes-tools">
+        {book ? (
+          <Button className="flow-btn" type="button" data-active onClick={() => setBook(null)}>
+            {stubColumn?.label || stub} · {themeCount} theme{themeCount === 1 ? '' : 's'} ×
+          </Button>
+        ) : null}
+        <Button
+          className="flow-btn"
+          type="button"
+          disabled={!stub}
+          onClick={() => onEditFrame?.(stub)}
+        >
+          Edit code frame
+        </Button>
+        <span className="sheet-spacer" />
         <ChoiceSelect
           className="flow-input"
-          value={stub}
-          onValueChange={setStub}
-          options={[
-            { value: '', label: 'Theme column' },
-            ...columns.map(column => ({ value: column, label: column })),
-          ]}
-        />
-        <ChoiceSelect
-          className="flow-input"
-          value={banner}
-          onValueChange={setBanner}
-          options={[
-            { value: '', label: 'Banner' },
-            ...columns.map(column => ({ value: column, label: column })),
-          ]}
-        />
-        <ChoiceSelect
-          className="flow-input"
+          aria-label="Weight"
           value={weight}
-          onValueChange={setWeight}
+          onValueChange={value => {
+            setWeight(value);
+            setBook(null);
+          }}
           options={[
             { value: '', label: 'Unweighted' },
-            ...columns.map(column => ({ value: column, label: column })),
+            ...columns.map(column => ({ value: column.name, label: column.label })),
           ]}
         />
-        <Button
-          className="flow-btn primary"
-          type="button"
-          disabled={!datasetId || !stub}
-          onClick={() => {
-            if (!datasetId || !stub) return;
-            setError('');
-            void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
-              method: 'POST',
-              body: JSON.stringify({
-                stubs: [codedStub(stub)],
-                banner: banner ? [{ column: banner }] : [],
-                statistics: ['column_proportion'],
-                significance_display: 'column_letters',
-                weight: weight || 'none',
-                save: false,
-              }),
-            })
-              .then(setBook)
-              .catch(err => setError(err instanceof Error ? err.message : 'Themes did not run'));
-          }}
-        >
-          Run themes
-        </Button>
+      </div>
+      <div className="themes-head">
+        <div>
+          <p className="flow-muted">Open end{stub ? ` · ${stub}` : ''}</p>
+          <h2>{stubColumn?.label || 'Choose a theme column'}</h2>
+          <p className="flow-muted">
+            {book
+              ? `${themeCount} theme${themeCount === 1 ? '' : 's'} · ${weight ? `weighted ${weight}` : 'unweighted'} · column %`
+              : 'Column % with significance letters'}
+          </p>
+        </div>
+        <div className="themes-split">
+          <span className="flow-muted">Split by</span>
+          {banner ? (
+            <Button className="flow-btn" type="button" data-active onClick={() => setBanner('')}>
+              {columns.find(column => column.name === banner)?.label || banner} ×
+            </Button>
+          ) : null}
+          <ChoiceSelect
+            className="flow-input"
+            aria-label="Theme column"
+            value={stub}
+            onValueChange={value => {
+              setStub(value);
+              setBook(null);
+            }}
+            options={[
+              { value: '', label: 'Theme column' },
+              ...columns.map(column => ({ value: column.name, label: column.label })),
+            ]}
+          />
+          <ChoiceSelect
+            className="flow-input"
+            aria-label="Banner"
+            value={banner}
+            onValueChange={value => {
+              setBanner(value);
+              setBook(null);
+            }}
+            options={[
+              { value: '', label: '+' },
+              ...columns.map(column => ({ value: column.name, label: column.label })),
+            ]}
+          />
+          <Button className="flow-btn primary" type="button" disabled={!datasetId || !stub} onClick={run}>
+            Run
+          </Button>
+        </div>
       </div>
       {error ? <p className="flow-error">{error}</p> : null}
-      {book ? <BannerGrid book={book} onSelectCell={onSelectCell} /> : null}
+      {book ? (
+        <BannerGrid book={book} onSelectCell={onSelectCell} baseAtEnd showQuotes />
+      ) : (
+        <p className="flow-muted">Run a theme column to see the table.</p>
+      )}
+      {notCoded != null ? (
+        <p className="themes-uncoded">
+          {notCoded} not coded. These answers are not in the table until they have a theme.
+        </p>
+      ) : null}
+      <div className="themes-links">
+        {projectId ? (
+          <Button className="flow-btn primary" type="button" asChild>
+            <Link href={`/flow/p/${projectId}/report`}>Add to report</Link>
+          </Button>
+        ) : null}
+        {projectId ? (
+          <Button className="flow-btn" type="button" asChild>
+            <Link href={`/flow/p/${projectId}/interviews`}>Open interviews</Link>
+          </Button>
+        ) : null}
+        {projectId ? (
+          <Button className="flow-btn" type="button" asChild>
+            <Link href={`/flow/p/${projectId}/tables`}>Use as banner</Link>
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

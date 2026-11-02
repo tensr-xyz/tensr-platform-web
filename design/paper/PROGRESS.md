@@ -16,10 +16,10 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 
 ## Counts
 
-- matched: 6
-- wired: 6
+- matched: 7
+- wired: 7
 - built: 1
-- todo: 34
+- todo: 33
 - checks done: 5 passed, 1 owner QA
 
 ## Decisions
@@ -47,7 +47,7 @@ Each folder should contain `screen.png` (Paper, 1x) and `screen.tsx` (Paper `get
 - [x] **4a Responses sheet** (`8EO-0`, `4a-responses`) — **wired**. Three columns: project rail, sheet with column mini-charts from the loaded page, and Agent/Variable/Evidence. Search filters column names, or rows when no column matches. Clicking a code filters that column. A row number selects the row. Sheet, Notebook, and Themes switch the center. Weight, ANOVA, and Descriptives stay on the toolbar. `screen.tsx` is the Paper export. Components: shadcn.
 - [x] **4c Evidence** (`765-0`, `4c-evidence`) — **wired**. Opening a significant cell shows the evidence chip, highlights those rows and the column, and lists the value labels. Back to all clears it. See all scrolls the sheet. Open table and Cite in report leave the screen. The letter chip is the letter the cell carries. Labels and Values stay off the toolbar. `screen.tsx` is the Paper export. Components: shadcn.
 - [x] **4d code frame** (`958-0`, `4d-code-frame`) — **wired**. A coded column opens the theme list in the variable rail. Counts and the uncoded row are the loaded page. See all filters the sheet. Selecting a theme shows Merge and Clear. Use as banner opens Tables. The live Q7 frame is one theme, so Merge stays off. PNG is the reference. Components: shadcn.
-- [ ] **4g Themes** (`16OA-0`, `4g-themes`) — **todo**. PNG only. Components: shadcn.
+- [x] **4g Themes** (`16OA-0`, `4g-themes`) — **wired**. Themes runs the column as a column-% table with a split-by chip. The base sits under the themes. A cell opens Evidence and stays on Themes. Edit code frame opens the variable rail. The uncoded count is the table's not-coded figure. No agent-read sentence is invented. `screen.tsx` is the Paper export. Components: shadcn.
 - [ ] **5 Tables** (`2LA-0`, `5-tables`) — **todo**. PNG only. Needs stub and banner chips, the table, and the agent thread. Components: shadcn.
 - [ ] **6 Report** (`2ZC-0`, `6-report`) — **built**. Three deliverable cards wired to deck, banner book, and topline. No `screen.tsx` yet, not matched. Components: shadcn.
 
@@ -103,6 +103,8 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 ## Bugs found
 
 - The dataset select on Responses logs that it changes from uncontrolled to controlled. It does not block the sheet.
+- The code frame offers numeric columns. Q7 got a "Numeric only, no comment" theme. Only text open-end columns should be codeable. Theme evidence for that frame quotes Q7 and returns no verbatims.
+- A themes banner heading shows the stored code (region 1 and 2) rather than the value label.
 
 ## Unfinished
 

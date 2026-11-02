@@ -1870,10 +1870,19 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
         {tab === 'themes' ? (
           <ThemesPanel
             datasetId={datasetId}
+            projectId={project?.id}
             onSelectCell={cell => {
               setSurveyCell(cell);
               setSide('evidence');
-              setTab('sheet');
+            }}
+            onEditFrame={column => {
+              const match = columns.find(item => item.name === column);
+              const header = match?.label || column;
+              const position = shownCols.findIndex(
+                item => item.name === header || item.name === column
+              );
+              if (position >= 0) setSelectedCol(position);
+              setSide('variable');
             }}
           />
         ) : null}
