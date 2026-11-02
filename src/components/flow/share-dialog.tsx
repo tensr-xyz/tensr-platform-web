@@ -8,7 +8,6 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -129,93 +128,147 @@ export function ShareDialog({
       .catch(err => setError(err instanceof Error ? err.message : 'Could not invite'));
   };
 
+  const mark = (value?: string) => {
+    const text = (value || '?').split('@')[0];
+    const parts = text.split(/[^A-Za-z0-9]+/).filter(Boolean);
+    return ((parts[0]?.[0] || '') + (parts[1]?.[0] || parts[0]?.[1] || '')).toUpperCase() || '?';
+  };
+  const roleName = (value?: string) =>
+    value ? value[0].toUpperCase() + value.slice(1).toLowerCase() : 'Viewer';
+  const count = (people || []).length + invites.length;
+
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
       <DialogContent className="share-dialog">
-        <DialogHeader>
+        <DialogHeader className="share-head">
           <DialogTitle>Share {projectName}</DialogTitle>
           <DialogDescription>
             Project, with its sources, tables, outputs and report.
           </DialogDescription>
         </DialogHeader>
-        <div className="share-invite">
-          <Input
-            aria-label="Email"
-            value={email}
-            placeholder="Add people by email"
-            onChange={event => setEmail(event.target.value)}
-          />
-          <ChoiceSelect
-            aria-label="Role"
-            value={role}
-            onValueChange={setRole}
-            options={[
-              { value: 'viewer', label: 'Viewer' },
-              { value: 'editor', label: 'Editor' },
-            ]}
-          />
-          <Button className="flow-btn primary" type="button" onClick={invite}>
-            Invite
-          </Button>
-        </div>
-        <p className="flow-muted">
-          Viewer reads tables, outputs and rows. Editor runs analyses and edits.
-        </p>
-        {people === null ? <Skeleton className="h-16" /> : null}
-        {(people || []).map(person => (
-          <div key={person.user_id} className="share-person">
-            <span>{person.name}</span>
-            <span className="flow-muted">{person.email}</span>
-            <span>{person.role}</span>
+        <div className="share-body">
+          <div className="share-invite">
+            <div className="share-field">
+              <Input
+                aria-label="Email"
+                value={email}
+                placeholder="Add people by email"
+                onChange={event => setEmail(event.target.value)}
+              />
+              <ChoiceSelect
+                className="share-role"
+                aria-label="Role"
+                value={role}
+                onValueChange={setRole}
+                options={[
+                  { value: 'viewer', label: 'Viewer' },
+                  { value: 'editor', label: 'Editor' },
+                ]}
+              />
+            </div>
+            <Button className="flow-btn primary" type="button" onClick={invite}>
+              Invite
+            </Button>
           </div>
-        ))}
-        {invites.map(inviteRow => (
-          <div key={inviteRow.token || inviteRow.email} className="share-person">
-            <span>{inviteRow.email}</span>
-            <span className="flow-muted">Pending</span>
-            {inviteRow.token ? (
-              <Button
-                className="flow-btn"
-                type="button"
-                onClick={() => {
-                  if (!orgId || !inviteRow.token) return;
-                  void flowJson(
-                    `/api/organizations/${orgId}/invitations/${inviteRow.token}/resend`,
-                    {
-                      method: 'POST',
-                    }
-                  )
-                    .then(() => setNote('Invitation resent.'))
-                    .catch(() => setError('Could not resend.'));
-                }}
-              >
-                Resend
-              </Button>
-            ) : null}
-          </div>
-        ))}
-        <div className="share-invite">
-          <Input readOnly aria-label="Project link" value={link} />
-          <Button
-            className="flow-btn"
-            type="button"
-            onClick={() =>
-              void navigator.clipboard.writeText(link).then(() => setNote('Link copied.'))
-            }
-          >
-            Copy link
-          </Button>
+          <p className="share-roles">
+            <span>Viewer · reads tables, outputs and rows</span>
+            <span>Editor · runs analyses and edits</span>
+          </p>
+          <span className="share-label">People with access · {count}</span>
+          {people === null ? <Skeleton className="h-16" /> : null}
+          {(people || []).map(person => (
+            <div key={person.user_id} className="share-person">
+              <span className="share-mark">{mark(person.name || person.email)}</span>
+              <span className="share-who">
+                <strong>{person.name}</strong>
+                <span>{person.email}</span>
+              </span>
+              <span className="share-person-role">{roleName(person.role)}</span>
+            </div>
+          ))}
+          {invites.map(inviteRow => (
+            <div key={inviteRow.token || inviteRow.email} className="share-person">
+              <span className="share-mark pending">{mark(inviteRow.email)}</span>
+              <span className="share-who">
+                <strong>
+                  {inviteRow.email} <span className="share-pending">Pending</span>
+                </strong>
+                <span>
+                  Invited
+                  {inviteRow.token ? (
+                    <>
+                      {' · '}
+                      <Button
+                        className="share-link-btn"
+                        type="button"
+                        onClick={() => {
+                          if (!orgId || !inviteRow.token) return;
+                          void flowJson(
+                            `/api/organizations/${orgId}/invitations/${inviteRow.token}/resend`,
+                            { method: 'POST' }
+                          )
+                            .then(() => setNote('Invitation resent.'))
+                            .catch(() => setError('Could not resend.'));
+                        }}
+                      >
+                        Resend
+                      </Button>
+                    </>
+                  ) : null}
+                </span>
+              </span>
+              <span className="share-person-role">Viewer</span>
+            </div>
+          ))}
         </div>
-        <p className="flow-muted">
-          The link opens this project for people who already have access.
-        </p>
-        {error ? <p className="flow-error">{error}</p> : null}
-        {note ? <p className="flow-muted">{note}</p> : null}
-        <DialogFooter>
+        <div className="share-section">
+          <div className="share-anyone">
+            <span className="share-icon">⛓</span>
+            <span className="share-who">
+              <strong>Anyone with the link</strong>
+              <span>Opens the project for people who already have access</span>
+            </span>
+            <span className="share-soon">Public links soon</span>
+          </div>
+          <div className="share-copy">
+            <Input readOnly aria-label="Project link" value={link} />
+            <Button
+              className="flow-btn"
+              type="button"
+              onClick={() =>
+                void navigator.clipboard.writeText(link).then(() => setNote('Link copied.'))
+              }
+            >
+              Copy link
+            </Button>
+          </div>
+          <div className="share-one">
+            <span className="share-radio" />
+            <span className="share-who">
+              <strong>Share one output only</strong>
+              <span>Send one result on its own</span>
+            </span>
+            <span className="share-soon">Coming soon</span>
+          </div>
+        </div>
+        <div className="share-foot">
+          <span className="share-foot-note">
+            {error ? (
+              <span className="flow-error">{error}</span>
+            ) : note ? (
+              note
+            ) : (
+              <>
+                ⓘ Shared people see the data behind every number.
+                <br />
+                Remove access any time.
+              </>
+            )}
+          </span>
           <Button className="flow-btn" type="button" onClick={onClose}>
             Done
           </Button>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

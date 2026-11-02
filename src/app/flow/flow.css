@@ -8935,3 +8935,231 @@ select.flow-input {
 .xp [hidden] {
   display: none !important;
 }
+
+/* 6f Share, from the Paper export. */
+.share-dialog {
+  width: min(530px, 94vw);
+  max-width: 530px !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  overflow: hidden;
+}
+
+.share-dialog .share-head {
+  padding: 20px 22px 4px;
+  text-align: left;
+}
+
+.share-dialog .share-head h2 {
+  font-size: 18px;
+  font-weight: var(--weight-medium);
+}
+
+.share-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 22px 14px;
+}
+
+.share-dialog .share-invite {
+  display: flex;
+  gap: 8px;
+}
+
+.share-field {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding-right: 4px;
+  border: 1px solid var(--color-accent);
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+.share-field input {
+  border: 0;
+  box-shadow: none;
+  font-size: 13px;
+}
+
+.share-dialog .share-role {
+  width: auto;
+  height: 26px;
+  gap: 4px;
+  padding: 0 8px;
+  border: 0;
+  background: var(--color-well);
+  font-size: 12px;
+}
+
+.share-invite .flow-btn.primary {
+  height: 36px;
+}
+
+.share-roles {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.share-label {
+  margin-top: 6px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.share-dialog .share-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+
+.share-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 14px;
+  background: #d9e6e0;
+  color: var(--color-accent);
+  font-size: 10px;
+  font-weight: var(--weight-title);
+}
+
+.share-mark.pending {
+  border: 1px dashed #c4c3bd;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.share-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.share-who strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: var(--weight-regular);
+}
+
+.share-who > span {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.share-person-role {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.share-pending {
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: #fbf1e2;
+  color: var(--color-warn);
+  font-size: 10px;
+}
+
+.share-dialog .share-link-btn {
+  display: inline;
+  height: auto;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 11px;
+  text-decoration: underline;
+}
+
+.share-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 22px;
+  border-top: 1px solid var(--color-line);
+}
+
+.share-anyone,
+.share-one {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.share-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 12px;
+}
+
+.share-soon {
+  padding: 2px 7px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  color: var(--color-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.share-copy {
+  display: flex;
+  gap: 8px;
+}
+
+.share-copy input {
+  height: 32px;
+  background: var(--color-well);
+  color: var(--color-muted);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+}
+
+.share-copy .flow-btn {
+  height: 32px;
+}
+
+.share-one {
+  padding: 10px 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+}
+
+.share-radio {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #c4c3bd;
+  border-radius: 7px;
+}
+
+.share-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-well);
+}
+
+.share-foot-note {
+  flex: 1;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 15px;
+}
