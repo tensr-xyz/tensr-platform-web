@@ -8190,3 +8190,18 @@ select.flow-input {
   flex-direction: row;
   align-items: stretch;
 }
+
+.output-compose {
+  position: relative;
+}
+
+.output-compose textarea {
+  padding-bottom: 40px;
+}
+
+.output-compose-row {
+  position: absolute;
+  left: 28px;
+  right: 28px;
+  bottom: 26px;
+}

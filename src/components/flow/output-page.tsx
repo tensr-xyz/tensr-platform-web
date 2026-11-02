@@ -329,11 +329,11 @@ export function OutputPage({
                 >
                   <div className="output-comment-top">
                     <span className="output-avatar">
-                      {(comment.author_name || 'S').slice(0, 2).toUpperCase()}
+                      {personName(comment.author_name).slice(0, 2).toUpperCase()}
                     </span>
                     <div>
                       <p>
-                        <strong>{comment.author_name || 'Someone'}</strong>{' '}
+                        <strong>{personName(comment.author_name)}</strong>{' '}
                         <span className="flow-muted">{commentWhen(comment.created_at)}</span>
                       </p>
                       <p>{comment.text}</p>
@@ -351,10 +351,10 @@ export function OutputPage({
                     .map(reply => (
                       <div key={reply.id} className="output-reply">
                         <span className="output-avatar">
-                          {(reply.author_name || 'S').slice(0, 2).toUpperCase()}
+                          {personName(reply.author_name).slice(0, 2).toUpperCase()}
                         </span>
                         <p>
-                          <strong>{reply.author_name || 'Someone'}</strong>{' '}
+                          <strong>{personName(reply.author_name)}</strong>{' '}
                           <span className="flow-muted">{commentWhen(reply.created_at)}</span>
                           <br />
                           {reply.text}
@@ -538,10 +538,18 @@ function commentWhen(iso?: string): string {
   if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString(undefined, {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const today = new Date().toDateString() === date.toDateString();
+  return today
+    ? date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+}
+
+function personName(value?: string): string {
+  const text = (value || 'Someone').trim();
+  return text.includes('@') ? text.split('@')[0] : text;
 }
