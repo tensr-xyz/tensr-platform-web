@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
+import { mapApiInvitation } from '@/lib/organization-invitations';
 import type { FlowColumn } from '@/lib/flow-columns';
 import { datasetRowId } from '@/components/flow/survey-screens';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -29,6 +30,30 @@ type DetailFile = {
 };
 
 type Member = { user_id: string; role?: string };
+
+export type WorkspacePerson = { userId: string; email: string; name: string };
+
+export function workspacePerson(raw: Record<string, unknown>): WorkspacePerson {
+  const email = String(raw.email || '');
+  const stored = String(raw.display_name || '').trim();
+  const name = stored || email.split('@')[0] || email;
+  return { userId: String(raw.user_id || ''), email, name };
+}
+
+export function workspacePersonLabel(person: WorkspacePerson): string {
+  if (person.name && person.email && person.name !== person.email) {
+    return `${person.name} · ${person.email}`;
+  }
+  return person.email || person.name || 'Member';
+}
+
+export function peopleNotOnProject(
+  people: WorkspacePerson[],
+  members: Member[]
+): WorkspacePerson[] {
+  const ids = new Set(members.map(member => member.user_id));
+  return people.filter(person => person.userId && !ids.has(person.userId));
+}
 
 type BriefDoc = {
   id?: string;
@@ -110,9 +135,14 @@ export function DetailsScreen({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [userId, setUserId] = useState('');
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [workspace, setWorkspace] = useState<WorkspacePerson[] | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [picked, setPicked] = useState('');
   const [role, setRole] = useState('editor');
+  const [inviteEmail, setInviteEmail] = useState('');
   const [memberError, setMemberError] = useState<string | null>(null);
+  const [inviteNote, setInviteNote] = useState<string | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -137,6 +167,34 @@ export function DetailsScreen({
       cancelled = true;
     };
   }, [projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void flowJson<{ active_organization?: { id?: string } }>('/me')
+      .then(page => {
+        const id = page.active_organization?.id || '';
+        if (cancelled) return;
+        setOrgId(id || null);
+        if (!id) {
+          setWorkspace([]);
+          return;
+        }
+        return flowJson<{ members?: Record<string, unknown>[] }>(
+          `/api/organizations/${id}/members`
+        ).then(body => {
+          if (!cancelled) setWorkspace((body.members || []).map(workspacePerson));
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWorkspace([]);
+          setWorkspaceError('Workspace members could not be loaded.');
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const datasetId = active ? datasetRowId(active) : '';
   useEffect(() => {
@@ -187,21 +245,53 @@ export function DetailsScreen({
       .finally(() => setBusy(false));
   };
 
+  const candidates = peopleNotOnProject(workspace || [], members || []);
+  const selected = picked || candidates[0]?.userId || '';
+
   const addMember = () => {
-    if (!projectId || !userId.trim()) return;
+    if (!projectId || !selected) return;
     setMemberError(null);
     void flowJson<{ member?: Member }>(`/api/projects/${projectId}/members`, {
       method: 'POST',
-      body: JSON.stringify({ user_id: userId.trim(), role }),
+      body: JSON.stringify({ user_id: selected, role }),
     })
       .then(page => {
-        const member = page.member || { user_id: userId.trim(), role };
+        const member = page.member || { user_id: selected, role };
         setMembers(current => [...(current || []), member]);
-        setUserId('');
+        setPicked('');
         setAddOpen(false);
       })
       .catch(err =>
         setMemberError(err instanceof Error ? err.message : 'The member was not added.')
+      );
+  };
+
+  const invite = () => {
+    const email = inviteEmail.trim();
+    if (!orgId || !email.includes('@')) {
+      setMemberError(email ? 'Enter an email address.' : 'This account has no workspace.');
+      return;
+    }
+    setMemberError(null);
+    setInviteNote(null);
+    void flowJson<{ invitation?: Record<string, unknown> }>(
+      `/api/organizations/${orgId}/invitations`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, role: 'member' }),
+      }
+    )
+      .then(page => {
+        const invitation = mapApiInvitation(page.invitation || { email });
+        setInviteEmail('');
+        setInviteNote(
+          invitation.emailStatus === 'sent'
+            ? `Invitation emailed to ${invitation.email}.`
+            : `Invitation created for ${invitation.email}. The email was not sent.`
+        );
+      })
+      .catch(err =>
+        setMemberError(err instanceof Error ? err.message : 'The invitation was not sent.')
       );
   };
 
@@ -368,17 +458,21 @@ export function DetailsScreen({
               </Button>
             </div>
             {members.length ? (
-              members.map(member => (
-                <div key={member.user_id} className="details-member">
-                  <Avatar className="size-6">
-                    <AvatarFallback className="bg-accent text-[10px] font-medium text-accent-foreground">
-                      {memberMark(member.user_id)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="details-member-id">{member.user_id}</span>
-                  <span className="flow-muted">{roleLabel(member.role)}</span>
-                </div>
-              ))
+              members.map(member => {
+                const person = (workspace || []).find(item => item.userId === member.user_id);
+                const label = person ? workspacePersonLabel(person) : member.user_id;
+                return (
+                  <div key={member.user_id} className="details-member">
+                    <Avatar className="size-6">
+                      <AvatarFallback className="bg-accent text-[10px] font-medium text-accent-foreground">
+                        {memberMark(person?.name || member.user_id)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="details-member-id">{label}</span>
+                    <span className="flow-muted">{roleLabel(member.role)}</span>
+                  </div>
+                );
+              })
             ) : (
               <p className="flow-muted">No members yet.</p>
             )}
@@ -390,16 +484,27 @@ export function DetailsScreen({
           <DialogHeader>
             <DialogTitle>Add member</DialogTitle>
             <DialogDescription>
-              Project members are added by user id. Email invites are the workspace invitation, not
-              this list.
+              Choose someone already in this workspace, or invite a new email. An email invite uses
+              the workspace invitation.
             </DialogDescription>
           </DialogHeader>
-          <Input
-            value={userId}
-            onChange={event => setUserId(event.target.value)}
-            aria-label="User id"
-            placeholder="User id"
-          />
+          {workspace === null ? (
+            <Skeleton className="h-9 w-full" />
+          ) : workspaceError ? (
+            <p className="flow-error">{workspaceError}</p>
+          ) : candidates.length ? (
+            <ChoiceSelect
+              aria-label="Workspace member"
+              value={selected}
+              onValueChange={setPicked}
+              options={candidates.map(person => ({
+                value: person.userId,
+                label: workspacePersonLabel(person),
+              }))}
+            />
+          ) : (
+            <p className="flow-muted">Everyone in this workspace is already on the project.</p>
+          )}
           <ChoiceSelect
             aria-label="Role"
             value={role}
@@ -409,15 +514,32 @@ export function DetailsScreen({
               { value: 'viewer', label: 'Viewer' },
             ]}
           />
-          {memberError ? <p className="flow-error">{memberError}</p> : null}
           <div className="flow-row">
-            <Button className="flow-btn primary" type="button" onClick={addMember}>
-              Add member
+            <Button
+              className="flow-btn primary"
+              type="button"
+              disabled={!selected}
+              onClick={addMember}
+            >
+              Add to project
+            </Button>
+          </div>
+          <Input
+            value={inviteEmail}
+            onChange={event => setInviteEmail(event.target.value)}
+            aria-label="Email"
+            placeholder="name@company.com"
+          />
+          <div className="flow-row">
+            <Button className="flow-btn" type="button" onClick={invite}>
+              Invite by email
             </Button>
             <Button className="flow-btn" type="button" onClick={() => setAddOpen(false)}>
               Close
             </Button>
           </div>
+          {inviteNote ? <p className="flow-muted">{inviteNote}</p> : null}
+          {memberError ? <p className="flow-error">{memberError}</p> : null}
         </DialogContent>
       </Dialog>
     </section>
