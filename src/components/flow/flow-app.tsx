@@ -1459,186 +1459,351 @@ function PublishScreen() {
       .finally(() => setBusy(false));
   };
 
+  const statusChip = (status?: string) =>
+    status === 'APPROVED'
+      ? { label: 'Published', tone: 'accent' }
+      : status === 'PENDING'
+        ? { label: 'In review', tone: 'warn' }
+        : status === 'REJECTED'
+          ? { label: 'Rejected', tone: 'warn' }
+          : { label: 'Draft', tone: 'muted' };
+  const languageLabel = (id?: string) =>
+    pluginLanguageChoices().find(item => item.id === (id || '').toLowerCase())?.label || id || '';
+  const checks = [
+    {
+      label: 'Static scan',
+      detail: 'Dependencies and imports checked',
+      line: review.find(line => line.startsWith('Static scan')),
+    },
+    {
+      label: 'Sandbox test',
+      detail: 'Coming soon',
+      line: undefined as string | undefined,
+    },
+    {
+      label: 'Manual review',
+      detail: 'A Tensr statistician checks the method',
+      line: review.find(line => !line.startsWith('Static scan')),
+    },
+  ];
+
   return (
-    <div className="publish-page">
-      <div className="plugins-head">
-        <div>
-          <div className="plugins-eyebrow">Plugins / Author</div>
-          <h1 className="plugins-title">Publish a plugin</h1>
-          <p className="flow-muted plugins-lead">
-            Write it in TypeScript or JavaScript. Once approved it shows up in ⌘K and the agent can
-            call it.
+    <div className="pub">
+      <header className="pub-head">
+        <div className="pub-head-copy">
+          <div className="pub-crumbs">
+            <span>PLUGINS</span>
+            <span className="pub-slash">/</span>
+            <span>AUTHOR</span>
+          </div>
+          <h1>Publish a plugin</h1>
+          <p>
+            Write it in TypeScript or JavaScript; Python and R are coming soon. Once approved it
+            shows up in ⌘K and the agent can call it.
           </p>
         </div>
-        <Button className="home-new" type="button" disabled={busy} onClick={submit}>
-          {busy ? 'Submitting' : 'Submit for review'}
-        </Button>
-      </div>
+        <div className="pub-actions">
+          <Button className="pub-btn" type="button" disabled title="Draft saving is coming soon">
+            Save draft <span className="pub-soon">soon</span>
+          </Button>
+          <Button className="pub-btn primary" type="button" disabled={busy} onClick={submit}>
+            {busy ? 'Submitting' : 'Submit for review'}
+          </Button>
+        </div>
+      </header>
       {phase === 'loading' ? (
-        <div className="publish-grid" aria-busy="true">
-          <Skeleton className="plugin-skeleton" />
-          <Skeleton className="plugin-skeleton" />
-          <Skeleton className="plugin-skeleton" />
+        <div className="pub-body" aria-busy="true">
+          <div className="pub-rail">
+            <Skeleton className="h-12 w-full" />
+          </div>
+          <div className="pub-main">
+            <Skeleton className="h-64 w-full" />
+          </div>
+          <div className="pub-side">
+            <Skeleton className="h-40 w-full" />
+          </div>
         </div>
       ) : phase === 'error' ? (
-        <p className="flow-error">{error || 'Could not load your plugins.'}</p>
+        <p className="flow-error pub-error">{error || 'Could not load your plugins.'}</p>
       ) : (
-        <div className="publish-grid">
-          <div className="publish-list">
-            <div className="plugin-foot">
-              <span className="flow-muted">Your plugins</span>
-              <span className="plugin-spacer" />
-              <Button className="plugin-install" type="button" onClick={blank}>
+        <div className="pub-body">
+          <aside className="pub-rail">
+            <div className="pub-rail-head">
+              <span>Your plugins</span>
+              <Button className="pub-new" type="button" onClick={blank}>
                 + New
               </Button>
             </div>
-            {plugins.length === 0 ? <p className="flow-muted">No plugins yet.</p> : null}
-            {plugins.map(plugin => (
-              <Button
-                key={plugin.pluginId}
-                className="publish-row"
-                type="button"
-                data-active={selectedId === plugin.pluginId}
-                onClick={() => choose(plugin.pluginId)}
-              >
-                <strong>{plugin.name || 'Plugin'}</strong>
-                <span className="flow-muted">
-                  {plugin.status === 'APPROVED'
-                    ? 'Published'
-                    : plugin.status === 'PENDING'
-                      ? 'In review'
-                      : plugin.status === 'REJECTED'
-                        ? 'Rejected'
-                        : plugin.status || 'Draft'}
-                </span>
-              </Button>
-            ))}
-          </div>
-          <div className="publish-form">
-            <div className="plugin-foot">
-              <span>Manifest</span>
-              <span className="plugin-spacer" />
-              <span className="flow-muted">plugin.toml</span>
+            {plugins.length === 0 ? <p className="pub-empty">No plugins yet.</p> : null}
+            {plugins.map(plugin => {
+              const chip = statusChip(plugin.status);
+              return (
+                <Button
+                  key={plugin.pluginId}
+                  className="pub-item"
+                  type="button"
+                  data-active={selectedId === plugin.pluginId}
+                  onClick={() => choose(plugin.pluginId)}
+                >
+                  <span className="pub-item-name">{plugin.name || 'Plugin'}</span>
+                  <span className="pub-item-meta">
+                    {[
+                      plugin.version ? `v${plugin.version}` : '',
+                      languageLabel((plugin as { language?: string }).language),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    <span className="pub-chip" data-tone={chip.tone}>
+                      <i />
+                      {chip.label}
+                    </span>
+                  </span>
+                </Button>
+              );
+            })}
+            <span className="pub-grow" />
+            <div className="pub-guide">
+              <strong>Author guide</strong>
+              <span>Manifest format, the test harness and how review works.</span>
+              <a href="https://tensr.xyz/docs" target="_blank" rel="noreferrer">
+                Open docs
+              </a>
             </div>
-            <div className="publish-pair">
-              <label className="publish-field">
-                Name
-                <Input value={name} onChange={event => setName(event.target.value)} />
+          </aside>
+          <section className="pub-main">
+            <div className="pub-section">
+              <div className="pub-section-head">
+                <h2>Manifest</h2>
+                <span className="pub-mono">plugin.toml</span>
+              </div>
+              <div className="pub-row">
+                <label className="pub-field pub-grow-field">
+                  <span>Name</span>
+                  <Input value={name} onChange={event => setName(event.target.value)} />
+                </label>
+                <label className="pub-field pub-version">
+                  <span>Version</span>
+                  <Input value={version} onChange={event => setVersion(event.target.value)} />
+                </label>
+              </div>
+              <label className="pub-field">
+                <span>Description</span>
+                <Textarea
+                  rows={2}
+                  value={description}
+                  onChange={event => setDescription(event.target.value)}
+                />
               </label>
-              <label className="publish-field">
-                Version
-                <Input value={version} onChange={event => setVersion(event.target.value)} />
-              </label>
-            </div>
-            <label className="publish-field publish-wide">
-              Description
-              <Textarea
-                value={description}
-                onChange={event => setDescription(event.target.value)}
-              />
-            </label>
-            <div className="publish-field publish-wide">
-              Language
-              <div className="plugins-tools">
-                {pluginLanguageChoices().map(item =>
-                  item.soon ? (
-                    <Badge key={item.id} tone="soon">
-                      {item.label} · coming soon
-                    </Badge>
-                  ) : (
-                    <Button
-                      key={item.id}
-                      className="plugin-pill"
-                      type="button"
-                      data-active={language === item.id}
-                      onClick={() => setLanguage(item.id)}
-                    >
-                      {item.label}
-                    </Button>
-                  )
-                )}
+              <div className="pub-row pub-row-end">
+                <div className="pub-field">
+                  <span>Language</span>
+                  <div className="pub-segment" role="group" aria-label="Language">
+                    {pluginLanguageChoices().map(item => (
+                      <Button
+                        key={item.id}
+                        type="button"
+                        data-active={language === item.id}
+                        disabled={item.soon}
+                        title={item.soon ? `${item.label} is coming soon` : undefined}
+                        onClick={() => setLanguage(item.id)}
+                      >
+                        {item.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <label className="pub-field pub-grow-field">
+                  <span>Shows up as</span>
+                  <Input readOnly value={`⌘K · ${name || 'Your plugin'}`} />
+                </label>
               </div>
             </div>
-            <label className="publish-field">
-              Entry point
-              <Input value={entryPoint} onChange={event => setEntryPoint(event.target.value)} />
-            </label>
-            <label className="publish-field publish-wide">
-              Plugin zip
-              <Input
-                type="file"
-                accept=".zip,application/zip"
-                aria-label="Plugin zip"
-                onChange={event => setFile(event.target.files?.[0] || null)}
-              />
-              <span className="flow-muted">
-                {file ? file.name : 'The source is the zip. An in-page editor is coming soon.'}
-              </span>
-            </label>
-            <p className="flow-muted">Permissions are read from the manifest inside the zip.</p>
-            <p className="flow-soon">Sandbox test coming soon</p>
-            {message ? <p className="flow-muted">{message}</p> : null}
-          </div>
-          <div className="publish-side">
-            <Card className="plugin-tile">
-              <span>Review</span>
-              {review.length === 0 ? (
-                <p className="flow-muted">Submit a zip to start review.</p>
-              ) : (
-                review.map(line => (
-                  <p key={line} className="flow-muted">
-                    {line}
-                  </p>
-                ))
-              )}
-            </Card>
-            <Card className="plugin-tile">
-              <span>Pricing</span>
+            <div className="pub-section">
+              <h2>Permissions</h2>
+              <div className="pub-row">
+                {[
+                  [
+                    'Reads selected columns only',
+                    'Gets the variables the user picks, nothing else',
+                  ],
+                  ['No network access', 'Runs sealed in the sandbox'],
+                ].map(([title, detail]) => (
+                  <div key={title} className="pub-permission">
+                    <span className="pub-tick" role="img" aria-label={`${title}: on`}>
+                      <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true">
+                        <path
+                          d="M2.5 6.2l2.4 2.3 4.6-5"
+                          fill="none"
+                          stroke="#fff"
+                          strokeWidth="1.6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </span>
+                    <div>
+                      <strong>{title}</strong>
+                      <span>{detail}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="pub-source">
+              <div className="pub-source-head">
+                <Input
+                  className="pub-mono pub-entry"
+                  aria-label="Entry point"
+                  value={entryPoint}
+                  onChange={event => setEntryPoint(event.target.value)}
+                />
+                <label className="pub-zip">
+                  {file ? file.name : 'Choose .zip'}
+                  <Input
+                    className="sr-only"
+                    type="file"
+                    accept=".zip,application/zip"
+                    aria-label="Plugin zip"
+                    onChange={event => setFile(event.target.files?.[0] || null)}
+                  />
+                </label>
+              </div>
+              <div className="pub-source-body">
+                <span>The source is the zip you upload, with the entry point above.</span>
+                <span className="pub-soon">In-page editor coming soon</span>
+              </div>
+            </div>
+            <div className="pub-test">
+              <div className="pub-test-head">
+                <span>Test run on sample data</span>
+                <span className="pub-soon">Coming soon</span>
+              </div>
+              <div className="pub-test-figures">
+                {['Sample', 'Output', 'Time', 'Memory'].map(label => (
+                  <div key={label}>
+                    <span>{label}</span>
+                    <strong>—</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {message ? <p className="pub-message">{message}</p> : null}
+          </section>
+          <aside className="pub-side">
+            <div className="pub-card">
+              <div className="pub-card-head">
+                <span>Review · v{version || '0.1.0'}</span>
+                <span>
+                  {selectedId
+                    ? statusChip(plugins.find(item => item.pluginId === selectedId)?.status).label
+                    : 'Not submitted'}
+                </span>
+              </div>
+              {checks.map(check => {
+                const failed = Boolean(check.line && /failed|rejected/i.test(check.line));
+                const done = Boolean(check.line && !failed && !/pending/i.test(check.line));
+                return (
+                  <div key={check.label} className="pub-check">
+                    <span
+                      className="pub-check-mark"
+                      data-state={done ? 'done' : failed ? 'failed' : 'pending'}
+                    >
+                      {done ? (
+                        <svg width="10" height="10" viewBox="0 0 12 12" aria-hidden="true">
+                          <path
+                            d="M2.5 6.2l2.4 2.3 4.6-5"
+                            fill="none"
+                            stroke="#fff"
+                            strokeWidth="1.6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      ) : (
+                        <i />
+                      )}
+                    </span>
+                    <div>
+                      <strong>{check.line || check.label}</strong>
+                      <span>{check.detail}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="pub-card">
+              <div className="pub-card-head">
+                <span>Pricing</span>
+              </div>
               <RadioGroup
+                className="pub-pricing"
                 value={paid ? 'subscription' : 'free'}
                 onValueChange={value => setPaid(value === 'subscription')}
               >
-                <label className="plugin-foot">
+                <label className="pub-price" data-active={!paid}>
                   <RadioGroupItem value="free" />
-                  Free
+                  <span>Free</span>
                 </label>
-                <label className="plugin-foot">
-                  <RadioGroupItem value="subscription" />
-                  Subscription
+                <label className="pub-price" data-active={paid}>
+                  <span className="pub-price-row">
+                    <RadioGroupItem value="subscription" />
+                    <span className="pub-grow">Subscription</span>
+                    <span className="pub-price-input">
+                      £
+                      <Input
+                        aria-label="Price per month"
+                        value={price}
+                        placeholder="0"
+                        onChange={event => {
+                          setPrice(event.target.value);
+                          setPaid(true);
+                        }}
+                      />
+                      <span>/mo</span>
+                    </span>
+                  </span>
+                  <span className="pub-price-note">Per workspace · charged monthly in GBP</span>
                 </label>
               </RadioGroup>
-              {paid ? (
-                <label className="publish-field">
-                  Price per month (GBP)
-                  <Input value={price} onChange={event => setPrice(event.target.value)} />
-                </label>
-              ) : null}
-            </Card>
-            <Card className="plugin-tile">
-              <span>Earnings</span>
-              {stats ? (
-                <div className="plugin-foot">
-                  <span>
-                    {stats.totalDownloads}
-                    <span className="flow-muted"> Purchases</span>
-                  </span>
-                  <span>
-                    {stats.totalCustomers}
-                    <span className="flow-muted"> Customers</span>
-                  </span>
-                  <span>
-                    {stats.monthlyRevenue.toLocaleString('en-GB', {
-                      style: 'currency',
-                      currency: 'GBP',
-                    })}
-                    <span className="flow-muted"> This month</span>
-                  </span>
+            </div>
+            <div className="pub-card pub-earnings">
+              <div className="pub-card-head">
+                <span>Earnings · all plugins</span>
+                <span className="pub-soon">Payouts soon</span>
+              </div>
+              <div className="pub-figures">
+                <div>
+                  <strong>{stats ? stats.totalDownloads : '—'}</strong>
+                  <span>Installs</span>
                 </div>
-              ) : (
-                <p className="flow-soon">Coming soon</p>
-              )}
-            </Card>
-          </div>
+                <div>
+                  <strong>{stats ? stats.totalCustomers : '—'}</strong>
+                  <span>Active workspaces</span>
+                </div>
+                <div>
+                  <strong>
+                    {stats
+                      ? stats.monthlyRevenue.toLocaleString('en-GB', {
+                          style: 'currency',
+                          currency: 'GBP',
+                          maximumFractionDigits: 0,
+                        })
+                      : '—'}
+                  </strong>
+                  <span>This month</span>
+                </div>
+              </div>
+              <svg
+                className="pub-spark"
+                width="248"
+                height="34"
+                viewBox="0 0 248 34"
+                aria-hidden="true"
+              >
+                <path d="M0 30 L248 30" fill="none" stroke="var(--color-line)" strokeWidth="1.6" />
+              </svg>
+            </div>
+          </aside>
         </div>
       )}
     </div>
