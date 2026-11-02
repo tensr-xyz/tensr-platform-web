@@ -4539,3 +4539,38 @@ select.flow-input {
 .project-table .row-archive:focus-visible {
   opacity: 1;
 }
+
+.plugins-lead {
+  max-width: 760px;
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.plugins-head {
+  align-items: center;
+}
+
+.plugins-actions .home-new {
+  display: inline-flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  text-decoration: none;
+}
+
+.plugins-actions .flow-btn {
+  height: 32px;
+}
+
+.plugin-installed-pill {
+  padding: 5px 10px;
+  border-radius: 6px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: var(--weight-medium);
+}
+
+.plugin-search input {
+  height: 32px;
+}

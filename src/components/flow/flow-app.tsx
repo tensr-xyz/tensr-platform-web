@@ -1153,6 +1153,7 @@ function PluginsScreen() {
       </div>
       <div className="plugins-tools">
         <label className="home-search plugin-search">
+          <SearchIcon />
           <Input
             value={query}
             placeholder="Search plugins"
@@ -1279,12 +1280,14 @@ function PluginFeature({
       </Button>
       <p className="flow-muted">{plugin.description}</p>
       <div className="plugin-foot">
-        <Badge tone="soon">Ratings coming soon</Badge>
+        <span className="flow-muted" title="Ratings are coming soon">
+          ★ coming soon
+        </span>
         {count ? <span className="flow-muted">{count}</span> : null}
         {plugin.version ? <span className="flow-muted">v{plugin.version}</span> : null}
         <span className="plugin-spacer" />
         {installed ? (
-          <Badge tone="active">Installed</Badge>
+          <span className="plugin-installed-pill">Installed</span>
         ) : (
           <Button className="flow-btn primary" type="button" disabled={busy} onClick={onInstall}>
             {busy ? 'Installing' : 'Install'}
