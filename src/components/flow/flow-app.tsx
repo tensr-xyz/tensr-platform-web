@@ -83,7 +83,6 @@ import {
   Skeleton,
 } from '@/components/ui/rest';
 import {
-  analysisReportForTable,
   findingFromTable,
   reportTableFromBook,
   segmentChoices,
@@ -204,6 +203,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [folders, setFolders] = useState<{ id: string; name: string }[]>([]);
   const [folderName, setFolderName] = useState<string | null>(null);
   const [datasets, setDatasets] = useState<DatasetRow[]>([]);
+  const [members, setMembers] = useState<Record<string, string[]>>({});
   const [error, setError] = useState<string | null>(null);
   const [account, setAccount] = useState('');
   const [orgName, setOrgName] = useState('');
@@ -225,7 +225,21 @@ export function FlowApp({ slug }: { slug: string[] }) {
         flowJson<{ folders?: { id: string; name: string }[] }>('/api/project-folders'),
         flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>('/datasets/?scope=all'),
       ]);
-      setProjects(projectPage.projects || []);
+      const listed = projectPage.projects || [];
+      const memberPages = await Promise.all(
+        listed.map(project =>
+          flowJson<{ members?: { user_id: string }[] }>(`/api/projects/${project.id}/members`, {
+            signal: AbortSignal.timeout(8000),
+          })
+            .then(page => [
+              project.id,
+              (page.members || []).map(item => item.user_id).filter(Boolean),
+            ])
+            .catch(() => [project.id, []])
+        )
+      );
+      setMembers(Object.fromEntries(memberPages));
+      setProjects(listed);
       setFolders(folderPage.folders || []);
       setDatasets(Array.isArray(filePage) ? filePage : filePage.datasets || []);
       setError(null);
@@ -468,6 +482,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 phase={workspacePhase}
                 error={error}
                 projects={projects}
+                members={members}
                 datasets={datasets}
                 folders={folders}
                 folderName={folderName}
@@ -655,6 +670,7 @@ function ProjectsScreen({
   phase,
   error,
   projects,
+  members,
   datasets,
   folders,
   folderName,
@@ -666,6 +682,7 @@ function ProjectsScreen({
   phase: 'loading' | 'ready' | 'error';
   error: string | null;
   projects: FlowProject[];
+  members: Record<string, string[]>;
   datasets: DatasetRow[];
   folders: { id: string; name: string }[];
   folderName: string | null;
@@ -765,7 +782,12 @@ function ProjectsScreen({
       ) : mode === 'cards' ? (
         <div className="flow-grid">
           {shown.map(project => (
-            <ProjectCard key={project.id} project={project} datasets={datasets} />
+            <ProjectCard
+              key={project.id}
+              project={project}
+              datasets={datasets}
+              memberIds={members[project.id] || []}
+            />
           ))}
           <Button className="flow-card flow-card-new" type="button" onClick={onCreate}>
             <span className="home-plus">+</span>
@@ -842,7 +864,7 @@ function ProjectsScreen({
                       </td>
                       <td>{responseLabel(files)}</td>
                       <td>
-                        <Members projectId={project.id} />
+                        <Members ids={members[project.id] || []} />
                       </td>
                       <td className="edited">{editedWhen(project.updated_at)}</td>
                     </tr>
@@ -857,7 +879,15 @@ function ProjectsScreen({
   );
 }
 
-function ProjectCard({ project, datasets }: { project: FlowProject; datasets: DatasetRow[] }) {
+function ProjectCard({
+  project,
+  datasets,
+  memberIds,
+}: {
+  project: FlowProject;
+  datasets: DatasetRow[];
+  memberIds: string[];
+}) {
   const count = datasets.filter(row => row.project_id === project.id).length;
   const status = project.status || 'active';
   const draft = count === 0;
@@ -883,7 +913,7 @@ function ProjectCard({ project, datasets }: { project: FlowProject; datasets: Da
           <Badge>{count === 0 ? 'Not fielded' : `${count} file${count === 1 ? '' : 's'}`}</Badge>
         </div>
         <div className="card-foot">
-          <Members projectId={project.id} />
+          <Members ids={memberIds} />
           <span className="flow-muted">{editedAgo(project.updated_at)}</span>
         </div>
       </Link>
@@ -896,15 +926,8 @@ function memberMark(id: string): string {
   return (letters.slice(0, 2) || '·').toUpperCase();
 }
 
-function Members({ projectId }: { projectId: string }) {
-  const [ids, setIds] = useState<string[] | null>(null);
-  useEffect(() => {
-    void flowJson<{ members?: { user_id: string }[] }>(`/api/projects/${projectId}/members`)
-      .then(page => setIds((page.members || []).map(item => item.user_id).filter(Boolean)))
-      .catch(() => setIds([]));
-  }, [projectId]);
-  if (ids === null) return <Skeleton className="h-6 w-12" />;
-  if (!ids.length) return <span className="flow-muted">—</span>;
+function Members({ ids }: { ids: string[] }) {
+  if (!ids.length) return <span />;
   return (
     <span className="avatars">
       {ids.slice(0, 3).map(id => (
@@ -3009,53 +3032,17 @@ function ReportScreen({
   const [busy, setBusy] = useState('');
   const [pane, setPane] = useState<'report' | 'outputs'>('report');
 
+  const templateInput = useRef<HTMLInputElement>(null);
+
   const writeFindings = useCallback(
-    async (nextTables: ReportTable[], nextSegment: string | null, nextCut: RowCut[] | null) => {
-      if (!datasetId || !nextTables.length) {
-        setFindings([]);
-        setFindingsPhase('ready');
-        setFindingsError('');
-        return;
-      }
-      setFindingsPhase('loading');
-      setFindingsError('');
+    (nextTables: ReportTable[], nextSegment: string | null, nextCut: RowCut[] | null) => {
       setEditing(false);
-      try {
-        const written = await Promise.all(
-          nextTables.map(async table => {
-            const report = analysisReportForTable(table, nextSegment, nextCut);
-            const body = {
-              report,
-              dataset_id: datasetId,
-              user_question: 'What do these saved table rows show?',
-            };
-            let markdown = '';
-            try {
-              const page = await flowJson<{ markdown?: string }>('/assistant/synthesize-report', {
-                method: 'POST',
-                body: JSON.stringify({ ...body, use_llm: true }),
-              });
-              markdown = page.markdown || '';
-            } catch {
-              const page = await flowJson<{ markdown?: string }>('/assistant/synthesize-report', {
-                method: 'POST',
-                body: JSON.stringify({ ...body, use_llm: false }),
-              });
-              markdown = page.markdown || '';
-            }
-            return findingFromTable(table, markdown, nextSegment, nextCut);
-          })
-        );
-        setFindings(written);
-        setEdits({});
-        setFindingsPhase('ready');
-      } catch (err) {
-        setFindings([]);
-        setFindingsError(err instanceof Error ? err.message : 'Could not write the findings.');
-        setFindingsPhase('error');
-      }
+      setFindingsError('');
+      setFindings(nextTables.map(table => findingFromTable(table, nextSegment, nextCut)));
+      setEdits({});
+      setFindingsPhase('ready');
     },
-    [datasetId]
+    []
   );
 
   useEffect(() => {
@@ -3100,8 +3087,7 @@ function ReportScreen({
         setTables(nextTables);
         setSegmentId(null);
         setRowCut(null);
-        await writeFindings(nextTables, null, null);
-        if (!live) return;
+        writeFindings(nextTables, null, null);
         setPhase('ready');
       })
       .catch(err => {
@@ -3312,7 +3298,7 @@ function ReportScreen({
                     type="button"
                     onClick={() => {
                       setRowCut(null);
-                      void writeFindings(tables, segmentId, null);
+                      writeFindings(tables, segmentId, null);
                     }}
                   >
                     All rows
@@ -3323,7 +3309,7 @@ function ReportScreen({
                     disabled={!filterDraft.length}
                     onClick={() => {
                       setRowCut(filterDraft);
-                      void writeFindings(tables, segmentId, filterDraft);
+                      writeFindings(tables, segmentId, filterDraft);
                     }}
                   >
                     Apply
@@ -3346,7 +3332,7 @@ function ReportScreen({
                 <DropdownMenuItem
                   onSelect={() => {
                     setSegmentId(null);
-                    void writeFindings(tables, null, rowCut);
+                    writeFindings(tables, null, rowCut);
                   }}
                 >
                   All segments
@@ -3356,7 +3342,7 @@ function ReportScreen({
                     key={column.id}
                     onSelect={() => {
                       setSegmentId(column.id);
-                      void writeFindings(tables, column.id, rowCut);
+                      writeFindings(tables, column.id, rowCut);
                     }}
                   >
                     {bannerHeading(column)}
@@ -3379,7 +3365,6 @@ function ReportScreen({
       </div>
       <div className="report-sheet">
         <div className="report-lead">
-          <p className="report-eyebrow">Up to date · regenerates as responses arrive</p>
           <h1>{project?.name || 'Report'}</h1>
           <p className="report-meta">
             <span className="ink">
@@ -3451,12 +3436,37 @@ function ReportScreen({
               </Button>
             </Card>
           </div>
-          <label className="report-template">
-            Deck template
+          <div className="report-template">
+            <Button
+              className="flow-btn"
+              type="button"
+              onClick={() => templateInput.current?.click()}
+            >
+              {templateName ? 'Change deck template' : 'Use a deck template'}
+            </Button>
+            <span className="flow-muted">
+              {templateName || 'Optional .pptx. The client deck uses its layouts.'}
+            </span>
+            {templateName ? (
+              <Button
+                className="flow-btn"
+                type="button"
+                onClick={() => {
+                  setTemplate('');
+                  setTemplateName('');
+                  if (templateInput.current) templateInput.current.value = '';
+                }}
+              >
+                Remove
+              </Button>
+            ) : null}
             <Input
+              ref={templateInput}
+              className="sr-only"
               type="file"
               accept=".pptx"
               aria-label="Deck template"
+              tabIndex={-1}
               onChange={event => {
                 const file = event.target.files?.[0];
                 if (!file) {
@@ -3468,7 +3478,7 @@ function ReportScreen({
                 void fileToBase64(file).then(setTemplate);
               }}
             />
-          </label>
+          </div>
         </div>
         <div className="report-findings">
           <div className="report-head">
@@ -3478,7 +3488,7 @@ function ReportScreen({
                 className="flow-btn"
                 type="button"
                 disabled={findingsPhase === 'loading'}
-                onClick={() => void writeFindings(tables, segmentId, rowCut)}
+                onClick={() => writeFindings(tables, segmentId, rowCut)}
               >
                 Regenerate
               </Button>

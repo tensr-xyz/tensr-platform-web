@@ -1,6 +1,7 @@
 export type BannerColumn = {
   id: string;
   label?: string;
+  letter_slot?: string;
   codes?: { column?: string; code?: string }[];
 };
 

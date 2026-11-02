@@ -1,30 +1,21 @@
-import { analysisReportForTable, findingFromTable, type ReportTable } from './flow-report';
+import { findingFromTable, type ReportTable } from './flow-report';
 
 const table: ReportTable = {
   id: 'spec-1',
   label: 'agree by region',
   index: 1,
+  tested: true,
   columns: [
-    { id: 'east', label: 'region=East' },
-    { id: 'north', label: 'region=North' },
+    { id: 'north', label: 'region=North', letter_slot: 'A' },
+    { id: 'east', label: 'region=East', letter_slot: 'B' },
   ],
   letters: [{ stub_row_id: 'price', banner_id: 'east', letter: 'A' }],
   rows: [
-    {
-      id: 'price',
-      label: 'Price too high',
-      kind: 'value',
-      cells: [
-        { banner_id: 'east', percent: 16, unweighted_n: 13, column_unweighted_n: 81 },
-        { banner_id: 'north', percent: 7.5, unweighted_n: 6, column_unweighted_n: 80 },
-      ],
-    },
     {
       id: 'staff',
       label: 'Staff',
       kind: 'value',
       cells: [
-        { banner_id: 'east', percent: 4, unweighted_n: 3, column_unweighted_n: 81, low_base: true },
         {
           banner_id: 'north',
           percent: 2,
@@ -32,57 +23,80 @@ const table: ReportTable = {
           column_unweighted_n: 80,
           low_base: true,
         },
+        { banner_id: 'east', percent: 4, unweighted_n: 3, column_unweighted_n: 81, low_base: true },
+      ],
+    },
+    {
+      id: 'price',
+      label: 'Price too high',
+      kind: 'value',
+      cells: [
+        { banner_id: 'north', percent: 7.5, unweighted_n: 6, column_unweighted_n: 80 },
+        { banner_id: 'east', percent: 16, unweighted_n: 13, column_unweighted_n: 81 },
+      ],
+    },
+  ],
+};
+
+const flat: ReportTable = {
+  ...table,
+  id: 'spec-2',
+  index: 2,
+  letters: [],
+  rows: [
+    {
+      id: 'agree',
+      label: 'Agree',
+      kind: 'value',
+      cells: [
+        { banner_id: 'north', percent: 40 },
+        { banner_id: 'east', percent: 38 },
+      ],
+    },
+    {
+      id: 'top2',
+      label: 'Top 2',
+      kind: 'net',
+      cells: [
+        { banner_id: 'north', percent: 85.5 },
+        { banner_id: 'east', percent: 84 },
       ],
     },
   ],
 };
 
 describe('report findings', () => {
-  it('builds a synthesize-report body from the cited cells', () => {
-    const report = analysisReportForTable(table, null, null);
-    const summary = String(report.summary);
-    expect(summary).toContain('Price too high is 16.0% in East');
-    expect(summary).toContain('row 1');
-    expect(summary).not.toContain('Staff');
-    const rows = (report.tables as { rows: { row: number }[] }[])[0].rows;
-    expect(rows.map(row => row.row)).toEqual([1]);
-  });
-
-  it('cites the table row and keeps a segment cut on the chart', () => {
-    const markdown = [
-      '## Executive Summary',
-      '',
-      'Price too high is 16.0% in East (n 13 of 81, row 1).',
-      '',
-      '## Results and Findings',
-      '',
-      'The East column carries letter A.',
-    ].join('\n');
-    const finding = findingFromTable(table, markdown, 'east', [{ tableId: 'spec-1', number: 1 }]);
-    expect(finding.citation).toBe('T1 · row 1');
+  it('leads with the largest significant gap in plain English', () => {
+    const finding = findingFromTable(table, null, null);
+    expect(finding.headline).toBe('East is higher than North on Price too high: 16% against 7.5%.');
+    expect(finding.support).toBe('That 8.5-point gap is significant at 95%.');
+    expect(finding.citation).toBe('T1');
     expect(finding.significant).toBe(true);
-    expect(finding.bars).toEqual([{ label: 'Price too high', percent: 16 }]);
-    expect(finding.headline).toContain('16.0%');
-    expect(finding.support).toContain('letter A');
+    expect(finding.bars).toEqual([
+      { label: 'North', percent: 7.5 },
+      { label: 'East', percent: 16 },
+    ]);
+    expect(`${finding.headline} ${finding.support}`).not.toMatch(/\brow \d/i);
   });
 
-  it('keeps the finding to the first two sentences', () => {
-    const markdown = [
-      '## Executive Summary',
-      '',
-      'Row one is 10.0% in East. Row two is 4.0% in North. Row three is 1.0% in South.',
-    ].join('\n');
-    const finding = findingFromTable(table, markdown, null, null);
-    expect(finding.headline).toBe('Row one is 10.0% in East.');
-    expect(finding.support).toBe('Row two is 4.0% in North.');
-    expect(finding.citation).toBe('T1 · row 1');
+  it('leads with Top 2 when nothing differs, and says so', () => {
+    const finding = findingFromTable(flat, null, null);
+    expect(finding.headline).toBe('Top 2 is highest in North at 85.5% and lowest in East at 84%.');
+    expect(finding.support).toBe('None of the differences between columns is significant at 95%.');
+    expect(finding.citation).toBe('T2');
+    expect(finding.significant).toBe(false);
   });
 
   it('uses the selected rows when a filter cut is applied', () => {
-    const finding = findingFromTable(table, '', null, [{ tableId: 'spec-1', number: 2 }]);
-    expect(finding.citation).toBe('T1 · row 2');
+    const finding = findingFromTable(table, null, [{ tableId: 'spec-1', number: 1 }]);
     expect(finding.lowBase).toBe(true);
-    expect(finding.bars.map(bar => bar.label)).toEqual(['East', 'North']);
-    expect(finding.headline).toContain('Staff is 4.0% in East');
+    expect(finding.headline).toBe('Staff is highest in East at 4% and lowest in North at 2%.');
+    expect(finding.citation).toBe('T1');
+  });
+
+  it('describes one segment without a comparison', () => {
+    const finding = findingFromTable(flat, 'east', null);
+    expect(finding.headline).toBe('Top 2 is 84% in East.');
+    expect(finding.bars).toEqual([{ label: 'Agree', percent: 38 }]);
   });
 });

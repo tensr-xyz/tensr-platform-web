@@ -15,6 +15,7 @@ export type ReportTable = {
   rows: BannerRow[];
   columns: BannerColumn[];
   letters: SigLetter[];
+  tested: boolean;
 };
 
 export type RowCut = { tableId: string; number: number };
@@ -48,7 +49,15 @@ export function reportTableFromBook(
     rows: (book.rows as BannerRow[]) || [],
     columns: bannerColumns(book),
     letters: (book.letters as SigLetter[]) || [],
+    tested: significanceTested(book),
   };
+}
+
+function significanceTested(book: Record<string, unknown>): boolean {
+  const display = String(book.significance_display || '');
+  if (display === 'none') return false;
+  const tests = book.tests as { items?: unknown[] } | undefined;
+  return Boolean(tests?.items?.length) || Boolean((book.letters as unknown[] | undefined)?.length);
 }
 
 function isValueRow(row: BannerRow): boolean {
@@ -87,171 +96,165 @@ function cellPercent(row: BannerRow, bannerId: string): number | null {
   return typeof value === 'number' ? value : null;
 }
 
-export function citedRows(
+type Gap = {
+  row: NumberedRow;
+  host: BannerColumn;
+  source: BannerColumn;
+  high: number;
+  low: number;
+};
+
+function shown(percent: number): string {
+  return `${percent.toFixed(1).replace(/\.0$/, '')}%`;
+}
+
+function columnForLetter(table: ReportTable, letter: string): BannerColumn | undefined {
+  return table.columns.find(
+    column => String(column.letter_slot || '').toUpperCase() === letter.toUpperCase()
+  );
+}
+
+function candidateRows(table: ReportTable, rowCut: RowCut[] | null): NumberedRow[] {
+  const values = valueRows(table);
+  if (!rowCut) return values;
+  const wanted = new Set(rowCut.filter(item => item.tableId === table.id).map(item => item.number));
+  const picked = values.filter(item => wanted.has(item.number));
+  return picked.length ? picked : values;
+}
+
+/** Significant gaps on the visible columns, largest first. A letter names the lower column. */
+function significantGaps(table: ReportTable, rows: NumberedRow[], columns: BannerColumn[]): Gap[] {
+  const gaps: Gap[] = [];
+  const shownIds = new Set(columns.map(column => column.id));
+  for (const item of rows) {
+    for (const host of columns) {
+      const letters = lettersFor(table.letters, item.row.id, host.id);
+      const high = cellPercent(item.row, host.id);
+      if (!letters || high == null) continue;
+      for (const letter of letters) {
+        const source = columnForLetter(table, letter);
+        if (!source || source.id === host.id) continue;
+        const low = cellPercent(item.row, source.id);
+        if (low == null || (!shownIds.has(source.id) && columns.length > 1)) continue;
+        gaps.push({ row: item, host, source, high, low });
+      }
+    }
+  }
+  return gaps.sort((left, right) => right.high - right.low - (left.high - left.low));
+}
+
+function netRow(table: ReportTable): NumberedRow | null {
+  const index = table.rows.findIndex(
+    row => row.kind === 'net' && /top/i.test(String(row.label || ''))
+  );
+  return index >= 0 ? { row: table.rows[index], number: 0 } : null;
+}
+
+function leadRow(rows: NumberedRow[], columns: BannerColumn[]): NumberedRow | null {
+  const score = (item: NumberedRow) =>
+    Math.max(-1, ...columns.map(column => cellPercent(item.row, column.id) ?? -1));
+  return [...rows].sort((left, right) => score(right) - score(left))[0] || null;
+}
+
+/** The most notable result in plain English: a significant gap, then Top 2, then the largest answer. */
+export function notableFinding(
   table: ReportTable,
   segmentId: string | null,
   rowCut: RowCut[] | null
-): NumberedRow[] {
-  const values = valueRows(table);
-  if (rowCut) {
-    const wanted = new Set(
-      rowCut.filter(item => item.tableId === table.id).map(item => item.number)
-    );
-    const picked = values.filter(item => wanted.has(item.number));
-    if (picked.length) return picked;
-  }
+): { headline: string; support: string; lead: NumberedRow | null; significant: boolean } {
   const columns = visibleColumns(table, segmentId);
-  const lettered = values.filter(item =>
-    columns.some(column => lettersFor(table.letters, item.row.id, column.id))
-  );
-  if (lettered.length) return lettered.slice(0, 4);
-  return [...values]
-    .sort((left, right) => {
-      const score = (item: NumberedRow) =>
-        Math.max(-1, ...columns.map(column => cellPercent(item.row, column.id) ?? -1));
-      return score(right) - score(left);
-    })
-    .slice(0, 4);
-}
-
-export function citationLabel(index: number, numbers: number[]): string {
-  const noun = numbers.length === 1 ? 'row' : 'rows';
-  return `T${index} · ${noun} ${numbers.join(', ')}`;
+  const rows = candidateRows(table, rowCut);
+  const gaps = significantGaps(table, rows, columns);
+  if (gaps.length) {
+    const gap = gaps[0];
+    const label = gap.row.row.label || 'this answer';
+    const points = Math.round((gap.high - gap.low) * 10) / 10;
+    const others = gaps.length - 1;
+    return {
+      headline: `${bannerHeading(gap.host)} is higher than ${bannerHeading(gap.source)} on ${label}: ${shown(gap.high)} against ${shown(gap.low)}.`,
+      support:
+        `That ${points}-point gap is significant at 95%.` +
+        (others
+          ? ` ${others} other significant difference${others === 1 ? '' : 's'} in this table.`
+          : ''),
+      lead: gap.row,
+      significant: true,
+    };
+  }
+  const net = rowCut ? null : netRow(table);
+  const lead = net || leadRow(rows, columns);
+  if (!lead) return { headline: table.label, support: '', lead: null, significant: false };
+  const label = lead.row.label || 'This answer';
+  const figures = columns
+    .map(column => ({ column, percent: cellPercent(lead.row, column.id) }))
+    .filter((item): item is { column: BannerColumn; percent: number } => item.percent != null);
+  if (figures.length > 1) {
+    const sorted = [...figures].sort((left, right) => right.percent - left.percent);
+    const top = sorted[0];
+    const bottom = sorted[sorted.length - 1];
+    return {
+      headline: `${label} is highest in ${bannerHeading(top.column)} at ${shown(top.percent)} and lowest in ${bannerHeading(bottom.column)} at ${shown(bottom.percent)}.`,
+      support: table.tested ? 'None of the differences between columns is significant at 95%.' : '',
+      lead,
+      significant: false,
+    };
+  }
+  const only = figures[0];
+  const where = segmentId && only ? ` in ${bannerHeading(only.column)}` : '';
+  return {
+    headline: only
+      ? net
+        ? `${label} is ${shown(only.percent)}${where}.`
+        : `${label} is the largest answer${where}, at ${shown(only.percent)}.`
+      : table.label,
+    support: '',
+    lead,
+    significant: false,
+  };
 }
 
 export function findingBars(
   table: ReportTable,
-  cited: NumberedRow[],
-  segmentId: string | null
+  lead: NumberedRow | null,
+  segmentId: string | null,
+  rowCut: RowCut[] | null
 ): FindingBar[] {
   const columns = visibleColumns(table, segmentId);
-  if (!cited.length || !columns.length) return [];
+  if (!lead || !columns.length) return [];
   if (columns.length > 1) {
-    const lead = cited[0];
     return columns.flatMap(column => {
       const percent = cellPercent(lead.row, column.id);
       return percent == null ? [] : [{ label: bannerHeading(column), percent }];
     });
   }
   const bannerId = columns[0].id;
-  return cited.flatMap(item => {
-    const percent = cellPercent(item.row, bannerId);
-    return percent == null ? [] : [{ label: item.row.label || `Row ${item.number}`, percent }];
-  });
-}
-
-function cellLine(row: BannerRow, column: BannerColumn, number: number): string {
-  const cell = cellFor(row, column.id);
-  if (!cell || typeof cell.percent !== 'number') return '';
-  const count = cell.unweighted_n != null ? `n ${cell.unweighted_n}` : 'n —';
-  const base = cell.column_unweighted_n != null ? ` of ${cell.column_unweighted_n}` : '';
-  return `${row.label} is ${cell.percent.toFixed(1)}% in ${bannerHeading(column)} (${count}${base}, row ${number})`;
-}
-
-export function analysisReportForTable(
-  table: ReportTable,
-  segmentId: string | null,
-  rowCut: RowCut[] | null
-): Record<string, unknown> {
-  const columns = visibleColumns(table, segmentId);
-  const cited = citedRows(table, segmentId, rowCut);
-  const lines = cited.flatMap(item =>
-    columns.map(column => cellLine(item.row, column, item.number)).filter(Boolean)
-  );
-  const warnings = cited.flatMap(item =>
-    columns
-      .filter(column => cellFor(item.row, column.id)?.low_base)
-      .map(column => `${item.row.label} in ${bannerHeading(column)} is a low base.`)
-  );
-  return {
-    meta: { analysis_key: 'banner_table', title: table.label },
-    summary: lines.join('. ') + (lines.length ? '.' : ''),
-    metrics: lines.map(line => ({ label: table.label, value: line })),
-    tables: [
-      {
-        title: table.label,
-        rows: cited.map(item => ({
-          row: item.number,
-          label: item.row.label,
-          cells: columns.map(column => {
-            const cell = cellFor(item.row, column.id);
-            return {
-              column: bannerHeading(column),
-              percent: cell?.percent ?? null,
-              n: cell?.unweighted_n ?? null,
-              base: cell?.column_unweighted_n ?? null,
-              letter: lettersFor(table.letters, item.row.id, column.id),
-              low_base: Boolean(cell?.low_base),
-            };
-          }),
-        })),
-      },
-    ],
-    trust: {
-      notes: ['Column letters use a 95% test when the table requested them.'],
-      warnings,
-    },
-  };
-}
-
-function section(markdown: string, heading: string): string {
-  const match = markdown.match(new RegExp(`## ${heading}\\s*([\\s\\S]*?)(?=\\n## |$)`, 'i'));
-  return match?.[1]?.trim() || '';
-}
-
-function plain(text: string): string {
-  return text
-    .replace(/\*\*/g, '')
-    .replace(/^#+\s*/gm, '')
-    .replace(/^[-*]\s+/gm, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-export function findingCopy(
-  markdown: string,
-  fallback: string
-): { headline: string; support: string } {
-  const summary = plain(section(markdown, 'Executive Summary'));
-  const usable = summary && !/see results below/i.test(summary) ? summary : fallback;
-  const sentences = usable
-    .split(/(?<=[.!?])\s+/)
-    .map(sentence => sentence.trim())
-    .filter(Boolean);
-  const headline = sentences[0] || fallback;
-  if (sentences[1]) return { headline, support: sentences[1] };
-  const results = plain(section(markdown, 'Results and Findings'));
-  const support = results
-    .split(/(?<=[.!?])\s+/)
-    .map(sentence => sentence.trim())
-    .filter(sentence => sentence && sentence !== headline)
-    .slice(0, 2)
-    .join(' ');
-  return { headline, support };
+  return candidateRows(table, rowCut)
+    .flatMap(item => {
+      const percent = cellPercent(item.row, bannerId);
+      return percent == null ? [] : [{ label: item.row.label || '', percent }];
+    })
+    .sort((left, right) => right.percent - left.percent)
+    .slice(0, 5);
 }
 
 export function findingFromTable(
   table: ReportTable,
-  markdown: string,
   segmentId: string | null,
   rowCut: RowCut[] | null
 ): ReportFinding {
   const columns = visibleColumns(table, segmentId);
-  const cited = citedRows(table, segmentId, rowCut);
-  const numbers = cited.map(item => item.number).sort((left, right) => left - right);
-  const report = analysisReportForTable(table, segmentId, rowCut);
-  const copy = findingCopy(markdown, String(report.summary || table.label));
+  const copy = notableFinding(table, segmentId, rowCut);
   return {
     id: table.id,
     tableId: table.id,
     eyebrow: `${String(table.index).padStart(2, '0')} · ${table.label}`,
     headline: copy.headline,
     support: copy.support,
-    citation: citationLabel(table.index, numbers),
-    significant: cited.some(item =>
-      columns.some(column => lettersFor(table.letters, item.row.id, column.id))
+    citation: `T${table.index}`,
+    significant: copy.significant,
+    lowBase: Boolean(
+      copy.lead && columns.some(column => cellFor(copy.lead!.row, column.id)?.low_base)
     ),
-    lowBase: cited.some(item => columns.some(column => cellFor(item.row, column.id)?.low_base)),
-    bars: findingBars(table, cited, segmentId),
+    bars: findingBars(table, copy.lead, segmentId, rowCut),
   };
 }
