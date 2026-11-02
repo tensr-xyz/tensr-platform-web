@@ -384,7 +384,7 @@ describe('LoginTemplate', () => {
         entitlements: { plan_code: 'pro' },
       };
       render(<LoginTemplate />);
-      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/flow'));
     });
 
     it('waits for /me entitlements before redirecting (null is unresolved, not unpaid)', async () => {
@@ -420,7 +420,7 @@ describe('LoginTemplate', () => {
       await waitFor(() => expect(mockRedeemStoredReferral).toHaveBeenCalled());
       expect(mockPush).not.toHaveBeenCalled();
       finishRedeem(null);
-      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/dashboard'));
+      await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/flow'));
     });
   });
 });
