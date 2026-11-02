@@ -84,3 +84,40 @@ describe('flow survey grid', () => {
     expect(efficiencyPercent(0.82)).toBe('82.0%');
   });
 });
+
+describe('theme read', () => {
+  it('names the largest theme and the largest significant segment gap', () => {
+    const { themeRead } = jest.requireActual('./flow-survey');
+    const book = {
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'r=E', label: 'region=East', letter_slot: 'A' },
+        { id: 'r=N', label: 'region=North', letter_slot: 'B' },
+      ],
+      letters: [{ stub_row_id: 'price', banner_id: 'r=E', letter: 'B' }],
+      rows: [
+        {
+          id: 'price',
+          label: 'Price',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 31 },
+            { banner_id: 'r=E', percent: 40 },
+            { banner_id: 'r=N', percent: 22 },
+          ],
+        },
+        {
+          id: 'staff',
+          label: 'Staff',
+          kind: 'value',
+          cells: [{ banner_id: 'total', percent: 12 }],
+        },
+      ],
+    };
+    const read = themeRead(book);
+    expect(read.text).toBe(
+      'Price is the largest theme, at 31% overall. Price is higher in East (40%) than North (22%) at 95%.'
+    );
+    expect(read.bannerId).toBe('r=E');
+  });
+});

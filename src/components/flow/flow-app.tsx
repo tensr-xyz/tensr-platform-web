@@ -90,6 +90,7 @@ import {
   Skeleton,
 } from '@/components/ui/rest';
 import {
+  distinctTables,
   findingFromTable,
   reportTableFromBook,
   segmentChoices,
@@ -207,6 +208,17 @@ function editedAgo(value?: string | null): string {
   const days = Math.round(hours / 24);
   if (days < 14) return `Edited ${days} days ago`;
   return `Edited ${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
+}
+
+function isIdColumn(name: string): boolean {
+  const lowered = name.trim().toLowerCase();
+  return (
+    isInternalColumn(name) ||
+    ['id', 'respid', 'respondentid', 'respondent_id', 'resp_id', 'uuid', 'record'].includes(
+      lowered
+    ) ||
+    lowered.endsWith('_id')
+  );
 }
 
 function isNumericColumn(column?: FlowColumn): boolean {
@@ -2748,7 +2760,12 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
   const [specs, setSpecs] = useState<{ id: string; label: string }[] | null>(null);
   const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error'>('loading');
-  const [selectedCol, setSelectedCol] = useState(0);
+  const [selectedCol, setSelectedColState] = useState(0);
+  const [colPicked, setColPicked] = useState(false);
+  const setSelectedCol = (index: number) => {
+    setColPicked(true);
+    setSelectedColState(index);
+  };
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const [side, setSide] = useState<'agent' | 'variable' | 'evidence'>('variable');
   const [showStats, setShowStats] = useState(true);
@@ -2830,9 +2847,14 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
     column => !needle || column.name.toLowerCase().includes(needle)
   );
   const shownCols = headerHits.length ? headerHits : visibleNames;
+  const firstSubstantive = Math.max(
+    0,
+    shownCols.findIndex(column => !isIdColumn(column.name))
+  );
+  const pickedCol = colPicked ? selectedCol : firstSubstantive;
   const columnMeta = (name: string) =>
     columns.find(column => column.name === name || column.label === name);
-  const activeIndex = shownCols[selectedCol]?.index ?? shownCols[0]?.index ?? 0;
+  const activeIndex = shownCols[pickedCol]?.index ?? shownCols[0]?.index ?? 0;
   const shownRows = preview
     .map((row, index) => ({ row, index }))
     .filter(({ row }) => {
@@ -3448,6 +3470,12 @@ function ReportScreen({
     )
       .then(async page => {
         const rows = page.specs || [];
+        const meta = await flowJson<{
+          columns?: { name?: string; value_labels?: Record<string, string> | null }[];
+        }>(`/datasets/${datasetId}/metadata`).catch(() => ({ columns: [] }));
+        const labels = Object.fromEntries(
+          (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
+        );
         const loaded = await Promise.all(
           rows.map(async (row, index) => {
             const id = row.spec_id || row.id || '';
@@ -3460,7 +3488,7 @@ function ReportScreen({
               id,
               label,
               spec,
-              table: reportTableFromBook(id, label, index + 1, detail),
+              table: reportTableFromBook(id, label, index + 1, detail, labels),
             };
           })
         );
@@ -3468,7 +3496,7 @@ function ReportScreen({
         const ready = loaded.filter(row => row.id);
         setSpecs(ready.map(row => ({ id: row.id, label: row.label, spec: row.spec })));
         setPicked(ready.map(row => row.id));
-        const nextTables = ready.map(row => row.table);
+        const nextTables = distinctTables(ready.map(row => row.table));
         setTables(nextTables);
         setSegmentId(null);
         setRowCut(null);

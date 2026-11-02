@@ -16,7 +16,33 @@ export type ReportTable = {
   columns: BannerColumn[];
   letters: SigLetter[];
   tested: boolean;
+  key?: string;
 };
+
+export type ValueLabels = Record<string, Record<string, string> | null | undefined>;
+
+function bareCode(code: string): string {
+  return code.replace(/\.0+$/, '');
+}
+
+/** A shown label for a code: the stored value label, else a reading of a 0/1 column, never a bare code. */
+export function codeLabel(
+  column: string,
+  code: string,
+  labels: ValueLabels,
+  role: 'row' | 'banner',
+  codes: string[] = []
+): string {
+  const key = bareCode(code);
+  const stored = labels[column]?.[key] ?? labels[column]?.[code];
+  if (stored) return stored;
+  const binary = codes.length > 0 && codes.every(item => ['0', '1'].includes(bareCode(item)));
+  if (binary) {
+    if (key === '1') return column;
+    if (key === '0') return role === 'row' ? `not ${column}` : `no ${column}`;
+  }
+  return `${column} ${key}`;
+}
 
 export type RowCut = { tableId: string; number: number };
 
@@ -40,17 +66,69 @@ export function reportTableFromBook(
   id: string,
   label: string,
   index: number,
-  book: Record<string, unknown>
+  book: Record<string, unknown>,
+  labels: ValueLabels = {}
 ): ReportTable {
+  const stub = String(((book.stubs as { column?: string }[]) || [])[0]?.column || '');
+  const rawRows = (book.rows as BannerRow[]) || [];
+  const rowCodes = rawRows
+    .filter(row => (row.kind || 'value') === 'value')
+    .map(row => String(row.id).split(':').pop() || '');
+  const rows = rawRows.map(row => {
+    if ((row.kind || 'value') !== 'value' || !stub) return row;
+    const code = String(row.id).split(':').pop() || '';
+    const labelled = String(row.label || '') !== bareCode(code) && String(row.label || '') !== code;
+    return labelled ? row : { ...row, label: codeLabel(stub, code, labels, 'row', rowCodes) };
+  });
+  const rawColumns = bannerColumns(book);
+  const byColumn = new Map<string, string[]>();
+  rawColumns.forEach(column => {
+    const name = column.codes?.[0]?.column;
+    const code = column.codes?.[0]?.code;
+    if (name && code != null) byColumn.set(name, [...(byColumn.get(name) || []), String(code)]);
+  });
+  const columns = rawColumns.map(column => {
+    const name = column.codes?.[0]?.column;
+    const code = column.codes?.[0]?.code;
+    if (!name || code == null) return column;
+    const heading = bannerHeading(column);
+    if (heading !== bareCode(String(code)) && heading !== String(code)) return column;
+    return {
+      ...column,
+      label: codeLabel(name, String(code), labels, 'banner', byColumn.get(name)),
+    };
+  });
+  const banners = [...byColumn.keys()].sort();
   return {
     id,
     label,
     index,
-    rows: (book.rows as BannerRow[]) || [],
-    columns: bannerColumns(book),
+    rows,
+    columns,
     letters: (book.letters as SigLetter[]) || [],
     tested: significanceTested(book),
+    key: `${stub}|${banners.join(',')}`,
   };
+}
+
+/** One finding per question: an identical table, or one whose banners another table covers, is dropped. */
+export function distinctTables(tables: ReportTable[]): ReportTable[] {
+  const parts = (table: ReportTable) => {
+    const [stub, banners = ''] = String(table.key || table.id).split('|');
+    return { stub, banners: banners ? banners.split(',') : [] };
+  };
+  return tables.filter((table, index) => {
+    const mine = parts(table);
+    return !tables.some((other, otherIndex) => {
+      if (otherIndex === index) return false;
+      const theirs = parts(other);
+      if (theirs.stub !== mine.stub) return false;
+      const covers = mine.banners.every(name => theirs.banners.includes(name));
+      if (!covers) return false;
+      const same = theirs.banners.length === mine.banners.length;
+      return same ? otherIndex < index : true;
+    });
+  });
 }
 
 function significanceTested(book: Record<string, unknown>): boolean {
@@ -140,7 +218,11 @@ function significantGaps(table: ReportTable, rows: NumberedRow[], columns: Banne
       }
     }
   }
-  return gaps.sort((left, right) => right.high - right.low - (left.high - left.low));
+  const negative = (gap: Gap) => (/^not /i.test(String(gap.row.row.label || '')) ? 1 : 0);
+  return gaps.sort(
+    (left, right) =>
+      right.high - right.low - (left.high - left.low) || negative(left) - negative(right)
+  );
 }
 
 function netRow(table: ReportTable): NumberedRow | null {
@@ -169,9 +251,11 @@ export function notableFinding(
     const gap = gaps[0];
     const label = gap.row.row.label || 'this answer';
     const points = Math.round((gap.high - gap.low) * 10) / 10;
-    const others = gaps.length - 1;
+    const others = gaps.filter(
+      item => item !== gap && !/^not /i.test(String(item.row.row.label || ''))
+    ).length;
     return {
-      headline: `${bannerHeading(gap.host)} is higher than ${bannerHeading(gap.source)} on ${label}: ${shown(gap.high)} against ${shown(gap.low)}.`,
+      headline: `${label}: ${shown(gap.high)} among ${bannerHeading(gap.host)} vs ${shown(gap.low)} among ${bannerHeading(gap.source)}.`,
       support:
         `That ${points}-point gap is significant at 95%.` +
         (others

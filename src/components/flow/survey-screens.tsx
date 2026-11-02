@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/rest';
@@ -22,6 +22,7 @@ import {
   codedStub,
   lettersFor,
   selectionFromCell,
+  themeRead,
   type BannerCell,
   type BannerColumn,
   type BannerRow,
@@ -315,8 +316,10 @@ export function ThemesPanel({
   ).length;
   const notCoded = ((book?.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
     ?.not_coded?.unweighted_n;
+  const runSeq = useRef(0);
   const run = () => {
     if (!datasetId || !stub) return;
+    const seq = (runSeq.current += 1);
     setError('');
     setRunning(true);
     setBook(null);
@@ -332,10 +335,20 @@ export function ThemesPanel({
       }),
     })
       .then(page => {
+        if (seq !== runSeq.current) return;
         setBook(page);
         setRunning(false);
+        const read = themeRead(page);
+        const row = ((page.rows as BannerRow[]) || []).find(item => item.id === read.rowId);
+        const cell = row?.cells?.find(item => item.banner_id === read.bannerId);
+        if (row && cell) {
+          const letter = lettersFor((page.letters as SigLetter[]) || [], row.id, read.bannerId);
+          const selected = selectionFromCell(page, row, cell, letter);
+          if (selected) onSelectCell(selected);
+        }
       })
       .catch(err => {
+        if (seq !== runSeq.current) return;
         setRunning(false);
         setError(err instanceof Error ? err.message : 'Themes did not run');
       });
@@ -442,20 +455,21 @@ export function ThemesPanel({
           <Skeleton className="h-40 w-full" />
         </div>
       ) : book ? (
-        <BannerGrid book={book} onSelectCell={onSelectCell} baseAtEnd showQuotes digits={0} />
+        <div className="themes-grid-scroll">
+          <BannerGrid book={book} onSelectCell={onSelectCell} baseAtEnd showQuotes digits={0} />
+        </div>
       ) : (
         <p className="flow-muted">Choose a theme and run it to see the table.</p>
       )}
       <div className="themes-cards">
         <div className="themes-links">
           {book ? (
-            <p className="themes-summary">
-              {themeCount} theme{themeCount === 1 ? '' : 's'} on {stubLabel}
-              {banner
-                ? ` by ${columns.find(column => column.name === banner)?.label || banner}`
-                : ''}
-              {book.answered_n != null ? ` · ${String(book.answered_n)} answered` : ''}
-            </p>
+            <div className="themes-read">
+              <span className="themes-read-label">
+                <i /> Read of this table
+              </span>
+              <p>{themeRead(book).text}</p>
+            </div>
           ) : null}
           {projectId ? (
             book ? (
@@ -1084,7 +1098,9 @@ export function TablesBuilder({
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [ask, setAsk] = useState('');
-  const [thread, setThread] = useState<{ role: 'user' | 'run' | 'reply'; text: string }[]>([]);
+  const [threads, setThreads] = useState<
+    Record<string, { role: 'user' | 'run' | 'reply'; text: string }[]>
+  >({});
   const [asking, setAsking] = useState(false);
   const [railReady, setRailReady] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
@@ -1141,6 +1157,10 @@ export function TablesBuilder({
   }, [datasetId]);
 
   const labelFor = (name: string) => columns.find(column => column.name === name)?.label || name;
+  const questionText = (name: string) => {
+    const label = columns.find(column => column.name === name)?.label;
+    return label && label !== name ? `${name} ${label}` : name;
+  };
   const figure = meanOn
     ? 'mean'
     : statistic === 'count'
@@ -1220,19 +1240,23 @@ export function TablesBuilder({
       .then(body => {
         remember(body);
         const across = banners.length ? banners.map(labelFor).join(', ') : 'the total';
-        setThread(current => [
-          ...current,
-          {
-            role: 'run',
-            text: `Built ${labelFor(stub)} × ${across}`,
-          },
-          {
-            role: 'run',
-            text: `${weight ? `Weighted by ${labelFor(weight)}` : 'Unweighted'}, ${
-              lettersOn ? 'sig at 95%' : 'no significance letters'
-            }`,
-          },
-        ]);
+        const savedId = String((body.spec as { id?: string } | undefined)?.id || threadKey);
+        setThreads(all => ({
+          ...all,
+          [savedId]: [
+            ...(all[threadKey] || []),
+            {
+              role: 'run',
+              text: `Built ${labelFor(stub)} × ${across}`,
+            },
+            {
+              role: 'run',
+              text: `${weight ? `Weighted by ${labelFor(weight)}` : 'Unweighted'}, ${
+                lettersOn ? 'sig at 95%' : 'no significance letters'
+              }`,
+            },
+          ],
+        }));
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Could not save the table'));
   }
@@ -1308,6 +1332,13 @@ export function TablesBuilder({
   }
 
   const specId = String((book?.spec as { id?: string } | undefined)?.id || '');
+  const threadKey = specId || 'draft';
+  const thread = threads[threadKey] || [];
+  const setThread = (
+    update: (
+      current: { role: 'user' | 'run' | 'reply'; text: string }[]
+    ) => { role: 'user' | 'run' | 'reply'; text: string }[]
+  ) => setThreads(current => ({ ...current, [threadKey]: update(current[threadKey] || []) }));
   const selectedIndex = specs.findIndex(item => (item.spec_id || item.id) === specId);
   const title = book
     ? `${selectedIndex >= 0 ? `T${selectedIndex + 1} · ` : ''}${labelFor(stub)}${
@@ -1506,12 +1537,12 @@ export function TablesBuilder({
                   Low base &lt; 30 *
                 </Button>
                 <ChoiceSelect
-                  className="flow-input"
+                  className="flow-input tables-weight"
                   aria-label="Table weight"
                   value={weight}
                   onValueChange={setWeight}
                   options={[
-                    { value: '', label: 'Unweighted' },
+                    { value: '', label: 'Weight none' },
                     ...(weightColumn
                       ? [{ value: weightColumn, label: `Weight ${weightColumn}` }]
                       : []),
@@ -1557,7 +1588,15 @@ export function TablesBuilder({
                 <div>
                   <h2>{title}</h2>
                   <p className="flow-muted">
-                    {[labelFor(stub), baseLine].filter(Boolean).join(' · ')}
+                    {[
+                      questionText(stub),
+                      baseLine ||
+                        (totalBase
+                          ? `Base: all respondents (${totalBase}${weight ? ', weighted' : ''})`
+                          : ''),
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
                   </p>
                 </div>
                 <div className="tables-title-actions">
@@ -1625,9 +1664,22 @@ export function TablesBuilder({
           <aside className="tables-agent">
             <div className="tables-agent-head">
               <span className="tables-dot" />
-              <span>{book ? labelFor(stub) : 'Table'}</span>
+              <span>{book ? title.replace(/^T\d+ · /, '') : 'Table'}</span>
             </div>
             <div className="tables-thread">
+              {thread.length === 0 && !asking ? (
+                <div className="tables-thread-empty">
+                  <strong>
+                    {selectedIndex >= 0
+                      ? `Ask about T${selectedIndex + 1}`
+                      : 'Ask about this table'}
+                  </strong>
+                  <p className="flow-muted">
+                    Ask what moved, or tell it to change the table: add a banner, net the top two
+                    boxes, or weight it.
+                  </p>
+                </div>
+              ) : null}
               {thread.map((item, index) =>
                 item.role === 'reply' ? (
                   <FlowMarkdown key={`reply-${index}`} className="tables-reply">

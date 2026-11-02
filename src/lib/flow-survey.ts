@@ -125,3 +125,53 @@ export function bannerColumns(book: Record<string, unknown>): BannerColumn[] {
     ).values()
   );
 }
+
+function percentText(value: number): string {
+  return `${value.toFixed(0)}%`;
+}
+
+/** One sentence from a themes grid: the largest theme, then the largest significant segment gap. */
+export function themeRead(book: Record<string, unknown>): {
+  text: string;
+  rowId: string;
+  bannerId: string;
+} {
+  const rows = ((book.rows as BannerRow[]) || []).filter(
+    row => (row.kind || 'value') === 'value' && row.label
+  );
+  const columns = bannerColumns(book);
+  const letters = (book.letters as SigLetter[]) || [];
+  const total = (row: BannerRow) =>
+    (row.cells || []).find(cell => cell.banner_id === 'total')?.percent ?? null;
+  const largest = [...rows].sort((a, b) => (total(b) ?? -1) - (total(a) ?? -1))[0];
+  if (!largest || total(largest) == null) return { text: '', rowId: '', bannerId: '' };
+  let text = `${largest.label} is the largest theme, at ${percentText(total(largest) as number)} overall.`;
+  let pick = { rowId: largest.id, bannerId: 'total' };
+  let best = -1;
+  for (const letter of letters) {
+    const row = rows.find(item => item.id === letter.stub_row_id);
+    const host = columns.find(column => column.id === letter.banner_id);
+    if (!row || !host || !letter.letter) continue;
+    const high = (row.cells || []).find(cell => cell.banner_id === host.id)?.percent;
+    for (const slot of letter.letter) {
+      const source = columns.find(
+        column =>
+          String((column as { letter_slot?: string }).letter_slot || '').toUpperCase() ===
+          slot.toUpperCase()
+      );
+      const low = source
+        ? (row.cells || []).find(cell => cell.banner_id === source.id)?.percent
+        : null;
+      if (typeof high !== 'number' || typeof low !== 'number' || !source) continue;
+      if (high - low > best) {
+        best = high - low;
+        text = `${largest.label} is the largest theme, at ${percentText(total(largest) as number)} overall. ${row.label} is higher in ${bannerHeading(host)} (${percentText(high)}) than ${bannerHeading(source)} (${percentText(low)}) at 95%.`;
+        pick = { rowId: row.id, bannerId: host.id };
+      }
+    }
+  }
+  if (best < 0 && columns.some(column => column.id !== 'total')) {
+    text += ' No segment differs significantly.';
+  }
+  return { text, ...pick };
+}
