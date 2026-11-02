@@ -261,14 +261,6 @@ export const FilesTable = ({
                   setMoveTarget({ id: file.fileId, name: file.fileName });
                 }}
               >
-                Add to project
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={e => {
-                  e.stopPropagation();
-                  setMoveTarget({ id: file.fileId, name: file.fileName });
-                }}
-              >
                 Move to project
               </DropdownMenuItem>
               <DropdownMenuSeparator />

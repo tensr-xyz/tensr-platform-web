@@ -51,14 +51,21 @@ export function MoveToProjectDialog({
 
   useEffect(() => {
     if (!open) return;
+    const controller = new AbortController();
     setError('');
-    void flowJson<{ projects?: { id: string; name: string }[] }>('/api/projects')
+    void flowJson<{ projects?: { id: string; name: string }[] }>('/api/projects', {
+      signal: controller.signal,
+    })
       .then(page => {
         const rows = page.projects || [];
         setProjects(rows);
         setProjectId(rows[0]?.id || '');
       })
-      .catch(err => setError(err instanceof Error ? err.message : 'Could not load projects'));
+      .catch(err => {
+        if (controller.signal.aborted) return;
+        setError(err instanceof Error ? err.message : 'Could not load projects');
+      });
+    return () => controller.abort();
   }, [open]);
 
   return (

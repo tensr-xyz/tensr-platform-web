@@ -224,6 +224,7 @@ export function EvidencePanel({
   const [error, setError] = useState('');
   const [syntaxNote, setSyntaxNote] = useState('');
   useEffect(() => {
+    setSyntaxNote('');
     if (!datasetId || !cell?.bitset || !cell.textColumn) {
       setQuotes(null);
       if (cell && !cell.bitset)
