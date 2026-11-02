@@ -4474,3 +4474,68 @@ select.flow-input {
   min-height: 120px;
   overflow-y: auto;
 }
+
+.project-table .flow-table td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  font-size: 12px;
+}
+
+.project-table .project-name {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+}
+
+.project-sub {
+  margin-top: 1px;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.project-table th:nth-child(2),
+.project-table td:nth-child(2) {
+  width: 150px;
+}
+
+.project-table th:nth-child(3),
+.project-table td:nth-child(3) {
+  width: 140px;
+  position: relative;
+}
+
+.project-table th:nth-child(4),
+.project-table td:nth-child(4) {
+  width: 180px;
+}
+
+.project-table th:nth-child(5),
+.project-table td:nth-child(5) {
+  width: 60px;
+}
+
+.project-table th:nth-child(6),
+.project-table td:nth-child(6) {
+  width: 100px;
+}
+
+.project-table td:nth-child(3) > :first-child {
+  border-radius: 999px !important;
+}
+
+.project-table .row-archive {
+  position: absolute;
+  left: 76px;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 22px;
+  padding: 0 8px;
+  font-size: 11px;
+  opacity: 0;
+}
+
+.project-table tr:hover .row-archive,
+.project-table .row-archive:focus-visible {
+  opacity: 1;
+}

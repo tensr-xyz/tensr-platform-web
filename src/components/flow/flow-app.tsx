@@ -952,6 +952,10 @@ function ProjectsScreen({
                         <Link className="project-name" href={`/flow/p/${project.id}/chat`}>
                           {project.name}
                         </Link>
+                        <div className="project-sub">
+                          {files.length} file{files.length === 1 ? '' : 's'}
+                          {files[0]?.original_filename ? ` · ${files[0].original_filename}` : ''}
+                        </div>
                       </td>
                       <td>
                         {project.folder ? (
@@ -968,7 +972,7 @@ function ProjectsScreen({
                           {status === 'archived' ? 'Archived' : draft ? 'Draft' : 'Active'}
                         </Badge>
                         <Button
-                          className="flow-btn"
+                          className="flow-btn row-archive"
                           type="button"
                           onClick={() => {
                             void flowJson(`/api/projects/${project.id}`, {
@@ -983,8 +987,8 @@ function ProjectsScreen({
                         </Button>
                       </td>
                       <td>{responseLabel(files)}</td>
-                      <td>
-                        <Members ids={members[project.id] || []} />
+                      <td className="flow-muted">
+                        {(members[project.id] || []).map(memberMark).join(', ') || '—'}
                       </td>
                       <td className="edited">{editedWhen(project.updated_at)}</td>
                     </tr>
