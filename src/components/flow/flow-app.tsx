@@ -3094,13 +3094,45 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
       });
   };
 
+  const viewSwitch = (
+    <Segmented
+      className="home-segment"
+      aria-label="Response view"
+      value={tab === 'notebook' ? 'notebook' : tab === 'themes' ? 'themes' : 'sheet'}
+      onValueChange={setTab}
+      options={[
+        { value: 'sheet', label: 'Sheet' },
+        { value: 'notebook', label: 'Notebook' },
+        { value: 'themes', label: 'Themes' },
+      ]}
+    />
+  );
+
   return (
-    <div className="responses-layout">
+    <div className={tab === 'notebook' ? 'responses-layout notebook-mode' : 'responses-layout'}>
       <aside className="responses-rail">
+        {tab === 'notebook' ? (
+          <div className="notebook-vars">
+            <div className="rail-head">
+              <span className="flow-muted">Variables</span>
+              <span className="flow-muted">{visibleNames.length}</span>
+            </div>
+            {visibleNames
+              .filter(column => !needle || column.name.toLowerCase().includes(needle))
+              .map(column => (
+                <div key={`${column.name}-${column.index}`} className="notebook-var">
+                  <span className="notebook-var-type">
+                    {isNumericColumn(columnMeta(column.name)) ? '#' : 'T'}
+                  </span>
+                  <span>{column.name}</span>
+                </div>
+              ))}
+          </div>
+        ) : null}
         <Input
           value={query}
-          placeholder="Search this project"
-          aria-label="Search this project"
+          placeholder={tab === 'notebook' ? 'Find variable' : 'Search this project'}
+          aria-label={tab === 'notebook' ? 'Find variable' : 'Search this project'}
           onChange={event => setQuery(event.target.value)}
         />
         <div>
@@ -3145,7 +3177,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
         </div>
       </aside>
       <section className="responses-sheet">
-        <div className="sheet-toolbar">
+        <div className="sheet-toolbar" hidden={tab === 'notebook'}>
           <ChoiceSelect
             className="w-[150px] shrink-0"
             aria-label="Dataset"
@@ -3165,17 +3197,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
               label: row.original_filename || datasetRowId(row),
             }))}
           />
-          <Segmented
-            className="home-segment"
-            aria-label="Response view"
-            value={tab === 'notebook' ? 'notebook' : tab === 'themes' ? 'themes' : 'sheet'}
-            onValueChange={setTab}
-            options={[
-              { value: 'sheet', label: 'Sheet' },
-              { value: 'notebook', label: 'Notebook' },
-              { value: 'themes', label: 'Themes' },
-            ]}
-          />
+          {viewSwitch}
           {tab === 'themes' || tab === 'notebook' ? null : (
             <>
               <Button
@@ -3294,7 +3316,7 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
             ) : null}
           </div>
         ) : null}
-        {tab === 'notebook' ? <FlowNotebook datasetId={datasetId} /> : null}
+        {tab === 'notebook' ? <FlowNotebook datasetId={datasetId} lead={viewSwitch} /> : null}
         {tab === 'themes' ? (
           <ThemesPanel
             datasetId={datasetId}
@@ -3442,7 +3464,24 @@ function ResponsesScreen({ project, datasets }: { project?: FlowProject; dataset
           )
         ) : null}
       </section>
-      <aside className="responses-side">
+      {tab === 'notebook' ? (
+        <aside className="notebook-icons" aria-label="Panels">
+          {(['agent', 'variable', 'evidence'] as const).map(item => (
+            <Button
+              key={item}
+              type="button"
+              aria-label={item[0].toUpperCase() + item.slice(1)}
+              onClick={() => {
+                setSide(item);
+                setTab('sheet');
+              }}
+            >
+              {item === 'agent' ? '✦' : item === 'variable' ? '▤' : '❝'}
+            </Button>
+          ))}
+        </aside>
+      ) : null}
+      <aside className="responses-side" hidden={tab === 'notebook'}>
         <div className="sheet-toolbar">
           <Segmented
             className="side-tabs"

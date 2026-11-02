@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { flowJson } from '@/lib/flow-api';
@@ -78,7 +78,7 @@ function download(filename: string, text: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-export function FlowNotebook({ datasetId }: { datasetId?: string }) {
+export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: ReactNode }) {
   const [cells, setCells] = useState<NotebookCell[]>(() => [blankCell('code')]);
   const [loadedOnce, setLoadedOnce] = useState(false);
 
@@ -123,8 +123,9 @@ export function FlowNotebook({ datasetId }: { datasetId?: string }) {
   return (
     <div className="notebook-page">
       <div className="notebook-bar">
-        <Button className="sources-ink" type="button" onClick={runAll}>
-          Run all
+        {lead}
+        <Button className="notebook-run-all" type="button" onClick={runAll}>
+          ▶ Run all
         </Button>
         <Button
           className="flow-btn"
@@ -140,7 +141,11 @@ export function FlowNotebook({ datasetId }: { datasetId?: string }) {
         >
           + Text
         </Button>
+        <span className="notebook-chip">No sheet filter · df is the open file</span>
         <span className="sheet-spacer" />
+        <span className="notebook-kernel">
+          <i /> Python · {cells.some(cell => cell.running) ? 'running' : 'idle'}
+        </span>
         <Button
           className="flow-btn"
           type="button"
@@ -153,38 +158,59 @@ export function FlowNotebook({ datasetId }: { datasetId?: string }) {
           type="button"
           onClick={() => download('notebook.ipynb', notebookIpynb(cells), 'application/json')}
         >
-          Export .ipynb
+          .ipynb
         </Button>
       </div>
-      <p className="flow-muted notebook-note">
-        Each cell runs on the open file. Cells do not share variables, and a sheet filter is not
-        applied.
-      </p>
-      {cells.map((cell, index) => (
-        <article key={cell.id} className="notebook-cell" data-kind={cell.kind}>
-          <div className="notebook-cell-head">
-            <span className="flow-muted">[{index + 1}]</span>
-            {cell.kind === 'code' ? (
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={cell.running}
-                onClick={() => run(cell)}
-              >
-                {cell.running ? 'Running…' : 'Run'}
-              </Button>
-            ) : (
-              <span className="flow-muted">Text</span>
-            )}
-          </div>
-          <Textarea
-            value={cell.source}
-            aria-label={cell.kind === 'code' ? `Code cell ${index + 1}` : `Text cell ${index + 1}`}
-            onChange={event => patch(cell.id, { source: event.target.value })}
-          />
-          {cell.output ? <pre className="notebook-output">{cell.output}</pre> : null}
-        </article>
-      ))}
+      <div className="notebook-scroll">
+        <div className="notebook-head">
+          <h2>Notebook</h2>
+          <p>
+            df is the open file. Each cell runs on its own, so cells do not share variables, and a
+            sheet filter is not applied.
+          </p>
+        </div>
+        {cells.map((cell, index) => (
+          <article key={cell.id} className="notebook-cell" data-kind={cell.kind}>
+            <span className="notebook-gutter">[{index + 1}]</span>
+            <div className="notebook-card" data-running={cell.running || undefined}>
+              <Textarea
+                value={cell.source}
+                rows={Math.max(1, cell.source.split('\n').length)}
+                aria-label={
+                  cell.kind === 'code' ? `Code cell ${index + 1}` : `Text cell ${index + 1}`
+                }
+                placeholder={cell.kind === 'code' ? 'df.head()' : 'Write a note'}
+                onChange={event => patch(cell.id, { source: event.target.value })}
+                onKeyDown={event => {
+                  if (cell.kind === 'code' && event.key === 'Enter' && event.shiftKey) {
+                    event.preventDefault();
+                    run(cell);
+                  }
+                }}
+              />
+              {cell.kind === 'code' ? (
+                <div className="notebook-out">
+                  {cell.output ? (
+                    <pre className="notebook-output">{cell.output}</pre>
+                  ) : (
+                    <span className="flow-muted">
+                      {cell.running ? 'Running…' : 'Shift+Enter or Run to see the output'}
+                    </span>
+                  )}
+                  <Button
+                    className="notebook-run"
+                    type="button"
+                    disabled={cell.running}
+                    onClick={() => run(cell)}
+                  >
+                    {cell.running ? 'Running…' : 'Run'}
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          </article>
+        ))}
+      </div>
     </div>
   );
 }
