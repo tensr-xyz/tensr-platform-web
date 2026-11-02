@@ -18,7 +18,16 @@ import {
   getAnalysisOpForMenuName,
   isDialogMenuItem,
 } from '@/configs/analysis-config/menu-registry';
-import { getAllAnalysisItems, type AnalysisItem } from '@/configs/analysis-config/utils';
+import {
+  filterAnalysisItems,
+  getAllAnalysisItems,
+  getPaletteTabContent,
+  groupAnalysisItems,
+  PALETTE_TAB_LABELS,
+  PALETTE_TAB_ORDER,
+  PLUGINS_TAB_VALUE,
+  type AnalysisItem,
+} from '@/configs/analysis-config/utils';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -26,13 +35,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  Command,
-  CommandEmpty,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
+import { Command, CommandInput } from '@/components/ui/command';
 import {
   Dialog,
   DialogContent,
@@ -490,6 +493,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
         {palette ? (
           <Palette
             datasetId={openDatasetId}
+            datasets={datasets}
             onClose={() => setPalette(false)}
             onAsk={name => {
               setPalette(false);
@@ -1490,54 +1494,104 @@ function PublishScreen() {
   );
 }
 
+function paletteMark(name: string): string {
+  const letters = name
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .map(word => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  return letters || '—';
+}
+
 function Palette({
   datasetId,
+  datasets,
   onClose,
   onAsk,
 }: {
   datasetId?: string;
+  datasets: DatasetRow[];
   onClose: () => void;
   onAsk: (name: string) => void;
 }) {
+  const items = useMemo(() => getAllAnalysisItems(), []);
   const [query, setQuery] = useState('');
+  const [tab, setTab] = useState<string>('analyze');
+  const [section, setSection] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
-  const analyses = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return getAllAnalysisItems()
-      .filter(item => !needle || item.name.toLowerCase().includes(needle))
-      .slice(0, 12);
-  }, [query]);
-  const chosen = analyses[Math.min(index, Math.max(analyses.length - 1, 0))];
+  const [plugins, setPlugins] = useState<{ pluginId: string; name: string }[]>([]);
+  const filtered = useMemo(() => filterAnalysisItems(items, query), [items, query]);
+  const grouped = useMemo(() => groupAnalysisItems(filtered), [filtered]);
+  const sections = tab === PLUGINS_TAB_VALUE ? {} : getPaletteTabContent(grouped, tab);
+  const sectionNames = Object.keys(sections).filter(name => !query || sections[name]?.length);
+  const activeSection = section && sections[section] ? section : sectionNames[0] || null;
+  const analyses = activeSection ? sections[activeSection] || [] : [];
+  const pluginRows = plugins.filter(plugin =>
+    plugin.name.toLowerCase().includes(query.trim().toLowerCase())
+  );
+  const rows =
+    tab === PLUGINS_TAB_VALUE
+      ? pluginRows.map(plugin => ({
+          kind: 'plugin' as const,
+          name: plugin.name,
+          id: plugin.pluginId,
+        }))
+      : analyses.map(item => ({ kind: 'analysis' as const, item }));
+  const chosen = rows[Math.min(index, Math.max(rows.length - 1, 0))];
+  const dataset = datasets.find(row => datasetRowId(row) === datasetId);
 
-  const openSetup = (item: AnalysisItem) => {
-    onClose();
-    const store = useAnalysisSetupStore.getState();
-    if (isDialogMenuItem(item.name)) {
-      store.openDialog(item.name);
+  useEffect(() => {
+    void flowJson<{ items?: { pluginId?: string; plugin?: { name?: string } }[] }>(
+      '/plugins/installed'
+    )
+      .then(page => {
+        setPlugins(
+          (page.items || [])
+            .map(row => ({
+              pluginId: row.pluginId || '',
+              name: row.plugin?.name || '',
+            }))
+            .filter(row => row.pluginId && row.name)
+        );
+      })
+      .catch(() => setPlugins([]));
+  }, []);
+
+  const openChosen = (ask: boolean) => {
+    if (!chosen) return;
+    if (chosen.kind === 'plugin' || ask) {
+      onAsk(chosen.kind === 'plugin' ? chosen.name : chosen.item.name);
       return;
     }
-    const op = getAnalysisOpForMenuName(item.name);
+    onClose();
+    const store = useAnalysisSetupStore.getState();
+    if (isDialogMenuItem(chosen.item.name)) {
+      store.openDialog(chosen.item.name);
+      return;
+    }
+    const op = getAnalysisOpForMenuName(chosen.item.name);
     if (op) store.openSetupFromPalette(op);
-    else store.openUnavailable(item.name);
+    else store.openUnavailable(chosen.item.name);
   };
 
   return (
     <div className="flow-palette" onClick={onClose}>
       <Command
         shouldFilter={false}
-        className="rounded-[16px] border border-border bg-popover"
+        className="palette-card"
         onClick={event => event.stopPropagation()}
         onKeyDown={event => {
           if (event.key === 'ArrowDown') {
             event.preventDefault();
-            setIndex(current => Math.min(current + 1, analyses.length - 1));
+            setIndex(current => Math.min(current + 1, rows.length - 1));
           } else if (event.key === 'ArrowUp') {
             event.preventDefault();
             setIndex(current => Math.max(current - 1, 0));
           } else if (event.key === 'Enter' && chosen) {
             event.preventDefault();
-            if (event.metaKey || event.ctrlKey) onAsk(chosen.name);
-            else openSetup(chosen);
+            openChosen(event.metaKey || event.ctrlKey);
           } else if (event.key === 'Escape') {
             onClose();
           }
@@ -1552,23 +1606,127 @@ function Palette({
             setIndex(0);
           }}
         />
-        <CommandList>
-          <CommandEmpty>No analyses</CommandEmpty>
-          {analyses.map((item, itemIndex) => (
-            <CommandItem
-              key={`${item.section}-${item.name}`}
-              value={item.name}
-              data-active={item.name === chosen?.name && itemIndex === index}
-              onSelect={() => openSetup(item)}
+        <div className="palette-tabs">
+          {PALETTE_TAB_ORDER.map(key => (
+            <Button
+              key={key}
+              className="plugin-pill"
+              type="button"
+              data-active={tab === key}
+              onClick={() => {
+                setTab(key);
+                setSection(null);
+                setIndex(0);
+              }}
             >
-              {item.name}
-              <span className="flow-muted"> {item.section}</span>
-            </CommandItem>
+              {PALETTE_TAB_LABELS[key] || key}
+            </Button>
           ))}
-        </CommandList>
-        <p className="flow-muted">
-          {datasetId ? 'Dataset open' : 'No dataset open'} · Enter opens setup. ⌘Enter asks the
-          agent.
+          <Button
+            className="plugin-pill"
+            type="button"
+            data-active={tab === PLUGINS_TAB_VALUE}
+            onClick={() => {
+              setTab(PLUGINS_TAB_VALUE);
+              setSection(null);
+              setIndex(0);
+            }}
+          >
+            Plugins{plugins.length ? ` ${plugins.length}` : ''}
+          </Button>
+        </div>
+        <div className={tab === PLUGINS_TAB_VALUE ? 'palette-body plugins' : 'palette-body'}>
+          {tab === PLUGINS_TAB_VALUE ? (
+            <div className="palette-results">
+              {pluginRows.length === 0 ? (
+                <p className="flow-muted">
+                  {plugins.length ? 'No plugins in this search.' : 'No installed plugins.'}
+                </p>
+              ) : (
+                pluginRows.map((plugin, rowIndex) => (
+                  <Button
+                    key={plugin.pluginId}
+                    className="palette-hit"
+                    type="button"
+                    data-active={rowIndex === index}
+                    onClick={() => onAsk(plugin.name)}
+                  >
+                    <span className="palette-mark">{paletteMark(plugin.name)}</span>
+                    <span>
+                      <strong>{plugin.name}</strong>
+                      <span className="flow-muted"> Installed plugin</span>
+                    </span>
+                  </Button>
+                ))
+              )}
+            </div>
+          ) : (
+            <>
+              <div className="palette-sections">
+                {sectionNames.length === 0 ? <p className="flow-muted">No sections</p> : null}
+                {sectionNames.map(name => (
+                  <Button
+                    key={name}
+                    className="palette-section"
+                    type="button"
+                    data-active={name === activeSection}
+                    onClick={() => {
+                      setSection(name);
+                      setIndex(0);
+                    }}
+                  >
+                    {name}
+                    {sections[name]?.length ? '' : ' · soon'}
+                  </Button>
+                ))}
+              </div>
+              <div className="palette-results">
+                {analyses.length === 0 ? (
+                  <p className="flow-soon">Coming soon</p>
+                ) : (
+                  analyses.map((item, rowIndex) => (
+                    <Button
+                      key={item.name}
+                      className="palette-hit"
+                      type="button"
+                      data-active={rowIndex === index}
+                      onClick={() => {
+                        setIndex(rowIndex);
+                        onClose();
+                        const store = useAnalysisSetupStore.getState();
+                        if (isDialogMenuItem(item.name)) {
+                          store.openDialog(item.name);
+                          return;
+                        }
+                        const op = getAnalysisOpForMenuName(item.name);
+                        if (op) store.openSetupFromPalette(op);
+                        else store.openUnavailable(item.name);
+                      }}
+                    >
+                      <span className="palette-mark">{paletteMark(item.name)}</span>
+                      <span>
+                        <strong>{item.name}</strong>
+                        {item.hint ? <span className="flow-muted"> {item.hint}</span> : null}
+                      </span>
+                    </Button>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+        </div>
+        <p className="palette-foot">
+          <span>↑↓ navigate</span>
+          <span>Enter opens setup</span>
+          <span>⌘Enter asks the agent</span>
+          <span className="plugin-spacer" />
+          <span>
+            {dataset
+              ? `Runs on ${dataset.original_filename || 'this dataset'}${
+                  dataset.n_rows ? ` · ${dataset.n_rows.toLocaleString('en-GB')} rows` : ''
+                }`
+              : 'No dataset open'}
+          </span>
         </p>
       </Command>
     </div>
