@@ -19,6 +19,7 @@ import {
 } from '@/lib/run-agent-loop';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import { DetailsScreen } from '@/components/flow/details-screen';
+import { SourcesScreen } from '@/components/flow/sources-screen';
 import { AnalysisSetupHost } from '@/components/templates/analysis/analysis-setup-provider';
 import {
   getAnalysisOpForMenuName,
@@ -116,6 +117,8 @@ type DatasetRow = {
   n_cols?: number;
   project_id?: string;
   updated_at?: string;
+  parent_dataset_id?: string | null;
+  lineage_label?: string | null;
 };
 
 function LogoMark() {
@@ -469,7 +472,19 @@ export function FlowApp({ slug }: { slug: string[] }) {
             ) : section === 'details' ? (
               <DetailsScreen project={project} datasets={datasets} />
             ) : section === 'sources' ? (
-              <SourcesScreen projectId={projectId} datasets={datasets} onChanged={reload} />
+              <SourcesScreen
+                project={project}
+                datasets={datasets}
+                onChanged={reload}
+                stack={
+                  <StackScreen
+                    projectId={projectId}
+                    datasets={datasets}
+                    embedded
+                    onChanged={reload}
+                  />
+                }
+              />
             ) : section === 'responses' ? (
               <ResponsesScreen project={project} datasets={datasets} />
             ) : section === 'tables' ? (
@@ -2434,84 +2449,6 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
       {phase === 'warming' ? <p>Warming up</p> : null}
       {phase === 'error' ? <p className="flow-error">{note}</p> : null}
     </aside>
-  );
-}
-
-function SourcesScreen({
-  projectId,
-  datasets,
-  onChanged,
-}: {
-  projectId: string;
-  datasets: DatasetRow[];
-  onChanged: () => void;
-}) {
-  const [docs, setDocs] = useState<{ id: string; name: string }[]>([]);
-  const [name, setName] = useState('Brief');
-  const [text, setText] = useState('');
-  const mine = datasets.filter(row => row.project_id === projectId);
-  useEffect(() => {
-    void flowJson<{ docs?: { id: string; name: string }[] }>(
-      `/api/projects/${projectId}/context-docs`
-    )
-      .then(page => setDocs(page.docs || []))
-      .catch(() => setDocs([]));
-  }, [projectId]);
-  return (
-    <div className="flow-grid">
-      <section className="flow-panel">
-        <h2>Upload</h2>
-        <p>
-          Drop in a .sav, .csv, or .xlsx from Datasets. {mine.length} files are in this project.
-        </p>
-        <p>
-          <span className="flow-soon">Prolific coming soon</span>{' '}
-          <span className="flow-soon">Qualtrics live sync coming soon</span>{' '}
-          <span className="flow-soon">Decipher coming soon</span>{' '}
-          <span className="flow-soon">Alchemer coming soon</span>
-        </p>
-      </section>
-      <section className="flow-panel">
-        <h2>Context docs</h2>
-        {docs.map(doc => (
-          <div key={doc.id}>{doc.name}</div>
-        ))}
-        <Input
-          className="flow-input"
-          value={name}
-          onChange={event => setName(event.target.value)}
-        />
-        <Textarea
-          className="flow-text"
-          value={text}
-          onChange={event => setText(event.target.value)}
-          placeholder="Questionnaire or brief"
-        />
-        <Button
-          className="flow-btn primary"
-          type="button"
-          onClick={() => {
-            void flowJson(`/api/projects/${projectId}/context-docs`, {
-              method: 'POST',
-              body: JSON.stringify({ name, text, kind: 'brief' }),
-            })
-              .then(() =>
-                flowJson<{ docs?: { id: string; name: string }[] }>(
-                  `/api/projects/${projectId}/context-docs`
-                )
-              )
-              .then(page => setDocs(page.docs || []));
-          }}
-        >
-          Save for the agent
-        </Button>
-      </section>
-      <section className="flow-panel">
-        <h2>Stack waves</h2>
-        <Link href={`/flow/p/${projectId}/sources`}>Review mapping is on the stack screen.</Link>
-        <StackScreen projectId={projectId} datasets={datasets} embedded onChanged={onChanged} />
-      </section>
-    </div>
   );
 }
 
