@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -190,7 +189,7 @@ export function SourcesScreen({
         <div className="sources-head">
           <div>
             <h1 className="sources-title">Sources</h1>
-            <p className="flow-muted">
+            <p className="flow-muted sources-lede">
               Where this project&apos;s data comes from. Tensr reads from your survey and panel
               tools, it doesn&apos;t replace them.
             </p>
@@ -206,15 +205,48 @@ export function SourcesScreen({
           </Button>
         </div>
 
-        <div className="sources-fielding">
-          <div>
-            <div className="sources-fielding-title">Fielding</div>
-            <p className="flow-muted">
-              Panel fielding is coming soon. Completes, quotas, and spend show here once a panel is
-              connected.
-            </p>
+        <div className="sources-field" data-soon>
+          <div className="sources-field-main">
+            <div className="sources-field-head">
+              <div className="sources-field-who">
+                <span className="sources-field-mark">P</span>
+                <div>
+                  <strong>Panel fielding</strong>
+                  <span>Connect Prolific to field this project from here</span>
+                </div>
+              </div>
+              <span className="sources-soon">Coming soon</span>
+            </div>
+            <div>
+              <div className="sources-field-count">
+                <strong>—</strong>
+                <span>completes · fielding is coming soon</span>
+              </div>
+              <div className="sources-field-bar" />
+            </div>
+            <div className="sources-field-stats">
+              {['Median time', 'Screened out', 'Flagged by checks', 'Spent'].map(label => (
+                <div key={label}>
+                  <span>{label}</span>
+                  <strong>—</strong>
+                </div>
+              ))}
+            </div>
+            <div className="sources-field-actions">
+              {['Sync now', 'Connection settings', 'Open in Prolific ↗'].map(label => (
+                <Button key={label} className="flow-btn" type="button" disabled>
+                  {label}
+                </Button>
+              ))}
+            </div>
           </div>
-          <Badge tone="soon">Coming soon</Badge>
+          <div className="sources-field-quotas">
+            <div className="sources-field-quota-head">
+              <span>Quotas</span>
+              <span>filled / target</span>
+            </div>
+            <p>Quotas show here once a panel is connected.</p>
+          </div>
         </div>
 
         <div className="sources-block">
@@ -225,10 +257,27 @@ export function SourcesScreen({
                 const id = datasetRowId(file);
                 return (
                   <div key={id} className="sources-file">
-                    <span className="sources-mark">{fileMark(sourceFileName(file))}</span>
-                    <span>
+                    <span className="sources-mark">
+                      <svg width="15" height="15" viewBox="0 0 14 14" aria-hidden="true">
+                        <rect
+                          x="2"
+                          y="2"
+                          width="10"
+                          height="10"
+                          rx="2"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.2"
+                        />
+                        <path d="M2 5.5h10M5.5 5.5V12" stroke="currentColor" strokeWidth="1.2" />
+                      </svg>
+                    </span>
+                    <span className="sources-file-copy">
                       <span className="sources-file-name">{sourceFileName(file)}</span>
-                      <span className="flow-muted">Uploaded · {sourceRowCount(file)}</span>
+                      <span className="flow-muted">
+                        Uploaded · {sourceRowCount(file)}
+                        {id === project?.active_dataset_id ? ' · in use' : ''}
+                      </span>
                     </span>
                   </div>
                 );
@@ -245,17 +294,17 @@ export function SourcesScreen({
             <div className="sources-connector">
               <span>Prolific</span>
               <span className="flow-muted">Status, quotas, participant IDs</span>
-              <Badge tone="soon">Coming soon</Badge>
+              <span className="sources-soon">Coming soon</span>
             </div>
             <div className="sources-connector">
               <span>Qualtrics</span>
               <span className="flow-muted">Live sync responses</span>
-              <Badge tone="soon">Coming soon</Badge>
+              <span className="sources-soon">Coming soon</span>
             </div>
             <div className="sources-connector">
               <span>Decipher / Alchemer</span>
               <span className="flow-muted">Import by survey ID</span>
-              <Badge tone="soon">Coming soon</Badge>
+              <span className="sources-soon">Coming soon</span>
             </div>
             <Button
               className="sources-connector"

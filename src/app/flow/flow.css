@@ -5637,3 +5637,192 @@ select.flow-input {
   display: flex;
   flex-direction: column;
 }
+
+/* 3 Sources, from the Paper export. */
+.sources-field {
+  display: flex;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.sources-field-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 22px 24px;
+}
+
+.sources-field-head,
+.sources-field-who {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sources-field-who > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sources-field-who strong {
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+}
+
+.sources-field-who span {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.sources-field-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: var(--color-well);
+  color: var(--color-muted);
+  font-size: 15px;
+  font-weight: var(--weight-title);
+}
+
+.sources-field-count {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.sources-field-count strong {
+  font-size: 34px;
+  line-height: 42px;
+  letter-spacing: -0.02em;
+  font-weight: var(--weight-medium);
+  color: var(--color-muted);
+}
+
+.sources-field-count span {
+  color: var(--color-muted);
+  font-size: 15px;
+}
+
+.sources-field-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--color-well);
+}
+
+.sources-field-stats {
+  display: flex;
+  gap: 28px;
+}
+
+.sources-field-stats div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sources-field-stats span {
+  color: var(--color-muted);
+  font-size: 13px;
+}
+
+.sources-field-stats strong {
+  color: var(--color-muted);
+  font-size: 15px;
+  font-weight: var(--weight-medium);
+}
+
+.sources-field-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sources-field-actions .flow-btn:disabled {
+  opacity: 0.6;
+}
+
+.sources-field-quotas {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px 24px;
+  border-left: 1px solid var(--color-line);
+  background: var(--color-well);
+}
+
+.sources-field-quota-head {
+  display: flex;
+  justify-content: space-between;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.sources-field-quotas p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.sources-soon {
+  align-self: flex-start;
+  padding: 2px 8px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.sources-connected {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.sources-file {
+  padding: 14px 16px;
+  border-radius: 12px;
+  gap: 12px;
+}
+
+.sources-file .sources-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--color-well);
+  color: var(--color-muted);
+}
+
+.sources-file-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sources-connector {
+  border-style: dashed !important;
+}
+
+.sources-field {
+  flex-shrink: 0;
+}
+
+.sources-connected {
+  display: grid !important;
+  gap: 12px;
+}
+
+.sources-lede {
+  margin: 6px 0 0;
+  font-size: 14px;
+  line-height: 18px;
+}
