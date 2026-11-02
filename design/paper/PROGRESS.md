@@ -118,7 +118,7 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 - A themes banner heading shows the stored code (region 1 and 2) rather than the value label. On likert_openends the region values are already words, so the headings read East, North, West, South.
 - The "No substantive comment" theme shows a count of 37 beside a total of 1.7%. The other ten theme counts match their column percents of the 348 base.
 - agree_value by region saved Top 2 and Bottom 2 rows at 0% while those toggles were off. The table request did not ask for them.
-- High priority, fix in the bugs pass. Notebook `df.head()` on the stacked file timed out after 18s. Find where the time goes: loading the dataset into the sandbox, a cold start, or the executor limit. A simple cell should return in a few seconds, and the first run should say it is loading the data. The cell currently shows the timeout.
+- High priority. Notebook `df.head()` on the stacked file timed out after 18s. The remote cell budget was 18s inside a 22s executor; each cell starts a fresh Python that imports pandas and reads the CSV, and the datasets route also wrote an unused temp CSV before the invoke. Fixing: skip that unused write, raise the cell budget to 22s and the executor Lambda to 28s (HTTP still 29s), and show "Loading data…" on the first run. Needs API deploy.
 
 ## Unfinished
 

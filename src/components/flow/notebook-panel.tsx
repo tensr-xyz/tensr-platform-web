@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { flowJson } from '@/lib/flow-api';
@@ -80,6 +80,11 @@ function download(filename: string, text: string, type: string) {
 
 export function FlowNotebook({ datasetId }: { datasetId?: string }) {
   const [cells, setCells] = useState<NotebookCell[]>(() => [blankCell('code')]);
+  const [loadedOnce, setLoadedOnce] = useState(false);
+
+  useEffect(() => {
+    setLoadedOnce(false);
+  }, [datasetId]);
 
   const patch = (id: string, next: Partial<NotebookCell>) => {
     setCells(current => current.map(cell => (cell.id === id ? { ...cell, ...next } : cell)));
@@ -87,7 +92,11 @@ export function FlowNotebook({ datasetId }: { datasetId?: string }) {
 
   const run = (cell: NotebookCell) => {
     if (!datasetId || cell.kind !== 'code' || !cell.source.trim()) return;
-    patch(cell.id, { running: true, output: '' });
+    const firstLoad = !loadedOnce;
+    patch(cell.id, {
+      running: true,
+      output: firstLoad ? 'Loading data…' : 'Running…',
+    });
     void flowJson<{ stdout?: string | null; output?: unknown; error?: string | null }>(
       '/api/execute/python',
       {
@@ -95,7 +104,10 @@ export function FlowNotebook({ datasetId }: { datasetId?: string }) {
         body: JSON.stringify({ code: cell.source, dataset_id: datasetId, save_as_dataset: false }),
       }
     )
-      .then(result => patch(cell.id, { running: false, output: notebookText(result) }))
+      .then(result => {
+        setLoadedOnce(true);
+        patch(cell.id, { running: false, output: notebookText(result) });
+      })
       .catch(err =>
         patch(cell.id, {
           running: false,
