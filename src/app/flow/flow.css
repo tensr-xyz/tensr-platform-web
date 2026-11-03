@@ -9850,3 +9850,117 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   gap: 8px;
   margin-top: 6px;
 }
+
+/* QA round 4. Settings inside the app shell. */
+.settings-page {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 32px;
+  padding: 40px 48px;
+  max-width: 1120px;
+  height: 100%;
+  overflow: auto;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-nav-label {
+  margin: 0 0 8px;
+  padding: 0 10px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.settings-nav a {
+  padding: 8px 10px;
+  border-radius: 8px;
+  color: var(--color-ink);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.settings-nav a:hover,
+.settings-nav a[data-active='true'] {
+  background: var(--color-well);
+}
+
+.settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.settings-head p {
+  margin: 4px 0 0;
+}
+
+.settings-content {
+  border: 1px solid var(--color-line);
+  border-radius: 12px;
+  background: var(--color-canvas);
+  padding: 8px 4px;
+}
+
+.settings-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+/* QA round 4. Datasets columns keep their own space. */
+.datasets-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.datasets-table th:nth-child(1) {
+  width: 38%;
+}
+
+.datasets-table th:nth-child(2) {
+  width: 24%;
+}
+
+.datasets-table th:nth-child(3) {
+  width: 10%;
+}
+
+.datasets-table th:nth-child(4) {
+  width: 12%;
+}
+
+.datasets-table .datasets-actions-cell {
+  width: 160px;
+}
+
+.datasets-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.datasets-table td.edited,
+.datasets-table th.edited {
+  text-align: right;
+}
+
+.datasets-table .datasets-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* QA round 4. The project name holds its place while the first fetch runs. */
+.proj-switch strong[data-loading] {
+  display: inline-block;
+  width: 96px;
+  height: 14px;
+  border-radius: 4px;
+  background: var(--color-well);
+}

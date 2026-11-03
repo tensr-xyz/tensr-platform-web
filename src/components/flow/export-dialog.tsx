@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { downloadExport } from '@/components/flow/survey-screens';
+import { flowJson } from '@/lib/flow-api';
 import {
   documentApa,
   documentCsv,
@@ -60,6 +61,22 @@ function downloadSvg(svg: string, filename: string, scale: number) {
   image.src = url;
 }
 
+/** The same deck Report builds: every saved table on the file, one slide each. */
+export async function deckFromTables(datasetId: string, stem: string) {
+  const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
+    `/datasets/${datasetId}/tables`
+  );
+  const ids = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
+  if (!ids.length)
+    throw new Error('Save a table in Tables first. The deck has one slide per saved table.');
+  const created = await flowJson<{ export_id?: string; filename?: string }>(
+    `/datasets/${datasetId}/export/deck`,
+    { method: 'POST', body: JSON.stringify({ spec_ids: ids }) }
+  );
+  if (!created.export_id) throw new Error('The deck did not build. Try again.');
+  await downloadExport(`/exports/${created.export_id}`, created.filename || `${stem}.pptx`);
+}
+
 export function ExportDialog({
   kind,
   title,
@@ -67,6 +84,7 @@ export function ExportDialog({
   svg,
   runIds,
   onClose,
+  datasetId,
 }: {
   kind: ExportKind;
   title: string;
@@ -74,6 +92,7 @@ export function ExportDialog({
   svg?: string;
   runIds: string[];
   onClose: () => void;
+  datasetId?: string;
 }) {
   const [error, setError] = useState('');
   const [note, setNote] = useState(document.summary);
@@ -105,7 +124,7 @@ export function ExportDialog({
 
   const serverFor = (format: 'pdf' | 'docx' | 'html', filename: string, ids: string[]) => {
     if (!ids.length) throw new Error('Pin a saved analysis before exporting this format.');
-    return downloadExport(`/reports/pipeline/export?format=${format}`, filename, {
+    return downloadExport(`/datasets/reports/pipeline/export?format=${format}`, filename, {
       method: 'POST',
       body: JSON.stringify({ run_ids: ids }),
     });
@@ -113,7 +132,7 @@ export function ExportDialog({
 
   const server = (format: 'pdf' | 'docx' | 'html', filename: string) => {
     if (!runIds.length) throw new Error('Save the analysis before exporting this format.');
-    return downloadExport(`/reports/pipeline/export?format=${format}`, filename, {
+    return downloadExport(`/datasets/reports/pipeline/export?format=${format}`, filename, {
       method: 'POST',
       body: JSON.stringify({ run_ids: runIds }),
     });
@@ -138,7 +157,14 @@ export function ExportDialog({
         note: 'Manuscript or topline, tables stay editable',
         run: () => serverFor('docx', `${stem}.docx`, chosenRuns),
       },
-      { id: 'pptx', ext: '.PPTX', label: 'PowerPoint', note: 'Coming soon', soon: true },
+      {
+        id: 'pptx',
+        ext: '.PPTX',
+        label: 'PowerPoint',
+        note: datasetId ? 'One slide per saved table' : 'Open a file to build a deck',
+        soon: !datasetId,
+        run: () => deckFromTables(datasetId || '', stem),
+      },
       {
         id: 'xlsx',
         ext: '.XLSX',
@@ -296,7 +322,7 @@ export function ExportDialog({
             <Button
               className="flow-btn primary"
               type="button"
-              disabled={busy !== '' || !format.run || !chosen.length}
+              disabled={busy !== '' || !format.run || (!chosen.length && format.id !== 'pptx')}
               onClick={() => format.run && save(format.label, format.run)}
             >
               {busy ? 'Working…' : `↓ Export ${format.ext.toLowerCase().split(' ')[0]}`}

@@ -26,8 +26,9 @@ import {
   clockLabel,
   dayLabel,
   metricLines,
+  outputCounts,
   outputRuns,
-  statusCounts,
+  uniqueRuns,
   summaryText,
   type OutputRun,
 } from '@/components/flow/report-output-runs';
@@ -69,11 +70,15 @@ export function ReportOutputs({
   files,
   findings = [],
   lead,
+  openRunId = '',
+  refreshKey = 0,
 }: {
   projectId: string;
   files: { id: string; name: string }[];
   findings?: { id: string; label: string }[];
   lead?: ReactNode;
+  openRunId?: string;
+  refreshKey?: number;
 }) {
   const [runs, setRuns] = useState<OutputRun[]>([]);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -109,14 +114,19 @@ export function ReportOutputs({
       .then(async pages => {
         if (!live) return;
         setProjectPins(projectId, pinsFromRuns(rawRuns));
-        const sorted = pages
-          .flat()
-          .sort((left, right) => right.created_at.localeCompare(left.created_at));
+        const sorted = uniqueRuns(pages.flat()).sort((left, right) =>
+          right.created_at.localeCompare(left.created_at)
+        );
         const next = sorted;
         setRuns(next);
-        setSelectedId(current =>
-          next.some(run => run.id === current) ? current : next[0]?.id || ''
-        );
+        if (openRunId && next.some(run => run.id === openRunId)) {
+          setSelectedId(openRunId);
+          setOpened(true);
+        } else {
+          setSelectedId(current =>
+            next.some(run => run.id === current) ? current : next[0]?.id || ''
+          );
+        }
         setPhase('ready');
       })
       .catch(err => {
@@ -128,7 +138,7 @@ export function ReportOutputs({
     return () => {
       live = false;
     };
-  }, [fileKey, filesRef, projectId]);
+  }, [fileKey, filesRef, projectId, refreshKey, openRunId]);
 
   useEffect(() => {
     if (!selectedId) {
@@ -159,16 +169,8 @@ export function ReportOutputs({
   const pins = useProjectPins(projectId, []);
   const pinnedRuns = useMemo(() => new Set(pins.map(pin => pin.runId)), [pins]);
   const stateOf = (run: OutputRun) => runState(run.status, pinnedRuns.has(run.id));
-  const counts = useMemo(() => {
-    const order = ['Saved', 'In report', 'Draft'] as const;
-    return order.map(status => ({
-      status: status as string,
-      count: runs.filter(
-        run => stateOf(run) === status || (status === 'Saved' && stateOf(run) === 'In report')
-      ).length,
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [runs, pinnedRuns]);
+  const tally = useMemo(() => outputCounts(runs, pinnedRuns), [runs, pinnedRuns]);
+  const counts = tally.counts;
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const matched = runs.filter(run => {
@@ -203,7 +205,7 @@ export function ReportOutputs({
   const download = (format: 'pdf' | 'html' | 'docx', filename: string) => {
     if (!selectedId) return;
     setExportError('');
-    void downloadExport(`/reports/pipeline/export?format=${format}`, filename, {
+    void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, filename, {
       method: 'POST',
       body: JSON.stringify({ run_id: selectedId }),
     }).catch(err =>
@@ -303,7 +305,7 @@ export function ReportOutputs({
             onClick={() => setStatus('all')}
           >
             <span>All outputs</span>
-            <span>{runs.length}</span>
+            <span>{tally.all}</span>
           </Button>
           {counts.map(item => (
             <Button

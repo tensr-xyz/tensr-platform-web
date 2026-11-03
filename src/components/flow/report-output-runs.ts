@@ -119,3 +119,31 @@ export function metricLines(run: Record<string, unknown>): { label: string; valu
   }
   return lines;
 }
+
+/** One count per status from one de-duplicated list, so All always equals Saved plus Draft. */
+export function outputCounts(
+  runs: OutputRun[],
+  pinned: Set<string>
+): { all: number; counts: { status: 'Saved' | 'In report' | 'Draft'; count: number }[] } {
+  const unique = uniqueRuns(runs);
+  const states = unique.map(run => runState(run.status, pinned.has(run.id)));
+  const inReport = states.filter(state => state === 'In report').length;
+  const draft = states.filter(state => state === 'Draft').length;
+  return {
+    all: unique.length,
+    counts: [
+      { status: 'Saved', count: unique.length - draft },
+      { status: 'In report', count: inReport },
+      { status: 'Draft', count: draft },
+    ],
+  };
+}
+
+export function uniqueRuns(runs: OutputRun[]): OutputRun[] {
+  const seen = new Set<string>();
+  return runs.filter(run => {
+    if (!run.id || seen.has(run.id)) return false;
+    seen.add(run.id);
+    return true;
+  });
+}

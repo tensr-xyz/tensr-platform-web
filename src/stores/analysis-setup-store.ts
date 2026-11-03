@@ -13,6 +13,8 @@ type AnalysisSetupState = {
   unavailableName: string | null;
   unavailableKind: UnavailableKind | null;
   commandPaletteOpen: boolean;
+  lastRun: { op: string; runId: string; datasetId: string; nonce: number } | null;
+  noteRun: (run: { op: string; runId: string; datasetId: string }) => void;
   openSetup: (op: AnalysisKey, initialBody?: Record<string, unknown> | null) => void;
   openSetupFromPalette: (op: AnalysisKey) => void;
   openDialog: (name: string, initialBody?: Record<string, unknown> | null) => void;
@@ -43,6 +45,8 @@ export const useAnalysisSetupStore = create<AnalysisSetupState>(set => ({
   unavailableName: null,
   unavailableKind: null,
   commandPaletteOpen: false,
+  lastRun: null,
+  noteRun: run => set(state => ({ lastRun: { ...run, nonce: (state.lastRun?.nonce || 0) + 1 } })),
   openSetup: (op, initialBody = null) =>
     set(
       isRetiredFromUi(op)

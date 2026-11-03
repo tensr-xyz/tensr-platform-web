@@ -26,6 +26,8 @@ type Props = {
   busy: boolean;
   canRun: boolean;
   runBlockers?: string[];
+  /** Show why Run is off only after a field changes or Run is pressed. */
+  revealBlockers?: boolean;
   serverError: string | null;
   onRun: () => void;
   children: React.ReactNode;
@@ -44,6 +46,7 @@ export function AnalysisDialogShell({
   serverError,
   onRun,
   children,
+  revealBlockers = true,
 }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -92,7 +95,7 @@ export function AnalysisDialogShell({
 
         {serverError ? (
           <div
-            className="shrink-0 border-t border-red-900/20 bg-red-600 px-6 py-2.5 text-sm text-white"
+            className="shrink-0 border-t border-border bg-[#F6EDE2] px-6 py-2.5 text-sm text-[#8A4B12]"
             role="alert"
           >
             {serverError}
@@ -101,8 +104,8 @@ export function AnalysisDialogShell({
 
         <footer className="flex shrink-0 items-center justify-between gap-3 border-t border-border bg-background px-6 py-3">
           <div className="min-w-0 flex-1 space-y-1">
-            {!canRun && !busy && runBlockers.length > 0 && !serverError ? (
-              <p className="text-[11px] leading-snug text-red-600 dark:text-red-400" role="status">
+            {revealBlockers && !canRun && !busy && runBlockers.length > 0 && !serverError ? (
+              <p className="text-[11px] leading-snug text-[#8A4B12]" role="status">
                 {runBlockers[0]}
               </p>
             ) : null}

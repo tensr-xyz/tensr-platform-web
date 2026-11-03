@@ -47,10 +47,12 @@ import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
 import { placePins, runDocument } from '@/components/flow/run-document';
 import { loadProjectPins, useProjectPins } from '@/components/flow/report-pins';
+import { SettingsScreen } from '@/components/flow/settings-screen';
 import {
   DatasetsScreen,
   FlowSidebar,
   LogoMark,
+  memberInitials,
   NavIcon,
   NewProjectDialog,
   ProjectSwitcher,
@@ -130,7 +132,7 @@ import {
 } from '@/lib/flow-plugins';
 import { bannerHeading } from '@/lib/flow-survey';
 import { CodeFrameRail } from '@/components/flow/code-frame-rail';
-import { ColumnSpark, valueCounts } from '@/components/flow/column-spark';
+import { ColumnSpark, fileCounts, valueCounts } from '@/components/flow/column-spark';
 import {
   datasetRowId,
   downloadExport,
@@ -276,19 +278,22 @@ export function FlowApp({ slug }: { slug: string[] }) {
   }, [isAuthReady, isAuthenticated, pathname, router]);
 
   const membersFor = useCallback(async (listed: FlowProject[]) => {
-    const memberPages = await Promise.all(
-      listed.map(project =>
-        flowJson<{ members?: { user_id: string }[] }>(`/api/projects/${project.id}/members`, {
-          signal: AbortSignal.timeout(8000),
-        })
-          .then(page => [
-            project.id,
-            (page.members || []).map(item => item.user_id).filter(Boolean),
-          ])
-          .catch(() => [project.id, []])
-      )
-    );
-    return Object.fromEntries(memberPages) as Record<string, string[]>;
+    if (!listed.length) return {} as Record<string, string[]>;
+    const page = await flowJson<{
+      members?: Record<string, { user_id?: string; name?: string; email?: string }[]>;
+    }>(`/api/projects/batch/members?ids=${listed.map(project => project.id).join(',')}`, {
+      signal: AbortSignal.timeout(10000),
+    }).catch(() => ({
+      members: {} as Record<string, { user_id?: string; name?: string; email?: string }[]>,
+    }));
+    return Object.fromEntries(
+      listed.map(project => [
+        project.id,
+        (page.members?.[project.id] || [])
+          .map(item => item.name || item.email || item.user_id || '')
+          .filter(Boolean),
+      ])
+    ) as Record<string, string[]>;
   }, []);
 
   const reload = useCallback(async () => {
@@ -395,6 +400,67 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const section = slug[0] === 'p' ? slug[2] || 'chat' : slug[0] || 'projects';
   const projectId = slug[0] === 'p' ? slug[1] : '';
   const project = projects.find(item => item.id === projectId);
+  const [projectReady, setProjectReady] = useState('');
+
+  useEffect(() => {
+    if (!isAuthenticated || !projectId) return;
+    let cancelled = false;
+    void flowJson<{ project?: FlowProject; datasets?: DatasetRow[] }>(`/api/projects/${projectId}`)
+      .then(page => {
+        if (cancelled) return;
+        const found = page.project;
+        if (found) {
+          setProjects(current =>
+            current.some(item => item.id === found.id)
+              ? current.map(item => (item.id === found.id ? { ...item, ...found } : item))
+              : [...current, found]
+          );
+          try {
+            window.localStorage.setItem(`tensr-project-name:${found.id}`, found.name);
+          } catch {
+            // The cached name only saves a flash of the placeholder.
+          }
+        }
+        const rows = (page.datasets || []).map(row => ({
+          ...row,
+          dataset_id: row.dataset_id || row.id,
+          project_id: row.project_id || projectId,
+        }));
+        setDatasets(current => [
+          ...current.filter(row => !rows.some(item => datasetRowId(item) === datasetRowId(row))),
+          ...rows,
+        ]);
+        setProjectReady(projectId);
+      })
+      .catch(() => {
+        if (!cancelled) setProjectReady(projectId);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, projectId]);
+  const tabReady = workspacePhase === 'ready' || projectReady === projectId;
+  const finishedRun = useAnalysisSetupStore(s => s.lastRun);
+  const handledRun = useRef(finishedRun?.nonce || 0);
+  useEffect(() => {
+    if (!finishedRun || finishedRun.nonce === handledRun.current) return;
+    handledRun.current = finishedRun.nonce;
+    if (projectId && section !== 'report') {
+      router.push(
+        `/flow/p/${projectId}/report?pane=outputs&run=${encodeURIComponent(finishedRun.runId)}`
+      );
+    }
+  }, [finishedRun, projectId, section, router]);
+  const [cachedName, setCachedName] = useState('');
+  useEffect(() => {
+    try {
+      setCachedName(
+        projectId ? window.localStorage.getItem(`tensr-project-name:${projectId}`) || '' : ''
+      );
+    } catch {
+      setCachedName('');
+    }
+  }, [projectId]);
 
   useEffect(() => {
     if (!projectId || workspacePhase !== 'ready' || projects.some(item => item.id === projectId)) {
@@ -477,6 +543,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                     <i />
                     <ProjectSwitcher
                       current={project}
+                      fallbackName={cachedName}
                       projects={projects}
                       section={section}
                       hasMore={Boolean(projectCursor)}
@@ -523,6 +590,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
               <PublishScreen />
             ) : section === 'plugins' ? (
               <PluginsScreen />
+            ) : section === 'settings' && !projectId ? (
+              <SettingsScreen section={slug[1]} />
             ) : section === 'datasets' && !projectId ? (
               <DatasetsScreen
                 phase={workspacePhase}
@@ -552,11 +621,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
             ) : section === 'sources' ? (
               <SourcesScreen project={project} datasets={datasets} onChanged={reload} />
             ) : section === 'responses' ? (
-              <ResponsesScreen
-                project={project}
-                datasets={datasets}
-                ready={workspacePhase === 'ready'}
-              />
+              <ResponsesScreen project={project} datasets={datasets} ready={tabReady} />
             ) : section === 'tables' ? (
               <TablesScreen project={project} datasets={datasets} />
             ) : section === 'report' ? (
@@ -576,7 +641,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
               <ChatScreen
                 project={project}
                 datasets={datasets}
-                ready={workspacePhase === 'ready'}
+                ready={tabReady}
                 pendingAsk={pendingAsk}
                 onAsked={() => setPendingAsk(null)}
               />
@@ -627,6 +692,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
               },
             })}
             runIds={exportPins.map(pin => pin.runId)}
+            datasetId={openDatasetId}
             onClose={() => setExportOpen(false)}
           />
         ) : null}
@@ -797,7 +863,7 @@ function ProjectsScreen({
             <span className="home-plus">+</span>
             <strong>New project</strong>
             <span className="flow-muted">
-              Recruit on Prolific, sync Qualtrics or drop in a .sav
+              Name it, then upload a survey file or use one you have
             </span>
           </Button>
         </div>
@@ -977,9 +1043,8 @@ function ProjectCard({
   );
 }
 
-function memberMark(id: string): string {
-  const letters = id.replace(/[^a-z]/gi, '');
-  return (letters.slice(0, 2) || '·').toUpperCase();
+function memberMark(label: string): string {
+  return memberInitials(label);
 }
 
 function Members({ ids }: { ids: string[] }) {
@@ -2528,7 +2593,7 @@ function ChatScreen({
   const respondents = baseCount(baseNote);
   const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
     const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
-    void downloadExport(`/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
+    void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
       method: 'POST',
       body: JSON.stringify({ run_ids: runIds }),
     }).catch(() => setStatus(`The ${label} export did not finish. Try again.`));
@@ -3024,6 +3089,18 @@ function ResponsesScreen({
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
   const [descError, setDescError] = useState<string | null>(null);
+  const [columnCounts, setColumnCounts] = useState<
+    Record<
+      string,
+      {
+        counts?: Record<string, number>;
+        value_labels?: Record<string, string>;
+        missing?: number;
+        n: number;
+        fallback?: boolean;
+      }
+    >
+  >({});
   const surveyCell = useSurveyCell();
   const evidenceSheet = useEvidenceSheet();
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -3042,14 +3119,14 @@ function ResponsesScreen({
     let cancelled = false;
     setSheetPhase('loading');
     const load = () =>
-      Promise.all([
-        flowJson<{ columns?: FlowColumn[] }>(`/datasets/${datasetId}/metadata`).catch(() => ({
-          columns: [] as FlowColumn[],
-        })),
-        flowJson<{ rows?: unknown[][]; headers?: string[]; n_rows?: number }>(
-          `/datasets/${datasetId}/preview?limit=${pageSize}&offset=${pageOffset}`
-        ),
-      ]);
+      flowJson<{
+        rows?: unknown[][];
+        headers?: string[];
+        n_rows?: number;
+        columns?: FlowColumn[];
+      }>(`/datasets/${datasetId}/preview?limit=${pageSize}&offset=${pageOffset}`).then(
+        page => [{ columns: page.columns || [] }, page] as const
+      );
     const wait = (ms: number) => new Promise(resolve => window.setTimeout(resolve, ms));
     void load()
       .catch(() => wait(1200).then(load))
@@ -3165,8 +3242,16 @@ function ResponsesScreen({
   const activeValues = preview.map(row =>
     row[activeIndex] == null || row[activeIndex] === 'null' ? '' : String(row[activeIndex])
   );
-  const counts = valueCounts(activeValues);
-  const countTotal = activeValues.length || 1;
+  const variableName = columnMeta(activeName)?.name || activeName;
+  const fileKey = `${datasetId}:${variableName}`;
+  const fetched = columnCounts[fileKey];
+  const countsSettled = Boolean(fetched);
+  const filePage = fetched && !fetched.fallback ? fetched : undefined;
+  const counts = filePage ? fileCounts(filePage) : valueCounts(activeValues);
+  const countTotal = (filePage ? filePage.n : activeValues.length) || 1;
+  const missingCount = filePage
+    ? filePage.missing || 0
+    : activeValues.filter(value => value === '').length;
   const projectDatasets = datasets.filter(row => !project || row.project_id === project.id);
   const uidIndex = names.indexOf('_row_uid');
   const idIndex = names.findIndex(name =>
@@ -3176,6 +3261,32 @@ function ResponsesScreen({
   const evidenceColumn = surveyCell?.textColumn || '';
   const columnMarked = (name: string, index: number) =>
     evidenceColumn ? name === evidenceColumn : index === activeIndex;
+
+  useEffect(() => {
+    if (!datasetId || sheetPhase !== 'ready' || !variableName || columnCounts[fileKey]) return;
+    let cancelled = false;
+    void flowJson<{
+      counts?: Record<string, number>;
+      value_labels?: Record<string, string>;
+      missing?: number;
+      n?: number;
+    }>(`/datasets/${datasetId}/columns/${encodeURIComponent(variableName)}/values`)
+      .then(page => {
+        if (cancelled) return;
+        setColumnCounts(current => ({
+          ...current,
+          [fileKey]: page.counts ? { ...page, n: page.n || 0 } : { n: 0, fallback: true },
+        }));
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setColumnCounts(current => ({ ...current, [fileKey]: { n: 0, fallback: true } }));
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [datasetId, sheetPhase, variableName, fileKey, columnCounts]);
 
   const askAboutColumn = () => {
     const text = agentText.trim();
@@ -3676,9 +3787,20 @@ function ResponsesScreen({
                 ) : null}
                 <div className="variable-head">
                   <span className="flow-muted">Click codes to filter</span>
-                  <span className="flow-muted">% of loaded rows</span>
+                  <span className="flow-muted">
+                    {filePage
+                      ? `% of all ${filePage.n.toLocaleString('en-GB')} rows`
+                      : countsSettled
+                        ? '% of loaded rows'
+                        : '% of all rows'}
+                  </span>
                 </div>
-                {counts.map(item => (
+                {!countsSettled
+                  ? Array.from({ length: 3 }, (_, index) => (
+                      <Skeleton key={`count-${index}`} className="mb-2 h-7 w-full" />
+                    ))
+                  : null}
+                {(countsSettled ? counts : []).map(item => (
                   <Button
                     key={item.label}
                     type="button"
@@ -3703,19 +3825,16 @@ function ResponsesScreen({
                     </span>
                   </Button>
                 ))}
-                {(() => {
-                  const missing = activeValues.filter(value => value === '').length;
-                  return (
-                    <div className="variable-missing" data-none={missing === 0 || undefined}>
-                      <span>Missing</span>
-                      <span>
-                        {missing
-                          ? `${Math.round((missing / countTotal) * 100)}% · ${missing} rows`
-                          : 'None on this page'}
-                      </span>
-                    </div>
-                  );
-                })()}
+                {countsSettled ? (
+                  <div className="variable-missing" data-none={missingCount === 0 || undefined}>
+                    <span>Missing</span>
+                    <span>
+                      {missingCount
+                        ? `${Math.round((missingCount / countTotal) * 100)}% · ${missingCount} rows`
+                        : 'None'}
+                    </span>
+                  </div>
+                ) : null}
                 {project ? (
                   <Link className="variable-action" href={`/flow/p/${project.id}/tables`}>
                     Use as banner column <span aria-hidden="true">+</span>
@@ -3803,9 +3922,20 @@ function ReportScreen({
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
   const [pane, setPane] = useState<'report' | 'outputs'>('report');
+  const [openRunId, setOpenRunId] = useState('');
+  const lastRun = useAnalysisSetupStore(s => s.lastRun);
+  const seenRun = useRef(lastRun?.nonce || 0);
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('pane') === 'outputs') setPane('outputs');
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('pane') === 'outputs') setPane('outputs');
+    if (params.get('run')) setOpenRunId(params.get('run') || '');
   }, []);
+  useEffect(() => {
+    if (!lastRun || lastRun.nonce === seenRun.current) return;
+    seenRun.current = lastRun.nonce;
+    setPane('outputs');
+    setOpenRunId(lastRun.runId);
+  }, [lastRun]);
   const reportPins = useProjectPins(projectId, []);
 
   const templateInput = useRef<HTMLInputElement>(null);
@@ -3981,6 +4111,8 @@ function ReportScreen({
         <ReportOutputs
           lead={<ReportPaneSwitch pane={pane} onChange={setPane} />}
           projectId={projectId}
+          openRunId={openRunId}
+          refreshKey={lastRun?.nonce || 0}
           findings={findings.map(finding => ({ id: finding.id, label: finding.eyebrow }))}
           files={datasets
             .filter(row => row.project_id === projectId)
