@@ -205,7 +205,7 @@ export function ReportOutputs({
   const download = (format: 'pdf' | 'html' | 'docx', filename: string) => {
     if (!selectedId) return;
     setExportError('');
-    void downloadExport(`/reports/pipeline/export?format=${format}`, filename, {
+    void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, filename, {
       method: 'POST',
       body: JSON.stringify({ run_id: selectedId }),
     }).catch(err =>

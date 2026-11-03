@@ -124,7 +124,7 @@ export function ExportDialog({
 
   const serverFor = (format: 'pdf' | 'docx' | 'html', filename: string, ids: string[]) => {
     if (!ids.length) throw new Error('Pin a saved analysis before exporting this format.');
-    return downloadExport(`/reports/pipeline/export?format=${format}`, filename, {
+    return downloadExport(`/datasets/reports/pipeline/export?format=${format}`, filename, {
       method: 'POST',
       body: JSON.stringify({ run_ids: ids }),
     });
@@ -132,7 +132,7 @@ export function ExportDialog({
 
   const server = (format: 'pdf' | 'docx' | 'html', filename: string) => {
     if (!runIds.length) throw new Error('Save the analysis before exporting this format.');
-    return downloadExport(`/reports/pipeline/export?format=${format}`, filename, {
+    return downloadExport(`/datasets/reports/pipeline/export?format=${format}`, filename, {
       method: 'POST',
       body: JSON.stringify({ run_ids: runIds }),
     });
@@ -322,7 +322,7 @@ export function ExportDialog({
             <Button
               className="flow-btn primary"
               type="button"
-              disabled={busy !== '' || !format.run || !chosen.length}
+              disabled={busy !== '' || !format.run || (!chosen.length && format.id !== 'pptx')}
               onClick={() => format.run && save(format.label, format.run)}
             >
               {busy ? 'Working…' : `↓ Export ${format.ext.toLowerCase().split(' ')[0]}`}

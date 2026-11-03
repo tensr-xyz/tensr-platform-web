@@ -2593,7 +2593,7 @@ function ChatScreen({
   const respondents = baseCount(baseNote);
   const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
     const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
-    void downloadExport(`/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
+    void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
       method: 'POST',
       body: JSON.stringify({ run_ids: runIds }),
     }).catch(() => setStatus(`The ${label} export did not finish. Try again.`));
@@ -3097,6 +3097,7 @@ function ResponsesScreen({
         value_labels?: Record<string, string>;
         missing?: number;
         n: number;
+        fallback?: boolean;
       }
     >
   >({});
@@ -3243,7 +3244,9 @@ function ResponsesScreen({
   );
   const variableName = columnMeta(activeName)?.name || activeName;
   const fileKey = `${datasetId}:${variableName}`;
-  const filePage = columnCounts[fileKey];
+  const fetched = columnCounts[fileKey];
+  const countsSettled = Boolean(fetched);
+  const filePage = fetched && !fetched.fallback ? fetched : undefined;
   const counts = filePage ? fileCounts(filePage) : valueCounts(activeValues);
   const countTotal = (filePage ? filePage.n : activeValues.length) || 1;
   const missingCount = filePage
@@ -3269,10 +3272,17 @@ function ResponsesScreen({
       n?: number;
     }>(`/datasets/${datasetId}/columns/${encodeURIComponent(variableName)}/values`)
       .then(page => {
-        if (cancelled || !page.counts) return;
-        setColumnCounts(current => ({ ...current, [fileKey]: { ...page, n: page.n || 0 } }));
+        if (cancelled) return;
+        setColumnCounts(current => ({
+          ...current,
+          [fileKey]: page.counts ? { ...page, n: page.n || 0 } : { n: 0, fallback: true },
+        }));
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (!cancelled) {
+          setColumnCounts(current => ({ ...current, [fileKey]: { n: 0, fallback: true } }));
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -3780,15 +3790,17 @@ function ResponsesScreen({
                   <span className="flow-muted">
                     {filePage
                       ? `% of all ${filePage.n.toLocaleString('en-GB')} rows`
-                      : '% of all rows'}
+                      : countsSettled
+                        ? '% of loaded rows'
+                        : '% of all rows'}
                   </span>
                 </div>
-                {!filePage
+                {!countsSettled
                   ? Array.from({ length: 3 }, (_, index) => (
                       <Skeleton key={`count-${index}`} className="mb-2 h-7 w-full" />
                     ))
                   : null}
-                {(filePage ? counts : []).map(item => (
+                {(countsSettled ? counts : []).map(item => (
                   <Button
                     key={item.label}
                     type="button"
@@ -3813,7 +3825,7 @@ function ResponsesScreen({
                     </span>
                   </Button>
                 ))}
-                {filePage ? (
+                {countsSettled ? (
                   <div className="variable-missing" data-none={missingCount === 0 || undefined}>
                     <span>Missing</span>
                     <span>

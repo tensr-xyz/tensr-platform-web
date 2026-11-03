@@ -94,3 +94,18 @@ describe('QA round 4', () => {
     expect(recentProjects(projects, '', 8)).toHaveLength(8);
   });
 });
+
+describe('QA round 4 deliverables', () => {
+  it('calls the pipeline export where the API mounts it', () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const fs = require('node:fs') as typeof import('node:fs');
+    const dir = 'src/components/flow';
+    const wrong = fs
+      .readdirSync(dir)
+      .filter((name: string) => /\.tsx?$/.test(name) && !name.includes('.test.'))
+      .filter((name: string) =>
+        /[`'"]\/reports\/pipeline\/export/.test(fs.readFileSync(`${dir}/${name}`, 'utf8'))
+      );
+    expect(wrong).toEqual([]);
+  });
+});
