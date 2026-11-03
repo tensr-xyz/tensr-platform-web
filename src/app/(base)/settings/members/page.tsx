@@ -1,11 +1,10 @@
-import Loading from '@/components/molecules/loading';
-import { Suspense } from 'react';
-import Members from '@/components/templates/settings/members';
+import { redirect } from 'next/navigation';
+import { flowSettingsPath } from '@/lib/settings-redirect';
 
-export default function OrganisationPage() {
-  return (
-    <Suspense fallback={<Loading centered />}>
-      <Members />
-    </Suspense>
-  );
+export default async function MembersSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  redirect(flowSettingsPath('organisation', await searchParams));
 }

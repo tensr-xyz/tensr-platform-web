@@ -1,11 +1,5 @@
-import CreatorDashboard from '@/components/templates/creator-dashboard';
-import { Suspense } from 'react';
-import Loading from '@/components/molecules/loading';
+import { redirect } from 'next/navigation';
 
 export default function CreatorPage() {
-  return (
-    <Suspense fallback={<Loading />}>
-      <CreatorDashboard />
-    </Suspense>
-  );
+  redirect('/flow/plugins/mine');
 }

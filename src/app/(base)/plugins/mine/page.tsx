@@ -1,11 +1,6 @@
-import MyPlugins from '@/components/templates/my-plugins';
-import { Suspense } from 'react';
-import { Loader } from '@/components/molecules/loading';
+import { redirect } from 'next/navigation';
 
-export default function MyPluginsPage() {
-  return (
-    <Suspense fallback={<Loader centered message="Loading…" />}>
-      <MyPlugins />
-    </Suspense>
-  );
+/** This page lives in the app now. */
+export default function LegacyPluginPage() {
+  redirect('/flow/plugins/mine');
 }

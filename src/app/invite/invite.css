@@ -1,0 +1,151 @@
+/* Outside /flow, so the Flow tokens are defined here. */
+.iv {
+  --color-canvas: #ffffff;
+  --color-well: #f6f6f3;
+  --color-line: #e7e6e1;
+  --color-ink: #1b1c1a;
+  --color-muted: #6a6b66;
+  --color-accent: #1e6b58;
+  --color-accent-soft: #e8f1ed;
+  --color-warn: #a15c12;
+  --weight-medium: 500;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  min-height: 100vh;
+  padding: 40px 16px;
+  background: var(--color-well);
+  color: var(--color-ink);
+  font-family: 'Suisse Intl', 'SuisseIntl', Inter, system-ui, sans-serif;
+}
+
+.iv-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  width: 100%;
+  max-width: 440px;
+  padding: 36px 36px 28px;
+  border: 1px solid var(--color-line);
+  border-radius: 16px;
+  background: var(--color-canvas);
+  box-shadow: 0 8px 24px #1b1c1a0f;
+}
+
+.iv-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  line-height: 20px;
+  font-weight: var(--weight-medium);
+}
+
+.iv-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: var(--color-ink);
+}
+
+.iv-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  width: 100%;
+}
+
+.iv-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+
+.iv-title {
+  margin: 0;
+  font-size: 20px;
+  line-height: 26px;
+  font-weight: var(--weight-medium);
+}
+
+.iv-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--color-muted);
+}
+
+.iv-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.iv .iv-email {
+  height: 40px;
+  border-color: var(--color-line);
+  background: var(--color-well);
+  color: var(--color-muted);
+  font-size: 14px;
+  opacity: 1;
+}
+
+.iv .iv-btn {
+  height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 14px;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.iv .iv-primary {
+  width: 100%;
+  border-color: var(--color-ink);
+  background: var(--color-ink);
+  color: var(--color-canvas);
+  font-weight: var(--weight-medium);
+}
+
+.iv-note {
+  margin: 0;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.iv-error {
+  margin: 0;
+  font-size: 13px;
+  line-height: 18px;
+  color: var(--color-warn);
+}
+
+.iv-skel-title {
+  height: 26px;
+  width: 80%;
+}
+
+.iv-skel-line {
+  height: 40px;
+  width: 100%;
+}
+
+.iv-skel-field {
+  height: 40px;
+  width: 100%;
+}

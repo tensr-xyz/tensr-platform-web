@@ -1,21 +1,6 @@
-'use client';
+import { redirect } from 'next/navigation';
 
-import { Suspense } from 'react';
-import NewProject from '@/components/templates/project/new-project';
-import { SubscriptionGate } from '@/components/templates/subscription-gate';
-
-function NewProjectContent() {
-  return (
-    <SubscriptionGate>
-      <NewProject />
-    </SubscriptionGate>
-  );
-}
-
+/** New projects start from the dialog in the app. */
 export default function NewProjectPage() {
-  return (
-    <Suspense fallback={null}>
-      <NewProjectContent />
-    </Suspense>
-  );
+  redirect('/flow?new=1');
 }

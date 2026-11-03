@@ -9964,3 +9964,143 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   border-radius: 4px;
   background: var(--color-well);
 }
+
+/* QA round 5. Weighting: labels, live preview and the missing-rows choice. */
+.weight-code {
+  color: var(--color-muted);
+  font-size: 11px;
+}
+
+.weight-choice {
+  margin: 0 24px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f3ece0;
+  color: var(--color-warn);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.weight-choice p {
+  margin: 0;
+}
+
+.weight-choice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.weight-choice-options .flow-btn[data-active] {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.weight-missing-target {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-ink);
+}
+
+.weight-missing-target input {
+  width: 64px;
+}
+
+.weight-previewing {
+  font-size: 12px;
+}
+
+/* QA round 5. Stack any number of uploads, from any of your projects. */
+.stack-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+}
+
+.stack-picker-label {
+  margin: 6px 0 2px;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.stack-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.stack-file .flow-muted {
+  margin-left: auto;
+}
+
+.stack-overlap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f3ece0;
+  color: var(--color-warn);
+  font-size: 13px;
+}
+
+/* QA round 5. Tables file picker and user nets; row menus. */
+.tables-file {
+  min-width: 260px;
+}
+
+.tables-net {
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tables-net-head {
+  margin: 0;
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+}
+
+.tables-net-codes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.flow .row-more {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+}
+
+.flow .row-more:hover {
+  background: var(--color-well);
+  color: var(--color-ink);
+}
+
+.row-menu {
+  min-width: 200px;
+}
+
+/* QA round 5. Pages built from the 3 Nov exports carry their own padding. */
+.flow-home .flow-body:has(> .ds-page, > .fv-page, > .st-page, > .pg-page, > .nf-page) {
+  padding: 0;
+  overflow: auto;
+}
