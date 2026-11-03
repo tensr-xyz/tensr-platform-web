@@ -27,23 +27,62 @@ export type WaveDiff = {
   right: string;
   reason: string;
   kind: 'matched' | 'check' | 'new';
+  /** The codes or their labels differ between files, so the column may need recoding. */
+  labelsDiffer?: boolean;
 };
 
 const EMPTY = '—';
 
-function labelReason(left: WaveColumn, right: WaveColumn): string | null {
-  const a = Object.keys(left.value_labels || {});
-  const b = Object.keys(right.value_labels || {});
+const foldLabel = (text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase();
+
+/**
+ * How one file's codes and value labels differ from the reference file's, or null when they agree.
+ * A translated label counts as a difference: the codes may mean something else in that file.
+ */
+export function labelDifferences(reference: WaveColumn, other: WaveColumn): string | null {
+  const left = reference.value_labels || {};
+  const right = other.value_labels || {};
+  const a = Object.keys(left);
+  const b = Object.keys(right);
   if (!a.length || !b.length) return null;
-  const aSet = new Set(a);
-  const bSet = new Set(b);
-  const added = b.filter(key => !aSet.has(key));
-  const removed = a.filter(key => !bSet.has(key));
-  if (!added.length && !removed.length) return null;
-  const parts = [];
-  if (added.length) parts.push(`${added.slice(0, 3).join(', ')} only on the right`);
-  if (removed.length) parts.push(`${removed.slice(0, 3).join(', ')} only on the left`);
-  return `Value labels differ: ${parts.join('; ')}`;
+  const parts: string[] = [];
+  const onlyRight = b.filter(key => !(key in left));
+  const onlyLeft = a.filter(key => !(key in right));
+  if (onlyRight.length) parts.push(`codes ${onlyRight.slice(0, 3).join(', ')} only here`);
+  if (onlyLeft.length) parts.push(`codes ${onlyLeft.slice(0, 3).join(', ')} missing`);
+  const relabelled = a.filter(
+    key => key in right && foldLabel(left[key]) !== foldLabel(right[key])
+  );
+  for (const key of relabelled.slice(0, 3)) parts.push(`${key} = ${left[key]} / ${right[key]}`);
+  if (relabelled.length > 3) parts.push(`${relabelled.length - 3} more`);
+  return parts.length ? parts.join('; ') : null;
+}
+
+function labelReason(left: WaveColumn, right: WaveColumn): string | null {
+  const differences = labelDifferences(left, right);
+  return differences ? `Codes or labels differ: ${differences}` : null;
+}
+
+/** Every code either file uses, numbers in order. */
+export function codeUniverse(...columns: (WaveColumn | undefined)[]): string[] {
+  const codes = new Set<string>();
+  for (const column of columns)
+    for (const key of Object.keys(column?.value_labels || {})) codes.add(key);
+  return [...codes].sort((x, y) => {
+    const a = Number(x);
+    const b = Number(y);
+    return Number.isFinite(a) && Number.isFinite(b) ? a - b : x.localeCompare(y);
+  });
+}
+
+/** 1→5, 2→4 … for a scale that runs the other way in one file. */
+export function reversedCodes(codes: string[]): Record<string, string> {
+  const numeric = codes.filter(code => Number.isFinite(Number(code)));
+  const sorted = [...numeric].sort((a, b) => Number(a) - Number(b));
+  if (sorted.length < 2) return {};
+  const low = Number(sorted[0]);
+  const high = Number(sorted[sorted.length - 1]);
+  return Object.fromEntries(sorted.map(code => [code, String(low + high - Number(code))]));
 }
 
 export function compareWaves(
@@ -78,6 +117,7 @@ export function compareWaves(
       right: name,
       reason: reason || 'Same name',
       kind: reason ? 'check' : 'matched',
+      labelsDiffer: Boolean(reason),
     });
   }
   for (const name of rightByName.keys()) {
@@ -101,7 +141,7 @@ export function waveCounts(rows: WaveDiff[]) {
   };
 }
 
-type Decision = { decision: 'accept' | 'skip' | 'override'; target: string };
+type Decision = { decision: 'accept' | 'skip' | 'override' | 'recode'; target: string };
 
 export function stackMappings(rows: WaveDiff[], choices: Record<string, Decision>) {
   return rows.map(row => {
@@ -109,9 +149,34 @@ export function stackMappings(rows: WaveDiff[], choices: Record<string, Decision
     const source = row.left !== EMPTY ? row.left : row.right;
     const target = choice.decision === 'override' ? choice.target || source : source;
     const decision =
-      choice.decision === 'override' && target === source ? 'accept' : choice.decision;
+      choice.decision === 'recode' || (choice.decision === 'override' && target === source)
+        ? 'accept'
+        : choice.decision;
     return { source_column: source, target_column: target, decision, note: row.reason };
   });
+}
+
+type RecodeMaps = Record<string, Record<string, Record<string, string>>>;
+
+/** {file: {column: {from: to}}} for the rows set to "Recode to match", without codes left as they are. */
+export function stackRecodes(
+  rows: WaveDiff[],
+  choices: Record<string, Decision>,
+  maps: RecodeMaps
+): Record<string, Record<string, Record<string, string>>> {
+  const out: Record<string, Record<string, Record<string, string>>> = {};
+  for (const row of rows) {
+    if (choices[row.id]?.decision !== 'recode') continue;
+    const column = row.left !== EMPTY ? row.left : row.right;
+    for (const [fileId, mapping] of Object.entries(maps[row.id] || {})) {
+      const changed = Object.fromEntries(
+        Object.entries(mapping).filter(([from, to]) => to && from !== to)
+      );
+      if (!Object.keys(changed).length) continue;
+      out[fileId] = { ...(out[fileId] || {}), [column]: changed };
+    }
+  }
+  return out;
 }
 
 export type StackFile = MovableDataset & {
@@ -156,14 +221,24 @@ export function compareManyWaves(files: { name: string; columns: WaveColumn[] }[
   return names.map(name => {
     const missing = files.filter(file => !file.columns.some(column => column.name === name));
     const inFirst = !missing.includes(files[0]);
+    const having = files
+      .map(file => ({ file, column: file.columns.find(column => column.name === name) }))
+      .filter(item => item.column);
+    const reference = having[0]?.column;
+    const differing = having
+      .slice(1)
+      .map(item => ({ file: item.file, why: labelDifferences(reference!, item.column!) }))
+      .filter(item => item.why);
+    const reasons: string[] = [];
+    if (missing.length) reasons.push(`Not in ${missing.map(file => file.name).join(', ')}`);
+    for (const item of differing.slice(0, 2)) reasons.push(`${item.file.name}: ${item.why}`);
     return {
       id: `${name}\t`,
       left: inFirst ? name : EMPTY,
       right: inFirst ? (missing.length ? EMPTY : name) : name,
-      reason: missing.length
-        ? `Not in ${missing.map(file => file.name).join(', ')}`
-        : 'In every file',
-      kind: missing.length ? (inFirst ? 'check' : 'new') : 'matched',
+      reason: reasons.length ? reasons.join('. ') : 'In every file',
+      kind: missing.length ? (inFirst ? 'check' : 'new') : differing.length ? 'check' : 'matched',
+      labelsDiffer: differing.length > 0,
     } as WaveDiff;
   });
 }
@@ -188,6 +263,7 @@ export function StackWaves({
   const [picked, setPicked] = useState<string[]>([]);
   const [columnsById, setColumnsById] = useState<Record<string, WaveColumn[]>>({});
   const [choices, setChoices] = useState<Record<string, Decision>>({});
+  const [recodeMaps, setRecodeMaps] = useState<RecodeMaps>({});
   const [showAll, setShowAll] = useState(false);
   const [overlap, setOverlap] = useState<{ column: string | null; overlapping_ids: number } | null>(
     null
@@ -272,12 +348,34 @@ export function StackWaves({
     setPicked(current => (on ? [...current, id] : current.filter(item => item !== id)));
   const setDecision = (id: string, decision: Decision['decision'], target = '') =>
     setChoices(current => ({ ...current, [id]: { decision, target } }));
+  const columnIn = (fileId: string, name: string) =>
+    (columnsById[fileId] || []).find(column => column.name === name);
+  /** Files whose codes or labels differ from the first file that has the column. */
+  const recodeFiles = (name: string) => {
+    const having = picked.filter(id => columnIn(id, name));
+    const reference = having[0] ? columnIn(having[0], name) : undefined;
+    return {
+      reference,
+      others: having
+        .slice(1)
+        .filter(id => reference && labelDifferences(reference, columnIn(id, name)!)),
+    };
+  };
+  const setRecode = (rowId: string, fileId: string, mapping: Record<string, string>) =>
+    setRecodeMaps(current => ({
+      ...current,
+      [rowId]: {
+        ...(current[rowId] || {}),
+        [fileId]: { ...(current[rowId]?.[fileId] || {}), ...mapping },
+      },
+    }));
 
   const stack = () => {
     if (picked.length < 2 || clash || busy) return;
     setBusy(true);
     setError(null);
     const mappings = stackMappings(rows, choices);
+    const recodes = stackRecodes(rows, choices, recodeMaps);
     void flowJson(`/api/projects/${projectId}/wave-maps`, {
       method: 'POST',
       body: JSON.stringify({ sources: picked, mappings }),
@@ -291,6 +389,7 @@ export function StackWaves({
               dataset_ids: picked,
               wave_names: picked.map(nameOf),
               mappings,
+              ...(Object.keys(recodes).length ? { recodes } : {}),
               ...(dedupe && overlap?.overlapping_ids && overlap.column
                 ? { dedupe_column: overlap.column }
                 : {}),
@@ -416,10 +515,57 @@ export function StackWaves({
                                 ]
                               : [
                                   { value: 'accept', label: oneSided ? 'Add' : 'Stack together' },
+                                  ...(row.labelsDiffer
+                                    ? [{ value: 'recode', label: 'Recode to match' }]
+                                    : []),
                                   { value: 'skip', label: 'Skip' },
                                 ]
                           }
                         />
+                        {choice.decision === 'recode'
+                          ? (() => {
+                              const column = row.left !== EMPTY ? row.left : row.right;
+                              const { reference, others } = recodeFiles(column);
+                              const targets = codeUniverse(reference);
+                              return others.map(fileId => {
+                                const own = columnIn(fileId, column);
+                                const codes = codeUniverse(own);
+                                const mapping = recodeMaps[row.id]?.[fileId] || {};
+                                return (
+                                  <div key={fileId} className="stack-recode">
+                                    <span className="flow-muted">{nameOf(fileId)}</span>
+                                    {codes.map(code => (
+                                      <span key={code} className="stack-recode">
+                                        <span title={own?.value_labels?.[code]}>{code} →</span>
+                                        <ChoiceSelect
+                                          aria-label={`${nameOf(fileId)} ${column} code ${code} becomes`}
+                                          value={mapping[code] || code}
+                                          onValueChange={value =>
+                                            setRecode(row.id, fileId, { [code]: value })
+                                          }
+                                          options={[...new Set([...targets, code])].map(target => ({
+                                            value: target,
+                                            label: reference?.value_labels?.[target]
+                                              ? `${target} ${reference.value_labels[target]}`
+                                              : target,
+                                          }))}
+                                        />
+                                      </span>
+                                    ))}
+                                    <Button
+                                      className="flow-btn"
+                                      type="button"
+                                      onClick={() =>
+                                        setRecode(row.id, fileId, reversedCodes(codes))
+                                      }
+                                    >
+                                      Reverse scale
+                                    </Button>
+                                  </div>
+                                );
+                              });
+                            })()
+                          : null}
                         {choice.decision === 'override' ? (
                           <ChoiceSelect
                             aria-label={`Same column as ${row.left === EMPTY ? row.right : row.left}`}

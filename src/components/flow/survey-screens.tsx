@@ -11,6 +11,7 @@ import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
+import { loadProjectTables } from '@/components/flow/project-tables';
 import {
   isIdColumn,
   openEndColumns,
@@ -1118,7 +1119,14 @@ export function CodeFramePanel({
 }
 
 type TableColumn = { name: string; label: string; labels: Record<string, string> };
-type SavedSpec = { spec_id?: string; id?: string; label?: string; name?: string };
+type SavedSpec = {
+  spec_id?: string;
+  id?: string;
+  label?: string;
+  name?: string;
+  dataset_id?: string;
+  filename?: string;
+};
 type SavedBook = { id?: string; name?: string; n_specs?: number };
 
 function scaleCodes(labels: Record<string, string> | undefined, end: 'top' | 'bottom'): string[] {
@@ -1141,11 +1149,41 @@ export function scaleCodesFromValues(values: string[], end: 'top' | 'bottom'): s
   return picked.map(item => item.code);
 }
 
+/** Earlier turns in this pane, in the shape the agent reads as history. */
+export function agentHistory(
+  thread: { role: 'user' | 'run' | 'reply'; text: string }[]
+): { role: string; content: string }[] {
+  return thread
+    .filter(item => item.role !== 'run' && item.text.trim())
+    .map(item => ({ role: item.role === 'user' ? 'user' : 'assistant', content: item.text }));
+}
+
+/** The agent's answer, or its question when it needs one more detail. */
+export function agentReplyText(result: {
+  status?: string;
+  answer_markdown?: string;
+  clarification_questions?: string[];
+}): string {
+  if (result.answer_markdown) return result.answer_markdown;
+  if (result.status === 'clarification')
+    return (result.clarification_questions || []).filter(Boolean).join('\n');
+  return '';
+}
+
 /** The saved weight first, then any other weight column the file has. */
 export function tableWeightChoices(listed: string[] | undefined, active: string): string[] {
-  return [active, ...(listed || [])].filter(
-    (name, index, all) => Boolean(name) && all.indexOf(name) === index
+  // _weight is the internal copy of the visible raked column, never a choice of its own.
+  const all = [active, ...(listed || [])].filter(name => Boolean(name) && name !== '_weight');
+  return all.filter(
+    (name, index) => all.findIndex(other => other.toLowerCase() === name.toLowerCase()) === index
   );
+}
+
+/** One line per weight column: its name, and its label when that says more. */
+export function weightOptionLabel(name: string, label: string): string {
+  const clean = label.trim();
+  if (!clean || clean.toLowerCase() === name.toLowerCase() || /^weight$/i.test(clean)) return name;
+  return `${name} · ${clean}`;
 }
 
 function bannerNames(spec: { banners?: { column?: string; columns?: string[] }[] } | undefined) {
@@ -1179,6 +1217,45 @@ export function bookFromToolResults(results: unknown): Record<string, unknown> |
     }
   }
   return null;
+}
+
+/**
+ * The table the agent built, as a Tables request: every value row kept beside its nets,
+ * same banner, weight, statistics and filter, saved to the list.
+ */
+export function tableBodyFromAgentBook(
+  book: Record<string, unknown>
+): Record<string, unknown> | null {
+  const spec = (book.spec || {}) as Record<string, unknown>;
+  const stubs = (Array.isArray(spec.stubs) ? spec.stubs : [])
+    .filter((stub): stub is Record<string, unknown> => Boolean(stub && typeof stub === 'object'))
+    .map(stub => {
+      const { values, ...rest } = stub;
+      // An empty value list is the net row alone; Tables shows the whole scale.
+      return Array.isArray(values) && values.length === 0 ? rest : stub;
+    })
+    .filter(stub => stub.column);
+  if (!stubs.length) return null;
+  const banners = (Array.isArray(spec.banners) ? spec.banners : [])
+    .filter((banner): banner is Record<string, unknown> =>
+      Boolean(banner && typeof banner === 'object')
+    )
+    .map(banner =>
+      Array.isArray(banner.columns) ? { columns: banner.columns } : { column: banner.column }
+    )
+    .filter(banner => ('columns' in banner ? (banner.columns as unknown[]).length : banner.column));
+  const weightRef = spec.weight as { column?: string; weight_vector?: unknown } | null | undefined;
+  const weight = weightRef?.column ? String(weightRef.column) : weightRef ? undefined : 'none';
+  return {
+    stubs,
+    banner: banners,
+    ...(Array.isArray(spec.statistics) ? { statistics: spec.statistics } : {}),
+    ...(spec.significance_display ? { significance_display: spec.significance_display } : {}),
+    ...(typeof spec.nest_banners === 'boolean' ? { nest_banners: spec.nest_banners } : {}),
+    ...(spec.filter_ref ? { filter_ref: spec.filter_ref } : {}),
+    ...(weight ? { weight } : {}),
+    save: true,
+  };
 }
 
 /** Nets the user made on the stub, kept apart from Top 2 / Bottom 2. */
@@ -1246,6 +1323,8 @@ export function TablesBuilder({
     Record<string, { role: 'user' | 'run' | 'reply'; text: string }[]>
   >({});
   const [asking, setAsking] = useState(false);
+  // One agent conversation per file, so an answer to its question resumes the same request.
+  const [agentSessions, setAgentSessions] = useState<Record<string, string>>({});
   const [railReady, setRailReady] = useState(false);
   const [opening, setOpening] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
@@ -1257,24 +1336,46 @@ export function TablesBuilder({
     }
     setRailReady(false);
     let live = true;
+    // A table picked on another file opens once that file is the one showing.
+    let pendingOpen = '';
+    try {
+      pendingOpen = window.sessionStorage.getItem(`tensr-open-table:${datasetId}`) || '';
+      window.sessionStorage.removeItem(`tensr-open-table:${datasetId}`);
+    } catch {
+      pendingOpen = '';
+    }
     void Promise.all([
-      flowJson<{ specs?: SavedSpec[]; first?: Record<string, unknown> | null }>(
-        `/datasets/${datasetId}/tables?open_first=true`
-      ).catch(() => ({
-        specs: [] as SavedSpec[],
-        first: null as Record<string, unknown> | null,
-      })),
+      pendingOpen
+        ? Promise.resolve({
+            specs: [] as SavedSpec[],
+            first: null as Record<string, unknown> | null,
+          })
+        : flowJson<{ specs?: SavedSpec[]; first?: Record<string, unknown> | null }>(
+            `/datasets/${datasetId}/tables?open_first=true`
+          ).catch(() => ({
+            specs: [] as SavedSpec[],
+            first: null as Record<string, unknown> | null,
+          })),
+      loadProjectTables(projectId, datasetId),
       flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`).catch(() => ({
         books: [] as SavedBook[],
       })),
-    ]).then(async ([specPage, bookPage]) => {
+    ]).then(async ([specPage, projectTables, bookPage]) => {
       if (!live) return;
-      const saved = specPage.specs || [];
+      const saved: SavedSpec[] = projectTables.map(table => ({
+        spec_id: table.id,
+        label: table.label,
+        dataset_id: table.datasetId,
+        filename: table.filename,
+      }));
       setSpecs(saved);
       setBooks(bookPage.books || []);
-      const firstId = saved[0]?.spec_id || saved[0]?.id;
+      const own = (specPage.specs || []).length
+        ? specPage.specs || []
+        : saved.filter(item => !item.dataset_id || item.dataset_id === datasetId);
+      const firstId = pendingOpen || own[0]?.spec_id || own[0]?.id;
       setRailReady(true);
-      if (specPage.first) {
+      if (specPage.first && !pendingOpen) {
         remember(specPage.first);
       } else if (firstId) {
         setOpening(true);
@@ -1292,7 +1393,11 @@ export function TablesBuilder({
       weight_columns?: string[];
     }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
-        setWeightColumns(tableWeightChoices(meta.weight_columns, meta.active_weight_column || ''));
+        const choices = tableWeightChoices(meta.weight_columns, meta.active_weight_column || '');
+        setWeightColumns(choices);
+        // The file's own weight is the default until a saved table says otherwise.
+        const active = meta.active_weight_column || '';
+        if (active && choices.includes(active)) setWeight(current => current || active);
         setColumns(
           (meta.columns || [])
             .map(column => ({
@@ -1348,14 +1453,44 @@ export function TablesBuilder({
     );
     const names = bannerNames(spec);
     if (names.length) setBanners(names);
+    const savedWeight = (spec as { weight?: { column?: string } | string | null } | undefined)
+      ?.weight;
+    if (savedWeight && typeof savedWeight === 'object' && savedWeight.column)
+      setWeight(String(savedWeight.column) === '_weight' ? weight : String(savedWeight.column));
     const id = String(spec?.id || '');
     if (id) {
       setSpecs(current =>
         current.some(item => (item.spec_id || item.id) === id)
           ? current
-          : [{ spec_id: id, label: spec?.label || stubColumn || stub }, ...current]
+          : [
+              { spec_id: id, label: spec?.label || stubColumn || stub, dataset_id: datasetId },
+              ...current,
+            ]
       );
     }
+  }
+
+  /** Re-runs the agent's table in the main pane with every row, and saves it to the list. */
+  async function adoptAgentTable(built: Record<string, unknown>) {
+    const request = datasetId ? tableBodyFromAgentBook(built) : null;
+    if (!request) {
+      setDirty(true);
+      return;
+    }
+    const saved = await flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
+      method: 'POST',
+      body: JSON.stringify(request),
+    }).catch(() => null);
+    if (!saved) {
+      setDirty(true);
+      return;
+    }
+    const nets = ((saved.spec as { stubs?: { nets?: { label?: string }[] }[] } | undefined)
+      ?.stubs?.[0]?.nets || []) as { label?: string }[];
+    setTop2(nets.some(net => /^top 2 box$/i.test(String(net.label || ''))));
+    setBottom2(nets.some(net => /^bottom 2 box$/i.test(String(net.label || ''))));
+    setDirty(false);
+    remember(saved);
   }
 
   async function netCodes(end: 'top' | 'bottom'): Promise<string[]> {
@@ -1583,6 +1718,15 @@ export function TablesBuilder({
                 type="button"
                 data-active={id === specId}
                 onClick={() => {
+                  if (spec.dataset_id && spec.dataset_id !== datasetId && onFile) {
+                    try {
+                      window.sessionStorage.setItem(`tensr-open-table:${spec.dataset_id}`, id);
+                    } catch {
+                      // Without storage the file still switches; its first table opens.
+                    }
+                    onFile(spec.dataset_id);
+                    return;
+                  }
                   void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
                     .then(remember)
                     .catch(err =>
@@ -1591,7 +1735,12 @@ export function TablesBuilder({
                 }}
               >
                 <span>T{index + 1}</span>
-                <span>{spec.label || spec.name || id}</span>
+                <span className="tables-saved-copy">
+                  <span>{spec.label || spec.name || id}</span>
+                  {spec.dataset_id && spec.dataset_id !== datasetId ? (
+                    <span className="flow-muted">on {spec.filename || 'another file'}</span>
+                  ) : null}
+                </span>
               </Button>
             );
           })
@@ -1789,10 +1938,10 @@ export function TablesBuilder({
                   value={weight}
                   onValueChange={setWeight}
                   options={[
-                    { value: '', label: 'Weight none' },
+                    { value: '', label: 'Unweighted' },
                     ...weightColumns.map(name => ({
                       value: name,
-                      label: `Weight ${labelFor(name)}`,
+                      label: weightOptionLabel(name, labelFor(name)),
                     })),
                   ]}
                 />
@@ -2043,11 +2192,15 @@ export function TablesBuilder({
                 setAsk('');
                 setAsking(true);
                 setAgentSteps([]);
+                const history = agentHistory(thread);
+                const sessionKey = `${datasetId}:${threadKey}`;
                 void runAgentLoop({
                   message: text,
                   mode: 'agent',
                   datasetId: datasetId || null,
                   agentVersion: 'v2',
+                  sessionId: agentSessions[sessionKey] || null,
+                  conversationHistory: history,
                   signal: AbortSignal.timeout(180_000),
                   onProgress: progress => {
                     const line = progress.message || progress.step;
@@ -2058,18 +2211,23 @@ export function TablesBuilder({
                   },
                 })
                   .then(result => {
+                    if (result.session_id)
+                      setAgentSessions(current => ({
+                        ...current,
+                        [sessionKey]: result.session_id!,
+                      }));
                     const built = bookFromToolResults(result.tool_results);
                     if (built) {
                       setBook(built);
                       setView('table');
-                      setDirty(true);
+                      void adoptAgentTable(built);
                     }
                     setThread(current => [
                       ...current,
                       {
                         role: 'reply',
                         text:
-                          result.answer_markdown ||
+                          agentReplyText(result) ||
                           (built ? 'Built the table. Save it to keep it.' : 'No answer came back.'),
                       },
                     ]);

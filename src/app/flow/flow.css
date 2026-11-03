@@ -10104,3 +10104,48 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   padding: 0;
   overflow: auto;
 }
+
+/* Round 6: the stack dialog is pinned to the top, so the file list stays put as checks load below it. */
+.sources-stack-dialog {
+  top: 6vh !important;
+  --tw-translate-y: 0 !important;
+  max-height: 88vh;
+  overflow-y: auto !important;
+}
+
+.sources-stack-dialog .stack-picker {
+  flex-shrink: 0;
+}
+
+.tables-saved-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  text-align: left;
+}
+
+.tables-saved-copy > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tables-saved-copy > .flow-muted {
+  font-size: 11px;
+}
+
+.stack-recode {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.stack-recode button[role='combobox'] {
+  height: 26px;
+  width: auto;
+  min-width: 64px;
+  font-size: 12px;
+}

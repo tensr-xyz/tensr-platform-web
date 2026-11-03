@@ -81,6 +81,16 @@ export type RakePreview = {
 export type MissingChoice = '' | 'keep_unweighted' | 'missing_target' | 'exclude';
 
 /** Columns a target can use: no ids, no weights, no system columns. */
+/** The name the saved weight column gets; the same rule as the API's rake_output_column. */
+export function rakeOutputColumn(names: string[]): string {
+  const taken = new Set(names.map(name => name.toLowerCase()));
+  if (!taken.has('weight')) return 'weight';
+  if (!taken.has('rake_weight')) return 'rake_weight';
+  let suffix = 2;
+  while (taken.has(`weight_${suffix}`)) suffix += 1;
+  return `weight_${suffix}`;
+}
+
 export function targetColumns(
   columns: { name: string; label?: string }[],
   weightColumns: string[]
@@ -143,6 +153,7 @@ export function WeightPanel({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
+  const outputColumn = rakeOutputColumn(columns.map(column => column.name));
   const openFile = datasets.find(row => rowId(row) === datasetId);
   const lead = [
     openFile?.original_filename,
@@ -165,7 +176,9 @@ export function WeightPanel({
           Object.fromEntries(listed.map(column => [column.name || '', column.value_labels || {}]))
         );
         setWeightColumns(
-          [...(meta.weight_columns || []), meta.active_weight_column || ''].filter(Boolean)
+          [...(meta.weight_columns || []), meta.active_weight_column || ''].filter(
+            (name, index, all) => Boolean(name) && name !== '_weight' && all.indexOf(name) === index
+          )
         );
       })
       .catch(() => setColumns([]));
@@ -345,7 +358,7 @@ export function WeightPanel({
             <DialogDescription className="weight-copy">{RAKE_COPY}</DialogDescription>
           </DialogHeader>
           <div className="weight-versions-head">
-            <span>Weight variable · _weight</span>
+            <span>Weight variable · {outputColumn}</span>
             <span>Targets are a percent of each column&apos;s rows, sent as counts</span>
           </div>
           <div className="weight-versions">
@@ -360,7 +373,7 @@ export function WeightPanel({
               <i />
               <div>
                 <strong>{savedName || 'New weighted file'}</strong>
-                <span>This rake · adds a _weight column</span>
+                <span>This rake · adds a {outputColumn} column</span>
               </div>
               <span className="weight-new">New</span>
             </div>
@@ -471,7 +484,7 @@ export function WeightPanel({
             <span>Converged</span>
             <strong>
               {diagnostics?.converged && diagnostics.iterations
-                ? `${diagnostics.iterations} runs`
+                ? `${diagnostics.iterations} ${diagnostics.iterations === 1 ? 'run' : 'runs'}`
                 : '—'}
             </strong>
           </div>

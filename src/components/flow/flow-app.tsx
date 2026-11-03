@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
+import { loadProjectTables, tableFileNote } from '@/components/flow/project-tables';
 import {
   dependentColumns,
   isIdColumn,
@@ -3166,7 +3167,7 @@ function ResponsesScreen({
   const pageSize = 50;
   const [query, setQuery] = useState('');
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
-  const [specs, setSpecs] = useState<{ id: string; label: string }[] | null>(null);
+  const [specs, setSpecs] = useState<{ id: string; label: string; note?: string }[] | null>(null);
   const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error' | 'empty'>('loading');
   const [sheetAttempt, setSheetAttempt] = useState(0);
   const [selectedCol, setSelectedColState] = useState(0);
@@ -3259,21 +3260,18 @@ function ResponsesScreen({
   }, [project]);
   useEffect(() => {
     if (!datasetId) return;
-    void flowJson<{ specs?: { spec_id?: string; id?: string; label?: string; name?: string }[] }>(
-      `/datasets/${datasetId}/tables`
-    )
-      .then(page =>
+    void loadProjectTables(project?.id, datasetId)
+      .then(rows =>
         setSpecs(
-          (page.specs || [])
-            .map(row => ({
-              id: row.spec_id || row.id || '',
-              label: row.label || row.name || row.spec_id || 'Saved table',
-            }))
-            .filter(row => row.id)
+          rows.map(row => ({
+            id: `${row.datasetId}:${row.id}`,
+            label: row.label,
+            note: tableFileNote(row, datasetId),
+          }))
         )
       )
       .catch(() => setSpecs([]));
-  }, [datasetId]);
+  }, [datasetId, project?.id]);
 
   const names = headers.length ? headers : columns.map(column => column.label || column.name);
   const needle = query.trim().toLowerCase();
@@ -3488,7 +3486,7 @@ function ResponsesScreen({
                 <span className="rail-badge">T{index + 1}</span>
                 <span className="rail-analysis-copy">
                   <span>{spec.label}</span>
-                  <span className="flow-muted">Custom Tables</span>
+                  <span className="flow-muted">{spec.note || 'Custom Tables'}</span>
                 </span>
               </Link>
             ))
@@ -4164,22 +4162,20 @@ function ReportScreen({
         .map(row => datasetRowId(row))
         .filter(Boolean)
     ).catch(() => []);
-    void flowJson<{ specs?: { spec_id?: string; id?: string; label?: string; name?: string }[] }>(
-      `/datasets/${datasetId}/tables`
-    )
-      .then(async page => {
-        const rows = page.specs || [];
+    void loadProjectTables(projectId, datasetId)
+      .then(async rows => {
         const meta = await metaRequest;
         const labels = Object.fromEntries(
           (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
         );
         const loaded = await Promise.all(
           rows.map(async (row, index) => {
-            const id = row.spec_id || row.id || '';
+            const id = row.id;
             const detail = await flowJson<Record<string, unknown>>(
-              `/datasets/${datasetId}/tables/${id}`
+              `/datasets/${row.datasetId}/tables/${id}`
             );
-            const label = row.label || row.name || id;
+            const note = tableFileNote(row, datasetId);
+            const label = note ? `${row.label} (${note})` : row.label;
             const spec = (detail.spec as Record<string, unknown>) || {};
             return {
               id,
