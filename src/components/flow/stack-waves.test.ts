@@ -18,7 +18,7 @@ describe('stack waves', () => {
     );
     expect(rows.find(row => row.left === 'q3')?.kind).toBe('matched');
     expect(rows.find(row => row.left === 'region')?.kind).toBe('check');
-    expect(rows.find(row => row.left === 'region')?.reason).toContain('3 only on the right');
+    expect(rows.find(row => row.left === 'region')?.reason).toContain('codes 3 only here');
     expect(rows.find(row => row.left === 'score')?.reason).toBe('Only in wave-a.csv');
     expect(rows.find(row => row.right === 'comment')?.kind).toBe('new');
     expect(waveCounts(rows)).toEqual({ matched: 1, check: 2, fresh: 1 });

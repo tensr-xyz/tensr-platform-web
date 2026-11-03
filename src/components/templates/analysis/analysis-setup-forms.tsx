@@ -8,12 +8,13 @@ import type {
   ConfidenceLevelKey,
   DescriptiveStatKey,
 } from '@/lib/analysis-definitions';
+import { twoGroupColumnNames } from '@/lib/analysis-definitions';
 import {
   WIZARD_FIELD,
   type WizardFieldErrorsMap,
   type WizardFieldNoticesMap,
 } from '@/lib/analysis-setup-validation';
-import type { SchemaColumn } from '@/lib/analysis-report-types';
+import type { DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
 import { Button } from '@/components/atoms/button';
 import { Checkbox } from '@/components/atoms/checkbox';
 import { Input } from '@/components/atoms/input';
@@ -85,6 +86,7 @@ type FormSliceProps = {
   notices: WizardFieldNoticesMap;
   errors: WizardFieldErrorsMap;
   tukeyBlocked?: boolean;
+  preview?: DatasetPreview | null;
 };
 
 function ConfidencePills({
@@ -287,7 +289,10 @@ export function GroupNumericForm({
   outcomeLabel = 'Outcome',
   groupingLabel = 'Grouping variable',
   showHypothesizedDifference = false,
+  groupingNames,
 }: FormSliceProps & {
+  /** Narrower grouping list, e.g. two-group variables for the independent t-test. */
+  groupingNames?: string[];
   outcomeFirst?: boolean;
   showConfidence?: boolean;
   showPostHoc?: boolean;
@@ -314,7 +319,7 @@ export function GroupNumericForm({
       value={form.groupCol}
       onChange={groupCol => setForm(f => ({ ...f, groupCol }))}
       schema={schema}
-      names={allNames}
+      names={groupingNames ?? allNames}
       expectedType="categorical"
       notices={notices[WIZARD_FIELD.groupCol]}
       errors={errors[WIZARD_FIELD.groupCol]}
@@ -478,6 +483,7 @@ export function IndependentTTestForm(props: FormSliceProps) {
       showHypothesizedDifference
       outcomeLabel="Test variable"
       groupingLabel="Grouping variable"
+      groupingNames={twoGroupColumnNames(props.schema, props.preview)}
     />
   );
 }

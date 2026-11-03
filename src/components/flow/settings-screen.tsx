@@ -1,10 +1,15 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { useOrganizationContext } from '@/contexts/organisation-context';
 import { SettingsBilling } from '@/components/flow/settings/billing';
 import { SettingsGeneral } from '@/components/flow/settings/general';
-import { SettingsOrganisation } from '@/components/flow/settings/organisation';
+import {
+  SettingsOrganisation,
+  SettingsPersonalOrganisation,
+} from '@/components/flow/settings/organisation';
+import { prefetchBillingAndUsage } from '@/components/flow/settings/billing-load';
 import { SettingsTeams } from '@/components/flow/settings/teams';
 import { SettingsUsage } from '@/components/flow/settings/usage';
 import { workspaceHeading } from '@/components/flow/settings/settings-data';
@@ -34,11 +39,15 @@ export function SettingsScreen({ section }: { section?: string }) {
   const orgId = !isPersonalAccount && activeOrganization ? activeOrganization.id : '';
   const inTeam = userOrganizations.some(org => !org.isPersonal);
   const shown = (Object.keys(SECTIONS) as SettingsSection[]).filter(key =>
-    key === 'organisation' ? Boolean(orgId) : key === 'teams' ? inTeam : true
+    key === 'teams' ? inTeam : true
   );
-  const workspace = orgId
-    ? activeOrganization?.name
-    : userOrganizations.find(org => org.isPersonal)?.name || 'Personal workspace';
+  const personal = userOrganizations.find(org => org.isPersonal);
+  const workspace = orgId ? activeOrganization?.name : personal?.name || 'Personal workspace';
+
+  // Billing and Usage share slow requests; start them now so either tab draws at once.
+  useEffect(() => {
+    prefetchBillingAndUsage();
+  }, [orgId]);
 
   let body;
   if (current === 'billing') body = <SettingsBilling />;
@@ -47,10 +56,10 @@ export function SettingsScreen({ section }: { section?: string }) {
     body = orgId ? (
       <SettingsOrganisation orgId={orgId} />
     ) : (
-      <p className="st-note">
-        You are in your personal workspace. Switch to an organisation from the sidebar to manage its
-        members.
-      </p>
+      <SettingsPersonalOrganisation
+        personalId={personal?.id || ''}
+        workspaceName={workspaceHeading(workspace)}
+      />
     );
   else if (current === 'teams') body = <SettingsTeams />;
   else body = <SettingsGeneral />;

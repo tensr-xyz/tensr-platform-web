@@ -1,5 +1,6 @@
 import {
   alphaToLevel,
+  dedupeMembers,
   compactCount,
   errorText,
   formatMoney,
@@ -143,5 +144,40 @@ describe('settings helpers', () => {
     );
     expect(flowSettingsPath('organisation')).toBe('/flow/settings/organisation');
     expect(flowSettingsPath('usage', { a: ['1', '2'] })).toBe('/flow/settings/usage?a=1&a=2');
+  });
+});
+
+describe('dedupeMembers', () => {
+  const person = (userId: string, email: string, role: 'owner' | 'member' = 'member') => ({
+    userId,
+    email,
+    name: email.split('@')[0],
+    role,
+    joinedAt: '2026-11-01',
+  });
+
+  it('keeps one row per user id', () => {
+    const rows = [person('u1', 'a@x.com', 'owner'), person('u1', 'a@x.com')];
+    expect(dedupeMembers(rows)).toEqual([rows[0]]);
+  });
+
+  it('merges two user records with the same email, ignoring case', () => {
+    const rows = [
+      person('u1', 'oliverdarby99+onboard1@gmail.com'),
+      person('u2', 'OliverDarby99+Onboard1@gmail.com', 'owner'),
+      person('u3', 'b@x.com'),
+    ];
+    const out = dedupeMembers(rows);
+    expect(out.map(p => p.userId)).toEqual(['u1', 'u3']);
+    expect(out[0].role).toBe('owner');
+  });
+
+  it('keeps your own row over a twin so "(you)" still shows', () => {
+    const rows = [person('old', 'me@x.com'), person('me', 'me@x.com')];
+    expect(dedupeMembers(rows, 'me').map(p => p.userId)).toEqual(['me']);
+  });
+
+  it('falls back to email when there is no user id', () => {
+    expect(dedupeMembers([person('', 'c@x.com'), person('', 'C@x.com')])).toHaveLength(1);
   });
 });

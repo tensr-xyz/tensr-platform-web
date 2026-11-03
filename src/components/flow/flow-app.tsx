@@ -6,6 +6,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
+import { loadProjectTables, tableFileNote } from '@/components/flow/project-tables';
+import { PaletteNoMatch } from '@/components/flow/palette-no-match';
 import {
   dependentColumns,
   isIdColumn,
@@ -52,7 +54,7 @@ import { FiltersPanel, type FlowFilter } from '@/components/flow/filters-panel';
 import { describeFilters } from '@/components/flow/filters-panel-logic';
 import { CodingReview } from '@/components/flow/coding-review';
 import { FlowNotFound } from '@/components/flow/flow-not-found';
-import { DatasetsScreen } from '@/components/flow/datasets-screen';
+import { DatasetsScreen, uploadTotal } from '@/components/flow/datasets-screen';
 import { FolderView } from '@/components/flow/folder-view';
 import { ArchivedProjects } from '@/components/flow/archived-projects';
 import { PluginDetail } from '@/components/flow/plugin-detail';
@@ -570,15 +572,19 @@ export function FlowApp({ slug }: { slug: string[] }) {
       ? orgName.slice(account.length).trim() || 'Workspace'
       : orgName || '';
 
+  // A project that is not there gets the plain 404, without its header, tabs, Share or Export.
+  const missingProject = Boolean(projectId) && projectReady === projectId && !project;
+  const projectChrome = Boolean(projectId) && !missingProject;
+
   return (
     <SubscriptionGate>
-      <div className={projectId ? 'flow flow-project' : 'flow flow-home'}>
-        {projectId ? null : (
+      <div className={projectChrome ? 'flow flow-project' : 'flow flow-home'}>
+        {projectChrome ? null : (
           <FlowSidebar
             collapsed={sideCollapsed}
             onCollapse={collapseSide}
             section={section}
-            datasetCount={datasets.filter(row => datasetRowId(row)).length}
+            datasetCount={uploadTotal(datasets)}
             folders={folders}
             folderName={folderName}
             account={account}
@@ -591,7 +597,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
           />
         )}
         <div className="flow-main">
-          {projectId ? (
+          {projectChrome ? (
             <>
               <header className="proj-bar">
                 <div className="proj-brand">
@@ -646,7 +652,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
             {workspacePhase === 'error' && section !== 'projects' && projectId ? (
               <p className="flow-error">{error}</p>
             ) : null}
-            {projectId && projectReady === projectId && !project ? (
+            {missingProject ? (
               <FlowNotFound />
             ) : section === 'plugins' && slug[1] === 'publish' ? (
               <PublishScreen />
@@ -1169,7 +1175,10 @@ function PluginsScreen() {
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<PluginCategory>('All');
   const [mine, setMine] = useState(false);
-  const [detail, setDetail] = useState<FlowPlugin | null>(null);
+  const router = useRouter();
+  // A plugin opens its own page (Paper 1g), not a dialog.
+  const openPlugin = (plugin: FlowPlugin) =>
+    router.push(`/flow/plugins/${encodeURIComponent(plugin.pluginId)}`);
   const [installing, setInstalling] = useState<string | null>(null);
   const [installError, setInstallError] = useState<string | null>(null);
 
@@ -1286,7 +1295,7 @@ function PluginsScreen() {
                   installed={installed.has(plugin.pluginId)}
                   team={Boolean(plugin.authorId && userIds.includes(plugin.authorId))}
                   busy={installing === plugin.pluginId}
-                  onOpen={() => setDetail(plugin)}
+                  onOpen={() => openPlugin(plugin)}
                   onInstall={() => install(plugin)}
                 />
               ))}
@@ -1300,7 +1309,7 @@ function PluginsScreen() {
                   plugin={plugin}
                   installed={installed.has(plugin.pluginId)}
                   busy={installing === plugin.pluginId}
-                  onOpen={() => setDetail(plugin)}
+                  onOpen={() => openPlugin(plugin)}
                   onInstall={() => install(plugin)}
                 />
               ))}
@@ -1309,39 +1318,6 @@ function PluginsScreen() {
           {installError ? <p className="flow-error">{installError}</p> : null}
         </>
       )}
-      <Dialog open={detail !== null} onOpenChange={open => !open && setDetail(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{detail?.name || 'Plugin'}</DialogTitle>
-            <DialogDescription>
-              {detail ? pluginByline(detail) || 'Plugin' : 'Plugin'}
-            </DialogDescription>
-          </DialogHeader>
-          {detail ? (
-            <div className="plugin-detail">
-              <p>{detail.description || 'No description.'}</p>
-              <p className="flow-muted">
-                {detail.version ? `v${detail.version}` : 'Version unavailable'}
-                {installCount(detail) ? ` · ${installCount(detail)}` : ''}
-              </p>
-              <Badge tone="soon">Ratings coming soon</Badge>
-              {installed.has(detail.pluginId) ? (
-                <Badge tone="active">Installed</Badge>
-              ) : (
-                <Button
-                  className="flow-btn primary"
-                  type="button"
-                  disabled={installing === detail.pluginId}
-                  onClick={() => install(detail)}
-                >
-                  {installing === detail.pluginId ? 'Installing' : 'Install'}
-                </Button>
-              )}
-              {installError ? <p className="flow-error">{installError}</p> : null}
-            </div>
-          ) : null}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
@@ -1374,9 +1350,6 @@ function PluginFeature({
       </Button>
       <p className="flow-muted">{plugin.description}</p>
       <div className="plugin-foot">
-        <span className="flow-muted" title="Ratings are coming soon">
-          ★ coming soon
-        </span>
         {count ? <span className="flow-muted">{count}</span> : null}
         {plugin.version ? <span className="flow-muted">v{plugin.version}</span> : null}
         <span className="plugin-spacer" />
@@ -1415,7 +1388,6 @@ function PluginTile({
       <p className="flow-muted">{plugin.description}</p>
       <div className="plugin-foot">
         {tag ? <span className="flow-muted">{tag}</span> : null}
-        <Badge tone="soon">Ratings coming soon</Badge>
         {count ? <span className="flow-muted">{count}</span> : null}
         <span className="plugin-spacer" />
         {installed ? (
@@ -2097,7 +2069,7 @@ function Palette({
               </div>
               <div className="palette-results">
                 {analyses.length === 0 ? (
-                  <p className="flow-soon">Coming soon</p>
+                  <PaletteNoMatch query={query} onAsk={onAsk} />
                 ) : (
                   <>
                     <p className="palette-label">{query ? 'Best match' : activeSection}</p>
@@ -3166,7 +3138,7 @@ function ResponsesScreen({
   const pageSize = 50;
   const [query, setQuery] = useState('');
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
-  const [specs, setSpecs] = useState<{ id: string; label: string }[] | null>(null);
+  const [specs, setSpecs] = useState<{ id: string; label: string; note?: string }[] | null>(null);
   const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error' | 'empty'>('loading');
   const [sheetAttempt, setSheetAttempt] = useState(0);
   const [selectedCol, setSelectedColState] = useState(0);
@@ -3184,6 +3156,8 @@ function ResponsesScreen({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filters, setFilters] = useState<FlowFilter[]>([]);
   const [reviewing, setReviewing] = useState<string | null>(null);
+  // The theme last reviewed reopens with its new counts once the coded version is in use.
+  const [reopenTheme, setReopenTheme] = useState('');
   const filtersKey = JSON.stringify(filters);
   const [valueFilter, setValueFilter] = useState<string | null>(null);
   const [agentText, setAgentText] = useState('');
@@ -3259,21 +3233,18 @@ function ResponsesScreen({
   }, [project]);
   useEffect(() => {
     if (!datasetId) return;
-    void flowJson<{ specs?: { spec_id?: string; id?: string; label?: string; name?: string }[] }>(
-      `/datasets/${datasetId}/tables`
-    )
-      .then(page =>
+    void loadProjectTables(project?.id, datasetId)
+      .then(rows =>
         setSpecs(
-          (page.specs || [])
-            .map(row => ({
-              id: row.spec_id || row.id || '',
-              label: row.label || row.name || row.spec_id || 'Saved table',
-            }))
-            .filter(row => row.id)
+          rows.map(row => ({
+            id: `${row.datasetId}:${row.id}`,
+            label: row.label,
+            note: tableFileNote(row, datasetId),
+          }))
         )
       )
       .catch(() => setSpecs([]));
-  }, [datasetId]);
+  }, [datasetId, project?.id]);
 
   const names = headers.length ? headers : columns.map(column => column.label || column.name);
   const needle = query.trim().toLowerCase();
@@ -3488,7 +3459,7 @@ function ResponsesScreen({
                 <span className="rail-badge">T{index + 1}</span>
                 <span className="rail-analysis-copy">
                   <span>{spec.label}</span>
-                  <span className="flow-muted">Custom Tables</span>
+                  <span className="flow-muted">{spec.note || 'Custom Tables'}</span>
                 </span>
               </Link>
             ))
@@ -3658,6 +3629,7 @@ function ResponsesScreen({
               codeColumn={reviewing.endsWith('_codes') ? reviewing : `${reviewing}_codes`}
               textColumn={reviewing.replace(/_codes$/, '')}
               onDone={result => {
+                setReopenTheme(result?.codeColumn || reviewing);
                 setReviewing(null);
                 if (result?.datasetId) {
                   setChosenId(result.datasetId);
@@ -3673,8 +3645,10 @@ function ResponsesScreen({
             />
           ) : (
             <ThemesPanel
+              key={`${datasetId}:${reopenTheme}`}
               datasetId={datasetId}
               projectId={project?.id}
+              initialStub={reopenTheme}
               onReview={column => setReviewing(column)}
               onSelectCell={cell => {
                 setSurveyCell(cell);
@@ -4164,22 +4138,20 @@ function ReportScreen({
         .map(row => datasetRowId(row))
         .filter(Boolean)
     ).catch(() => []);
-    void flowJson<{ specs?: { spec_id?: string; id?: string; label?: string; name?: string }[] }>(
-      `/datasets/${datasetId}/tables`
-    )
-      .then(async page => {
-        const rows = page.specs || [];
+    void loadProjectTables(projectId, datasetId)
+      .then(async rows => {
         const meta = await metaRequest;
         const labels = Object.fromEntries(
           (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
         );
         const loaded = await Promise.all(
           rows.map(async (row, index) => {
-            const id = row.spec_id || row.id || '';
+            const id = row.id;
             const detail = await flowJson<Record<string, unknown>>(
-              `/datasets/${datasetId}/tables/${id}`
+              `/datasets/${row.datasetId}/tables/${id}`
             );
-            const label = row.label || row.name || id;
+            const note = tableFileNote(row, datasetId);
+            const label = note ? `${row.label} (${note})` : row.label;
             const spec = (detail.spec as Record<string, unknown>) || {};
             return {
               id,

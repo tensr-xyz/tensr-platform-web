@@ -33,6 +33,11 @@ function stamp(row: ShellDataset): number {
   return Number.isFinite(value) ? value : 0;
 }
 
+/** The number of uploads: the Datasets header and the sidebar both show this. */
+export function uploadTotal(rows: ShellDataset[]): number {
+  return groupDatasets(rows).filter(group => !group.root.parent_dataset_id).length;
+}
+
 /** Uploads with the working versions whose parent chain leads back to them. */
 export function groupDatasets(rows: ShellDataset[]): DatasetGroup[] {
   const listed = rows.filter(row => shellDatasetId(row));
@@ -41,8 +46,11 @@ export function groupDatasets(rows: ShellDataset[]): DatasetGroup[] {
     let current = row;
     const seen = new Set([shellDatasetId(row)]);
     while (current.parent_dataset_id) {
-      const parent = byId.get(String(current.parent_dataset_id));
-      if (!parent) break;
+      // A parent that is archived or out of scope is not listed; the origin upload still is.
+      const parent =
+        byId.get(String(current.parent_dataset_id)) ||
+        (current.origin_dataset_id ? byId.get(String(current.origin_dataset_id)) : undefined);
+      if (!parent || parent === current) break;
       // A parent loop is bad data: show each row on its own rather than guess.
       if (seen.has(shellDatasetId(parent))) return row;
       seen.add(shellDatasetId(parent));

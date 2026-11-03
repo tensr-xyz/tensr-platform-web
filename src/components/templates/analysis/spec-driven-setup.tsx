@@ -90,7 +90,9 @@ function ParamField({
   schema,
   preview,
   revealSelectionError,
+  analysisKey,
 }: {
+  analysisKey?: string;
   param: SpecParam;
   value: unknown;
   onChange: (value: unknown) => void;
@@ -112,7 +114,7 @@ function ParamField({
           value={asText(value)}
           onChange={onChange}
           schema={schema}
-          names={namesForParam(schema, param, preview)}
+          names={namesForParam(schema, param, preview, analysisKey)}
           expectedType={slotOf(param)}
           allowEmpty={param.role !== 'required' || isWeightParam(param)}
           emptyLabel="None"
@@ -134,7 +136,7 @@ function ParamField({
           selected={asColumns(value)}
           onChange={onChange}
           schema={schema.filter(column =>
-            namesForParam(schema, param, preview).includes(column.name)
+            namesForParam(schema, param, preview, analysisKey).includes(column.name)
           )}
           filterSlot={slotOf(param)}
           minSelected={param.role === 'required' ? 1 : undefined}
@@ -316,6 +318,7 @@ export function SpecDrivenSetup({
           {required.map(param => (
             <ParamField
               key={param.name}
+              analysisKey={spec.key}
               param={param}
               value={values[param.name]}
               onChange={value => onChange(param.name, value)}
@@ -337,6 +340,7 @@ export function SpecDrivenSetup({
           {defaults.map(param => (
             <ParamField
               key={param.name}
+              analysisKey={spec.key}
               param={param}
               value={values[param.name]}
               onChange={value => onChange(param.name, value)}
@@ -347,6 +351,7 @@ export function SpecDrivenSetup({
           {advanced.map(param => (
             <ParamField
               key={param.name}
+              analysisKey={spec.key}
               param={param}
               value={values[param.name]}
               onChange={value => onChange(param.name, value)}
