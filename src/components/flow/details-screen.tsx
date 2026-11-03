@@ -244,7 +244,7 @@ export function DetailsScreen({
         multiple_response_sets?: { columns?: string[]; variables?: string[] }[] | null;
       }>(`/datasets/${datasetId}/metadata`),
       flowJson<{ rows?: unknown[][]; headers?: string[] }>(
-        `/datasets/${datasetId}/preview?limit=200&offset=0`
+        `/datasets/${datasetId}/preview?limit=60&offset=0&slim=true`
       ).catch(() => ({ rows: [], headers: [] })),
     ])
       .then(([meta, page]) => {
