@@ -619,9 +619,19 @@ export function FlowApp({ slug }: { slug: string[] }) {
             ) : section === 'details' ? (
               <DetailsScreen project={project} datasets={datasets} />
             ) : section === 'sources' ? (
-              <SourcesScreen project={project} datasets={datasets} onChanged={reload} />
+              <SourcesScreen
+                project={project}
+                datasets={datasets}
+                onChanged={reload}
+                projectNames={Object.fromEntries(projects.map(item => [item.id, item.name]))}
+              />
             ) : section === 'responses' ? (
-              <ResponsesScreen project={project} datasets={datasets} ready={tabReady} />
+              <ResponsesScreen
+                project={project}
+                datasets={datasets}
+                ready={tabReady}
+                onChanged={reload}
+              />
             ) : section === 'tables' ? (
               <TablesScreen project={project} datasets={datasets} />
             ) : section === 'report' ? (
@@ -3047,10 +3057,12 @@ function ResponsesScreen({
   project,
   datasets,
   ready = true,
+  onChanged,
 }: {
   project?: FlowProject;
   datasets: DatasetRow[];
   ready?: boolean;
+  onChanged?: () => void;
 }) {
   const router = useRouter();
   const [chosenId, setChosenId] = useState<string | null>(null);
@@ -3873,6 +3885,9 @@ function ResponsesScreen({
           datasets={projectDatasets}
           onClose={() => setWeightOpen(false)}
           onAdopted={nextId => {
+            setChosenId(nextId);
+            setColPicked(false);
+            onChanged?.();
             if (!project) return;
             void flowJson(`/api/projects/${project.id}`, {
               method: 'PATCH',
@@ -3886,9 +3901,23 @@ function ResponsesScreen({
 }
 
 function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: DatasetRow[] }) {
+  const [chosen, setChosen] = useState('');
+  const files = datasets.filter(row => row.project_id === project?.id && datasetRowId(row));
   const datasetId =
-    project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
-  return <TablesBuilder datasetId={datasetId} projectId={project?.id} />;
+    chosen || project?.active_dataset_id || (files[0] ? datasetRowId(files[0]) : undefined);
+  return (
+    <TablesBuilder
+      key={datasetId}
+      datasetId={datasetId}
+      projectId={project?.id}
+      files={files.map(row => ({
+        id: datasetRowId(row),
+        name: row.original_filename || datasetRowId(row),
+        inUse: datasetRowId(row) === project?.active_dataset_id,
+      }))}
+      onFile={setChosen}
+    />
+  );
 }
 
 function ReportScreen({
@@ -3964,14 +3993,23 @@ function ReportScreen({
     let live = true;
     setPhase('loading');
     setError('');
+    // Metadata and pins do not depend on the table list, so they load alongside it.
+    const metaRequest = flowJson<{
+      columns?: { name?: string; value_labels?: Record<string, string> | null }[];
+    }>(`/datasets/${datasetId}/metadata`).catch(() => ({ columns: [] }));
+    const pinsRequest = loadProjectPins(
+      projectId,
+      datasets
+        .filter(row => row.project_id === projectId)
+        .map(row => datasetRowId(row))
+        .filter(Boolean)
+    ).catch(() => []);
     void flowJson<{ specs?: { spec_id?: string; id?: string; label?: string; name?: string }[] }>(
       `/datasets/${datasetId}/tables`
     )
       .then(async page => {
         const rows = page.specs || [];
-        const meta = await flowJson<{
-          columns?: { name?: string; value_labels?: Record<string, string> | null }[];
-        }>(`/datasets/${datasetId}/metadata`).catch(() => ({ columns: [] }));
+        const meta = await metaRequest;
         const labels = Object.fromEntries(
           (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
         );
@@ -3995,13 +4033,7 @@ function ReportScreen({
         const ready = loaded.filter(row => row.id);
         setSpecs(ready.map(row => ({ id: row.id, label: row.label, spec: row.spec })));
         setPicked(ready.map(row => row.id));
-        await loadProjectPins(
-          projectId,
-          datasets
-            .filter(row => row.project_id === projectId)
-            .map(row => datasetRowId(row))
-            .filter(Boolean)
-        ).catch(() => []);
+        await pinsRequest;
         if (!live) return;
         const nextTables = distinctTables(ready.map(row => row.table));
         setTables(nextTables);

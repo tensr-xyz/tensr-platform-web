@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { flowJson } from '@/lib/flow-api';
-import { isInternalColumn } from '@/lib/flow-columns';
+import { isIdColumn, isInternalColumn } from '@/lib/flow-columns';
 import { efficiencyPercent } from '@/lib/flow-survey';
 import { RAKE_COPY } from '@/lib/rake-weights';
 import {
@@ -55,6 +55,55 @@ type RakePayload = {
   diagnostics?: RakeDiagnostics;
 };
 
+export type RakePreview = {
+  ok?: boolean;
+  needs_choice?: boolean;
+  message?: string;
+  audit?: { affected_rows?: number; per_variable?: { column: string; missing_rows?: number }[] };
+  cells?: {
+    column: string;
+    level: string;
+    label: string;
+    n: number;
+    unweighted_pct: number;
+    weighted_pct: number;
+    target_pct: number;
+    mean_weight: number | null;
+  }[];
+  efficiency?: number;
+  effective_base?: number;
+  min_weight?: number;
+  max_weight?: number;
+  converged?: boolean;
+  warning?: string;
+};
+
+export type MissingChoice = '' | 'keep_unweighted' | 'missing_target' | 'exclude';
+
+/** Columns a target can use: no ids, no weights, no system columns. */
+export function targetColumns(
+  columns: { name: string; label?: string }[],
+  weightColumns: string[]
+): { name: string; label?: string }[] {
+  const weights = new Set(weightColumns);
+  return columns.filter(
+    column =>
+      !isInternalColumn(column.name) &&
+      !isIdColumn(column.name) &&
+      !isIdColumn(column.label || '') &&
+      !weights.has(column.name) &&
+      !/(^|_)(weight|wt|wgt)s?($|_)/i.test(column.name)
+  );
+}
+
+/** The preview cell for a code, matching "1" and "1.0". */
+export function previewCell(preview: RakePreview | null, column: string, code: string) {
+  const key = code.trim().replace(/\.0$/, '');
+  return (preview?.cells || []).find(
+    cell => cell.column === column && cell.level.trim().replace(/\.0$/, '') === key
+  );
+}
+
 type WeightGroup = {
   column: string;
   total: number;
@@ -76,7 +125,14 @@ export function WeightPanel({
   onClose: () => void;
   onAdopted?: (datasetId: string) => void;
 }) {
-  const [columns, setColumns] = useState<string[]>([]);
+  const [columns, setColumns] = useState<{ name: string; label?: string }[]>([]);
+  const [labels, setLabels] = useState<Record<string, Record<string, string>>>({});
+  const [weightColumns, setWeightColumns] = useState<string[]>([]);
+  const [preview, setPreview] = useState<RakePreview | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [handling, setHandling] = useState<MissingChoice>('');
+  const [missingPct, setMissingPct] = useState<Record<string, string>>({});
+  const [saved, setSaved] = useState<{ id: string; name: string } | null>(null);
   const [groups, setGroups] = useState<WeightGroup[]>([]);
   const [percents, setPercents] = useState<Record<string, Record<string, string>>>({});
   const [addColumn, setAddColumn] = useState('');
@@ -97,10 +153,21 @@ export function WeightPanel({
 
   useEffect(() => {
     if (!datasetId) return;
-    void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${datasetId}/metadata`)
-      .then(meta =>
-        setColumns((meta.columns || []).map(column => column.name || '').filter(Boolean))
-      )
+    void flowJson<{
+      columns?: { name?: string; label?: string; value_labels?: Record<string, string> | null }[];
+      weight_columns?: string[];
+      active_weight_column?: string | null;
+    }>(`/datasets/${datasetId}/metadata`)
+      .then(meta => {
+        const listed = (meta.columns || []).filter(column => column.name);
+        setColumns(listed.map(column => ({ name: column.name || '', label: column.label || '' })));
+        setLabels(
+          Object.fromEntries(listed.map(column => [column.name || '', column.value_labels || {}]))
+        );
+        setWeightColumns(
+          [...(meta.weight_columns || []), meta.active_weight_column || ''].filter(Boolean)
+        );
+      })
       .catch(() => setColumns([]));
   }, [datasetId]);
 
@@ -160,8 +227,7 @@ export function WeightPanel({
       .catch(err => setError(err instanceof Error ? err.message : 'Could not load targets'));
   };
 
-  const save = () => {
-    if (!datasetId) return;
+  const requestBody = (previewOnly: boolean) => {
     const categorical: Record<string, Record<string, number>> = {};
     for (const group of groups) {
       const counts = countsFromPercents(
@@ -173,26 +239,92 @@ export function WeightPanel({
       );
       if (Object.keys(counts).length) categorical[group.column] = counts;
     }
-    if (!Object.keys(categorical).length) {
+    if (!Object.keys(categorical).length) return null;
+    const upper = Number(cap);
+    const missingTargets = Object.fromEntries(
+      Object.entries(missingPct)
+        .filter(
+          ([column, value]) => categorical[column] && Number.isFinite(Number(value)) && value.trim()
+        )
+        .map(([column, value]) => {
+          const total = groups.find(group => group.column === column)?.total || 0;
+          return [column, (Number(value) / 100) * total];
+        })
+    );
+    return {
+      categorical_targets: categorical,
+      ...(handling ? { missing_handling: handling } : {}),
+      ...(handling === 'missing_target' ? { missing_targets: missingTargets } : {}),
+      ...(Number.isFinite(upper) && upper > 0 ? { upper } : {}),
+      ...(previewOnly ? { preview: true } : {}),
+    };
+  };
+
+  const previewKey = JSON.stringify([
+    percents,
+    groups.map(group => group.column),
+    cap,
+    handling,
+    missingPct,
+  ]);
+  useEffect(() => {
+    if (!datasetId || saved) return;
+    const body = requestBody(true);
+    if (!body) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
+    setPreviewing(true);
+    const handle = window.setTimeout(() => {
+      void flowJson<RakePreview>(`/datasets/${datasetId}/weights/rake`, {
+        method: 'POST',
+        body: JSON.stringify(body),
+      })
+        .then(next => {
+          if (!cancelled) setPreview(next);
+        })
+        .catch(err => {
+          if (!cancelled)
+            setPreview({ ok: false, message: err instanceof Error ? err.message : '' });
+        })
+        .finally(() => {
+          if (!cancelled) setPreviewing(false);
+        });
+    }, 450);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+    };
+    // The key holds every input of the request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId, previewKey, saved]);
+
+  const needsChoice = Boolean(preview?.needs_choice) && !handling;
+
+  const save = () => {
+    if (!datasetId) return;
+    const body = requestBody(false);
+    if (!body) {
       setError('Enter a target percent for at least one code.');
       return;
     }
-    const upper = Number(cap);
+    if (needsChoice) {
+      setError('Choose what happens to rows with no target category first.');
+      return;
+    }
     setBusy(true);
     setError('');
     void flowJson<RakePayload>(`/datasets/${datasetId}/weights/rake`, {
       method: 'POST',
-      body: JSON.stringify({
-        categorical_targets: categorical,
-        missing_handling: 'exclude',
-        ...(Number.isFinite(upper) && upper > 0 ? { upper } : {}),
-      }),
+      body: JSON.stringify(body),
     })
       .then(payload => {
         setDiagnostics(payload.diagnostics || null);
-        setSavedName(payload.original_filename || 'the new file');
+        const name = payload.original_filename || 'the new file';
+        setSavedName(name);
         const nextId = String(payload.derived_dataset_id || payload.dataset_id || '');
-        if (nextId) onAdopted?.(nextId);
+        if (nextId) setSaved({ id: nextId, name });
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Raking did not finish'))
       .finally(() => setBusy(false));
@@ -250,8 +382,19 @@ export function WeightPanel({
             <section key={group.column} className="weight-group">
               <h3>{group.column}</h3>
               {group.codes.map(code => {
-                const margin = marginFor(diagnostics?.margins, group.column, code.code);
-                const mean = margin ? categoryMeanWeight(margin.achieved, code.count) : '';
+                const cell = previewCell(preview, group.column, code.code);
+                const margin = cell
+                  ? undefined
+                  : marginFor(diagnostics?.margins, group.column, code.code);
+                const mean =
+                  cell && cell.mean_weight != null
+                    ? cell.mean_weight.toFixed(2)
+                    : margin
+                      ? categoryMeanWeight(margin.achieved, code.count)
+                      : '';
+                const label =
+                  labels[group.column]?.[code.code] ||
+                  labels[group.column]?.[code.code.replace(/\.0$/, '')];
                 const capped = mean && Number(cap) > 0 && Number(mean) >= Number(cap);
                 return (
                   <div
@@ -260,7 +403,13 @@ export function WeightPanel({
                     data-capped={capped ? 'true' : 'false'}
                   >
                     <span>
-                      {code.code}
+                      {label ? (
+                        <>
+                          {label} <span className="weight-code">{code.code}</span>
+                        </>
+                      ) : (
+                        code.code
+                      )}
                       {capped ? ` · capped at ${cap}` : ''}
                     </span>
                     <span className="weight-muted">{shareLabel(code.percentage)}</span>
@@ -272,7 +421,13 @@ export function WeightPanel({
                       />
                       %
                     </span>
-                    <span>{margin ? achievedShare(margin.achieved, group.total) : '—'}</span>
+                    <span>
+                      {cell
+                        ? `${cell.weighted_pct.toFixed(1)}%`
+                        : margin
+                          ? achievedShare(margin.achieved, group.total)
+                          : '—'}
+                    </span>
                     <span>{mean || '—'}</span>
                   </div>
                 );
@@ -284,14 +439,18 @@ export function WeightPanel({
           <div>
             <span>Efficiency</span>
             <strong>
-              {diagnostics ? efficiencyPercent(diagnostics.weighting_efficiency) || '—' : '—'}
+              {preview?.efficiency != null
+                ? efficiencyPercent(preview.efficiency) || '—'
+                : diagnostics
+                  ? efficiencyPercent(diagnostics.weighting_efficiency) || '—'
+                  : '—'}
             </strong>
           </div>
           <div>
             <span>Effective base</span>
             <strong>
-              {diagnostics && Number.isFinite(Number(diagnostics.kish_ess))
-                ? Number(diagnostics.kish_ess).toLocaleString('en-GB', {
+              {Number.isFinite(Number(preview?.effective_base ?? diagnostics?.kish_ess))
+                ? Number(preview?.effective_base ?? diagnostics?.kish_ess).toLocaleString('en-GB', {
                     maximumFractionDigits: 1,
                   })
                 : '—'}
@@ -300,10 +459,11 @@ export function WeightPanel({
           <div>
             <span>Weight range</span>
             <strong>
-              {diagnostics &&
-              Number.isFinite(Number(diagnostics.min_weight)) &&
-              Number.isFinite(Number(diagnostics.max_weight))
-                ? `${Number(diagnostics.min_weight).toFixed(2)} to ${Number(diagnostics.max_weight).toFixed(2)}`
+              {Number.isFinite(Number(preview?.min_weight ?? diagnostics?.min_weight)) &&
+              Number.isFinite(Number(preview?.max_weight ?? diagnostics?.max_weight))
+                ? `${Number(preview?.min_weight ?? diagnostics?.min_weight).toFixed(2)} to ${Number(
+                    preview?.max_weight ?? diagnostics?.max_weight
+                  ).toFixed(2)}`
                 : '—'}
             </strong>
           </div>
@@ -316,15 +476,68 @@ export function WeightPanel({
             </strong>
           </div>
         </div>
-        {savedName || diagnostics?.missing_category_warning || error ? (
+        {preview?.needs_choice ? (
+          <div className="weight-choice" role="alert">
+            <p>
+              <strong>{preview.audit?.affected_rows || 0} rows have no target category</strong> (
+              {(preview.audit?.per_variable || [])
+                .filter(item => item.missing_rows)
+                .map(item => `${item.column}: ${item.missing_rows} missing`)
+                .join('; ')}
+              ). Choose what happens to them before saving.
+            </p>
+            <div className="weight-choice-options">
+              {(
+                [
+                  ['keep_unweighted', 'Keep them at weight 1'],
+                  ['missing_target', 'Treat missing as its own category'],
+                  ['exclude', 'Leave them out (weight 0)'],
+                ] as const
+              ).map(([value, text]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  className="flow-btn"
+                  data-active={handling === value || undefined}
+                  onClick={() => setHandling(value)}
+                >
+                  {text}
+                </Button>
+              ))}
+            </div>
+            {handling === 'missing_target'
+              ? (preview.audit?.per_variable || [])
+                  .filter(item => item.missing_rows)
+                  .map(item => (
+                    <label key={item.column} className="weight-missing-target">
+                      Target for missing {item.column}
+                      <Input
+                        aria-label={`Target percent missing ${item.column}`}
+                        value={missingPct[item.column] || ''}
+                        onChange={event =>
+                          setMissingPct(current => ({
+                            ...current,
+                            [item.column]: event.target.value,
+                          }))
+                        }
+                      />
+                      %
+                    </label>
+                  ))
+              : null}
+          </div>
+        ) : null}
+        {savedName || diagnostics?.missing_category_warning || preview?.warning || error ? (
           <div className="weight-messages">
             {savedName ? (
               <p className="flow-muted">
                 Saved as {savedName}. The file you raked stays in the project.
               </p>
             ) : null}
-            {diagnostics?.missing_category_warning ? (
-              <p className="flow-muted">{diagnostics.missing_category_warning}</p>
+            {diagnostics?.missing_category_warning || (!savedName && preview?.warning) ? (
+              <p className="flow-muted">
+                {diagnostics?.missing_category_warning || preview?.warning}
+              </p>
             ) : null}
             {error ? <p className="flow-error">{error}</p> : null}
           </div>
@@ -339,10 +552,15 @@ export function WeightPanel({
             }}
             options={[
               { value: '', label: '+ Add target' },
-              ...columns
-                .filter(column => !isInternalColumn(column))
-                .filter(column => !groups.some(group => group.column === column))
-                .map(column => ({ value: column, label: column })),
+              ...targetColumns(columns, weightColumns)
+                .filter(column => !groups.some(group => group.column === column.name))
+                .map(column => ({
+                  value: column.name,
+                  label:
+                    column.label && column.label !== column.name
+                      ? `${column.name} · ${column.label}`
+                      : column.name,
+                })),
             ]}
           />
           {addColumn ? (
@@ -377,17 +595,33 @@ export function WeightPanel({
             />
           </span>
           <span className="sheet-spacer" />
+          {previewing && !saved ? (
+            <span className="flow-muted weight-previewing">Updating…</span>
+          ) : null}
           <Button className="flow-btn" type="button" onClick={onClose}>
-            Cancel
+            {saved ? 'Close' : 'Cancel'}
           </Button>
-          <Button
-            className="flow-btn primary"
-            type="button"
-            disabled={!datasetId || busy}
-            onClick={save}
-          >
-            {busy ? 'Saving…' : 'Save as new file'}
-          </Button>
+          {saved ? (
+            <Button
+              className="flow-btn primary"
+              type="button"
+              onClick={() => {
+                onAdopted?.(saved.id);
+                onClose();
+              }}
+            >
+              Open weighted file
+            </Button>
+          ) : (
+            <Button
+              className="flow-btn primary"
+              type="button"
+              disabled={!datasetId || busy || needsChoice}
+              onClick={save}
+            >
+              {busy ? 'Saving…' : 'Save as new file'}
+            </Button>
+          )}
         </div>
       </DialogContent>
     </Dialog>

@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { datasetRowId } from '@/components/flow/survey-screens';
 import { moveDatasetToProject } from '@/components/flow/move-dataset';
 import { StackWaves } from '@/components/flow/stack-waves';
+import { DatasetMenu } from '@/components/flow/dataset-actions';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
@@ -79,10 +80,12 @@ export function SourcesScreen({
   project,
   datasets,
   onChanged,
+  projectNames = {},
 }: {
   project?: FlowProject;
   datasets: SourceFile[];
   onChanged: () => void;
+  projectNames?: Record<string, string>;
 }) {
   const router = useRouter();
   const projectId = project?.id || '';
@@ -203,6 +206,12 @@ export function SourcesScreen({
         </span>
         <span className="flow-muted sources-rows">{sourceRowCount(file)}</span>
         {inUse ? <span className="sources-in-use">In use</span> : action}
+        <DatasetMenu
+          datasetId={id}
+          name={sourceFileName(file)}
+          inUse={inUse}
+          onChanged={onChanged}
+        />
       </div>
     );
   };
@@ -399,6 +408,7 @@ export function SourcesScreen({
           <StackWaves
             projectId={projectId}
             datasets={datasets}
+            projectNames={projectNames}
             onChanged={onChanged}
             onDone={() => setStackOpen(false)}
           />

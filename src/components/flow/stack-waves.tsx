@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/table';
 import { datasetRowId } from '@/components/flow/survey-screens';
 import { moveDatasetToProject, type MovableDataset } from '@/components/flow/move-dataset';
+import { Checkbox } from '@/components/ui/checkbox';
 import { flowJson } from '@/lib/flow-api';
 
 export type WaveColumn = { name: string; value_labels?: Record<string, string> };
@@ -113,89 +114,173 @@ export function stackMappings(rows: WaveDiff[], choices: Record<string, Decision
   });
 }
 
+export type StackFile = MovableDataset & {
+  parent_dataset_id?: string | null;
+  archived?: boolean;
+};
+
+/** Original uploads first: this project's, then the ones in your other projects. */
+export function stackCandidates(datasets: StackFile[], projectId: string) {
+  const uploads = datasets.filter(
+    row => datasetRowId(row) && !row.parent_dataset_id && !row.archived
+  );
+  return {
+    here: uploads.filter(row => row.project_id === projectId),
+    elsewhere: uploads.filter(row => row.project_id !== projectId),
+  };
+}
+
+/** A file and one made from it can't stack: name the pair. */
+export function descendantClash(ids: string[], datasets: StackFile[]): [string, string] | null {
+  const byId = new Map(datasets.map(row => [datasetRowId(row), row]));
+  for (const id of ids) {
+    let parent = byId.get(id)?.parent_dataset_id || '';
+    const seen = new Set<string>();
+    while (parent && !seen.has(parent)) {
+      if (ids.includes(parent)) return [id, parent];
+      seen.add(parent);
+      parent = byId.get(parent)?.parent_dataset_id || '';
+    }
+  }
+  return null;
+}
+
+/** Columns across any number of files. A column in every file matches; others are flagged. */
+export function compareManyWaves(files: { name: string; columns: WaveColumn[] }[]): WaveDiff[] {
+  const names: string[] = [];
+  for (const file of files) {
+    for (const column of file.columns) {
+      if (column.name && !names.includes(column.name)) names.push(column.name);
+    }
+  }
+  return names.map(name => {
+    const missing = files.filter(file => !file.columns.some(column => column.name === name));
+    const inFirst = !missing.includes(files[0]);
+    return {
+      id: `${name}\t`,
+      left: inFirst ? name : EMPTY,
+      right: inFirst ? (missing.length ? EMPTY : name) : name,
+      reason: missing.length
+        ? `Not in ${missing.map(file => file.name).join(', ')}`
+        : 'In every file',
+      kind: missing.length ? (inFirst ? 'check' : 'new') : 'matched',
+    } as WaveDiff;
+  });
+}
+
 export function StackWaves({
   projectId,
   datasets,
+  projectNames = {},
   onChanged,
   onDone,
 }: {
   projectId: string;
-  datasets: MovableDataset[];
+  datasets: StackFile[];
+  projectNames?: Record<string, string>;
   onChanged: () => void;
   onDone: () => void;
 }) {
-  const files = datasets.filter(row => row.project_id === projectId && datasetRowId(row));
-  const [leftId, setLeftId] = useState('');
-  const [rightId, setRightId] = useState('');
-  const [leftCols, setLeftCols] = useState<WaveColumn[] | null>(null);
-  const [rightCols, setRightCols] = useState<WaveColumn[] | null>(null);
+  const { here, elsewhere } = useMemo(
+    () => stackCandidates(datasets, projectId),
+    [datasets, projectId]
+  );
+  const [picked, setPicked] = useState<string[]>([]);
+  const [columnsById, setColumnsById] = useState<Record<string, WaveColumn[]>>({});
   const [choices, setChoices] = useState<Record<string, Decision>>({});
   const [showAll, setShowAll] = useState(false);
+  const [overlap, setOverlap] = useState<{ column: string | null; overlapping_ids: number } | null>(
+    null
+  );
+  const [dedupe, setDedupe] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (leftId || files.length < 2) return;
-    setLeftId(datasetRowId(files[0]));
-    setRightId(datasetRowId(files[1]));
-  }, [files, leftId]);
+    if (picked.length || here.length < 2) return;
+    setPicked(here.map(row => datasetRowId(row)));
+  }, [here, picked.length]);
 
+  const pickedKey = picked.join('|');
   useEffect(() => {
-    if (!leftId || !rightId || leftId === rightId) {
-      setLeftCols([]);
-      setRightCols([]);
-      return;
-    }
+    const missing = picked.filter(id => !columnsById[id]);
+    if (!missing.length) return;
     let cancelled = false;
-    setLeftCols(null);
-    setRightCols(null);
-    const load = (id: string) =>
-      flowJson<{ columns?: WaveColumn[] }>(`/datasets/${id}/metadata`).then(
-        meta => meta.columns || []
-      );
-    void Promise.all([load(leftId), load(rightId)])
-      .then(([left, right]) => {
-        if (cancelled) return;
-        setLeftCols(left);
-        setRightCols(right);
+    void Promise.all(
+      missing.map(id =>
+        flowJson<{ columns?: WaveColumn[] }>(`/datasets/${id}/metadata`).then(
+          meta => [id, meta.columns || []] as const
+        )
+      )
+    )
+      .then(rows => {
+        if (!cancelled) setColumnsById(current => ({ ...current, ...Object.fromEntries(rows) }));
       })
       .catch(err => {
-        if (cancelled) return;
-        setLeftCols([]);
-        setRightCols([]);
-        setError(err instanceof Error ? err.message : 'The columns did not load.');
+        if (!cancelled) setError(err instanceof Error ? err.message : 'The columns did not load.');
       });
     return () => {
       cancelled = true;
     };
-  }, [leftId, rightId]);
+    // pickedKey covers picked; columnsById only grows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedKey]);
 
-  const leftFile = files.find(file => datasetRowId(file) === leftId);
-  const rightFile = files.find(file => datasetRowId(file) === rightId);
-  const leftName = leftFile?.original_filename || 'First file';
-  const rightName = rightFile?.original_filename || 'Second file';
-  const visibleCols = (list: typeof leftCols) =>
-    (list || []).filter(column => !String(column.name || '').startsWith('_'));
-  const rows =
-    leftCols && rightCols
-      ? compareWaves(visibleCols(leftCols), visibleCols(rightCols), leftName, rightName)
-      : [];
+  useEffect(() => {
+    setOverlap(null);
+    if (picked.length < 2) return;
+    let cancelled = false;
+    void flowJson<{ column: string | null; overlapping_ids: number }>(
+      '/datasets/intake/id-overlap',
+      {
+        method: 'POST',
+        body: JSON.stringify({ dataset_ids: picked }),
+      }
+    )
+      .then(result => {
+        if (!cancelled) setOverlap(result);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // pickedKey covers picked.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedKey]);
+
+  const byId = new Map(datasets.map(row => [datasetRowId(row), row]));
+  const nameOf = (id: string) => byId.get(id)?.original_filename || 'File';
+  const clash = descendantClash(picked, datasets);
+  const ready = picked.length >= 2 && picked.every(id => columnsById[id]);
+  const visibleCols = (list: WaveColumn[]) =>
+    list.filter(column => !String(column.name || '').startsWith('_'));
+  const rows = !ready
+    ? []
+    : picked.length === 2
+      ? compareWaves(
+          visibleCols(columnsById[picked[0]]),
+          visibleCols(columnsById[picked[1]]),
+          nameOf(picked[0]),
+          nameOf(picked[1])
+        )
+      : compareManyWaves(
+          picked.map(id => ({ name: nameOf(id), columns: visibleCols(columnsById[id]) }))
+        );
   const counts = waveCounts(rows);
   const visible = showAll ? rows : rows.filter(row => row.kind !== 'matched');
-  const ready = leftCols !== null && rightCols !== null;
-
-  const setDecision = (id: string, decision: Decision['decision'], target = '') => {
+  const toggle = (id: string, on: boolean) =>
+    setPicked(current => (on ? [...current, id] : current.filter(item => item !== id)));
+  const setDecision = (id: string, decision: Decision['decision'], target = '') =>
     setChoices(current => ({ ...current, [id]: { decision, target } }));
-  };
 
   const stack = () => {
-    if (!leftId || !rightId || leftId === rightId || busy) return;
+    if (picked.length < 2 || clash || busy) return;
     setBusy(true);
     setError(null);
     const mappings = stackMappings(rows, choices);
     void flowJson(`/api/projects/${projectId}/wave-maps`, {
       method: 'POST',
-      body: JSON.stringify({ sources: [leftId, rightId], mappings }),
+      body: JSON.stringify({ sources: picked, mappings }),
     })
       .then(() =>
         flowJson<{ dataset_id?: string; derived_dataset_id?: string }>(
@@ -203,9 +288,12 @@ export function StackWaves({
           {
             method: 'POST',
             body: JSON.stringify({
-              dataset_ids: [leftId, rightId],
-              wave_names: [leftName, rightName],
+              dataset_ids: picked,
+              wave_names: picked.map(nameOf),
               mappings,
+              ...(dedupe && overlap?.overlapping_ids && overlap.column
+                ? { dedupe_column: overlap.column }
+                : {}),
             }),
           }
         )
@@ -223,45 +311,66 @@ export function StackWaves({
       .finally(() => setBusy(false));
   };
 
-  const otherNames = (row: WaveDiff) => {
-    const names = row.left === EMPTY ? leftCols || [] : rightCols || [];
-    return names.map(column => column.name).filter(Boolean);
+  const fileRow = (row: StackFile, other: boolean) => {
+    const id = datasetRowId(row);
+    return (
+      <label key={id} className="stack-file">
+        <Checkbox
+          checked={picked.includes(id)}
+          onCheckedChange={checked => toggle(id, checked === true)}
+        />
+        <span>{row.original_filename || id}</span>
+        {other ? (
+          <span className="flow-muted">
+            {projectNames[row.project_id || ''] || 'Another project'}
+          </span>
+        ) : null}
+      </label>
+    );
   };
 
   return (
     <>
       <DialogHeader>
-        <DialogTitle>
-          Stack {leftName} + {rightName}
-        </DialogTitle>
+        <DialogTitle>Stack {picked.length >= 2 ? `${picked.length} files` : 'files'}</DialogTitle>
         <DialogDescription>
-          Columns with the same name stack together. Check the exceptions below.
+          Pick the original uploads to stack. Columns with the same name stack together; check the
+          exceptions below.
         </DialogDescription>
       </DialogHeader>
-      {files.length > 2 ? (
-        <div className="stack-picks">
-          <ChoiceSelect
-            aria-label="First file"
-            value={leftId}
-            onValueChange={setLeftId}
-            options={files.map(file => ({
-              value: datasetRowId(file),
-              label: file.original_filename || datasetRowId(file),
-            }))}
-          />
-          <ChoiceSelect
-            aria-label="Second file"
-            value={rightId}
-            onValueChange={setRightId}
-            options={files.map(file => ({
-              value: datasetRowId(file),
-              label: file.original_filename || datasetRowId(file),
-            }))}
-          />
+      <div className="stack-picker">
+        <p className="stack-picker-label">This project</p>
+        {here.length ? (
+          here.map(row => fileRow(row, false))
+        ) : (
+          <p className="flow-muted">No uploads here yet.</p>
+        )}
+        {elsewhere.length ? (
+          <>
+            <p className="stack-picker-label">Your other projects</p>
+            {elsewhere.map(row => fileRow(row, true))}
+          </>
+        ) : null}
+      </div>
+      {clash ? (
+        <p className="flow-error">
+          {nameOf(clash[0])} was made from {nameOf(clash[1])}. Stack the original uploads instead.
+        </p>
+      ) : null}
+      {overlap && overlap.overlapping_ids > 0 ? (
+        <div className="stack-overlap">
+          <span>
+            {overlap.overlapping_ids.toLocaleString('en-GB')} respondent IDs in{' '}
+            <strong>{overlap.column}</strong> appear in more than one file.
+          </span>
+          <label className="stack-file">
+            <Checkbox checked={dedupe} onCheckedChange={checked => setDedupe(checked === true)} />
+            <span>Keep one row per respondent (the first file&apos;s)</span>
+          </label>
         </div>
       ) : null}
-      {files.length < 2 ? (
-        <p className="flow-muted">Add another file before stacking.</p>
+      {picked.length < 2 ? (
+        <p className="flow-muted">Pick at least two files.</p>
       ) : !ready ? (
         <Skeleton className="h-40 w-full" />
       ) : (
@@ -269,16 +378,14 @@ export function StackWaves({
           <div className="stack-counts">
             <Badge tone="active">{counts.matched} matched</Badge>
             <Badge tone="warn">{counts.check} to check</Badge>
-            <Badge>
-              {counts.fresh} new in {rightName}
-            </Badge>
+            <Badge>{counts.fresh} new</Badge>
           </div>
           {visible.length ? (
             <Table className="stack-table">
               <TableHeader>
                 <TableRow>
-                  <TableHead>{leftName}</TableHead>
-                  <TableHead>{rightName}</TableHead>
+                  <TableHead>{picked.length === 2 ? nameOf(picked[0]) : 'Column'}</TableHead>
+                  <TableHead>{picked.length === 2 ? nameOf(picked[1]) : 'Also in'}</TableHead>
                   <TableHead>Why it is flagged</TableHead>
                   <TableHead>Do this</TableHead>
                 </TableRow>
@@ -287,6 +394,7 @@ export function StackWaves({
                 {visible.map(row => {
                   const choice = choices[row.id] || { decision: 'accept' as const, target: '' };
                   const oneSided = row.left === EMPTY || row.right === EMPTY;
+                  const twoFiles = picked.length === 2;
                   return (
                     <TableRow key={row.id} data-kind={row.kind}>
                       <TableCell>{row.left}</TableCell>
@@ -300,14 +408,14 @@ export function StackWaves({
                             setDecision(row.id, value as Decision['decision'], choice.target)
                           }
                           options={
-                            oneSided
+                            oneSided && twoFiles
                               ? [
                                   { value: 'accept', label: 'Add' },
                                   { value: 'skip', label: 'Skip' },
                                   { value: 'override', label: 'Treat as same' },
                                 ]
                               : [
-                                  { value: 'accept', label: 'Stack together' },
+                                  { value: 'accept', label: oneSided ? 'Add' : 'Stack together' },
                                   { value: 'skip', label: 'Skip' },
                                 ]
                           }
@@ -318,7 +426,13 @@ export function StackWaves({
                             value={choice.target}
                             onValueChange={value => setDecision(row.id, 'override', value)}
                             placeholder="Choose a column"
-                            options={otherNames(row).map(name => ({ value: name, label: name }))}
+                            options={(row.left === EMPTY
+                              ? columnsById[picked[0]]
+                              : columnsById[picked[1]]
+                            )
+                              .map(column => column.name)
+                              .filter(Boolean)
+                              .map(name => ({ value: name, label: name }))}
                           />
                         ) : null}
                       </TableCell>
@@ -334,7 +448,7 @@ export function StackWaves({
       )}
       {error ? <p className="flow-error">{error}</p> : null}
       <div className="stack-foot">
-        {ready && files.length >= 2 ? (
+        {ready ? (
           <Button
             className="stack-show-all"
             type="button"
@@ -343,17 +457,19 @@ export function StackWaves({
             {showAll ? 'Show exceptions' : `Show all ${rows.length} mappings`}
           </Button>
         ) : null}
-        <p className="flow-muted">Creates a new dataset, originals untouched</p>
+        <p className="flow-muted">Creates a new working version; the uploads stay as they are</p>
         <Button className="flow-btn" type="button" onClick={onDone}>
           Cancel
         </Button>
         <Button
           className="flow-btn primary"
           type="button"
-          disabled={busy || files.length < 2 || leftId === rightId}
+          disabled={busy || picked.length < 2 || Boolean(clash)}
           onClick={stack}
         >
-          {busy ? 'Stacking…' : 'Stack waves'}
+          {busy
+            ? 'Stacking…'
+            : `Stack ${picked.length >= 2 ? picked.length : ''} files`.replace('  ', ' ')}
         </Button>
       </div>
     </>

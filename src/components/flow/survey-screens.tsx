@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/rest';
+import { Popover, PopoverContent, PopoverTrigger, Skeleton } from '@/components/ui/rest';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
@@ -1155,14 +1155,55 @@ function bannerNames(spec: { banners?: { column?: string; columns?: string[] }[]
   return names.filter((name, index) => name && names.indexOf(name) === index);
 }
 
+/** The banner book an agent turn produced, if any. */
+export function bookFromToolResults(results: unknown): Record<string, unknown> | null {
+  const items = Array.isArray(results) ? results : [];
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index] as Record<string, unknown> | null;
+    const candidates = [
+      item,
+      item?.result,
+      (item?.result as Record<string, unknown> | undefined)?.result,
+    ];
+    for (const candidate of candidates) {
+      if (
+        candidate &&
+        typeof candidate === 'object' &&
+        Array.isArray((candidate as Record<string, unknown>).cells) &&
+        Array.isArray((candidate as Record<string, unknown>).banner_columns)
+      ) {
+        return candidate as Record<string, unknown>;
+      }
+    }
+  }
+  return null;
+}
+
+/** Nets the user made on the stub, kept apart from Top 2 / Bottom 2. */
+export function userNets(nets: { label?: string; values?: unknown[] }[] | undefined) {
+  return (nets || [])
+    .filter(net => net && !/^(top|bottom) 2 box$/i.test(String(net.label || '')))
+    .map(net => ({ label: String(net.label || 'Net'), values: (net.values || []).map(String) }));
+}
+
 export function TablesBuilder({
   datasetId,
   projectId,
+  files = [],
+  onFile,
 }: {
   datasetId?: string;
   projectId?: string;
+  files?: { id: string; name: string; inUse?: boolean }[];
+  onFile?: (id: string) => void;
 }) {
   const router = useRouter();
+  const [customNets, setCustomNets] = useState<{ label: string; values: string[] }[]>([]);
+  const [netOpen, setNetOpen] = useState(false);
+  const [netOptions, setNetOptions] = useState<string[]>([]);
+  const [netPicked, setNetPicked] = useState<string[]>([]);
+  const [netLabel, setNetLabel] = useState('');
+  const [agentSteps, setAgentSteps] = useState<string[]>([]);
   const [columns, setColumns] = useState<TableColumn[]>([]);
   const [weightColumns, setWeightColumns] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -1199,8 +1240,11 @@ export function TablesBuilder({
     setRailReady(false);
     let live = true;
     void Promise.all([
-      flowJson<{ specs?: SavedSpec[] }>(`/datasets/${datasetId}/tables`).catch(() => ({
+      flowJson<{ specs?: SavedSpec[]; first?: Record<string, unknown> | null }>(
+        `/datasets/${datasetId}/tables?open_first=true`
+      ).catch(() => ({
         specs: [] as SavedSpec[],
+        first: null as Record<string, unknown> | null,
       })),
       flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`).catch(() => ({
         books: [] as SavedBook[],
@@ -1212,7 +1256,9 @@ export function TablesBuilder({
       setBooks(bookPage.books || []);
       const firstId = saved[0]?.spec_id || saved[0]?.id;
       setRailReady(true);
-      if (firstId) {
+      if (specPage.first) {
+        remember(specPage.first);
+      } else if (firstId) {
         setOpening(true);
         const opened = await flowJson<Record<string, unknown>>(
           `/datasets/${datasetId}/tables/${firstId}`
@@ -1277,6 +1323,11 @@ export function TablesBuilder({
       | undefined;
     const stubColumn = spec?.stubs?.[0]?.column;
     if (stubColumn) setStub(String(stubColumn));
+    setCustomNets(
+      userNets(
+        (spec?.stubs?.[0] as { nets?: { label?: string; values?: unknown[] }[] } | undefined)?.nets
+      )
+    );
     const names = bannerNames(spec);
     if (names.length) setBanners(names);
     const id = String(spec?.id || '');
@@ -1322,6 +1373,7 @@ export function TablesBuilder({
       }
       nets.push({ label: 'Bottom 2 box', values });
     }
+    nets.push(...customNets);
     setError('');
     const statistics = meanOn ? [statistic, 'column_mean'] : [statistic];
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
@@ -1378,6 +1430,7 @@ export function TablesBuilder({
     nest,
     lowBase,
     meanOn,
+    JSON.stringify(customNets),
   ].join('|');
   const lastOptions = useRef(optionsKey);
   useEffect(() => {
@@ -1568,6 +1621,21 @@ export function TablesBuilder({
         <>
           <section className="tables-main">
             <div className="tables-tools">
+              {files.length ? (
+                <div className="tables-line">
+                  <span>File</span>
+                  <ChoiceSelect
+                    className="flow-input tables-file"
+                    aria-label="Table file"
+                    value={datasetId || ''}
+                    onValueChange={value => onFile?.(value)}
+                    options={files.map(file => ({
+                      value: file.id,
+                      label: `${file.name}${file.inUse ? ' · in use' : ''}`,
+                    }))}
+                  />
+                </div>
+              ) : null}
               <div className="tables-line">
                 <span>Stub</span>
                 {stub ? (
@@ -1715,6 +1783,93 @@ export function TablesBuilder({
                     Mean
                   </Button>
                 </div>
+                {customNets.map(net => (
+                  <Button
+                    key={net.label}
+                    className="tables-chip accent"
+                    type="button"
+                    title={net.values.join(', ')}
+                    onClick={() =>
+                      setCustomNets(current => current.filter(item => item.label !== net.label))
+                    }
+                  >
+                    {net.label} ×
+                  </Button>
+                ))}
+                <Popover
+                  open={netOpen}
+                  onOpenChange={open => {
+                    setNetOpen(open);
+                    if (!open || !stub) return;
+                    setNetPicked([]);
+                    setNetLabel('');
+                    const labelled = Object.keys(
+                      columns.find(item => item.name === stub)?.labels || {}
+                    );
+                    if (labelled.length) {
+                      setNetOptions(labelled);
+                      return;
+                    }
+                    void flowJson<{ values?: string[] }>(
+                      `/datasets/${datasetId}/columns/${encodeURIComponent(stub)}/values`
+                    )
+                      .then(page => setNetOptions(page.values || []))
+                      .catch(() => setNetOptions([]));
+                  }}
+                >
+                  <PopoverTrigger asChild>
+                    <Button className="flow-btn" type="button" disabled={!stub}>
+                      + Net
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent align="start" className="tables-net">
+                    <p className="tables-net-head">Net codes of {labelFor(stub)}</p>
+                    <div className="tables-net-codes">
+                      {netOptions.map(code => {
+                        const label = columns.find(item => item.name === stub)?.labels?.[code];
+                        return (
+                          <label key={code} className="stack-file">
+                            <Checkbox
+                              checked={netPicked.includes(code)}
+                              onCheckedChange={checked =>
+                                setNetPicked(current =>
+                                  checked === true
+                                    ? [...current, code]
+                                    : current.filter(item => item !== code)
+                                )
+                              }
+                            />
+                            <span>{label ? `${label} (${code})` : code}</span>
+                          </label>
+                        );
+                      })}
+                      {netOptions.length === 0 ? (
+                        <p className="flow-muted">No codes found.</p>
+                      ) : null}
+                    </div>
+                    <Input
+                      aria-label="Net name"
+                      placeholder="Net name, e.g. Any agree"
+                      value={netLabel}
+                      onChange={event => setNetLabel(event.target.value)}
+                    />
+                    <Button
+                      className="flow-btn primary"
+                      type="button"
+                      disabled={netPicked.length < 2}
+                      onClick={() => {
+                        const label = netLabel.trim() || `Net ${netPicked.join('+')}`;
+                        setCustomNets(current => [
+                          ...current.filter(item => item.label !== label),
+                          { label, values: netPicked },
+                        ]);
+                        setNetOpen(false);
+                      }}
+                    >
+                      Add net
+                    </Button>
+                  </PopoverContent>
+                </Popover>
                 <span className="flow-muted">Nets kept on re-run</span>
                 <Button className="flow-btn tables-run-book" type="button" onClick={runBook}>
                   Run as banner book →
@@ -1834,7 +1989,9 @@ export function TablesBuilder({
                   </p>
                 )
               )}
-              {asking ? <p className="flow-status">Warming up</p> : null}
+              {asking ? (
+                <p className="flow-status">{agentSteps[agentSteps.length - 1] || 'Warming up'}</p>
+              ) : null}
             </div>
             <form
               className="tables-composer"
@@ -1845,19 +2002,38 @@ export function TablesBuilder({
                 setThread(current => [...current, { role: 'user', text }]);
                 setAsk('');
                 setAsking(true);
+                setAgentSteps([]);
                 void runAgentLoop({
                   message: text,
                   mode: 'agent',
                   datasetId: datasetId || null,
                   agentVersion: 'v2',
-                  signal: AbortSignal.timeout(120_000),
+                  signal: AbortSignal.timeout(180_000),
+                  onProgress: progress => {
+                    const line = progress.message || progress.step;
+                    if (line)
+                      setAgentSteps(current =>
+                        current.includes(line) ? current : [...current, line]
+                      );
+                  },
                 })
-                  .then(result =>
+                  .then(result => {
+                    const built = bookFromToolResults(result.tool_results);
+                    if (built) {
+                      setBook(built);
+                      setView('table');
+                      setDirty(true);
+                    }
                     setThread(current => [
                       ...current,
-                      { role: 'reply', text: result.answer_markdown || 'No answer came back.' },
-                    ])
-                  )
+                      {
+                        role: 'reply',
+                        text:
+                          result.answer_markdown ||
+                          (built ? 'Built the table. Save it to keep it.' : 'No answer came back.'),
+                      },
+                    ]);
+                  })
                   .catch(err =>
                     setThread(current => [
                       ...current,
