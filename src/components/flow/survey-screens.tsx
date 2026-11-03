@@ -1188,6 +1188,7 @@ export function TablesBuilder({
   >({});
   const [asking, setAsking] = useState(false);
   const [railReady, setRailReady] = useState(false);
+  const [opening, setOpening] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
 
   useEffect(() => {
@@ -1210,14 +1211,16 @@ export function TablesBuilder({
       setSpecs(saved);
       setBooks(bookPage.books || []);
       const firstId = saved[0]?.spec_id || saved[0]?.id;
+      setRailReady(true);
       if (firstId) {
+        setOpening(true);
         const opened = await flowJson<Record<string, unknown>>(
           `/datasets/${datasetId}/tables/${firstId}`
         ).catch(() => null);
         if (!live) return;
         if (opened) remember(opened);
+        setOpening(false);
       }
-      setRailReady(true);
     });
     void flowJson<{
       columns?: { name?: string; label?: string; value_labels?: Record<string, string> }[];
@@ -1768,7 +1771,7 @@ export function TablesBuilder({
                   </Button>
                 </div>
               </div>
-              {!railReady ? (
+              {!railReady || (opening && !book) ? (
                 <div aria-busy="true">
                   <Skeleton className="mb-2 h-8 w-full" />
                   <Skeleton className="mb-2 h-8 w-full" />
