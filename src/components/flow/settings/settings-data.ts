@@ -277,6 +277,38 @@ export function personFromApi(raw: Record<string, unknown>): Person {
   };
 }
 
+/**
+ * One row per person. Members are keyed by user id, and the API can hold two membership rows
+ * for one email (two user records for the same address), so rows also merge on the lower-cased
+ * email. The first row wins, except that your own row is kept over a twin, and a merged person
+ * is an owner when any of their rows is.
+ */
+export function dedupeMembers(people: Person[], selfId = ''): Person[] {
+  const out: Person[] = [];
+  const byKey = new Map<string, number>();
+  for (const person of people) {
+    const idKey = person.userId ? `id:${person.userId}` : '';
+    const emailKey = person.email.trim() ? `email:${person.email.trim().toLowerCase()}` : '';
+    const keys = [idKey, emailKey].filter(Boolean);
+    const at = keys.map(key => byKey.get(key)).find(index => index !== undefined);
+    if (at === undefined) {
+      keys.forEach(key => byKey.set(key, out.length));
+      out.push(person);
+      continue;
+    }
+    const kept = out[at];
+    const base = selfId && person.userId === selfId && kept.userId !== selfId ? person : kept;
+    out[at] = {
+      ...base,
+      name: base.name || kept.name || person.name,
+      role: kept.role === 'owner' || person.role === 'owner' ? 'owner' : 'member',
+      joinedAt: [kept.joinedAt, person.joinedAt].filter(Boolean).sort()[0] || '',
+    };
+    keys.forEach(key => byKey.set(key, at));
+  }
+  return out;
+}
+
 export function roleLabel(role: string): string {
   return role === 'owner' ? 'Owner' : 'Member';
 }

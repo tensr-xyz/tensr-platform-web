@@ -103,6 +103,28 @@ function provenance(raw: unknown): Record<string, unknown> {
   return asRecord(raw) || {};
 }
 
+/**
+ * Text that is not an answer. The same list the API uses for the theme base
+ * (_nonblank_answer_mask), so the review queue, the "not yet coded" count and the table agree.
+ */
+const NOT_AN_ANSWER = new Set([
+  '',
+  'nan',
+  'none',
+  'null',
+  '<na>',
+  'n/a',
+  'na',
+  'no comment',
+  'nothing',
+  '(blank)',
+  'blank',
+]);
+
+export function isAnswer(text: string): boolean {
+  return !NOT_AN_ANSWER.has(text.trim().toLowerCase());
+}
+
 /** Uncoded answers from a preview page filtered to code column = "uncoded". */
 export function reviewRowsFromPreview(
   page: PreviewPage,
@@ -129,8 +151,8 @@ export function reviewRowsFromPreview(
           : null;
     const confidence = typeof prov.confidence === 'number' ? prov.confidence : null;
     const text = textAt >= 0 && cells[textAt] != null ? String(cells[textAt]).trim() : '';
-    // A blank answer has nothing to code; it is not in the queue.
-    if (!text || /^\(?blank\)?$/i.test(text) || text.toLowerCase() === 'null') continue;
+    // A blank or "no comment" has nothing to code; it is not in the queue or the count.
+    if (!isAnswer(text)) continue;
     out.push({
       row,
       respondentId: respondent,
@@ -175,4 +197,11 @@ export function buildOverrides(
 
 export function respondentLabel(row: ReviewRow): string {
   return row.respondentId ? `Respondent ${row.respondentId}` : `Row ${row.row + 1}`;
+}
+
+/** How many uncoded answers are left: the queue itself, or the server's count less the non-answers seen. */
+export function uncodedTotal(page: PreviewPage, queueLength: number): number {
+  const seen = (page.rows || []).length;
+  if (!page.truncated || page.n_rows_matched == null) return queueLength;
+  return Math.max(queueLength, Number(page.n_rows_matched) - (seen - queueLength));
 }

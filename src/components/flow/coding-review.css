@@ -27,6 +27,30 @@
 
 .cr-bar-right {
   gap: 8px;
+  flex-shrink: 0;
+}
+
+/* The title gives way first, so the toolbar stays on one line. */
+.cr-bar-left {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.cr-bar-left > .cr-crumb,
+.cr-bar-left > .cr-left {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.cr-bar .cr-btn {
+  white-space: nowrap;
+}
+
+.cr-list-keys {
+  flex-shrink: 0;
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-line);
 }
 
 .cr-crumb,

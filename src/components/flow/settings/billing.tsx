@@ -21,7 +21,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { BILLING_RETURN_PATH, ChangePlanDialog } from './change-plan';
-import { loadMe, loadPlans, loadSubscription, openBillingPortal } from './billing-load';
+import { invalidateBilling, loadBilling, openBillingPortal, peekBilling } from './billing-load';
 import { Bar, RowCard, SettingsError, SkeletonCard } from './parts';
 import {
   errorText,
@@ -31,24 +31,14 @@ import {
   planLabel,
   planPrice,
   trialProgress,
-  type Invoice,
 } from './settings-data';
 import { useLoad } from './use-load';
 
-async function loadBilling() {
-  const [me, subscription, catalog, invoices] = await Promise.all([
-    loadMe(),
-    loadSubscription(),
-    loadPlans(),
-    flowJson<{ invoices?: Invoice[] }>('/api/billing/invoices')
-      .then(page => page.invoices || [])
-      .catch(() => null),
-  ]);
-  return { me, subscription, catalog, invoices };
-}
-
 export function SettingsBilling() {
-  const { state, retry, reload } = useLoad(loadBilling, []);
+  const { state, retry, reload } = useLoad(loadBilling, [], {
+    peek: peekBilling,
+    invalidate: invalidateBilling,
+  });
   const [planOpen, setPlanOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState('');

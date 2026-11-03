@@ -134,10 +134,10 @@ function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[
 }
 
 /** Themes read largest first, and answers not yet coded are a row of their own. */
-export function themeRows(rows: BannerRow[], notCoded?: number | null): BannerRow[] {
+export function themeRows(rows: BannerRow[], notCoded?: number | null, sort = true): BannerRow[] {
   const total = (row: BannerRow) =>
     (row.cells || []).find(cell => cell.banner_id === 'total')?.unweighted_n ?? 0;
-  const sorted = [...rows].sort((left, right) => total(right) - total(left));
+  const sorted = sort ? [...rows].sort((left, right) => total(right) - total(left)) : [...rows];
   if (!notCoded) return sorted;
   const sample = rows.flatMap(row => row.cells || []).find(cell => cell.banner_id === 'total');
   const base = sample?.column_unweighted_n;
@@ -186,7 +186,8 @@ export function BannerGrid({
   const notCoded = ((book.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
     ?.not_coded;
   const listed = ((book.rows as BannerRow[]) || []).filter(row => showNets || row.kind !== 'net');
-  const rows = showQuotes ? themeRows(listed, notCoded?.unweighted_n) : listed;
+  // A coded open end always ends on its "Not yet coded" row, in Themes and in Tables.
+  const rows = themeRows(listed, notCoded?.unweighted_n, showQuotes);
   if (!columns.length) return <p className="flow-muted">This table has no banner columns yet.</p>;
   const base = (
     <tr>
@@ -292,9 +293,6 @@ export function BannerGrid({
           Base: answered {String(book.answered_n)} of {String(book.respondent_n)}
         </p>
       ) : null}
-      {!showQuotes && notCoded?.unweighted_n != null ? (
-        <p className="flow-muted">Not coded: {notCoded.unweighted_n}</p>
-      ) : null}
     </div>
   );
 }
@@ -320,17 +318,20 @@ export function ThemesPanel({
   onSelectCell,
   onEditFrame,
   onReview,
+  initialStub = '',
 }: {
   datasetId?: string;
   projectId?: string;
   onSelectCell: (cell: SurveyCell) => void;
   onEditFrame?: (column: string) => void;
   onReview?: (codeColumn: string) => void;
+  /** The theme to reopen, e.g. the one just reviewed, so its table comes back with new counts. */
+  initialStub?: string;
 }) {
   const [columns, setColumns] = useState<
     { name: string; label: string; type?: string; measure?: string }[]
   >([]);
-  const [stub, setStub] = useState('');
+  const [stub, setStub] = useState(initialStub);
   const [banner, setBanner] = useState('');
   const [weight, setWeight] = useState('');
   const [book, setBook] = useState<Record<string, unknown> | null>(null);

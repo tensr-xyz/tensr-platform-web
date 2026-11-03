@@ -1,6 +1,6 @@
 import type { ColumnSlotType } from '@/lib/analysis-column-types';
 import { columnSlotType, slotTypeMatchesExpected } from '@/lib/analysis-column-types';
-import { categoricalColumnNames } from '@/lib/analysis-definitions';
+import { categoricalColumnNames, twoGroupColumnNames } from '@/lib/analysis-definitions';
 import type { DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
@@ -83,6 +83,11 @@ export function resetAnalysisSpecs(): void {
   loading = null;
 }
 
+/** True once the catalog is in memory, so a dialog can render the spec form on its first paint. */
+export function analysisSpecsLoaded(): boolean {
+  return cachedSpecs !== null;
+}
+
 export function specFor(key: string): AnalysisSpec | undefined {
   return cachedSpecs?.get(key);
 }
@@ -155,11 +160,22 @@ function slotFor(types: string[] | undefined): ColumnSlotType | undefined {
   return undefined;
 }
 
+/** The independent-samples t-test compares exactly two groups. */
+export function isTwoGroupParam(analysisKey: string | undefined, param: SpecParam): boolean {
+  return (
+    analysisKey === 'ttest_independent' &&
+    param.type === 'column' &&
+    (param.name === 'group_column' || param.name === 'grouping_variable' || param.name === 'group')
+  );
+}
+
 export function namesForParam(
   schema: SchemaColumn[],
   param: SpecParam,
-  preview?: DatasetPreview | null
+  preview?: DatasetPreview | null,
+  analysisKey?: string
 ): string[] {
+  if (isTwoGroupParam(analysisKey, param)) return twoGroupColumnNames(schema, preview);
   const names = schema.map(column => column.name);
   const slot = slotFor(param.columnTypes);
   if (!slot) return names;

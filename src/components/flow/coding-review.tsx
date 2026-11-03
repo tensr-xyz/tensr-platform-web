@@ -14,6 +14,7 @@ import {
   newCodeId,
   respondentLabel,
   reviewRowsFromPreview,
+  uncodedTotal,
   type FrameCode,
   type PreviewPage,
   type ReviewRow,
@@ -97,7 +98,7 @@ export function CodingReview({
         const queue = reviewRowsFromPreview(page, textColumn, codeColumn);
         setCodes(frame);
         setRows(queue);
-        setTotalUncoded(Number(page.n_rows_matched ?? queue.length));
+        setTotalUncoded(uncodedTotal(page, queue.length));
         setCurrentRow(queue[0]?.row ?? null);
         setPhase('ready');
       })
@@ -267,11 +268,12 @@ export function CodingReview({
       <div className="cr-bar">
         <div className="cr-bar-left">
           <span className="cr-crumb">Themes ›</span>
-          <span className="cr-title">Review uncoded answers · {textColumn}</span>
+          <span className="cr-title" title={`Review uncoded answers · ${textColumn}`}>
+            Review uncoded answers · {textColumn}
+          </span>
           {phase === 'ready' ? <span className="cr-left">{left} left</span> : null}
         </div>
         <div className="cr-bar-right">
-          <span className="cr-keys">J / K to move · 1–9 to pick a theme · N for new</span>
           <Button className="cr-btn" type="button" disabled={saving} onClick={() => onDone()}>
             Skip for now
           </Button>
@@ -359,6 +361,7 @@ export function CodingReview({
                 </p>
               ) : null}
             </div>
+            <p className="cr-keys cr-list-keys">J / K to move · 1–9 to pick a theme · N for new</p>
           </div>
 
           <div className="cr-pane">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { flowJson } from '@/lib/flow-api';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +14,13 @@ import {
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/rest';
 import { PersonMark, SettingsError } from './parts';
-import { errorText, parseInviteEmails, personFromApi, type Person } from './settings-data';
+import {
+  dedupeMembers,
+  errorText,
+  parseInviteEmails,
+  personFromApi,
+  type Person,
+} from './settings-data';
 import { useLoad } from './use-load';
 
 export type Team = { id: string; name: string; role: string; people: Person[] };
@@ -26,13 +32,16 @@ async function loadTeams(): Promise<{ teams: Team[]; activeId: string; selfId: s
     flowJson<{ teams?: TeamRow[]; active_team_id?: string }>('/api/teams'),
     flowJson<{ user?: { id?: string } }>('/api/me'),
   ]);
-  const rows = (page.teams || []).filter(row => row.id);
+  const selfId = me.user?.id || '';
+  const rows = (page.teams || []).filter(
+    (row, index, all) => row.id && all.findIndex(other => other.id === row.id) === index
+  );
   const teams = await Promise.all(
     rows.map(async row => {
       const members = await flowJson<{ members?: Record<string, unknown>[] }>(
         `/api/teams/${row.id}/members`
       )
-        .then(res => (res.members || []).map(personFromApi))
+        .then(res => dedupeMembers((res.members || []).map(personFromApi), selfId))
         .catch(() => [] as Person[]);
       return {
         id: String(row.id),
@@ -42,7 +51,14 @@ async function loadTeams(): Promise<{ teams: Team[]; activeId: string; selfId: s
       };
     })
   );
-  return { teams, activeId: page.active_team_id || '', selfId: me.user?.id || '' };
+  return { teams, activeId: page.active_team_id || '', selfId };
+}
+
+let handoffTeam = '';
+
+/** Opens the Teams tab on this team next time it draws (used after creating a team elsewhere). */
+export function chooseTeamNext(teamId: string): void {
+  handoffTeam = teamId;
 }
 
 /** Selected team first: the one in the URL state, else the active workspace, else the first. */
@@ -61,7 +77,10 @@ export function pickTeam(teams: Team[], chosen: string, activeId: string): Team 
  */
 export function SettingsTeams() {
   const { state, retry, reload } = useLoad(loadTeams, []);
-  const [chosen, setChosen] = useState('');
+  const [chosen, setChosen] = useState(() => handoffTeam);
+  useEffect(() => {
+    handoffTeam = '';
+  }, []);
   const [dialog, setDialog] = useState<'new' | 'rename' | 'add' | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState('');

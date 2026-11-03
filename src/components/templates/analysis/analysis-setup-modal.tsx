@@ -36,6 +36,7 @@ import { renderAnalysisForm } from '@/components/templates/analysis/analysis-set
 import { SpecDrivenSetup } from '@/components/templates/analysis/spec-driven-setup';
 import { apiClient } from '@/lib/api-client';
 import {
+  analysisSpecsLoaded,
   bodyFromSpec,
   ensureAnalysisSpecs,
   isWeightParam,
@@ -55,7 +56,24 @@ type Props = {
   busy: boolean;
   onRun: (op: AnalysisKey, body: Record<string, unknown>) => Promise<void>;
   onBackToPalette: () => void;
+  /** The host is still fetching rows the pickers need (group counts). */
+  contextLoading?: boolean;
 };
+
+export type SpecsStatus = 'loading' | 'ready' | 'failed';
+
+/**
+ * The form the dialog renders must be the one its values were seeded for. Before
+ * the catalog settles there is no form yet; after, the spec form when the op has one.
+ */
+export function setupFormKind(
+  status: SpecsStatus,
+  hasSpec: boolean,
+  contextLoading = false
+): 'loading' | 'spec' | 'legacy' {
+  if (status === 'loading' || contextLoading) return 'loading';
+  return status === 'ready' && hasSpec ? 'spec' : 'legacy';
+}
 
 const DEFAULTS_LINE: Partial<Record<AnalysisKey, string>> = {
   descriptives: 'Mean, standard deviation, minimum, and maximum. Weight uses the active weight.',
@@ -90,6 +108,7 @@ export function AnalysisSetupModal({
   busy,
   onRun,
   onBackToPalette,
+  contextLoading = false,
 }: Props) {
   const [form, setForm] = React.useState<AnalysisFormState>(() => ({
     analysis: initialOp,
@@ -101,7 +120,10 @@ export function AnalysisSetupModal({
   );
   const [activeWeight, setActiveWeight] = React.useState<string | null>(null);
   const [specValues, setSpecValues] = React.useState<Record<string, unknown>>({});
-  const [specsReady, setSpecsReady] = React.useState(false);
+  // The catalog is module-cached. Read it on first paint so the spec form does not swap in later.
+  const [specsStatus, setSpecsStatus] = React.useState<SpecsStatus>(() =>
+    analysisSpecsLoaded() ? 'ready' : 'loading'
+  );
   const [runAttempted, setRunAttempted] = React.useState(false);
 
   React.useEffect(() => {
@@ -109,10 +131,10 @@ export function AnalysisSetupModal({
     let cancelled = false;
     void ensureAnalysisSpecs()
       .then(() => {
-        if (!cancelled) setSpecsReady(true);
+        if (!cancelled) setSpecsStatus('ready');
       })
       .catch(() => {
-        if (!cancelled) setSpecsReady(false);
+        if (!cancelled) setSpecsStatus('failed');
       });
     return () => {
       cancelled = true;
@@ -128,7 +150,9 @@ export function AnalysisSetupModal({
     [schema]
   );
   const previewKey = preview ? `${preview.headers.join('\u0001')}:${preview.rows.length}` : '';
-  const setupKey = `${initialOp}\u0001${bodyKey}\u0001${schemaKey}\u0001${previewKey}`;
+  // specsStatus is part of the key: when the catalog arrives the spec values are seeded
+  // then, not left at {} while the legacy form's picks (id, a 4-group variable) vanish.
+  const setupKey = `${initialOp}\u0001${bodyKey}\u0001${schemaKey}\u0001${previewKey}\u0001${specsStatus}`;
   const setupKeyRef = React.useRef('');
 
   React.useEffect(() => {
@@ -155,7 +179,7 @@ export function AnalysisSetupModal({
       setForm(f => ({ ...f, analysis: initialOp }));
       return;
     }
-    const spec = specFor(initialOp);
+    const spec = specsStatus === 'ready' ? specFor(initialOp) : undefined;
     const fullReset = setupKeyRef.current !== setupKey;
     setupKeyRef.current = setupKey;
     if (spec) {
@@ -201,11 +225,14 @@ export function AnalysisSetupModal({
       setOutputPrefs(loadOutputPreferences());
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initialBody in bodyKey, schema in schemaKey, preview in previewKey
-  }, [open, initialOp, bodyKey, schemaKey, previewKey, activeWeight, specsReady]);
+  }, [open, initialOp, bodyKey, schemaKey, previewKey, activeWeight, specsStatus]);
 
   const allNames = schema.map(c => c.name);
   const analysis = form.analysis;
-  const spec = specFor(analysis);
+  // Only the state the values were seeded for. Reading the module cache directly let a
+  // later rerender (Run) swap the filled legacy form for an empty spec form.
+  const formKind = setupFormKind(specsStatus, Boolean(specFor(analysis)), contextLoading);
+  const spec = formKind === 'spec' ? specFor(analysis) : undefined;
   const meta = ANALYSIS_WIZARD_META[analysis];
   const tooltip = ANALYSIS_WIZARD_TOOLTIPS[analysis];
 
@@ -238,12 +265,13 @@ export function AnalysisSetupModal({
     setForm(f => ({ ...f, anovaPostHoc: 'none' }));
   }, [analysis, tukeyBlocked, form.anovaPostHoc]);
 
-  const canRun = runBlockers.length === 0;
+  const canRun = formKind !== 'loading' && runBlockers.length === 0;
   const firstInput = React.useRef(JSON.stringify([form, specValues]));
   const touched = JSON.stringify([form, specValues]) !== firstInput.current;
   const revealed = runAttempted || touched;
 
   const run = async () => {
+    if (formKind === 'loading') return;
     setRunAttempted(true);
     setServerError(null);
     if (runBlockers.length) {
@@ -274,7 +302,7 @@ export function AnalysisSetupModal({
       tooltip={tooltip}
       onBack={onBackToPalette}
       busy={busy}
-      canRun={analysis === 'descriptives' ? true : canRun}
+      canRun={analysis === 'descriptives' ? formKind !== 'loading' : canRun}
       runBlockers={runBlockers}
       revealBlockers={revealed}
       serverError={serverError}
@@ -282,6 +310,8 @@ export function AnalysisSetupModal({
     >
       {!schema.length ? (
         <p className="text-sm text-muted-foreground">Upload a dataset with a schema first.</p>
+      ) : formKind === 'loading' ? (
+        <p className="text-sm text-muted-foreground">Loading your variables…</p>
       ) : (
         <>
           {spec ? (
@@ -304,6 +334,7 @@ export function AnalysisSetupModal({
                 notices: fieldNotices,
                 errors: revealed ? fieldErrors : {},
                 tukeyBlocked,
+                preview,
               })}
             </>
           )}

@@ -45,6 +45,8 @@ export type ShellDataset = {
   updated_at?: string;
   created_at?: string;
   parent_dataset_id?: string | null;
+  /** The upload a working version came from. */
+  origin_dataset_id?: string | null;
   lineage_label?: string | null;
 };
 
@@ -307,7 +309,7 @@ export function FlowSidebar({
               <Link
                 href="/flow"
                 aria-label="Home"
-                data-active={section === 'projects'}
+                data-active={section === 'projects' && !folderName}
                 onClick={() => onFolder(null)}
               >
                 <NavIcon kind="home" />
@@ -384,7 +386,11 @@ export function FlowSidebar({
           </span>
           <span className="flow-k">⌘K</span>
         </Button>
-        <Link href="/flow" data-active={section === 'projects'} onClick={() => onFolder(null)}>
+        <Link
+          href="/flow"
+          data-active={section === 'projects' && !folderName}
+          onClick={() => onFolder(null)}
+        >
           <span className="nav-label">
             <NavIcon kind="home" /> Home
           </span>

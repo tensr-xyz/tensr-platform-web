@@ -14,6 +14,8 @@ import {
   WORKSPACE_DATASET_REQUIRED,
 } from '@/lib/workspace-dataset';
 import { apiClient } from '@/lib/api-client';
+import { flowJson } from '@/lib/flow-api';
+import { datasetPreviewFromPage } from '@/lib/analysis-definitions';
 import { useTabsStore, ViewType, type Tab } from '@/stores/tabs-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
@@ -124,7 +126,13 @@ export function AnalysisSetupHost() {
   const contextTabFingerprint = contextTab
     ? `${contextTab.id}:${contextTab.data?.initialColumns?.length ?? 0}`
     : '';
-  const preview = useMemo(() => buildPreviewFromTab(contextTab), [contextTab]);
+  const tabPreview = useMemo(() => buildPreviewFromTab(contextTab), [contextTab]);
+  // Without a sheet tab (the Flow app) the pickers still need rows: group counts keep a
+  // 4-group variable out of the t-test grouping slot. Fetched once per open.
+  const [apiPreview, setApiPreview] = useState<{
+    datasetId: string;
+    preview: DatasetPreview | null;
+  } | null>(null);
   const tabSchema = useMemo(() => columnsFromTab(contextTab), [contextTabFingerprint]);
   const effectiveSchema = schema.length ? schema : tabSchema;
   const datasetId = useMemo(
@@ -139,6 +147,27 @@ export function AnalysisSetupHost() {
 
   const setupOpen = setupOp !== null;
   const unavailableOpen = unavailableName !== null;
+  const needsApiPreview = setupOpen && !tabPreview && Boolean(datasetId);
+  const preview =
+    tabPreview ?? (apiPreview && apiPreview.datasetId === datasetId ? apiPreview.preview : null);
+  const previewLoading = needsApiPreview && (!apiPreview || apiPreview.datasetId !== datasetId);
+
+  useEffect(() => {
+    if (!needsApiPreview || !datasetId) return;
+    let cancelled = false;
+    flowJson<unknown>(
+      `/datasets/${encodeURIComponent(datasetId)}/preview?limit=500&offset=0&slim=true&show_value_labels=false`
+    )
+      .then(page => {
+        if (!cancelled) setApiPreview({ datasetId, preview: datasetPreviewFromPage(page) });
+      })
+      .catch(() => {
+        if (!cancelled) setApiPreview({ datasetId, preview: null });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [needsApiPreview, datasetId]);
 
   useEffect(() => {
     const tab = useTabsStore.getState().tabs.find(item => item.id === activeTabId);
@@ -213,6 +242,7 @@ export function AnalysisSetupHost() {
           busy={busy}
           onRun={onRun}
           onBackToPalette={returnToCommandPalette}
+          contextLoading={previewLoading}
         />
       ) : null}
       {dialogName ? (

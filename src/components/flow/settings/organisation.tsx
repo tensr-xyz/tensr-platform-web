@@ -1,6 +1,9 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useOrganizationContext } from '@/contexts/organisation-context';
+import { chooseTeamNext } from './teams';
 import { MoreHorizontal } from 'lucide-react';
 import { flowJson } from '@/lib/flow-api';
 import {
@@ -26,8 +29,9 @@ import {
   Skeleton,
 } from '@/components/ui/rest';
 import { ChoiceSelect } from '@/components/ui/select';
-import { PersonMark, SettingsError } from './parts';
+import { PersonMark, RowCard, SettingsError } from './parts';
 import {
+  dedupeMembers,
   errorText,
   formatDay,
   parseInviteEmails,
@@ -60,7 +64,7 @@ async function loadOrganisation(orgId: string) {
       .then(page => (page.invitations || []).map(mapApiInvitation))
       .catch(() => [] as OrganizationInvitation[]),
   ]);
-  return { me, org, members, invitations };
+  return { me, org, members: dedupeMembers(members, me.user?.id), invitations };
 }
 
 export function pendingInvitations(
@@ -392,6 +396,181 @@ export function SettingsOrganisation({ orgId }: { orgId: string }) {
               onClick={() => void rename()}
             >
               {busy === 'rename' ? 'Saving…' : 'Save'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+type MeWithId = MePage & { user?: { id?: string } };
+
+/**
+ * The personal workspace is an organisation in the API with you as its only owner. Its members
+ * come from the same members route. Invites go into a team instead: an invite into a personal
+ * workspace would make it someone else's personal workspace too.
+ */
+async function loadPersonal(personalId: string) {
+  const members = (orgId: string) =>
+    flowJson<{ members?: Record<string, unknown>[] }>(`/api/organizations/${orgId}/members`).then(
+      page => (page.members || []).map(personFromApi)
+    );
+  const mePromise = flowJson<MeWithId>('/api/me');
+  const [me, people] = await Promise.all([
+    mePromise,
+    personalId
+      ? members(personalId)
+      : mePromise.then(me =>
+          me.active_organization?.id ? members(me.active_organization.id) : []
+        ),
+  ]);
+  return { me, members: dedupeMembers(people, me.user?.id) };
+}
+
+/** 7e for the personal workspace: you as the only member, and a way to start a team to invite people. */
+export function SettingsPersonalOrganisation({
+  personalId,
+  workspaceName,
+}: {
+  personalId: string;
+  workspaceName: string;
+}) {
+  const router = useRouter();
+  const { refreshOrganizations } = useOrganizationContext();
+  const { state, retry } = useLoad(() => loadPersonal(personalId), []);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+
+  if (state.phase === 'loading') {
+    return (
+      <div className="st-stack st-wide" aria-busy="true">
+        <div className="st-card st-org-card">
+          <Skeleton className="size-11 rounded-md" />
+          <Skeleton className="h-10 w-48" />
+        </div>
+        <div className="st-card st-skeleton">
+          <Skeleton className="h-10 w-full" />
+        </div>
+        <Skeleton className="h-16 w-full" />
+      </div>
+    );
+  }
+  if (state.phase === 'error') return <SettingsError message={state.error} onRetry={retry} />;
+
+  const { me, members } = state.data;
+  const selfId = me.user?.id || '';
+  const people = members.length;
+
+  const createTeam = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const page = await flowJson<{ team?: { id?: string } }>('/api/teams', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      await refreshOrganizations();
+      if (page.team?.id) chooseTeamNext(page.team.id);
+      setOpen(false);
+      router.push('/flow/settings/teams');
+    } catch (err) {
+      setError(errorText(err, 'That did not go through.'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="st-stack st-wide">
+      <section className="st-card st-org-card">
+        <span className="st-org-logo" aria-hidden="true">
+          {workspaceName.trim()[0]?.toUpperCase() || 'P'}
+        </span>
+        <div className="st-org-text">
+          <p className="st-section-title">{workspaceName}</p>
+          <p className="st-row-sub">
+            {people} {people === 1 ? 'person' : 'people'} · {planLabel(me.entitlements?.plan_code)}
+          </p>
+        </div>
+      </section>
+
+      <RowCard
+        title="Work with other people"
+        sub="Your personal workspace is just for you. Create a team to get a shared workspace, then invite people by email."
+        action={
+          <Button
+            className="st-btn primary"
+            type="button"
+            onClick={() => {
+              setName('');
+              setError('');
+              setOpen(true);
+            }}
+          >
+            Create a team
+          </Button>
+        }
+      />
+
+      <section className="st-card st-members">
+        <div className="st-member-row st-member-head">
+          <span>Member</span>
+          <span>Role</span>
+          <span>Joined</span>
+          <span />
+        </div>
+        {members.map(member => (
+          <div key={member.userId || member.email} className="st-member-row">
+            <div className="st-person">
+              <PersonMark label={member.name || member.email} />
+              <div>
+                <p className="st-person-name">
+                  {member.name}
+                  {member.userId === selfId ? <span className="st-muted"> (you)</span> : null}
+                </p>
+                <p className="st-row-sub">{member.email}</p>
+              </div>
+            </div>
+            <span>{roleLabel(member.role)}</span>
+            <span className="st-muted">{formatDay(member.joinedAt)}</span>
+            <span />
+          </div>
+        ))}
+      </section>
+
+      <Dialog open={open} onOpenChange={next => (busy ? null : setOpen(next))}>
+        <DialogContent className="st-dialog">
+          <DialogHeader>
+            <DialogTitle>New team</DialogTitle>
+            <DialogDescription>
+              A team gets its own workspace for projects and people. Once it is made you can add
+              people by email from the Teams tab.
+            </DialogDescription>
+          </DialogHeader>
+          <Input
+            aria-label="Team name"
+            placeholder="Team name"
+            value={name}
+            onChange={event => setName(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Enter' && name.trim().length >= 2 && !busy) void createTeam();
+            }}
+          />
+          {error ? <p className="flow-error">{error}</p> : null}
+          <DialogFooter className="st-dialog-foot">
+            <Button className="st-btn" type="button" disabled={busy} onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="st-btn primary"
+              type="button"
+              disabled={busy || name.trim().length < 2}
+              onClick={() => void createTeam()}
+            >
+              {busy ? 'Creating…' : 'Create team'}
             </Button>
           </DialogFooter>
         </DialogContent>

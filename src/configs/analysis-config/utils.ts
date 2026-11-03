@@ -211,32 +211,145 @@ export function getAllAnalysisItems(): AnalysisItem[] {
 }
 
 /**
+ * Words researchers type for an analysis that are not in its menu name.
+ * Compared with hyphens, spaces and case ignored (see normalizeSearchText).
+ */
+export const ANALYSIS_SEARCH_ALIASES: Partial<Record<AnalysisKey, string[]>> = {
+  ttest_independent: [
+    't-test',
+    'ttest',
+    't test',
+    'student',
+    'students t',
+    'independent t',
+    'two-sample t',
+    'two sample t',
+    'welch',
+    'compare two groups',
+  ],
+  ttest_paired: [
+    't-test',
+    'ttest',
+    't test',
+    'student',
+    'students t',
+    'paired t',
+    'dependent t',
+    'repeated t',
+    'before after',
+    'pre post',
+  ],
+  ttest_one_sample: ['t-test', 'ttest', 't test', 'one-sample t', 'single sample t'],
+  chi_square: [
+    'chi-square',
+    'chi square',
+    'chi2',
+    'chisq',
+    'chi squared',
+    'crosstab',
+    'cross-tab',
+    'xtab',
+    'contingency',
+    'pearson chi',
+  ],
+  fishers_exact: ['fisher', 'fishers exact', 'exact test', 'crosstab'],
+  anova_oneway: [
+    'anova',
+    'one-way anova',
+    'f test',
+    'f-test',
+    'analysis of variance',
+    'compare means',
+  ],
+  anova_twoway: ['anova', 'two-way anova', 'factorial anova', 'analysis of variance'],
+  anova_threeway: ['anova', 'three-way anova', 'factorial anova', 'analysis of variance'],
+  anova_repeated: ['anova', 'rm anova', 'repeated measures', 'within subjects'],
+  manova: ['anova', 'manova', 'multivariate anova'],
+  correlation: [
+    'correlation',
+    'correlate',
+    'corr',
+    'pearson',
+    'spearman',
+    'kendall',
+    'pearson r',
+    'rho',
+  ],
+  partial_correlation: ['correlation', 'partial corr', 'pearson'],
+  linear_regression: ['regression', 'ols', 'linear model', 'lm', 'least squares', 'predict'],
+  stepwise_regression: ['regression', 'stepwise', 'ols'],
+  logistic_regression: ['regression', 'logit', 'logistic', 'binary outcome', 'glm'],
+  poisson_regression: ['regression', 'poisson', 'count model', 'glm'],
+  ordinal_regression: ['regression', 'ordinal', 'ordered logit', 'proportional odds'],
+  mann_whitney_u: [
+    'mann-whitney',
+    'mann whitney',
+    'mwu',
+    'u test',
+    'wilcoxon rank sum',
+    'rank-sum',
+    'nonparametric t',
+  ],
+  wilcoxon_signed_rank: ['wilcoxon', 'signed rank', 'nonparametric paired'],
+  kruskal_wallis: ['kruskal', 'kruskal-wallis', 'nonparametric anova', 'h test'],
+  descriptives: ['descriptive', 'summary statistics', 'summary stats', 'mean', 'median', 'sd'],
+};
+
+/** Lower-case and drop hyphens, spaces and punctuation: "T-Test" and "t test" both give "ttest". */
+export function normalizeSearchText(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function searchTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/** Everything an item can be found by: name, section, tab, hints, the op label and aliases. */
+export function analysisSearchText(item: AnalysisItem): string[] {
+  const tabLabel = PALETTE_TAB_LABELS[item.category] ?? item.category;
+  return [
+    item.name,
+    item.section,
+    tabLabel,
+    item.searchBlob,
+    item.hint,
+    item.analysisKey ? analysisSearchBlob(item.analysisKey) : '',
+    ...(item.analysisKey ? (ANALYSIS_SEARCH_ALIASES[item.analysisKey] ?? []) : []),
+  ].filter((part): part is string => Boolean(part));
+}
+
+/**
+ * True when the query matches the haystack, ignoring hyphens, spaces and case.
+ * "independent t" matches word by word; "ttest" matches "T Test" squashed together.
+ */
+export function searchTextMatches(haystack: string | string[], query: string): boolean {
+  const squashedQuery = normalizeSearchText(query);
+  if (!squashedQuery) return true;
+  const parts = Array.isArray(haystack) ? haystack : [haystack];
+  if (parts.some(part => normalizeSearchText(part).includes(squashedQuery))) return true;
+  const tokens = searchTokens(query);
+  if (tokens.length < 2) return false;
+  const words = parts.flatMap(searchTokens);
+  return tokens.every((token, index) => {
+    const last = index === tokens.length - 1;
+    // Short words ("t") must start a word; the last word may be half typed.
+    return words.some(word =>
+      token.length < 3 || last ? word.startsWith(token) : word.includes(token)
+    );
+  });
+}
+
+/**
  * Filter analysis items by search term
  */
 export function filterAnalysisItems(items: AnalysisItem[], searchTerm: string): AnalysisItem[] {
   if (!searchTerm.trim()) {
     return items;
   }
-
-  const lowerSearchTerm = searchTerm.toLowerCase();
-
-  return items.filter(item => {
-    const keywords = [item.searchBlob, item.hint]
-      .filter((part): part is string => Boolean(part))
-      .join(' ')
-      .toLowerCase();
-    if (keywords.includes(lowerSearchTerm)) {
-      return true;
-    }
-    if (item.analysisKey && analysisSearchBlob(item.analysisKey).includes(lowerSearchTerm)) {
-      return true;
-    }
-    const matchesName = item.name.toLowerCase().includes(lowerSearchTerm);
-    const matchesSection = item.section.toLowerCase().includes(lowerSearchTerm);
-    const tabLabel = PALETTE_TAB_LABELS[item.category] ?? item.category;
-    const matchesCategory = tabLabel.toLowerCase().includes(lowerSearchTerm);
-    return matchesName || matchesSection || matchesCategory;
-  });
+  return items.filter(item => searchTextMatches(analysisSearchText(item), searchTerm));
 }
 
 /**

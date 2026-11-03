@@ -1,10 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { flowJson } from '@/lib/flow-api';
 import { Button } from '@/components/ui/button';
 import { ChangePlanDialog } from './change-plan';
-import { loadMe, loadPlans, loadSubscription } from './billing-load';
+import { invalidateBilling, loadUsage, peekUsage } from './billing-load';
 import { Bar, SettingsError } from './parts';
 import { Skeleton } from '@/components/ui/rest';
 import {
@@ -17,30 +16,11 @@ import {
 } from './settings-data';
 import { useLoad } from './use-load';
 
-type UsagePage = {
-  summary?: { analyses?: number; reports?: number };
-  usage?: { reports?: number; aiRequests?: number };
-  limits?: { assistant_requests?: number; reports?: number };
-  currentUsage?: number;
-};
-
-type DatasetRow = { n_rows?: number };
-
-async function loadUsage() {
-  const [me, usage, datasets, subscription, catalog] = await Promise.all([
-    loadMe(),
-    flowJson<UsagePage>('/api/billing/usage'),
-    flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>('/datasets/?scope=all').then(page =>
-      Array.isArray(page) ? page : page.datasets || []
-    ),
-    loadSubscription().catch(() => null),
-    loadPlans(),
-  ]);
-  return { me, usage, datasets, subscription, catalog };
-}
-
 export function SettingsUsage() {
-  const { state, retry, reload } = useLoad(loadUsage, []);
+  const { state, retry, reload } = useLoad(loadUsage, [], {
+    peek: peekUsage,
+    invalidate: invalidateBilling,
+  });
   const [planOpen, setPlanOpen] = useState(false);
 
   if (state.phase === 'loading') {

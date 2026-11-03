@@ -1,6 +1,7 @@
 import type { AnalysisReport, DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
 import { schemaColumnSlotType } from '@/lib/analysis-column-types';
 import { isIdColumn, type StarterColumn } from '@/lib/agent-starter-prompts';
+import { isIdColumn as isFlowIdColumn } from '@/lib/flow-columns';
 
 export type AnalysisKey =
   | 'descriptives'
@@ -1576,12 +1577,114 @@ export function categoricalColumnNames(
     .map(column => column.name);
 }
 
+function previewValues(name: string, preview?: DatasetPreview | null): unknown[] {
+  if (!preview) return [];
+  const index = preview.headers.indexOf(name);
+  if (index < 0) return [];
+  return preview.rows.map(row => row[index]);
+}
+
+/** A respondent, record or row id (id, respondent_id, respid, _row_uid, ...). Never a setup default. */
+export function isIdLikeSchemaColumn(
+  column: SchemaColumn,
+  preview?: DatasetPreview | null
+): boolean {
+  return (
+    isFlowIdColumn(column.name, previewValues(column.name, preview)) ||
+    isIdColumn(asStarterColumn(column, preview))
+  );
+}
+
+/** Columns a setup slot may start on: everything except ids. */
+export function nonIdColumnNames(
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
+): string[] {
+  return schema.filter(column => !isIdLikeSchemaColumn(column, preview)).map(column => column.name);
+}
+
+/** Rows from GET /datasets/{id}/preview as the setup dialog's preview. Null when empty. */
+export function datasetPreviewFromPage(page: unknown): DatasetPreview | null {
+  if (!page || typeof page !== 'object') return null;
+  const raw = page as { headers?: unknown; rows?: unknown };
+  const headers = Array.isArray(raw.headers) ? raw.headers.map(header => String(header)) : [];
+  const rows = Array.isArray(raw.rows) ? raw.rows.filter(Array.isArray) : [];
+  if (!headers.length || !rows.length) return null;
+  return {
+    headers,
+    rows: rows.map(row =>
+      headers.map((_, index) => {
+        const value = (row as unknown[])[index];
+        if (value === undefined || value === null) return null;
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+          return value;
+        return String(value);
+      })
+    ),
+  };
+}
+
+function isMissingCell(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  const text = String(value).trim();
+  return text === '' || text.toLowerCase() === 'null' || text.toLowerCase() === 'nan';
+}
+
+/**
+ * Non-missing groups in a column: observed preview values first, then value labels,
+ * then the schema's distinct count. Undefined when nothing is known.
+ */
+export function columnLevelCount(
+  column: SchemaColumn,
+  preview?: DatasetPreview | null
+): number | undefined {
+  const values = previewValues(column.name, preview);
+  if (preview && preview.headers.includes(column.name)) {
+    const seen = new Set<string>();
+    for (const value of values) {
+      if (isMissingCell(value)) continue;
+      seen.add(String(value).trim());
+    }
+    if (seen.size > 0) return seen.size;
+  }
+  const labels = column.value_labels ? Object.keys(column.value_labels) : [];
+  if (labels.length) return labels.length;
+  if (typeof column.uniqueCount === 'number') return column.uniqueCount;
+  return undefined;
+}
+
+/**
+ * Grouping variables an independent-samples t-test can use: categorical, not an id,
+ * exactly two non-missing groups. When no column has a known group count, every
+ * categorical column stays on offer.
+ */
+export function twoGroupColumnNames(
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
+): string[] {
+  const categorical = new Set(categoricalColumnNames(schema, preview));
+  const candidates = schema.filter(
+    column => categorical.has(column.name) || columnLevelCount(column, preview) === 2
+  );
+  const usable = candidates.filter(column => !isIdLikeSchemaColumn(column, preview));
+  const counts = usable.map(column => columnLevelCount(column, preview));
+  if (counts.every(count => count === undefined)) {
+    return usable.filter(column => categorical.has(column.name)).map(column => column.name);
+  }
+  return usable.filter((_, index) => counts[index] === 2).map(column => column.name);
+}
+
 function numericColumnNames(schema: SchemaColumn[], preview?: DatasetPreview | null): string[] {
-  const usable = schema
-    .filter(column => column.type === 'numeric' && !isIdColumn(asStarterColumn(column, preview)))
+  const usable = schema.filter(column => !isIdLikeSchemaColumn(column, preview));
+  const numeric = usable.filter(column => column.type === 'numeric').map(column => column.name);
+  if (numeric.length) return numeric;
+  // Integer storage types (int64, ...) without value labels are measures too. Never an id.
+  return usable
+    .filter(
+      column =>
+        declaredNumeric(column) && !(column.value_labels && Object.keys(column.value_labels).length)
+    )
     .map(column => column.name);
-  if (usable.length) return usable;
-  return schema.filter(column => column.type === 'numeric').map(column => column.name);
 }
 
 const CATEGORICAL_OUTCOME_ANALYSES = new Set<AnalysisKey>([
@@ -1601,11 +1704,12 @@ export function defaultFormFieldsFromSchema(
 ): Omit<AnalysisFormState, 'analysis'> {
   const num = numericColumnNames(schema, preview);
   const categorical = categoricalColumnNames(schema, preview);
+  const usable = nonIdColumnNames(schema, preview);
   return {
     selectedCols: [],
     groupCol: categorical[0] ?? '',
-    valueCol: num[0] ?? schema[0]?.name ?? '',
-    depCol: num[0] ?? schema[0]?.name ?? '',
+    valueCol: num[0] ?? usable[0] ?? '',
+    depCol: num[0] ?? usable[0] ?? '',
     independentCols: num.slice(1, 3),
     chiA: categorical[0] ?? '',
     chiB: categorical[1] ?? '',
@@ -1620,9 +1724,9 @@ export function defaultFormFieldsFromSchema(
     correlationSignificance: 'two_tailed',
     flagSignificantCorrelations: false,
     confidenceLevel: '0.95',
-    pairedBeforeCol: num[0] ?? schema[0]?.name ?? '',
-    pairedAfterCol: num[1] ?? schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
-    oneSampleCol: num[0] ?? schema[0]?.name ?? '',
+    pairedBeforeCol: num[0] ?? usable[0] ?? '',
+    pairedAfterCol: num[1] ?? usable[Math.min(1, Math.max(0, usable.length - 1))] ?? '',
+    oneSampleCol: num[0] ?? usable[0] ?? '',
     hypothesizedMean: '0',
     hypothesizedDifference: '0',
     groupValues: '',
@@ -1646,7 +1750,7 @@ export function defaultFormFieldsFromSchema(
     pcaNComponents: '',
     nClusters: '3',
     anovaInteraction: true,
-    covariateCol: num[1] ?? schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
+    covariateCol: num[1] ?? usable[Math.min(1, Math.max(0, usable.length - 1))] ?? '',
     clusterMethod: 'kmeans' as const,
     clusterStandardize: true,
     treeMaxDepth: '5',
@@ -1660,13 +1764,12 @@ export function defaultFormFieldsFromSchema(
     mlMode: 'classification' as const,
     dbscanEpsilon: '0.5',
     dbscanMinSamples: '5',
-    dateCol:
-      schema.find(c => c.type?.toLowerCase().includes('date'))?.name ?? schema[0]?.name ?? '',
+    dateCol: schema.find(c => c.type?.toLowerCase().includes('date'))?.name ?? usable[0] ?? '',
     seasonalPeriod: '12',
     forecastSteps: '12',
     acfMaxLags: '20',
-    durationCol: num[0] ?? schema[0]?.name ?? '',
-    eventCol: num[1] ?? schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
+    durationCol: num[0] ?? usable[0] ?? '',
+    eventCol: num[1] ?? usable[Math.min(1, Math.max(0, usable.length - 1))] ?? '',
     semModelSpec: 'F1 =~ item1 + item2 + item3',
     glmmFamily: 'binomial' as const,
     clusterByCol: '',
@@ -1694,6 +1797,10 @@ export function defaultFormForAnalysis(
   if (analysis === 'network') {
     fields.chiA = schema[0]?.name ?? '';
     fields.chiB = schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '';
+  }
+  if (analysis === 'ttest_independent') {
+    const twoGroups = twoGroupColumnNames(schema, preview);
+    fields.groupCol = twoGroups[0] ?? '';
   }
   if (CATEGORICAL_OUTCOME_ANALYSES.has(analysis)) {
     const categorical = categoricalColumnNames(schema, preview);
