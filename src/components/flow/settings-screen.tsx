@@ -1,79 +1,79 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Skeleton } from '@/components/ui/rest';
 import { useOrganizationContext } from '@/contexts/organisation-context';
-
-const loading = () => (
-  <div className="settings-loading" aria-busy="true">
-    <Skeleton className="h-8 w-48" />
-    <Skeleton className="h-40 w-full" />
-    <Skeleton className="h-24 w-full" />
-  </div>
-);
+import { SettingsBilling } from '@/components/flow/settings/billing';
+import { SettingsGeneral } from '@/components/flow/settings/general';
+import { SettingsOrganisation } from '@/components/flow/settings/organisation';
+import { SettingsTeams } from '@/components/flow/settings/teams';
+import { SettingsUsage } from '@/components/flow/settings/usage';
+import { workspaceHeading } from '@/components/flow/settings/settings-data';
+import '@/components/flow/settings/settings.css';
 
 const SECTIONS = {
-  general: {
-    title: 'Account',
-    lede: 'Your name, email and sign-in.',
-    view: dynamic(() => import('@/components/templates/settings/general'), { loading }),
-  },
-  billing: {
-    title: 'Workspace and billing',
-    lede: 'Your plan, invoices and payment method.',
-    view: dynamic(() => import('@/components/templates/settings/billing'), { loading }),
-  },
-  usage: {
-    title: 'Usage',
-    lede: 'Runs, tables and reports this period.',
-    view: dynamic(() => import('@/components/templates/settings/usage'), { loading }),
-  },
-  organisation: {
-    title: 'Organisation',
-    lede: 'The workspace name and who owns it.',
-    view: dynamic(() => import('@/components/templates/settings/organisation'), { loading }),
-  },
-  members: {
-    title: 'Members',
-    lede: 'Invite people and set what they can do.',
-    view: dynamic(() => import('@/components/templates/settings/members'), { loading }),
-  },
+  general: 'General',
+  billing: 'Billing',
+  usage: 'Usage',
+  organisation: 'Organisation',
+  teams: 'Teams',
 } as const;
 
 export type SettingsSection = keyof typeof SECTIONS;
 
+const ALIASES: Record<string, SettingsSection> = { members: 'organisation' };
+
 export function settingsSection(value?: string): SettingsSection {
+  if (value && value in ALIASES) return ALIASES[value];
   return value && value in SECTIONS ? (value as SettingsSection) : 'general';
 }
 
+/** Settings 7a–7f: workspace line, title, underline tabs, then the section. */
 export function SettingsScreen({ section }: { section?: string }) {
   const current = settingsSection(section);
-  const { activeOrganization, isPersonalAccount } = useOrganizationContext();
-  const hasOrg = Boolean(activeOrganization) && !isPersonalAccount;
-  const shown = (Object.keys(SECTIONS) as SettingsSection[]).filter(
-    key => hasOrg || (key !== 'organisation' && key !== 'members')
+  const { activeOrganization, isPersonalAccount, userOrganizations } = useOrganizationContext();
+  const orgId = !isPersonalAccount && activeOrganization ? activeOrganization.id : '';
+  const inTeam = userOrganizations.some(org => !org.isPersonal);
+  const shown = (Object.keys(SECTIONS) as SettingsSection[]).filter(key =>
+    key === 'organisation' ? Boolean(orgId) : key === 'teams' ? inTeam : true
   );
-  const View = SECTIONS[current].view;
+  const workspace = orgId
+    ? activeOrganization?.name
+    : userOrganizations.find(org => org.isPersonal)?.name || 'Personal workspace';
+
+  let body;
+  if (current === 'billing') body = <SettingsBilling />;
+  else if (current === 'usage') body = <SettingsUsage />;
+  else if (current === 'organisation')
+    body = orgId ? (
+      <SettingsOrganisation orgId={orgId} />
+    ) : (
+      <p className="st-note">
+        You are in your personal workspace. Switch to an organisation from the sidebar to manage its
+        members.
+      </p>
+    );
+  else if (current === 'teams') body = <SettingsTeams />;
+  else body = <SettingsGeneral />;
+
   return (
-    <div className="settings-page">
-      <nav className="settings-nav" aria-label="Settings">
-        <p className="settings-nav-label">Settings</p>
+    <div className="st-page">
+      <header className="st-head">
+        <p className="st-workspace">{workspaceHeading(workspace)}</p>
+        <h1 className="st-title">Settings</h1>
+      </header>
+      <nav className="st-tabs" aria-label="Settings">
         {shown.map(key => (
-          <Link key={key} href={`/flow/settings/${key}`} data-active={key === current}>
-            {SECTIONS[key].title}
+          <Link
+            key={key}
+            href={`/flow/settings/${key}`}
+            data-active={key === current || undefined}
+            aria-current={key === current ? 'page' : undefined}
+          >
+            {SECTIONS[key]}
           </Link>
         ))}
       </nav>
-      <section className="settings-body">
-        <header className="settings-head">
-          <h1 className="flow-page-title">{SECTIONS[current].title}</h1>
-          <p className="flow-muted">{SECTIONS[current].lede}</p>
-        </header>
-        <div className="settings-content">
-          <View />
-        </div>
-      </section>
+      <div className="st-body">{body}</div>
     </div>
   );
 }

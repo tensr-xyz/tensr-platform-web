@@ -10098,3 +10098,9 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .row-menu {
   min-width: 200px;
 }
+
+/* QA round 5. Pages built from the 3 Nov exports carry their own padding. */
+.flow-home .flow-body:has(> .ds-page, > .fv-page, > .st-page, > .pg-page, > .nf-page) {
+  padding: 0;
+  overflow: auto;
+}

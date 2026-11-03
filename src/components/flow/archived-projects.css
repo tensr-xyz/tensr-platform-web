@@ -1,0 +1,209 @@
+/* 1l Archived projects. Every class starts with ap-. */
+
+.ap-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--color-ink);
+}
+
+.ap-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ap-count,
+.ap-muted,
+.ap-sub {
+  color: var(--color-muted);
+}
+
+.ap-toolbar .ap-search {
+  width: 220px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.ap-info {
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--color-well);
+  color: var(--color-muted);
+}
+
+.ap-error {
+  margin: 0;
+  color: var(--color-warn);
+}
+
+.ap-table-wrap {
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.ap-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.ap-table th {
+  padding: 10px 18px;
+  background: var(--color-well);
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.ap-table td {
+  padding: 14px 18px;
+  border-top: 1px solid var(--color-line);
+  vertical-align: middle;
+}
+
+.ap-name {
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ap-sub {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.ap-col-folder {
+  width: 180px;
+}
+
+.ap-col-date {
+  width: 160px;
+}
+
+.ap-col-by {
+  width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ap-col-action {
+  width: 130px;
+  text-align: right;
+}
+
+.ap-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ap-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.ap-restore {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.ap-restore:disabled {
+  color: var(--color-muted);
+}
+
+.ap-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 24px;
+  border: 1px dashed var(--color-line);
+  border-radius: 14px;
+  background: var(--color-well);
+  text-align: center;
+}
+
+.ap-empty strong {
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+}
+
+.ap-skeleton-head {
+  height: 36px;
+  background: var(--color-well);
+}
+
+.ap-skeleton-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  height: 64px;
+  padding: 0 18px;
+  border-top: 1px solid var(--color-line);
+}
+
+.ap-skeleton-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ap-skeleton-row .ap-skeleton-line {
+  width: 200px;
+  height: 12px;
+}
+
+.ap-skeleton-row .ap-skeleton-line.short {
+  width: 90px;
+}
+
+.ap-skeleton-row .ap-skeleton-cell {
+  width: 120px;
+  height: 12px;
+}
+
+.ap-skeleton-row .ap-skeleton-cell.small {
+  width: 60px;
+}
+
+.ap-skeleton-row .ap-skeleton-button {
+  width: 76px;
+  height: 30px;
+  border-radius: 8px;
+}
+
+@media (max-width: 900px) {
+  .ap-col-folder,
+  .ap-col-by {
+    display: none;
+  }
+}

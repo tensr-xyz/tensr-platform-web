@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,7 +13,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
-import { Table } from '@/components/ui/table';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,7 +28,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/atoms/tooltip';
-import { MoveToProjectDialog, moveDatasetToProject } from '@/components/flow/move-dataset';
+import { moveDatasetToProject } from '@/components/flow/move-dataset';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
@@ -922,187 +921,5 @@ export function NewProjectDialog({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-export function DatasetsScreen({
-  phase,
-  datasets,
-  projects,
-  onChanged,
-}: {
-  phase: 'loading' | 'ready' | 'error';
-  datasets: ShellDataset[];
-  projects: FlowProject[];
-  onChanged: () => Promise<void>;
-}) {
-  const router = useRouter();
-  const [query, setQuery] = useState('');
-  const [moving, setMoving] = useState<ShellDataset | null>(null);
-  const [error, setError] = useState('');
-  const [names, setNames] = useState<Record<string, string>>({});
-  const projectName = (id?: string) =>
-    (id && (projects.find(item => item.id === id)?.name || names[id])) || '';
-  const missing = useMemo(
-    () =>
-      [...new Set(datasets.map(row => row.project_id).filter(Boolean) as string[])].filter(
-        id => !projects.some(item => item.id === id)
-      ),
-    [datasets, projects]
-  );
-  const missingKey = missing.join('|');
-  useEffect(() => {
-    if (!missingKey) return;
-    void Promise.all(
-      missingKey.split('|').map(id =>
-        flowJson<{ project?: FlowProject }>(`/api/projects/${id}`)
-          .then(page => [id, page.project?.name || ''] as const)
-          .catch(() => [id, ''] as const)
-      )
-    ).then(rows => setNames(current => ({ ...current, ...Object.fromEntries(rows) })));
-  }, [missingKey]);
-
-  const needle = query.trim().toLowerCase();
-  const shown = datasets
-    .filter(row => shellDatasetId(row))
-    .filter(
-      row =>
-        !needle ||
-        (row.original_filename || '').toLowerCase().includes(needle) ||
-        projectName(row.project_id).toLowerCase().includes(needle)
-    )
-    .sort(
-      (left, right) =>
-        new Date(right.updated_at || right.created_at || 0).getTime() -
-        new Date(left.updated_at || left.created_at || 0).getTime()
-    );
-
-  const open = (row: ShellDataset) => {
-    const id = shellDatasetId(row);
-    if (!row.project_id) {
-      setMoving(row);
-      return;
-    }
-    setError('');
-    void flowJson(`/api/projects/${row.project_id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ active_dataset_id: id }),
-    })
-      .then(() => router.push(`/flow/p/${row.project_id}/responses`))
-      .catch(err => setError(err instanceof Error ? err.message : 'The file did not open.'));
-  };
-
-  return (
-    <div className="home-page datasets-page">
-      <div className="home-head">
-        <div>
-          <div className="flow-muted">Every file in your workspace</div>
-          <h1 className="flow-page-title">Datasets</h1>
-        </div>
-        <div className="home-head-actions">
-          <label className="home-search">
-            <SearchIcon />
-            <Input
-              value={query}
-              placeholder="Search files or projects"
-              aria-label="Search datasets"
-              onChange={event => setQuery(event.target.value)}
-            />
-          </label>
-        </div>
-      </div>
-      {phase === 'loading' ? (
-        <div className="project-table" aria-busy="true">
-          {Array.from({ length: 6 }, (_, index) => (
-            <div key={index} className="datasets-skeleton" />
-          ))}
-        </div>
-      ) : phase === 'error' ? (
-        <p className="flow-error">Could not load your datasets. Refresh to try again.</p>
-      ) : shown.length === 0 ? (
-        <div className="datasets-empty">
-          <strong>{needle ? 'No file matches' : 'No datasets yet'}</strong>
-          <span className="flow-muted">
-            {needle
-              ? 'Try a different file or project name.'
-              : 'Upload a file from a project’s Sources tab, or start a new project.'}
-          </span>
-        </div>
-      ) : (
-        <div className="project-table">
-          <Table className="flow-table datasets-table">
-            <thead>
-              <tr>
-                <th>File</th>
-                <th>Project</th>
-                <th>Rows</th>
-                <th className="edited">Updated</th>
-                <th className="datasets-actions-cell" aria-label="Actions" />
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map(row => {
-                const id = shellDatasetId(row);
-                const project = projectName(row.project_id);
-                return (
-                  <tr key={id}>
-                    <td>
-                      <span className="project-name">{row.original_filename || id}</span>
-                      <div className="project-sub">
-                        {row.parent_dataset_id
-                          ? row.lineage_label || 'Working version'
-                          : 'Uploaded file'}
-                        {row.n_cols ? ` · ${row.n_cols} columns` : ''}
-                      </div>
-                    </td>
-                    <td>
-                      {row.project_id ? (
-                        <Link
-                          className="datasets-project"
-                          href={`/flow/p/${row.project_id}/sources`}
-                        >
-                          {project || 'Project'}
-                        </Link>
-                      ) : (
-                        <span className="flow-muted">Not in a project</span>
-                      )}
-                    </td>
-                    <td>{row.n_rows ? row.n_rows.toLocaleString('en-GB') : '—'}</td>
-                    <td className="edited">
-                      {row.updated_at || row.created_at
-                        ? new Date(row.updated_at || row.created_at || '').toLocaleDateString(
-                            'en-GB',
-                            { day: 'numeric', month: 'short' }
-                          )
-                        : '—'}
-                    </td>
-                    <td className="datasets-actions-cell">
-                      <div className="datasets-actions">
-                        <Button className="flow-btn" type="button" onClick={() => open(row)}>
-                          Open
-                        </Button>
-                        <Button className="flow-btn" type="button" onClick={() => setMoving(row)}>
-                          Move
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </Table>
-        </div>
-      )}
-      {error ? <p className="flow-error">{error}</p> : null}
-      <MoveToProjectDialog
-        datasetId={moving ? shellDatasetId(moving) : ''}
-        datasetName={moving?.original_filename}
-        open={Boolean(moving)}
-        onOpenChange={next => {
-          if (!next) setMoving(null);
-        }}
-        onMoved={() => void onChanged()}
-      />
-    </div>
   );
 }

@@ -55,11 +55,15 @@ async function compare(folder, route, ask, steps = [], anon = false, crop = '') 
   const browser = await chromium.launch();
   const context = await browser.newContext(anon ? { viewport } : { viewport, storageState: auth });
   const page = await context.newPage();
-  await page.goto(`${base}${route}`, { waitUntil: 'networkidle' });
+  await page.goto(`${base}${route}`, { waitUntil: 'load' });
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => undefined);
   // Flow pages render inside .flow once auth and the workspace are ready; /login has its own form.
-  await page.waitForSelector(route.startsWith('/flow') ? '.flow-main' : 'form', {
-    timeout: 60_000,
-  });
+  await page.waitForSelector(
+    route.startsWith('/flow') ? '.flow-main' : route.startsWith('/login') ? 'form' : 'main',
+    {
+      timeout: 60_000,
+    }
+  );
   await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'), null, {
     timeout: 60_000,
   });
@@ -87,7 +91,7 @@ async function compare(folder, route, ask, steps = [], anon = false, crop = '') 
   await page
     .waitForFunction(() => !document.querySelector('.animate-pulse'), null, { timeout: 30_000 })
     .catch(() => console.log('A skeleton was still showing after 30s.'));
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('networkidle', { timeout: 20000 }).catch(() => undefined);
   // The Next.js dev badge is not part of the app.
   await page.addStyleTag({ content: 'nextjs-portal{display:none!important}' });
   await page.waitForTimeout(500);

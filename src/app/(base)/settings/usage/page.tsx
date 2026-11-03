@@ -1,11 +1,10 @@
-import UsageDashboard from '@/components/templates/settings/usage';
-import Loading from '@/components/molecules/loading';
-import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
+import { flowSettingsPath } from '@/lib/settings-redirect';
 
-export default function UsagePage() {
-  return (
-    <Suspense fallback={<Loading centered />}>
-      <UsageDashboard />
-    </Suspense>
-  );
+export default async function UsageSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  redirect(flowSettingsPath('usage', await searchParams));
 }

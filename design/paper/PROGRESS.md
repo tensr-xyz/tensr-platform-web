@@ -160,3 +160,25 @@ Skipped on purpose: Brand/logo boards, and 2e Clips. Clips stays a coming-soon t
 - compare.png for all 41 screens. It needs a signed-in session on localhost:3000: run `node design/paper/tools/compare.mjs signin` once, then `node design/paper/tools/compare.mjs <screen-folder> <path>` per screen.
 
 - `scripts/strip_stored_nominal_nets.py` and `strip_signed_session_urls` were not run. No dev AWS credentials in this session.
+
+## Missing screens · added 3 Nov (round 5)
+
+Exported from "★ Flow · latest drafts" (rows above y=-1300, header "Missing screens · added 3 Nov"). `screen.png` is Paper at 1x. `screen.tsx` is `get_jsx` (tailwind, no node ids); the shared sidebar was taken from one export and adjusted per screen (active row, root classes), the page content is verbatim. Each has a `compare.png` taken signed in on localhost:3000 (sandbox account). Status is **built** unless noted; the differences listed are data or a missing backend.
+
+- [x] **7a Settings · General** (`1IIT-0`, `7a-settings-general`) — built, wired. Name save (PATCH /me), significance level and low base on the organisation (owner), delete account with email confirm. Left out: profile photo, decimals and spelling (no preference store).
+- [x] **7b Settings · Billing** (`1IOI-0`, `7b-settings-billing`) — built, wired to /billing/\* and the Stripe portal. Card entry is Stripe's. Billing details only when a Stripe customer exists.
+- [x] **7c Change plan** (`1IU7-0`, `7c-settings-change-plan`) — built; prices and limits come from /billing/plans. Same-scope plan changes use update-subscription, anything else Stripe Checkout.
+- [x] **7d Settings · Usage** (`1IZW-0`, `7d-settings-usage`) — built. Left out: the By project table and period picker (no project breakdown in /billing/usage).
+- [x] **7e Settings · Organisation & members** (`1J5L-0`, `7e-settings-organisation`) — built: rename, invite, resend/cancel invites, role (owner/member), remove. Left out: admin/viewer and client viewer roles, member teams, last active.
+- [x] **7f Settings · Teams** (`1JBA-0`, `7f-settings-teams`) — built on the API's teams (each team is a workspace). Left out: "Shared with this team" folder sharing, delete team (deletes the workspace).
+- [x] **1f Datasets** (`1JGZ-0`, `1f-datasets`) — built, wired: uploads with versions underneath, In use tag, Updated, row menu (open, analyse, move, rename, download as file type, archive). Uploader name left out (not stored).
+- [x] **1g Plugin detail** (`1JMO-0`, `1g-plugin-detail`) — built. Left out: ratings, reviews, "Where it shows up".
+- [x] **1h Install / purchase** (`1JSD-0`, `1h-plugin-install`) — built: paid plugins go through Stripe Checkout. Left out: per-workspace seats and VAT lines (installs are per user; no tax data).
+- [x] **1i My plugins** (`1JY2-0`, `1i-my-plugins`) — built at /flow/plugins/mine (replaces /creator). Left out: earnings, payouts, revenue share stat cards.
+- [x] **1j Admin plugin review** (`1K3R-0`, `1j-admin-plugin-review`) — built at /flow/admin/plugins, staff only (403 shows a staff-only state). Left out: diff, test-dataset runs, Changes asked / Done tabs.
+- [x] **1k Folder view** (`1K9G-0`, `1k-folder-view`) — built: opens from a sidebar folder. Left out: Share folder, client viewer line, rename folder (no route), fielding bars.
+- [x] **1l Archived projects** (`1M9E-0`, `1l-archived`) — built: Projects › Archived and /flow?view=archived, Restore. Archive date and archiver are stored from round 5 on.
+- [x] **4h Coding review queue** (`1KF5-0`, `4h-coding-review`) — built: Themes "Review N →". Saving re-applies the frame and adopts the coded version. Left out: "Create new theme for N answers" suggestion.
+- [x] **4i Filters panel** (`1KYX-0`, `4i-filters-panel`) — built: conditions, per-value and combined match counts, Apply, Use on Tables (table filter_ref). Left out: Save as segment, Match any.
+- [x] **8a Invite acceptance** (`1MHT-0`, `8a-invite-acceptance`) — built at /invite/<token>. Left out: inviter and workspace name, expiry date (no public invite lookup).
+- [x] **8b Not found / error** (`1MHU-0`, `8b-not-found`) — built: project 404 in the shell, app-wide 404, and the error boundary around the app.

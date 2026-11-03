@@ -1,11 +1,10 @@
-import Billing from '@/components/templates/settings/billing';
-import Loading from '@/components/molecules/loading';
-import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
+import { flowSettingsPath } from '@/lib/settings-redirect';
 
-export default function BillingPage() {
-  return (
-    <Suspense fallback={<Loading centered />}>
-      <Billing />
-    </Suspense>
-  );
+export default async function BillingSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  redirect(flowSettingsPath('billing', await searchParams));
 }

@@ -1,7 +1,10 @@
 import { redirect } from 'next/navigation';
+import { flowSettingsPath } from '@/lib/settings-redirect';
 
-// The old Teams screen called /api/teams, which the API maps onto whole organisations
-// (deleting a "team" deleted the organisation and its datasets).
-export default function TeamsPage() {
-  redirect('/settings/members');
+export default async function TeamsSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  redirect(flowSettingsPath('teams', await searchParams));
 }

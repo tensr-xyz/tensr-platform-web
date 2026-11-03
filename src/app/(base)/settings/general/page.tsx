@@ -1,11 +1,10 @@
-import Loading from '@/components/molecules/loading';
-import { Suspense } from 'react';
-import GeneralTemplate from '@/components/templates/settings/general';
+import { redirect } from 'next/navigation';
+import { flowSettingsPath } from '@/lib/settings-redirect';
 
-export default function GeneralPage() {
-  return (
-    <Suspense fallback={<Loading centered />}>
-      <GeneralTemplate />
-    </Suspense>
-  );
+export default async function GeneralSettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  redirect(flowSettingsPath('general', await searchParams));
 }

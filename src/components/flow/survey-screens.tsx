@@ -318,11 +318,13 @@ export function ThemesPanel({
   projectId,
   onSelectCell,
   onEditFrame,
+  onReview,
 }: {
   datasetId?: string;
   projectId?: string;
   onSelectCell: (cell: SurveyCell) => void;
   onEditFrame?: (column: string) => void;
+  onReview?: (codeColumn: string) => void;
 }) {
   const [columns, setColumns] = useState<
     { name: string; label: string; type?: string; measure?: string }[]
@@ -563,11 +565,11 @@ export function ThemesPanel({
           <div className="themes-uncoded">
             <strong>{notCoded}</strong>
             <span>answers have no theme yet. They are not in the table until they have one.</span>
-            {onEditFrame ? (
+            {onReview || onEditFrame ? (
               <Button
                 className="themes-review"
                 type="button"
-                onClick={() => onEditFrame(frameColumn)}
+                onClick={() => (onReview ? onReview(frameColumn) : onEditFrame?.(frameColumn))}
               >
                 Review {notCoded} →
               </Button>
@@ -1204,6 +1206,22 @@ export function TablesBuilder({
   const [netPicked, setNetPicked] = useState<string[]>([]);
   const [netLabel, setNetLabel] = useState('');
   const [agentSteps, setAgentSteps] = useState<string[]>([]);
+  const [tableFilter, setTableFilter] = useState<{
+    filters: { column: string; op: string; value: string | string[] }[];
+  } | null>(null);
+  useEffect(() => {
+    if (!datasetId) return;
+    try {
+      const key = `tensr-table-filter:${datasetId}`;
+      const raw = window.sessionStorage.getItem(key);
+      if (raw) {
+        setTableFilter(JSON.parse(raw));
+        window.sessionStorage.removeItem(key);
+      }
+    } catch {
+      // A filter handed over from Responses is optional.
+    }
+  }, [datasetId]);
   const [columns, setColumns] = useState<TableColumn[]>([]);
   const [weightColumns, setWeightColumns] = useState<string[]>([]);
   const [dirty, setDirty] = useState(false);
@@ -1388,6 +1406,7 @@ export function TablesBuilder({
         suppress_low_base: false,
         decimals: { [statistic]: digits, ...(meanOn ? { column_mean: digits } : {}) },
         weight: weight || 'none',
+        ...(tableFilter?.filters.length ? { filter_ref: tableFilter } : {}),
         save,
       }),
     })
@@ -1431,6 +1450,7 @@ export function TablesBuilder({
     lowBase,
     meanOn,
     JSON.stringify(customNets),
+    JSON.stringify(tableFilter),
   ].join('|');
   const lastOptions = useRef(optionsKey);
   useEffect(() => {
@@ -1621,6 +1641,26 @@ export function TablesBuilder({
         <>
           <section className="tables-main">
             <div className="tables-tools">
+              {tableFilter?.filters.length ? (
+                <div className="tables-line">
+                  <span>Filter</span>
+                  <Button
+                    className="tables-chip accent"
+                    type="button"
+                    onClick={() => setTableFilter(null)}
+                  >
+                    {tableFilter.filters
+                      .map(
+                        item =>
+                          `${item.column} ${item.op === 'in' ? 'is' : 'is not'} ${
+                            Array.isArray(item.value) ? item.value.join(', ') : item.value
+                          }`
+                      )
+                      .join(' and ')}{' '}
+                    ×
+                  </Button>
+                </div>
+              ) : null}
               {files.length ? (
                 <div className="tables-line">
                   <span>File</span>
