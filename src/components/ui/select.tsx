@@ -30,11 +30,15 @@ export function ChoiceSelect({
   'aria-label'?: string;
   disabled?: boolean;
 }) {
-  const items = options.map(option => ({
-    value: option.value === '' ? EMPTY : option.value,
-    label: option.label,
-  }));
-  const current = value === '' ? EMPTY : value;
+  const items = options
+    .map(option => ({
+      value: option.value === '' ? EMPTY : option.value,
+      label: option.label,
+    }))
+    .filter((item, index, all) => all.findIndex(other => other.value === item.value) === index);
+  const hasEmpty = items.some(item => item.value === EMPTY);
+  // An empty value with no empty option shows the placeholder; it is not a choice in the list.
+  const current = value === '' ? (hasEmpty ? EMPTY : '') : value;
   if (current && !items.some(item => item.value === current)) {
     items.unshift({ value: current, label: value || placeholder || 'Selected' });
   }

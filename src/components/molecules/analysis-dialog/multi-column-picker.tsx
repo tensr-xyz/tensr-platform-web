@@ -164,7 +164,7 @@ export function MultiColumnPicker({
               onClick={() => toggle(name)}
               className={cn(
                 'flex w-full items-center justify-between gap-2 px-2.5 py-1.5 text-left text-xs',
-                isSelected && 'bg-sky-100/80 dark:bg-sky-950/40',
+                isSelected && 'bg-[#E7F1EC]',
                 !isSelected && 'hover:bg-muted/50',
                 dimmed && 'opacity-60'
               )}

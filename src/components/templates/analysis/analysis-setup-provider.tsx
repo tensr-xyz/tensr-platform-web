@@ -180,6 +180,8 @@ export function AnalysisSetupHost() {
       setBusy(true);
       try {
         const envelope = await runDatasetAnalysis(datasetId, op, body);
+        const runId = String((envelope as { run_id?: unknown } | null)?.run_id || '');
+        useAnalysisSetupStore.getState().noteRun({ op, runId, datasetId });
         openAnalysisResultTab({
           op,
           envelope: envelope as import('@/lib/analysis-report-types').AnalyzeResponse,

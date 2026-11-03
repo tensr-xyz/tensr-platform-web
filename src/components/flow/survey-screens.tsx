@@ -11,7 +11,13 @@ import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
-import { openEndColumns, pickerColumns, themeColumns, type FlowColumn } from '@/lib/flow-columns';
+import {
+  isIdColumn,
+  openEndColumns,
+  pickerColumns,
+  themeColumns,
+  type FlowColumn,
+} from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { runAgentLoop } from '@/lib/run-agent-loop';
@@ -126,6 +132,33 @@ function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[
   return groups;
 }
 
+/** Themes read largest first, and answers not yet coded are a row of their own. */
+export function themeRows(rows: BannerRow[], notCoded?: number | null): BannerRow[] {
+  const total = (row: BannerRow) =>
+    (row.cells || []).find(cell => cell.banner_id === 'total')?.unweighted_n ?? 0;
+  const sorted = [...rows].sort((left, right) => total(right) - total(left));
+  if (!notCoded) return sorted;
+  const sample = rows.flatMap(row => row.cells || []).find(cell => cell.banner_id === 'total');
+  const base = sample?.column_unweighted_n;
+  return [
+    ...sorted,
+    {
+      id: 'not-coded',
+      label: 'Not yet coded',
+      kind: 'not_coded',
+      cells: [
+        {
+          banner_id: 'total',
+          unweighted_n: notCoded,
+          count: notCoded,
+          percent: base ? (100 * notCoded) / base : undefined,
+          column_unweighted_n: base,
+        } as BannerCell,
+      ],
+    } as BannerRow,
+  ];
+}
+
 export function BannerGrid({
   book,
   onSelectCell,
@@ -149,9 +182,10 @@ export function BannerGrid({
   const columns = bannerColumns(book);
   const letters = (book.letters as SigLetter[]) || [];
   const lettersShown = String(book.significance_display || 'column_letters') !== 'none';
-  const rows = ((book.rows as BannerRow[]) || []).filter(row => showNets || row.kind !== 'net');
   const notCoded = ((book.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
     ?.not_coded;
+  const listed = ((book.rows as BannerRow[]) || []).filter(row => showNets || row.kind !== 'net');
+  const rows = showQuotes ? themeRows(listed, notCoded?.unweighted_n) : listed;
   if (!columns.length) return <p className="flow-muted">This table has no banner columns yet.</p>;
   const base = (
     <tr>
@@ -218,6 +252,13 @@ export function BannerGrid({
                   {columns.map((column: BannerColumn) => {
                     const cell = (row.cells || []).find(item => item.banner_id === column.id);
                     const letter = lettersFor(letters, row.id, column.id);
+                    if (row.kind === 'not_coded') {
+                      return (
+                        <td key={column.id} className="flow-muted">
+                          {cellFigure(cell, figure, digits)}
+                        </td>
+                      );
+                    }
                     return (
                       <td key={column.id}>
                         <Button
@@ -254,6 +295,21 @@ export function BannerGrid({
         <p className="flow-muted">Not coded: {notCoded.unweighted_n}</p>
       ) : null}
     </div>
+  );
+}
+
+/** Columns a theme can be split by: no ids, no system columns, not the theme or its open end. */
+export function splitColumns<T extends { name: string; label: string }>(
+  columns: T[],
+  theme: string
+): T[] {
+  const source = theme.replace(/_codes$/, '');
+  return pickerColumns(columns).filter(
+    column =>
+      column.name !== theme &&
+      column.name !== source &&
+      !isIdColumn(column.name) &&
+      !isIdColumn(column.label)
   );
 }
 
@@ -424,19 +480,17 @@ export function ThemesPanel({
           ) : null}
           <ChoiceSelect
             className="flow-input themes-add"
-            aria-label="Banner"
+            aria-label="Split by"
             value=""
+            placeholder="+"
             onValueChange={value => {
               setBanner(value);
               setBook(null);
             }}
-            options={[
-              { value: '', label: '+' },
-              ...pickerColumns(columns).map(column => ({
-                value: column.name,
-                label: column.label,
-              })),
-            ]}
+            options={splitColumns(columns, stub).map(column => ({
+              value: column.name,
+              label: column.label,
+            }))}
           />
         </div>
       </div>
@@ -483,14 +537,26 @@ export function ThemesPanel({
             )
           ) : null}
           {projectId ? (
-            <Button className="flow-btn" type="button" asChild>
-              <Link href={`/flow/p/${projectId}/interviews`}>Open interviews</Link>
-            </Button>
+            stub ? (
+              <Button className="flow-btn" type="button" asChild>
+                <Link href={`/flow/p/${projectId}/interviews`}>Open interviews</Link>
+              </Button>
+            ) : (
+              <Button className="flow-btn" type="button" disabled title="Choose a theme first">
+                Open interviews
+              </Button>
+            )
           ) : null}
           {projectId ? (
-            <Button className="flow-btn" type="button" asChild>
-              <Link href={`/flow/p/${projectId}/tables`}>Use as banner</Link>
-            </Button>
+            stub ? (
+              <Button className="flow-btn" type="button" asChild>
+                <Link href={`/flow/p/${projectId}/tables`}>Use as banner</Link>
+              </Button>
+            ) : (
+              <Button className="flow-btn" type="button" disabled title="Choose a theme first">
+                Use as banner
+              </Button>
+            )
           ) : null}
         </div>
         {notCoded != null ? (
@@ -1062,6 +1128,24 @@ function scaleCodes(labels: Record<string, string> | undefined, end: 'top' | 'bo
   return picked.map(item => item.code);
 }
 
+/** Two highest or lowest numeric codes found in the whole file. */
+export function scaleCodesFromValues(values: string[], end: 'top' | 'bottom'): string[] {
+  const scored = values
+    .map(code => ({ code, n: Number(code) }))
+    .filter(item => item.code.trim() !== '' && Number.isFinite(item.n))
+    .sort((a, b) => a.n - b.n);
+  if (scored.length < 3) return [];
+  const picked = end === 'bottom' ? scored.slice(0, 2) : scored.slice(-2);
+  return picked.map(item => item.code);
+}
+
+/** The saved weight first, then any other weight column the file has. */
+export function tableWeightChoices(listed: string[] | undefined, active: string): string[] {
+  return [active, ...(listed || [])].filter(
+    (name, index, all) => Boolean(name) && all.indexOf(name) === index
+  );
+}
+
 function bannerNames(spec: { banners?: { column?: string; columns?: string[] }[] } | undefined) {
   const names: string[] = [];
   for (const banner of spec?.banners || []) {
@@ -1080,7 +1164,8 @@ export function TablesBuilder({
 }) {
   const router = useRouter();
   const [columns, setColumns] = useState<TableColumn[]>([]);
-  const [weightColumn, setWeightColumn] = useState('');
+  const [weightColumns, setWeightColumns] = useState<string[]>([]);
+  const [dirty, setDirty] = useState(false);
   const [specs, setSpecs] = useState<SavedSpec[]>([]);
   const [books, setBooks] = useState<SavedBook[]>([]);
   const [stub, setStub] = useState('');
@@ -1137,9 +1222,10 @@ export function TablesBuilder({
     void flowJson<{
       columns?: { name?: string; label?: string; value_labels?: Record<string, string> }[];
       active_weight_column?: string | null;
+      weight_columns?: string[];
     }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
-        setWeightColumn(meta.active_weight_column || '');
+        setWeightColumns(tableWeightChoices(meta.weight_columns, meta.active_weight_column || ''));
         setColumns(
           (meta.columns || [])
             .map(column => ({
@@ -1200,12 +1286,25 @@ export function TablesBuilder({
     }
   }
 
-  function saveTable() {
-    if (!datasetId || !stub) return;
+  async function netCodes(end: 'top' | 'bottom'): Promise<string[]> {
     const column = columns.find(item => item.name === stub);
+    const labelled = scaleCodes(column?.labels, end);
+    if (labelled.length >= 2 || !datasetId) return labelled;
+    const page = await flowJson<{ values?: string[] }>(
+      `/datasets/${datasetId}/columns/${encodeURIComponent(stub)}/values`
+    ).catch(() => ({ values: [] as string[] }));
+    return scaleCodesFromValues(page.values || [], end);
+  }
+
+  function saveTable() {
+    void runTable(true);
+  }
+
+  async function runTable(save: boolean) {
+    if (!datasetId || !stub) return;
     const nets: { label: string; values: string[] }[] = [];
     if (top2) {
-      const values = scaleCodes(column?.labels, 'top');
+      const values = await netCodes('top');
       if (values.length < 2) {
         setError('That column has no numbered scale for a top 2 box.');
         return;
@@ -1213,7 +1312,7 @@ export function TablesBuilder({
       nets.push({ label: 'Top 2 box', values });
     }
     if (bottom2) {
-      const values = scaleCodes(column?.labels, 'bottom');
+      const values = await netCodes('bottom');
       if (values.length < 2) {
         setError('That column has no numbered scale for a bottom 2 box.');
         return;
@@ -1234,10 +1333,15 @@ export function TablesBuilder({
         suppress_low_base: false,
         decimals: { [statistic]: digits, ...(meanOn ? { column_mean: digits } : {}) },
         weight: weight || 'none',
-        save: true,
+        save,
       }),
     })
       .then(body => {
+        if (!save) {
+          setBook(body);
+          return;
+        }
+        setDirty(false);
         remember(body);
         const across = banners.length ? banners.map(labelFor).join(', ') : 'the total';
         const savedId = String((body.spec as { id?: string } | undefined)?.id || threadKey);
@@ -1260,6 +1364,28 @@ export function TablesBuilder({
       })
       .catch(err => setError(err instanceof Error ? err.message : 'Could not save the table'));
   }
+
+  const optionsKey = [
+    top2,
+    bottom2,
+    weight,
+    statistic,
+    digits,
+    lettersOn,
+    nest,
+    lowBase,
+    meanOn,
+  ].join('|');
+  const lastOptions = useRef(optionsKey);
+  useEffect(() => {
+    if (lastOptions.current === optionsKey) return;
+    lastOptions.current = optionsKey;
+    if (!stub || !book) return;
+    setDirty(true);
+    void runTable(false);
+    // Options rebuild the table they belong to; stub and banner changes save on their own.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [optionsKey]);
 
   function matchesSaved(): boolean {
     const spec = currentSpec() as {
@@ -1553,9 +1679,10 @@ export function TablesBuilder({
                   onValueChange={setWeight}
                   options={[
                     { value: '', label: 'Weight none' },
-                    ...(weightColumn
-                      ? [{ value: weightColumn, label: `Weight ${weightColumn}` }]
-                      : []),
+                    ...weightColumns.map(name => ({
+                      value: name,
+                      label: `Weight ${labelFor(name)}`,
+                    })),
                   ]}
                 />
                 <span className="flow-muted">Scale</span>
@@ -1610,7 +1737,7 @@ export function TablesBuilder({
                   </p>
                 </div>
                 <div className="tables-title-actions">
-                  {stub && !matchesSaved() ? (
+                  {stub && (dirty || !matchesSaved()) ? (
                     <Button className="flow-btn primary" type="button" onClick={saveTable}>
                       Save table
                     </Button>

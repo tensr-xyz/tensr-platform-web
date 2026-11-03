@@ -57,6 +57,19 @@ export function isInternalUser(email?: string | null): boolean {
   return /@tensr\.xyz$/i.test(String(email || '').trim());
 }
 
+/** Two initials from a name or an email, never from an id. */
+export function memberInitials(label: string): string {
+  const text = label.trim();
+  if (!text) return '·';
+  const base = text.includes('@') ? text.split('@')[0] : text;
+  const parts = base
+    .replace(/[0-9]+/g, ' ')
+    .split(/[\s._-]+/)
+    .filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return (parts[0] || base).slice(0, 2).toUpperCase();
+}
+
 export function shellDatasetId(row: ShellDataset): string {
   return String(row.dataset_id || row.id || '');
 }
@@ -414,6 +427,16 @@ export function FlowSidebar({
   );
 }
 
+/** A taken name gets the next free number, so folders never share a name. */
+export function uniqueFolderName(name: string, folders: { name: string }[]): string {
+  const base = name.trim();
+  const taken = new Set(folders.map(folder => folder.name.trim().toLowerCase()));
+  if (!taken.has(base.toLowerCase())) return base;
+  let index = 2;
+  while (taken.has(`${base} ${index}`.toLowerCase())) index += 1;
+  return `${base} ${index}`;
+}
+
 export function FolderList({
   folders,
   folderName,
@@ -439,7 +462,7 @@ export function FolderList({
     setError('');
     void flowJson('/api/project-folders', {
       method: 'POST',
-      body: JSON.stringify({ name: value }),
+      body: JSON.stringify({ name: uniqueFolderName(value, folders) }),
     })
       .then(() => onCreated())
       .then(() => {
@@ -543,13 +566,13 @@ export function UserMenu({
           <span>{email || workspace || 'Workspace'}</span>
         </div>
         <DropdownMenuItem asChild>
-          <Link href="/settings/general">Account</Link>
+          <Link href="/flow/settings/general">Account</Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/settings/billing">Workspace and billing</Link>
+          <Link href="/flow/settings/billing">Workspace and billing</Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href="/settings/members">Invite people</Link>
+          <Link href="/flow/settings/members">Invite people</Link>
         </DropdownMenuItem>
         {internal ? (
           <DropdownMenuItem
@@ -571,12 +594,14 @@ export function UserMenu({
 
 export function ProjectSwitcher({
   current,
+  fallbackName = '',
   projects,
   section,
   hasMore,
   onLoadMore,
 }: {
   current?: FlowProject;
+  fallbackName?: string;
   projects: FlowProject[];
   section: string;
   hasMore: boolean;
@@ -601,7 +626,9 @@ export function ProjectSwitcher({
     >
       <PopoverTrigger asChild>
         <Button className="proj-switch" type="button" aria-label="Switch project">
-          <strong>{current?.name || 'Project'}</strong>
+          <strong data-loading={(!current?.name && !fallbackName) || undefined}>
+            {current?.name || fallbackName || '\u00a0'}
+          </strong>
           <SwitchIcon />
         </Button>
       </PopoverTrigger>
@@ -1010,7 +1037,7 @@ export function DatasetsScreen({
                 <th>Project</th>
                 <th>Rows</th>
                 <th className="edited">Updated</th>
-                <th aria-label="Actions" />
+                <th className="datasets-actions-cell" aria-label="Actions" />
               </tr>
             </thead>
             <tbody>
@@ -1049,13 +1076,15 @@ export function DatasetsScreen({
                           )
                         : '—'}
                     </td>
-                    <td className="datasets-actions">
-                      <Button className="flow-btn" type="button" onClick={() => open(row)}>
-                        Open
-                      </Button>
-                      <Button className="flow-btn" type="button" onClick={() => setMoving(row)}>
-                        Move
-                      </Button>
+                    <td className="datasets-actions-cell">
+                      <div className="datasets-actions">
+                        <Button className="flow-btn" type="button" onClick={() => open(row)}>
+                          Open
+                        </Button>
+                        <Button className="flow-btn" type="button" onClick={() => setMoving(row)}>
+                          Move
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 );

@@ -239,6 +239,9 @@ export function AnalysisSetupModal({
   }, [analysis, tukeyBlocked, form.anovaPostHoc]);
 
   const canRun = runBlockers.length === 0;
+  const firstInput = React.useRef(JSON.stringify([form, specValues]));
+  const touched = JSON.stringify([form, specValues]) !== firstInput.current;
+  const revealed = runAttempted || touched;
 
   const run = async () => {
     setRunAttempted(true);
@@ -273,6 +276,7 @@ export function AnalysisSetupModal({
       busy={busy}
       canRun={analysis === 'descriptives' ? true : canRun}
       runBlockers={runBlockers}
+      revealBlockers={revealed}
       serverError={serverError}
       onRun={run}
     >
@@ -287,7 +291,7 @@ export function AnalysisSetupModal({
               onChange={(name, value) => setSpecValues(current => ({ ...current, [name]: value }))}
               schema={schema}
               preview={preview}
-              revealSelectionError={runAttempted}
+              revealSelectionError={revealed}
             />
           ) : (
             <>
@@ -298,7 +302,7 @@ export function AnalysisSetupModal({
                 schema,
                 allNames,
                 notices: fieldNotices,
-                errors: fieldErrors,
+                errors: revealed ? fieldErrors : {},
                 tukeyBlocked,
               })}
             </>
