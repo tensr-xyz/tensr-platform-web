@@ -60,6 +60,7 @@ export function outputRuns(rows: unknown[]): OutputRun[] {
       weighting: split.weighting,
       inReport: record.in_report === true,
       datasetId: String(record.dataset_id || ''),
+      file: typeof record.file === 'string' ? record.file : undefined,
     });
   }
   return runs;

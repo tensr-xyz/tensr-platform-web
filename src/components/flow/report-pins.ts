@@ -52,6 +52,17 @@ export function pinsFromRuns(runs: RunSummary[]): ReportPin[] {
     });
 }
 
+const runCache = new Map<string, RunSummary[]>();
+
+export function rememberReportRuns(projectId: string, runs: RunSummary[]) {
+  runCache.set(projectId, runs);
+}
+
+export function cachedReportRuns(projectId: string): RunSummary[] | null {
+  if (!runCache.has(projectId)) return null;
+  return runCache.get(projectId) || [];
+}
+
 export function setProjectPins(projectId: string, pins: ReportPin[]) {
   store.set(projectId, pins);
   loaded.add(projectId);

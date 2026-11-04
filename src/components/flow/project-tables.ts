@@ -8,6 +8,8 @@ export type ProjectTable = {
   filename: string;
   /** The table's T number. It stays once given; a new table takes the next one. */
   number: number;
+  stale?: boolean;
+  detail?: string;
 };
 
 type RawRow = {
@@ -18,6 +20,8 @@ type RawRow = {
   dataset_id?: string;
   filename?: string;
   table_number?: number | null;
+  stale?: boolean;
+  detail?: string;
 };
 
 export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = ''): ProjectTable[] {
@@ -35,6 +39,8 @@ export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = '
       datasetId,
       filename: row.filename || '',
       number: Number(row.table_number) > 0 ? Number(row.table_number) : 0,
+      stale: Boolean(row.stale),
+      detail: row.detail || '',
     });
   }
   return out;
