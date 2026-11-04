@@ -285,7 +285,7 @@ export function ExportDialog({
                       }
                     />
                     <span>
-                      Finding {String(index + 1).padStart(2, '0')} · {table.title}
+                      T{index + 1} · {table.title}
                     </span>
                   </label>
                 ))}

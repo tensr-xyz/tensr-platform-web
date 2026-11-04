@@ -307,15 +307,16 @@ export function DatasetsScreen({
     );
   };
 
-  const projectCell = (row: ShellDataset) =>
-    row.project_id ? (
-      <span className="ds-project">
+  const projectCell = (row: ShellDataset) => {
+    if (!row.project_id) return <span className="ds-muted">—</span>;
+    const name = projectName(row.project_id) || 'Project';
+    return (
+      <span className="ds-project" title={name}>
         <span className="ds-dot" aria-hidden />
-        {projectName(row.project_id) || 'Project'}
+        <span className="ds-project-name">{name}</span>
       </span>
-    ) : (
-      <span className="ds-muted">—</span>
     );
+  };
 
   const count = (value?: number) => (value ? value.toLocaleString('en-GB') : '—');
 

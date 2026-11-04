@@ -109,11 +109,7 @@ export function codingVersionStatus(
     inUseLabel: label,
     newerAvailable,
     newerId: newerAvailable ? newest?.id : undefined,
-    newerLabel: newerAvailable
-      ? `${newest?.lineageLabel || newest?.name || 'Newer coding'}${
-          newest ? ` · ${codingDateLabel(newest)}` : ''
-        }`
-      : undefined,
+    newerLabel: newerAvailable && newest ? codingDateLabel(newest) : undefined,
   };
 }
 

@@ -42,7 +42,7 @@ export function SettingsScreen({ section }: { section?: string }) {
     key === 'teams' ? inTeam : true
   );
   const personal = userOrganizations.find(org => org.isPersonal);
-  const workspace = orgId ? activeOrganization?.name : personal?.name || 'Personal workspace';
+  const workspace = orgId ? activeOrganization?.name : personal?.name || 'Personal';
 
   // Billing and Usage share slow requests; start them now so either tab draws at once.
   useEffect(() => {
@@ -58,7 +58,7 @@ export function SettingsScreen({ section }: { section?: string }) {
     ) : (
       <SettingsPersonalOrganisation
         personalId={personal?.id || ''}
-        workspaceName={workspaceHeading(workspace)}
+        workspaceName={workspaceHeading(workspace, true)}
       />
     );
   else if (current === 'teams') body = <SettingsTeams />;
@@ -67,7 +67,7 @@ export function SettingsScreen({ section }: { section?: string }) {
   return (
     <div className="st-page">
       <header className="st-head">
-        <p className="st-workspace">{workspaceHeading(workspace)}</p>
+        <p className="st-workspace">{workspaceHeading(workspace, !orgId)}</p>
         <h1 className="st-title">Settings</h1>
       </header>
       <nav className="st-tabs" aria-label="Settings">
