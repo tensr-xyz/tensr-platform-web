@@ -6,6 +6,8 @@ export type ProjectTable = {
   label: string;
   datasetId: string;
   filename: string;
+  /** The table's T number. It stays once given; a new table takes the next one. */
+  number: number;
 };
 
 type RawRow = {
@@ -15,6 +17,7 @@ type RawRow = {
   name?: string;
   dataset_id?: string;
   filename?: string;
+  table_number?: number | null;
 };
 
 export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = ''): ProjectTable[] {
@@ -31,6 +34,7 @@ export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = '
       label: row.label || row.name || id,
       datasetId,
       filename: row.filename || '',
+      number: Number(row.table_number) > 0 ? Number(row.table_number) : 0,
     });
   }
   return out;
@@ -42,21 +46,54 @@ export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = '
  */
 export async function loadProjectTables(
   projectId: string | undefined,
-  datasetId: string | undefined
+  datasetId: string | undefined,
+  options: {
+    /** The project's files the screen already holds, so the API reads those and skips its file scan. */
+    fileIds?: string[];
+    /** The open file's table list when the screen already asked for it, so it is not fetched twice. */
+    filePage?: Promise<{ specs?: RawRow[] } | null>;
+  } = {}
 ): Promise<ProjectTable[]> {
   // Both lists, merged: the project's (every file) and the open file's own, so a gap in one never empties the rail.
   const [projectPage, filePage] = await Promise.all([
     projectId
-      ? flowJson<{ specs?: RawRow[] }>(`/api/projects/${projectId}/tables`).catch(() => null)
+      ? flowJson<{ specs?: RawRow[] }>(projectTablesPath(projectId, options.fileIds)).catch(
+          () => null
+        )
       : Promise.resolve(null),
-    datasetId
-      ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
-      : Promise.resolve(null),
+    options.filePage ||
+      (datasetId
+        ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
+        : Promise.resolve(null)),
   ]);
-  return mergeTableLists(
-    projectTableRows(projectPage?.specs),
-    projectTableRows(filePage?.specs, datasetId)
+  return numberTables(
+    mergeTableLists(
+      projectTableRows(projectPage?.specs),
+      projectTableRows(filePage?.specs, datasetId)
+    )
   );
+}
+
+/**
+ * Keeps every saved T number. A table without one (just saved, not yet listed by the project)
+ * takes the next number after the highest, oldest first. The list itself is newest first.
+ */
+export function numberTables<T extends { number?: number }>(tables: T[]): T[] {
+  let next = Math.max(0, ...tables.map(table => table.number || 0)) + 1;
+  const numbers = new Map<number, number>();
+  for (let index = tables.length - 1; index >= 0; index -= 1) {
+    if (!tables[index].number) numbers.set(index, next++);
+  }
+  return tables.map((table, index) =>
+    numbers.has(index) ? { ...table, number: numbers.get(index) } : table
+  );
+}
+
+export function projectTablesPath(projectId: string, fileIds: string[] = []): string {
+  const ids = [...new Set(fileIds.filter(Boolean))];
+  return ids.length
+    ? `/api/projects/${projectId}/tables?dataset_ids=${encodeURIComponent(ids.join(','))}`
+    : `/api/projects/${projectId}/tables`;
 }
 
 /** Project tables first (newest first); the open file's tables the project list missed go on top. */

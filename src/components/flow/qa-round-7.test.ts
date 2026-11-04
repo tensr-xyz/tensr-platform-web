@@ -116,7 +116,7 @@ describe('QA round 7', () => {
 
   test('6: Not yet coded stays as a row at zero', () => {
     const cell = { banner_id: 'total', unweighted_n: 9, column_unweighted_n: 348 };
-    const rows = themeRows([{ id: 'a', label: 'No comment', cells: [cell] }] as never, 0);
-    expect(rows.map(row => row.label)).toEqual(['No comment', 'Not yet coded']);
+    const rows = themeRows([{ id: 'a', label: 'Price', cells: [cell] }] as never, 0);
+    expect(rows.map(row => row.label)).toEqual(['Price', 'Not yet coded']);
   });
 });

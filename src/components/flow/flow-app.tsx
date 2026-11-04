@@ -4138,7 +4138,12 @@ function ReportScreen({
         .map(row => datasetRowId(row))
         .filter(Boolean)
     ).catch(() => []);
-    void loadProjectTables(projectId, datasetId)
+    void loadProjectTables(projectId, datasetId, {
+      fileIds: datasets
+        .filter(row => row.project_id === projectId)
+        .map(row => datasetRowId(row))
+        .filter(Boolean),
+    })
       .then(async rows => {
         const meta = await metaRequest;
         const labels = Object.fromEntries(
@@ -4157,7 +4162,7 @@ function ReportScreen({
               id,
               label,
               spec,
-              table: reportTableFromBook(id, label, index + 1, detail, labels),
+              table: reportTableFromBook(id, label, row.number || index + 1, detail, labels),
             };
           })
         );
