@@ -37,6 +37,8 @@ import {
   type SigLetter,
   type SurveyCell,
 } from '@/lib/flow-survey';
+import { tableBaseCopy } from '@/components/flow/table-base';
+import { codingVersionStatus, type CodingFile } from '@/components/flow/coding-versions';
 
 type DatasetRow = {
   dataset_id?: string;
@@ -321,6 +323,7 @@ export function splitColumns<T extends { name: string; label: string }>(
 export function ThemesPanel({
   datasetId,
   projectId,
+  files = [],
   onSelectCell,
   onEditFrame,
   onReview,
@@ -328,12 +331,14 @@ export function ThemesPanel({
 }: {
   datasetId?: string;
   projectId?: string;
+  files?: CodingFile[];
   onSelectCell: (cell: SurveyCell) => void;
   onEditFrame?: (column: string) => void;
   onReview?: (codeColumn: string) => void;
   /** The theme to reopen, e.g. the one just reviewed, so its table comes back with new counts. */
   initialStub?: string;
 }) {
+  const coding = codingVersionStatus(files, datasetId);
   const [columns, setColumns] = useState<
     { name: string; label: string; type?: string; measure?: string }[]
   >([]);
@@ -459,7 +464,11 @@ export function ThemesPanel({
       </div>
       <div className="themes-head">
         <div>
-          <p className="flow-muted">Open end{stub ? ` · ${stubLabel}` : ''}</p>
+          <p className="flow-muted">
+            Open end{stub ? ` · ${stubLabel}` : ''}
+            {coding.inUseLabel ? ` · ${coding.inUseLabel}` : ''}
+            {coding.newerAvailable ? ' · newer coding available' : ''}
+          </p>
           <h2>{stub ? stubLabel : 'Choose a theme'}</h2>
           <p className="flow-muted">
             {book
@@ -1400,6 +1409,7 @@ export function TablesBuilder({
   }, [datasetId]);
   const [columns, setColumns] = useState<TableColumn[]>([]);
   const [weightColumns, setWeightColumns] = useState<string[]>([]);
+  const [weightNeedsRefresh, setWeightNeedsRefresh] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [specs, setSpecs] = useState<SavedSpec[]>([]);
   const [books, setBooks] = useState<SavedBook[]>([]);
@@ -1499,6 +1509,7 @@ export function TablesBuilder({
       columns?: { name?: string; label?: string; value_labels?: Record<string, string> }[];
       active_weight_column?: string | null;
       weight_columns?: string[];
+      weight_vector?: { needs_refresh?: boolean } | null;
     }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         const choices = tableWeightChoices(meta.weight_columns, meta.active_weight_column || '');
@@ -1506,6 +1517,7 @@ export function TablesBuilder({
         // The file's own weight is the default until a saved table says otherwise.
         const active = meta.active_weight_column || '';
         if (active && choices.includes(active)) setWeight(current => current || active);
+        setWeightNeedsRefresh(Boolean(meta.weight_vector?.needs_refresh));
         setColumns(
           (meta.columns || [])
             .map(column => ({
@@ -1806,19 +1818,25 @@ export function TablesBuilder({
         banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
       }`
     : 'Save a table';
-  const baseLine =
-    book?.answered_n != null && book?.respondent_n != null
-      ? `Base: answered ${String(book.answered_n)} of ${String(book.respondent_n)}`
-      : '';
-  const totalBase = (() => {
-    if (book?.respondent_n != null) return String(book.respondent_n);
-    const rows = (book?.rows as BannerRow[]) || [];
-    for (const row of rows) {
-      const cell = (row.cells || []).find(item => item.banner_id === 'total');
-      if (cell?.column_unweighted_n != null) return String(cell.column_unweighted_n);
-    }
-    return '';
-  })();
+  const baseCopy = tableBaseCopy(
+    book
+      ? {
+          base_label: book.base_label as string | null | undefined,
+          answered_n: book.answered_n as number | null | undefined,
+          respondent_n: book.respondent_n as number | null | undefined,
+          weight: book.weight as
+            | {
+                weight_aware?: boolean;
+                weighted_n?: number | null;
+                unweighted_n?: number | null;
+              }
+            | null
+            | undefined,
+        }
+      : null
+  );
+  const baseLine = baseCopy.line;
+  const totalBase = baseCopy.foot;
 
   return (
     <div className="flow-split tables-board">
@@ -2191,20 +2209,18 @@ export function TablesBuilder({
             </div>
             {error ? <p className="flow-error">{error}</p> : null}
             {note ? <p className="flow-muted">{note}</p> : null}
+            {weightNeedsRefresh ? (
+              <p className="flow-muted" role="status">
+                Made before a weighting fix · re-run from Weight to targets so every table reads the
+                same base.
+              </p>
+            ) : null}
             <div className="tables-sheet">
               <div className="tables-title">
                 <div>
                   <h2>{title}</h2>
                   <p className="flow-muted">
-                    {[
-                      questionText(stub),
-                      baseLine ||
-                        (totalBase
-                          ? `Base: all respondents (${totalBase}${weight ? ', weighted' : ''})`
-                          : ''),
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
+                    {[questionText(stub), baseLine].filter(Boolean).join(' · ')}
                   </p>
                 </div>
                 <div className="tables-title-actions">
@@ -2264,8 +2280,7 @@ export function TablesBuilder({
               )}
             </div>
             <div className="tables-foot">
-              <span>{totalBase ? `${totalBase} respondents` : ''}</span>
-              <span>{weight ? 'Weighted' : book ? 'Unweighted' : ''}</span>
+              <span>{totalBase}</span>
               <span>{specId ? 'Saved' : ''}</span>
             </div>
           </section>
