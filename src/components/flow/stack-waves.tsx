@@ -440,11 +440,20 @@ export function StackWaves({
           .filter(id => id && !(id in projectNames))
       ),
     ];
-    // Load this project's columns with the dialog so the overlap filter can run immediately.
-    const fileIds = [
-      ...here.map(row => datasetRowId(row)),
-      ...candidates.elsewhere.map(row => datasetRowId(row)),
-    ].filter(Boolean);
+    const hereFileIds = here.map(row => datasetRowId(row)).filter(Boolean);
+    const otherFileIds = candidates.elsewhere.map(row => datasetRowId(row)).filter(Boolean);
+    // This project's columns first so the overlap filter can start before other-project metadata returns.
+    void Promise.all(
+      hereFileIds.map(id =>
+        flowJson<{ columns?: WaveColumn[] }>(`/datasets/${id}/metadata`)
+          .then(meta => [id, meta.columns || []] as const)
+          .catch(() => [id, [] as WaveColumn[]] as const)
+      )
+    ).then(columns => {
+      if (cancelled) return;
+      setColumnsById(current => ({ ...Object.fromEntries(columns), ...current }));
+      setLookupsDone(true);
+    });
     void Promise.all([
       Promise.all(
         unknown.map(id =>
@@ -454,7 +463,7 @@ export function StackWaves({
         )
       ),
       Promise.all(
-        fileIds.map(id =>
+        otherFileIds.map(id =>
           flowJson<{ columns?: WaveColumn[] }>(`/datasets/${id}/metadata`)
             .then(meta => [id, meta.columns || []] as const)
             .catch(() => [id, [] as WaveColumn[]] as const)
@@ -474,7 +483,6 @@ export function StackWaves({
         )
       );
       setColumnsById(current => ({ ...Object.fromEntries(columns), ...current }));
-      setLookupsDone(true);
     });
     return () => {
       cancelled = true;

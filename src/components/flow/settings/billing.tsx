@@ -24,9 +24,11 @@ import { BILLING_RETURN_PATH, ChangePlanDialog } from './change-plan';
 import {
   invalidateBilling,
   loadBilling,
+  loadBillingPlanCard,
   loadInvoices,
   openBillingPortal,
   peekBilling,
+  peekSubscription,
 } from './billing-load';
 import { Bar, RowCard, SettingsError, SkeletonCard } from './parts';
 import {
@@ -37,7 +39,10 @@ import {
   planLabel,
   planPrice,
   trialProgress,
+  type ApiPlan,
   type Invoice,
+  type LegacySubscription,
+  type MePage,
 } from './settings-data';
 import { useLoad } from './use-load';
 
@@ -51,6 +56,12 @@ export function SettingsBilling() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [invoices, setInvoices] = useState<Invoice[] | null | undefined>(undefined);
+  const [earlyPlan, setEarlyPlan] = useState<{
+    subscription: LegacySubscription | null;
+    me: MePage | null;
+    ms: number;
+  } | null>(null);
+  const [planTiming, setPlanTiming] = useState<{ cold?: number; warm?: number }>({});
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +73,22 @@ export function SettingsBilling() {
     };
   }, [state.phase]);
 
-  if (state.phase === 'loading') {
+  useEffect(() => {
+    let cancelled = false;
+    const warm = peekSubscription() !== undefined;
+    void loadBillingPlanCard().then(card => {
+      if (cancelled) return;
+      setEarlyPlan(card);
+      setPlanTiming(current =>
+        warm ? { ...current, warm: card.ms } : { ...current, cold: card.ms }
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (state.phase === 'loading' && !earlyPlan) {
     return (
       <div className="st-stack st-narrow">
         <SkeletonCard rows={2} />
@@ -71,9 +97,14 @@ export function SettingsBilling() {
       </div>
     );
   }
-  if (state.phase === 'error') return <SettingsError message={state.error} onRetry={retry} />;
+  if (state.phase === 'error' && !earlyPlan)
+    return <SettingsError message={state.error} onRetry={retry} />;
 
-  const { me, subscription, catalog } = state.data;
+  const me = state.phase === 'ready' ? state.data.me : earlyPlan?.me || ({} as MePage);
+  const subscription =
+    state.phase === 'ready' ? state.data.subscription : earlyPlan?.subscription || null;
+  const catalog =
+    state.phase === 'ready' ? state.data.catalog : { currency: 'GBP', plans: [] as ApiPlan[] };
   const code = me.entitlements?.plan_code || subscription?.tier || 'none';
   const status = (subscription?.status || '').toLowerCase();
   const trial = trialProgress(me.access, me.entitlements?.trial_days);
@@ -168,7 +199,11 @@ export function SettingsBilling() {
   );
 
   return (
-    <div className="st-stack st-narrow">
+    <div
+      className="st-stack st-narrow"
+      data-plan-cold-ms={planTiming.cold != null ? String(Math.round(planTiming.cold)) : undefined}
+      data-plan-warm-ms={planTiming.warm != null ? String(Math.round(planTiming.warm)) : undefined}
+    >
       <section className="st-card st-plan-card">
         <div className="st-plan-card-top">
           <div className="st-plan-card-text">

@@ -109,10 +109,10 @@ describe('QA round 9: coding version in use', () => {
 
   test('flags a newer coding when an older coded file is in use', () => {
     expect(isCodingVersion(files[1])).toBe(true);
-    expect(codingVersionStatus(files, 'old')).toEqual({
-      inUseLabel: 'coded comments',
-      newerAvailable: true,
-    });
+    const status = codingVersionStatus(files, 'old');
+    expect(status.newerAvailable).toBe(true);
+    expect(status.inUseLabel).toMatch(/coded comments/i);
+    expect(status.newerId).toBe('new');
     expect(codingVersionStatus(files, 'new').newerAvailable).toBe(false);
   });
 
