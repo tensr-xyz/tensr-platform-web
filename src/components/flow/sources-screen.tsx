@@ -193,7 +193,7 @@ export function SourcesScreen({
     const label = sourceFileNote(file);
     const made = label.charAt(0).toUpperCase() + label.slice(1);
     const sources = (file.source_filenames || []).map(name => name.trim()).filter(Boolean);
-    if (sources.length > 1) return `${made} from ${sources.join(', ')}`;
+    if (sources.length) return `${made} from ${sources.join(', ')}`;
     const parent = datasets.find(row => datasetRowId(row) === file.parent_dataset_id);
     return parent ? `${made} from ${sourceFileName(parent)}` : made;
   };

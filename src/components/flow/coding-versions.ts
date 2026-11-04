@@ -28,7 +28,7 @@ export function codingStamp(row: {
   created_at?: string | null;
   updated_at?: string | null;
 }): number {
-  const raw = row.updatedAt || row.updated_at || row.createdAt || row.created_at || 0;
+  const raw = row.createdAt || row.created_at || row.updatedAt || row.updated_at || 0;
   const value = new Date(raw).getTime();
   return Number.isFinite(value) ? value : 0;
 }

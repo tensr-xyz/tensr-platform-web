@@ -74,6 +74,7 @@ export type RakePreview = {
   effective_base?: number;
   min_weight?: number;
   max_weight?: number;
+  iterations?: number;
   converged?: boolean;
   warning?: string;
 };
@@ -526,9 +527,13 @@ export function WeightPanel({
           <div>
             <span>Converged</span>
             <strong>
-              {diagnostics?.converged && diagnostics.iterations
-                ? `${diagnostics.iterations} ${diagnostics.iterations === 1 ? 'run' : 'runs'}`
-                : '—'}
+              {(() => {
+                const iterations = diagnostics?.iterations ?? preview?.iterations;
+                const converged = diagnostics?.converged ?? preview?.converged;
+                if (!iterations) return converged === false ? 'No' : converged ? 'Yes' : '—';
+                const noun = iterations === 1 ? 'iteration' : 'iterations';
+                return `${converged === false ? 'No' : 'Yes'} (${iterations} ${noun})`;
+              })()}
             </strong>
           </div>
         </div>
@@ -612,10 +617,7 @@ export function WeightPanel({
                 .filter(column => !groups.some(group => group.column === column.name))
                 .map(column => ({
                   value: column.name,
-                  label:
-                    column.label && column.label !== column.name
-                      ? `${column.name} · ${column.label}`
-                      : column.name,
+                  label: column.label && column.label !== column.name ? column.label : column.name,
                 })),
             ]}
           />
