@@ -4906,7 +4906,7 @@ function ReportScreen({
                       {table.filename ? ` · ${table.filename}` : ''}
                     </p>
                     <h3>{table.label}</h3>
-                    <p>Built on an older version of the data</p>
+                    <p>{table.detail || 'Built on an older version of the data'}</p>
                     {staleErrors[table.id] ? (
                       <p className="flow-error">{staleErrors[table.id]}</p>
                     ) : null}
