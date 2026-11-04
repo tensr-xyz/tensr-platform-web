@@ -294,7 +294,9 @@ describe('LoginTemplate', () => {
       await waitFor(() => {
         expect(mockVerifyAuth).toHaveBeenCalledWith('ada@example.com', '123456', 'email-123');
       });
-      expect(screen.getByRole('button', { name: /verifying/i })).toBeDisabled();
+      // Once the code is accepted the form gives way to the app's loading state until /flow draws.
+      expect(await screen.findByText('Signing you in…')).toBeInTheDocument();
+      expect(screen.queryByLabelText(/6-digit code/i)).not.toBeInTheDocument();
     });
 
     it('shows why verification failed and lets the user retry', async () => {
@@ -422,5 +424,52 @@ describe('LoginTemplate', () => {
       finishRedeem(null);
       await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/flow'));
     });
+  });
+});
+
+describe('LoginTemplate: signing in', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    window.sessionStorage.clear();
+    authState = { ...loggedOut };
+    mockRedeemStoredInvitation.mockResolvedValue(null);
+    mockRedeemStoredReferral.mockResolvedValue(null);
+  });
+
+  it('shows "Signing you in…" from the OAuth return, not a blank or the form', () => {
+    searchParams = new URLSearchParams('stytch_token_type=oauth&token=tok');
+    mockOAuthAuthenticate.mockReturnValue(new Promise(() => undefined));
+    render(<LoginTemplate />);
+    expect(screen.getByText('Signing you in…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /continue with google/i })).not.toBeInTheDocument();
+    expect(window.sessionStorage.getItem('tensr-signing-in')).not.toBeNull();
+  });
+
+  it('goes back to the form with the error when the OAuth return fails', async () => {
+    searchParams = new URLSearchParams('stytch_token_type=oauth&token=tok');
+    mockOAuthAuthenticate.mockRejectedValue(new Error('expired'));
+    render(<LoginTemplate />);
+    expect(
+      await screen.findByRole('button', { name: /continue with google/i })
+    ).toBeInTheDocument();
+  });
+
+  it('keeps "Signing you in…" while an already signed-in user is sent on', () => {
+    searchParams = new URLSearchParams();
+    authState = {
+      ...loggedOut,
+      isAuthenticated: true,
+      hasActiveSubscription: true,
+      entitlements: { plan_code: 'pro' },
+    };
+    render(<LoginTemplate />);
+    expect(screen.getByText('Signing you in…')).toBeInTheDocument();
+  });
+
+  it('shows the real provider marks on the buttons', () => {
+    searchParams = new URLSearchParams();
+    const { container } = render(<LoginTemplate />);
+    expect(container.querySelectorAll('.signin-provider svg[data-provider]')).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'Continue with Google' })).toBeInTheDocument();
   });
 });

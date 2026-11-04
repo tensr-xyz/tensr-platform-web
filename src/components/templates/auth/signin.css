@@ -1,7 +1,6 @@
 /* Paper 0f Sign in and 0g Enter code. Tokens from the artboards. */
 .signin {
   --signin-canvas: #f8f4ec;
-  --signin-card: #ede8dd;
   --signin-ink: #23463b;
   --signin-muted: #537267;
   --signin-field: #fcfaf5;
@@ -50,8 +49,9 @@
   width: 520px;
   max-width: 100%;
   margin: auto 0 auto 60px;
+  /* The form sits straight on the page; the padding keeps the 0f/0g spacing and width. */
   padding: 46px 40px 40px;
-  background: var(--signin-card);
+  background: transparent;
 }
 
 .signin-form {
@@ -105,15 +105,9 @@
 }
 
 .signin-mark {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 1.5px solid var(--signin-ink);
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 500;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
 }
 
 .signin-or {

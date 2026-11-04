@@ -18,6 +18,9 @@ import { stytchErrorMessage } from '@/lib/stytch-error-message';
 import { dumpAuthTrace, authTrace } from '@/lib/auth-trace';
 import { captureProductEvent, captureProductException, errorClass } from '@/lib/product-analytics';
 import { storeSession } from '@/utils/auth';
+import { SigningIn } from '@/components/molecules/signing-in';
+import { isAuthReturn, markSigningIn } from '@/lib/signing-in';
+import { ProviderLogo } from './provider-logos';
 import Link from 'next/link';
 import './signin.css';
 import Image from 'next/image';
@@ -34,11 +37,19 @@ function emailCodeSendError(err: unknown): string {
 const LoginTemplate = () => {
   const router = useRouter();
   const searchParams = useSearchParams();
+  // From the moment auth succeeds until /flow draws, the screen shows "Signing you in…", never a blank form.
+  const [signingIn, setSigningInState] = useState(() => isAuthReturn(searchParams));
+  const setSigningIn = (on: boolean) => {
+    if (on) markSigningIn();
+    setSigningInState(on);
+  };
 
   useEffect(() => {
     const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
     const sessionToken = hash.get('session_token');
     if (!sessionToken) return;
+    markSigningIn();
+    setSigningInState(true);
     storeSession(sessionToken, hash.get('session_jwt') || undefined);
     window.history.replaceState(null, '', window.location.pathname + window.location.search);
     router.replace(safeReturnTo(searchParams.get('returnTo')) || '/flow');
@@ -120,6 +131,8 @@ const LoginTemplate = () => {
     if (!entitlementsResolved(entitlements)) return;
 
     authTrace('login:redirect-after-auth');
+    markSigningIn();
+    setSigningInState(true);
 
     void Promise.all([redeemStoredInvitation(), redeemStoredReferral()]).finally(() => {
       const target = safeReturnTo(searchParams.get('returnTo'));
@@ -145,6 +158,8 @@ const LoginTemplate = () => {
       return;
     }
     hasHandledOAuthRef.current = true;
+    markSigningIn();
+    setSigningInState(true);
     setIsGoogleLoading(true);
     setIsGitHubLoading(true);
     setError('');
@@ -163,6 +178,7 @@ const LoginTemplate = () => {
       })
       .catch(err => {
         console.error('OAuth authenticate error:', err);
+        setSigningIn(false);
         setError(stytchErrorMessage(err, 'Failed to authenticate'));
         hasHandledOAuthRef.current = false;
       })
@@ -322,6 +338,7 @@ const LoginTemplate = () => {
       const result = await verifyAuth(email, verificationCode, methodId);
 
       if (result.success) {
+        setSigningIn(true);
         const sentAt = otpSentAt.current;
         captureProductEvent('otp_verified', {
           elapsed_ms: sentAt == null ? null : Date.now() - sentAt,
@@ -394,23 +411,24 @@ const LoginTemplate = () => {
   };
 
   const providers = [
-    { key: 'google', mark: 'G', label: 'Google', loading: isGoogleLoading, run: handleGoogleOAuth },
+    { key: 'google' as const, label: 'Google', loading: isGoogleLoading, run: handleGoogleOAuth },
     {
-      key: 'microsoft',
-      mark: 'M',
+      key: 'microsoft' as const,
       label: 'Microsoft',
       loading: isMicrosoftLoading,
       run: handleMicrosoftOAuth,
     },
     {
-      key: 'github',
-      mark: 'GH',
+      key: 'github' as const,
       label: 'GitHub',
       loading: isGitHubLoading,
       run: handleGitHubOAuth,
     },
   ];
   const digits = Array.from({ length: 6 }, (_, index) => verificationCode[index] || '');
+
+  // Adding an email after OAuth is still a form; anything else after auth succeeds is "Signing you in…".
+  if (signingIn && !needsEmail && !error) return <SigningIn />;
 
   return (
     <div className="signin">
@@ -484,9 +502,7 @@ const LoginTemplate = () => {
                     onClick={provider.run}
                     disabled={formBusy}
                   >
-                    <span className="signin-mark" aria-hidden="true">
-                      {provider.mark}
-                    </span>
+                    <ProviderLogo provider={provider.key} className="signin-mark" />
                     {provider.loading ? 'Continuing...' : `Continue with ${provider.label}`}
                   </Button>
                 ))}

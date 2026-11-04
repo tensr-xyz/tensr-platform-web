@@ -8,9 +8,11 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
+import { SigningIn } from '@/components/molecules/signing-in';
+import { markSigningIn } from '@/lib/signing-in';
 import '../invite.css';
 
-type Phase = 'checking' | 'ready' | 'accepting' | 'expired' | 'error';
+type Phase = 'checking' | 'ready' | 'accepting' | 'signing-in' | 'expired' | 'error';
 
 function readError(err: unknown): { status: number; message: string } {
   const status = Number((err as { status?: number })?.status || 0);
@@ -80,6 +82,9 @@ export default function InvitePage() {
     setMessage('');
     try {
       await flowJson(`/api/invitations/${encodeURIComponent(token)}/accept`, { method: 'POST' });
+      // Accepted: hold "Signing you in…" until the workspace draws.
+      markSigningIn();
+      setPhase('signing-in');
       router.push('/flow');
     } catch (err) {
       const { status, message: text } = readError(err);
@@ -103,6 +108,8 @@ export default function InvitePage() {
       setPhase('error');
     }
   }
+
+  if (phase === 'signing-in') return <SigningIn />;
 
   return (
     <main className="iv">
