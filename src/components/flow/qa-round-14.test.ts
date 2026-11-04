@@ -1,4 +1,5 @@
 import { outputCardReady, outputRunIds } from '@/components/flow/chat-output';
+import { staleCardKey, uniqueStale } from '@/components/flow/project-tables';
 
 describe('round 14', () => {
   it('does not turn a failed procedure into an output card', () => {
@@ -37,5 +38,15 @@ describe('round 14', () => {
     expect(outputRunIds(done.tool_results)).toEqual(['run-1']);
     expect(outputCardReady(done, false)).toBe(true);
     expect(outputCardReady(done, true)).toBe(false);
+  });
+
+  it('keys a stale card by spec id and T number, and keeps one of each', () => {
+    const rows = [
+      { id: '6cd03cde', number: 13, label: 'first' },
+      { id: '6cd03cde', number: 13, label: 'copy' },
+      { id: '6cd03cde', number: 14, label: 'other' },
+    ];
+    expect(uniqueStale(rows).map(row => row.label)).toEqual(['first', 'other']);
+    expect(new Set(uniqueStale(rows).map(staleCardKey)).size).toBe(2);
   });
 });

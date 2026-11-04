@@ -110,6 +110,24 @@ export function mergeTableLists(project: ProjectTable[], file: ProjectTable[]): 
 
 /** "on cars_EN - weighted 3 Nov" for a table built on another file than the one open. */
 export function tableFileNote(table: ProjectTable, openDatasetId: string | undefined): string {
+  if (table.filename) return `on ${table.filename}`;
   if (!table.datasetId || table.datasetId === openDatasetId) return '';
-  return table.filename ? `on ${table.filename}` : 'on another file';
+  return 'on another file';
+}
+
+/** Report cards key by spec id and T number, so a repeated spec id does not collide. */
+export function staleCardKey(table: { id: string; number: number }): string {
+  return `${table.id}:${table.number}`;
+}
+
+export function uniqueStale<T extends { id: string; number: number }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const row of rows) {
+    const key = staleCardKey(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
 }

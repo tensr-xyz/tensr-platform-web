@@ -8,7 +8,12 @@ import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { archiveChatTurn, type ChatExchange } from '@/components/flow/chat-thread';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
-import { loadProjectTables, tableFileNote } from '@/components/flow/project-tables';
+import {
+  loadProjectTables,
+  staleCardKey,
+  tableFileNote,
+  uniqueStale,
+} from '@/components/flow/project-tables';
 import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
 import { PaletteNoMatch } from '@/components/flow/palette-no-match';
 import {
@@ -4215,6 +4220,9 @@ function ReportScreen({
   const [picked, setPicked] = useState<string[]>([]);
   const [tables, setTables] = useState<ReportTable[]>([]);
   const [staleTables, setStaleTables] = useState<StaleTable[]>([]);
+  const [rebuildOffers, setRebuildOffers] = useState<
+    Record<string, { id: string; filename: string }>
+  >({});
   const [findings, setFindings] = useState<ReportFinding[]>([]);
   const [findingsPhase, setFindingsPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [findingsError, setFindingsError] = useState('');
@@ -4314,14 +4322,16 @@ function ReportScreen({
         const staleRows = overview.tables.filter(row => row.stale);
         const liveRows = overview.tables.filter(row => row.spec_id && !row.stale);
         setStaleTables(
-          staleRows.map(row => ({
-            id: String(row.spec_id || ''),
-            label: String(row.label || ''),
-            number: Number(row.table_number) || 0,
-            datasetId: String(row.dataset_id || ''),
-            filename: String(row.filename || ''),
-            detail: String(row.detail || ''),
-          }))
+          uniqueStale(
+            staleRows.map(row => ({
+              id: String(row.spec_id || ''),
+              label: String(row.label || ''),
+              number: Number(row.table_number) || 0,
+              datasetId: String(row.dataset_id || ''),
+              filename: String(row.filename || ''),
+              detail: String(row.detail || ''),
+            }))
+          )
         );
         setFindings((overview.findings || []).map(findingFromOverview));
         setFindingsPhase('ready');
@@ -4414,7 +4424,7 @@ function ReportScreen({
             filename: String(row.filename || ''),
             detail: String(row.detail || 'Rebuild this table on the current file.'),
           }));
-        setStaleTables(current => [...current, ...refused, ...settled.stale]);
+        setStaleTables(current => uniqueStale([...current, ...refused, ...settled.stale]));
         const nextTables = distinctTables(ready.map(row => row.table));
         setTables(nextTables);
         setSegmentId(null);
@@ -4436,16 +4446,39 @@ function ReportScreen({
     row => picked.includes(row.id) && Object.keys(row.spec || {}).length > 0
   );
 
-  const rebuildStale = async (table: StaleTable) => {
+  const rebuildStale = async (table: StaleTable, targetId?: string) => {
     setBusy(`rebuild-${table.id}`);
     setError('');
     setStaleErrors(current => ({ ...current, [table.id]: '' }));
     try {
-      await flowJson(`/datasets/${datasetId}/tables/${table.id}/rebuild`, {
+      const result = await flowJson<{
+        ok?: boolean;
+        blocked?: boolean;
+        detail?: string;
+        clean_dataset_id?: string;
+        clean_filename?: string;
+        table_number?: number;
+      }>(`/datasets/${datasetId}/tables/${table.id}/rebuild`, {
         method: 'POST',
+        body: JSON.stringify(targetId ? { dataset_id: targetId } : {}),
       });
+      if (result.blocked) {
+        const message = result.detail || 'This file has a scale problem.';
+        setStaleErrors(current => ({ ...current, [table.id]: message }));
+        if (result.clean_dataset_id) {
+          setRebuildOffers(current => ({
+            ...current,
+            [table.id]: {
+              id: result.clean_dataset_id || '',
+              filename: result.clean_filename || 'the latest file',
+            },
+          }));
+        }
+        return;
+      }
+      const number = result.table_number || table.number;
       setRefreshKey(key => key + 1);
-      setNote(`T${table.number} rebuilt on the current file.`);
+      setNote(`T${number} rebuilt.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not rebuild that table';
       setStaleErrors(current => ({ ...current, [table.id]: message }));
@@ -4855,7 +4888,11 @@ function ReportScreen({
           {staleTables.length ? (
             <div className="report-stale-list">
               {staleTables.map(table => (
-                <article key={table.id} className="report-finding report-stale" role="status">
+                <article
+                  key={staleCardKey(table)}
+                  className="report-finding report-stale"
+                  role="status"
+                >
                   <div className="report-finding-copy">
                     <p className="flow-muted">
                       T{table.number}
@@ -4871,9 +4908,13 @@ function ReportScreen({
                         className="report-chip accent"
                         type="button"
                         disabled={busy !== ''}
-                        onClick={() => void rebuildStale(table)}
+                        onClick={() => void rebuildStale(table, rebuildOffers[table.id]?.id)}
                       >
-                        {staleErrors[table.id] ? 'Retry' : 'Rebuild on current file'}
+                        {rebuildOffers[table.id]
+                          ? `Rebuild on ${rebuildOffers[table.id].filename}`
+                          : staleErrors[table.id]
+                            ? 'Retry'
+                            : 'Rebuild on current file'}
                       </Button>
                       <Link
                         className="report-chip"

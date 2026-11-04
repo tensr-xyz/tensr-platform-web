@@ -2015,8 +2015,8 @@ export function TablesBuilder({
                   <span>{spec.label || spec.name || id}</span>
                   {spec.stale ? (
                     <span className="flow-muted">Rebuild</span>
-                  ) : spec.dataset_id && spec.dataset_id !== datasetId ? (
-                    <span className="flow-muted">on {spec.filename || 'another file'}</span>
+                  ) : spec.filename ? (
+                    <span className="flow-muted">{spec.filename}</span>
                   ) : null}
                 </span>
               </Button>
