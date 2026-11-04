@@ -175,6 +175,8 @@ type DatasetRow = {
   n_cols?: number;
   project_id?: string;
   updated_at?: string;
+  created_at?: string;
+  source_filenames?: string[];
   parent_dataset_id?: string | null;
   origin_dataset_id?: string | null;
   lineage_label?: string | null;
@@ -495,10 +497,28 @@ export function FlowApp({ slug }: { slug: string[] }) {
           dataset_id: row.dataset_id || row.id,
           project_id: row.project_id || projectId,
         }));
-        setDatasets(current => [
-          ...current.filter(row => !rows.some(item => datasetRowId(item) === datasetRowId(row))),
-          ...rows,
-        ]);
+        setDatasets(current => {
+          const previous = new Map(current.map(row => [datasetRowId(row), row]));
+          const merged = rows.map(row => {
+            const prior = previous.get(datasetRowId(row));
+            const incomingName = (row.original_filename || '').trim();
+            const priorName = (prior?.original_filename || '').trim();
+            return {
+              ...prior,
+              ...row,
+              original_filename: incomingName || priorName,
+              source_filenames: row.source_filenames?.length
+                ? row.source_filenames
+                : prior?.source_filenames,
+            };
+          });
+          return [
+            ...current.filter(
+              row => !merged.some(item => datasetRowId(item) === datasetRowId(row))
+            ),
+            ...merged,
+          ];
+        });
         setProjectReady(projectId);
       })
       .catch(() => {
@@ -2375,6 +2395,7 @@ function ChatScreen({
   const [attachedNote, setAttachedNote] = useState('');
   const attachmentsRef = useRef<AgentLoopAttachment[]>([]);
   attachmentsRef.current = attachments;
+  const sessionRef = useRef<string | null>(null);
   const askedRef = useRef<string | null>(null);
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
   const [recipes, setRecipes] = useState<FlowRecipe[] | null>(null);
@@ -2459,6 +2480,7 @@ function ChatScreen({
           datasetId: datasetId || null,
           attachments: turnFiles,
           agentVersion: 'v2',
+          sessionId: sessionRef.current,
           signal: AbortSignal.timeout(120_000),
           onProgress: progress => {
             const line = progress.message || progress.step;
@@ -2476,6 +2498,7 @@ function ChatScreen({
             setStatus(null);
           },
         });
+        if (result.session_id) sessionRef.current = result.session_id;
         setAnswer(result.answer_markdown || '');
         setPlan(result.status === 'awaiting_approval' ? result : null);
         setTurn(result.status === 'awaiting_approval' ? null : result);
@@ -2641,6 +2664,7 @@ function ChatScreen({
   };
 
   const clearChat = () => {
+    sessionRef.current = null;
     setSent('');
     setAttachedNote('');
     setAnswer('');
@@ -2660,6 +2684,7 @@ function ChatScreen({
   const baseNote = outputBaseNote(answer);
   const stat = outputStat(turn?.tool_results, answer, takeaway);
   const runIds = outputRunIds(turn?.tool_results);
+  const outputReady = Boolean(turn?.status === 'ok' && !plan && runIds.length);
   const checks = outputChecks(turn?.tool_results);
   const tables = answerTables(answer);
   const thread = answerWithoutBase(panelOpen && tables ? answerWithoutTables(answer) : answer);
@@ -2827,7 +2852,7 @@ function ChatScreen({
                     </div>
                   </div>
                 ) : null}
-                {answer && !plan ? (
+                {outputReady ? (
                   <div className="chat-result">
                     <div className="chat-result-top">
                       <span className="chat-result-icon" aria-hidden="true">
@@ -2889,7 +2914,7 @@ function ChatScreen({
             </div>
           </section>
           <aside className="flow-output" hidden={!panelOpen}>
-            {answer && !plan && tableMode ? (
+            {outputReady && tableMode ? (
               <>
                 <div className="output-tabs">
                   <span className="output-tab">T1 {title}</span>
@@ -2943,7 +2968,7 @@ function ChatScreen({
                   <Link href={`${projectHref}/tables`}>Open in Tables</Link>
                 </div>
               </>
-            ) : answer && !plan ? (
+            ) : outputReady ? (
               <>
                 <div className="output-lead">
                   <div className="output-kicker">
@@ -3691,7 +3716,7 @@ function ResponsesScreen({
               files={projectDatasets.map(row => ({
                 id: datasetRowId(row),
                 name: row.original_filename || datasetRowId(row),
-                createdAt: row.updated_at,
+                createdAt: row.created_at,
                 updatedAt: row.updated_at,
                 lineageLabel: row.lineage_label,
                 producingOperation: row.producing_operation,
@@ -4219,9 +4244,24 @@ function ReportScreen({
         const labels = Object.fromEntries(
           (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
         );
-        const settled = await loadTablesSettled(rows, row =>
-          flowJson<Record<string, unknown>>(`/datasets/${row.datasetId}/tables/${row.id}`)
+        const opened = await flowJson<{
+          tables?: { ok?: boolean; spec_id?: string; book?: Record<string, unknown> }[];
+        }>(`/api/projects/${projectId}/tables/open`, {
+          method: 'POST',
+          body: JSON.stringify({
+            tables: rows.map(row => ({ spec_id: row.id, dataset_id: row.datasetId })),
+          }),
+        }).catch(() => null);
+        const byId = new Map(
+          (opened?.tables || [])
+            .filter(item => item.ok && item.book && item.spec_id)
+            .map(item => [item.spec_id, item.book as Record<string, unknown>])
         );
+        const settled = await loadTablesSettled(rows, row => {
+          const cached = byId.get(row.id);
+          if (cached) return Promise.resolve(cached);
+          return flowJson<Record<string, unknown>>(`/datasets/${row.datasetId}/tables/${row.id}`);
+        });
         if (!live) return;
         const ready = settled.ready.map(({ row, detail }, index) => {
           const note = tableFileNote(row, datasetId);
@@ -4361,7 +4401,12 @@ function ReportScreen({
         method: 'POST',
         body: JSON.stringify({
           name: 'Banner book',
-          specs: selected.map(row => row.spec).filter(spec => Object.keys(spec).length),
+          specs: selected
+            .map(row => ({
+              ...row.spec,
+              dataset_id: (row.spec.dataset_id as string | undefined) || row.datasetId || datasetId,
+            }))
+            .filter(spec => Object.keys(spec).length),
         }),
       }
     );

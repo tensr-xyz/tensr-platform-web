@@ -130,7 +130,8 @@ function cellFigure(
 function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[] {
   const groups: { label: string; span: number }[] = [];
   for (const column of columns) {
-    const label = column.id === 'total' ? '' : String(column.codes?.[0]?.column || '');
+    const label =
+      column.id === 'total' ? '' : String(column.column_label || column.codes?.[0]?.column || '');
     const last = groups[groups.length - 1];
     if (last && last.label === label) last.span += 1;
     else groups.push({ label, span: 1 });
@@ -206,7 +207,18 @@ export function BannerGrid({
         const sample = rows
           .flatMap(row => row.cells || [])
           .find(cell => cell.banner_id === column.id);
-        return <td key={column.id}>{sample?.column_unweighted_n ?? '—'}</td>;
+        const weight = book.weight as { weight_aware?: boolean } | undefined;
+        const weighted = sample?.column_weighted_n;
+        const unweighted = sample?.column_unweighted_n;
+        const weightedShown =
+          typeof weighted === 'number' ? Math.round(weighted).toLocaleString('en-GB') : null;
+        const unweightedShown =
+          typeof unweighted === 'number' ? Math.round(unweighted).toLocaleString('en-GB') : null;
+        const text =
+          weight?.weight_aware && weightedShown
+            ? `${weightedShown} (${unweightedShown ?? '—'})`
+            : (unweightedShown ?? '—');
+        return <td key={column.id}>{text}</td>;
       })}
     </tr>
   );
@@ -1658,13 +1670,19 @@ export function TablesBuilder({
     }
     const id = String(spec?.id || '');
     if (id) {
+      const assigned = Number(body.table_number);
       setSpecs(current =>
         current.some(item => (item.spec_id || item.id) === id)
           ? current
-          : numberTables([
-              { spec_id: id, label: spec?.label || stubColumn || stub, dataset_id: datasetId },
+          : [
+              {
+                spec_id: id,
+                label: spec?.label || stubColumn || stub,
+                dataset_id: datasetId,
+                ...(Number.isFinite(assigned) && assigned > 0 ? { number: assigned } : {}),
+              },
               ...current,
-            ])
+            ]
       );
     }
   }

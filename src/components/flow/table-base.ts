@@ -12,9 +12,7 @@ export type TableBaseBook = {
 };
 
 function formatBase(value: number): string {
-  const whole = Math.round(value);
-  if (Math.abs(value - whole) < 1e-6) return whole.toLocaleString('en-GB');
-  return value.toLocaleString('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  return Math.round(value).toLocaleString('en-GB');
 }
 
 /** "Base: …" once. A label that already starts with base is not prefixed again. */
@@ -30,7 +28,11 @@ export function baseLineFromLabel(label: string): string {
 export function footFromBaseLabel(label: string): string {
   const weighted = label.match(/([\d,.]+)\s*weighted\s*\(\s*unweighted\s*([\d,.]+)\s*\)/i);
   if (weighted) {
-    return `${weighted[1]} weighted (${weighted[2]} unweighted)`;
+    const asInt = (raw: string) => {
+      const number = Number(raw.replace(/,/g, ''));
+      return Number.isFinite(number) ? Math.round(number).toLocaleString('en-GB') : raw;
+    };
+    return `${asInt(weighted[1])} weighted (${asInt(weighted[2])} unweighted)`;
   }
   const unweighted = label.match(/Unweighted,\s*n\s*=\s*([\d,.]+)/i);
   if (unweighted) {

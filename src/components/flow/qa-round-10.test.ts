@@ -97,7 +97,7 @@ describe('QA round 10: footer matches the table base, not the file n', () => {
         weight: { weight_aware: true, weighted_n: 900, unweighted_n: 900 },
         respondent_n: 900,
       },
-      '295.5',
+      '296',
       '293',
     ],
     [
@@ -115,7 +115,7 @@ describe('QA round 10: footer matches the table base, not the file n', () => {
       {
         weight: { weight_aware: true, weighted_n: 54.2, unweighted_n: 50 },
       },
-      '54.2',
+      '54',
       '50',
     ],
   ])('%s', (_name, book, weighted, unweighted) => {

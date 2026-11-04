@@ -1,6 +1,7 @@
 export type BannerColumn = {
   id: string;
   label?: string;
+  column_label?: string;
   letter_slot?: string;
   codes?: { column?: string; code?: string }[];
 };
@@ -14,6 +15,7 @@ export type BannerCell = {
   mean?: number | null;
   low_base?: boolean;
   column_unweighted_n?: number;
+  column_weighted_n?: number;
   unweighted_n?: number;
   provenance?: {
     row_uid_bitset?: string;
