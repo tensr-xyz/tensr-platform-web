@@ -44,17 +44,25 @@ export async function loadProjectTables(
   projectId: string | undefined,
   datasetId: string | undefined
 ): Promise<ProjectTable[]> {
-  if (projectId) {
-    const page = await flowJson<{ specs?: RawRow[] }>(`/api/projects/${projectId}/tables`).catch(
-      () => null
-    );
-    if (page) return projectTableRows(page.specs);
-  }
-  if (!datasetId) return [];
-  const page = await flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => ({
-    specs: [] as RawRow[],
-  }));
-  return projectTableRows(page.specs, datasetId);
+  // Both lists, merged: the project's (every file) and the open file's own, so a gap in one never empties the rail.
+  const [projectPage, filePage] = await Promise.all([
+    projectId
+      ? flowJson<{ specs?: RawRow[] }>(`/api/projects/${projectId}/tables`).catch(() => null)
+      : Promise.resolve(null),
+    datasetId
+      ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  return mergeTableLists(
+    projectTableRows(projectPage?.specs),
+    projectTableRows(filePage?.specs, datasetId)
+  );
+}
+
+/** Project tables first (newest first); the open file's tables the project list missed go on top. */
+export function mergeTableLists(project: ProjectTable[], file: ProjectTable[]): ProjectTable[] {
+  const known = new Set(project.map(table => `${table.datasetId}:${table.id}`));
+  return [...file.filter(table => !known.has(`${table.datasetId}:${table.id}`)), ...project];
 }
 
 /** "on cars_EN - weighted 3 Nov" for a table built on another file than the one open. */

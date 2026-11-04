@@ -39,28 +39,81 @@ const foldLabel = (text: string) => text.trim().replace(/\s+/g, ' ').toLowerCase
  * How one file's codes and value labels differ from the reference file's, or null when they agree.
  * A translated label counts as a difference: the codes may mean something else in that file.
  */
-export function labelDifferences(reference: WaveColumn, other: WaveColumn): string | null {
+/** How two files' codes compare for one column. */
+export type CodeCompare = {
+  /** Codes in the other file that the reference file does not have. */
+  extra: string[];
+  /** Codes the reference file has that the other file does not. */
+  missing: string[];
+  /** Same codes, different label text (usually a translation). */
+  relabelled: string[];
+};
+
+export function compareCodes(reference: WaveColumn, other: WaveColumn): CodeCompare | null {
   const left = reference.value_labels || {};
   const right = other.value_labels || {};
   const a = Object.keys(left);
   const b = Object.keys(right);
   if (!a.length || !b.length) return null;
-  const parts: string[] = [];
-  const onlyRight = b.filter(key => !(key in left));
-  const onlyLeft = a.filter(key => !(key in right));
-  if (onlyRight.length) parts.push(`codes ${onlyRight.slice(0, 3).join(', ')} only here`);
-  if (onlyLeft.length) parts.push(`codes ${onlyLeft.slice(0, 3).join(', ')} missing`);
-  const relabelled = a.filter(
-    key => key in right && foldLabel(left[key]) !== foldLabel(right[key])
-  );
-  for (const key of relabelled.slice(0, 3)) parts.push(`${key} = ${left[key]} / ${right[key]}`);
-  if (relabelled.length > 3) parts.push(`${relabelled.length - 3} more`);
-  return parts.length ? parts.join('; ') : null;
+  return {
+    extra: b.filter(key => !(key in left)),
+    missing: a.filter(key => !(key in right)),
+    relabelled: a.filter(key => key in right && foldLabel(left[key]) !== foldLabel(right[key])),
+  };
 }
 
-function labelReason(left: WaveColumn, right: WaveColumn): string | null {
-  const differences = labelDifferences(left, right);
-  return differences ? `Codes or labels differ: ${differences}` : null;
+/** A real mismatch: the code lists differ. Translated labels on the same codes are not one. */
+export function codesMismatch(compare: CodeCompare | null): boolean {
+  return Boolean(compare && (compare.extra.length || compare.missing.length));
+}
+
+/** Short per-code diff, e.g. "code 4 (South-East) only in cars_DE". */
+export function codeDiffText(
+  compare: CodeCompare,
+  other: WaveColumn,
+  otherName: string,
+  referenceName: string
+): string {
+  const named = (code: string) =>
+    other.value_labels?.[code] ? `${code} (${other.value_labels[code]})` : code;
+  const parts: string[] = [];
+  if (compare.extra.length)
+    parts.push(
+      `${compare.extra.length === 1 ? 'code' : 'codes'} ${compare.extra
+        .slice(0, 3)
+        .map(named)
+        .join(', ')} only in ${otherName}`
+    );
+  if (compare.missing.length)
+    parts.push(
+      `${compare.missing.length === 1 ? 'code' : 'codes'} ${compare.missing
+        .slice(0, 3)
+        .join(', ')} only in ${referenceName}`
+    );
+  return parts.join('; ');
+}
+
+/** One line: the code mismatch, "labels translated", or null when the codes and labels agree. */
+export function labelDifferences(reference: WaveColumn, other: WaveColumn): string | null {
+  const compare = compareCodes(reference, other);
+  if (!compare) return null;
+  if (codesMismatch(compare)) return codeDiffText(compare, other, 'this file', 'the first file');
+  return compare.relabelled.length ? 'labels translated' : null;
+}
+
+function labelReason(
+  left: WaveColumn,
+  right: WaveColumn,
+  leftName: string,
+  rightName: string
+): { reason: string; mismatch: boolean } | null {
+  const compare = compareCodes(left, right);
+  if (!compare) return null;
+  if (codesMismatch(compare))
+    return { reason: codeDiffText(compare, right, rightName, leftName), mismatch: true };
+  return compare.relabelled.length
+    ? { reason: 'Same codes · labels translated', mismatch: false }
+    : null;
 }
 
 /** Every code either file uses, numbers in order. */
@@ -110,13 +163,13 @@ export function compareWaves(
       });
       continue;
     }
-    const reason = labelReason(column, other);
+    const reason = labelReason(column, other, leftName, rightName);
     rows.push({
       id: `${name}\t${name}`,
       left: name,
       right: name,
-      reason: reason || 'Same name',
-      kind: reason ? 'check' : 'matched',
+      reason: reason?.reason || 'Same name',
+      kind: reason?.mismatch ? 'check' : 'matched',
       labelsDiffer: Boolean(reason),
     });
   }
@@ -182,7 +235,37 @@ export function stackRecodes(
 export type StackFile = MovableDataset & {
   parent_dataset_id?: string | null;
   archived?: boolean;
+  n_rows?: number;
+  n_cols?: number;
 };
+
+/** The same upload listed twice (same name and shape) shows once; the first listed wins. */
+export function dedupeUploads(rows: StackFile[]): StackFile[] {
+  const seen = new Set<string>();
+  return rows.filter(row => {
+    const key = `${(row.original_filename || '').toLowerCase()}|${row.n_rows ?? ''}|${row.n_cols ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+/** Columns two files share, ignoring system columns that start with "_". */
+export function sharedColumnShare(left: WaveColumn[], right: WaveColumn[]): number {
+  const names = (list: WaveColumn[]) =>
+    new Set(list.map(column => column.name).filter(name => name && !name.startsWith('_')));
+  const a = names(left);
+  const b = names(right);
+  if (!a.size || !b.size) return 0;
+  let shared = 0;
+  for (const name of a) if (b.has(name)) shared += 1;
+  return shared / Math.min(a.size, b.size);
+}
+
+/** An upload from another project is offered when it shares at least half its columns with one here. */
+export function overlapsAny(columns: WaveColumn[], references: WaveColumn[][]): boolean {
+  return references.some(reference => sharedColumnShare(columns, reference) >= 0.5);
+}
 
 /** Original uploads first: this project's, then the ones in your other projects. */
 export function stackCandidates(datasets: StackFile[], projectId: string) {
@@ -225,20 +308,35 @@ export function compareManyWaves(files: { name: string; columns: WaveColumn[] }[
       .map(file => ({ file, column: file.columns.find(column => column.name === name) }))
       .filter(item => item.column);
     const reference = having[0]?.column;
-    const differing = having
-      .slice(1)
-      .map(item => ({ file: item.file, why: labelDifferences(reference!, item.column!) }))
-      .filter(item => item.why);
+    const compared = having.slice(1).map(item => ({
+      file: item.file,
+      column: item.column!,
+      compare: compareCodes(reference!, item.column!),
+    }));
+    const mismatched = compared.filter(item => codesMismatch(item.compare));
+    const translated = compared.filter(
+      item => !codesMismatch(item.compare) && item.compare?.relabelled.length
+    );
     const reasons: string[] = [];
     if (missing.length) reasons.push(`Not in ${missing.map(file => file.name).join(', ')}`);
-    for (const item of differing.slice(0, 2)) reasons.push(`${item.file.name}: ${item.why}`);
+    // One line per distinct difference: "code 4 (South-East) only in cars_DE, cars_FR".
+    const lines = new Map<string, string[]>();
+    for (const item of mismatched) {
+      const text = codeDiffText(item.compare!, item.column, '{files}', having[0].file.name);
+      lines.set(text, [...(lines.get(text) || []), item.file.name]);
+    }
+    for (const [text, files] of lines) reasons.push(text.replace('{files}', files.join(', ')));
+    if (!reasons.length && translated.length)
+      reasons.push(
+        `Same codes · labels translated in ${translated.map(item => item.file.name).join(', ')}`
+      );
     return {
       id: `${name}\t`,
       left: inFirst ? name : EMPTY,
       right: inFirst ? (missing.length ? EMPTY : name) : name,
       reason: reasons.length ? reasons.join('. ') : 'In every file',
-      kind: missing.length ? (inFirst ? 'check' : 'new') : differing.length ? 'check' : 'matched',
-      labelsDiffer: differing.length > 0,
+      kind: missing.length ? (inFirst ? 'check' : 'new') : mismatched.length ? 'check' : 'matched',
+      labelsDiffer: mismatched.length + translated.length > 0,
     } as WaveDiff;
   });
 }
@@ -256,10 +354,13 @@ export function StackWaves({
   onChanged: () => void;
   onDone: () => void;
 }) {
-  const { here, elsewhere } = useMemo(
-    () => stackCandidates(datasets, projectId),
-    [datasets, projectId]
+  const candidates = useMemo(() => stackCandidates(datasets, projectId), [datasets, projectId]);
+  const here = useMemo(() => dedupeUploads(candidates.here), [candidates.here]);
+  // Projects not on the first page of the project list: look their names up; archived or gone ones are hidden.
+  const [projectInfo, setProjectInfo] = useState<Record<string, { name: string; active: boolean }>>(
+    {}
   );
+  const [lookupsDone, setLookupsDone] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [columnsById, setColumnsById] = useState<Record<string, WaveColumn[]>>({});
   const [choices, setChoices] = useState<Record<string, Decision>>({});
@@ -271,6 +372,75 @@ export function StackWaves({
   const [dedupe, setDedupe] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const otherIds = candidates.elsewhere.map(row => datasetRowId(row)).join('|');
+  useEffect(() => {
+    let cancelled = false;
+    const unknown = [
+      ...new Set(
+        candidates.elsewhere
+          .map(row => row.project_id || '')
+          .filter(id => id && !(id in projectNames))
+      ),
+    ];
+    const fileIds = candidates.elsewhere.map(row => datasetRowId(row));
+    void Promise.all([
+      Promise.all(
+        unknown.map(id =>
+          flowJson<{ project?: { name?: string; status?: string } }>(`/api/projects/${id}`)
+            .then(page => [id, page.project] as const)
+            .catch(() => [id, undefined] as const)
+        )
+      ),
+      Promise.all(
+        fileIds.map(id =>
+          flowJson<{ columns?: WaveColumn[] }>(`/datasets/${id}/metadata`)
+            .then(meta => [id, meta.columns || []] as const)
+            .catch(() => [id, [] as WaveColumn[]] as const)
+        )
+      ),
+    ]).then(([projects, columns]) => {
+      if (cancelled) return;
+      setProjectInfo(
+        Object.fromEntries(
+          projects.map(([id, project]) => [
+            id,
+            {
+              name: project?.name || '',
+              active: Boolean(project) && (project?.status || 'active') === 'active',
+            },
+          ])
+        )
+      );
+      setColumnsById(current => ({ ...Object.fromEntries(columns), ...current }));
+      setLookupsDone(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // otherIds covers the candidates; projectNames only grows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otherIds]);
+
+  const projectLabel = (id?: string | null) =>
+    projectNames[id || ''] || projectInfo[id || '']?.name || '';
+  const references = (picked.length ? picked : here.map(row => datasetRowId(row)))
+    .map(id => columnsById[id])
+    .filter((list): list is WaveColumn[] => Boolean(list));
+  const elsewhere = dedupeUploads(
+    candidates.elsewhere.filter(row => {
+      const id = row.project_id || '';
+      const known = id in projectNames || projectInfo[id]?.active;
+      const columns = columnsById[datasetRowId(row)];
+      // A picked file always stays listed so it can be unticked.
+      if (picked.includes(datasetRowId(row))) return true;
+      return (
+        Boolean(known) &&
+        Boolean(columns) &&
+        (!references.length || overlapsAny(columns!, references))
+      );
+    })
+  );
 
   useEffect(() => {
     if (picked.length || here.length < 2) return;
@@ -419,11 +589,7 @@ export function StackWaves({
           onCheckedChange={checked => toggle(id, checked === true)}
         />
         <span>{row.original_filename || id}</span>
-        {other ? (
-          <span className="flow-muted">
-            {projectNames[row.project_id || ''] || 'Another project'}
-          </span>
-        ) : null}
+        {other ? <span className="flow-muted">{projectLabel(row.project_id)}</span> : null}
       </label>
     );
   };
@@ -444,7 +610,12 @@ export function StackWaves({
         ) : (
           <p className="flow-muted">No uploads here yet.</p>
         )}
-        {elsewhere.length ? (
+        {!lookupsDone && candidates.elsewhere.length ? (
+          <>
+            <p className="stack-picker-label">Your other projects</p>
+            <Skeleton className="h-6 w-full" />
+          </>
+        ) : elsewhere.length ? (
           <>
             <p className="stack-picker-label">Your other projects</p>
             {elsewhere.map(row => fileRow(row, true))}
