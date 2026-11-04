@@ -66,23 +66,55 @@ export function codingVersionsFor(files: CodingFile[], openId: string | undefine
     .sort((left, right) => codingStamp(right) - codingStamp(left));
 }
 
+export function codingDateLabel(row: {
+  createdAt?: string | null;
+  updatedAt?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}): string {
+  const stamp = codingStamp(row);
+  if (!stamp) return '';
+  return new Date(stamp).toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export function codingVersionStatus(
   files: CodingFile[],
   inUseId: string | undefined
-): { inUseLabel: string; newerAvailable: boolean } {
+): {
+  inUseLabel: string;
+  newerAvailable: boolean;
+  newerId?: string;
+  newerLabel?: string;
+} {
   const coded = codingVersionsFor(files, inUseId);
   const inUse = files.find(file => file.id === inUseId) || null;
-  const label =
+  const raw =
     (inUse && isCodingVersion(inUse)
       ? inUse.lineageLabel || inUse.name
       : coded.find(file => file.id === inUseId)?.lineageLabel) ||
     inUse?.name ||
     '';
+  const date = inUse ? codingDateLabel(inUse) : '';
+  const label =
+    raw && date && !raw.toLowerCase().includes(date.toLowerCase()) ? `${raw} · ${date}` : raw;
   const newest = coded[0];
   const newerAvailable = Boolean(
     newest && inUseId && newest.id !== inUseId && codingStamp(newest) > codingStamp(inUse || {})
   );
-  return { inUseLabel: label, newerAvailable };
+  return {
+    inUseLabel: label,
+    newerAvailable,
+    newerId: newerAvailable ? newest?.id : undefined,
+    newerLabel: newerAvailable
+      ? `${newest?.lineageLabel || newest?.name || 'Newer coding'}${
+          newest ? ` · ${codingDateLabel(newest)}` : ''
+        }`
+      : undefined,
+  };
 }
 
 /** After coding review Done: only adopt the new file when it is at least as new as the one in use. */

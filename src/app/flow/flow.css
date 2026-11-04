@@ -1608,6 +1608,23 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   font-size: 13px;
 }
 
+.flow-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.flow-banner.warn {
+  background: #f6ede2;
+  color: var(--color-warn, #8a4b12);
+}
+
 .flow-status {
   color: var(--color-muted);
   font-size: 13px;

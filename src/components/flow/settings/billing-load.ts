@@ -69,6 +69,29 @@ export function loadBilling(): Promise<BillingData> {
   });
 }
 
+/** Subscription alone — for painting the plan card as soon as that call returns. */
+export function peekSubscription() {
+  return settingsCache.peek<LegacySubscription | null>(cacheKey('subscription'));
+}
+
+export function loadBillingPlanCard(): Promise<{
+  subscription: LegacySubscription | null;
+  me: MePage | null;
+  ms: number;
+}> {
+  const started = typeof performance !== 'undefined' ? performance.now() : Date.now();
+  return loadSubscription().then(subscription => {
+    const ended = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    // Warm /me in the background; the plan card does not wait on it.
+    void loadMe().catch(() => undefined);
+    return {
+      subscription,
+      me: settingsCache.peek<MePage>(cacheKey('me')) || null,
+      ms: ended - started,
+    };
+  });
+}
+
 /** Stripe's invoice list — only when Billing opens the invoices block. */
 export function loadInvoices(): Promise<Invoice[] | null> {
   return settingsCache.get(cacheKey('invoices'), () =>

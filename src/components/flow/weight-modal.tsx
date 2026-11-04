@@ -129,11 +129,14 @@ export function WeightPanel({
   datasets,
   onClose,
   onAdopted,
+  rerake = false,
 }: {
   datasetId?: string;
   datasets: WeightDataset[];
   onClose: () => void;
   onAdopted?: (datasetId: string) => void;
+  /** Prefill the same targets from the file's weight record and focus on saving a new version. */
+  rerake?: boolean;
 }) {
   const [columns, setColumns] = useState<{ name: string; label?: string }[]>([]);
   const [labels, setLabels] = useState<Record<string, Record<string, string>>>({});
@@ -163,15 +166,24 @@ export function WeightPanel({
     .filter(Boolean)
     .join(' · ');
 
+  const loadColumn = (column: string, fileId: string) =>
+    flowJson<FrequencyBody>(`/datasets/${fileId}/explore/column_frequencies`, {
+      method: 'POST',
+      body: JSON.stringify({ column }),
+    });
+
   useEffect(() => {
     if (!datasetId) return;
     void flowJson<{
       columns?: { name?: string; label?: string; value_labels?: Record<string, string> | null }[];
       weight_columns?: string[];
       active_weight_column?: string | null;
-      weight_vector?: { needs_refresh?: boolean } | null;
+      weight_vector?: {
+        needs_refresh?: boolean;
+        diagnostics?: { targets?: Record<string, Record<string, number>> };
+      } | null;
     }>(`/datasets/${datasetId}/metadata`)
-      .then(meta => {
+      .then(async meta => {
         const listed = (meta.columns || []).filter(column => column.name);
         setColumns(listed.map(column => ({ name: column.name || '', label: column.label || '' })));
         setLabels(
@@ -182,16 +194,38 @@ export function WeightPanel({
             (name, index, all) => Boolean(name) && name !== '_weight' && all.indexOf(name) === index
           )
         );
-        setNeedsRefresh(Boolean(meta.weight_vector?.needs_refresh));
+        const refresh = Boolean(meta.weight_vector?.needs_refresh);
+        setNeedsRefresh(refresh);
+        const stored = meta.weight_vector?.diagnostics?.targets;
+        if (!(rerake || refresh) || !stored || !Object.keys(stored).length) return;
+        const loaded = await Promise.all(
+          Object.entries(stored).map(async ([column, levels]) => {
+            const body = await loadColumn(column, datasetId);
+            const codes = (body.frequencies || []).map(row => ({
+              code: String(row.value),
+              count: Number(row.count || 0),
+              percentage: Number(row.percentage || 0),
+            }));
+            const total = Number(
+              body.total_count || codes.reduce((sum, row) => sum + row.count, 0)
+            );
+            const targetSum = Object.values(levels).reduce((sum, value) => sum + Number(value), 0);
+            const columnPercents = Object.fromEntries(
+              Object.entries(levels).map(([code, value]) => [
+                code,
+                String(Math.round((Number(value) / (targetSum || 1)) * 1000) / 10),
+              ])
+            );
+            return { column, total, codes, columnPercents };
+          })
+        );
+        setGroups(
+          loaded.map(item => ({ column: item.column, total: item.total, codes: item.codes }))
+        );
+        setPercents(Object.fromEntries(loaded.map(item => [item.column, item.columnPercents])));
       })
       .catch(() => setColumns([]));
-  }, [datasetId]);
-
-  const loadColumn = (column: string, fileId: string) =>
-    flowJson<FrequencyBody>(`/datasets/${fileId}/explore/column_frequencies`, {
-      method: 'POST',
-      body: JSON.stringify({ column }),
-    });
+  }, [datasetId, rerake]);
 
   const addTarget = () => {
     if (!datasetId || !addColumn || groups.some(group => group.column === addColumn)) return;
@@ -382,10 +416,10 @@ export function WeightPanel({
             </div>
           </div>
           <p className="weight-note">Nothing is overwritten. Outputs keep the file they ran on.</p>
-          {needsRefresh ? (
-            <p className="weight-note weight-refresh" role="status">
-              Made before a weighting fix · re-run. Set the same targets below and save a new
-              weighted file so every table reads the same base.
+          {needsRefresh || rerake ? (
+            <p className="flow-banner warn weight-refresh" role="status">
+              Made before a weighting fix · re-run. The same targets are filled in below — save to
+              switch to the new weighted file.
             </p>
           ) : null}
         </div>
