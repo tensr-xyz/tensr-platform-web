@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
 import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
+import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
 import {
   isIdColumn,
   openEndColumns,
@@ -137,7 +138,11 @@ function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[
 export function themeRows(rows: BannerRow[], notCoded?: number | null, sort = true): BannerRow[] {
   const total = (row: BannerRow) =>
     (row.cells || []).find(cell => cell.banner_id === 'total')?.unweighted_n ?? 0;
-  const sorted = sort ? [...rows].sort((left, right) => total(right) - total(left)) : [...rows];
+  // "No comment", "N/A" and the like are non-answers, left out of the base, so they are not theme rows.
+  const themes = rows.filter(
+    row => (row.kind || 'value') !== 'value' || !isNonAnswerTheme(String(row.label || ''))
+  );
+  const sorted = sort ? [...themes].sort((left, right) => total(right) - total(left)) : [...themes];
   // Zero is a count too: the row stays so people can see every answer has a theme.
   if (notCoded == null) return sorted;
   const sample = rows.flatMap(row => row.cells || []).find(cell => cell.banner_id === 'total');

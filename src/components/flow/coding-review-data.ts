@@ -105,24 +105,61 @@ function provenance(raw: unknown): Record<string, unknown> {
 
 /**
  * Text that is not an answer. The same list the API uses for the theme base
- * (_nonblank_answer_mask), so the review queue, the "not yet coded" count and the table agree.
+ * (app/non_answers.py), so the review queue, the "not yet coded" count and the table agree.
  */
 const NOT_AN_ANSWER = new Set([
   '',
   'nan',
-  'none',
   'null',
   '<na>',
-  'n/a',
   'na',
-  'no comment',
+  'n a',
+  'n/a',
+  'not applicable',
+  'none',
+  'none really',
+  'nil',
   'nothing',
-  '(blank)',
+  'nothing to add',
+  'nothing else',
+  'nothing more',
+  'nothing more to add',
+  'nothing else to add',
+  'nothing to say',
+  'nothing really',
+  'nothing in particular',
+  'nothing at all',
+  'no comment',
+  'no comments',
+  'no further comments',
+  'no other comments',
+  'no answer',
   'blank',
+  '(blank)',
+  '-',
+  '--',
+  '.',
 ]);
 
+function normalized(text: string): string {
+  const flat = text
+    .replace(/\u2019/g, "'")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+  if (NOT_AN_ANSWER.has(flat)) return flat;
+  return flat.replace(/^[\s.,!?\-"'`]+|[\s.,!?\-"'`]+$/g, '');
+}
+
 export function isAnswer(text: string): boolean {
-  return !NOT_AN_ANSWER.has(text.trim().toLowerCase());
+  return !NOT_AN_ANSWER.has(normalized(String(text ?? '')));
+}
+
+/** A theme that only names a non-answer ("No comment", "N/A"). Non-answers are out of the base, so not a theme. */
+export function isNonAnswerTheme(label: string | undefined, id?: string): boolean {
+  return [label, id]
+    .map(name => String(name || '').replace(/_/g, ' '))
+    .some(name => name.trim() !== '' && !isAnswer(name));
 }
 
 /** Uncoded answers from a preview page filtered to code column = "uncoded". */

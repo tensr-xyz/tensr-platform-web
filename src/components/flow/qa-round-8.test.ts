@@ -1,3 +1,5 @@
+import { isAnswer, isNonAnswerTheme } from './coding-review-data';
+import { themeRows } from './survey-screens';
 import {
   loadProjectTables,
   numberTables,
@@ -65,5 +67,37 @@ describe('QA round 8: tables load', () => {
 
   test('7: without file ids it falls back to the plain project list', () => {
     expect(projectTablesPath('p')).toBe('/api/projects/p/tables');
+  });
+});
+
+describe('QA round 8: non-answers', () => {
+  test.each([
+    'Nothing to add',
+    'nothing to add.',
+    'n/a',
+    'N/A',
+    'none',
+    'None.',
+    'no comment',
+    'No comments',
+  ])('8: "%s" is not an answer', text => expect(isAnswer(text)).toBe(false));
+
+  test.each(['No, the price was too high', 'Nothing beats the service'])(
+    '8: "%s" is an answer',
+    text => expect(isAnswer(text)).toBe(true)
+  );
+
+  test('8: the No comment theme is not in the frame', () => {
+    const cell = { banner_id: 'total', unweighted_n: 9, column_unweighted_n: 348 };
+    const rows = themeRows(
+      [
+        { id: 'no_comment', label: 'No comment', cells: [cell] },
+        { id: 'price', label: 'Price', cells: [cell] },
+      ] as never,
+      0
+    );
+    expect(rows.map(row => row.label)).toEqual(['Price', 'Not yet coded']);
+    expect(isNonAnswerTheme('Nothing to add')).toBe(true);
+    expect(isNonAnswerTheme('Price')).toBe(false);
   });
 });
