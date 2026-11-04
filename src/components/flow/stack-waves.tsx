@@ -29,7 +29,54 @@ export type WaveDiff = {
   kind: 'matched' | 'check' | 'new';
   /** The codes or their labels differ between files, so the column may need recoding. */
   labelsDiffer?: boolean;
+  /** Files whose mean sits at the other end of the scale: the scale may run the other way there. */
+  scaleFlip?: string[];
+  /** The scale's codes, low to high, for Reverse scale when a file has no value labels. */
+  scaleCodes?: string[];
 };
+
+/** From POST /datasets/intake/scale-check. */
+export type ScaleFlag = {
+  column: string;
+  low: number;
+  high: number;
+  means: Record<string, number>;
+  flip_ids: string[];
+};
+
+const formatMean = (value: number) => value.toFixed(1);
+
+/**
+ * After the label check: a column whose means sit at opposite ends of the scale across the files
+ * goes under "to check", with Recode to match and Reverse scale.
+ */
+export function applyScaleFlags(
+  rows: WaveDiff[],
+  flags: ScaleFlag[],
+  nameOf: (id: string) => string
+): WaveDiff[] {
+  const byColumn = new Map(flags.map(flag => [flag.column, flag]));
+  return rows.map(row => {
+    const column = row.left !== EMPTY ? row.left : row.right;
+    const flag = byColumn.get(column);
+    if (!flag || row.left === EMPTY || row.right === EMPTY) return row;
+    const means = Object.entries(flag.means)
+      .map(([id, mean]) => `${nameOf(id)} ${formatMean(mean)}`)
+      .join(', ');
+    const line = `Means at opposite ends of the ${flag.low}–${flag.high} scale (${means}). The scale may run the other way in ${flag.flip_ids.map(nameOf).join(', ')}`;
+    const plain = row.reason === 'Same name' || row.reason === 'In every file';
+    const codes: string[] = [];
+    for (let code = flag.low; code <= flag.high; code += 1) codes.push(String(code));
+    return {
+      ...row,
+      kind: 'check',
+      reason: plain ? line : `${row.reason}. ${line}`,
+      labelsDiffer: true,
+      scaleFlip: flag.flip_ids,
+      scaleCodes: codes,
+    };
+  });
+}
 
 const EMPTY = '—';
 
@@ -370,6 +417,7 @@ export function StackWaves({
     null
   );
   const [dedupe, setDedupe] = useState(true);
+  const [scaleFlags, setScaleFlags] = useState<ScaleFlag[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -494,13 +542,32 @@ export function StackWaves({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickedKey]);
 
+  useEffect(() => {
+    setScaleFlags([]);
+    if (picked.length < 2) return;
+    let cancelled = false;
+    void flowJson<{ flags?: ScaleFlag[] }>('/datasets/intake/scale-check', {
+      method: 'POST',
+      body: JSON.stringify({ dataset_ids: picked }),
+    })
+      .then(result => {
+        if (!cancelled) setScaleFlags(result.flags || []);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+    // pickedKey covers picked.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedKey]);
+
   const byId = new Map(datasets.map(row => [datasetRowId(row), row]));
   const nameOf = (id: string) => byId.get(id)?.original_filename || 'File';
   const clash = descendantClash(picked, datasets);
   const ready = picked.length >= 2 && picked.every(id => columnsById[id]);
   const visibleCols = (list: WaveColumn[]) =>
     list.filter(column => !String(column.name || '').startsWith('_'));
-  const rows = !ready
+  const labelRows = !ready
     ? []
     : picked.length === 2
       ? compareWaves(
@@ -512,6 +579,7 @@ export function StackWaves({
       : compareManyWaves(
           picked.map(id => ({ name: nameOf(id), columns: visibleCols(columnsById[id]) }))
         );
+  const rows = applyScaleFlags(labelRows, scaleFlags, nameOf);
   const counts = waveCounts(rows);
   const visible = showAll ? rows : rows.filter(row => row.kind !== 'matched');
   const toggle = (id: string, on: boolean) =>
@@ -521,14 +589,17 @@ export function StackWaves({
   const columnIn = (fileId: string, name: string) =>
     (columnsById[fileId] || []).find(column => column.name === name);
   /** Files whose codes or labels differ from the first file that has the column. */
-  const recodeFiles = (name: string) => {
+  const recodeFiles = (name: string, flipped: string[] = []) => {
     const having = picked.filter(id => columnIn(id, name));
     const reference = having[0] ? columnIn(having[0], name) : undefined;
     return {
       reference,
       others: having
         .slice(1)
-        .filter(id => reference && labelDifferences(reference, columnIn(id, name)!)),
+        .filter(
+          id =>
+            flipped.includes(id) || (reference && labelDifferences(reference, columnIn(id, name)!))
+        ),
     };
   };
   const setRecode = (rowId: string, fileId: string, mapping: Record<string, string>) =>
@@ -674,9 +745,23 @@ export function StackWaves({
                         <ChoiceSelect
                           aria-label={`Decision for ${row.left} ${row.right}`}
                           value={choice.decision}
-                          onValueChange={value =>
-                            setDecision(row.id, value as Decision['decision'], choice.target)
-                          }
+                          onValueChange={value => {
+                            if (value === 'reverse') {
+                              // Reverse scale: recode each flagged file 1→5, 2→4 … to match.
+                              const column = row.left !== EMPTY ? row.left : row.right;
+                              for (const fileId of row.scaleFlip || []) {
+                                const own = codeUniverse(columnIn(fileId, column));
+                                setRecode(
+                                  row.id,
+                                  fileId,
+                                  reversedCodes(own.length ? own : row.scaleCodes || [])
+                                );
+                              }
+                              setDecision(row.id, 'recode', choice.target);
+                              return;
+                            }
+                            setDecision(row.id, value as Decision['decision'], choice.target);
+                          }}
                           options={
                             oneSided && twoFiles
                               ? [
@@ -689,6 +774,9 @@ export function StackWaves({
                                   ...(row.labelsDiffer
                                     ? [{ value: 'recode', label: 'Recode to match' }]
                                     : []),
+                                  ...(row.scaleFlip?.length
+                                    ? [{ value: 'reverse', label: 'Reverse scale' }]
+                                    : []),
                                   { value: 'skip', label: 'Skip' },
                                 ]
                           }
@@ -696,11 +784,15 @@ export function StackWaves({
                         {choice.decision === 'recode'
                           ? (() => {
                               const column = row.left !== EMPTY ? row.left : row.right;
-                              const { reference, others } = recodeFiles(column);
-                              const targets = codeUniverse(reference);
+                              const { reference, others } = recodeFiles(column, row.scaleFlip);
+                              const targets = codeUniverse(reference).length
+                                ? codeUniverse(reference)
+                                : row.scaleCodes || [];
                               return others.map(fileId => {
                                 const own = columnIn(fileId, column);
-                                const codes = codeUniverse(own);
+                                const codes = codeUniverse(own).length
+                                  ? codeUniverse(own)
+                                  : row.scaleCodes || [];
                                 const mapping = recodeMaps[row.id]?.[fileId] || {};
                                 return (
                                   <div key={fileId} className="stack-recode">

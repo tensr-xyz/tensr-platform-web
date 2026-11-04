@@ -11,7 +11,8 @@ import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
-import { loadProjectTables } from '@/components/flow/project-tables';
+import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
+import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
 import {
   isIdColumn,
   openEndColumns,
@@ -137,7 +138,11 @@ function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[
 export function themeRows(rows: BannerRow[], notCoded?: number | null, sort = true): BannerRow[] {
   const total = (row: BannerRow) =>
     (row.cells || []).find(cell => cell.banner_id === 'total')?.unweighted_n ?? 0;
-  const sorted = sort ? [...rows].sort((left, right) => total(right) - total(left)) : [...rows];
+  // "No comment", "N/A" and the like are non-answers, left out of the base, so they are not theme rows.
+  const themes = rows.filter(
+    row => (row.kind || 'value') !== 'value' || !isNonAnswerTheme(String(row.label || ''))
+  );
+  const sorted = sort ? [...themes].sort((left, right) => total(right) - total(left)) : [...themes];
   // Zero is a count too: the row stays so people can see every answer has a theme.
   if (notCoded == null) return sorted;
   const sample = rows.flatMap(row => row.cells || []).find(cell => cell.banner_id === 'total');
@@ -1132,6 +1137,7 @@ type SavedSpec = {
   name?: string;
   dataset_id?: string;
   filename?: string;
+  number?: number;
 };
 type SavedBook = { id?: string; name?: string; n_specs?: number };
 
@@ -1422,6 +1428,8 @@ export function TablesBuilder({
   const [opening, setOpening] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
   const loadingSaved = useRef(false);
+  const fileIdsRef = useRef<string[]>([]);
+  fileIdsRef.current = (files || []).map(file => file.id);
 
   useEffect(() => {
     if (!datasetId) {
@@ -1438,19 +1446,24 @@ export function TablesBuilder({
     } catch {
       pendingOpen = '';
     }
+    const firstPage = pendingOpen
+      ? Promise.resolve({
+          specs: [] as SavedSpec[],
+          first: null as Record<string, unknown> | null,
+        })
+      : flowJson<{ specs?: SavedSpec[]; first?: Record<string, unknown> | null }>(
+          `/datasets/${datasetId}/tables?open_first=true`
+        ).catch(() => ({
+          specs: [] as SavedSpec[],
+          first: null as Record<string, unknown> | null,
+        }));
     void Promise.all([
-      pendingOpen
-        ? Promise.resolve({
-            specs: [] as SavedSpec[],
-            first: null as Record<string, unknown> | null,
-          })
-        : flowJson<{ specs?: SavedSpec[]; first?: Record<string, unknown> | null }>(
-            `/datasets/${datasetId}/tables?open_first=true`
-          ).catch(() => ({
-            specs: [] as SavedSpec[],
-            first: null as Record<string, unknown> | null,
-          })),
-      loadProjectTables(projectId, datasetId),
+      firstPage,
+      // The open file's list comes from the open_first call; the project list reads only this project's files.
+      loadProjectTables(projectId, datasetId, {
+        fileIds: fileIdsRef.current,
+        filePage: pendingOpen ? undefined : firstPage,
+      }),
       flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`).catch(() => ({
         books: [] as SavedBook[],
       })),
@@ -1461,6 +1474,7 @@ export function TablesBuilder({
         label: table.label,
         dataset_id: table.datasetId,
         filename: table.filename,
+        number: table.number,
       }));
       setSpecs(saved);
       setBooks(bookPage.books || []);
@@ -1557,10 +1571,10 @@ export function TablesBuilder({
       setSpecs(current =>
         current.some(item => (item.spec_id || item.id) === id)
           ? current
-          : [
+          : numberTables([
               { spec_id: id, label: spec?.label || stubColumn || stub, dataset_id: datasetId },
               ...current,
-            ]
+            ])
       );
     }
   }
@@ -1786,9 +1800,9 @@ export function TablesBuilder({
       current: { role: 'user' | 'run' | 'reply'; text: string }[]
     ) => { role: 'user' | 'run' | 'reply'; text: string }[]
   ) => setThreads(current => ({ ...current, [threadKey]: update(current[threadKey] || []) }));
-  const selectedIndex = specs.findIndex(item => (item.spec_id || item.id) === specId);
+  const selectedNumber = specs.find(item => (item.spec_id || item.id) === specId)?.number;
   const title = book
-    ? `${selectedIndex >= 0 ? `T${selectedIndex + 1} · ` : ''}${labelFor(stub)}${
+    ? `${selectedNumber ? `T${selectedNumber} · ` : ''}${labelFor(stub)}${
         banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
       }`
     : 'Save a table';
@@ -1819,7 +1833,7 @@ export function TablesBuilder({
             <Skeleton className="h-8 w-full" />
           </div>
         ) : specs.length ? (
-          specs.map((spec, index) => {
+          specs.map(spec => {
             const id = spec.spec_id || spec.id || '';
             return (
               <Button
@@ -1844,7 +1858,7 @@ export function TablesBuilder({
                     );
                 }}
               >
-                <span>T{index + 1}</span>
+                <span>T{spec.number}</span>
                 <span className="tables-saved-copy">
                   <span>{spec.label || spec.name || id}</span>
                   {spec.dataset_id && spec.dataset_id !== datasetId ? (
@@ -2264,9 +2278,7 @@ export function TablesBuilder({
               {thread.length === 0 && !asking ? (
                 <div className="tables-thread-empty">
                   <strong>
-                    {selectedIndex >= 0
-                      ? `Ask about T${selectedIndex + 1}`
-                      : 'Ask about this table'}
+                    {selectedNumber ? `Ask about T${selectedNumber}` : 'Ask about this table'}
                   </strong>
                   <p className="flow-muted">
                     Ask what moved, or tell it to change the table: add a banner, net the top two
@@ -2363,9 +2375,7 @@ export function TablesBuilder({
               />
               <div className="tables-composer-row">
                 <span className="tables-agent-chip">Agent</span>
-                {selectedIndex >= 0 ? (
-                  <span className="flow-muted">@T{selectedIndex + 1}</span>
-                ) : null}
+                {selectedNumber ? <span className="flow-muted">@T{selectedNumber}</span> : null}
                 <Button
                   className="chat-send"
                   type="submit"

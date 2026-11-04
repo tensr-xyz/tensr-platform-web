@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useRef, useState } from 'react';
+import { SIGNING_IN_MESSAGE } from '@/lib/signing-in';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import Loading from '@/components/molecules/loading';
 import { Button } from '@/components/atoms/button';
@@ -173,8 +174,12 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
     retryNonce,
   ]);
 
+  // Back from Stripe the user is already signed in; say so while the plan is confirmed.
+  const landingMessage =
+    searchParams.get('checkout') === 'success' ? SIGNING_IN_MESSAGE : undefined;
+
   if (!isAuthReady || isLoading) {
-    return <Loading fullScreen />;
+    return <Loading fullScreen message={landingMessage} />;
   }
 
   if (profileError && !isSubscribed) {
@@ -192,7 +197,7 @@ function SubscriptionGateInner({ children }: { children: React.ReactNode }) {
   }
 
   if (!isSubscribed) {
-    return <Loading fullScreen />;
+    return <Loading fullScreen message={landingMessage} />;
   }
 
   return <>{children}</>;

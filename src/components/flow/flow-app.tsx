@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { clearSigningIn } from '@/lib/signing-in';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
@@ -310,6 +311,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [workspacePhase, setWorkspacePhase] = useState<'loading' | 'ready' | 'error'>('loading');
+  // The shell has drawn, so a sign-in that led here has landed.
+  useEffect(() => clearSigningIn(), []);
   const routeProjectId = slug[0] === 'p' ? slug[1] || '' : '';
   const exportPins = useProjectPins(
     routeProjectId,
@@ -4138,7 +4141,12 @@ function ReportScreen({
         .map(row => datasetRowId(row))
         .filter(Boolean)
     ).catch(() => []);
-    void loadProjectTables(projectId, datasetId)
+    void loadProjectTables(projectId, datasetId, {
+      fileIds: datasets
+        .filter(row => row.project_id === projectId)
+        .map(row => datasetRowId(row))
+        .filter(Boolean),
+    })
       .then(async rows => {
         const meta = await metaRequest;
         const labels = Object.fromEntries(
@@ -4157,7 +4165,7 @@ function ReportScreen({
               id,
               label,
               spec,
-              table: reportTableFromBook(id, label, index + 1, detail, labels),
+              table: reportTableFromBook(id, label, row.number || index + 1, detail, labels),
             };
           })
         );
