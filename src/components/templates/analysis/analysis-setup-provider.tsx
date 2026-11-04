@@ -156,7 +156,7 @@ export function AnalysisSetupHost() {
     if (!needsApiPreview || !datasetId) return;
     let cancelled = false;
     flowJson<unknown>(
-      `/datasets/${encodeURIComponent(datasetId)}/preview?limit=500&offset=0&slim=true&show_value_labels=false`
+      `/datasets/${encodeURIComponent(datasetId)}/preview?limit=5000&offset=0&slim=true&show_value_labels=false`
     )
       .then(page => {
         if (!cancelled) setApiPreview({ datasetId, preview: datasetPreviewFromPage(page) });

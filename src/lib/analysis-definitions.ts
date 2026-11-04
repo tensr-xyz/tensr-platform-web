@@ -1606,8 +1606,10 @@ export function nonIdColumnNames(
 /** Rows from GET /datasets/{id}/preview as the setup dialog's preview. Null when empty. */
 export function datasetPreviewFromPage(page: unknown): DatasetPreview | null {
   if (!page || typeof page !== 'object') return null;
-  const raw = page as { headers?: unknown; rows?: unknown };
-  const headers = Array.isArray(raw.headers) ? raw.headers.map(header => String(header)) : [];
+  const raw = page as { headers?: unknown; variable_names?: unknown; rows?: unknown };
+  // headers are display labels ("Owns car A"); the schema matches on variable names (owns_A).
+  const names = Array.isArray(raw.variable_names) ? raw.variable_names : raw.headers;
+  const headers = Array.isArray(names) ? names.map(header => String(header)) : [];
   const rows = Array.isArray(raw.rows) ? raw.rows.filter(Array.isArray) : [];
   if (!headers.length || !rows.length) return null;
   return {

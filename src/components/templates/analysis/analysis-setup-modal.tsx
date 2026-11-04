@@ -154,6 +154,8 @@ export function AnalysisSetupModal({
   // then, not left at {} while the legacy form's picks (id, a 4-group variable) vanish.
   const setupKey = `${initialOp}\u0001${bodyKey}\u0001${schemaKey}\u0001${previewKey}\u0001${specsStatus}`;
   const setupKeyRef = React.useRef('');
+  // Values filled in by the dialog (defaults, the catalog arriving) are not the person's edits.
+  const rebaseline = React.useRef(true);
 
   React.useEffect(() => {
     if (!open || !datasetId) return;
@@ -175,6 +177,7 @@ export function AnalysisSetupModal({
     if (!open) return;
     setServerError(null);
     setRunAttempted(false);
+    rebaseline.current = true;
     if (!schema.length) {
       setForm(f => ({ ...f, analysis: initialOp }));
       return;
@@ -267,7 +270,12 @@ export function AnalysisSetupModal({
 
   const canRun = formKind !== 'loading' && runBlockers.length === 0;
   const firstInput = React.useRef(JSON.stringify([form, specValues]));
-  const touched = JSON.stringify([form, specValues]) !== firstInput.current;
+  const currentInput = JSON.stringify([form, specValues]);
+  if (rebaseline.current) {
+    firstInput.current = currentInput;
+    rebaseline.current = false;
+  }
+  const touched = currentInput !== firstInput.current;
   const revealed = runAttempted || touched;
 
   const run = async () => {

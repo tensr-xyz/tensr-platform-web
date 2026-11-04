@@ -86,15 +86,15 @@ describe('QA round 6', () => {
   test('2: stacking flags codes and labels that differ, and recodes to match', () => {
     const en = { name: 'Q7', value_labels: { '1': 'Disagree', '5': 'Agree' } };
     const fr = { name: 'Q7', value_labels: { '1': "Pas d'accord", '5': "D'accord" } };
-    expect(labelDifferences(en, fr)).toContain("1 = Disagree / Pas d'accord");
+    expect(labelDifferences(en, fr)).toBe('labels translated');
     const two = compareWaves([en], [fr], 'cars_EN', 'cars_FR');
-    expect(two[0]).toMatchObject({ kind: 'check', labelsDiffer: true });
+    expect(two[0]).toMatchObject({ kind: 'matched', labelsDiffer: true });
     const many = compareManyWaves([
       { name: 'cars_EN', columns: [en] },
       { name: 'cars_DE', columns: [en] },
       { name: 'cars_FR', columns: [fr] },
     ]);
-    expect(many[0].kind).toBe('check');
+    expect(many[0].kind).toBe('matched');
     expect(many[0].reason).toContain('cars_FR');
     expect(reversedCodes(['1', '2', '3', '4', '5'])).toEqual({
       '1': '5',

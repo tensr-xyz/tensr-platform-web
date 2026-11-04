@@ -138,7 +138,8 @@ export function themeRows(rows: BannerRow[], notCoded?: number | null, sort = tr
   const total = (row: BannerRow) =>
     (row.cells || []).find(cell => cell.banner_id === 'total')?.unweighted_n ?? 0;
   const sorted = sort ? [...rows].sort((left, right) => total(right) - total(left)) : [...rows];
-  if (!notCoded) return sorted;
+  // Zero is a count too: the row stays so people can see every answer has a theme.
+  if (notCoded == null) return sorted;
   const sample = rows.flatMap(row => row.cells || []).find(cell => cell.banner_id === 'total');
   const base = sample?.column_unweighted_n;
   return [
@@ -566,8 +567,12 @@ export function ThemesPanel({
         {notCoded != null ? (
           <div className="themes-uncoded">
             <strong>{notCoded}</strong>
-            <span>answers have no theme yet. They are not in the table until they have one.</span>
-            {onReview || onEditFrame ? (
+            <span>
+              {notCoded === 0
+                ? 'Every answer has a theme.'
+                : `${notCoded === 1 ? 'answer has' : 'answers have'} no theme yet. They show as Not yet coded until you review them.`}
+            </span>
+            {notCoded > 0 && (onReview || onEditFrame) ? (
               <Button
                 className="themes-review"
                 type="button"
@@ -1259,6 +1264,93 @@ export function tableBodyFromAgentBook(
   };
 }
 
+/**
+ * A net's codes in the form the column stores. A column kept as label text ("Agree") needs the
+ * labels, not the codes (4, 5), or the net counts nobody.
+ */
+export function netValuesAsStored(
+  codes: string[],
+  labels: Record<string, string> | undefined,
+  stored: string[]
+): string[] {
+  if (!stored.length || codes.some(code => stored.includes(code))) return codes;
+  const asLabels = codes
+    .map(code => labels?.[code])
+    .filter((label): label is string => Boolean(label));
+  return asLabels.length === codes.length && asLabels.some(label => stored.includes(label))
+    ? asLabels
+    : codes;
+}
+
+/** The agent's session id: the stream puts it under turn_state. */
+export function agentSessionId(result: {
+  session_id?: string;
+  turn_state?: Record<string, unknown>;
+}): string {
+  return String(result.session_id || result.turn_state?.session_id || '');
+}
+
+/**
+ * The last table the agent ran, as a Tables request. The reply carries the run's request body,
+ * not the table, so Tables re-runs that body with every value row and saves it.
+ */
+export function tableBodyFromAgentRun(results: unknown): Record<string, unknown> | null {
+  const items = Array.isArray(results) ? results : [];
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = (items[index] || {}) as Record<string, unknown>;
+    const args = (item.args || {}) as Record<string, unknown>;
+    const kind = String(item.analysis_type || item.procedure || args.analysis_type || '');
+    if (kind !== 'banner_table') continue;
+    const body = (item.request_body || args.request_body || {}) as Record<string, unknown>;
+    const netsOnBody = Array.isArray(body.nets) ? body.nets : [];
+    const listed: Record<string, unknown>[] = Array.isArray(body.stubs)
+      ? (body.stubs as Record<string, unknown>[])
+      : (Array.isArray(body.stub_columns) ? body.stub_columns : [body.stub_column])
+          .filter(Boolean)
+          .map(column => ({ column }) as Record<string, unknown>);
+    const stubs = listed
+      .filter(stub => stub && stub.column)
+      .map(stub => {
+        const { values, ...rest } = stub;
+        const kept = Array.isArray(values) && values.length === 0 ? rest : stub;
+        const nets = Array.isArray(kept.nets) && kept.nets.length ? kept.nets : netsOnBody;
+        return nets.length ? { ...kept, nets } : kept;
+      });
+    if (!stubs.length) return null;
+    const banner = Array.isArray(body.banner)
+      ? (body.banner as Record<string, unknown>[])
+          .map(item =>
+            Array.isArray(item.columns) ? { columns: item.columns } : { column: item.column }
+          )
+          .filter(item => ('columns' in item ? (item.columns as unknown[]).length : item.column))
+      : body.banner_column
+        ? [{ column: body.banner_column }]
+        : [];
+    const statistics = Array.isArray(body.statistics)
+      ? body.statistics
+      : body.row_percent
+        ? ['row_proportion']
+        : ['column_proportion'];
+    return {
+      stubs,
+      banner,
+      statistics,
+      significance_display: body.significance_display || 'column_letters',
+      nest_banners:
+        typeof body.nest_banners === 'boolean'
+          ? body.nest_banners
+          : banner.some(item => 'columns' in item),
+      ...(typeof body.low_base_threshold === 'number'
+        ? { low_base_threshold: body.low_base_threshold }
+        : {}),
+      ...(body.filter_ref ? { filter_ref: body.filter_ref } : {}),
+      ...(typeof body.weight === 'string' && body.weight ? { weight: body.weight } : {}),
+      save: true,
+    };
+  }
+  return null;
+}
+
 /** Nets the user made on the stub, kept apart from Top 2 / Bottom 2. */
 export function userNets(nets: { label?: string; values?: unknown[] }[] | undefined) {
   return (nets || [])
@@ -1329,6 +1421,7 @@ export function TablesBuilder({
   const [railReady, setRailReady] = useState(false);
   const [opening, setOpening] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
+  const loadingSaved = useRef(false);
 
   useEffect(() => {
     if (!datasetId) {
@@ -1436,6 +1529,7 @@ export function TablesBuilder({
   }
 
   function remember(body: Record<string, unknown>) {
+    loadingSaved.current = true;
     setBook(body);
     const spec = body.spec as
       | {
@@ -1472,35 +1566,44 @@ export function TablesBuilder({
   }
 
   /** Re-runs the agent's table in the main pane with every row, and saves it to the list. */
-  async function adoptAgentTable(built: Record<string, unknown>) {
-    const request = datasetId ? tableBodyFromAgentBook(built) : null;
-    if (!request) {
-      setDirty(true);
-      return;
-    }
+  async function adoptAgentTable(request: Record<string, unknown>) {
+    if (!datasetId) return;
+    setView('table');
+    setOpening(true);
     const saved = await flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
       body: JSON.stringify(request),
     }).catch(() => null);
+    setOpening(false);
     if (!saved) {
+      setError('The agent built the table, but it could not be saved. Try Save.');
       setDirty(true);
       return;
     }
+    loadingSaved.current = true;
     const nets = ((saved.spec as { stubs?: { nets?: { label?: string }[] }[] } | undefined)
       ?.stubs?.[0]?.nets || []) as { label?: string }[];
     setTop2(nets.some(net => /^top 2 box$/i.test(String(net.label || ''))));
     setBottom2(nets.some(net => /^bottom 2 box$/i.test(String(net.label || ''))));
     setDirty(false);
+    const savedId = String((saved.spec as { id?: string } | undefined)?.id || '');
+    // The conversation that built the table stays with it.
+    if (savedId && savedId !== threadKey)
+      setThreads(all => ({
+        ...all,
+        [savedId]: [...(all[savedId] || []), ...(all[threadKey] || [])],
+      }));
     remember(saved);
   }
 
   async function netCodes(end: 'top' | 'bottom'): Promise<string[]> {
     const column = columns.find(item => item.name === stub);
     const labelled = scaleCodes(column?.labels, end);
-    if (labelled.length >= 2 || !datasetId) return labelled;
+    if (!datasetId) return labelled;
     const page = await flowJson<{ values?: string[] }>(
       `/datasets/${datasetId}/columns/${encodeURIComponent(stub)}/values`
     ).catch(() => ({ values: [] as string[] }));
+    if (labelled.length >= 2) return netValuesAsStored(labelled, column?.labels, page.values || []);
     return scaleCodesFromValues(page.values || [], end);
   }
 
@@ -1592,12 +1695,18 @@ export function TablesBuilder({
   useEffect(() => {
     if (lastOptions.current === optionsKey) return;
     lastOptions.current = optionsKey;
+    // Options copied from a saved table describe that table; they do not rebuild it as a draft.
+    if (loadingSaved.current) return;
     if (!stub || !book) return;
     setDirty(true);
     void runTable(false);
     // Options rebuild the table they belong to; stub and banner changes save on their own.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [optionsKey]);
+  // Runs after the options effect in the same commit, so the flag covers exactly one update.
+  useEffect(() => {
+    loadingSaved.current = false;
+  });
 
   function matchesSaved(): boolean {
     const spec = currentSpec() as {
@@ -2212,24 +2321,25 @@ export function TablesBuilder({
                   },
                 })
                   .then(result => {
-                    if (result.session_id)
-                      setAgentSessions(current => ({
-                        ...current,
-                        [sessionKey]: result.session_id!,
-                      }));
+                    const session = agentSessionId(result);
+                    if (session)
+                      setAgentSessions(current => ({ ...current, [sessionKey]: session }));
                     const built = bookFromToolResults(result.tool_results);
+                    const request = built
+                      ? tableBodyFromAgentBook(built)
+                      : tableBodyFromAgentRun(result.tool_results);
                     if (built) {
                       setBook(built);
                       setView('table');
-                      void adoptAgentTable(built);
                     }
+                    if (request) void adoptAgentTable(request);
                     setThread(current => [
                       ...current,
                       {
                         role: 'reply',
                         text:
                           agentReplyText(result) ||
-                          (built ? 'Built the table. Save it to keep it.' : 'No answer came back.'),
+                          (built || request ? 'Built the table.' : 'No answer came back.'),
                       },
                     ]);
                   })
