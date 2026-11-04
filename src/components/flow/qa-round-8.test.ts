@@ -1,3 +1,4 @@
+import { applyScaleFlags, compareManyWaves, reversedCodes, waveCounts } from './stack-waves';
 import { isAnswer, isNonAnswerTheme } from './coding-review-data';
 import { themeRows } from './survey-screens';
 import {
@@ -99,5 +100,38 @@ describe('QA round 8: non-answers', () => {
     expect(rows.map(row => row.label)).toEqual(['Price', 'Not yet coded']);
     expect(isNonAnswerTheme('Nothing to add')).toBe(true);
     expect(isNonAnswerTheme('Price')).toBe(false);
+  });
+});
+
+describe('QA round 8: stack scale check', () => {
+  const names: Record<string, string> = { en: 'cars_EN', de: 'cars_DE', fr: 'cars_FR' };
+  test('9: a column whose means sit at opposite ends goes under to check with Reverse scale', () => {
+    const labels = { '1': 'Strongly disagree', '5': 'Strongly agree' };
+    const files = ['en', 'de', 'fr'].map(id => ({
+      name: names[id],
+      columns: [{ name: 'Q7', value_labels: labels }, { name: 'region' }],
+    }));
+    const rows = applyScaleFlags(
+      compareManyWaves(files),
+      [{ column: 'Q7', low: 1, high: 5, means: { en: 4.4, de: 4.3, fr: 1.5 }, flip_ids: ['fr'] }],
+      id => names[id]
+    );
+    const q7 = rows.find(row => row.left === 'Q7')!;
+    expect(q7.kind).toBe('check');
+    expect(q7.labelsDiffer).toBe(true);
+    expect(q7.scaleFlip).toEqual(['fr']);
+    expect(q7.reason).toContain(
+      'Means at opposite ends of the 1–5 scale (cars_EN 4.4, cars_DE 4.3, cars_FR 1.5)'
+    );
+    expect(q7.reason).toContain('cars_FR');
+    expect(rows.find(row => row.left === 'region')!.kind).toBe('matched');
+    expect(waveCounts(rows).check).toBe(1);
+    expect(reversedCodes(q7.scaleCodes!)).toEqual({
+      '1': '5',
+      '2': '4',
+      '3': '3',
+      '4': '2',
+      '5': '1',
+    });
   });
 });
