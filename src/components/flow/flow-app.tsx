@@ -56,6 +56,7 @@ import {
   pinsFromRuns,
   rememberReportRuns,
   setProjectPins,
+  shareRequest,
   useProjectPins,
 } from '@/components/flow/report-pins';
 import { SettingsScreen } from '@/components/flow/settings-screen';
@@ -4248,6 +4249,13 @@ function ReportScreen({
 
   const templateInput = useRef<HTMLInputElement>(null);
 
+  const reportFileKey = datasets
+    .filter(row => row.project_id === projectId)
+    .map(row => datasetRowId(row))
+    .filter(Boolean)
+    .join(',');
+  const reportLoadKey = reportFileKey || (ready ? 'ready' : '');
+
   const writeFindings = useCallback(
     (nextTables: ReportTable[], nextSegment: string | null, nextCut: RowCut[] | null) => {
       setEditing(false);
@@ -4273,30 +4281,29 @@ function ReportScreen({
     let live = true;
     setPhase('loading');
     setError('');
-    const fileIds = datasets
-      .filter(row => row.project_id === projectId)
-      .map(row => datasetRowId(row))
-      .filter(Boolean);
+    const fileIds = reportFileKey ? reportFileKey.split(',') : [];
     // The file list arrives after the first paint. Waiting for it keeps the
     // overview on those files instead of scanning every file in the account.
-    if (!fileIds.length && !ready) return;
+    if (!reportLoadKey) return;
     const overviewUrl = `/api/projects/${projectId}/overview${
       fileIds.length ? `?dataset_ids=${encodeURIComponent(fileIds.join(','))}` : ''
     }`;
-    void flowJson<{
-      ok?: boolean;
-      tables?: {
-        spec_id?: string;
-        label?: string;
-        dataset_id?: string;
-        filename?: string;
-        table_number?: number | null;
-        stale?: boolean;
-        detail?: string;
-      }[];
-      findings?: { id: string; title: string; number?: number | null }[];
-      runs?: { id?: string; dataset_id?: string; in_report?: boolean; report_pin?: unknown }[];
-    }>(overviewUrl)
+    void shareRequest(overviewUrl, () =>
+      flowJson<{
+        ok?: boolean;
+        tables?: {
+          spec_id?: string;
+          label?: string;
+          dataset_id?: string;
+          filename?: string;
+          table_number?: number | null;
+          stale?: boolean;
+          detail?: string;
+        }[];
+        findings?: { id: string; title: string; number?: number | null }[];
+        runs?: { id?: string; dataset_id?: string; in_report?: boolean; report_pin?: unknown }[];
+      }>(overviewUrl)
+    )
       .then(async overview => {
         if (!live || !overview?.ok || !Array.isArray(overview.tables)) {
           throw new Error('Could not load saved tables');
@@ -4416,7 +4423,7 @@ function ReportScreen({
     return () => {
       live = false;
     };
-  }, [datasetId, writeFindings, refreshKey, ready, datasets, projectId]);
+  }, [datasetId, writeFindings, refreshKey, projectId, reportLoadKey, reportFileKey]);
 
   const selected = specs.filter(
     row => picked.includes(row.id) && Object.keys(row.spec || {}).length > 0
