@@ -1648,7 +1648,8 @@ export function TablesBuilder({
       const first = Object.values(decimals).find(value => typeof value === 'number');
       if (typeof first === 'number') setDigits(first);
     }
-    if (spec?.filter && Array.isArray(spec.filter.filters)) setTableFilter(spec.filter);
+    const savedFilters = spec?.filter?.filters;
+    if (Array.isArray(savedFilters)) setTableFilter({ filters: savedFilters });
     const savedWeight = spec?.weight;
     if (savedWeight && typeof savedWeight === 'object' && 'column' in savedWeight) {
       weightFromTable.current = true;

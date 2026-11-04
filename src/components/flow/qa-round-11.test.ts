@@ -5,7 +5,11 @@ import { tableBaseCopy } from '@/components/flow/table-base';
 
 describe('QA round 11', () => {
   test.each([
-    ['json detail', '{"detail":"That column is not on this file."}', 'That column is not on this file.'],
+    [
+      'json detail',
+      '{"detail":"That column is not on this file."}',
+      'That column is not on this file.',
+    ],
     ['validation list', '{"detail":[{"msg":"Field required"}]}', 'Field required'],
     ['plain sentence', 'The deck could not be built.', 'The deck could not be built.'],
   ])('api errors stay readable: %s', (_name, body, expected) => {
