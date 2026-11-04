@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
+import { archiveChatTurn, type ChatExchange } from '@/components/flow/chat-thread';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import { loadProjectTables, tableFileNote } from '@/components/flow/project-tables';
 import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
@@ -122,6 +123,7 @@ import {
 } from '@/components/ui/rest';
 import {
   distinctTables,
+  findingFromOverview,
   findingFromTable,
   reportTableFromBook,
   segmentChoices,
@@ -378,7 +380,14 @@ export function FlowApp({ slug }: { slug: string[] }) {
       ]);
       setProjectCursor(projectPage.next_cursor || null);
       setFolders(folderPage.folders || []);
-      setDatasets(Array.isArray(filePage) ? filePage : filePage.datasets || []);
+      const incoming = Array.isArray(filePage) ? filePage : filePage.datasets || [];
+      // A project page may already have loaded every version. The workspace list
+      // keeps one file per origin, so a refresh must not drop the rest.
+      setDatasets(current => {
+        const incomingIds = new Set(incoming.map(row => datasetRowId(row)));
+        const kept = current.filter(row => !incomingIds.has(datasetRowId(row)));
+        return [...incoming, ...kept];
+      });
       setError(null);
       setWorkspacePhase('ready');
     } catch (err) {
@@ -2380,6 +2389,7 @@ function ChatScreen({
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
   const [question, setQuestion] = useState('');
   const [sent, setSent] = useState('');
+  const [past, setPast] = useState<ChatExchange[]>([]);
   const [mode, setMode] = useState<'ask' | 'plan' | 'agent'>('agent');
   const [answer, setAnswer] = useState('');
   const [status, setStatus] = useState<string | null>(null);
@@ -2396,11 +2406,17 @@ function ChatScreen({
   const attachmentsRef = useRef<AgentLoopAttachment[]>([]);
   attachmentsRef.current = attachments;
   const sessionRef = useRef<string | null>(null);
+  const sentRef = useRef('');
+  const answerRef = useRef('');
+  const noteRef = useRef('');
+  sentRef.current = sent;
+  answerRef.current = answer;
+  noteRef.current = attachedNote;
   const askedRef = useRef<string | null>(null);
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
   const [recipes, setRecipes] = useState<FlowRecipe[] | null>(null);
   const file = chatFile(project, datasets);
-  const showThread = Boolean(sent || answer || plan || status);
+  const showThread = Boolean(past.length || sent || answer || plan || status);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
 
   const chatProjectId = project?.id || '';
@@ -2459,6 +2475,14 @@ function ChatScreen({
     async (text: string, nextMode: 'ask' | 'plan' | 'agent' = mode) => {
       if (!text.trim() || status === 'Warming up') return;
       const turnFiles = attachmentsRef.current;
+      setPast(current =>
+        archiveChatTurn(
+          current,
+          sentRef.current
+            ? { user: sentRef.current, note: noteRef.current, answer: answerRef.current }
+            : null
+        )
+      );
       setSent(text);
       setAttachedNote(
         turnFiles.length ? `Attached: ${turnFiles.map(item => item.filename).join(', ')}` : ''
@@ -2665,6 +2689,7 @@ function ChatScreen({
 
   const clearChat = () => {
     sessionRef.current = null;
+    setPast([]);
     setSent('');
     setAttachedNote('');
     setAnswer('');
@@ -2790,6 +2815,19 @@ function ChatScreen({
           <section className="flow-thread">
             <div className="chat-column">
               <div className="chat-scroll">
+                {past.map((turn, index) => (
+                  <div key={`${index}-${turn.user.slice(0, 24)}`}>
+                    <div className="chat-bubble">
+                      {turn.user}
+                      {turn.note ? <div className="flow-muted">{turn.note}</div> : null}
+                    </div>
+                    {turn.answer ? (
+                      <FlowMarkdown className="chat-prose">
+                        {answerWithoutBase(turn.answer)}
+                      </FlowMarkdown>
+                    ) : null}
+                  </div>
+                ))}
                 {sent ? (
                   <div className="chat-bubble">
                     {sent}
@@ -4226,18 +4264,43 @@ function ReportScreen({
     const metaRequest = flowJson<{
       columns?: { name?: string; value_labels?: Record<string, string> | null }[];
     }>(`/datasets/${datasetId}/metadata`).catch(() => ({ columns: [] }));
-    const pinsRequest = loadProjectPins(
-      projectId,
-      datasets
-        .filter(row => row.project_id === projectId)
-        .map(row => datasetRowId(row))
-        .filter(Boolean)
-    ).catch(() => []);
+    const fileIds = datasets
+      .filter(row => row.project_id === projectId)
+      .map(row => datasetRowId(row))
+      .filter(Boolean);
+    const pinsRequest = loadProjectPins(projectId, fileIds).catch(() => []);
+    const overviewRequest = flowJson<{
+      ok?: boolean;
+      tables?: {
+        spec_id?: string;
+        label?: string;
+        dataset_id?: string;
+        table_number?: number | null;
+      }[];
+      findings?: { id: string; title: string; number?: number | null }[];
+    }>(
+      `/api/projects/${projectId}/overview${
+        fileIds.length ? `?dataset_ids=${encodeURIComponent(fileIds.join(','))}` : ''
+      }`
+    ).catch(() => null);
+    void overviewRequest.then(overview => {
+      if (!live || !overview?.ok || !Array.isArray(overview.tables)) return;
+      const listed = overview.tables
+        .map(row => ({
+          id: String(row.spec_id || ''),
+          label: String(row.label || ''),
+          spec: {} as Record<string, unknown>,
+          datasetId: String(row.dataset_id || ''),
+        }))
+        .filter(row => row.id);
+      setSpecs(listed);
+      setPicked(listed.map(row => row.id));
+      setFindings((overview.findings || []).map(findingFromOverview));
+      setFindingsPhase('ready');
+      setPhase('ready');
+    });
     void loadProjectTables(projectId, datasetId, {
-      fileIds: datasets
-        .filter(row => row.project_id === projectId)
-        .map(row => datasetRowId(row))
-        .filter(Boolean),
+      fileIds,
     })
       .then(async rows => {
         const meta = await metaRequest;

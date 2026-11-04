@@ -39,8 +39,10 @@ export function codingVersionsFor(files: CodingFile[], openId: string | undefine
   const byId = new Map(files.map(file => [file.id, file]));
   const open = byId.get(openId);
   if (!open) return [];
+  const statedOrigin = (file: CodingFile) =>
+    file.originId && file.originId !== file.id ? file.originId : '';
   const root =
-    open.originId ||
+    statedOrigin(open) ||
     (() => {
       let current: CodingFile | undefined = open;
       const seen = new Set<string>();
@@ -53,11 +55,11 @@ export function codingVersionsFor(files: CodingFile[], openId: string | undefine
   return files
     .filter(file => {
       if (!isCodingVersion(file)) return false;
-      if (file.id === root || file.originId === root || file.parentId === root) return true;
+      if (file.id === root || statedOrigin(file) === root || file.parentId === root) return true;
       let current: CodingFile | undefined = file;
       const seen = new Set<string>();
       while (current?.parentId && !seen.has(current.parentId)) {
-        if (current.parentId === root || current.originId === root) return true;
+        if (current.parentId === root || statedOrigin(current) === root) return true;
         seen.add(current.id);
         current = byId.get(current.parentId);
       }

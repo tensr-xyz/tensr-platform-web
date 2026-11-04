@@ -527,6 +527,15 @@ export function StackWaves({
       );
     })
   );
+  const otherShown = lookupsDone
+    ? elsewhere
+    : dedupeUploads(
+        candidates.elsewhere.filter(row => {
+          const id = row.project_id || '';
+          if (projectInfo[id] && !projectInfo[id].active && !(id in projectNames)) return false;
+          return true;
+        })
+      );
 
   useEffect(() => {
     if (picked.length || here.length < 2) return;
@@ -760,15 +769,10 @@ export function StackWaves({
         ) : (
           <p className="flow-muted">No uploads here yet.</p>
         )}
-        {!lookupsDone && candidates.elsewhere.length ? (
+        {otherShown.length ? (
           <>
             <p className="stack-picker-label">Your other projects</p>
-            <Skeleton className="h-6 w-full" />
-          </>
-        ) : elsewhere.length ? (
-          <>
-            <p className="stack-picker-label">Your other projects</p>
-            {elsewhere.map(row => fileRow(row, true))}
+            {otherShown.map(row => fileRow(row, true))}
           </>
         ) : null}
       </div>
