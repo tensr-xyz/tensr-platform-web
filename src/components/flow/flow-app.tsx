@@ -54,6 +54,7 @@ import { SettingsScreen } from '@/components/flow/settings-screen';
 import { FiltersPanel, type FlowFilter } from '@/components/flow/filters-panel';
 import { describeFilters } from '@/components/flow/filters-panel-logic';
 import { CodingReview } from '@/components/flow/coding-review';
+import { shouldAdoptCodingVersion } from '@/components/flow/coding-versions';
 import { FlowNotFound } from '@/components/flow/flow-not-found';
 import { DatasetsScreen, uploadTotal } from '@/components/flow/datasets-screen';
 import { FolderView } from '@/components/flow/folder-view';
@@ -3635,14 +3636,40 @@ function ResponsesScreen({
                 setReopenTheme(result?.codeColumn || reviewing);
                 setReviewing(null);
                 if (result?.datasetId) {
-                  setChosenId(result.datasetId);
-                  onChanged?.();
-                  if (project) {
-                    void flowJson(`/api/projects/${project.id}`, {
-                      method: 'PATCH',
-                      body: JSON.stringify({ active_dataset_id: result.datasetId }),
-                    });
+                  const files = projectDatasets.map(row => ({
+                    id: datasetRowId(row),
+                    name: row.original_filename || datasetRowId(row),
+                    createdAt: row.updated_at,
+                    updatedAt: row.updated_at,
+                    lineageLabel: row.lineage_label,
+                    parentId: row.parent_dataset_id,
+                  }));
+                  // Include the brand-new version so Done can adopt it even before the list refreshes.
+                  const withNext = [
+                    ...files,
+                    {
+                      id: result.datasetId,
+                      name: result.datasetId,
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString(),
+                      lineageLabel: 'coded comments',
+                    },
+                  ];
+                  const adopt = shouldAdoptCodingVersion(
+                    project?.active_dataset_id || datasetId,
+                    result.datasetId,
+                    withNext
+                  );
+                  if (adopt) {
+                    setChosenId(result.datasetId);
+                    if (project) {
+                      void flowJson(`/api/projects/${project.id}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ active_dataset_id: result.datasetId }),
+                      });
+                    }
                   }
+                  onChanged?.();
                 }
               }}
             />
@@ -3651,6 +3678,14 @@ function ResponsesScreen({
               key={`${datasetId}:${reopenTheme}`}
               datasetId={datasetId}
               projectId={project?.id}
+              files={projectDatasets.map(row => ({
+                id: datasetRowId(row),
+                name: row.original_filename || datasetRowId(row),
+                createdAt: row.updated_at,
+                updatedAt: row.updated_at,
+                lineageLabel: row.lineage_label,
+                parentId: row.parent_dataset_id,
+              }))}
               initialStub={reopenTheme}
               onReview={column => setReviewing(column)}
               onSelectCell={cell => {
