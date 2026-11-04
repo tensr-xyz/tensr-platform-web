@@ -46,16 +46,25 @@ export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = '
  */
 export async function loadProjectTables(
   projectId: string | undefined,
-  datasetId: string | undefined
+  datasetId: string | undefined,
+  options: {
+    /** The project's files the screen already holds, so the API reads those and skips its file scan. */
+    fileIds?: string[];
+    /** The open file's table list when the screen already asked for it, so it is not fetched twice. */
+    filePage?: Promise<{ specs?: RawRow[] } | null>;
+  } = {}
 ): Promise<ProjectTable[]> {
   // Both lists, merged: the project's (every file) and the open file's own, so a gap in one never empties the rail.
   const [projectPage, filePage] = await Promise.all([
     projectId
-      ? flowJson<{ specs?: RawRow[] }>(`/api/projects/${projectId}/tables`).catch(() => null)
+      ? flowJson<{ specs?: RawRow[] }>(projectTablesPath(projectId, options.fileIds)).catch(
+          () => null
+        )
       : Promise.resolve(null),
-    datasetId
-      ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
-      : Promise.resolve(null),
+    options.filePage ||
+      (datasetId
+        ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
+        : Promise.resolve(null)),
   ]);
   return numberTables(
     mergeTableLists(
@@ -78,6 +87,13 @@ export function numberTables<T extends { number?: number }>(tables: T[]): T[] {
   return tables.map((table, index) =>
     numbers.has(index) ? { ...table, number: numbers.get(index) } : table
   );
+}
+
+export function projectTablesPath(projectId: string, fileIds: string[] = []): string {
+  const ids = [...new Set(fileIds.filter(Boolean))];
+  return ids.length
+    ? `/api/projects/${projectId}/tables?dataset_ids=${encodeURIComponent(ids.join(','))}`
+    : `/api/projects/${projectId}/tables`;
 }
 
 /** Project tables first (newest first); the open file's tables the project list missed go on top. */

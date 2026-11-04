@@ -1423,6 +1423,8 @@ export function TablesBuilder({
   const [opening, setOpening] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
   const loadingSaved = useRef(false);
+  const fileIdsRef = useRef<string[]>([]);
+  fileIdsRef.current = (files || []).map(file => file.id);
 
   useEffect(() => {
     if (!datasetId) {
@@ -1439,19 +1441,24 @@ export function TablesBuilder({
     } catch {
       pendingOpen = '';
     }
+    const firstPage = pendingOpen
+      ? Promise.resolve({
+          specs: [] as SavedSpec[],
+          first: null as Record<string, unknown> | null,
+        })
+      : flowJson<{ specs?: SavedSpec[]; first?: Record<string, unknown> | null }>(
+          `/datasets/${datasetId}/tables?open_first=true`
+        ).catch(() => ({
+          specs: [] as SavedSpec[],
+          first: null as Record<string, unknown> | null,
+        }));
     void Promise.all([
-      pendingOpen
-        ? Promise.resolve({
-            specs: [] as SavedSpec[],
-            first: null as Record<string, unknown> | null,
-          })
-        : flowJson<{ specs?: SavedSpec[]; first?: Record<string, unknown> | null }>(
-            `/datasets/${datasetId}/tables?open_first=true`
-          ).catch(() => ({
-            specs: [] as SavedSpec[],
-            first: null as Record<string, unknown> | null,
-          })),
-      loadProjectTables(projectId, datasetId),
+      firstPage,
+      // The open file's list comes from the open_first call; the project list reads only this project's files.
+      loadProjectTables(projectId, datasetId, {
+        fileIds: fileIdsRef.current,
+        filePage: pendingOpen ? undefined : firstPage,
+      }),
       flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`).catch(() => ({
         books: [] as SavedBook[],
       })),
