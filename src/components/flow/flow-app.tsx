@@ -4325,6 +4325,13 @@ function ReportScreen({
         );
         setFindings((overview.findings || []).map(findingFromOverview));
         setFindingsPhase('ready');
+        if (!liveRows.length) {
+          setSpecs([]);
+          setPicked([]);
+          setTables([]);
+          setPhase('ready');
+          return;
+        }
         const meta = await flowJson<{
           columns?: { name?: string; value_labels?: Record<string, string> | null }[];
         }>(`/datasets/${datasetId}/metadata`).catch(() => ({ columns: [] }));
