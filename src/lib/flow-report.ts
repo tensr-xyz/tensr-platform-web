@@ -41,7 +41,7 @@ export function codeLabel(
     if (key === '1') return column;
     if (key === '0') return role === 'row' ? `not ${column}` : `no ${column}`;
   }
-  return `${column} ${key}`;
+  return key;
 }
 
 export type RowCut = { tableId: string; number: number };
@@ -331,7 +331,7 @@ export function findingFromTable(
   return {
     id: table.id,
     tableId: table.id,
-    eyebrow: `${String(table.index).padStart(2, '0')} · ${table.label}`,
+    eyebrow: `T${table.index} · ${table.label}`,
     headline: copy.headline,
     support: copy.support,
     citation: `T${table.index}`,

@@ -482,8 +482,9 @@ export function ThemesPanel({
           </p>
           {coding.newerAvailable && coding.newerId ? (
             <p className="flow-banner warn" role="status">
-              Newer coding available
-              {coding.newerLabel ? ` · ${coding.newerLabel}` : ''}
+              {coding.newerLabel
+                ? `Newer coding available (${coding.newerLabel})`
+                : 'Newer coding available'}
               <Button
                 className="flow-btn"
                 type="button"
@@ -1498,6 +1499,7 @@ export function TablesBuilder({
   const [opening, setOpening] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
   const loadingSaved = useRef(false);
+  const weightFromTable = useRef(false);
   const fileIdsRef = useRef<string[]>([]);
   fileIdsRef.current = (files || []).map(file => file.id);
 
@@ -1574,9 +1576,10 @@ export function TablesBuilder({
       .then(meta => {
         const choices = tableWeightChoices(meta.weight_columns, meta.active_weight_column || '');
         setWeightColumns(choices);
-        // The file's own weight is the default until a saved table says otherwise.
+        // A saved table's weight wins. The file weight is only the default before one is open.
         const active = meta.active_weight_column || '';
-        if (active && choices.includes(active)) setWeight(current => current || active);
+        if (!weightFromTable.current && active && choices.includes(active))
+          setWeight(current => current || active);
         setWeightNeedsRefresh(Boolean(meta.weight_vector?.needs_refresh));
         setColumns(
           (meta.columns || [])
@@ -1621,23 +1624,38 @@ export function TablesBuilder({
       | {
           id?: string;
           label?: string;
-          stubs?: { column?: string }[];
-          banners?: { column?: string; columns?: string[] }[];
+          nest_banners?: boolean;
+          decimals?: Record<string, number>;
+          filter?: { filters?: { column: string; op: string; value: string | string[] }[] } | null;
+          stubs?: { column?: string; nets?: { label?: string; values?: unknown[] }[] }[];
+          banners?: { column?: string; columns?: string[]; nested?: unknown }[];
+          weight?: { column?: string } | string | null;
         }
       | undefined;
     const stubColumn = spec?.stubs?.[0]?.column;
     if (stubColumn) setStub(String(stubColumn));
-    setCustomNets(
-      userNets(
-        (spec?.stubs?.[0] as { nets?: { label?: string; values?: unknown[] }[] } | undefined)?.nets
-      )
-    );
+    const storedNets = spec?.stubs?.[0]?.nets || [];
+    setCustomNets(userNets(storedNets));
+    setTop2(storedNets.some(net => /^top 2 box$/i.test(String(net.label || ''))));
+    setBottom2(storedNets.some(net => /^bottom 2 box$/i.test(String(net.label || ''))));
     const names = bannerNames(spec);
     if (names.length) setBanners(names);
-    const savedWeight = (spec as { weight?: { column?: string } | string | null } | undefined)
-      ?.weight;
-    if (savedWeight && typeof savedWeight === 'object' && savedWeight.column)
-      setWeight(String(savedWeight.column) === '_weight' ? weight : String(savedWeight.column));
+    setNest(
+      Boolean(spec?.nest_banners) || (spec?.banners || []).some(banner => Boolean(banner.nested))
+    );
+    const decimals = spec?.decimals;
+    if (decimals && typeof decimals === 'object') {
+      const first = Object.values(decimals).find(value => typeof value === 'number');
+      if (typeof first === 'number') setDigits(first);
+    }
+    const savedFilters = spec?.filter?.filters;
+    if (Array.isArray(savedFilters)) setTableFilter({ filters: savedFilters });
+    const savedWeight = spec?.weight;
+    if (savedWeight && typeof savedWeight === 'object' && 'column' in savedWeight) {
+      weightFromTable.current = true;
+      const column = String(savedWeight.column || '');
+      setWeight(!column || column === '_weight' ? '' : column);
+    }
     const id = String(spec?.id || '');
     if (id) {
       setSpecs(current =>
@@ -1719,6 +1737,7 @@ export function TablesBuilder({
     nets.push(...customNets);
     setError('');
     const statistics = meanOn ? [statistic, 'column_mean'] : [statistic];
+    const openId = String((book?.spec as { id?: string } | undefined)?.id || '');
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
       body: JSON.stringify({
@@ -1731,6 +1750,7 @@ export function TablesBuilder({
         suppress_low_base: false,
         decimals: { [statistic]: digits, ...(meanOn ? { column_mean: digits } : {}) },
         weight: weight || 'none',
+        ...(openId ? { spec_id: openId } : {}),
         ...(tableFilter?.filters.length ? { filter_ref: tableFilter } : {}),
         save,
       }),

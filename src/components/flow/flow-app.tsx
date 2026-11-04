@@ -3145,7 +3145,9 @@ function ResponsesScreen({
   const pageSize = 50;
   const [query, setQuery] = useState('');
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
-  const [specs, setSpecs] = useState<{ id: string; label: string; note?: string }[] | null>(null);
+  const [specs, setSpecs] = useState<
+    { id: string; label: string; note?: string; number?: number }[] | null
+  >(null);
   const [sheetPhase, setSheetPhase] = useState<'loading' | 'ready' | 'error' | 'empty'>('loading');
   const [sheetAttempt, setSheetAttempt] = useState(0);
   const [selectedCol, setSelectedColState] = useState(0);
@@ -3239,19 +3241,24 @@ function ResponsesScreen({
       .catch(() => setSessions([]));
   }, [project]);
   useEffect(() => {
-    if (!datasetId) return;
-    void loadProjectTables(project?.id, datasetId)
+    if (!datasetId || !project?.id) return;
+    const fileIds = datasets
+      .filter(row => row.project_id === project.id)
+      .map(row => datasetRowId(row))
+      .filter(Boolean);
+    void loadProjectTables(project.id, datasetId, { fileIds })
       .then(rows =>
         setSpecs(
           rows.map(row => ({
             id: `${row.datasetId}:${row.id}`,
             label: row.label,
             note: tableFileNote(row, datasetId),
+            number: row.number,
           }))
         )
       )
       .catch(() => setSpecs([]));
-  }, [datasetId, project?.id]);
+  }, [datasetId, datasets, project?.id]);
 
   const names = headers.length ? headers : columns.map(column => column.label || column.name);
   const needle = query.trim().toLowerCase();
@@ -3461,9 +3468,9 @@ function ResponsesScreen({
           ) : specs.length === 0 ? (
             <p className="flow-muted">No saved tables yet</p>
           ) : (
-            specs.slice(0, 8).map((spec, index) => (
+            specs.slice(0, 8).map(spec => (
               <Link key={spec.id} className="rail-analysis" href={`/flow/p/${project?.id}/tables`}>
-                <span className="rail-badge">T{index + 1}</span>
+                <span className="rail-badge">T{spec.number || ''}</span>
                 <span className="rail-analysis-copy">
                   <span>{spec.label}</span>
                   <span className="flow-muted">{spec.note || 'Custom Tables'}</span>
@@ -4147,6 +4154,7 @@ function ReportScreen({
   const [pane, setPane] = useState<'report' | 'outputs'>('report');
   const [openRunId, setOpenRunId] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [staleErrors, setStaleErrors] = useState<Record<string, string>>({});
   const lastRun = useAnalysisSetupStore(s => s.lastRun);
   const seenRun = useRef(lastRun?.nonce || 0);
   useEffect(() => {
@@ -4276,14 +4284,16 @@ function ReportScreen({
   const rebuildStale = async (table: StaleTable) => {
     setBusy(`rebuild-${table.id}`);
     setError('');
+    setStaleErrors(current => ({ ...current, [table.id]: '' }));
     try {
-      await flowJson(`/datasets/${table.datasetId}/tables/${table.id}/rebuild`, {
+      await flowJson(`/datasets/${datasetId}/tables/${table.id}/rebuild`, {
         method: 'POST',
       });
       setRefreshKey(key => key + 1);
       setNote(`T${table.number} rebuilt on the current file.`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not rebuild that table');
+      const message = err instanceof Error ? err.message : 'Could not rebuild that table';
+      setStaleErrors(current => ({ ...current, [table.id]: message }));
     } finally {
       setBusy('');
     }
@@ -4300,7 +4310,7 @@ function ReportScreen({
     }
     setError('');
     const created = await flowJson<{ export_id?: string; filename?: string }>(
-      `/datasets/${selected[0].datasetId || datasetId}/export/deck`,
+      `/datasets/${datasetId}/export/deck`,
       {
         method: 'POST',
         body: JSON.stringify({
@@ -4693,6 +4703,9 @@ function ReportScreen({
                     </p>
                     <h3>{table.label}</h3>
                     <p>Built on an older version of the data</p>
+                    {staleErrors[table.id] ? (
+                      <p className="flow-error">{staleErrors[table.id]}</p>
+                    ) : null}
                     <div className="report-chips">
                       <Button
                         className="report-chip accent"
@@ -4700,7 +4713,7 @@ function ReportScreen({
                         disabled={busy !== ''}
                         onClick={() => void rebuildStale(table)}
                       >
-                        Rebuild on current file
+                        {staleErrors[table.id] ? 'Retry' : 'Rebuild on current file'}
                       </Button>
                       <Link
                         className="report-chip"
