@@ -321,6 +321,27 @@ export function findingBars(
     .slice(0, 5);
 }
 
+/** A finding from the project overview, before any table grid has loaded. */
+export function findingFromOverview(row: {
+  id: string;
+  title: string;
+  number?: number | null;
+}): ReportFinding {
+  const number = typeof row.number === 'number' && row.number > 0 ? row.number : 0;
+  const citation = number ? `T${number}` : '';
+  return {
+    id: row.id,
+    tableId: row.id,
+    eyebrow: citation && row.title ? `${citation} · ${row.title}` : row.title || citation,
+    headline: row.title,
+    support: '',
+    citation,
+    significant: false,
+    lowBase: false,
+    bars: [],
+  };
+}
+
 export function findingFromTable(
   table: ReportTable,
   segmentId: string | null,

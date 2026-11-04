@@ -103,37 +103,55 @@ export function ReportOutputs({
     let live = true;
     setPhase('loading');
     setError('');
-    const rawRuns: RunSummary[] = [];
-    void Promise.all(
-      filesRef.map(async file => {
-        const page = await flowJson<{ runs?: unknown[] }>(`/datasets/${file.id}/runs`);
-        rawRuns.push(...((page.runs || []) as RunSummary[]));
-        return outputRuns(page.runs || []).map(run => ({ ...run, file: file.name }));
-      })
-    )
-      .then(async pages => {
-        if (!live) return;
-        setProjectPins(projectId, pinsFromRuns(rawRuns));
+    const applyRuns = (next: OutputRun[], raw: RunSummary[]) => {
+      if (!live) return;
+      if (raw.length) setProjectPins(projectId, pinsFromRuns(raw));
+      setRuns(next);
+      if (openRunId && next.some(run => run.id === openRunId)) {
+        setSelectedId(openRunId);
+        setOpened(true);
+      } else {
+        setSelectedId(current =>
+          next.some(run => run.id === current) ? current : next[0]?.id || ''
+        );
+      }
+      setPhase('ready');
+    };
+    const loadPerFile = () => {
+      const rawRuns: RunSummary[] = [];
+      return Promise.all(
+        filesRef.map(async file => {
+          const page = await flowJson<{ runs?: unknown[] }>(`/datasets/${file.id}/runs`);
+          rawRuns.push(...((page.runs || []) as RunSummary[]));
+          return outputRuns(page.runs || []).map(run => ({ ...run, file: file.name }));
+        })
+      ).then(pages => {
         const sorted = uniqueRuns(pages.flat()).sort((left, right) =>
           right.created_at.localeCompare(left.created_at)
         );
-        const next = sorted;
-        setRuns(next);
-        if (openRunId && next.some(run => run.id === openRunId)) {
-          setSelectedId(openRunId);
-          setOpened(true);
-        } else {
-          setSelectedId(current =>
-            next.some(run => run.id === current) ? current : next[0]?.id || ''
+        applyRuns(sorted, rawRuns);
+      });
+    };
+    void flowJson<{ ok?: boolean; runs?: unknown[] }>(`/api/projects/${projectId}/overview`)
+      .then(overview => {
+        if (!live) return;
+        if (overview?.ok && Array.isArray(overview.runs)) {
+          const next = uniqueRuns(outputRuns(overview.runs)).sort((left, right) =>
+            right.created_at.localeCompare(left.created_at)
           );
+          applyRuns(next, overview.runs as RunSummary[]);
+          return;
         }
-        setPhase('ready');
+        return loadPerFile();
       })
       .catch(err => {
         if (!live) return;
-        setRuns([]);
-        setError(err instanceof Error ? err.message : 'Could not load saved analyses');
-        setPhase('error');
+        return loadPerFile().catch(() => {
+          if (!live) return;
+          setRuns([]);
+          setError(err instanceof Error ? err.message : 'Could not load saved analyses');
+          setPhase('error');
+        });
       });
     return () => {
       live = false;

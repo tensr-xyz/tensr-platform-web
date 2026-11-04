@@ -107,16 +107,29 @@ function columnNames(columns: { name?: string }[]): string[] {
   return columns.map(column => column.name || '').filter(Boolean);
 }
 
+/** A counts table shows the weighted count when a weight is applied, rounded like the export. */
+export function displayedCount(
+  cell:
+    | { count?: number | null; weighted_n?: number | null; unweighted_n?: number | null }
+    | undefined,
+  weighted: boolean
+): string {
+  if (!cell) return '—';
+  const raw = weighted
+    ? (cell.count ?? cell.weighted_n ?? cell.unweighted_n)
+    : (cell.unweighted_n ?? cell.count);
+  if (raw == null || Number.isNaN(Number(raw))) return '—';
+  return String(Math.round(Number(raw)));
+}
+
 function cellFigure(
   cell: BannerCell | undefined,
   figure: 'percent' | 'row_percent' | 'total_percent' | 'count' | 'mean',
-  digits: number
+  digits: number,
+  weighted = false
 ): string {
   if (!cell) return '—';
-  if (figure === 'count') {
-    const count = cell.unweighted_n ?? cell.count;
-    return count != null ? String(count) : '—';
-  }
+  if (figure === 'count') return displayedCount(cell, weighted);
   if (figure === 'mean') return cell.mean != null ? cell.mean.toFixed(digits) : '—';
   const value =
     figure === 'row_percent'
@@ -190,6 +203,7 @@ export function BannerGrid({
   digits?: number;
   markLowBase?: boolean;
 }) {
+  const weighted = Boolean((book.weight as { weight_aware?: boolean } | undefined)?.weight_aware);
   const [picked, setPicked] = useState('');
   const columns = bannerColumns(book);
   const letters = (book.letters as SigLetter[]) || [];
@@ -279,7 +293,7 @@ export function BannerGrid({
                     if (row.kind === 'not_coded') {
                       return (
                         <td key={column.id} className="flow-muted">
-                          {cellFigure(cell, figure, digits)}
+                          {cellFigure(cell, figure, digits, weighted)}
                         </td>
                       );
                     }
@@ -296,7 +310,7 @@ export function BannerGrid({
                             onSelectCell(selected);
                           }}
                         >
-                          {cellFigure(cell, figure, digits)}
+                          {cellFigure(cell, figure, digits, weighted)}
                           {markLowBase && cell?.low_base ? ' *' : ''}
                           {letter ? <span className="grid-letter"> {letter}</span> : null}
                         </Button>
