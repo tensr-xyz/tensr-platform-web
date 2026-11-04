@@ -146,6 +146,8 @@
 
 .ds-table .ds-col-project {
   width: 200px;
+  max-width: 200px;
+  overflow: hidden;
 }
 
 .ds-table .ds-col-num {
@@ -212,9 +214,15 @@
 }
 
 .ds-project {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.ds-project-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -10,6 +10,7 @@ import {
   personFromApi,
   planChoice,
   planFeatures,
+  billedPlanLine,
   planLabel,
   planPrice,
   relativeDay,
@@ -51,6 +52,30 @@ describe('settings helpers', () => {
     expect(workspaceHeading('Skopos')).toBe('Skopos workspace');
     expect(workspaceHeading("Ollie's workspace")).toBe("Ollie's workspace");
     expect(workspaceHeading('')).toBe('Your workspace');
+    expect(workspaceHeading('Personal', true)).toBe('Personal');
+    expect(workspaceHeading('', true)).toBe('Personal');
+  });
+
+  it('hides a catalog price in another currency and a renewal that has passed', () => {
+    const now = new Date('2026-11-04T12:00:00Z');
+    expect(
+      billedPlanLine({
+        price: '£119 a month',
+        catalogCurrency: 'GBP',
+        chargeCurrency: 'USD',
+        renewalDate: '2026-10-15',
+        now,
+      })
+    ).toBe('');
+    expect(
+      billedPlanLine({
+        price: '$20 a month',
+        catalogCurrency: 'USD',
+        chargeCurrency: 'USD',
+        renewalDate: '2026-12-15',
+        now,
+      })
+    ).toContain('renews on');
   });
 
   it('formats money and counts', () => {

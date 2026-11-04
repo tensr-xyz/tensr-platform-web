@@ -36,6 +36,7 @@ import {
   formatDay,
   formatMoney,
   isLiveStripeSubscription,
+  billedPlanLine,
   planLabel,
   planPrice,
   trialProgress,
@@ -171,10 +172,13 @@ export function SettingsBilling() {
   } else {
     badge = { tone: 'active', text: status === 'past_due' ? 'Payment due' : 'Active' };
     const price = monthly ? `${formatMoney(monthly.amount, catalog.currency)} ${monthly.unit}` : '';
-    const renew = subscription.renewalDate
-      ? `renews on ${formatDay(subscription.renewalDate)}`
-      : '';
-    sub = [price, renew].filter(Boolean).join(' · ');
+    const invoiceCurrency = invoices?.find(row => row.currency)?.currency;
+    sub = billedPlanLine({
+      price,
+      catalogCurrency: catalog.currency,
+      chargeCurrency: subscription.currency || invoiceCurrency,
+      renewalDate: subscription.renewalDate,
+    });
   }
 
   const primary = live ? (

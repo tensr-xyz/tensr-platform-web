@@ -30,6 +30,7 @@ export type LegacySubscription = {
   stripeCustomerId?: string;
   stripeSubscriptionId?: string;
   renewalDate?: string;
+  currency?: string;
   cancelAtPeriodEnd?: boolean;
   cancelAt?: string | null;
 };
@@ -72,11 +73,32 @@ export function planLabel(code?: string | null): string {
   return PLAN_LABELS[code] || code.replace(/_/g, ' ').replace(/^./, c => c.toUpperCase());
 }
 
-/** "Skopos" → "Skopos workspace"; "Ollie's workspace" stays as it is. */
-export function workspaceHeading(name?: string | null): string {
+/** "Skopos" → "Skopos workspace"; "Ollie's workspace" stays as it is. A personal workspace is "Personal". */
+export function workspaceHeading(name?: string | null, personal = false): string {
   const text = (name || '').trim();
+  if (personal) return text || 'Personal';
   if (!text) return 'Your workspace';
   return /workspace$/i.test(text) ? text : `${text} workspace`;
+}
+
+/** Catalog price only when it is the currency Stripe is charging. A past renewal date is omitted. */
+export function billedPlanLine(input: {
+  price?: string;
+  catalogCurrency?: string | null;
+  chargeCurrency?: string | null;
+  renewalDate?: string | null;
+  now?: Date;
+}): string {
+  const catalog = (input.catalogCurrency || '').toUpperCase();
+  const charge = (input.chargeCurrency || '').toUpperCase();
+  const price = input.price && (!charge || !catalog || charge === catalog) ? input.price : '';
+  const now = input.now || new Date();
+  const renewAt = input.renewalDate ? new Date(input.renewalDate) : null;
+  const renew =
+    renewAt && !Number.isNaN(renewAt.getTime()) && renewAt.getTime() > now.getTime()
+      ? `renews on ${formatDay(input.renewalDate, now)}`
+      : '';
+  return [price, renew].filter(Boolean).join(' · ');
 }
 
 const SYMBOLS: Record<string, string> = { GBP: '£', USD: '$', EUR: '€' };

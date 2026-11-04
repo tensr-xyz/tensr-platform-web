@@ -12,9 +12,9 @@ export type TableBaseBook = {
 };
 
 function formatBase(value: number): string {
-  return Number.isInteger(value)
-    ? value.toLocaleString('en-GB')
-    : value.toLocaleString('en-GB', { maximumFractionDigits: 1 });
+  const whole = Math.round(value);
+  if (Math.abs(value - whole) < 1e-6) return whole.toLocaleString('en-GB');
+  return value.toLocaleString('en-GB', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
 
 /** "Base: …" once. A label that already starts with base is not prefixed again. */

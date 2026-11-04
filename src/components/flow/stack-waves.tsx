@@ -305,19 +305,39 @@ export function dedupeUploads(rows: StackFile[]): StackFile[] {
   });
 }
 
-/** Columns two files share, ignoring system columns that start with "_". */
+function columnNameSet(list: WaveColumn[]): Set<string> {
+  return new Set(list.map(column => column.name).filter(name => name && !name.startsWith('_')));
+}
+
+/** Columns two files share, as a share of the wider file. */
 export function sharedColumnShare(left: WaveColumn[], right: WaveColumn[]): number {
-  const names = (list: WaveColumn[]) =>
-    new Set(list.map(column => column.name).filter(name => name && !name.startsWith('_')));
-  const a = names(left);
-  const b = names(right);
+  const a = columnNameSet(left);
+  const b = columnNameSet(right);
   if (!a.size || !b.size) return 0;
   let shared = 0;
   for (const name of a) if (b.has(name)) shared += 1;
-  return shared / Math.min(a.size, b.size);
+  return shared / Math.max(a.size, b.size);
 }
 
-/** An upload from another project is offered when it shares at least half its columns with one here. */
+/** Columns present on every file, against the widest file. */
+export function columnOverlap(lists: WaveColumn[][]): {
+  matched: number;
+  widest: number;
+  share: number;
+} {
+  const sets = lists.map(columnNameSet).filter(set => set.size > 0);
+  if (sets.length < 2) return { matched: 0, widest: 0, share: 1 };
+  const widest = Math.max(...sets.map(set => set.size));
+  let matched = 0;
+  for (const name of sets[0]) {
+    if (sets.every(set => set.has(name))) matched += 1;
+  }
+  return { matched, widest, share: widest ? matched / widest : 0 };
+}
+
+export const LOW_COLUMN_OVERLAP = 0.5;
+
+/** An upload from another project is offered when at least half the wider file's columns match. */
 export function overlapsAny(columns: WaveColumn[], references: WaveColumn[][]): boolean {
   return references.some(reference => sharedColumnShare(columns, reference) >= 0.5);
 }
@@ -428,6 +448,7 @@ export function StackWaves({
   const [scaleFlags, setScaleFlags] = useState<ScaleFlag[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmLow, setConfirmLow] = useState(false);
 
   const otherIds = candidates.elsewhere.map(row => datasetRowId(row)).join('|');
   const hereIds = here.map(row => datasetRowId(row)).join('|');
@@ -442,34 +463,29 @@ export function StackWaves({
     ];
     const hereFileIds = here.map(row => datasetRowId(row)).filter(Boolean);
     const otherFileIds = candidates.elsewhere.map(row => datasetRowId(row)).filter(Boolean);
-    // This project's columns first so the overlap filter can start before other-project metadata returns.
+    const fileIds = [...hereFileIds, ...otherFileIds];
+    void flowJson<{ columns?: Record<string, string[]> }>('/datasets/intake/column-names', {
+      method: 'POST',
+      body: JSON.stringify({ dataset_ids: fileIds }),
+    })
+      .then(page => {
+        if (cancelled) return;
+        const named = Object.entries(page.columns || {}).map(
+          ([id, names]) => [id, names.map(name => ({ name }))] as const
+        );
+        setColumnsById(current => ({ ...Object.fromEntries(named), ...current }));
+        setLookupsDone(true);
+      })
+      .catch(() => {
+        if (!cancelled) setLookupsDone(true);
+      });
     void Promise.all(
-      hereFileIds.map(id =>
-        flowJson<{ columns?: WaveColumn[] }>(`/datasets/${id}/metadata`)
-          .then(meta => [id, meta.columns || []] as const)
-          .catch(() => [id, [] as WaveColumn[]] as const)
+      unknown.map(id =>
+        flowJson<{ project?: { name?: string; status?: string } }>(`/api/projects/${id}`)
+          .then(page => [id, page.project] as const)
+          .catch(() => [id, undefined] as const)
       )
-    ).then(columns => {
-      if (cancelled) return;
-      setColumnsById(current => ({ ...Object.fromEntries(columns), ...current }));
-      setLookupsDone(true);
-    });
-    void Promise.all([
-      Promise.all(
-        unknown.map(id =>
-          flowJson<{ project?: { name?: string; status?: string } }>(`/api/projects/${id}`)
-            .then(page => [id, page.project] as const)
-            .catch(() => [id, undefined] as const)
-        )
-      ),
-      Promise.all(
-        otherFileIds.map(id =>
-          flowJson<{ columns?: WaveColumn[] }>(`/datasets/${id}/metadata`)
-            .then(meta => [id, meta.columns || []] as const)
-            .catch(() => [id, [] as WaveColumn[]] as const)
-        )
-      ),
-    ]).then(([projects, columns]) => {
+    ).then(projects => {
       if (cancelled) return;
       setProjectInfo(
         Object.fromEntries(
@@ -482,7 +498,6 @@ export function StackWaves({
           ])
         )
       );
-      setColumnsById(current => ({ ...Object.fromEntries(columns), ...current }));
     });
     return () => {
       cancelled = true;
@@ -519,6 +534,12 @@ export function StackWaves({
   }, [here, picked.length]);
 
   const pickedKey = picked.join('|');
+  const pickedColumns = picked
+    .map(id => columnsById[id])
+    .filter((list): list is WaveColumn[] => Boolean(list?.length));
+  const overlapSummary = columnOverlap(pickedColumns);
+  const lowOverlap =
+    picked.length >= 2 && overlapSummary.widest > 0 && overlapSummary.share < LOW_COLUMN_OVERLAP;
   useEffect(() => {
     const missing = picked.filter(id => !columnsById[id]);
     if (!missing.length) return;
@@ -541,6 +562,10 @@ export function StackWaves({
     };
     // pickedKey covers picked; columnsById only grows.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickedKey]);
+
+  useEffect(() => {
+    setConfirmLow(false);
   }, [pickedKey]);
 
   useEffect(() => {
@@ -666,6 +691,7 @@ export function StackWaves({
 
   const stack = () => {
     if (picked.length < 2 || clash || busy) return;
+    if (lowOverlap && !confirmLow) return;
     setBusy(true);
     setError(null);
     const mappings = stackMappings(rows, choices);
@@ -762,6 +788,17 @@ export function StackWaves({
             <span>Keep one row per respondent (the first file&apos;s)</span>
           </label>
         </div>
+      ) : null}
+      {picked.length >= 2 && overlapSummary.widest > 0 ? (
+        <p className={lowOverlap ? 'flow-banner warn' : 'flow-muted'} role="status">
+          {overlapSummary.matched} of {overlapSummary.widest} columns match across these files.
+          {lowOverlap && !confirmLow ? ' Confirm before stacking files that barely overlap.' : ''}
+        </p>
+      ) : null}
+      {lowOverlap && !confirmLow ? (
+        <Button className="flow-btn" type="button" onClick={() => setConfirmLow(true)}>
+          Stack anyway
+        </Button>
       ) : null}
       {picked.length < 2 ? (
         <p className="flow-muted">Pick at least two files.</p>
@@ -933,7 +970,7 @@ export function StackWaves({
         <Button
           className="flow-btn primary"
           type="button"
-          disabled={busy || picked.length < 2 || Boolean(clash)}
+          disabled={busy || picked.length < 2 || Boolean(clash) || (lowOverlap && !confirmLow)}
           onClick={stack}
         >
           {busy
