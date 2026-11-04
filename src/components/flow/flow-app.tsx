@@ -4296,9 +4296,10 @@ function ReportScreen({
     const overviewUrl = `/api/projects/${projectId}/overview${
       fileIds.length ? `?dataset_ids=${encodeURIComponent(fileIds.join(','))}` : ''
     }`;
-    void shareRequest(overviewUrl, () =>
-      flowJson<{
+    void shareRequest(overviewUrl, async () => {
+      const first = await flowJson<{
         ok?: boolean;
+        stamps_pending?: boolean;
         tables?: {
           spec_id?: string;
           label?: string;
@@ -4310,8 +4311,14 @@ function ReportScreen({
         }[];
         findings?: { id: string; title: string; number?: number | null }[];
         runs?: { id?: string; dataset_id?: string; in_report?: boolean; report_pin?: unknown }[];
-      }>(overviewUrl)
-    )
+      }>(overviewUrl);
+      if (!first?.stamps_pending || !fileIds.length) return first;
+      await flowJson('/datasets/file-stamps', {
+        method: 'POST',
+        body: JSON.stringify({ dataset_ids: fileIds }),
+      }).catch(() => null);
+      return flowJson<typeof first>(overviewUrl);
+    })
       .then(async overview => {
         if (!live || !overview?.ok || !Array.isArray(overview.tables)) {
           throw new Error('Could not load saved tables');

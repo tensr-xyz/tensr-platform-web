@@ -61,12 +61,22 @@ export async function loadProjectTables(
   } = {}
 ): Promise<ProjectTable[]> {
   // Both lists, merged: the project's (every file) and the open file's own, so a gap in one never empties the rail.
-  const [projectPage, filePage] = await Promise.all([
-    projectId
-      ? flowJson<{ specs?: RawRow[] }>(projectTablesPath(projectId, options.fileIds)).catch(
-          () => null
-        )
-      : Promise.resolve(null),
+  const fileIds = options.fileIds || [];
+  let projectPage = projectId
+    ? await flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(
+        projectTablesPath(projectId, fileIds)
+      ).catch(() => null)
+    : null;
+  if (projectId && projectPage?.stamps_pending && fileIds.length) {
+    await flowJson('/datasets/file-stamps', {
+      method: 'POST',
+      body: JSON.stringify({ dataset_ids: fileIds }),
+    }).catch(() => null);
+    projectPage = await flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(
+      projectTablesPath(projectId, fileIds)
+    ).catch(() => null);
+  }
+  const [filePage] = await Promise.all([
     options.filePage ||
       (datasetId
         ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
