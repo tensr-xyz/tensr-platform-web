@@ -732,6 +732,12 @@ class ApiClient {
 
   /** tensr-api `/assistant/*` — dataset-scoped tutor / intent. */
   assistant = {
+    signExport: (key: string) =>
+      this.request<{ filename: string; url: string; expires: number }>('/assistant/exports/sign', {
+        method: 'POST',
+        body: JSON.stringify({ key }),
+      }),
+
     parseIntent: (data: {
       datasetId: string;
       message: string;
@@ -1035,10 +1041,20 @@ class ApiClient {
           }
         ),
 
-      listRuns: (datasetId: string) =>
-        this.request<{ dataset_id: string; runs: unknown[] }>(`/datasets/${datasetId}/runs`),
+      listRuns: (datasetId: string, cursor?: string) => {
+        const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : '';
+        return this.request<{ dataset_id: string; runs: unknown[]; next_cursor?: string | null }>(
+          `/datasets/${datasetId}/runs${query}`
+        );
+      },
 
       get: (runId: string) => this.request<any>(`/datasets/analysis-runs/${runId}`),
+
+      recheckR: (runId: string) =>
+        this.request<{ r_syntax_verification?: unknown }>(
+          `/datasets/analysis-runs/${runId}/r-check`,
+          { method: 'POST' }
+        ),
 
       resolve: (runId: string, group?: string) => {
         const q = group ? `?group=${encodeURIComponent(group)}` : '';

@@ -1,0 +1,72 @@
+import { flowJson } from '@/lib/flow-api';
+
+/** A saved table, with the file it was built on. */
+export type ProjectTable = {
+  id: string;
+  label: string;
+  datasetId: string;
+  filename: string;
+};
+
+type RawRow = {
+  spec_id?: string;
+  id?: string;
+  label?: string;
+  name?: string;
+  dataset_id?: string;
+  filename?: string;
+};
+
+export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = ''): ProjectTable[] {
+  const seen = new Set<string>();
+  const out: ProjectTable[] = [];
+  for (const row of rows || []) {
+    const id = String(row.spec_id || row.id || '');
+    const datasetId = String(row.dataset_id || fallbackDataset);
+    const key = `${datasetId}:${id}`;
+    if (!id || seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      id,
+      label: row.label || row.name || id,
+      datasetId,
+      filename: row.filename || '',
+    });
+  }
+  return out;
+}
+
+/**
+ * Every table saved in the project, so the list stays put when the file in use changes.
+ * Falls back to the one file's tables when the project list is unavailable.
+ */
+export async function loadProjectTables(
+  projectId: string | undefined,
+  datasetId: string | undefined
+): Promise<ProjectTable[]> {
+  // Both lists, merged: the project's (every file) and the open file's own, so a gap in one never empties the rail.
+  const [projectPage, filePage] = await Promise.all([
+    projectId
+      ? flowJson<{ specs?: RawRow[] }>(`/api/projects/${projectId}/tables`).catch(() => null)
+      : Promise.resolve(null),
+    datasetId
+      ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
+      : Promise.resolve(null),
+  ]);
+  return mergeTableLists(
+    projectTableRows(projectPage?.specs),
+    projectTableRows(filePage?.specs, datasetId)
+  );
+}
+
+/** Project tables first (newest first); the open file's tables the project list missed go on top. */
+export function mergeTableLists(project: ProjectTable[], file: ProjectTable[]): ProjectTable[] {
+  const known = new Set(project.map(table => `${table.datasetId}:${table.id}`));
+  return [...file.filter(table => !known.has(`${table.datasetId}:${table.id}`)), ...project];
+}
+
+/** "on cars_EN - weighted 3 Nov" for a table built on another file than the one open. */
+export function tableFileNote(table: ProjectTable, openDatasetId: string | undefined): string {
+  if (!table.datasetId || table.datasetId === openDatasetId) return '';
+  return table.filename ? `on ${table.filename}` : 'on another file';
+}

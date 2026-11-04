@@ -1,0 +1,397 @@
+<div className="[font-synthesis:none] wrap-anywhere text-[12px] leading-4 flex overflow-clip w-360 h-225 font-sans bg-canvas antialiased">
+  <div className="w-58 shrink-0 flex flex-col py-3.5 px-2.5 gap-4.5 self-stretch h-225 bg-well border-r border-r-solid border-r-line">
+    <div className="flex items-center justify-between py-1 px-2">
+      <div className="flex items-center gap-2.5">
+        <div className="flex items-center justify-center shrink-0 rounded-sm bg-ink size-6">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 48 48"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ display: 'inline-block', flexShrink: 0 }}
+          >
+            <rect x="4" y="5" width="12" height="12" rx="2.5" fill="#FFFFFF" />
+            <rect x="18" y="5" width="12" height="12" rx="2.5" fill="#FFFFFF" />
+            <rect x="32" y="5" width="12" height="12" rx="2.5" fill="#6FC2A6" />
+            <rect x="18" y="19" width="12" height="12" rx="2.5" fill="#FFFFFF" />
+            <rect x="18" y="33" width="12" height="12" rx="2.5" fill="#FFFFFF" />
+          </svg>
+        </div>
+        <div className="text-[14px] tracking-[-0.01em] font-[system-ui,sans-serif] font-[600] leading-4.5 text-ink">
+          Tensr
+        </div>
+        <div className="text-[13px] font-[system-ui,sans-serif] leading-4 text-muted">· Skopos</div>
+      </div>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ display: 'inline-block', flexShrink: 0 }}
+      >
+        <rect
+          x="2.5"
+          y="3"
+          width="11"
+          height="10"
+          rx="2"
+          fill="none"
+          stroke="#6A6B66"
+          strokeWidth="1.3"
+        />
+        <path d="M6.5 3v10" fill="#000000" stroke="#6A6B66" strokeWidth="1.3" />
+      </svg>
+    </div>
+    <div className="flex flex-col gap-0.5">
+      <div className="flex items-center p-2 rounded-[8px] gap-2.5 bg-canvas border border-solid border-line">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ display: 'inline-block', flexShrink: 0 }}
+        >
+          <path
+            d="M8 3.5v9M3.5 8h9"
+            fill="#000000"
+            stroke="#1B1C1A"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="text-[14px] grow basis-[0%] font-[system-ui,sans-serif] font-[500] leading-4.5 text-ink">
+          New project
+        </div>
+        <div className="text-[11px] font-sans font-features-['tnum'] leading-3.5 text-muted">
+          ⌘N
+        </div>
+      </div>
+      <div className="flex items-center p-2 rounded-[8px] gap-2.5">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ display: 'inline-block', flexShrink: 0 }}
+        >
+          <circle cx="7" cy="7" r="4.5" fill="none" stroke="#6A6B66" strokeWidth="1.4" />
+          <path
+            d="M10.5 10.5L13.5 13.5"
+            fill="#000000"
+            stroke="#6A6B66"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="text-[14px] grow basis-[0%] font-[system-ui,sans-serif] leading-4.5 text-ink">
+          Search
+        </div>
+        <div className="text-[11px] font-sans font-features-['tnum'] leading-3.5 text-muted">
+          ⌘K
+        </div>
+      </div>
+      <div className="flex items-center p-2 rounded-[8px] gap-2.5">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ display: 'inline-block', flexShrink: 0 }}
+        >
+          <rect
+            x="2.5"
+            y="2.5"
+            width="11"
+            height="11"
+            rx="2"
+            fill="none"
+            stroke="#6A6B66"
+            strokeWidth="1.4"
+          />
+          <path d="M2.5 6.5h11M6.5 6.5v7" fill="#000000" stroke="#6A6B66" strokeWidth="1.4" />
+        </svg>
+        <div className="text-[14px] grow basis-[0%] font-[system-ui,sans-serif] font-[500] leading-4.5 text-ink">
+          Home
+        </div>
+      </div>
+      <div className="flex items-center h-8.5 px-2 rounded-[7px] gap-2.5 shrink-0">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ display: 'inline-block', flexShrink: 0 }}
+        >
+          <ellipse cx="8" cy="4" rx="5" ry="1.8" fill="none" stroke="#6A6B66" strokeWidth="1.2" />
+          <path
+            d="M3 4v8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8V4M3 8c0 1 2.2 1.8 5 1.8s5-.8 5-1.8"
+            fill="none"
+            stroke="#6A6B66"
+            strokeWidth="1.2"
+          />
+        </svg>
+        <div className="grow basis-[0%] text-[14px] font-[system-ui,sans-serif] leading-4.5 text-ink">
+          Datasets
+        </div>
+        <div className="text-[12px] font-[system-ui,sans-serif] leading-4 text-muted">12</div>
+      </div>
+      <div className="flex items-center p-2 rounded-[8px] gap-2.5">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 16 16"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ display: 'inline-block', flexShrink: 0 }}
+        >
+          <path
+            d="M6 2.5h4v2a1.3 1.3 0 102.6 0h0.9v4h-2a1.3 1.3 0 100 2.6h2v2.4H2.5V10.5h2a1.3 1.3 0 100-2.6h-2V4.5H6z"
+            fill="none"
+            stroke="#6A6B66"
+            strokeWidth="1.2"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <div className="text-[14px] grow basis-[0%] font-[system-ui,sans-serif] leading-4.5 text-ink">
+          Plugins
+        </div>
+      </div>
+    </div>
+    <div className="flex flex-col gap-0.5 grow">
+      <div className="flex items-center justify-between pt-1 pb-1.5 px-2">
+        <div className="text-[12px] font-[system-ui,sans-serif] font-[500] leading-4 text-muted">
+          Folders
+        </div>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 14 14"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ display: 'inline-block', flexShrink: 0 }}
+        >
+          <path
+            d="M7 3v8M3 7h8"
+            fill="#000000"
+            stroke="#6A6B66"
+            strokeWidth="1.3"
+            strokeLinecap="round"
+          />
+        </svg>
+      </div>
+      <div className="flex items-center py-1.75 px-2 rounded-[8px] gap-2.5 bg-[#ECECE7]">
+        <div className="shrink-0 rounded-[2px] bg-accent size-2" />
+        <div className="text-[14px] grow basis-[0%] font-[system-ui,sans-serif] leading-4.5 text-ink">
+          Octavia Energy
+        </div>
+      </div>
+      <div className="flex items-center py-1.75 px-2 rounded-[8px] gap-2.5">
+        <div className="shrink-0 rounded-[2px] bg-[#9A9A93] size-2" />
+        <div className="text-[14px] grow basis-[0%] font-[system-ui,sans-serif] leading-4.5 text-ink">
+          Halden Bank
+        </div>
+      </div>
+      <div className="flex items-center py-1.75 px-2 rounded-[8px] gap-2.5">
+        <div className="shrink-0 rounded-[2px] bg-[#9A9A93] size-2" />
+        <div className="text-[14px] grow basis-[0%] font-[system-ui,sans-serif] leading-4.5 text-ink">
+          Internal
+        </div>
+      </div>
+    </div>
+    <div className="flex items-center pt-3.5 pb-2 gap-2.5 px-2 border-t border-t-solid border-t-line">
+      <div className="flex items-center justify-center rounded-[14px] shrink-0 bg-[#D9E6E0] size-7">
+        <div className="text-[12px] font-[system-ui,sans-serif] font-[600] leading-4 text-accent">
+          OD
+        </div>
+      </div>
+      <div className="flex flex-col grow basis-[0%] gap-px">
+        <div className="text-[13px] font-[system-ui,sans-serif] font-[500] leading-4 text-ink">
+          Ollie Darby
+        </div>
+        <div className="text-[12px] font-[system-ui,sans-serif] leading-4 text-muted">
+          Pro · 30-day trial
+        </div>
+      </div>
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        xmlns="http://www.w3.org/2000/svg"
+        style={{ display: 'inline-block', flexShrink: 0 }}
+      >
+        <circle cx="4" cy="8" r="1.1" fill="#6A6B66" />
+        <circle cx="8" cy="8" r="1.1" fill="#6A6B66" />
+        <circle cx="12" cy="8" r="1.1" fill="#6A6B66" />
+      </svg>
+    </div>
+  </div>
+  <div className="grow basis-[0%] min-w-0 flex flex-col py-11 px-14 gap-5.5">
+    <div className="flex items-end justify-between">
+      <div className="flex flex-col gap-1">
+        <div className="text-[13px] leading-4 font-[system-ui,sans-serif] text-muted">
+          Projects › Folder
+        </div>
+        <div className="flex items-center gap-2.5">
+          <div className="rounded-[3px] shrink-0 bg-accent size-3" />
+          <div className="text-[30px] leading-9 tracking-[-0.02em] font-[system-ui,sans-serif] font-[500] text-ink">
+            Octavia Energy
+          </div>
+        </div>
+        <div className="text-[13px] leading-4 font-[system-ui,sans-serif] text-muted">
+          2 projects · shared with Octavia account team (can edit) · client viewer
+          jo.taylor@octavia.energy
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <div className="flex items-center h-9 px-3 rounded-[8px] border border-solid border-line">
+          <div className="text-[13px] font-[system-ui,sans-serif] leading-4 text-ink">···</div>
+        </div>
+        <div className="flex items-center h-9 px-3 rounded-[8px] border border-solid border-line">
+          <div className="text-[13px] font-[system-ui,sans-serif] leading-4 text-ink">
+            Share folder
+          </div>
+        </div>
+        <div className="flex items-center h-9 px-3.5 rounded-[8px] bg-ink">
+          <div className="text-[13px] font-[system-ui,sans-serif] font-[500] leading-4 text-canvas">
+            + New project here
+          </div>
+        </div>
+      </div>
+    </div>
+    <div className="flex items-center gap-2">
+      <div className="flex p-0.5 rounded-[8px] bg-well">
+        <div className="py-1 px-2.5 rounded-sm [box-shadow:#1B1C1A14_0px_1px_2px] bg-canvas">
+          <div className="text-[13px] font-[system-ui,sans-serif] font-[500] leading-4 text-ink">
+            Cards
+          </div>
+        </div>
+        <div className="py-1 px-2.5">
+          <div className="text-[13px] font-[system-ui,sans-serif] leading-4 text-muted">Table</div>
+        </div>
+      </div>
+      <div className="grow basis-[0%]" />
+      <div className="py-1 px-2.5 rounded-sm bg-well">
+        <div className="text-[13px] font-[system-ui,sans-serif] font-[500] leading-4 text-ink">
+          Active
+        </div>
+      </div>
+      <div className="py-1 px-2.5">
+        <div className="text-[13px] font-[system-ui,sans-serif] leading-4 text-muted">Mine</div>
+      </div>
+      <div className="py-1 px-2.5">
+        <div className="text-[13px] font-[system-ui,sans-serif] leading-4 text-muted">Archived</div>
+      </div>
+    </div>
+    <div className="flex flex-wrap gap-4">
+      <div className="w-[calc(33.33%-11px)] flex flex-col p-5 rounded-[14px] gap-4 bg-canvas border border-solid border-line">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <div className="rounded-[2px] shrink-0 bg-accent size-2" />
+            <div className="inline-block text-[12px] font-[system-ui,sans-serif] leading-4 text-muted">
+              Octavia Energy
+            </div>
+          </div>
+          <div className="flex items-center py-0.5 px-2 rounded-[999px] gap-1.25 bg-accent-soft">
+            <div className="rounded-[3px] shrink-0 bg-accent size-1.5" />
+            <div className="inline-block text-[12px] font-[system-ui,sans-serif] font-[500] leading-4 text-accent">
+              Fielding
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-[18px] tracking-[-0.01em] font-[system-ui,sans-serif] font-[600] leading-5.5 text-black">
+            Brand tracker W4
+          </div>
+          <div className="text-[13px] font-[system-ui,sans-serif] leading-4 text-muted">
+            Tracker · wave 4 of 6 · 14 tables
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex justify-between">
+            <div className="text-[12px] font-[system-ui,sans-serif] leading-4 text-muted">
+              Prolific
+            </div>
+            <div className="text-[12px] font-[system-ui,sans-serif] font-[500] leading-4 text-ink">
+              312 / 400
+            </div>
+          </div>
+          <div className="h-1 flex rounded-[2px] shrink-0 bg-well">
+            <div className="w-[round(78%,1px)] rounded-[2px] bg-accent" />
+          </div>
+        </div>
+        <div className="flex items-center justify-between pt-3.5 border-t border-t-solid border-t-line">
+          <div className="flex">
+            <div className="flex items-center justify-center rounded-[12px] shrink-0 bg-accent-soft border-2 border-solid border-canvas size-6">
+              <div className="text-[9px] font-[system-ui,sans-serif] font-[600] leading-3 text-accent">
+                OD
+              </div>
+            </div>
+            <div className="flex items-center justify-center rounded-[12px] shrink-0 bg-[#E6ECF2] border-2 border-solid border-canvas size-6">
+              <div className="text-[9px] font-[system-ui,sans-serif] font-[600] leading-3 text-[#3D5A73]">
+                MK
+              </div>
+            </div>
+          </div>
+          <div className="text-[12px] font-[system-ui,sans-serif] leading-4 text-muted">
+            Edited 12 min ago
+          </div>
+        </div>
+      </div>
+      <div className="w-[calc(33.33%-11px)] flex flex-col p-5 rounded-[14px] gap-4 bg-canvas border border-solid border-line">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <div className="rounded-[2px] shrink-0 bg-accent size-2" />
+            <div className="inline-block text-[12px] font-[system-ui,sans-serif] leading-4 text-muted">
+              Octavia Energy
+            </div>
+          </div>
+          <div className="py-0.5 px-2 rounded-[999px] bg-[#F3ECE0]">
+            <div className="text-[12px] font-[system-ui,sans-serif] font-[500] leading-4 text-warn">
+              Analysing
+            </div>
+          </div>
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-[18px] tracking-[-0.01em] font-[system-ui,sans-serif] font-[600] leading-5.5 text-black">
+            Tariff concept test
+          </div>
+          <div className="text-[13px] font-[system-ui,sans-serif] leading-4 text-muted">
+            Ad hoc · 3 concepts · Qualtrics live
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex justify-between">
+            <div className="text-[12px] font-[system-ui,sans-serif] leading-4 text-muted">
+              Qualtrics
+            </div>
+            <div className="text-[12px] font-[system-ui,sans-serif] font-[500] leading-4 text-ink">
+              600 / 600
+            </div>
+          </div>
+          <div className="h-1 rounded-[2px] shrink-0 bg-accent" />
+        </div>
+        <div className="flex items-center justify-between pt-3.5 border-t border-t-solid border-t-line">
+          <div className="flex">
+            <div className="flex items-center justify-center rounded-[12px] shrink-0 bg-[#E6ECF2] border-2 border-solid border-canvas size-6">
+              <div className="text-[9px] font-[system-ui,sans-serif] font-[600] leading-3 text-[#3D5A73]">
+                MK
+              </div>
+            </div>
+          </div>
+          <div className="text-[12px] font-[system-ui,sans-serif] leading-4 text-muted">
+            Edited yesterday
+          </div>
+        </div>
+      </div>
+      <div className="w-[calc(33.33%-11px)] flex flex-col items-center justify-center p-5 rounded-[14px] gap-2 bg-well border border-dashed border-line">
+        <div className="flex items-center justify-center rounded-[18px] shrink-0 bg-canvas border border-solid border-line size-9">
+          <div className="text-[18px] font-[system-ui,sans-serif] leading-5.5 text-ink">+</div>
+        </div>
+        <div className="text-[15px] font-[system-ui,sans-serif] font-[500] leading-4.5 text-black">
+          New project
+        </div>
+        <div className="text-[13px] text-center font-[system-ui,sans-serif] leading-4 text-muted">
+          Drop in a .sav, .dta, CSV or Excel file
+        </div>
+      </div>
+    </div>
+  </div>
+</div>;

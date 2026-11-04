@@ -1,6 +1,7 @@
 import type { AnalysisReport, DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
 import { schemaColumnSlotType } from '@/lib/analysis-column-types';
 import { isIdColumn, type StarterColumn } from '@/lib/agent-starter-prompts';
+import { isIdColumn as isFlowIdColumn } from '@/lib/flow-columns';
 
 export type AnalysisKey =
   | 'descriptives'
@@ -94,7 +95,7 @@ export type AnalysisKey =
 export type KolmogorovTestType = 'normality' | 'two_sample';
 
 export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
-  descriptives: 'Frequencies',
+  descriptives: 'Descriptive statistics',
   correlation: 'Bivariate Correlations',
   ttest_independent: 'Independent-Samples T Test',
   ttest_paired: 'Paired-Samples T Test',
@@ -184,7 +185,7 @@ export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
 };
 
 export const SPSS_MENU_PATHS: Record<AnalysisKey, string> = {
-  descriptives: 'Analyze → Descriptive Statistics → Frequencies',
+  descriptives: 'Analyze → Descriptive Statistics → Descriptives',
   correlation: 'Analyze → Correlate → Bivariate',
   ttest_independent: 'Analyze → Compare Means → Independent-Samples T Test',
   ttest_paired: 'Analyze → Compare Means → Paired-Samples T Test',
@@ -424,6 +425,7 @@ export type AnalysisFormSetters = {
   setPairedAfterCol: (v: string) => void;
   setOneSampleCol: (v: string) => void;
   setHypothesizedMean: (v: string) => void;
+  setWeightCol?: (s: string) => void;
 };
 
 export function applyBodyToForm(
@@ -450,6 +452,10 @@ export function applyBodyToForm(
   if (op === 'descriptives' || op === 'correlation') {
     const cols = body.columns as string[] | undefined;
     setSelectedCols(cols?.length ? cols : []);
+    if (op === 'descriptives') {
+      const weight = body.weight_column ?? body.weight;
+      if (typeof weight === 'string') setters.setWeightCol?.(weight);
+    }
     if (op === 'correlation') {
       const method = body.method;
       if (method === 'pearson' || method === 'spearman' || method === 'kendall')
@@ -837,9 +843,11 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     const statistics = (Object.entries(descriptiveStats) as [DescriptiveStatKey, boolean][])
       .filter(([, on]) => on)
       .map(([key]) => key);
+    const weight = form.weightCol.trim();
     return {
       columns: selectedCols.length ? selectedCols : undefined,
       statistics: statistics.length ? statistics : undefined,
+      ...(weight ? { weight_column: weight } : {}),
     };
   }
   if (analysis === 'correlation') {
@@ -1075,21 +1083,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       column_letters: true,
     };
     const weight = form.bannerWeight.trim();
-    if (weight) body.weight = weight;
-    const decimals = form.bannerDecimals.trim();
-    if (decimals && !decimals.startsWith('{')) {
-      const places = Number(decimals);
-      if (!Number.isNaN(places)) {
-        const n = Math.max(0, Math.min(6, Math.round(places)));
-        body.decimal_places = n;
-        body.decimals = {
-          column_proportion: n,
-          row_proportion: n,
-          total_proportion: n,
-          column_mean: n,
-        };
-      }
-    }
+    if (weight && weight !== '__none__') body.weight = weight;
     const filter = form.bannerFilter.trim();
     if (filter) body.filter = filter;
     const nets = form.bannerNetRows
@@ -1108,8 +1102,6 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     body.letter_case = 'lower';
     body.letter_upper_alpha = 0.01;
     body.multiple_comparison = 'fdr';
-    body.apa_format = form.apaFormat;
-    body.include_charts = form.includeCharts;
     return body;
   }
   if (analysis === 'chi_square') {
@@ -1585,12 +1577,116 @@ export function categoricalColumnNames(
     .map(column => column.name);
 }
 
+function previewValues(name: string, preview?: DatasetPreview | null): unknown[] {
+  if (!preview) return [];
+  const index = preview.headers.indexOf(name);
+  if (index < 0) return [];
+  return preview.rows.map(row => row[index]);
+}
+
+/** A respondent, record or row id (id, respondent_id, respid, _row_uid, ...). Never a setup default. */
+export function isIdLikeSchemaColumn(
+  column: SchemaColumn,
+  preview?: DatasetPreview | null
+): boolean {
+  return (
+    isFlowIdColumn(column.name, previewValues(column.name, preview)) ||
+    isIdColumn(asStarterColumn(column, preview))
+  );
+}
+
+/** Columns a setup slot may start on: everything except ids. */
+export function nonIdColumnNames(
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
+): string[] {
+  return schema.filter(column => !isIdLikeSchemaColumn(column, preview)).map(column => column.name);
+}
+
+/** Rows from GET /datasets/{id}/preview as the setup dialog's preview. Null when empty. */
+export function datasetPreviewFromPage(page: unknown): DatasetPreview | null {
+  if (!page || typeof page !== 'object') return null;
+  const raw = page as { headers?: unknown; variable_names?: unknown; rows?: unknown };
+  // headers are display labels ("Owns car A"); the schema matches on variable names (owns_A).
+  const names = Array.isArray(raw.variable_names) ? raw.variable_names : raw.headers;
+  const headers = Array.isArray(names) ? names.map(header => String(header)) : [];
+  const rows = Array.isArray(raw.rows) ? raw.rows.filter(Array.isArray) : [];
+  if (!headers.length || !rows.length) return null;
+  return {
+    headers,
+    rows: rows.map(row =>
+      headers.map((_, index) => {
+        const value = (row as unknown[])[index];
+        if (value === undefined || value === null) return null;
+        if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+          return value;
+        return String(value);
+      })
+    ),
+  };
+}
+
+function isMissingCell(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  const text = String(value).trim();
+  return text === '' || text.toLowerCase() === 'null' || text.toLowerCase() === 'nan';
+}
+
+/**
+ * Non-missing groups in a column: observed preview values first, then value labels,
+ * then the schema's distinct count. Undefined when nothing is known.
+ */
+export function columnLevelCount(
+  column: SchemaColumn,
+  preview?: DatasetPreview | null
+): number | undefined {
+  const values = previewValues(column.name, preview);
+  if (preview && preview.headers.includes(column.name)) {
+    const seen = new Set<string>();
+    for (const value of values) {
+      if (isMissingCell(value)) continue;
+      seen.add(String(value).trim());
+    }
+    if (seen.size > 0) return seen.size;
+  }
+  const labels = column.value_labels ? Object.keys(column.value_labels) : [];
+  if (labels.length) return labels.length;
+  if (typeof column.uniqueCount === 'number') return column.uniqueCount;
+  return undefined;
+}
+
+/**
+ * Grouping variables an independent-samples t-test can use: categorical, not an id,
+ * exactly two non-missing groups. When no column has a known group count, every
+ * categorical column stays on offer.
+ */
+export function twoGroupColumnNames(
+  schema: SchemaColumn[],
+  preview?: DatasetPreview | null
+): string[] {
+  const categorical = new Set(categoricalColumnNames(schema, preview));
+  const candidates = schema.filter(
+    column => categorical.has(column.name) || columnLevelCount(column, preview) === 2
+  );
+  const usable = candidates.filter(column => !isIdLikeSchemaColumn(column, preview));
+  const counts = usable.map(column => columnLevelCount(column, preview));
+  if (counts.every(count => count === undefined)) {
+    return usable.filter(column => categorical.has(column.name)).map(column => column.name);
+  }
+  return usable.filter((_, index) => counts[index] === 2).map(column => column.name);
+}
+
 function numericColumnNames(schema: SchemaColumn[], preview?: DatasetPreview | null): string[] {
-  const usable = schema
-    .filter(column => column.type === 'numeric' && !isIdColumn(asStarterColumn(column, preview)))
+  const usable = schema.filter(column => !isIdLikeSchemaColumn(column, preview));
+  const numeric = usable.filter(column => column.type === 'numeric').map(column => column.name);
+  if (numeric.length) return numeric;
+  // Integer storage types (int64, ...) without value labels are measures too. Never an id.
+  return usable
+    .filter(
+      column =>
+        declaredNumeric(column) && !(column.value_labels && Object.keys(column.value_labels).length)
+    )
     .map(column => column.name);
-  if (usable.length) return usable;
-  return schema.filter(column => column.type === 'numeric').map(column => column.name);
 }
 
 const CATEGORICAL_OUTCOME_ANALYSES = new Set<AnalysisKey>([
@@ -1610,11 +1706,12 @@ export function defaultFormFieldsFromSchema(
 ): Omit<AnalysisFormState, 'analysis'> {
   const num = numericColumnNames(schema, preview);
   const categorical = categoricalColumnNames(schema, preview);
+  const usable = nonIdColumnNames(schema, preview);
   return {
     selectedCols: [],
     groupCol: categorical[0] ?? '',
-    valueCol: num[0] ?? schema[0]?.name ?? '',
-    depCol: num[0] ?? schema[0]?.name ?? '',
+    valueCol: num[0] ?? usable[0] ?? '',
+    depCol: num[0] ?? usable[0] ?? '',
     independentCols: num.slice(1, 3),
     chiA: categorical[0] ?? '',
     chiB: categorical[1] ?? '',
@@ -1629,13 +1726,14 @@ export function defaultFormFieldsFromSchema(
     correlationSignificance: 'two_tailed',
     flagSignificantCorrelations: false,
     confidenceLevel: '0.95',
-    pairedBeforeCol: num[0] ?? schema[0]?.name ?? '',
-    pairedAfterCol: num[1] ?? schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
-    oneSampleCol: num[0] ?? schema[0]?.name ?? '',
+    pairedBeforeCol: num[0] ?? usable[0] ?? '',
+    pairedAfterCol: num[1] ?? usable[Math.min(1, Math.max(0, usable.length - 1))] ?? '',
+    oneSampleCol: num[0] ?? usable[0] ?? '',
     hypothesizedMean: '0',
     hypothesizedDifference: '0',
     groupValues: '',
     descriptiveStats: { ...DEFAULT_DESCRIPTIVE_STATS },
+    weightCol: '',
     kruskalPostHoc: false,
     regressionMethod: 'enter',
     regressionIncludeConstant: true,
@@ -1654,7 +1752,7 @@ export function defaultFormFieldsFromSchema(
     pcaNComponents: '',
     nClusters: '3',
     anovaInteraction: true,
-    covariateCol: num[1] ?? schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
+    covariateCol: num[1] ?? usable[Math.min(1, Math.max(0, usable.length - 1))] ?? '',
     clusterMethod: 'kmeans' as const,
     clusterStandardize: true,
     treeMaxDepth: '5',
@@ -1668,13 +1766,12 @@ export function defaultFormFieldsFromSchema(
     mlMode: 'classification' as const,
     dbscanEpsilon: '0.5',
     dbscanMinSamples: '5',
-    dateCol:
-      schema.find(c => c.type?.toLowerCase().includes('date'))?.name ?? schema[0]?.name ?? '',
+    dateCol: schema.find(c => c.type?.toLowerCase().includes('date'))?.name ?? usable[0] ?? '',
     seasonalPeriod: '12',
     forecastSteps: '12',
     acfMaxLags: '20',
-    durationCol: num[0] ?? schema[0]?.name ?? '',
-    eventCol: num[1] ?? schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '',
+    durationCol: num[0] ?? usable[0] ?? '',
+    eventCol: num[1] ?? usable[Math.min(1, Math.max(0, usable.length - 1))] ?? '',
     semModelSpec: 'F1 =~ item1 + item2 + item3',
     glmmFamily: 'binomial' as const,
     clusterByCol: '',
@@ -1702,6 +1799,10 @@ export function defaultFormForAnalysis(
   if (analysis === 'network') {
     fields.chiA = schema[0]?.name ?? '';
     fields.chiB = schema[Math.min(1, Math.max(0, schema.length - 1))]?.name ?? '';
+  }
+  if (analysis === 'ttest_independent') {
+    const twoGroups = twoGroupColumnNames(schema, preview);
+    fields.groupCol = twoGroups[0] ?? '';
   }
   if (CATEGORICAL_OUTCOME_ANALYSES.has(analysis)) {
     const categorical = categoricalColumnNames(schema, preview);
@@ -1785,6 +1886,7 @@ export type AnalysisFormState = {
   networkIngest: 'edge_list' | 'adjacency';
   networkWeightCol: string;
   openTextLexicon: string;
+  weightCol: string;
   bannerWeight: string;
   bannerDecimals: string;
   bannerFilter: string;
@@ -1919,6 +2021,9 @@ export function formStateFromBody(
     },
     setHypothesizedMean: v => {
       state.hypothesizedMean = v;
+    },
+    setWeightCol: v => {
+      state.weightCol = v;
     },
   });
   if (

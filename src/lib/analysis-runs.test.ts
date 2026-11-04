@@ -2,14 +2,57 @@ import {
   analysisEnvelopeFromStoredRun,
   canRevealConsumedRows,
   displayedProvenance,
+  formatRunLabel,
+  normalizeAnalysisRunSummary,
+  savedRunDisplayTitle,
   normalizeStoredAnalysisRun,
   provenanceBannerText,
   provenanceTraceState,
   storedRunIdToHydrate,
+  R_CHECK_POLL_LIMIT,
+  R_CHECK_STILL_AFTER,
+  rCheckPhase,
   rSyntaxBadgeText,
   sourceRowsUsedLabel,
 } from './analysis-runs';
 import type { StoredAnalysisRun } from './analysis-runs';
+
+describe('normalizeAnalysisRunSummary', () => {
+  it('keeps the stored title and does not invent a report', () => {
+    const row = normalizeAnalysisRunSummary({
+      id: 'run-summary',
+      dataset_id: '11111111-1111-4111-8111-111111111111',
+      title: 'Q7, gender, age × source_wave',
+      op: 'banner_table',
+      created_at: '2026-01-01T00:00:00.000Z',
+      status: 'complete',
+    });
+    expect(row).toEqual({
+      id: 'run-summary',
+      dataset_id: '11111111-1111-4111-8111-111111111111',
+      op: 'banner_table',
+      created_at: '2026-01-01T00:00:00.000Z',
+      title: 'Q7, gender, age × source_wave',
+      status: 'complete',
+    });
+    expect(formatRunLabel(row!)).toBe('Q7, gender, age × source_wave');
+  });
+});
+
+describe('savedRunDisplayTitle', () => {
+  it('keeps the banner cross and skips the procedure name', () => {
+    expect(
+      savedRunDisplayTitle('banner_table', {
+        meta: { title: 'Q7, gender × source_wave', subtitle: 'Q7 by source_wave' },
+      })
+    ).toBe('Q7, gender × source_wave');
+    expect(
+      savedRunDisplayTitle('banner_table', {
+        meta: { title: 'banner table', subtitle: 'Q7 by source_wave' },
+      })
+    ).toBe('Q7 by source_wave');
+  });
+});
 
 describe('normalizeStoredAnalysisRun', () => {
   it('keeps a stored report so removed analysis types still open', () => {
@@ -240,5 +283,31 @@ describe('rSyntaxBadgeText', () => {
       'verified_in_ci'
     );
     expect(rSyntaxBadgeText({ kind: 'not_verified', statement: 'miss' }).kind).toBe('not_verified');
+  });
+
+  it('does not call a pending stamp verified, and names a failed check', () => {
+    const pending = rSyntaxBadgeText({
+      kind: 'pending',
+      statement: 'R syntax is being checked.',
+    });
+    expect(pending.text).toMatch(/being checked/i);
+    expect(pending.text).not.toMatch(/verified against r/i);
+    expect(rSyntaxBadgeText({ kind: 'unknown', reason: 'verify_failed' }).text).toBe(
+      'R check unavailable'
+    );
+    expect(rSyntaxBadgeText({ kind: 'unknown', reason: 'timeout' }).text).toBe(
+      'R check unavailable'
+    );
+  });
+});
+
+describe('rCheckPhase', () => {
+  it('keeps checking, then says still checking, and only then unavailable', () => {
+    expect(rCheckPhase(0)).toBe('checking');
+    expect(rCheckPhase(R_CHECK_STILL_AFTER - 1)).toBe('checking');
+    expect(rCheckPhase(R_CHECK_STILL_AFTER)).toBe('still');
+    expect(rCheckPhase(R_CHECK_POLL_LIMIT - 1)).toBe('still');
+    expect(rCheckPhase(R_CHECK_POLL_LIMIT)).toBe('unavailable');
+    expect(R_CHECK_POLL_LIMIT).toBeGreaterThan(R_CHECK_STILL_AFTER);
   });
 });

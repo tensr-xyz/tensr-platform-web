@@ -13,3 +13,4 @@ src/lib/agent-capabilities.generated.ts
 agent-eval/promptfooconfig.routing-baseline.yaml
 agent-eval/promptfooconfig.routing-post.yaml
 agent-eval/baseline-contract.generated.json
+.worktrees

@@ -7,9 +7,10 @@ import {
   formatRunTime,
   listDatasetAnalysisRuns,
   openAnalysisRunById,
-  openStoredAnalysisRun,
-  type StoredAnalysisRun,
+  savedRunDisplayTitle,
+  type AnalysisRunSummary,
 } from '@/lib/analysis-runs';
+import { runWhenIdle } from '@/lib/dataset-open';
 import { useSession, wsService } from '@/hooks/ui/use-session';
 import { Button } from '@/components/atoms/button';
 import {
@@ -28,6 +29,7 @@ type Props = {
     id: string;
     runId?: string;
     analysisType: string;
+    title?: string;
     subtitle?: string;
     createdAt: string;
   }[];
@@ -35,7 +37,7 @@ type Props = {
 
 export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
   const { currentSession } = useSession();
-  const [runs, setRuns] = useState<StoredAnalysisRun[]>([]);
+  const [runs, setRuns] = useState<AnalysisRunSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
     (currentSession.datasetId === datasetId || !currentSession.datasetId);
 
   const load = useCallback(
-    async (opts?: { silent?: boolean; autoOpenRemote?: boolean }) => {
+    async (opts?: { silent?: boolean; autoOpenRemote?: boolean; fresh?: boolean }) => {
       if (!datasetId) {
         setRuns([]);
         return;
@@ -58,7 +60,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
       }
       setError(null);
       try {
-        const next = await listDatasetAnalysisRuns(datasetId);
+        const next = await listDatasetAnalysisRuns(datasetId, { fresh: opts?.fresh });
         if (opts?.autoOpenRemote && knownRunIdsRef.current.size > 0) {
           const newest = next[0];
           if (
@@ -66,7 +68,7 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
             !knownRunIdsRef.current.has(newest.id) &&
             !localEntriesRef.current.some(e => e.runId === newest.id)
           ) {
-            void openStoredAnalysisRun(newest);
+            void openAnalysisRunById(newest.id);
           }
         }
         knownRunIdsRef.current = new Set(next.map(r => r.id));
@@ -84,27 +86,34 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
   );
 
   useEffect(() => {
-    void load();
+    return runWhenIdle(() => {
+      void load();
+    });
   }, [load]);
+
+  const localRunKey = localEntries
+    .map(entry => entry.runId)
+    .filter((id): id is string => Boolean(id))
+    .join(',');
+  useEffect(() => {
+    if (!datasetId || !localRunKey) return;
+    void load({ silent: true, fresh: true });
+  }, [datasetId, localRunKey, load]);
 
   // Live collab: peers push `analysis_run_created` over WS — no REST polling.
   useEffect(() => {
     if (!liveSession || !datasetId) return;
     return wsService.onAnalysisRunCreated(event => {
       if (event.datasetId !== datasetId) return;
-      void load({ silent: true, autoOpenRemote: true });
+      void load({ silent: true, autoOpenRemote: true, fresh: true });
     });
   }, [liveSession, datasetId, load]);
 
-  const openRun = async (runId: string, cached?: StoredAnalysisRun) => {
+  const openRun = async (runId: string) => {
     setOpeningId(runId);
     try {
-      if (cached) {
-        openStoredAnalysisRun(cached);
-      } else {
-        const ok = await openAnalysisRunById(runId);
-        if (!ok) setError('Saved analysis not found');
-      }
+      const ok = await openAnalysisRunById(runId);
+      if (!ok) setError('Saved analysis not found');
     } finally {
       setOpeningId(null);
     }
@@ -112,6 +121,24 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
 
   const serverIds = new Set(runs.map(r => r.id));
   const localOnly = localEntries.filter(e => e.runId && !serverIds.has(e.runId));
+  const listed = [
+    ...runs.map(run => ({
+      key: run.id,
+      runId: run.id,
+      title: formatRunLabel(run),
+      createdAt: run.created_at,
+    })),
+    ...localOnly.map(entry => ({
+      key: entry.id,
+      runId: entry.runId as string,
+      title:
+        entry.title ||
+        savedRunDisplayTitle(entry.analysisType, {
+          meta: { title: '', subtitle: entry.subtitle },
+        }),
+      createdAt: entry.createdAt,
+    })),
+  ].sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 
   if (!datasetId && localEntries.length === 0) return null;
 
@@ -144,44 +171,27 @@ export function DatasetAnalysisRuns({ datasetId, localEntries = [] }: Props) {
       {error ? <p className="text-[11px] text-destructive">{error}</p> : null}
 
       <div className="flex flex-col gap-0.5">
-        {runs.map(run => (
+        {listed.map(row => (
           <Button
             size="compact"
-            key={run.id}
+            key={row.key}
             type="button"
             variant="ghost"
-            disabled={openingId === run.id}
-            onClick={() => openRun(run.id, run)}
+            disabled={openingId === row.runId}
+            onClick={() => openRun(row.runId)}
             className={cn(
               'h-auto w-full flex-col items-start gap-0.5 rounded-sm px-2 py-1.5 text-left text-xs font-normal',
               'hover:bg-muted/50 text-foreground',
-              openingId === run.id && 'opacity-60'
+              openingId === row.runId && 'opacity-60'
             )}
           >
             <span className="inline-flex items-center gap-1.5 font-medium">
               <BarChart3 className="size-3 shrink-0 text-primary" aria-hidden />
-              <span className="truncate">{formatRunLabel(run)}</span>
+              <span className="truncate">{row.title}</span>
             </span>
             <span className="font-mono text-[10px] text-muted-foreground">
-              {formatRunTime(run.created_at)}
+              {formatRunTime(row.createdAt)}
             </span>
-          </Button>
-        ))}
-
-        {localOnly.map(entry => (
-          <Button
-            size="compact"
-            key={entry.id}
-            type="button"
-            variant="ghost"
-            disabled={openingId === entry.runId}
-            onClick={() => entry.runId && openRun(entry.runId)}
-            className="h-auto w-full flex-col items-start gap-0.5 rounded-sm px-2 py-1.5 text-left text-xs font-normal hover:bg-muted/50"
-          >
-            <span className="truncate font-medium">{entry.analysisType.replace(/_/g, ' ')}</span>
-            {entry.subtitle ? (
-              <span className="truncate text-[10px] text-muted-foreground">{entry.subtitle}</span>
-            ) : null}
           </Button>
         ))}
 

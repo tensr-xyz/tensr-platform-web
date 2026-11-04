@@ -79,10 +79,16 @@ import { useSheetState } from '@/hooks/ui/use-sheet-state';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import {
   shouldClearAttemptOnPathChange,
-  shouldClearAttemptOnShowStats,
   shouldKeepAttemptAfterFetchSettled,
   shouldLoadColumnStats,
 } from '@/lib/column-stats-load-policy';
+import { fetchColumnStats } from '@/lib/column-stats-fetch';
+import { datasetContentVersion } from '@/lib/dataset-schema-fetch';
+import {
+  columnTypeFromSchemaColumn,
+  dataTypeFromSchemaColumn,
+  type SchemaColumnType,
+} from '@/lib/schema-column-type';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { getDatasetIdFromPath } from '@/lib/workspace-dataset';
 import { deriveLiveSheetId } from '@/lib/collaboration-sheet';
@@ -108,9 +114,10 @@ import { SPREADSHEET_EVENTS, type TabColumnFilterPayload } from '@/lib/spreadshe
 import { gridRowsForColumns, gridRowsFromStoredRecords } from '@/lib/sheet-grid-align';
 import { fetchWithColdStartRetry } from '@/lib/cold-start-fetch';
 import { fetchDatasetSchema } from '@/lib/dataset-schema-fetch';
+import { FIRST_OPEN_ROWS, noteServerTiming, previewPageUrl, runWhenIdle } from '@/lib/dataset-open';
 
 const INITIAL_EMPTY_ROWS = 200;
-const ROWS_PER_BATCH = 250;
+const ROWS_PER_BATCH = FIRST_OPEN_ROWS;
 const EXTRA_COLUMN_BATCH = 10;
 const DEFAULT_COLUMN_WIDTH = 150;
 const ROW_HEIGHT_PX = 36;
@@ -120,7 +127,7 @@ const INITIAL_PREFETCH_DELAY = 50;
 /** Rows to load beyond the last visible virtual row (fast scroll buffer). */
 const LOAD_AHEAD_ROWS = 180;
 /** Datasets at or below this size load entirely (one preview fetch for UUID datasets). */
-const SMALL_DATASET_EAGER_LOAD = 2500;
+const SMALL_DATASET_EAGER_LOAD = FIRST_OPEN_ROWS;
 /** Extra rows rendered above/below viewport — more while paginating to reduce blank flashes. */
 const VIRTUAL_OVERSCAN_LOADED = 40;
 const VIRTUAL_OVERSCAN_LOADING = 80;
@@ -211,7 +218,7 @@ function VirtualSheetPlaceholderRow({
 
 type UuidDatasetGridCache = Map<
   string,
-  { headers: string[]; variableNames: string[]; rows: unknown[][] }
+  { headers: string[]; variableNames: string[]; rows: unknown[][]; done: boolean }
 >;
 
 function compareSpreadsheetCellValues(av: unknown, bv: unknown, desc: boolean): number {
@@ -268,7 +275,7 @@ function sortDatasetPreviewRows(
   });
 }
 
-/** tensr-api dataset as grid: cache preview once, slice rows into fetch-page column-major `data`. */
+/** tensr-api dataset as grid: page the preview, then slice rows into column-major `data`. */
 async function fetchDatasetGridSliceForSpreadsheet(
   datasetId: string,
   token: string | null,
@@ -286,22 +293,34 @@ async function fetchDatasetGridSliceForSpreadsheet(
       headers,
     });
     if (!schemaRes.ok) return null;
+    noteServerTiming('schema', schemaRes.headers.get('Server-Timing'));
+    entry = { headers: [], variableNames: [], rows: [], done: false };
+    cache.set(datasetId, entry);
+  }
+
+  while (!entry.done && entry.rows.length < endRow) {
+    const offset = entry.rows.length;
+    const limit = Math.min(FIRST_OPEN_ROWS, Math.max(endRow - offset, 1));
     const previewRes = await fetchWithColdStartRetry(
-      tensrApiUrl(`/datasets/${datasetId}/preview?limit=5000`),
+      tensrApiUrl(previewPageUrl(datasetId, offset, limit)),
       { headers }
     );
     if (!previewRes.ok) return null;
+    noteServerTiming('preview', previewRes.headers.get('Server-Timing'));
     const preview = (await previewRes.json()) as {
       headers?: string[];
       variable_names?: string[];
       rows?: unknown[][];
+      truncated?: boolean;
     };
-    entry = {
-      headers: preview.headers || [],
-      variableNames: preview.variable_names || preview.headers || [],
-      rows: preview.rows || [],
-    };
-    cache.set(datasetId, entry);
+    if (entry.headers.length === 0) {
+      entry.headers = preview.headers || [];
+      entry.variableNames = preview.variable_names || preview.headers || [];
+    }
+    const page = preview.rows || [];
+    entry.rows.push(...page);
+    if (page.length < limit || preview.truncated === false) entry.done = true;
+    if (page.length === 0) break;
   }
 
   const sortedRows = sortDatasetPreviewRows(
@@ -640,16 +659,6 @@ export function Spreadsheet({
     uuidDatasetGridCacheRef.current.clear();
   }, [decodedFilePath]);
 
-  // Reset stats when file path changes
-  useEffect(() => {
-    if (filePath) {
-      setLocalColumnStats(undefined);
-      if (shouldClearAttemptOnPathChange()) {
-        statsLoadAttempted.current = false;
-      }
-    }
-  }, [filePath]);
-
   /** Tab props may omit stats; `/api/analysis/analyze-file` fills `localColumnStats`. */
   const mergedColumnStats = useMemo(
     (): Record<string, ColumnSummary> => ({
@@ -808,6 +817,18 @@ export function Spreadsheet({
     projectFileSystem,
   ]);
 
+  // A path string that flips between forms of the same dataset must not fetch analyze-file twice.
+  const statsDatasetRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!gridDatasetId) return;
+    if (statsDatasetRef.current === gridDatasetId) return;
+    statsDatasetRef.current = gridDatasetId;
+    setLocalColumnStats(undefined);
+    if (shouldClearAttemptOnPathChange()) {
+      statsLoadAttempted.current = false;
+    }
+  }, [gridDatasetId]);
+
   const refreshColumnHeadersFromSchema = useCallback(async () => {
     if (!gridDatasetId || !idTokenRef.current) return;
     const res = await fetchDatasetSchema(gridDatasetId, {
@@ -816,14 +837,47 @@ export function Spreadsheet({
     if (handleUnauthorizedResponse(res)) return;
     if (!res.ok) return;
     const json = (await res.json()) as {
-      schema?: { name: string; label?: string | null }[];
+      schema?: (SchemaColumnType & { label?: string | null })[];
     };
     const map: Record<string, string> = {};
-    for (const col of json.schema || []) {
+    const schema = json.schema || [];
+    for (const col of schema) {
+      if (!col.name) continue;
       map[col.name] = String(col.label || col.name);
     }
     setColumnHeaderOverrides(map);
-  }, [gridDatasetId]);
+    if (!tabId) return;
+    const tab = useTabsStore.getState().tabs.find(t => t.id === tabId);
+    const columns = tab?.data?.initialColumns;
+    if (!tab?.data || !columns?.length) return;
+    const byName = new Map(schema.filter(col => col.name).map(col => [String(col.name), col]));
+    let changed = false;
+    const nextColumns = columns.map(col => {
+      const schemaCol = col.id ? byName.get(col.id) : undefined;
+      if (!schemaCol) return col;
+      const type = columnTypeFromSchemaColumn(schemaCol);
+      if (col.type === type) return col;
+      changed = true;
+      return { ...col, type };
+    });
+    const nextStats = { ...(tab.data.columnStats ?? {}) };
+    for (const schemaCol of schema) {
+      if (!schemaCol.name) continue;
+      const dataType = dataTypeFromSchemaColumn(schemaCol);
+      const prev = nextStats[schemaCol.name] ?? { name: schemaCol.name };
+      if (prev.data_type === dataType) continue;
+      nextStats[schemaCol.name] = { ...prev, name: schemaCol.name, data_type: dataType };
+      changed = true;
+    }
+    if (!changed) return;
+    updateTab(tabId, {
+      data: {
+        ...tab.data,
+        initialColumns: nextColumns,
+        columnStats: nextStats,
+      },
+    });
+  }, [gridDatasetId, tabId, updateTab]);
 
   useEffect(() => {
     void refreshColumnHeadersFromSchema();
@@ -835,15 +889,19 @@ export function Spreadsheet({
       return;
     }
     let cancelled = false;
-    void fetchDatasetColumnMetadata(gridDatasetId, idTokenRef.current)
-      .then(meta => {
-        if (!cancelled) setColumnMetadata(meta);
-      })
-      .catch(() => {
-        if (!cancelled) setColumnMetadata({});
-      });
+    const cancelIdle = runWhenIdle(() => {
+      if (cancelled || !idTokenRef.current) return;
+      void fetchDatasetColumnMetadata(gridDatasetId, idTokenRef.current)
+        .then(meta => {
+          if (!cancelled) setColumnMetadata(meta);
+        })
+        .catch(() => {
+          if (!cancelled) setColumnMetadata({});
+        });
+    });
     return () => {
       cancelled = true;
+      cancelIdle();
     };
   }, [gridDatasetId]);
 
@@ -884,11 +942,13 @@ export function Spreadsheet({
   );
 
   useEffect(() => {
-    if (!activeTab?.data || activeTab.data.datasetId || !gridDatasetId) return;
-    updateTab(activeTab.id, {
-      data: { ...activeTab.data, datasetId: gridDatasetId },
+    if (!tabId || !gridDatasetId) return;
+    const sheet = useTabsStore.getState().tabs.find(t => t.id === tabId);
+    if (!sheet?.data || sheet.data.datasetId) return;
+    updateTab(tabId, {
+      data: { ...sheet.data, datasetId: gridDatasetId },
     });
-  }, [activeTab, gridDatasetId, updateTab]);
+  }, [tabId, gridDatasetId, updateTab]);
 
   const isFullyLoadedInMemory = useMemo(
     () => !!totalRowCount && data.length >= totalRowCount,
@@ -907,12 +967,7 @@ export function Spreadsheet({
 
   const hasUsableColumnStats = useMemo(() => {
     const merged = { ...(columnStats ?? {}), ...(localColumnStats ?? {}) };
-    return Object.values(merged).some(
-      s =>
-        s?.numeric_stats ||
-        s?.categorical_stats ||
-        (s?.data_type && s.data_type !== 'object' && s.data_type !== 'string')
-    );
+    return Object.values(merged).some(s => s?.numeric_stats || s?.categorical_stats);
   }, [columnStats, localColumnStats]);
 
   const columnSampleValues = useMemo(() => {
@@ -935,34 +990,26 @@ export function Spreadsheet({
 
   const loadColumnStats = useCallback(async () => {
     const statsPath = gridDatasetId ?? decodedFilePath;
-    if (!statsPath || statsLoadAttempted.current || isProjectFile || hasUsableColumnStats) {
+    const token = idTokenRef.current;
+    if (
+      !showStats ||
+      !statsPath ||
+      !token ||
+      statsLoadAttempted.current ||
+      isProjectFile ||
+      hasUsableColumnStats
+    ) {
       return;
     }
 
     try {
       setIsLoadingStats(true);
       statsLoadAttempted.current = true;
-
-      const response = await fetch(tensrApiUrl('/api/analysis/analyze-file'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${idTokenRef.current}`,
-        },
-        body: JSON.stringify({
-          path: statsPath,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error analyzing file: ${response.statusText}`);
-      }
-
-      const stats = await response.json();
-
-      if (!stats || typeof stats !== 'object') {
-        throw new Error('Invalid statistics data received');
-      }
+      const stats = (await fetchColumnStats(
+        statsPath,
+        datasetContentVersion(statsPath),
+        token
+      )) as Record<string, ColumnSummary>;
 
       setLocalColumnStats(stats);
 
@@ -985,7 +1032,15 @@ export function Spreadsheet({
     } finally {
       setIsLoadingStats(false);
     }
-  }, [decodedFilePath, gridDatasetId, isProjectFile, hasUsableColumnStats, tabId, updateTab]);
+  }, [
+    decodedFilePath,
+    gridDatasetId,
+    isProjectFile,
+    hasUsableColumnStats,
+    showStats,
+    tabId,
+    updateTab,
+  ]);
 
   useEffect(() => {
     const statsPath = gridDatasetId ?? decodedFilePath;
@@ -996,6 +1051,7 @@ export function Spreadsheet({
         hasUsableStats: hasUsableColumnStats,
         isLoading: isLoadingStats,
         attempted: statsLoadAttempted.current,
+        statsPanelOpen: showStats,
       })
     ) {
       loadColumnStats();
@@ -1007,24 +1063,7 @@ export function Spreadsheet({
     isLoadingStats,
     isProjectFile,
     loadColumnStats,
-  ]);
-
-  useEffect(() => {
-    const statsPath = gridDatasetId ?? decodedFilePath;
-    if (showStats && statsPath && !localColumnStats && !isLoadingStats && !isProjectFile) {
-      if (shouldClearAttemptOnShowStats()) {
-        statsLoadAttempted.current = false;
-      }
-      loadColumnStats();
-    }
-  }, [
     showStats,
-    decodedFilePath,
-    gridDatasetId,
-    localColumnStats,
-    isLoadingStats,
-    isProjectFile,
-    loadColumnStats,
   ]);
 
   const [sorting, setSorting] = useState<SortingState>([]);

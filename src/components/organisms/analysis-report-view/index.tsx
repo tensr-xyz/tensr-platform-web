@@ -22,6 +22,10 @@ import {
   displayedProvenance,
   provenanceBannerText,
   provenanceTraceState,
+  fetchAnalysisRun,
+  R_CHECK_POLL_MS,
+  rCheckPhase,
+  recheckAnalysisRun,
   rSyntaxBadgeText,
   sourceRowsUsedLabel,
 } from '@/lib/analysis-runs';
@@ -29,7 +33,15 @@ import { copyTableRich } from '@/utils/apa-clipboard';
 import { ReportChartCard } from '@/components/molecules/report-chart-card';
 import { Button } from '@/components/atoms/button';
 import { ReportExportMenu } from '@/components/organisms/analysis-report-view/export-menu';
+import { downloadExcelArtifact, excelDownloadFromResult } from '@/lib/excel-download';
+import { downloadReportXlsx } from '@/lib/report-export';
 import { cn } from '@/utils';
+
+function cellText(cell: unknown): string {
+  if (cell == null) return '';
+  if (typeof cell === 'object') return JSON.stringify(cell);
+  return String(cell);
+}
 
 function tableToTsv(t: AnalysisReportTable): string {
   const esc = (cell: string) => {
@@ -260,7 +272,7 @@ function ReportTable({
             >
               {table.columns.map((c, i) => (
                 <th
-                  key={c}
+                  key={`${i}-${String(c)}`}
                   className={cn(
                     'whitespace-nowrap px-3 py-2.5',
                     i === 0 ? 'text-left' : 'text-right'
@@ -302,7 +314,7 @@ function ReportTable({
                             !alignRight && 'font-medium text-foreground'
                           )}
                         >
-                          {cell}
+                          {cellText(cell)}
                         </span>
                       )}
                     </td>
@@ -466,6 +478,50 @@ export function AnalysisReportView({
   analysisRunId,
 }: Props) {
   const [copyState, setCopyState] = React.useState<string | null>(null);
+  const [rVerification, setRVerification] = React.useState(report.r_syntax_verification);
+  const [rPhase, setRPhase] = React.useState<'checking' | 'still' | 'unavailable'>('checking');
+  React.useEffect(() => {
+    setRVerification(report.r_syntax_verification);
+    setRPhase('checking');
+  }, [report]);
+  React.useEffect(() => {
+    if (rVerification?.kind !== 'pending' || !analysisRunId) return;
+    let cancelled = false;
+    let polls = 0;
+    const timer = window.setInterval(() => {
+      polls += 1;
+      const phase = rCheckPhase(polls);
+      if (phase === 'unavailable') {
+        window.clearInterval(timer);
+        if (!cancelled) {
+          setRPhase('unavailable');
+          setRVerification({
+            kind: 'unknown',
+            reason: 'timeout',
+            statement: 'R check unavailable.',
+          });
+        }
+        return;
+      }
+      if (phase === 'still' && !cancelled) setRPhase('still');
+      void fetchAnalysisRun(analysisRunId).then(run => {
+        const next = run?.report?.r_syntax_verification;
+        if (cancelled || !next || next.kind === 'pending') return;
+        setRVerification(next);
+      });
+    }, R_CHECK_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [analysisRunId, rVerification]);
+  const recheckR = () => {
+    if (!analysisRunId) return;
+    setRVerification({ kind: 'pending', reason: 'async', statement: 'R syntax is being checked.' });
+    void recheckAnalysisRun(analysisRunId).then(next => {
+      if (next && next.kind !== 'pending') setRVerification(next);
+    });
+  };
   const [rawOpen, setRawOpen] = React.useState(false);
   const primaryTable = report.tables[0];
   const blocks = resolveReportBlocks(report);
@@ -511,15 +567,23 @@ export function AnalysisReportView({
       ? pluginMark.statement || PLUGIN_UNVERIFIED_STATEMENT
       : null;
   const statusBanner = pluginBanner ?? provenanceBanner;
-  const rBadge = rSyntaxBadgeText(report.r_syntax_verification);
+  const rBadge = rSyntaxBadgeText(rVerification);
   const showRBadge =
     !report.meta.analysis_key.startsWith('plugin:') && report.meta.analysis_key !== 'chart_builder';
-  const rBadgeTitle =
-    rBadge.kind === 'verified'
+  const rCheckUnavailable = rBadge.text === 'R check unavailable';
+  const rStillChecking = rBadge.kind === 'pending' && rPhase === 'still';
+  const rBadgeTitle = rCheckUnavailable
+    ? 'R check unavailable'
+    : rBadge.kind === 'verified'
       ? 'Verified against R ✓'
-      : rBadge.kind === 'not_verified'
-        ? 'R check failed'
-        : 'Not verified against R';
+      : rStillChecking
+        ? 'Still checking'
+        : rBadge.kind === 'pending'
+          ? 'Checking R syntax'
+          : rBadge.kind === 'not_verified'
+            ? 'R check failed'
+            : 'Not verified against R';
+  const rBadgeBody = rStillChecking ? 'Still checking.' : rBadge.text;
   const canReveal =
     canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
   const rowsUsedLabel = sourceRowsUsedLabel(report.exclusion_summary, report.meta.rows_dataset);
@@ -609,7 +673,19 @@ export function AnalysisReportView({
             )}
           >
             <p className="text-xs font-medium text-amber-800 dark:text-amber-200">{rBadgeTitle}</p>
-            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{rBadge.text}</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{rBadgeBody}</p>
+            {rCheckUnavailable && analysisRunId ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                data-testid="r-check-retry"
+                onClick={recheckR}
+              >
+                Re-check
+              </Button>
+            ) : null}
             {report.reproducibility?.r_script ? (
               <pre
                 data-testid="r-equivalent-syntax"
@@ -942,6 +1018,30 @@ export function AnalysisReportView({
           <Button type="button" variant="ghost" size="sm" className="h-8 text-xs" onClick={onPrint}>
             <Printer className="mr-1.5 size-3.5" aria-hidden />
             Print
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 text-xs"
+            data-testid="report-excel-download"
+            onClick={() => {
+              const artifact = excelDownloadFromResult(rawResult);
+              if (artifact) {
+                downloadExcelArtifact(artifact);
+                flash('Excel download started');
+                return;
+              }
+              void downloadReportXlsx(report, {
+                provenance: inspectorProvenance,
+                datasetId,
+                raw: rawResult ?? null,
+              })
+                .then(() => flash('Excel download started'))
+                .catch(() => flash('Excel export failed'));
+            }}
+          >
+            Excel
           </Button>
           <ReportExportMenu
             report={report}

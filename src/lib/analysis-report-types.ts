@@ -237,7 +237,7 @@ export type AnalysisReport = {
   spss_syntax?: string;
   reproducibility?: { r_script?: string; spss_syntax?: string };
   r_syntax_verification?: {
-    kind: 'verified' | 'verified_in_ci' | 'not_verified' | 'unknown';
+    kind: 'verified' | 'verified_in_ci' | 'not_verified' | 'unknown' | 'pending';
     reason?: string;
     statement?: string;
     build_id?: string;

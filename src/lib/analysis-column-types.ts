@@ -31,14 +31,14 @@ export function slotTypeMatchesExpected(actual: ColumnSlotType, expected: Column
 }
 
 export const SLOT_BADGE_CLASS: Record<ColumnSlotType, string> = {
-  numeric: 'bg-sky-100 text-sky-800 dark:bg-sky-950/60 dark:text-sky-200',
-  categorical: 'bg-amber-100 text-amber-900 dark:bg-amber-950/50 dark:text-amber-200',
-  'date/time': 'bg-violet-100 text-violet-900 dark:bg-violet-950/50 dark:text-violet-200',
-  string: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/50 dark:text-emerald-200',
+  numeric: 'bg-secondary text-muted-foreground',
+  categorical: 'bg-secondary text-muted-foreground',
+  'date/time': 'bg-secondary text-muted-foreground',
+  string: 'bg-secondary text-muted-foreground',
 };
 
-export const SLOT_BADGE_MISMATCH_CLASS =
-  'bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-200';
+/** Paper's warn tone, not a red alarm. */
+export const SLOT_BADGE_MISMATCH_CLASS = 'bg-[#F6EDE2] text-[#8A4B12]';
 
 /** @deprecated Prefer columnSlotType — kept for transitional imports. */
 export function typeBadgeLabel(schema: SchemaColumn[], name: string): string {

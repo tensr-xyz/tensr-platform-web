@@ -1,0 +1,86 @@
+/* Tokens repeated here so the blocks render the same outside .flow (global 404, error boundary). */
+.nf-page,
+.nf-block {
+  --nf-canvas: var(--color-canvas, #ffffff);
+  --nf-line: var(--color-line, #e7e6e1);
+  --nf-ink: var(--color-ink, #1b1c1a);
+  --nf-muted: var(--color-muted, #6a6b66);
+  --nf-warn: var(--color-warn, #a15c12);
+}
+
+.nf-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 40px 16px;
+  background: var(--nf-canvas);
+  color: var(--nf-ink);
+  font-family: 'Suisse Intl', 'SuisseIntl', Inter, system-ui, sans-serif;
+}
+
+.nf-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  text-align: center;
+  color: var(--nf-ink);
+}
+
+.nf-code {
+  font-size: 13px;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+  color: var(--nf-muted);
+}
+
+.nf-kicker {
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0.04em;
+  font-weight: 500;
+  color: var(--nf-warn);
+}
+
+.nf-title {
+  margin: 0;
+  font-size: 22px;
+  line-height: 28px;
+  font-weight: 500;
+}
+
+.nf-body {
+  margin: 0;
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--nf-muted);
+}
+
+.nf-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.nf-block .nf-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--nf-line);
+  background: var(--nf-canvas);
+  color: var(--nf-ink);
+  font-size: 13px;
+  font-weight: 400;
+  text-decoration: none;
+}
+
+.nf-block .nf-primary {
+  border-color: var(--nf-ink);
+  background: var(--nf-ink);
+  color: var(--nf-canvas);
+  font-weight: 500;
+}

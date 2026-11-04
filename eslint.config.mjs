@@ -83,6 +83,40 @@ const eslintConfig = [
       'react-hooks/use-memo': 'warn',
     },
   },
+
+  // The flow redesign uses components/ui. Native controls stay in the primitives.
+  {
+    files: ['src/components/flow/**/*.{ts,tsx}', 'src/app/flow/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: 'JSXOpeningElement[name.name="select"]',
+          message: 'Use Select from components/ui.',
+        },
+        {
+          selector: 'JSXOpeningElement[name.name="button"]',
+          message: 'Use Button from components/ui.',
+        },
+        {
+          selector: 'JSXOpeningElement[name.name="textarea"]',
+          message: 'Use Textarea from components/ui.',
+        },
+        {
+          selector: 'JSXOpeningElement[name.name="input"]',
+          message: 'Use Input, Checkbox, Switch, or RadioGroup from components/ui.',
+        },
+        {
+          selector: 'JSXAttribute[name.name="type"][value.value="checkbox"]',
+          message: 'Use Checkbox from components/ui.',
+        },
+        {
+          selector: 'JSXAttribute[name.name="type"][value.value="radio"]',
+          message: 'Use RadioGroup from components/ui.',
+        },
+      ],
+    },
+  },
 ];
 
 export default eslintConfig;

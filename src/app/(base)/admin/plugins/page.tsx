@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 
-/** Prefer the plugins-area review page. */
-export default function AdminPluginsPage() {
-  redirect('/plugins/review');
+/** This page lives in the app now. */
+export default function LegacyPluginPage() {
+  redirect('/flow/admin/plugins');
 }

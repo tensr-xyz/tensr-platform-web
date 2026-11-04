@@ -1,5 +1,6 @@
 /** Post-login destinations that match app routes (see proxy matcher). */
 const ALLOWED_RETURN_TO_PREFIXES = [
+  '/flow',
   '/dashboard',
   '/workspace',
   '/settings',
@@ -16,7 +17,7 @@ const BLOCKED_RETURN_TO_PATHS = new Set(['/login', '/sign-up', '/register']);
  * Sanitize `returnTo` query values so auth flows never send users to missing
  * or external paths (e.g. `/sign-up` after a dead link + session redirect).
  */
-export function safeReturnTo(returnTo: string | null | undefined, fallback = '/dashboard'): string {
+export function safeReturnTo(returnTo: string | null | undefined, fallback = '/flow'): string {
   if (!returnTo || !returnTo.startsWith('/') || returnTo.startsWith('//')) {
     return fallback;
   }

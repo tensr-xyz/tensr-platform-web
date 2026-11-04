@@ -113,11 +113,11 @@ async function signInWhileProviderLoadIsPending() {
   );
 
   fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'ada@example.com' } });
-  fireEvent.click(screen.getByRole('button', { name: /^continue$/i }));
-  fireEvent.change(await screen.findByLabelText(/verification code/i), {
+  fireEvent.click(screen.getByRole('button', { name: /email me a code/i }));
+  fireEvent.change(await screen.findByLabelText(/6-digit code/i), {
     target: { value: '123456' },
   });
-  fireEvent.click(screen.getByRole('button', { name: /sign in/i }));
+  fireEvent.click(screen.getByRole('button', { name: /^verify/i }));
   expect(await screen.findByText(PROFILE_ERROR)).toBeInTheDocument();
   return providerLoad;
 }

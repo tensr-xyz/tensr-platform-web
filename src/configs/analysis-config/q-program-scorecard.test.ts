@@ -21,7 +21,7 @@ const REQUIRED_DIALOGS = [
   'NPS',
   'Brand Funnel',
   'MaxDiff (counting / MNL)',
-  'Conjoint (MNL)',
+  'Conjoint',
 ];
 
 function flattenMenuLabels(): string[] {

@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
 import {
   conjointBodyFromRoles,
   maxdiffAnalyzeBody,
@@ -6,6 +9,25 @@ import {
 } from './choice-roles';
 
 describe('choice column roles', () => {
+  it('maps qa_cbc_long.csv and treats other long-format columns as attributes', () => {
+    const header = readFileSync(path.join(__dirname, 'fixtures', 'qa_cbc_long.csv'), 'utf8')
+      .split(/\r?\n/, 1)[0]
+      .split(',');
+    const roles = suggestChoiceRoles(header);
+    expect(roles).toEqual({
+      respondent: 'respondent',
+      task: 'task',
+      alternative: 'alternative',
+      chosen: 'chosen',
+      brand: 'attribute',
+    });
+    expect(suggestChoiceRoles(['best', 'worst', 'set_1', 'set_2', 'notes'])).toMatchObject({
+      set_1: 'attribute',
+      set_2: 'attribute',
+      notes: 'attribute',
+    });
+  });
+
   it('maps a long CBC file and leaves set columns as attributes for MaxDiff', () => {
     const roles = suggestChoiceRoles([
       'respondent',
@@ -18,7 +40,8 @@ describe('choice column roles', () => {
     expect(roles.respondent).toBe('respondent');
     expect(roles.task).toBe('task');
     expect(roles.chosen).toBe('chosen');
-    expect(roles.brand).toBe('ignore');
+    expect(roles.brand).toBe('attribute');
+    expect(roles.price).toBe('price');
     const body = conjointBodyFromRoles(
       { ...roles, brand: 'attribute', price: 'attribute' },
       { layout: 'long', priceAttribute: 'price' }

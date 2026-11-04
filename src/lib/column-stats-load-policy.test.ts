@@ -10,10 +10,17 @@ const ready = {
   isProjectFile: false,
   hasUsableStats: false,
   isLoading: false,
+  statsPanelOpen: true,
 };
 
 describe('column stats load policy', () => {
-  it('loads once when the grid has a dataset and no stats yet', () => {
+  it('does not load on dataset open', () => {
+    expect(shouldLoadColumnStats({ ...ready, statsPanelOpen: false, attempted: false })).toBe(
+      false
+    );
+  });
+
+  it('loads once when the stats panel opens and the grid has no stats yet', () => {
     expect(shouldLoadColumnStats({ ...ready, attempted: false })).toBe(true);
   });
 

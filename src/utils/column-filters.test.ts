@@ -20,6 +20,20 @@ describe('filterRowsByRowUids', () => {
 });
 
 describe('applyClientColumnFilters', () => {
+  it('drops blank and missing cells for is_not_missing', () => {
+    const rows = [
+      { region: 'north' },
+      { region: '' },
+      { region: null },
+      { region: 'nan' },
+      { region: 'south' },
+    ];
+    const filtered = applyClientColumnFilters(rows, [
+      { id: 'region', value: { operator: 'is_not_missing', value: null } },
+    ]);
+    expect(filtered).toEqual([{ region: 'north' }, { region: 'south' }]);
+  });
+
   it('still supports in-filters', () => {
     const rows = [{ Pos: 'C' }, { Pos: 'PG' }];
     const filtered = applyClientColumnFilters(rows, [

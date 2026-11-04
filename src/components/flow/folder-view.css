@@ -1,0 +1,385 @@
+/* 1k Folder view. Every class starts with fv-. */
+
+.fv-page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 44px 56px;
+  min-width: 0;
+  font-size: 13px;
+  line-height: 16px;
+  color: var(--color-ink);
+}
+
+.fv-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.fv-titles {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fv-crumb,
+.fv-sub,
+.fv-card-sub,
+.fv-edited,
+.fv-folder {
+  color: var(--color-muted);
+}
+
+.fv-crumb a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.fv-crumb a:hover {
+  color: var(--color-ink);
+}
+
+.fv-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.fv-swatch {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background: var(--color-accent);
+}
+
+.fv-title {
+  margin: 0;
+  font-size: 30px;
+  line-height: 36px;
+  letter-spacing: -0.02em;
+  font-weight: var(--weight-medium);
+}
+
+.fv-head-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.fv-primary {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
+  background: var(--color-ink);
+  color: var(--color-canvas);
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+}
+
+.fv-secondary {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.fv-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fv-gap {
+  flex: 1;
+}
+
+.fv-segment {
+  display: flex;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--color-well);
+}
+
+.fv-segment button,
+.fv-filter {
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.fv-segment button[data-active='true'] {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-weight: var(--weight-medium);
+  box-shadow: 0 1px 2px rgba(27, 28, 26, 0.08);
+}
+
+.fv-filter[data-active='true'] {
+  background: var(--color-well);
+  color: var(--color-ink);
+  font-weight: var(--weight-medium);
+}
+
+.fv-error {
+  margin: 0;
+  color: var(--color-warn);
+}
+
+.fv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.fv-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  text-decoration: none;
+  text-align: left;
+}
+
+a.fv-card:hover {
+  border-color: #d6d5cf;
+}
+
+.fv-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.fv-folder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fv-dot {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.fv-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fv-card-title {
+  font-size: 18px;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+  font-weight: var(--weight-title);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fv-card-sub {
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fv-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 14px;
+  border-top: 1px solid var(--color-line);
+  min-height: 24px;
+}
+
+.fv-edited {
+  font-size: 12px;
+}
+
+.fv-avatars {
+  display: flex;
+}
+
+.fv-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: -6px;
+  border: 2px solid var(--color-canvas);
+  border-radius: 12px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: 9px;
+  line-height: 12px;
+  font-weight: var(--weight-title);
+}
+
+.fv-avatar:first-child {
+  margin-left: 0;
+}
+
+.fv-avatar[data-tone='1'] {
+  background: #e6ecf2;
+  color: #3d5a73;
+}
+
+.fv-card-new {
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 190px;
+  border-style: dashed;
+  background: var(--color-well);
+  text-align: center;
+}
+
+.fv-plus {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--color-line);
+  border-radius: 18px;
+  background: var(--color-canvas);
+  font-size: 18px;
+  line-height: 22px;
+}
+
+.fv-new-title {
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+}
+
+.fv-card-new .fv-card-sub {
+  white-space: normal;
+}
+
+.fv-card-skeleton {
+  height: 190px;
+  border-radius: 14px;
+}
+
+.fv-table-wrap {
+  border: 1px solid var(--color-line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.fv-row-skeleton {
+  height: 56px;
+  border-radius: 0;
+  border-top: 1px solid var(--color-line);
+}
+
+.fv-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.fv-table th {
+  padding: 10px 18px;
+  background: var(--color-well);
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 400;
+  text-align: left;
+}
+
+.fv-table td {
+  padding: 12px 18px;
+  border-top: 1px solid var(--color-line);
+  vertical-align: middle;
+}
+
+.fv-row-name {
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+
+.fv-row-name:hover {
+  text-decoration: underline;
+}
+
+.fv-col-status {
+  width: 120px;
+}
+
+.fv-col-people {
+  width: 140px;
+}
+
+.fv-col-edited {
+  width: 130px;
+  color: var(--color-muted);
+}
+
+.fv-col-action {
+  width: 110px;
+  text-align: right;
+}
+
+.fv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 48px 24px;
+  border: 1px dashed var(--color-line);
+  border-radius: 14px;
+  background: var(--color-well);
+  text-align: center;
+}
+
+.fv-empty strong {
+  font-size: 15px;
+  line-height: 18px;
+  font-weight: var(--weight-medium);
+}
+
+.fv-empty-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 900px) {
+  .fv-page {
+    padding: 28px 16px;
+  }
+
+  .fv-col-people {
+    display: none;
+  }
+}

@@ -2,6 +2,8 @@ import type { NextConfig } from 'next';
 import path from 'node:path';
 
 const nextConfig: NextConfig = {
+  // The dev badge sat on the sidebar account menu at bottom-left.
+  devIndicators: { position: 'bottom-right' },
   env: {
     NEXT_PUBLIC_VERCEL_ENV: process.env.VERCEL_ENV ?? '',
   },

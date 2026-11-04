@@ -149,8 +149,8 @@ export const TECHNIQUE_CONFIGS: Record<string, TechniqueConfig> = {
       { kind: 'columns', key: 'items', label: 'Items', optional: true },
     ],
   },
-  'Conjoint (MNL)': {
-    label: 'Conjoint (MNL)',
+  Conjoint: {
+    label: 'Conjoint',
     route: 'techniques/conjoint/mnl',
     analysisOp: 'conjoint_mnl',
     fields: [
@@ -159,8 +159,8 @@ export const TECHNIQUE_CONFIGS: Record<string, TechniqueConfig> = {
       { kind: 'columns', key: 'attribute_columns', label: 'Attribute columns' },
     ],
   },
-  'Conjoint (individual utilities)': {
-    label: 'Conjoint (individual utilities)',
+  'Conjoint individual utilities': {
+    label: 'Conjoint individual utilities',
     route: 'techniques/conjoint/hb',
     analysisOp: 'conjoint_hb',
     fields: [

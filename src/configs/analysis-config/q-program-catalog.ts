@@ -77,7 +77,7 @@ export const Q_PROCEDURES: readonly QProcedure[] = [
     chatPhrases: ['maxdiff', 'max diff', 'best worst'],
   },
   {
-    menuLabel: 'Conjoint (MNL)',
+    menuLabel: 'Conjoint',
     analysisType: 'conjoint_mnl',
     chatPhrases: ['conjoint', 'choice-based conjoint', 'cbc'],
   },

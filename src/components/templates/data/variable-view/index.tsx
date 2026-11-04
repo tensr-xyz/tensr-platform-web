@@ -17,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/atoms/select';
+import { fetchDatasetMetadataDocument } from '@/lib/dataset-metadata';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getSessionJwt } from '@/utils/auth';
 import { resolveWorkspaceDatasetId } from '@/lib/workspace-dataset';
@@ -54,18 +55,17 @@ export function VariableViewDialog({ children }: VariableViewProps) {
     if (!datasetId) return;
     const token = getSessionJwt();
     if (!token) return;
-    const res = await fetch(tensrApiUrl(`/datasets/${datasetId}/metadata`), {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!res.ok) {
-      setError('Could not load variable metadata');
-      return;
-    }
-    const json = (await res.json()) as {
+    let json: {
       columns?: ColumnMetadata[];
       loop_proposals?: LoopDefinition[];
       loops?: LoopDefinition[];
     };
+    try {
+      json = (await fetchDatasetMetadataDocument(datasetId, token)) as typeof json;
+    } catch {
+      setError('Could not load variable metadata');
+      return;
+    }
     setColumns(json.columns || []);
     setMemberNames(loopMemberNames([...(json.loop_proposals || []), ...(json.loops || [])]));
     setError('');

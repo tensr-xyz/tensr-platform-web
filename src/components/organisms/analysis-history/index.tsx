@@ -5,10 +5,12 @@ import { Badge } from '@/components/atoms/badge';
 import { ScrollArea } from '@/components/atoms/scroll-area';
 import { Clock, RefreshCw, Eye, Play, Calendar, AlertCircle } from 'lucide-react';
 import {
+  fetchAnalysisRun,
   formatRunLabel,
   formatRunTime,
   listDatasetAnalysisRuns,
   openStoredAnalysisRun,
+  type AnalysisRunSummary,
   type StoredAnalysisRun,
 } from '@/lib/analysis-runs';
 
@@ -19,7 +21,7 @@ interface AnalysisHistoryProps {
 }
 
 export function AnalysisHistory({ projectId, onReRunAnalysis }: AnalysisHistoryProps) {
-  const [analyses, setAnalyses] = useState<StoredAnalysisRun[]>([]);
+  const [analyses, setAnalyses] = useState<AnalysisRunSummary[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selectedAnalysis, setSelectedAnalysis] = useState<StoredAnalysisRun | null>(null);
@@ -47,16 +49,30 @@ export function AnalysisHistory({ projectId, onReRunAnalysis }: AnalysisHistoryP
     void loadAnalysisHistory();
   }, [loadAnalysisHistory]);
 
-  const handleReRunAnalysis = (analysis: StoredAnalysisRun) => {
-    if (onReRunAnalysis) {
-      onReRunAnalysis(analysis);
-      return;
-    }
-    void openStoredAnalysisRun(analysis);
+  const handleReRunAnalysis = (analysis: AnalysisRunSummary) => {
+    void fetchAnalysisRun(analysis.id).then(full => {
+      if (!full) return;
+      if (onReRunAnalysis) {
+        onReRunAnalysis(full);
+        return;
+      }
+      void openStoredAnalysisRun(full);
+    });
   };
 
-  const handleViewDetails = (analysis: StoredAnalysisRun) => {
-    setSelectedAnalysis(selectedAnalysis?.id === analysis.id ? null : analysis);
+  const handleViewDetails = (analysis: AnalysisRunSummary) => {
+    if (selectedAnalysis?.id === analysis.id) {
+      setSelectedAnalysis(null);
+      return;
+    }
+    void fetchAnalysisRun(analysis.id).then(full => {
+      if (!full) {
+        setError('Saved analysis not found');
+        return;
+      }
+      setError(null);
+      setSelectedAnalysis(full);
+    });
   };
 
   if (isLoading) {
@@ -137,7 +153,7 @@ export function AnalysisHistory({ projectId, onReRunAnalysis }: AnalysisHistoryP
                     <div className="border-t pt-3">
                       <h4 className="font-medium mb-2">Summary</h4>
                       <p className="text-sm text-muted-foreground mb-3">
-                        {analysis.report.summary}
+                        {selectedAnalysis?.report.summary}
                       </p>
                     </div>
                   </CardContent>

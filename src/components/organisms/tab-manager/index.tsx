@@ -957,7 +957,7 @@ const TabManager: React.FC<TabManagerProps> = ({
       ) : null}
 
       {/* Tab Content Area - Tabs are now only responsible for rendering content */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
         {/* Add check to ensure tabs is an array */}
         {Array.isArray(tabs) &&
           tabs.map(tab => {
@@ -966,12 +966,12 @@ const TabManager: React.FC<TabManagerProps> = ({
             return (
               <div
                 key={tab.id}
-                className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background"
+                className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background"
                 style={{ display: activeTab?.id === tab.id ? 'flex' : 'none' }}
               >
                 <div
                   className={cn(
-                    'min-h-0 flex-1',
+                    'min-h-0 min-w-0 flex-1',
                     isReport ? 'flex flex-col overflow-hidden' : 'relative overflow-hidden'
                   )}
                 >

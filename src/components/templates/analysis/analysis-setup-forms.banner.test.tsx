@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { BannerTableForm } from './analysis-setup-forms';
 import { formStateFromBody } from '@/lib/analysis-definitions';
 import type { SchemaColumn } from '@/lib/analysis-report-types';
@@ -33,10 +33,12 @@ describe('Banner table re-run form', () => {
       />
     );
     expect(screen.queryByText(/expects a categorical column/i)).not.toBeInTheDocument();
+    expect(screen.getByText('Weight')).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'APA format' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: 'Include charts' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /advanced options/i }));
     expect(screen.getByLabelText('Net label')).toHaveValue('Top 2 Box');
     expect(screen.getByLabelText('Net codes')).toHaveValue('4, 5');
     expect(screen.queryByDisplayValue(/"label"/)).not.toBeInTheDocument();
-    expect(screen.getByRole('checkbox', { name: 'APA format' })).toBeChecked();
-    expect(screen.getByRole('checkbox', { name: 'Include charts' })).toBeChecked();
   });
 });

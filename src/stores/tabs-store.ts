@@ -90,6 +90,8 @@ export interface AgentAnalysisHistoryEntry {
   content: string;
   /** Short line for the list (e.g. dependent ~ predictors). */
   subtitle?: string;
+  /** Saved-analyses label. The run title, when the report has one. */
+  title?: string;
   /** tensr-api analysis_runs id — reload full report from server. */
   runId?: string;
 }

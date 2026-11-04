@@ -156,7 +156,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       ],
       Survival: ['Kaplan–Meier', 'Cox Proportional Hazards', 'Nelson–Aalen'],
       Network: ['Network'],
-      'Choice modelling': ['Conjoint (CBC)', 'MaxDiff'],
+      'Choice modelling': ['Conjoint', 'MaxDiff'],
       'Survey techniques': [
         'TURF',
         'Driver Analysis',
@@ -167,14 +167,12 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Brand Funnel',
         'Open-text coding',
         'MaxDiff (counting / MNL)',
-        'Conjoint (MNL)',
       ],
       Techniques: [
         'Verbatim Coding',
         'MaxDiff (Count)',
         'MaxDiff (MNL)',
         'MaxDiff (individual utilities)',
-        'Conjoint (individual utilities)',
         'Choice Simulator',
       ],
     },

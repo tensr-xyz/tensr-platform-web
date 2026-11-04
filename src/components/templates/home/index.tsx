@@ -506,6 +506,9 @@ const HomeTemplate: React.FC = () => {
             onExport={handleExportDataset}
             onShare={handleShareDataset}
             onRename={handleRenameDataset}
+            onMoved={() => {
+              void queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+            }}
             deletingId={deletingId}
             searchQuery={searchQ}
             onSearchChange={setSearchQ}

@@ -1,3 +1,4 @@
+import { fetchDatasetMetadataDocument } from '@/lib/dataset-metadata';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import type { LoopDefinition } from './loops';
@@ -28,12 +29,9 @@ export function fetchColumnValues(datasetId: string, column: string, token?: str
   );
 }
 
-export function fetchActiveWeight(datasetId: string, token?: string | null) {
-  return authedJson<{ active_weight_column?: string | null }>(
-    `/datasets/${datasetId}/metadata`,
-    { method: 'GET' },
-    token
-  );
+export async function fetchActiveWeight(datasetId: string, token?: string | null) {
+  const document = await fetchDatasetMetadataDocument(datasetId, token);
+  return { active_weight_column: document.active_weight_column };
 }
 
 export function listDatasetVersions(datasetId: string, token?: string | null) {
@@ -162,12 +160,13 @@ export function drillTableCell(
   );
 }
 
-export function fetchLoopMetadata(datasetId: string, token?: string | null) {
-  return authedJson<{
-    loop_proposals?: LoopDefinition[];
-    loops?: LoopDefinition[];
-    active_weight_column?: string | null;
-  }>(`/datasets/${datasetId}/metadata`, { method: 'GET' }, token);
+export async function fetchLoopMetadata(datasetId: string, token?: string | null) {
+  const document = await fetchDatasetMetadataDocument(datasetId, token);
+  return {
+    loop_proposals: document.loop_proposals as LoopDefinition[] | undefined,
+    loops: document.loops as LoopDefinition[] | undefined,
+    active_weight_column: document.active_weight_column,
+  };
 }
 
 export function confirmLoop(datasetId: string, loopId: string, token?: string | null) {

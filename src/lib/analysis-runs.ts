@@ -1,6 +1,7 @@
 import { apiClient } from '@/lib/api-client';
 import type { AnalysisReport, AnalyzeResponse } from '@/lib/analysis-report-types';
 import { ANALYSIS_LABELS, type AnalysisKey } from '@/lib/analysis-definitions';
+import { getDatasetIdFromTab } from '@/lib/workspace-dataset';
 import { isRetiredFromUi, retiredFromUiUserMessage } from '@/lib/retired-from-ui';
 import { openAnalysisResultTab } from '@/lib/open-analysis-result-tab';
 import { useTabsStore, ViewType, type AgentAnalysisHistoryEntry } from '@/stores/tabs-store';
@@ -129,7 +130,12 @@ export function sourceRowsUsedLabel(
   return `${used.toLocaleString()} of ${total.toLocaleString()} source rows used`;
 }
 
-export type RSyntaxVerificationKind = 'verified' | 'verified_in_ci' | 'not_verified' | 'unknown';
+export type RSyntaxVerificationKind =
+  | 'verified'
+  | 'verified_in_ci'
+  | 'not_verified'
+  | 'unknown'
+  | 'pending';
 
 export type RSyntaxVerification = {
   kind: RSyntaxVerificationKind;
@@ -152,7 +158,8 @@ export function rSyntaxVerificationState(value: unknown): RSyntaxVerification {
     v.kind === 'verified' ||
     v.kind === 'verified_in_ci' ||
     v.kind === 'not_verified' ||
-    v.kind === 'unknown'
+    v.kind === 'unknown' ||
+    v.kind === 'pending'
   ) {
     return {
       kind: v.kind,
@@ -186,10 +193,36 @@ export function rSyntaxBadgeText(value: unknown): { kind: RSyntaxVerificationKin
       text: state.statement || 'Generated R does not reproduce the engine result.',
     };
   }
+  if (state.kind === 'pending') {
+    return { kind: 'pending', text: state.statement || 'Checking the R syntax.' };
+  }
+  if (state.reason === 'verify_failed' || state.reason === 'timeout') {
+    return { kind: 'unknown', text: 'R check unavailable' };
+  }
   return {
     kind: 'unknown',
     text: state.statement || 'R syntax reproduction unknown.',
   };
+}
+
+/** Poll interval. The verify function timeout is 180s, so the report waits past a cold start. */
+export const R_CHECK_POLL_MS = 2000;
+
+/** After this many polls the badge says still checking instead of giving up. */
+export const R_CHECK_STILL_AFTER = 30;
+
+/** How many polls the report waits before the badge says the check is unavailable. */
+export const R_CHECK_POLL_LIMIT = 90;
+
+export function rCheckPhase(polls: number): 'checking' | 'still' | 'unavailable' {
+  if (polls >= R_CHECK_POLL_LIMIT) return 'unavailable';
+  if (polls >= R_CHECK_STILL_AFTER) return 'still';
+  return 'checking';
+}
+
+export function rCheckFinished(value: unknown): boolean {
+  const state = rSyntaxVerificationState(value);
+  return state.kind !== 'pending';
 }
 
 export type StoredAnalysisRun = {
@@ -203,10 +236,66 @@ export type StoredAnalysisRun = {
   body?: Record<string, unknown> | null;
 };
 
-export async function listDatasetAnalysisRuns(datasetId: string): Promise<StoredAnalysisRun[]> {
-  const res = await apiClient.datasets.analyze.listRuns(datasetId);
-  const runs = Array.isArray(res) ? res : ((res as { runs?: StoredAnalysisRun[] })?.runs ?? []);
-  return runs.map(normalizeStoredAnalysisRun).filter((r): r is StoredAnalysisRun => r !== null);
+/** Row from GET /datasets/{id}/runs. The report lives on the full run. */
+export type AnalysisRunSummary = {
+  id: string;
+  dataset_id: string;
+  op: string;
+  created_at: string;
+  title: string;
+  status?: string;
+};
+
+const RUNS_TTL_MS = 30_000;
+const recentRuns = new Map<string, { at: number; runs: AnalysisRunSummary[] }>();
+const inflightRuns = new Map<string, Promise<AnalysisRunSummary[]>>();
+
+export async function listDatasetAnalysisRuns(
+  datasetId: string,
+  opts?: { fresh?: boolean }
+): Promise<AnalysisRunSummary[]> {
+  if (!opts?.fresh) {
+    const hit = recentRuns.get(datasetId);
+    if (hit && Date.now() - hit.at < RUNS_TTL_MS) return hit.runs;
+  }
+  const pending = inflightRuns.get(datasetId);
+  if (pending) return pending;
+  const request = (async () => {
+    const collected: AnalysisRunSummary[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < 20; page += 1) {
+      const res = await apiClient.datasets.analyze.listRuns(datasetId, cursor);
+      const rows = Array.isArray(res) ? res : ((res as { runs?: unknown[] })?.runs ?? []);
+      for (const row of rows) {
+        const summary = normalizeAnalysisRunSummary(row);
+        if (summary) collected.push(summary);
+      }
+      const next = Array.isArray(res)
+        ? undefined
+        : (res as { next_cursor?: string | null }).next_cursor;
+      if (!next) break;
+      cursor = String(next);
+    }
+    recentRuns.set(datasetId, { at: Date.now(), runs: collected });
+    return collected;
+  })().finally(() => {
+    if (inflightRuns.get(datasetId) === request) inflightRuns.delete(datasetId);
+  });
+  inflightRuns.set(datasetId, request);
+  return request;
+}
+
+export async function recheckAnalysisRun(runId: string): Promise<RSyntaxVerification | null> {
+  try {
+    const body = await apiClient.datasets.analyze.recheckR(runId);
+    return rSyntaxVerificationState(body?.r_syntax_verification);
+  } catch {
+    return {
+      kind: 'unknown',
+      reason: 'verify_failed',
+      statement: 'R check unavailable.',
+    };
+  }
 }
 
 export async function fetchAnalysisRun(runId: string): Promise<StoredAnalysisRun | null> {
@@ -240,6 +329,36 @@ export async function openAnalysisRunById(runId: string): Promise<boolean> {
   return true;
 }
 
+/** Label for Saved analyses. A banner keeps the stub × banner title, not the procedure name. */
+export function savedRunDisplayTitle(
+  op: string,
+  report?: { meta?: { title?: string; subtitle?: string } } | null
+): string {
+  const raw = op.replace(/_/g, ' ').toLowerCase();
+  const catalog = ANALYSIS_LABELS[op as AnalysisKey] || '';
+  const title = (report?.meta?.title || '').trim();
+  const folded = title.replace(/_/g, ' ').toLowerCase();
+  const generic =
+    !title ||
+    folded === raw ||
+    folded === op.toLowerCase() ||
+    title === catalog ||
+    (Boolean(catalog) && (title.startsWith(`${catalog} (`) || title.startsWith(`${catalog} —`)));
+  if (!generic) return title;
+  const subtitle = (report?.meta?.subtitle || '').trim();
+  const subtitleFolded = subtitle.replace(/_/g, ' ').toLowerCase();
+  if (subtitle && subtitleFolded !== raw && subtitle !== catalog) return subtitle;
+  return catalog || op.replace(/_/g, ' ');
+}
+
+function catalogRunTitle(op: string, stored?: string): string {
+  const raw = op.replace(/_/g, ' ');
+  const title = (stored || '').trim();
+  const folded = title.toLowerCase();
+  if (title && folded !== raw.toLowerCase() && folded !== op.toLowerCase()) return title;
+  return ANALYSIS_LABELS[op as AnalysisKey] || raw;
+}
+
 /** Link a completed run to the source dataset spreadsheet tab (in-session list). */
 export function appendAnalysisRunToDatasetTab(params: {
   sourceDatasetId: string;
@@ -247,13 +366,10 @@ export function appendAnalysisRunToDatasetTab(params: {
   runId?: string;
   report: AnalysisReport;
 }): void {
+  recentRuns.delete(params.sourceDatasetId);
   const { tabs, updateTab } = useTabsStore.getState();
   const sheetTab = tabs.find(
-    t =>
-      t.type === ViewType.SPREADSHEET &&
-      (t.data?.filePath === params.sourceDatasetId ||
-        t.path === params.sourceDatasetId ||
-        t.data?.filePath?.includes(params.sourceDatasetId))
+    t => t.type === ViewType.SPREADSHEET && getDatasetIdFromTab(t) === params.sourceDatasetId
   );
   if (!sheetTab?.data) return;
 
@@ -262,6 +378,7 @@ export function appendAnalysisRunToDatasetTab(params: {
     createdAt: params.report.meta.generated_at || new Date().toISOString(),
     analysisType: params.op,
     content: params.report.summary || params.report.meta.title,
+    title: savedRunDisplayTitle(params.op, params.report),
     subtitle: params.report.meta.subtitle,
     runId: params.runId,
   };
@@ -278,7 +395,7 @@ export function appendAnalysisRunToDatasetTab(params: {
 }
 
 function stubReportForOp(op: string, createdAt: string): AnalysisReport {
-  const title = ANALYSIS_LABELS[op as AnalysisKey] || op.replace(/_/g, ' ');
+  const title = catalogRunTitle(op);
   const summary = isRetiredFromUi(op)
     ? retiredFromUiUserMessage(op)
     : 'This saved run has no stored report. The original output cannot be reconstructed from the list entry.';
@@ -294,6 +411,24 @@ function stubReportForOp(op: string, createdAt: string): AnalysisReport {
     metrics: [],
     tables: [],
     trust: { notes: [], warnings: [] },
+  };
+}
+
+export function normalizeAnalysisRunSummary(row: unknown): AnalysisRunSummary | null {
+  if (!row || typeof row !== 'object') return null;
+  const r = row as Record<string, unknown>;
+  const id = String(r.id ?? '');
+  const dataset_id = String(r.dataset_id ?? '');
+  const op = String(r.op ?? '');
+  if (!id || !dataset_id || !op) return null;
+  const storedTitle = String(r.title ?? '').trim();
+  return {
+    id,
+    dataset_id,
+    op,
+    created_at: String(r.created_at ?? ''),
+    title: catalogRunTitle(op, storedTitle),
+    status: r.status == null || r.status === '' ? undefined : String(r.status),
   };
 }
 
@@ -340,10 +475,15 @@ export function analysisEnvelopeFromStoredRun(
   };
 }
 
-export function formatRunLabel(run: StoredAnalysisRun): string {
-  const title = run.report.meta.title || run.op.replace(/_/g, ' ');
-  const sub = run.report.meta.subtitle;
-  return sub ? `${title} · ${sub}` : title;
+export function formatRunLabel(run: {
+  op: string;
+  title?: string;
+  report?: { meta?: { title?: string; subtitle?: string } };
+}): string {
+  const title = catalogRunTitle(run.op, run.title || run.report?.meta?.title);
+  const sub = run.report?.meta?.subtitle;
+  if (!sub || sub === title) return title;
+  return `${title} · ${sub}`;
 }
 
 export function formatRunTime(iso: string): string {

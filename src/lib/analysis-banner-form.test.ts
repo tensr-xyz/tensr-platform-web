@@ -54,16 +54,10 @@ describe('banner table rerun form', () => {
       stub_column: 'Q5',
       banner_column: 'Q3',
       weight: 'weight',
-      decimal_places: 3,
-      decimals: {
-        column_proportion: 3,
-        row_proportion: 3,
-        total_proportion: 3,
-        column_mean: 3,
-      },
-      apa_format: true,
-      include_charts: false,
     });
+    expect(buildBodyFromForm(form)).not.toHaveProperty('apa_format');
+    expect(buildBodyFromForm(form)).not.toHaveProperty('include_charts');
+    expect(buildBodyFromForm(form)).not.toHaveProperty('decimal_places');
     expect(form.bannerDecimals.startsWith('{')).toBe(false);
   });
 
@@ -84,9 +78,9 @@ describe('banner table rerun form', () => {
     expect(form.bannerDecimals).toBe('1');
     expect(form.includeCharts).toBe(false);
     const body = buildBodyFromForm(form);
-    expect(body.include_charts).toBe(false);
-    expect(body.apa_format).toBe(false);
-    expect(body.decimals).toEqual(saved.decimals);
+    expect(body).not.toHaveProperty('include_charts');
+    expect(body).not.toHaveProperty('apa_format');
+    expect(body).not.toHaveProperty('decimals');
   });
 
   it('posts one name for each output field', () => {
@@ -111,19 +105,11 @@ describe('banner table rerun form', () => {
       includeCharts: true,
       decimalPlaces: 3,
     });
-    expect(body).not.toHaveProperty('apaFormat');
-    expect(body).not.toHaveProperty('includeCharts');
-    expect(body).not.toHaveProperty('decimalPlaces');
-    expect(body.apa_format).toBe(false);
-    expect(body.include_charts).toBe(false);
-    expect(body.decimal_places).toBe(1);
-    expect(typeof body.decimal_places).toBe('number');
-    expect(body.decimals).toEqual({
-      column_proportion: 1,
-      row_proportion: 1,
-      total_proportion: 1,
-      column_mean: 1,
-    });
+    expect(body.apaFormat).toBe(true);
+    expect(body.includeCharts).toBe(true);
+    expect(body.decimalPlaces).toBe(3);
+    expect(body).not.toHaveProperty('apa_format');
+    expect(body).not.toHaveProperty('decimal_places');
     expect(form.bannerDecimals).toBe('1');
   });
 
@@ -172,7 +158,7 @@ describe('banner table rerun form', () => {
       SCHEMA
     );
     expect(form.bannerDecimals).toBe('1');
-    expect(buildBodyFromForm(form).decimals).toMatchObject({ column_proportion: 1 });
+    expect(buildBodyFromForm(form)).not.toHaveProperty('decimals');
   });
 
   it('keeps run disabled until the stub and banner are set', () => {

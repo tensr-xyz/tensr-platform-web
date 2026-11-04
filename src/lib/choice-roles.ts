@@ -6,6 +6,8 @@ export type ChoiceRole =
   | 'best'
   | 'worst'
   | 'attribute'
+  | 'price'
+  | 'segment'
   | 'ignore';
 
 const ROLE_HINTS: { role: ChoiceRole; pattern: RegExp }[] = [
@@ -15,6 +17,8 @@ const ROLE_HINTS: { role: ChoiceRole; pattern: RegExp }[] = [
   { role: 'chosen', pattern: /chosen|choice|selected/i },
   { role: 'best', pattern: /^best$|best_item/i },
   { role: 'worst', pattern: /^worst$|worst_item/i },
+  { role: 'price', pattern: /^price$|price_attribute/i },
+  { role: 'segment', pattern: /^segment$|_segment$/i },
 ];
 
 export function suggestChoiceRoles(columns: string[]): Record<string, ChoiceRole> {
@@ -25,10 +29,14 @@ export function suggestChoiceRoles(columns: string[]): Record<string, ChoiceRole
     if (hint) {
       roles[column] = hint.role;
       used.add(hint.role);
-    } else if (/^set_\d+$/i.test(column)) {
-      roles[column] = 'attribute';
+    } else if (/^price$|price_attribute/i.test(column) && !used.has('price')) {
+      roles[column] = 'price';
+      used.add('price');
+    } else if (/^segment$|_segment$/i.test(column) && !used.has('segment')) {
+      roles[column] = 'segment';
+      used.add('segment');
     } else {
-      roles[column] = 'ignore';
+      roles[column] = 'attribute';
     }
   }
   return roles;
@@ -141,8 +149,8 @@ export function conjointBodyFromRoles(
       chosen_column: 'chosen',
       profile_id_column: 'task_key',
       attribute_columns: attributes,
-      price_attribute: options.priceAttribute || undefined,
-      segment_column: options.segment || undefined,
+      price_attribute: options.priceAttribute || columnsFor('price')[0] || undefined,
+      segment_column: options.segment || columnsFor('segment')[0] || undefined,
       wide_map: {
         respondent: columnsFor('respondent')[0],
         task: columnsFor('task')[0],
@@ -156,7 +164,7 @@ export function conjointBodyFromRoles(
     profile_id_column: columnsFor('task')[0],
     attribute_columns: attributes,
     respondent_column: columnsFor('respondent')[0],
-    price_attribute: options.priceAttribute || undefined,
-    segment_column: options.segment || undefined,
+    price_attribute: options.priceAttribute || columnsFor('price')[0] || undefined,
+    segment_column: options.segment || columnsFor('segment')[0] || undefined,
   };
 }

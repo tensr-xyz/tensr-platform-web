@@ -1,16 +1,18 @@
 'use client';
 
 import { useState } from 'react';
+import { downloadExcelArtifact, type ExcelDownload } from '@/lib/excel-download';
 
 type Props = {
   title: string;
   summary: string;
+  excelDownload?: ExcelDownload | null;
   /** Return a sentence when the click cannot open a new view. */
   onOpen: () => string | void | Promise<string | void>;
 };
 
 /** Chat stand-in for a report that already opened in its own tab. */
-export function AnalysisReportChatCard({ title, summary, onOpen }: Props) {
+export function AnalysisReportChatCard({ title, summary, excelDownload, onOpen }: Props) {
   const [notice, setNotice] = useState<string | null>(null);
   return (
     <div
@@ -36,6 +38,16 @@ export function AnalysisReportChatCard({ title, summary, onOpen }: Props) {
       >
         Open report
       </button>
+      {excelDownload ? (
+        <button
+          type="button"
+          data-testid="analysis-report-excel-download"
+          className="ml-3 mt-2 text-sm font-medium text-primary hover:underline"
+          onClick={() => downloadExcelArtifact(excelDownload)}
+        >
+          Download {excelDownload.filename}
+        </button>
+      ) : null}
       {notice ? (
         <p role="status" className="mt-1 text-xs text-muted-foreground">
           {notice}

@@ -11,13 +11,18 @@ import { Button } from '@/components/atoms/button';
 import { Textarea } from '@/components/atoms/text-area';
 import { cn } from '@/utils';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
+import { useTabsStore } from '@/stores/tabs-store';
 import {
   formatRunLabel,
   formatRunTime,
   listDatasetAnalysisRuns,
-  openStoredAnalysisRun,
-  type StoredAnalysisRun,
+  openAnalysisRunById,
+  type AnalysisRunSummary,
 } from '@/lib/analysis-runs';
+import { runWhenIdle } from '@/lib/dataset-open';
+import { resolveSpreadsheetContextTab } from '@/lib/workspace-dataset';
+import { ensureAnalysisSpecs, specFor } from '@/lib/analysis-spec-setup';
+import { railParamLabel } from '@/lib/analysis-report-rail-labels';
 
 function RailSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -58,41 +63,89 @@ function VarPicker({
   );
 }
 
-function pickSpecInputs(report: AnalysisReport): { label: string; value: string; type?: string }[] {
+const BANNER_KEYS = new Set(['banner_table', 'crosstabs', 'cross_tab', 'custom_tables']);
+
+function columnName(item: unknown): string | null {
+  if (typeof item === 'string' && item.trim()) return item.trim();
+  if (item && typeof item === 'object' && 'column' in item) {
+    const column = (item as { column?: unknown }).column;
+    if (typeof column === 'string' && column.trim()) return column.trim();
+  }
+  return null;
+}
+
+function expandNames(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.map(columnName).filter((name): name is string => Boolean(name));
+  }
+  const one = columnName(raw);
+  return one ? [one] : [];
+}
+
+function pickSpecInputs(
+  report: AnalysisReport,
+  columns: { id: string; type?: string }[]
+): {
+  variables: { label: string; value: string; type?: string }[];
+  settings: { label: string; value: string }[];
+} {
   const inputs = report.analysis_spec?.inputs ?? {};
-  const pairs: { label: string; value: string; type?: string }[] = [];
-  const labelMap: Record<string, string> = {
-    dependent_variable: 'DV',
-    dependent_var: 'DV',
-    dv: 'DV',
-    outcome: 'DV',
-    y: 'DV',
-    independent_variable: 'Factor',
-    independent_var: 'Factor',
-    factor: 'Factor',
-    group: 'Factor',
-    x: 'Factor',
-    predictor: 'Predictor',
-    covariate: 'Covariate',
+  const analysisKey = report.analysis_spec?.analysis_key || report.meta.analysis_key || '';
+  const typeByName = new Map(columns.map(column => [column.id, column.type]));
+  const variables: { label: string; value: string; type?: string }[] = [];
+  const settings: { label: string; value: string }[] = [];
+  const stubNames = [...expandNames(inputs.stubs), ...expandNames(inputs.stub_columns)];
+  const seen = new Set<string>();
+
+  const labelFor = (key: string) => railParamLabel(analysisKey, key);
+  const pushVariable = (label: string, name: string) => {
+    const key = `${label}\u0000${name}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    variables.push({ label, value: name, type: typeByName.get(name) });
   };
 
   for (const [key, raw] of Object.entries(inputs)) {
-    if (raw === null || raw === undefined) continue;
-    const value = Array.isArray(raw) ? raw.join(', ') : String(raw);
-    if (!value || key.startsWith('_')) continue;
-    pairs.push({
-      label: labelMap[key] ?? key.replace(/_/g, ' '),
-      value,
-    });
+    if (raw === null || raw === undefined || key.startsWith('_')) continue;
+    if (BANNER_KEYS.has(analysisKey) && (key === 'column_a' || key === 'column_b')) continue;
+    const label = labelFor(key);
+    if (!label) continue;
+    if (key === 'stub_column' && stubNames.length) continue;
+    if (typeof raw === 'boolean') {
+      settings.push({ label, value: raw ? 'On' : 'Off' });
+      continue;
+    }
+    if (typeof raw === 'number') {
+      settings.push({ label, value: String(raw) });
+      continue;
+    }
+    const names = expandNames(raw);
+    if (!names.length) continue;
+    if (names.length === 1 && (names[0] === 'true' || names[0] === 'false')) {
+      settings.push({ label, value: names[0] === 'true' ? 'On' : 'Off' });
+      continue;
+    }
+    const paramType = specFor(analysisKey)?.params.find(item => item.name === key)?.type;
+    const looksLikeColumns =
+      names.some(name => typeByName.has(name)) || paramType === 'column' || paramType === 'columns';
+    if (looksLikeColumns) {
+      for (const name of names) pushVariable(label, name);
+      continue;
+    }
+    if (!columns.length && names.every(name => Number.isNaN(Number(name)))) {
+      for (const name of names) pushVariable(label, name);
+      continue;
+    }
+    settings.push({ label, value: names.join(', ') });
   }
 
-  if (pairs.length === 0 && report.meta.subtitle) {
+  if (variables.length === 0 && settings.length === 0 && report.meta.subtitle) {
     const parts = report.meta.subtitle.split(/\s+by\s+/i);
-    if (parts[0]) pairs.push({ label: 'DV', value: parts[0].trim() });
-    if (parts[1]) pairs.push({ label: 'Factor', value: parts[1].trim() });
+    if (parts[0]) variables.push({ label: 'DV', value: parts[0].trim() });
+    if (parts[1]) variables.push({ label: 'Factor', value: parts[1].trim() });
   }
 
-  return pairs.slice(0, 4);
+  return { variables, settings };
 }
 
 type Props = {
@@ -149,22 +202,54 @@ export function AnalysisReportRail({
   onResolveAnnotation,
 }: Props) {
   const [draft, setDraft] = React.useState('');
-  const [otherRuns, setOtherRuns] = React.useState<StoredAnalysisRun[]>([]);
+  const [otherRuns, setOtherRuns] = React.useState<AnalysisRunSummary[]>([]);
+  const [specsReady, setSpecsReady] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    void ensureAnalysisSpecs()
+      .then(() => {
+        if (!cancelled) setSpecsReady(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!sourceDatasetId) return;
     let cancelled = false;
-    listDatasetAnalysisRuns(sourceDatasetId).then(all => {
-      if (!cancelled) {
-        setOtherRuns(all.filter(r => r.id !== currentRunId).slice(0, 8));
-      }
+    const cancelIdle = runWhenIdle(() => {
+      void listDatasetAnalysisRuns(sourceDatasetId).then(all => {
+        if (!cancelled) {
+          setOtherRuns(all.filter(r => r.id !== currentRunId).slice(0, 8));
+        }
+      });
     });
     return () => {
       cancelled = true;
+      cancelIdle();
     };
   }, [sourceDatasetId, currentRunId]);
 
-  const variables = pickSpecInputs(report);
+  const initialColumns = useTabsStore(state => {
+    const active = state.tabs.find(item => item.id === state.activeTabId);
+    const sheet = resolveSpreadsheetContextTab(state.tabs, active);
+    return sheet?.data?.initialColumns;
+  });
+  const columns = React.useMemo(
+    () =>
+      (initialColumns ?? []).map(column => ({
+        id: column.id,
+        type: column.type,
+      })),
+    [initialColumns]
+  );
+  const { variables, settings } = React.useMemo(
+    () => pickSpecInputs(report, columns),
+    [report, columns, specsReady]
+  );
   const chartTitles = (report.charts?.length ? report.charts : report.chart ? [report.chart] : [])
     .filter(Boolean)
     .map(c => c!.title);
@@ -208,6 +293,19 @@ export function AnalysisReportRail({
               Open the setup dialog to change variables and run again.
             </p>
           )}
+          {settings.length ? (
+            <ul className="mt-2 space-y-1">
+              {settings.map(setting => (
+                <li
+                  key={`${setting.label}:${setting.value}`}
+                  className="flex justify-between gap-2 text-[11px]"
+                >
+                  <span className="text-muted-foreground">{setting.label}</span>
+                  <span className="font-medium text-foreground">{setting.value}</span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
         <div className="mt-2.5 flex gap-2">
           <Button
@@ -249,7 +347,7 @@ export function AnalysisReportRail({
                 key={run.id}
                 type="button"
                 variant="ghost"
-                onClick={() => openStoredAnalysisRun(run)}
+                onClick={() => void openAnalysisRunById(run.id)}
                 className="h-auto w-full flex-col items-start gap-0.5 whitespace-normal rounded-sm px-2 py-1.5 text-left text-xs font-normal text-muted-foreground hover:bg-muted/50 hover:text-foreground"
               >
                 <span className="truncate font-medium text-foreground">{formatRunLabel(run)}</span>

@@ -1,11 +1,6 @@
-import PluginUploadForm from '@/components/templates/plugin-upload';
-import { Suspense } from 'react';
-import { Loader } from '@/components/molecules/loading';
+import { redirect } from 'next/navigation';
 
-export default function PluginUploadPage() {
-  return (
-    <Suspense fallback={<Loader centered message="Loading…" />}>
-      <PluginUploadForm />
-    </Suspense>
-  );
+/** This page lives in the app now. */
+export default function LegacyPluginPage() {
+  redirect('/flow/plugins/publish');
 }
