@@ -4157,7 +4157,7 @@ function ReportScreen({
               id,
               label,
               spec,
-              table: reportTableFromBook(id, label, index + 1, detail, labels),
+              table: reportTableFromBook(id, label, row.number || index + 1, detail, labels),
             };
           })
         );

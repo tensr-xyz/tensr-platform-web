@@ -6,6 +6,8 @@ export type ProjectTable = {
   label: string;
   datasetId: string;
   filename: string;
+  /** The table's T number. It stays once given; a new table takes the next one. */
+  number: number;
 };
 
 type RawRow = {
@@ -15,6 +17,7 @@ type RawRow = {
   name?: string;
   dataset_id?: string;
   filename?: string;
+  table_number?: number | null;
 };
 
 export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = ''): ProjectTable[] {
@@ -31,6 +34,7 @@ export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = '
       label: row.label || row.name || id,
       datasetId,
       filename: row.filename || '',
+      number: Number(row.table_number) > 0 ? Number(row.table_number) : 0,
     });
   }
   return out;
@@ -53,9 +57,26 @@ export async function loadProjectTables(
       ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
       : Promise.resolve(null),
   ]);
-  return mergeTableLists(
-    projectTableRows(projectPage?.specs),
-    projectTableRows(filePage?.specs, datasetId)
+  return numberTables(
+    mergeTableLists(
+      projectTableRows(projectPage?.specs),
+      projectTableRows(filePage?.specs, datasetId)
+    )
+  );
+}
+
+/**
+ * Keeps every saved T number. A table without one (just saved, not yet listed by the project)
+ * takes the next number after the highest, oldest first. The list itself is newest first.
+ */
+export function numberTables<T extends { number?: number }>(tables: T[]): T[] {
+  let next = Math.max(0, ...tables.map(table => table.number || 0)) + 1;
+  const numbers = new Map<number, number>();
+  for (let index = tables.length - 1; index >= 0; index -= 1) {
+    if (!tables[index].number) numbers.set(index, next++);
+  }
+  return tables.map((table, index) =>
+    numbers.has(index) ? { ...table, number: numbers.get(index) } : table
   );
 }
 

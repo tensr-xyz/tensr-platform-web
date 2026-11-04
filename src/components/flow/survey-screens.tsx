@@ -11,7 +11,7 @@ import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
-import { loadProjectTables } from '@/components/flow/project-tables';
+import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
 import {
   isIdColumn,
   openEndColumns,
@@ -1132,6 +1132,7 @@ type SavedSpec = {
   name?: string;
   dataset_id?: string;
   filename?: string;
+  number?: number;
 };
 type SavedBook = { id?: string; name?: string; n_specs?: number };
 
@@ -1461,6 +1462,7 @@ export function TablesBuilder({
         label: table.label,
         dataset_id: table.datasetId,
         filename: table.filename,
+        number: table.number,
       }));
       setSpecs(saved);
       setBooks(bookPage.books || []);
@@ -1557,10 +1559,10 @@ export function TablesBuilder({
       setSpecs(current =>
         current.some(item => (item.spec_id || item.id) === id)
           ? current
-          : [
+          : numberTables([
               { spec_id: id, label: spec?.label || stubColumn || stub, dataset_id: datasetId },
               ...current,
-            ]
+            ])
       );
     }
   }
@@ -1786,9 +1788,9 @@ export function TablesBuilder({
       current: { role: 'user' | 'run' | 'reply'; text: string }[]
     ) => { role: 'user' | 'run' | 'reply'; text: string }[]
   ) => setThreads(current => ({ ...current, [threadKey]: update(current[threadKey] || []) }));
-  const selectedIndex = specs.findIndex(item => (item.spec_id || item.id) === specId);
+  const selectedNumber = specs.find(item => (item.spec_id || item.id) === specId)?.number;
   const title = book
-    ? `${selectedIndex >= 0 ? `T${selectedIndex + 1} · ` : ''}${labelFor(stub)}${
+    ? `${selectedNumber ? `T${selectedNumber} · ` : ''}${labelFor(stub)}${
         banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
       }`
     : 'Save a table';
@@ -1819,7 +1821,7 @@ export function TablesBuilder({
             <Skeleton className="h-8 w-full" />
           </div>
         ) : specs.length ? (
-          specs.map((spec, index) => {
+          specs.map(spec => {
             const id = spec.spec_id || spec.id || '';
             return (
               <Button
@@ -1844,7 +1846,7 @@ export function TablesBuilder({
                     );
                 }}
               >
-                <span>T{index + 1}</span>
+                <span>T{spec.number}</span>
                 <span className="tables-saved-copy">
                   <span>{spec.label || spec.name || id}</span>
                   {spec.dataset_id && spec.dataset_id !== datasetId ? (
@@ -2264,9 +2266,7 @@ export function TablesBuilder({
               {thread.length === 0 && !asking ? (
                 <div className="tables-thread-empty">
                   <strong>
-                    {selectedIndex >= 0
-                      ? `Ask about T${selectedIndex + 1}`
-                      : 'Ask about this table'}
+                    {selectedNumber ? `Ask about T${selectedNumber}` : 'Ask about this table'}
                   </strong>
                   <p className="flow-muted">
                     Ask what moved, or tell it to change the table: add a banner, net the top two
@@ -2363,9 +2363,7 @@ export function TablesBuilder({
               />
               <div className="tables-composer-row">
                 <span className="tables-agent-chip">Agent</span>
-                {selectedIndex >= 0 ? (
-                  <span className="flow-muted">@T{selectedIndex + 1}</span>
-                ) : null}
+                {selectedNumber ? <span className="flow-muted">@T{selectedNumber}</span> : null}
                 <Button
                   className="chat-send"
                   type="submit"
