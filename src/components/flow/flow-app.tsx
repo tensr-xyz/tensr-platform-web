@@ -8,6 +8,7 @@ import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import { loadProjectTables, tableFileNote } from '@/components/flow/project-tables';
+import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
 import { PaletteNoMatch } from '@/components/flow/palette-no-match';
 import {
   dependentColumns,
@@ -175,7 +176,9 @@ type DatasetRow = {
   project_id?: string;
   updated_at?: string;
   parent_dataset_id?: string | null;
+  origin_dataset_id?: string | null;
   lineage_label?: string | null;
+  producing_operation?: string | null;
 };
 
 function editedAgo(value?: string | null): string {
@@ -3684,10 +3687,19 @@ function ResponsesScreen({
                 createdAt: row.updated_at,
                 updatedAt: row.updated_at,
                 lineageLabel: row.lineage_label,
+                producingOperation: row.producing_operation,
                 parentId: row.parent_dataset_id,
+                originId: row.origin_dataset_id,
               }))}
               initialStub={reopenTheme}
               onReview={column => setReviewing(column)}
+              onUseNewer={nextId => {
+                if (!project?.id || !nextId) return;
+                void flowJson(`/api/projects/${project.id}`, {
+                  method: 'PATCH',
+                  body: JSON.stringify({ active_dataset_id: nextId }),
+                }).then(() => onChanged?.());
+              }}
               onSelectCell={cell => {
                 setSurveyCell(cell);
                 setSide('evidence');
@@ -4087,7 +4099,16 @@ function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: 
         name: row.original_filename || datasetRowId(row),
         inUse: datasetRowId(row) === project?.active_dataset_id,
       }))}
+      datasets={files}
       onFile={setChosen}
+      onAdopted={nextId => {
+        setChosen(nextId);
+        if (!project?.id) return;
+        void flowJson(`/api/projects/${project.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active_dataset_id: nextId }),
+        });
+      }}
     />
   );
 }
@@ -4105,10 +4126,11 @@ function ReportScreen({
     project?.active_dataset_id || datasets.find(row => row.project_id === projectId)?.dataset_id;
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [specs, setSpecs] = useState<
-    { id: string; label: string; spec: Record<string, unknown> }[]
+    { id: string; label: string; spec: Record<string, unknown>; datasetId?: string }[]
   >([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [tables, setTables] = useState<ReportTable[]>([]);
+  const [staleTables, setStaleTables] = useState<StaleTable[]>([]);
   const [findings, setFindings] = useState<ReportFinding[]>([]);
   const [findingsPhase, setFindingsPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [findingsError, setFindingsError] = useState('');
@@ -4124,6 +4146,7 @@ function ReportScreen({
   const [busy, setBusy] = useState('');
   const [pane, setPane] = useState<'report' | 'outputs'>('report');
   const [openRunId, setOpenRunId] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
   const lastRun = useAnalysisSetupStore(s => s.lastRun);
   const seenRun = useRef(lastRun?.nonce || 0);
   useEffect(() => {
@@ -4157,6 +4180,7 @@ function ReportScreen({
       setSpecs([]);
       setPicked([]);
       setTables([]);
+      setStaleTables([]);
       setFindings([]);
       setPhase('ready');
       setFindingsPhase('ready');
@@ -4187,27 +4211,39 @@ function ReportScreen({
         const labels = Object.fromEntries(
           (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
         );
-        const loaded = await Promise.all(
-          rows.map(async (row, index) => {
-            const id = row.id;
-            const detail = await flowJson<Record<string, unknown>>(
-              `/datasets/${row.datasetId}/tables/${id}`
-            );
-            const note = tableFileNote(row, datasetId);
-            const label = note ? `${row.label} (${note})` : row.label;
-            const spec = (detail.spec as Record<string, unknown>) || {};
-            return {
-              id,
-              label,
-              spec,
-              table: reportTableFromBook(id, label, row.number || index + 1, detail, labels),
-            };
-          })
+        const settled = await loadTablesSettled(rows, row =>
+          flowJson<Record<string, unknown>>(`/datasets/${row.datasetId}/tables/${row.id}`)
         );
         if (!live) return;
-        const ready = loaded.filter(row => row.id);
-        setSpecs(ready.map(row => ({ id: row.id, label: row.label, spec: row.spec })));
+        const ready = settled.ready.map(({ row, detail }, index) => {
+          const note = tableFileNote(row, datasetId);
+          const label = note ? `${row.label} (${note})` : row.label;
+          const spec = (detail.spec as Record<string, unknown>) || {};
+          return {
+            id: row.id,
+            label,
+            datasetId: row.datasetId,
+            spec,
+            table: reportTableFromBook(row.id, label, row.number || index + 1, detail, labels),
+          };
+        });
+        const listed = [
+          ...ready.map(row => ({
+            id: row.id,
+            label: row.label,
+            spec: row.spec,
+            datasetId: row.datasetId,
+          })),
+          ...settled.stale.map(row => ({
+            id: row.id,
+            label: row.label,
+            spec: {},
+            datasetId: row.datasetId,
+          })),
+        ];
+        setSpecs(listed);
         setPicked(ready.map(row => row.id));
+        setStaleTables(settled.stale);
         await pinsRequest;
         if (!live) return;
         const nextTables = distinctTables(ready.map(row => row.table));
@@ -4215,6 +4251,12 @@ function ReportScreen({
         setSegmentId(null);
         setRowCut(null);
         writeFindings(nextTables, null, null);
+        if (settled.failed.length && !ready.length && !settled.stale.length) {
+          const first = settled.failed[0]?.error;
+          setError(first instanceof Error ? first.message : 'Could not load saved tables');
+          setPhase('error');
+          return;
+        }
         setPhase('ready');
       })
       .catch(err => {
@@ -4225,18 +4267,40 @@ function ReportScreen({
     return () => {
       live = false;
     };
-  }, [datasetId, writeFindings]);
+  }, [datasetId, writeFindings, refreshKey]);
 
-  const selected = specs.filter(row => picked.includes(row.id));
+  const selected = specs.filter(
+    row => picked.includes(row.id) && Object.keys(row.spec || {}).length > 0
+  );
+
+  const rebuildStale = async (table: StaleTable) => {
+    setBusy(`rebuild-${table.id}`);
+    setError('');
+    try {
+      await flowJson(`/datasets/${table.datasetId}/tables/${table.id}/rebuild`, {
+        method: 'POST',
+      });
+      setRefreshKey(key => key + 1);
+      setNote(`T${table.number} rebuilt on the current file.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not rebuild that table');
+    } finally {
+      setBusy('');
+    }
+  };
 
   const deck = async () => {
     if (!datasetId || !selected.length) {
-      setError('Save a table before building a deck.');
+      setError(
+        staleTables.length
+          ? 'Rebuild or deselect tables built on an older file before exporting.'
+          : 'Save a table before building a deck.'
+      );
       return;
     }
     setError('');
     const created = await flowJson<{ export_id?: string; filename?: string }>(
-      `/datasets/${datasetId}/export/deck`,
+      `/datasets/${selected[0].datasetId || datasetId}/export/deck`,
       {
         method: 'POST',
         body: JSON.stringify({
@@ -4272,12 +4336,17 @@ function ReportScreen({
 
   const bannerBook = async () => {
     if (!datasetId || !selected.length) {
-      setError('Save a table before building a banner book.');
+      setError(
+        staleTables.length
+          ? 'Rebuild or deselect tables built on an older file before exporting.'
+          : 'Save a table before building a banner book.'
+      );
       return;
     }
     setError('');
+    const exportDatasetId = selected[0].datasetId || datasetId;
     const saved = await flowJson<{ book?: { id?: string } }>(
-      `/datasets/${datasetId}/banner-books`,
+      `/datasets/${exportDatasetId}/banner-books`,
       {
         method: 'POST',
         body: JSON.stringify({
@@ -4289,11 +4358,11 @@ function ReportScreen({
     const bookId = saved.book?.id;
     if (!bookId) throw new Error('The banner book was not saved.');
     await downloadExport(
-      `/datasets/${datasetId}/banner-books/${bookId}/export.xlsx`,
+      `/datasets/${exportDatasetId}/banner-books/${bookId}/export.xlsx`,
       'banner-book.xlsx',
       {
         method: 'POST',
-        body: JSON.stringify({ target_dataset_id: datasetId, mapping: {} }),
+        body: JSON.stringify({ target_dataset_id: exportDatasetId, mapping: {} }),
       }
     );
     setNote('Banner book downloaded.');
@@ -4306,7 +4375,7 @@ function ReportScreen({
     }
     setError('');
     await downloadExport(
-      `/datasets/${datasetId}/tables/${selected[0].id}/export.docx`,
+      `/datasets/${selected[0].datasetId || datasetId}/tables/${selected[0].id}/export.docx`,
       'topline.docx'
     );
     setNote('Topline downloaded.');
@@ -4613,6 +4682,38 @@ function ReportScreen({
           <div className="report-head">
             <h2>Key findings</h2>
           </div>
+          {staleTables.length ? (
+            <div className="report-stale-list">
+              {staleTables.map(table => (
+                <article key={table.id} className="report-finding report-stale" role="status">
+                  <div className="report-finding-copy">
+                    <p className="flow-muted">
+                      T{table.number}
+                      {table.filename ? ` · ${table.filename}` : ''}
+                    </p>
+                    <h3>{table.label}</h3>
+                    <p>Built on an older version of the data</p>
+                    <div className="report-chips">
+                      <Button
+                        className="report-chip accent"
+                        type="button"
+                        disabled={busy !== ''}
+                        onClick={() => void rebuildStale(table)}
+                      >
+                        Rebuild on current file
+                      </Button>
+                      <Link
+                        className="report-chip"
+                        href={`/flow/p/${projectId}/sources?file=${encodeURIComponent(table.datasetId)}`}
+                      >
+                        Open original version
+                      </Link>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : null}
           {findingsPhase === 'loading' ? (
             <>
               <Skeleton className="h-36 w-full" />
@@ -4620,7 +4721,7 @@ function ReportScreen({
             </>
           ) : findingsPhase === 'error' ? (
             <p className="flow-error">{findingsError || 'Could not write the findings.'}</p>
-          ) : findings.length === 0 && reportPins.length === 0 ? (
+          ) : findings.length === 0 && reportPins.length === 0 && !staleTables.length ? (
             <p className="report-empty">Save a table to generate findings.</p>
           ) : (
             <>

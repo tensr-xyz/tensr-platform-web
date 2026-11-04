@@ -4,7 +4,14 @@ jest.mock('@/lib/flow-api', () => ({
 }));
 
 import { flowJson } from '@/lib/flow-api';
-import { loadBilling, loadInvoices, loadUsage, peekBilling, peekUsage } from './billing-load';
+import {
+  loadBilling,
+  loadBillingPlanCard,
+  loadInvoices,
+  loadUsage,
+  peekBilling,
+  peekUsage,
+} from './billing-load';
 import { settingsCache } from './settings-cache';
 
 const ANSWERS: Record<string, unknown> = {
@@ -50,5 +57,22 @@ describe('billing and usage loading', () => {
     const calls = (flowJson as jest.Mock).mock.calls.length;
     await Promise.all([loadBilling(), loadUsage(), loadInvoices()]);
     expect((flowJson as jest.Mock).mock.calls.length).toBe(calls);
+  });
+
+  test.each([
+    ['pro tier', 'pro'],
+    ['trial tier', 'trial'],
+    ['none tier', 'none'],
+  ])('plan card for %s returns when subscription resolves', async (_name, tier) => {
+    settingsCache.forget(() => true);
+    const card = loadBillingPlanCard();
+    expect(pending.map(item => item.path)).toEqual(['/api/billing/subscription']);
+    expect(pending.map(item => item.path)).not.toContain('/api/billing/plans');
+    pending.splice(0).forEach(item => item.resolve({ subscription: { tier, status: 'active' } }));
+    const result = await card;
+    expect(result.subscription?.tier).toBe(tier);
+    expect(result.ms).toBeGreaterThanOrEqual(0);
+    // /me may have been kicked off in the background — resolve so it does not leak.
+    pending.splice(0).forEach(item => item.resolve({ entitlements: { plan_code: tier } }));
   });
 });

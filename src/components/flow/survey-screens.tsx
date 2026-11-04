@@ -23,6 +23,7 @@ import {
 import { TableChart } from '@/components/flow/table-chart-panel';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { runAgentLoop } from '@/lib/run-agent-loop';
+import { WeightPanel } from '@/components/flow/weight-modal';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import {
   bannerColumns,
@@ -39,6 +40,7 @@ import {
 } from '@/lib/flow-survey';
 import { tableBaseCopy } from '@/components/flow/table-base';
 import { codingVersionStatus, type CodingFile } from '@/components/flow/coding-versions';
+import { isTableSourceChanged } from '@/components/flow/stale-table';
 
 type DatasetRow = {
   dataset_id?: string;
@@ -327,6 +329,7 @@ export function ThemesPanel({
   onSelectCell,
   onEditFrame,
   onReview,
+  onUseNewer,
   initialStub = '',
 }: {
   datasetId?: string;
@@ -335,9 +338,11 @@ export function ThemesPanel({
   onSelectCell: (cell: SurveyCell) => void;
   onEditFrame?: (column: string) => void;
   onReview?: (codeColumn: string) => void;
+  onUseNewer?: (datasetId: string) => void;
   /** The theme to reopen, e.g. the one just reviewed, so its table comes back with new counts. */
   initialStub?: string;
 }) {
+  const router = useRouter();
   const coding = codingVersionStatus(files, datasetId);
   const [columns, setColumns] = useState<
     { name: string; label: string; type?: string; measure?: string }[]
@@ -348,6 +353,7 @@ export function ThemesPanel({
   const [book, setBook] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
   const [running, setRunning] = useState(false);
+  const [savingReport, setSavingReport] = useState(false);
   const [columnsReady, setColumnsReady] = useState(false);
   useEffect(() => {
     if (!datasetId) {
@@ -467,7 +473,6 @@ export function ThemesPanel({
           <p className="flow-muted">
             Open end{stub ? ` · ${stubLabel}` : ''}
             {coding.inUseLabel ? ` · ${coding.inUseLabel}` : ''}
-            {coding.newerAvailable ? ' · newer coding available' : ''}
           </p>
           <h2>{stub ? stubLabel : 'Choose a theme'}</h2>
           <p className="flow-muted">
@@ -475,6 +480,19 @@ export function ThemesPanel({
               ? `${themeCount} theme${themeCount === 1 ? '' : 's'} · ${weight ? `weighted ${weight}` : 'unweighted'} · column %`
               : 'Column % with significance letters'}
           </p>
+          {coding.newerAvailable && coding.newerId ? (
+            <p className="flow-banner warn" role="status">
+              Newer coding available
+              {coding.newerLabel ? ` · ${coding.newerLabel}` : ''}
+              <Button
+                className="flow-btn"
+                type="button"
+                onClick={() => onUseNewer?.(coding.newerId!)}
+              >
+                Use newer
+              </Button>
+            </p>
+          ) : null}
         </div>
         <div className="themes-split">
           <span className="flow-muted">Theme</span>
@@ -546,8 +564,39 @@ export function ThemesPanel({
           ) : null}
           {projectId ? (
             book ? (
-              <Button className="flow-btn primary" type="button" asChild>
-                <Link href={`/flow/p/${projectId}/report`}>Add to report</Link>
+              <Button
+                className="flow-btn primary"
+                type="button"
+                disabled={savingReport || !datasetId || !stub}
+                onClick={() => {
+                  if (!datasetId || !stub) return;
+                  setSavingReport(true);
+                  setError('');
+                  void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
+                    method: 'POST',
+                    body: JSON.stringify({
+                      stubs: [codedStub(stub)],
+                      banner: banner ? [{ column: banner }] : [],
+                      statistics: ['column_proportion'],
+                      significance_display: 'column_letters',
+                      weight: weight || 'none',
+                      save: true,
+                    }),
+                  })
+                    .then(() => {
+                      router.push(`/flow/p/${projectId}/report`);
+                    })
+                    .catch(err => {
+                      setSavingReport(false);
+                      setError(
+                        err instanceof Error
+                          ? err.message
+                          : 'Could not add that table to the report'
+                      );
+                    });
+                }}
+              >
+                {savingReport ? 'Adding…' : 'Add to report'}
               </Button>
             ) : (
               <Button className="flow-btn primary" type="button" disabled>
@@ -1377,14 +1426,25 @@ export function TablesBuilder({
   datasetId,
   projectId,
   files = [],
+  datasets = [],
   onFile,
+  onAdopted,
 }: {
   datasetId?: string;
   projectId?: string;
   files?: { id: string; name: string; inUse?: boolean }[];
+  datasets?: {
+    dataset_id?: string;
+    id?: string;
+    original_filename?: string;
+    n_rows?: number;
+  }[];
   onFile?: (id: string) => void;
+  onAdopted?: (datasetId: string) => void;
 }) {
   const router = useRouter();
+  const [weightOpen, setWeightOpen] = useState(false);
+  const [weightRerake, setWeightRerake] = useState(false);
   const [customNets, setCustomNets] = useState<{ label: string; values: string[] }[]>([]);
   const [netOpen, setNetOpen] = useState(false);
   const [netOptions, setNetOptions] = useState<string[]>([]);
@@ -1871,9 +1931,16 @@ export function TablesBuilder({
                   }
                   void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
                     .then(remember)
-                    .catch(err =>
-                      setError(err instanceof Error ? err.message : 'Could not open that table')
-                    );
+                    .catch(err => {
+                      if (isTableSourceChanged(err)) {
+                        setBook(null);
+                        setError(
+                          'Built on an older version of the data. Rebuild on current file from Report, or open the original version from Sources.'
+                        );
+                        return;
+                      }
+                      setError(err instanceof Error ? err.message : 'Could not open that table');
+                    });
                 }}
               >
                 <span>T{spec.number}</span>
@@ -2210,9 +2277,18 @@ export function TablesBuilder({
             {error ? <p className="flow-error">{error}</p> : null}
             {note ? <p className="flow-muted">{note}</p> : null}
             {weightNeedsRefresh ? (
-              <p className="flow-muted" role="status">
-                Made before a weighting fix · re-run from Weight to targets so every table reads the
-                same base.
+              <p className="flow-banner warn" role="status">
+                Made before a weighting fix · re-run
+                <Button
+                  className="flow-btn"
+                  type="button"
+                  onClick={() => {
+                    setWeightRerake(true);
+                    setWeightOpen(true);
+                  }}
+                >
+                  Re-rake
+                </Button>
               </p>
             ) : null}
             <div className="tables-sheet">
@@ -2404,6 +2480,27 @@ export function TablesBuilder({
           </aside>
         </>
       )}
+      {weightOpen ? (
+        <WeightPanel
+          datasetId={datasetId}
+          datasets={
+            datasets.length
+              ? datasets
+              : files.map(file => ({ id: file.id, original_filename: file.name }))
+          }
+          rerake={weightRerake}
+          onClose={() => {
+            setWeightOpen(false);
+            setWeightRerake(false);
+          }}
+          onAdopted={nextId => {
+            setWeightOpen(false);
+            setWeightRerake(false);
+            setWeightNeedsRefresh(false);
+            onAdopted?.(nextId);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
