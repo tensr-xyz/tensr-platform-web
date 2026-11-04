@@ -152,6 +152,7 @@ export function WeightPanel({
   const [savedName, setSavedName] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
 
   const outputColumn = rakeOutputColumn(columns.map(column => column.name));
   const openFile = datasets.find(row => rowId(row) === datasetId);
@@ -168,6 +169,7 @@ export function WeightPanel({
       columns?: { name?: string; label?: string; value_labels?: Record<string, string> | null }[];
       weight_columns?: string[];
       active_weight_column?: string | null;
+      weight_vector?: { needs_refresh?: boolean } | null;
     }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         const listed = (meta.columns || []).filter(column => column.name);
@@ -180,6 +182,7 @@ export function WeightPanel({
             (name, index, all) => Boolean(name) && name !== '_weight' && all.indexOf(name) === index
           )
         );
+        setNeedsRefresh(Boolean(meta.weight_vector?.needs_refresh));
       })
       .catch(() => setColumns([]));
   }, [datasetId]);
@@ -379,6 +382,12 @@ export function WeightPanel({
             </div>
           </div>
           <p className="weight-note">Nothing is overwritten. Outputs keep the file they ran on.</p>
+          {needsRefresh ? (
+            <p className="weight-note weight-refresh" role="status">
+              Made before a weighting fix · re-run. Set the same targets below and save a new
+              weighted file so every table reads the same base.
+            </p>
+          ) : null}
         </div>
         <div className="weight-table">
           <div className="weight-row weight-head-row">

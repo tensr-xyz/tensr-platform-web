@@ -243,9 +243,17 @@ export function waveCounts(rows: WaveDiff[]) {
 
 type Decision = { decision: 'accept' | 'skip' | 'override' | 'recode'; target: string };
 
+/** Opposite-end means default to Reverse scale (stored as recode), not Stack together. */
+export function defaultStackDecision(row: WaveDiff): Decision['decision'] {
+  return row.scaleFlip?.length ? 'recode' : 'accept';
+}
+
 export function stackMappings(rows: WaveDiff[], choices: Record<string, Decision>) {
   return rows.map(row => {
-    const choice = choices[row.id] || { decision: 'accept' as const, target: '' };
+    const choice = choices[row.id] || {
+      decision: defaultStackDecision(row),
+      target: '',
+    };
     const source = row.left !== EMPTY ? row.left : row.right;
     const target = choice.decision === 'override' ? choice.target || source : source;
     const decision =
@@ -422,6 +430,7 @@ export function StackWaves({
   const [error, setError] = useState<string | null>(null);
 
   const otherIds = candidates.elsewhere.map(row => datasetRowId(row)).join('|');
+  const hereIds = here.map(row => datasetRowId(row)).join('|');
   useEffect(() => {
     let cancelled = false;
     const unknown = [
@@ -431,7 +440,11 @@ export function StackWaves({
           .filter(id => id && !(id in projectNames))
       ),
     ];
-    const fileIds = candidates.elsewhere.map(row => datasetRowId(row));
+    // Load this project's columns with the dialog so the overlap filter can run immediately.
+    const fileIds = [
+      ...here.map(row => datasetRowId(row)),
+      ...candidates.elsewhere.map(row => datasetRowId(row)),
+    ].filter(Boolean);
     void Promise.all([
       Promise.all(
         unknown.map(id =>
@@ -466,9 +479,9 @@ export function StackWaves({
     return () => {
       cancelled = true;
     };
-    // otherIds covers the candidates; projectNames only grows.
+    // hereIds/otherIds cover the candidates; projectNames only grows.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [otherIds]);
+  }, [hereIds, otherIds]);
 
   const projectLabel = (id?: string | null) =>
     projectNames[id || ''] || projectInfo[id || '']?.name || '';
@@ -482,10 +495,12 @@ export function StackWaves({
       const columns = columnsById[datasetRowId(row)];
       // A picked file always stays listed so it can be unticked.
       if (picked.includes(datasetRowId(row))) return true;
+      // Wait until this project's columns are known, then require column overlap.
       return (
         Boolean(known) &&
         Boolean(columns) &&
-        (!references.length || overlapsAny(columns!, references))
+        Boolean(references.length) &&
+        overlapsAny(columns!, references)
       );
     })
   );
@@ -582,6 +597,36 @@ export function StackWaves({
   const rows = applyScaleFlags(labelRows, scaleFlags, nameOf);
   const counts = waveCounts(rows);
   const visible = showAll ? rows : rows.filter(row => row.kind !== 'matched');
+  const scaleKey = rows.map(row => `${row.id}:${(row.scaleFlip || []).join(',')}`).join('|');
+  useEffect(() => {
+    // Seed reverse-scale defaults so Stack together is never the silent choice for flagged columns.
+    const additions: Record<string, Decision> = {};
+    const maps: RecodeMaps = {};
+    for (const row of rows) {
+      if (!row.scaleFlip?.length || choices[row.id]) continue;
+      additions[row.id] = { decision: 'recode', target: '' };
+      const column = row.left !== EMPTY ? row.left : row.right;
+      for (const fileId of row.scaleFlip) {
+        const own = (columnsById[fileId] || []).find(item => item.name === column);
+        const codes = codeUniverse(own).length ? codeUniverse(own) : row.scaleCodes || [];
+        maps[row.id] = {
+          ...(maps[row.id] || {}),
+          [fileId]: reversedCodes(codes),
+        };
+      }
+    }
+    if (!Object.keys(additions).length) return;
+    setChoices(current => ({ ...current, ...additions }));
+    setRecodeMaps(current => {
+      const next = { ...current };
+      for (const [rowId, files] of Object.entries(maps)) {
+        next[rowId] = { ...(next[rowId] || {}), ...files };
+      }
+      return next;
+    });
+    // scaleKey covers flagged rows; choices/maps only grow from here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scaleKey]);
   const toggle = (id: string, on: boolean) =>
     setPicked(current => (on ? [...current, id] : current.filter(item => item !== id)));
   const setDecision = (id: string, decision: Decision['decision'], target = '') =>
@@ -733,9 +778,16 @@ export function StackWaves({
               </TableHeader>
               <TableBody>
                 {visible.map(row => {
-                  const choice = choices[row.id] || { decision: 'accept' as const, target: '' };
+                  const choice = choices[row.id] || {
+                    decision: defaultStackDecision(row),
+                    target: '',
+                  };
                   const oneSided = row.left === EMPTY || row.right === EMPTY;
                   const twoFiles = picked.length === 2;
+                  const selectValue =
+                    choice.decision === 'recode' && row.scaleFlip?.length
+                      ? 'reverse'
+                      : choice.decision;
                   return (
                     <TableRow key={row.id} data-kind={row.kind}>
                       <TableCell>{row.left}</TableCell>
@@ -744,7 +796,7 @@ export function StackWaves({
                       <TableCell>
                         <ChoiceSelect
                           aria-label={`Decision for ${row.left} ${row.right}`}
-                          value={choice.decision}
+                          value={selectValue}
                           onValueChange={value => {
                             if (value === 'reverse') {
                               // Reverse scale: recode each flagged file 1→5, 2→4 … to match.

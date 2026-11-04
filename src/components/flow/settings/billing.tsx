@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { flowJson } from '@/lib/flow-api';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -21,7 +21,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { BILLING_RETURN_PATH, ChangePlanDialog } from './change-plan';
-import { invalidateBilling, loadBilling, openBillingPortal, peekBilling } from './billing-load';
+import {
+  invalidateBilling,
+  loadBilling,
+  loadInvoices,
+  openBillingPortal,
+  peekBilling,
+} from './billing-load';
 import { Bar, RowCard, SettingsError, SkeletonCard } from './parts';
 import {
   errorText,
@@ -31,6 +37,7 @@ import {
   planLabel,
   planPrice,
   trialProgress,
+  type Invoice,
 } from './settings-data';
 import { useLoad } from './use-load';
 
@@ -43,6 +50,17 @@ export function SettingsBilling() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [invoices, setInvoices] = useState<Invoice[] | null | undefined>(undefined);
+
+  useEffect(() => {
+    let cancelled = false;
+    void loadInvoices().then(list => {
+      if (!cancelled) setInvoices(list);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [state.phase]);
 
   if (state.phase === 'loading') {
     return (
@@ -55,7 +73,7 @@ export function SettingsBilling() {
   }
   if (state.phase === 'error') return <SettingsError message={state.error} onRetry={retry} />;
 
-  const { me, subscription, catalog, invoices } = state.data;
+  const { me, subscription, catalog } = state.data;
   const code = me.entitlements?.plan_code || subscription?.tier || 'none';
   const status = (subscription?.status || '').toLowerCase();
   const trial = trialProgress(me.access, me.entitlements?.trial_days);
@@ -252,11 +270,13 @@ export function SettingsBilling() {
           </Table>
         ) : (
           <p className="st-table-empty">
-            {invoices === null
-              ? 'Invoices did not load. Open Stripe billing to see them.'
-              : trial
-                ? `Your first invoice arrives when your plan starts${me.access?.trial_ends_at ? ` after ${formatDay(me.access.trial_ends_at)}` : ''}.`
-                : 'No invoices yet.'}
+            {invoices === undefined
+              ? 'Loading invoices…'
+              : invoices === null
+                ? 'Invoices did not load. Open Stripe billing to see them.'
+                : trial
+                  ? `Your first invoice arrives when your plan starts${me.access?.trial_ends_at ? ` after ${formatDay(me.access.trial_ends_at)}` : ''}.`
+                  : 'No invoices yet.'}
           </p>
         )}
       </section>

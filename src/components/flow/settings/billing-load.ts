@@ -45,7 +45,8 @@ export type BillingData = {
   me: MePage;
   subscription: LegacySubscription | null;
   catalog: PlanCatalog;
-  invoices: Invoice[] | null;
+  /** Present only after loadInvoices(); omitted on the first Billing paint. */
+  invoices?: Invoice[] | null;
 };
 
 export type UsageData = {
@@ -56,22 +57,28 @@ export type UsageData = {
   catalog: PlanCatalog;
 };
 
-/** 7b. Every request goes out at once; /api/me, the subscription and plans are shared with 7c. */
+/** Plan card first: Stripe invoices wait until the Invoices section asks for them. */
 export function loadBilling(): Promise<BillingData> {
   return settingsCache.get(cacheKey('billing'), async () => {
-    const [me, subscription, catalog, invoices] = await Promise.all([
+    const [me, subscription, catalog] = await Promise.all([
       loadMe(),
       loadSubscription(),
       loadPlans(),
-      flowJson<{ invoices?: Invoice[] }>('/api/billing/invoices')
-        .then(page => page.invoices || [])
-        .catch(() => null),
     ]);
-    return { me, subscription, catalog, invoices };
+    return { me, subscription, catalog };
   });
 }
 
-/** 7c. Same shape as billing: one parallel batch, sharing requests with 7b. */
+/** Stripe's invoice list — only when Billing opens the invoices block. */
+export function loadInvoices(): Promise<Invoice[] | null> {
+  return settingsCache.get(cacheKey('invoices'), () =>
+    flowJson<{ invoices?: Invoice[] }>('/api/billing/invoices')
+      .then(page => page.invoices || [])
+      .catch(() => null)
+  );
+}
+
+/** Usage tab: datasets list stays here so opening Settings does not wait on it. */
 export function loadUsage(): Promise<UsageData> {
   return settingsCache.get(cacheKey('usage'), async () => {
     const [me, usage, datasets, subscription, catalog] = await Promise.all([
@@ -95,10 +102,11 @@ export function invalidateBilling(): void {
   settingsCache.forget(key => key !== 'plans');
 }
 
-/** Called when Settings opens, so the Billing and Usage tabs draw at once. */
+/** Called when Settings opens: warm the shared me/subscription/plans only. */
 export function prefetchBillingAndUsage(): void {
-  void loadBilling().catch(() => undefined);
-  void loadUsage().catch(() => undefined);
+  void loadMe().catch(() => undefined);
+  void loadSubscription().catch(() => undefined);
+  void loadPlans().catch(() => undefined);
 }
 
 /** Stripe's customer portal. Returns false when there is no Stripe customer yet. */
