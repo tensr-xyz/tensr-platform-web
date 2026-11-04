@@ -68,10 +68,19 @@ export function themeColumns(
   return columns
     .filter(column => column.name.endsWith('_codes'))
     .map(column => {
-      const label = String(column.label || '')
+      const source = column.name.replace(/_codes$/, '');
+      const sourceColumn = columns.find(item => item.name === source);
+      const own = String(column.label || '')
         .replace(/^Codes for\s+/i, '')
         .trim();
-      return { value: column.name, label: label || column.name.replace(/_codes$/, '') };
+      const ownIsStoredName = !own || own === column.name || own === source;
+      const sourceLabel = String(sourceColumn?.label || '').trim();
+      const label = !ownIsStoredName
+        ? own
+        : sourceLabel && sourceLabel !== source
+          ? sourceLabel
+          : source;
+      return { value: column.name, label };
     });
 }
 
