@@ -31,6 +31,34 @@ type DetailFile = {
 
 type Member = { user_id: string; role?: string };
 
+function labelledMeasure(labels: Record<string, string>): 'ordinal' | 'nominal' {
+  const codes = Object.keys(labels)
+    .map(key => Number(String(key).replace(/\.0$/, '')))
+    .filter(value => Number.isInteger(value));
+  if (codes.length !== Object.keys(labels).length || codes.length < 3) return 'nominal';
+  const unique = [...new Set(codes)].sort((a, b) => a - b);
+  if (unique.length < 3) return 'nominal';
+  return unique[unique.length - 1] - unique[0] + 1 === unique.length ? 'ordinal' : 'nominal';
+}
+
+/** The measure and the reason, using the API's source when it sent one. */
+function displayedMeasure(column: FlowColumn): { measure: string; source: string } {
+  const sent = String(column.measure || '').toLowerCase();
+  const source = String(column.measure_source || '');
+  if (source && (sent === 'nominal' || sent === 'ordinal' || sent === 'scale')) {
+    return { measure: sent, source };
+  }
+  if (sent === 'nominal' || sent === 'ordinal' || sent === 'scale') {
+    return { measure: sent, source: 'stored' };
+  }
+  const labels = column.value_labels || {};
+  if (Object.keys(labels).length >= 2) {
+    return { measure: labelledMeasure(labels), source: 'labelled codes' };
+  }
+  if (column.type === 'numeric') return { measure: 'scale', source: 'unlabelled number' };
+  return { measure: 'nominal', source: 'unlabelled text' };
+}
+
 function measureSourceLabel(source: string | null | undefined): string {
   if (source === 'override') return 'Set in Details';
   if (source === 'stored') return 'Stored measure';
@@ -563,6 +591,7 @@ export function DetailsScreen({
               <div className="details-q">
                 {outline.map((column, index) => {
                   const kind = kinds[column.name] || columnKind(column);
+                  const shown = displayedMeasure(column);
                   return (
                     <div key={column.name} className="details-q-row">
                       <span className="details-q-num">Q{index + 1}</span>
@@ -575,15 +604,7 @@ export function DetailsScreen({
                       </span>
                       <ChoiceSelect
                         aria-label={`Measurement level for ${column.label || column.name}`}
-                        value={
-                          ['nominal', 'ordinal', 'scale'].includes(
-                            String(column.measure || '').toLowerCase()
-                          )
-                            ? String(column.measure).toLowerCase()
-                            : column.type === 'numeric'
-                              ? 'scale'
-                              : 'nominal'
-                        }
+                        value={shown.measure}
                         options={[
                           { value: 'nominal', label: 'Nominal' },
                           { value: 'ordinal', label: 'Ordinal' },
@@ -607,9 +628,7 @@ export function DetailsScreen({
                           });
                         }}
                       />
-                      <span className="flow-muted">
-                        {measureSourceLabel(column.measure_source)}
-                      </span>
+                      <span className="flow-muted">{measureSourceLabel(shown.source)}</span>
                     </div>
                   );
                 })}
