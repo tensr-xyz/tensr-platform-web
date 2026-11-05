@@ -193,6 +193,7 @@ export function BannerGrid({
   figure = 'percent',
   digits = 1,
   markLowBase = false,
+  muted = false,
 }: {
   book: Record<string, unknown>;
   onSelectCell: (cell: SurveyCell) => void;
@@ -202,6 +203,7 @@ export function BannerGrid({
   figure?: 'percent' | 'row_percent' | 'total_percent' | 'count' | 'mean';
   digits?: number;
   markLowBase?: boolean;
+  muted?: boolean;
 }) {
   const weighted = Boolean((book.weight as { weight_aware?: boolean } | undefined)?.weight_aware);
   const [picked, setPicked] = useState('');
@@ -241,6 +243,7 @@ export function BannerGrid({
       <div style={{ overflowX: 'auto' }}>
         <Table
           className={showQuotes ? 'flow-table banner-grid theme-grid' : 'flow-table banner-grid'}
+          data-muted={muted ? 'true' : 'false'}
         >
           <thead>
             {bannerGroups(columns).some(group => group.label) ? (
@@ -1223,6 +1226,8 @@ type SavedSpec = {
   dataset_id?: string;
   filename?: string;
   number?: number;
+  stale?: boolean;
+  detail?: string;
 };
 type SavedBook = { id?: string; name?: string; n_specs?: number };
 
@@ -1573,16 +1578,25 @@ export function TablesBuilder({
         dataset_id: table.datasetId,
         filename: table.filename,
         number: table.number,
+        stale: table.stale,
+        detail: table.detail,
       }));
       setSpecs(saved);
       setBooks(bookPage.books || []);
-      const own = (specPage.specs || []).length
-        ? specPage.specs || []
-        : saved.filter(item => !item.dataset_id || item.dataset_id === datasetId);
-      const firstId = pendingOpen || own[0]?.spec_id || own[0]?.id;
+      const liveHere = saved.filter(
+        item => !item.stale && (!item.dataset_id || item.dataset_id === datasetId)
+      );
+      const firstHere = saved.find(item => !item.dataset_id || item.dataset_id === datasetId);
+      const firstId = pendingOpen || liveHere[0]?.spec_id || liveHere[0]?.id;
+      const openedId = String(
+        (specPage.first as { spec?: { id?: string } } | null)?.spec?.id || ''
+      );
+      const openedLive = liveHere.some(item => (item.spec_id || item.id) === openedId);
       setRailReady(true);
-      if (specPage.first && !pendingOpen) {
+      if (specPage.first && !pendingOpen && openedLive) {
         remember(specPage.first);
+      } else if (firstHere?.stale && !pendingOpen && !firstId) {
+        setError(firstHere.detail || 'Rebuild this table on the current file.');
       } else if (firstId) {
         setOpening(true);
         const opened = await flowJson<Record<string, unknown>>(
@@ -1924,7 +1938,8 @@ export function TablesBuilder({
       current: { role: 'user' | 'run' | 'reply'; text: string }[]
     ) => { role: 'user' | 'run' | 'reply'; text: string }[]
   ) => setThreads(current => ({ ...current, [threadKey]: update(current[threadKey] || []) }));
-  const selectedNumber = specs.find(item => (item.spec_id || item.id) === specId)?.number;
+  const openSaved = specs.find(item => (item.spec_id || item.id) === specId);
+  const selectedNumber = openSaved?.number;
   const title = book
     ? `${selectedNumber ? `T${selectedNumber} · ` : ''}${labelFor(stub)}${
         banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
@@ -1955,7 +1970,7 @@ export function TablesBuilder({
       <aside className="tables-rail">
         <div className="tables-rail-head">
           <span>Tables</span>
-          <span>{specs.length}</span>
+          <span>{specs.filter(spec => !spec.stale).length}</span>
         </div>
         {!railReady ? (
           <div aria-busy="true">
@@ -1972,7 +1987,7 @@ export function TablesBuilder({
                 type="button"
                 data-active={id === specId}
                 onClick={() => {
-                  if (spec.dataset_id && spec.dataset_id !== datasetId && onFile) {
+                  if (spec.dataset_id && spec.dataset_id !== datasetId && onFile && !spec.stale) {
                     try {
                       window.sessionStorage.setItem(`tensr-open-table:${spec.dataset_id}`, id);
                     } catch {
@@ -1998,8 +2013,10 @@ export function TablesBuilder({
                 <span>T{spec.number}</span>
                 <span className="tables-saved-copy">
                   <span>{spec.label || spec.name || id}</span>
-                  {spec.dataset_id && spec.dataset_id !== datasetId ? (
-                    <span className="flow-muted">on {spec.filename || 'another file'}</span>
+                  {spec.stale ? (
+                    <span className="flow-muted">Rebuild</span>
+                  ) : spec.filename ? (
+                    <span className="flow-muted">{spec.filename}</span>
                   ) : null}
                 </span>
               </Button>
@@ -2390,19 +2407,76 @@ export function TablesBuilder({
                   <Skeleton className="h-48 w-full" />
                 </div>
               ) : book ? (
-                <BannerGrid
-                  book={book}
-                  onSelectCell={openCell}
-                  baseAtEnd
-                  showNets={
-                    top2 ||
-                    bottom2 ||
-                    ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
-                  }
-                  figure={figure}
-                  digits={digits}
-                  markLowBase={lowBase}
-                />
+                <>
+                  {openSaved?.stale ? (
+                    <div className="tables-stale">
+                      <p>{openSaved.detail || 'This table is on an older version of the data.'}</p>
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        onClick={() => {
+                          if (!datasetId || !specId) return;
+                          void flowJson<{
+                            ok?: boolean;
+                            blocked?: boolean;
+                            detail?: string;
+                            dataset_id?: string;
+                            weight_note?: string;
+                          }>(`/datasets/${datasetId}/tables/${specId}/rebuild`, {
+                            method: 'POST',
+                            body: JSON.stringify({}),
+                          })
+                            .then(async result => {
+                              if (result.blocked) {
+                                setError(result.detail || 'This file has a scale problem.');
+                                return;
+                              }
+                              setSpecs(current =>
+                                current.map(item =>
+                                  (item.spec_id || item.id) === specId
+                                    ? { ...item, stale: false, detail: '' }
+                                    : item
+                                )
+                              );
+                              setError(result.weight_note || '');
+                              const opened = await flowJson<Record<string, unknown>>(
+                                `/datasets/${result.dataset_id || datasetId}/tables/${specId}`
+                              );
+                              remember(opened);
+                            })
+                            .catch(err =>
+                              setError(err instanceof Error ? err.message : 'Could not rebuild')
+                            );
+                        }}
+                      >
+                        Rebuild
+                      </Button>
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        onClick={() => {
+                          if (openSaved?.dataset_id) onFile?.(openSaved.dataset_id);
+                        }}
+                      >
+                        Open original version
+                      </Button>
+                    </div>
+                  ) : null}
+                  <BannerGrid
+                    book={book}
+                    onSelectCell={openCell}
+                    muted={Boolean(openSaved?.stale)}
+                    baseAtEnd
+                    showNets={
+                      top2 ||
+                      bottom2 ||
+                      ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
+                    }
+                    figure={figure}
+                    digits={digits}
+                    markLowBase={lowBase}
+                  />
+                </>
               ) : (
                 <p className="flow-muted">Choose a stub and save the table.</p>
               )}

@@ -79,7 +79,7 @@ describe('QA round 6', () => {
       { spec_id: 't2', label: 'Q8', dataset_id: 'b', filename: 'cars_EN - weighted 3 Nov' },
     ]);
     expect(rows.map(row => row.id)).toEqual(['t1', 't2']);
-    expect(tableFileNote(rows[0], 'a')).toBe('');
+    expect(tableFileNote(rows[0], 'a')).toBe('on cars_EN.sav');
     expect(tableFileNote(rows[1], 'a')).toBe('on cars_EN - weighted 3 Nov');
   });
 

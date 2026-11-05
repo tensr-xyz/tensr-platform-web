@@ -23,6 +23,19 @@ export type RunSummary = {
   report_pin?: ServerPin | null;
 };
 
+const inflight = new Map<string, Promise<unknown>>();
+
+/** Collapse two callers that start the same read before the first one finishes. */
+export function shareRequest<T>(key: string, load: () => Promise<T>): Promise<T> {
+  const pending = inflight.get(key) as Promise<T> | undefined;
+  if (pending) return pending;
+  const promise = load().finally(() => {
+    if (inflight.get(key) === promise) inflight.delete(key);
+  });
+  inflight.set(key, promise);
+  return promise;
+}
+
 const store = new Map<string, ReportPin[]>();
 const loaded = new Set<string>();
 const listeners = new Set<() => void>();
@@ -50,6 +63,17 @@ export function pinsFromRuns(runs: RunSummary[]): ReportPin[] {
         keepLive: pin.keep_live !== false,
       };
     });
+}
+
+const runCache = new Map<string, RunSummary[]>();
+
+export function rememberReportRuns(projectId: string, runs: RunSummary[]) {
+  runCache.set(projectId, runs);
+}
+
+export function cachedReportRuns(projectId: string): RunSummary[] | null {
+  if (!runCache.has(projectId)) return null;
+  return runCache.get(projectId) || [];
 }
 
 export function setProjectPins(projectId: string, pins: ReportPin[]) {

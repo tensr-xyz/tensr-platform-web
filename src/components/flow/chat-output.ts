@@ -2,6 +2,8 @@
 
 type ToolResult = {
   name?: string;
+  ok?: boolean;
+  error?: unknown;
   procedure?: string;
   analysis_type?: string;
   request_body?: Record<string, unknown> | null;
@@ -209,15 +211,31 @@ export function keepLineBreaks(text: string): string {
   return out.join('\n');
 }
 
-/** Saved run ids on this turn, for the server exports. */
+function succeeded(item: ToolResult): boolean {
+  if (item.ok === false || item.error) return false;
+  const nested = item.result || {};
+  return nested.ok !== false && !nested.error;
+}
+
+/** Saved run ids on this turn, for the server exports. A failed step is not an output. */
 export function outputRunIds(results: ToolResult[] | undefined): string[] {
   return analysisItems(results)
+    .filter(succeeded)
     .map(item => {
       const nested = item.result || {};
       const value = (item as { run_id?: unknown }).run_id ?? nested.run_id;
       return typeof value === 'string' ? value : '';
     })
     .filter(Boolean);
+}
+
+/** The output card is a successful result. A failed turn stays in the thread. */
+export function outputCardReady(
+  turn: { status?: string; tool_results?: ToolResult[] } | null | undefined,
+  plan: boolean
+): boolean {
+  if (!turn || turn.status !== 'ok' || plan) return false;
+  return outputRunIds(turn.tool_results).length > 0;
 }
 
 /** Method checks the engine ran, as short chips. A failed check is a warning. */

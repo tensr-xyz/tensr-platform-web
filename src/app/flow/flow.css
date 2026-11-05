@@ -1239,6 +1239,28 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   padding: 8px 8px 4px;
 }
 
+.tables-stale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--color-paper-2, #f4f1ea);
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.tables-stale p {
+  margin: 0;
+  flex: 1 1 16rem;
+}
+
+.flow-table[data-muted='true'] {
+  opacity: 0.45;
+}
+
 .tables-saved {
   display: flex;
   align-items: center;
