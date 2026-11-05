@@ -7,6 +7,8 @@ import {
   columnHeading,
   columnSlotType,
   isListedColumn,
+  isNumericOutcome,
+  isWeightColumn,
   type ColumnSlotType,
 } from '@/lib/analysis-column-types';
 import type { SchemaColumn } from '@/lib/analysis-report-types';
@@ -85,7 +87,13 @@ export function MultiColumnPicker({
   };
 
   const selectBySlot = (slot: ColumnSlotType) => {
-    const names = schema.filter(c => columnSlotType(schema, c.name) === slot).map(c => c.name);
+    const names = schema
+      .filter(column =>
+        slot === 'numeric'
+          ? isNumericOutcome(column)
+          : !isWeightColumn(column) && columnSlotType(schema, column.name) === slot
+      )
+      .map(column => column.name);
     const merged = new Set([...selected, ...names]);
     changeSelection([...merged]);
   };
@@ -176,8 +184,13 @@ export function MultiColumnPicker({
             schema.find(column => column.name === name)?.measure || ''
           ).toLowerCase();
           const isSelected = selected.includes(name);
+          const column = schema.find(item => item.name === name);
+          const weightInVariableSlot = filterSlot === 'numeric' && isWeightColumn(column || {});
           const dimmed =
-            filterSlot != null && measure !== 'ordinal' && slot !== filterSlot && !isSelected;
+            filterSlot != null &&
+            !isSelected &&
+            (weightInVariableSlot ||
+              (measure !== 'ordinal' && measure !== 'scale' && slot !== filterSlot));
           return (
             <button
               key={name}

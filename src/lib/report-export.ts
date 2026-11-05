@@ -1,4 +1,5 @@
 import type { AnalysisReport, AnalysisReportTable } from '@/lib/analysis-report-types';
+import { exclusionCopy } from '@/lib/format-agent-analysis-report';
 import { provenanceBannerText, provenanceTraceState } from '@/lib/analysis-runs';
 import { errorBarFootnote } from '@/lib/chart-error-bars';
 
@@ -322,11 +323,7 @@ export function reportToHtml(
     }.`
   );
   if (report.case_exclusion_note) methodBits.push(escHtml(report.case_exclusion_note));
-  if (report.exclusion_summary && report.exclusion_summary.rows_excluded > 0) {
-    methodBits.push(
-      `Used ${report.exclusion_summary.rows_used.toLocaleString()} of ${report.exclusion_summary.rows_total.toLocaleString()} rows (${report.exclusion_summary.rows_excluded.toLocaleString()} excluded for missing data).`
-    );
-  }
+  for (const line of exclusionCopy(report.exclusion_summary)) methodBits.push(escHtml(line));
   if (report.analysis_log) {
     methodBits.push(
       `<pre style="white-space:pre-wrap;font-size:12px;margin:0.5rem 0 0">${escHtml(report.analysis_log.slice(0, 2500))}</pre>`

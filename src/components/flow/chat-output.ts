@@ -247,8 +247,7 @@ export function outputChecks(
   const checks: { label: string; warn: boolean }[] = [];
   for (const item of analysisItems(results)) {
     const records = summaryOf(item).preconditions;
-    if (!Array.isArray(records)) continue;
-    for (const record of records as Record<string, unknown>[]) {
+    for (const record of (Array.isArray(records) ? records : []) as Record<string, unknown>[]) {
       const name = String(record?.name || '').replaceAll('_', ' ');
       const status = String(record?.status || '');
       if (!name || status === 'skipped') continue;
@@ -260,8 +259,40 @@ export function outputChecks(
           : `${name[0].toUpperCase()}${name.slice(1)} ${warn ? 'failed' : 'passed'}`;
       if (!checks.some(check => check.label === label)) checks.push({ label, warn });
     }
+    for (const label of exclusionLabels(item)) {
+      if (!checks.some(check => check.label === label)) checks.push({ label, warn: false });
+    }
   }
   return checks;
+}
+
+function exclusionLabels(item: ToolResult): string[] {
+  const result = item.result || {};
+  const nested =
+    result.result && typeof result.result === 'object'
+      ? (result.result as Record<string, unknown>)
+      : {};
+  const report = (result.report || nested.report || {}) as {
+    exclusion_summary?: Record<string, unknown>;
+  };
+  const summary = summaryOf(item);
+  const exclusion =
+    report.exclusion_summary || (summary.exclusion as Record<string, unknown> | undefined);
+  if (!exclusion || typeof exclusion !== 'object') return [];
+  const count = (key: string) => {
+    const value = exclusion[key];
+    return typeof value === 'number' && value > 0 ? value : 0;
+  };
+  const lines: string[] = [];
+  const missing = count('missing_selected');
+  const weight = count('zero_or_missing_weight');
+  const filtered = count('filtered_out');
+  const other = count('other');
+  if (missing) lines.push(`${missing} rows excluded because a selected column was missing`);
+  if (weight) lines.push(`${weight} rows excluded because the weight was zero or missing`);
+  if (filtered) lines.push(`${filtered} rows excluded because they were filtered out`);
+  if (other) lines.push(`${other} rows excluded for another counted reason`);
+  return lines;
 }
 
 /** Markdown table blocks in the answer, in order. The panel shows them; the thread keeps the prose. */

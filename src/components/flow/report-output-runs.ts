@@ -104,7 +104,16 @@ export function baseCount(run: Record<string, unknown>): number | null {
 }
 
 export function summaryText(run: Record<string, unknown>): string {
-  const report = run.report as { summary?: unknown } | undefined;
+  const report = run.report as
+    | { summary?: unknown; answer?: unknown; answer_from_result?: unknown }
+    | undefined;
+  if (
+    report?.answer_from_result === true &&
+    typeof report.answer === 'string' &&
+    report.answer.trim()
+  ) {
+    return report.answer.trim();
+  }
   return typeof report?.summary === 'string' ? report.summary.trim() : '';
 }
 

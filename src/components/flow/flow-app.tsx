@@ -3055,7 +3055,9 @@ function ChatScreen({
                   {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
                 </div>
                 <div className="output-body">
-                  {takeaway ? <div className="output-takeaway">{takeaway}</div> : null}
+                  {takeaway && takeaway !== title ? (
+                    <div className="output-takeaway">{takeaway}</div>
+                  ) : null}
                   {tables ? <FlowMarkdown className="output-table">{tables}</FlowMarkdown> : null}
                   {stat ? (
                     <div>
@@ -4414,7 +4416,7 @@ function ReportScreen({
           return flowJson<Record<string, unknown>>(`/datasets/${row.datasetId}/tables/${row.id}`);
         });
         if (!live) return;
-        const ready = settled.ready.map(({ row, detail }, index) => {
+        const ready = settled.ready.map(({ row, detail }) => {
           const note = tableFileNote(row, datasetId);
           const label = note ? `${row.label} (${note})` : row.label;
           const spec = (detail.spec as Record<string, unknown>) || {};
@@ -4424,7 +4426,7 @@ function ReportScreen({
             datasetId: row.datasetId,
             number: row.number,
             spec,
-            table: reportTableFromBook(row.id, label, row.number || index + 1, detail, labels),
+            table: reportTableFromBook(row.id, label, row.number, detail, labels),
           };
         });
         setSpecs(

@@ -1,6 +1,7 @@
 import {
   answerWithoutBase,
   keepLineBreaks,
+  outputChecks,
   outputKind,
   outputBaseNote,
   outputTakeaway,
@@ -73,6 +74,38 @@ describe('chat output panel', () => {
     expect(thread).not.toMatch(/weighted base|Minimum base|under that base|^base \d/im);
     expect(thread).toContain('| Top 2 | 50.0% | 51.0% | 47.0% | 51.0% |');
     expect(thread.split('\n')[0]).toMatch(/^No group differs significantly/);
+  });
+
+  it('puts a zero weight in checks and keeps the statistic as the title', () => {
+    const sentence =
+      'Independent-Samples T Test. Systolic reading for Placebo and Active: t = 2.400, df = 38.000, p = 0.020. The difference is unlikely to be chance.';
+    const results = [
+      {
+        name: 'run_analysis',
+        analysis_type: 'ttest_independent',
+        summary: {
+          title: sentence,
+          exclusion: { missing_selected: 0, zero_or_missing_weight: 4, filtered_out: 1, other: 0 },
+        },
+        result: {
+          report: {
+            exclusion_summary: {
+              missing_selected: 2,
+              zero_or_missing_weight: 4,
+              filtered_out: 1,
+              other: 3,
+            },
+          },
+        },
+      },
+    ];
+    expect(outputTitle(results, '54 rows were excluded for missing values.')).toBe(sentence);
+    const labels = outputChecks(results).map(check => check.label);
+    expect(labels).toContain('2 rows excluded because a selected column was missing');
+    expect(labels).toContain('4 rows excluded because the weight was zero or missing');
+    expect(labels).toContain('1 rows excluded because they were filtered out');
+    expect(labels).toContain('3 rows excluded for another counted reason');
+    expect(labels.join(' ')).not.toMatch(/missing values/);
   });
 
   it('puts each download on its own line', () => {

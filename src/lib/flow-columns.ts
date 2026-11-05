@@ -13,6 +13,7 @@ export type FlowColumn = {
 export function isDependentColumn(column: FlowColumn): boolean {
   const name = column.name.trim();
   if (!name) return false;
+  if (String(column.role || '').toLowerCase() === 'weight') return false;
   if (name.endsWith('_numeric')) return true;
   const measure = String(column.measure || '').toLowerCase();
   if (measure === 'nominal') return false;

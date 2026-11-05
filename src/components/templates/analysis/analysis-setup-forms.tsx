@@ -36,7 +36,7 @@ import {
   NumericField,
   PillToggle,
 } from '@/components/molecules/analysis-dialog';
-import { columnSlotType } from '@/lib/analysis-column-types';
+import { isWeightColumn } from '@/lib/analysis-column-types';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/molecules/tabs';
 
 const CONFIDENCE_OPTIONS: { value: ConfidenceLevelKey; label: string }[] = [
@@ -138,8 +138,11 @@ function CheckboxRow({
   );
 }
 
-function numericNames(schema: FormSliceProps['schema'], names: string[]): string[] {
-  return names.filter(name => columnSlotType(schema, name) === 'numeric');
+function weightNames(schema: FormSliceProps['schema'], names: string[]): string[] {
+  return names.filter(name => {
+    const column = schema.find(item => item.name === name);
+    return column ? isWeightColumn(column) : false;
+  });
 }
 
 function WeightColumnPicker({
@@ -159,7 +162,7 @@ function WeightColumnPicker({
       value={value}
       onChange={onChange}
       schema={schema}
-      names={numericNames(schema, names)}
+      names={weightNames(schema, names)}
       expectedType="numeric"
       allowEmpty
       emptyLabel="Unweighted"

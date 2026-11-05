@@ -2,6 +2,8 @@ import type { DatasetPreview } from '@/lib/analysis-report-types';
 
 import {
   columnSlotType,
+  isNumericOutcome,
+  isWeightColumn,
   slotTypeMatchesExpected,
   type ColumnSlotType,
 } from '@/lib/analysis-column-types';
@@ -135,9 +137,7 @@ function appendRequiredFieldErrors(
   schema: SchemaColumn[],
   errors: WizardFieldErrorsMap
 ) {
-  const numericNames = schema
-    .filter(c => columnSlotType(schema, c.name) === 'numeric')
-    .map(c => c.name);
+  const numericNames = schema.filter(c => isNumericOutcome(c)).map(c => c.name);
 
   const require = (field: WizardFieldId, ok: boolean, message: string) => {
     if (!ok) pushError(errors, field, message);
@@ -533,8 +533,14 @@ function checkColumnSlot(
   expected: ColumnSlotType
 ) {
   if (!name) return;
+  const column = schema.find(item => item.name === name);
   const actual = columnSlotType(schema, name);
-  if (!slotTypeMatchesExpected(actual, expected)) {
+  if (expected === 'numeric' && isNumericOutcome(column)) return;
+  if (expected !== 'numeric' && isWeightColumn(column || {})) {
+    pushError(errors, field, slotMismatchMessage(expected, actual, name));
+    return;
+  }
+  if (!slotTypeMatchesExpected(actual, expected, column)) {
     pushError(errors, field, slotMismatchMessage(expected, actual, name));
   }
 }
@@ -546,9 +552,7 @@ export function computeWizardFieldNotices(
   preview: DatasetPreview | null
 ): WizardFieldNoticesMap {
   const notices: WizardFieldNoticesMap = {};
-  const numericNames = new Set(
-    schema.filter(c => columnSlotType(schema, c.name) === 'numeric').map(c => c.name)
-  );
+  const numericNames = new Set(schema.filter(c => isNumericOutcome(c)).map(c => c.name));
 
   if (op === 'correlation') {
     const cols = form.selectedCols;
@@ -829,9 +833,7 @@ export function computeWizardFieldErrors(
 ): WizardFieldErrorsMap {
   const errors: WizardFieldErrorsMap = {};
   appendRequiredFieldErrors(op, form, schema, errors);
-  const numericNames = schema
-    .filter(c => columnSlotType(schema, c.name) === 'numeric')
-    .map(c => c.name);
+  const numericNames = schema.filter(c => isNumericOutcome(c)).map(c => c.name);
 
   switch (op) {
     case 'descriptives':
@@ -1125,9 +1127,7 @@ export function analysisRequiredFieldsSatisfied(
   form: AnalysisFormState,
   schema: SchemaColumn[]
 ): boolean {
-  const numericNames = schema
-    .filter(c => columnSlotType(schema, c.name) === 'numeric')
-    .map(c => c.name);
+  const numericNames = schema.filter(c => isNumericOutcome(c)).map(c => c.name);
   switch (op) {
     case 'descriptives':
       return true;

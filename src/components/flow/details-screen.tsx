@@ -38,7 +38,8 @@ function labelledMeasure(labels: Record<string, string>): 'ordinal' | 'nominal' 
   if (codes.length !== Object.keys(labels).length || codes.length < 3) return 'nominal';
   const unique = [...new Set(codes)].sort((a, b) => a - b);
   if (unique.length < 3) return 'nominal';
-  return unique[unique.length - 1] - unique[0] + 1 === unique.length ? 'ordinal' : 'nominal';
+  const missing = unique[unique.length - 1] - unique[0] + 1 - unique.length;
+  return missing <= 1 ? 'ordinal' : 'nominal';
 }
 
 /** The measure and the reason, using the API's source when it sent one. */
