@@ -289,6 +289,7 @@ export function GroupNumericForm({
   outcomeLabel = 'Outcome',
   groupingLabel = 'Grouping variable',
   showHypothesizedDifference = false,
+  showWeight = false,
   groupingNames,
 }: FormSliceProps & {
   /** Narrower grouping list, e.g. two-group variables for the independent t-test. */
@@ -300,6 +301,7 @@ export function GroupNumericForm({
   outcomeLabel?: string;
   groupingLabel?: string;
   showHypothesizedDifference?: boolean;
+  showWeight?: boolean;
 }) {
   const outcome = (
     <ColumnSelect
@@ -343,6 +345,14 @@ export function GroupNumericForm({
             </>
           )}
         </div>
+        {showWeight ? (
+          <WeightColumnPicker
+            value={form.weightCol}
+            onChange={weightCol => setForm(f => ({ ...f, weightCol }))}
+            schema={schema}
+            names={allNames}
+          />
+        ) : null}
       </div>
       {showHypothesizedDifference ||
       showPostHoc ||
@@ -479,6 +489,7 @@ export function IndependentTTestForm(props: FormSliceProps) {
     <GroupNumericForm
       {...props}
       outcomeFirst
+      showWeight
       showConfidence
       showHypothesizedDifference
       outcomeLabel="Test variable"
@@ -490,7 +501,13 @@ export function IndependentTTestForm(props: FormSliceProps) {
 
 export function AnovaForm(props: FormSliceProps) {
   return (
-    <GroupNumericForm {...props} showPostHoc showAnovaOptions tukeyBlocked={props.tukeyBlocked} />
+    <GroupNumericForm
+      {...props}
+      showWeight
+      showPostHoc
+      showAnovaOptions
+      tukeyBlocked={props.tukeyBlocked}
+    />
   );
 }
 
@@ -653,6 +670,14 @@ function RegressionVariablesTab({
           notices={notices[WIZARD_FIELD.independentCols]}
           errors={errors[WIZARD_FIELD.independentCols]}
         />
+        {form.analysis === 'linear_regression' || form.analysis === 'logistic_regression' ? (
+          <WeightColumnPicker
+            value={form.weightCol}
+            onChange={weightCol => setForm(f => ({ ...f, weightCol }))}
+            schema={schema}
+            names={allNames}
+          />
+        ) : null}
       </div>
     </div>
   );
@@ -1054,6 +1079,14 @@ export function ChiSquareForm({
         notices={notices[WIZARD_FIELD.chiB]}
         errors={errors[WIZARD_FIELD.chiB]}
       />
+      {form.analysis === 'chi_square' ? (
+        <WeightColumnPicker
+          value={form.weightCol}
+          onChange={weightCol => setForm(f => ({ ...f, weightCol }))}
+          schema={schema}
+          names={allNames}
+        />
+      ) : null}
       {form.analysis === 'chi_square' ? (
         <AdvancedOptionsDisclosure>
           <label className="flex items-center gap-2 text-sm">
@@ -2370,6 +2403,7 @@ export function TrendTestForm({ form, setForm, schema, allNames, errors }: FormS
 export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps): React.ReactNode {
   switch (analysis) {
     case 'descriptives':
+    case 'frequencies':
       return <DescriptivesForm {...props} />;
     case 'correlation':
       return <CorrelationForm {...props} />;

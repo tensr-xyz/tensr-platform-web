@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { analysisDisplayName } from '@/lib/analysis-definitions';
 import { OutputPage } from '@/components/flow/output-page';
 import {
   cachedReportRuns,
@@ -108,7 +109,7 @@ export function ReportOutputs({
       if (!live) return;
       if (raw.length) setProjectPins(projectId, pinsFromRuns(raw));
       setRuns(next);
-      if (openRunId && next.some(run => run.id === openRunId)) {
+      if (openRunId) {
         setSelectedId(openRunId);
         setOpened(true);
       } else {
@@ -118,7 +119,7 @@ export function ReportOutputs({
       }
       setPhase('ready');
     };
-    const cached = cachedReportRuns(projectId);
+    const cached = refreshKey ? null : cachedReportRuns(projectId);
     if (cached) {
       const next = uniqueRuns(outputRuns(cached)).sort((left, right) =>
         right.created_at.localeCompare(left.created_at)
@@ -175,12 +176,21 @@ export function ReportOutputs({
   }, [fileKey, filesRef, projectId, refreshKey, openRunId]);
 
   useEffect(() => {
+    if (!openRunId) return;
+    setSelectedId(openRunId);
+    setOpened(true);
+    setDetail(null);
+    setDetailPhase('loading');
+  }, [openRunId, refreshKey]);
+
+  useEffect(() => {
     if (!selectedId) {
       setDetail(null);
       setDetailPhase('idle');
       return;
     }
     let live = true;
+    setDetail(null);
     setDetailPhase('loading');
     setExportError('');
     void flowJson<Record<string, unknown>>(`/datasets/analysis-runs/${selectedId}`)
@@ -257,6 +267,15 @@ export function ReportOutputs({
     else downloadText(`${stem}-apa.txt`, documentApa(document), 'text/plain');
   };
 
+  if (opened && detailPhase === 'loading') {
+    return (
+      <div className="outputs-board" aria-busy="true">
+        <p className="flow-muted">Opening this result…</p>
+        <Skeleton className="outputs-skeleton" />
+      </div>
+    );
+  }
+
   if (opened && selected && detail && detailPhase === 'ready') {
     const datasetId = String(detail.dataset_id || selected.file || '');
     const fileId =
@@ -297,7 +316,7 @@ export function ReportOutputs({
       linear_regression: 'Regression',
       ttest_independent: 't-test',
     };
-    return known[op] || op.replaceAll('_', ' ');
+    return analysisDisplayName(op) || known[op] || 'Analysis';
   };
 
   return (

@@ -17,9 +17,11 @@ export type SchemaColumn = {
   missing_count: number;
   label?: string | null;
   measure?: string | null;
+  measure_source?: string | null;
   value_labels?: Record<string, string> | null;
   storage_type?: string;
   width?: number;
+  role?: string | null;
   /** Distinct values, when known. Used to skip high-cardinality id columns. */
   uniqueCount?: number;
 };
@@ -43,6 +45,7 @@ export type AnalysisReportTable = {
   title: string;
   columns: string[];
   rows: string[][];
+  count_rows?: string[][];
   apa_style?: boolean;
   apa_title?: string;
   notes?: string[];
@@ -202,6 +205,7 @@ export type AnalysisReport = {
     };
   };
   summary: string;
+  answer?: string;
   /** Combined narrative text (summary + follow-up paragraphs). */
   interpretation?: string;
   /** Pre-approval plan + method rationale kept with saved/run output. */
@@ -231,7 +235,15 @@ export type AnalysisReport = {
     interpretations?: string[];
     summary?: string;
   };
-  exclusion_summary?: { rows_total: number; rows_used: number; rows_excluded: number };
+  exclusion_summary?: {
+    rows_total: number;
+    rows_used: number;
+    rows_excluded: number;
+    missing_selected?: number;
+    zero_or_missing_weight?: number;
+    filtered_out?: number;
+    other?: number;
+  };
   case_exclusion_note?: string;
   analysis_log?: string;
   spss_syntax?: string;

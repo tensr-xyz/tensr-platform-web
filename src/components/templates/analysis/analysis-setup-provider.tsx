@@ -112,6 +112,7 @@ export function AnalysisSetupHost() {
 
   const [busy, setBusy] = useState(false);
   const [schema, setSchema] = useState<SchemaColumn[]>([]);
+  const [schemaReady, setSchemaReady] = useState(false);
   // Only subscribe to the active tab's id so unrelated tabs being edited don't rerender the host.
   const activeTabId = useTabsStore(s => s.activeTabId);
   const tabs = useTabsStore(s => s.tabs);
@@ -186,7 +187,11 @@ export function AnalysisSetupHost() {
     const currentTab = resolveSpreadsheetContextTab(currentTabs, currentActive) ?? currentActive;
     const fallback = columnsFromTab(currentTab);
     setSchema(fallback);
-    if (!datasetId) return;
+    if (!datasetId) {
+      setSchemaReady(true);
+      return;
+    }
+    setSchemaReady(fallback.length > 0);
     let cancelled = false;
     (async () => {
       try {
@@ -196,6 +201,8 @@ export function AnalysisSetupHost() {
         setSchema(apiSchema.length ? apiSchema : fallback);
       } catch {
         if (!cancelled) setSchema(fallback);
+      } finally {
+        if (!cancelled) setSchemaReady(true);
       }
     })();
     return () => {
@@ -243,6 +250,7 @@ export function AnalysisSetupHost() {
           onRun={onRun}
           onBackToPalette={returnToCommandPalette}
           contextLoading={previewLoading}
+          schemaReady={schemaReady}
         />
       ) : null}
       {dialogName ? (

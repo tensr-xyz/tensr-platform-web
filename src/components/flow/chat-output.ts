@@ -1,5 +1,7 @@
 /** Output panel text for a finished chat turn: title, takeaway, and the base note. */
 
+import { analysisDisplayName } from '@/lib/analysis-definitions';
+
 type ToolResult = {
   name?: string;
   ok?: boolean;
@@ -57,7 +59,7 @@ function analysisItems(results: ToolResult[] | undefined): ToolResult[] {
 export function outputKind(results: ToolResult[] | undefined): string {
   const procedure = procedureOf(analysisItems(results)[0] || {});
   if (!procedure) return 'Output';
-  return KIND_LABELS[procedure] || procedure.replaceAll('_', ' ');
+  return KIND_LABELS[procedure] || analysisDisplayName(procedure);
 }
 
 /** The statistic line from the result, else the one sentence of the answer that carries it. */

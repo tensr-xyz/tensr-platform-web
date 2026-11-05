@@ -49,6 +49,7 @@ const CONTEXT_KINDS = [
 ];
 
 export function sourceFileName(file: SourceFile): string {
+  if (file.parent_dataset_id && file.lineage_label) return file.lineage_label;
   return file.original_filename || file.dataset_id || file.id || 'File';
 }
 
@@ -99,6 +100,7 @@ export function SourcesScreen({
   const [docKind, setDocKind] = useState('brief');
   const [docText, setDocText] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [olderOpen, setOlderOpen] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -189,6 +191,19 @@ export function SourcesScreen({
 
   const uploads = files.filter(file => !file.parent_dataset_id);
   const versions = files.filter(file => file.parent_dataset_id);
+  const uploadNames = new Set(uploads.map(sourceFileName));
+  const fusedNames = versions
+    .flatMap(file => file.source_filenames || [])
+    .map(name => name.trim())
+    .filter(name => name && !uploadNames.has(name))
+    .filter((name, index, all) => all.indexOf(name) === index);
+  const lineageGroups = new Map<string, SourceFile[]>();
+  for (const file of versions) {
+    const key = file.parent_dataset_id || datasetRowId(file);
+    const group = lineageGroups.get(key) || [];
+    group.push(file);
+    lineageGroups.set(key, group);
+  }
   const versionNote = (file: SourceFile) => {
     const label = sourceFileNote(file);
     const made = label.charAt(0).toUpperCase() + label.slice(1);
@@ -247,7 +262,7 @@ export function SourcesScreen({
               Files you uploaded. Open one to analyse it; the agent and Tables use the file in use.
             </p>
           </div>
-          {uploads.length ? (
+          {uploads.length || fusedNames.length ? (
             <div className="sources-datasets">
               {uploads.map(file =>
                 fileRow(
@@ -262,6 +277,15 @@ export function SourcesScreen({
                   </Button>
                 )
               )}
+              {fusedNames.map(name => (
+                <div key={name} className="sources-dataset">
+                  <span className="sources-kind">{fileMark(name)}</span>
+                  <span>
+                    <span className="sources-file-name">{name}</span>
+                    <span className="flow-muted">Used in a stacked file</span>
+                  </span>
+                </div>
+              ))}
             </div>
           ) : (
             <Button
@@ -300,28 +324,68 @@ export function SourcesScreen({
               </Button>
             ) : null}
           </div>
-          {versions.length ? (
+          {lineageGroups.size ? (
             <div className="sources-datasets">
-              {versions.map(file =>
-                fileRow(
-                  file,
-                  versionNote(file),
-                  <span className="sources-actions">
-                    {/stack|merge|join|fuse/i.test(sourceFileNote(file)) ? (
-                      <Button className="flow-btn" type="button" onClick={() => setStackOpen(true)}>
-                        Review mapping
-                      </Button>
+              {[...lineageGroups.entries()].map(([key, group]) => {
+                const newest = group[group.length - 1];
+                const older = group.slice(0, -1);
+                const openOlder = Boolean(olderOpen[key]);
+                return (
+                  <div key={key}>
+                    {fileRow(
+                      newest,
+                      versionNote(newest),
+                      <span className="sources-actions">
+                        {/stack|merge|join|fuse/i.test(sourceFileNote(newest)) ? (
+                          <Button
+                            className="flow-btn"
+                            type="button"
+                            onClick={() => setStackOpen(true)}
+                          >
+                            Review mapping
+                          </Button>
+                        ) : null}
+                        <Button
+                          className="flow-btn"
+                          type="button"
+                          onClick={() => openFile(datasetRowId(newest))}
+                        >
+                          Open
+                        </Button>
+                      </span>
+                    )}
+                    {older.length ? (
+                      <>
+                        <Button
+                          className="flow-btn"
+                          type="button"
+                          aria-expanded={openOlder}
+                          onClick={() =>
+                            setOlderOpen(current => ({ ...current, [key]: !current[key] }))
+                          }
+                        >
+                          Older versions
+                        </Button>
+                        {openOlder
+                          ? older.map(file =>
+                              fileRow(
+                                file,
+                                versionNote(file),
+                                <Button
+                                  className="flow-btn"
+                                  type="button"
+                                  onClick={() => openFile(datasetRowId(file))}
+                                >
+                                  Open
+                                </Button>
+                              )
+                            )
+                          : null}
+                      </>
                     ) : null}
-                    <Button
-                      className="flow-btn"
-                      type="button"
-                      onClick={() => openFile(datasetRowId(file))}
-                    >
-                      Open
-                    </Button>
-                  </span>
-                )
-              )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="flow-muted sources-none">

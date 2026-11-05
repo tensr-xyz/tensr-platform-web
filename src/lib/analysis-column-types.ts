@@ -3,6 +3,30 @@ import type { SchemaColumn } from '@/lib/analysis-report-types';
 /** Column slot types used in analysis dialog badges and validation. */
 export type ColumnSlotType = 'numeric' | 'categorical' | 'date/time' | 'string';
 
+const HIDDEN_ROLES = new Set(['stacked_source', 'helper', 'system']);
+
+/** A column a person can pick. Leading-underscore fields and helper roles stay hidden. */
+export function isListedColumn(column: { name: string; role?: string | null }): boolean {
+  const name = column.name.trim();
+  if (!name || name.startsWith('_')) return false;
+  return !HIDDEN_ROLES.has(String(column.role || '').toLowerCase());
+}
+
+/** A weight is not a default factor. The weight control still offers it. */
+export function isWeightColumn(column: { role?: string | null }): boolean {
+  return String(column.role || '').toLowerCase() === 'weight';
+}
+
+/** Label first, stored name second, wherever a picker lists a column. */
+export function columnHeading(
+  column: { name: string; label?: string | null } | undefined,
+  name: string
+): { primary: string; secondary: string } {
+  const label = String(column?.label || '').trim();
+  if (label && label !== name) return { primary: label, secondary: name };
+  return { primary: name, secondary: '' };
+}
+
 export function schemaColumnSlotType(col: SchemaColumn | undefined): ColumnSlotType {
   if (!col) return 'string';
   const t = (col.type || '').toLowerCase();
@@ -23,9 +47,16 @@ export function slotTypeLabel(slot: ColumnSlotType): string {
   return slot;
 }
 
-export function slotTypeMatchesExpected(actual: ColumnSlotType, expected: ColumnSlotType): boolean {
+export function slotTypeMatchesExpected(
+  actual: ColumnSlotType,
+  expected: ColumnSlotType,
+  column?: SchemaColumn
+): boolean {
+  const measure = String(column?.measure || '').toLowerCase();
+  if (measure === 'ordinal') return expected === 'numeric' || expected === 'categorical';
+  if (measure === 'nominal') return expected === 'categorical' || expected === 'string';
+  if (measure === 'scale') return expected === 'numeric';
   if (actual === expected) return true;
-  if (expected === 'numeric' && actual === 'numeric') return true;
   if (expected === 'categorical' && (actual === 'categorical' || actual === 'string')) return true;
   return false;
 }

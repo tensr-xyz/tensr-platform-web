@@ -14,15 +14,7 @@ export const PALETTE_CATALOG: PaletteCatalog = {
   },
   visualization: {
     sections: {
-      Charts: [
-        'Bar Chart',
-        'Line Chart',
-        'Scatter Chart',
-        'Histogram',
-        'Boxplot',
-        'Pie Chart',
-        'Area Chart',
-      ],
+      Charts: ['Bar Chart', 'Line Chart', 'Scatter Chart', 'Histogram', 'Boxplot'],
     },
   },
   data: {

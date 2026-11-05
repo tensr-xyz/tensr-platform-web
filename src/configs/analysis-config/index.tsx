@@ -72,6 +72,7 @@ const U = (featureName: string): AnalysisComponent => {
 };
 
 const DescriptivesLauncher = L('descriptives');
+const FrequenciesLauncher = L('frequencies');
 const CorrelationLauncher = L('correlation');
 const AnovaLauncher = L('anova_oneway');
 const OneSampleLauncher = L('ttest_one_sample');
@@ -95,7 +96,7 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'One Way Anova': AnovaLauncher,
   'One Sample T-Test': OneSampleLauncher,
   'Descriptive Statistics': DescriptivesLauncher,
-  Frequencies: DescriptivesLauncher,
+  Frequencies: FrequenciesLauncher,
   Descriptives: DescriptivesLauncher,
   'One-Way ANOVA': AnovaLauncher,
   'Independent-Samples T Test': IndependentTLauncher,

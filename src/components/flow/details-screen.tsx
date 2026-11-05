@@ -31,6 +31,43 @@ type DetailFile = {
 
 type Member = { user_id: string; role?: string };
 
+function labelledMeasure(labels: Record<string, string>): 'ordinal' | 'nominal' {
+  const codes = Object.keys(labels)
+    .map(key => Number(String(key).replace(/\.0$/, '')))
+    .filter(value => Number.isInteger(value));
+  if (codes.length !== Object.keys(labels).length || codes.length < 3) return 'nominal';
+  const unique = [...new Set(codes)].sort((a, b) => a - b);
+  if (unique.length < 3) return 'nominal';
+  return unique[unique.length - 1] - unique[0] + 1 === unique.length ? 'ordinal' : 'nominal';
+}
+
+/** The measure and the reason, using the API's source when it sent one. */
+function displayedMeasure(column: FlowColumn): { measure: string; source: string } {
+  const sent = String(column.measure || '').toLowerCase();
+  const source = String(column.measure_source || '');
+  if (source && (sent === 'nominal' || sent === 'ordinal' || sent === 'scale')) {
+    return { measure: sent, source };
+  }
+  if (sent === 'nominal' || sent === 'ordinal' || sent === 'scale') {
+    return { measure: sent, source: 'stored' };
+  }
+  const labels = column.value_labels || {};
+  if (Object.keys(labels).length >= 2) {
+    return { measure: labelledMeasure(labels), source: 'labelled codes' };
+  }
+  if (column.type === 'numeric') return { measure: 'scale', source: 'unlabelled number' };
+  return { measure: 'nominal', source: 'unlabelled text' };
+}
+
+function measureSourceLabel(source: string | null | undefined): string {
+  if (source === 'override') return 'Set in Details';
+  if (source === 'stored') return 'Stored measure';
+  if (source === 'labelled codes') return 'From the labelled codes';
+  if (source === 'unlabelled number') return 'Unlabelled number';
+  if (source === 'unlabelled text') return 'Unlabelled text';
+  return 'Classified from the file';
+}
+
 export type WorkspacePerson = { userId: string; email: string; name: string };
 
 export function workspacePerson(raw: Record<string, unknown>): WorkspacePerson {
@@ -554,6 +591,7 @@ export function DetailsScreen({
               <div className="details-q">
                 {outline.map((column, index) => {
                   const kind = kinds[column.name] || columnKind(column);
+                  const shown = displayedMeasure(column);
                   return (
                     <div key={column.name} className="details-q-row">
                       <span className="details-q-num">Q{index + 1}</span>
@@ -564,6 +602,33 @@ export function DetailsScreen({
                       >
                         {kind}
                       </span>
+                      <ChoiceSelect
+                        aria-label={`Measurement level for ${column.label || column.name}`}
+                        value={shown.measure}
+                        options={[
+                          { value: 'nominal', label: 'Nominal' },
+                          { value: 'ordinal', label: 'Ordinal' },
+                          { value: 'scale', label: 'Scale' },
+                        ]}
+                        onValueChange={measure => {
+                          setColumns(
+                            current =>
+                              current?.map(item =>
+                                item.name === column.name
+                                  ? { ...item, measure, measure_source: 'override' }
+                                  : item
+                              ) || current
+                          );
+                          if (!datasetId) return;
+                          void flowJson(`/datasets/${datasetId}/metadata`, {
+                            method: 'PUT',
+                            body: JSON.stringify({
+                              columns: { [column.name]: { measure_override: measure } },
+                            }),
+                          });
+                        }}
+                      />
+                      <span className="flow-muted">{measureSourceLabel(shown.source)}</span>
                     </div>
                   );
                 })}

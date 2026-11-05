@@ -16,6 +16,7 @@ import { ChoiceSelect } from '@/components/ui/select';
 import { Table } from '@/components/ui/table';
 import { Switch } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { analysisDisplayName } from '@/lib/analysis-definitions';
 import { clearPin, savePin, useProjectPins } from '@/components/flow/report-pins';
 import { ExportDialog, copyText, figureSvg } from '@/components/flow/export-dialog';
 import { documentApa, runDocument, type ReportPin } from '@/components/flow/run-document';
@@ -127,7 +128,7 @@ export function OutputPage({
         descriptives: 'Descriptives',
         chi_square: 'Chi-square',
       } as Record<string, string>
-    )[document.op] || document.op.replaceAll('_', ' ');
+    )[document.op] || analysisDisplayName(document.op);
   const [answer, ...rest] = document.summary.split(/(?<=[.!?])\s+/);
   const when = document.createdAt
     ? new Date(document.createdAt).toLocaleString('en-GB', {
