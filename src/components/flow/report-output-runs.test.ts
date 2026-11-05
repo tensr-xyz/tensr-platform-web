@@ -24,6 +24,15 @@ describe('report outputs', () => {
       report: { summary: 'Score differs by region.', meta: { rows_dataset: 403 } },
     };
     expect(summaryText(run)).toBe('Score differs by region.');
+    expect(
+      summaryText({
+        report: {
+          summary: '54 rows were excluded.',
+          answer_from_result: true,
+          answer: 'Chi-square. Pearson chi-square = 9.100, df = 1.000, p = 0.003.',
+        },
+      })
+    ).toContain('Pearson chi-square');
     expect(baseCount(run)).toBe(403);
     expect(baseCount({ report: { meta: { rows_dataset: 30 } }, result: { n_used: 22 } })).toBe(22);
     expect(baseCount({ result: { n_used: 3 } })).toBe(3);

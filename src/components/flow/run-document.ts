@@ -125,10 +125,14 @@ export function runDocument(run: Record<string, unknown>): RunDocument {
         : typeof result.n_rows === 'number'
           ? result.n_rows
           : null;
+  const structured =
+    report.answer_from_result === true && typeof report.answer === 'string'
+      ? report.answer.trim()
+      : '';
   return {
     title: text(meta.title) || text(run.title) || text(run.op) || 'Analysis',
     op: text(run.op),
-    summary: typeof report.summary === 'string' ? report.summary.trim() : '',
+    summary: structured || (typeof report.summary === 'string' ? report.summary.trim() : ''),
     base,
     createdAt: text(run.created_at) || text(meta.generated_at),
     tables,

@@ -36,6 +36,16 @@ describe('saved run document', () => {
     expect(document.checks).toEqual(['Levene p = .21', '8 rows dropped']);
     expect(runDocument({ ...run, result: { ...run.result, n_used: 22 } }).base).toBe(22);
     expect(document.script).toContain('aov');
+    const lead = runDocument({
+      ...run,
+      report: {
+        ...run.report,
+        answer_from_result: true,
+        answer:
+          'One-Way ANOVA. F = 4.200, df = 2.000, p = 0.040. The difference is unlikely to be chance.',
+      },
+    });
+    expect(lead.summary.startsWith('One-Way ANOVA.')).toBe(true);
     expect(documentCsv(document)).toContain('North,80,4.2,1.1');
     expect(documentMarkdown(document)).toContain('# score by region');
     expect(documentApa(document)).toContain('Table 1');
