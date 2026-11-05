@@ -8,6 +8,8 @@ export type ProjectTable = {
   filename: string;
   /** The table's T number. It stays once given; a new table takes the next one. */
   number: number;
+  stale?: boolean;
+  detail?: string;
 };
 
 type RawRow = {
@@ -18,6 +20,8 @@ type RawRow = {
   dataset_id?: string;
   filename?: string;
   table_number?: number | null;
+  stale?: boolean;
+  detail?: string;
 };
 
 export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = ''): ProjectTable[] {
@@ -35,6 +39,8 @@ export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = '
       datasetId,
       filename: row.filename || '',
       number: Number(row.table_number) > 0 ? Number(row.table_number) : 0,
+      stale: Boolean(row.stale),
+      detail: row.detail || '',
     });
   }
   return out;
@@ -55,12 +61,22 @@ export async function loadProjectTables(
   } = {}
 ): Promise<ProjectTable[]> {
   // Both lists, merged: the project's (every file) and the open file's own, so a gap in one never empties the rail.
-  const [projectPage, filePage] = await Promise.all([
-    projectId
-      ? flowJson<{ specs?: RawRow[] }>(projectTablesPath(projectId, options.fileIds)).catch(
-          () => null
-        )
-      : Promise.resolve(null),
+  const fileIds = options.fileIds || [];
+  let projectPage = projectId
+    ? await flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(
+        projectTablesPath(projectId, fileIds)
+      ).catch(() => null)
+    : null;
+  if (projectId && projectPage?.stamps_pending && fileIds.length) {
+    await flowJson('/datasets/file-stamps', {
+      method: 'POST',
+      body: JSON.stringify({ dataset_ids: fileIds }),
+    }).catch(() => null);
+    projectPage = await flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(
+      projectTablesPath(projectId, fileIds)
+    ).catch(() => null);
+  }
+  const [filePage] = await Promise.all([
     options.filePage ||
       (datasetId
         ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
@@ -104,6 +120,24 @@ export function mergeTableLists(project: ProjectTable[], file: ProjectTable[]): 
 
 /** "on cars_EN - weighted 3 Nov" for a table built on another file than the one open. */
 export function tableFileNote(table: ProjectTable, openDatasetId: string | undefined): string {
+  if (table.filename) return `on ${table.filename}`;
   if (!table.datasetId || table.datasetId === openDatasetId) return '';
-  return table.filename ? `on ${table.filename}` : 'on another file';
+  return 'on another file';
+}
+
+/** Report cards key by spec id and T number, so a repeated spec id does not collide. */
+export function staleCardKey(table: { id: string; number: number }): string {
+  return `${table.id}:${table.number}`;
+}
+
+export function uniqueStale<T extends { id: string; number: number }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const row of rows) {
+    const key = staleCardKey(row);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
 }

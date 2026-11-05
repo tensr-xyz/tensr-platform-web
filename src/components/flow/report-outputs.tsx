@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
 import { OutputPage } from '@/components/flow/output-page';
 import {
+  cachedReportRuns,
   pinsFromRuns,
   setProjectPins,
   useProjectPins,
@@ -117,6 +118,17 @@ export function ReportOutputs({
       }
       setPhase('ready');
     };
+    const cached = cachedReportRuns(projectId);
+    if (cached) {
+      const next = uniqueRuns(outputRuns(cached)).sort((left, right) =>
+        right.created_at.localeCompare(left.created_at)
+      );
+      applyRuns(next, cached);
+      return () => {
+        live = false;
+      };
+    }
+    const fileIds = filesRef.map(file => file.id).filter(Boolean);
     const loadPerFile = () => {
       const rawRuns: RunSummary[] = [];
       return Promise.all(
@@ -132,7 +144,11 @@ export function ReportOutputs({
         applyRuns(sorted, rawRuns);
       });
     };
-    void flowJson<{ ok?: boolean; runs?: unknown[] }>(`/api/projects/${projectId}/overview`)
+    void flowJson<{ ok?: boolean; runs?: unknown[] }>(
+      `/api/projects/${projectId}/overview${
+        fileIds.length ? `?dataset_ids=${encodeURIComponent(fileIds.join(','))}` : ''
+      }`
+    )
       .then(overview => {
         if (!live) return;
         if (overview?.ok && Array.isArray(overview.runs)) {
