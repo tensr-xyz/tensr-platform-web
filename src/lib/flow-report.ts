@@ -358,10 +358,10 @@ export function findingFromTable(
   return {
     id: table.id,
     tableId: table.id,
-    eyebrow: `T${table.index} · ${table.label}`,
+    eyebrow: table.index > 0 ? `T${table.index} · ${table.label}` : table.label,
     headline: copy.headline,
     support: copy.support,
-    citation: `T${table.index}`,
+    citation: table.index > 0 ? `T${table.index}` : '',
     significant: copy.significant,
     lowBase: Boolean(
       copy.lead && columns.some(column => cellFor(copy.lead!.row, column.id)?.low_base)

@@ -1,6 +1,32 @@
 import type { AnalysisReport, AnalysisReportTable } from '@/lib/analysis-report-types';
 import { formatProvenanceConventionMarkdown } from '@/lib/provenance-inspector';
 
+export function exclusionCopy(summary: AnalysisReport['exclusion_summary']): string[] {
+  if (!summary || !(summary.rows_excluded > 0)) return [];
+  const lines = [
+    `Used ${summary.rows_used.toLocaleString()} of ${summary.rows_total.toLocaleString()} rows (${summary.rows_excluded.toLocaleString()} excluded).`,
+  ];
+  if (summary.missing_selected) {
+    lines.push(
+      `${summary.missing_selected.toLocaleString()} rows were excluded because a selected column was missing.`
+    );
+  }
+  if (summary.zero_or_missing_weight) {
+    lines.push(
+      `${summary.zero_or_missing_weight.toLocaleString()} rows were excluded because the weight was zero or missing.`
+    );
+  }
+  if (summary.filtered_out) {
+    lines.push(
+      `${summary.filtered_out.toLocaleString()} rows were excluded because they were filtered out.`
+    );
+  }
+  if (summary.other) {
+    lines.push(`${summary.other.toLocaleString()} rows were excluded for another counted reason.`);
+  }
+  return lines;
+}
+
 function isRegressionCoefficientTable(table: AnalysisReportTable): boolean {
   if (table.id === 'regression_coef' || table.id === 'logit_coef') return true;
   return /coefficient|odds ratio/i.test(table.title || '');
@@ -153,11 +179,7 @@ export function formatAnalysisReportForAgentChat(
     lines.push('');
   }
 
-  if (report.exclusion_summary && report.exclusion_summary.rows_excluded > 0) {
-    lines.push(
-      `*Analysis used ${report.exclusion_summary.rows_used.toLocaleString()} of ${report.exclusion_summary.rows_total.toLocaleString()} rows (${report.exclusion_summary.rows_excluded.toLocaleString()} excluded due to missing data).*`
-    );
-  }
+  for (const line of exclusionCopy(report.exclusion_summary)) lines.push(`*${line}*`);
 
   const provenanceSection = formatProvenanceConventionMarkdown(opts?.provenance);
   if (provenanceSection) {

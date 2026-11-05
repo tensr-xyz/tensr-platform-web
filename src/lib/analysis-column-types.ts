@@ -17,6 +17,22 @@ export function isWeightColumn(column: { role?: string | null }): boolean {
   return String(column.role || '').toLowerCase() === 'weight';
 }
 
+/**
+ * A column a numeric slot can use as an outcome.
+ * Ordinal and scale are numeric outcomes. Nominal is not. A weight stays in the weight picker.
+ */
+export function isNumericOutcome(column: SchemaColumn | undefined): boolean {
+  if (!column || !isListedColumn(column) || isWeightColumn(column)) return false;
+  const measure = String(column.measure || '').toLowerCase();
+  if (measure === 'nominal') return false;
+  if (measure === 'ordinal' || measure === 'scale') return true;
+  return schemaColumnSlotType(column) === 'numeric';
+}
+
+export function numericOutcomeNames(schema: SchemaColumn[]): string[] {
+  return schema.filter(column => isNumericOutcome(column)).map(column => column.name);
+}
+
 /** Label first, stored name second, wherever a picker lists a column. */
 export function columnHeading(
   column: { name: string; label?: string | null } | undefined,

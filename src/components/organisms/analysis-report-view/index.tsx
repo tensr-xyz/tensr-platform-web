@@ -600,20 +600,9 @@ export function AnalysisReportView({
   const canReveal =
     canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
   const rowsUsedLabel = sourceRowsUsedLabel(report.exclusion_summary, report.meta.rows_dataset);
-  const exclusion = report.exclusion_summary;
-  const reasonLine =
-    exclusion && typeof exclusion.missing_selected === 'number'
-      ? [
-          `${exclusion.missing_selected} missing on a selected column`,
-          `${exclusion.zero_or_missing_weight ?? 0} zero or missing weight`,
-          `${exclusion.filtered_out ?? 0} filtered out`,
-          `${exclusion.other ?? 0} other`,
-        ].join(' · ')
-      : '';
-  const nSubtitle = [rowsUsedLabel, reasonLine].filter(Boolean).join(' · ');
   const isBannerTable = report.meta.analysis_key === 'banner_table';
-  const blockTitle = report.meta.subtitle?.trim() || report.meta.title;
-  const blockSubtitle = [canReveal ? null : nSubtitle].filter(Boolean).join(' · ') || undefined;
+  const blockTitle = report.answer?.trim() || report.meta.subtitle?.trim() || report.meta.title;
+  const blockSubtitle = undefined;
   const metaTestLabel =
     isBannerTable && report.meta.subtitle ? report.meta.subtitle : report.meta.title;
   const approachCopy = reportApproachCopy(report);

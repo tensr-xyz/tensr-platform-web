@@ -1690,7 +1690,9 @@ export function twoGroupColumnNames(
 ): string[] {
   const categorical = new Set(categoricalColumnNames(schema, preview));
   const candidates = schema.filter(
-    column => categorical.has(column.name) || columnLevelCount(column, preview) === 2
+    column =>
+      !isWeightColumn(column) &&
+      (categorical.has(column.name) || columnLevelCount(column, preview) === 2)
   );
   const usable = candidates.filter(column => !isIdLikeSchemaColumn(column, preview));
   const counts = usable.map(column => columnLevelCount(column, preview));
@@ -1706,6 +1708,7 @@ function numericColumnNames(schema: SchemaColumn[], preview?: DatasetPreview | n
   );
   return usable
     .filter(column => {
+      if (isWeightColumn(column)) return false;
       const measure = String(column.measure || '').toLowerCase();
       if (measure === 'nominal') return false;
       if (measure === 'ordinal' || measure === 'scale') return true;

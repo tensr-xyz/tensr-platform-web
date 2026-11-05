@@ -2075,6 +2075,7 @@ export function TablesBuilder({
           tables={specs.map(item => ({
             id: item.spec_id || item.id || '',
             label: item.label || item.name || '',
+            number: item.number,
           }))}
           onOpenTable={id => {
             setView('table');
