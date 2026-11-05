@@ -4215,7 +4215,13 @@ function ReportScreen({
     project?.active_dataset_id || datasets.find(row => row.project_id === projectId)?.dataset_id;
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [specs, setSpecs] = useState<
-    { id: string; label: string; spec: Record<string, unknown>; datasetId?: string }[]
+    {
+      id: string;
+      label: string;
+      spec: Record<string, unknown>;
+      datasetId?: string;
+      number?: number;
+    }[]
   >([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [tables, setTables] = useState<ReportTable[]>([]);
@@ -4408,6 +4414,7 @@ function ReportScreen({
             id: row.id,
             label,
             datasetId: row.datasetId,
+            number: row.number,
             spec,
             table: reportTableFromBook(row.id, label, row.number || index + 1, detail, labels),
           };
@@ -4418,6 +4425,7 @@ function ReportScreen({
             label: row.label,
             spec: row.spec,
             datasetId: row.datasetId,
+            number: row.number,
           }))
         );
         setPicked(ready.map(row => row.id));
@@ -4465,6 +4473,7 @@ function ReportScreen({
         clean_dataset_id?: string;
         clean_filename?: string;
         table_number?: number;
+        weight_note?: string;
       }>(`/datasets/${datasetId}/tables/${table.id}/rebuild`, {
         method: 'POST',
         body: JSON.stringify(targetId ? { dataset_id: targetId } : {}),
@@ -4485,7 +4494,8 @@ function ReportScreen({
       }
       const number = result.table_number || table.number;
       setRefreshKey(key => key + 1);
-      setNote(`T${number} rebuilt.`);
+      const weightNote = result.weight_note ? ` ${result.weight_note}` : '';
+      setNote(`T${number} rebuilt.${weightNote}`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not rebuild that table';
       setStaleErrors(current => ({ ...current, [table.id]: message }));
@@ -4560,6 +4570,7 @@ function ReportScreen({
             .map(row => ({
               ...row.spec,
               dataset_id: (row.spec.dataset_id as string | undefined) || row.datasetId || datasetId,
+              table_number: row.number || row.spec.table_number,
             }))
             .filter(spec => Object.keys(spec).length),
         }),
