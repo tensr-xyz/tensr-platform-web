@@ -58,6 +58,8 @@ type Props = {
   onBackToPalette: () => void;
   /** The host is still fetching rows the pickers need (group counts). */
   contextLoading?: boolean;
+  /** False while the column list for this dataset is still on its way. */
+  schemaReady?: boolean;
 };
 
 export type SpecsStatus = 'loading' | 'ready' | 'failed';
@@ -109,6 +111,7 @@ export function AnalysisSetupModal({
   onRun,
   onBackToPalette,
   contextLoading = false,
+  schemaReady = true,
 }: Props) {
   const [form, setForm] = React.useState<AnalysisFormState>(() => ({
     analysis: initialOp,
@@ -316,10 +319,10 @@ export function AnalysisSetupModal({
       serverError={serverError}
       onRun={run}
     >
-      {!schema.length ? (
-        <p className="text-sm text-muted-foreground">Upload a dataset with a schema first.</p>
-      ) : formKind === 'loading' ? (
+      {!schemaReady || formKind === 'loading' ? (
         <p className="text-sm text-muted-foreground">Loading your variables…</p>
+      ) : !schema.length ? (
+        <p className="text-sm text-muted-foreground">Upload a dataset with a schema first.</p>
       ) : (
         <>
           {spec ? (

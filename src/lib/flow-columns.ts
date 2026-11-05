@@ -5,6 +5,8 @@ export type FlowColumn = {
   label?: string | null;
   type?: string;
   measure?: string;
+  measure_source?: string | null;
+  role?: string | null;
   value_labels?: Record<string, string> | null;
 };
 
@@ -13,7 +15,8 @@ export function isDependentColumn(column: FlowColumn): boolean {
   if (!name) return false;
   if (name.endsWith('_numeric')) return true;
   const measure = String(column.measure || '').toLowerCase();
-  if (measure === 'scale') return true;
+  if (measure === 'nominal') return false;
+  if (measure === 'scale' || measure === 'ordinal') return true;
   const type = String(column.type || '').toLowerCase();
   return type === 'numeric' || type === 'number' || type === 'float' || type === 'double';
 }
@@ -57,8 +60,12 @@ export function isInternalColumn(name: string): boolean {
   );
 }
 
-export function pickerColumns<T extends { name: string }>(columns: T[]): T[] {
-  return columns.filter(column => !isInternalColumn(column.name));
+export function pickerColumns<T extends { name: string; role?: string | null }>(columns: T[]): T[] {
+  return columns.filter(column => {
+    if (isInternalColumn(column.name)) return false;
+    const role = String(column.role || '').toLowerCase();
+    return role !== 'stacked_source' && role !== 'helper' && role !== 'system';
+  });
 }
 
 /** Coded open ends for the Theme picker. The value is the stored codes column, the label its open end. */

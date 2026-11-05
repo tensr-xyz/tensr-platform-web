@@ -31,6 +31,15 @@ type DetailFile = {
 
 type Member = { user_id: string; role?: string };
 
+function measureSourceLabel(source: string | null | undefined): string {
+  if (source === 'override') return 'Set in Details';
+  if (source === 'stored') return 'Stored measure';
+  if (source === 'labelled codes') return 'From the labelled codes';
+  if (source === 'unlabelled number') return 'Unlabelled number';
+  if (source === 'unlabelled text') return 'Unlabelled text';
+  return 'Classified from the file';
+}
+
 export type WorkspacePerson = { userId: string; email: string; name: string };
 
 export function workspacePerson(raw: Record<string, unknown>): WorkspacePerson {
@@ -563,6 +572,43 @@ export function DetailsScreen({
                         data-kind={kind.startsWith('scale') ? 'scale' : kind}
                       >
                         {kind}
+                      </span>
+                      <ChoiceSelect
+                        aria-label={`Measurement level for ${column.label || column.name}`}
+                        value={
+                          ['nominal', 'ordinal', 'scale'].includes(
+                            String(column.measure || '').toLowerCase()
+                          )
+                            ? String(column.measure).toLowerCase()
+                            : column.type === 'numeric'
+                              ? 'scale'
+                              : 'nominal'
+                        }
+                        options={[
+                          { value: 'nominal', label: 'Nominal' },
+                          { value: 'ordinal', label: 'Ordinal' },
+                          { value: 'scale', label: 'Scale' },
+                        ]}
+                        onValueChange={measure => {
+                          setColumns(
+                            current =>
+                              current?.map(item =>
+                                item.name === column.name
+                                  ? { ...item, measure, measure_source: 'override' }
+                                  : item
+                              ) || current
+                          );
+                          if (!datasetId) return;
+                          void flowJson(`/datasets/${datasetId}/metadata`, {
+                            method: 'PUT',
+                            body: JSON.stringify({
+                              columns: { [column.name]: { measure_override: measure } },
+                            }),
+                          });
+                        }}
+                      />
+                      <span className="flow-muted">
+                        {measureSourceLabel(column.measure_source)}
                       </span>
                     </div>
                   );

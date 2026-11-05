@@ -95,6 +95,7 @@ import {
   getAllAnalysisItems,
   getPaletteTabContent,
   groupAnalysisItems,
+  rankAnalysisItems,
   PALETTE_TAB_LABELS,
   PALETTE_TAB_ORDER,
   PLUGINS_TAB_VALUE,
@@ -1958,8 +1959,20 @@ function Palette({
   const [index, setIndex] = useState(0);
   const [plugins, setPlugins] = useState<{ pluginId: string; name: string }[]>([]);
   const filtered = useMemo(() => filterAnalysisItems(items, query), [items, query]);
-  const grouped = useMemo(() => groupAnalysisItems(filtered), [filtered]);
-  const sections = tab === PLUGINS_TAB_VALUE ? {} : getPaletteTabContent(grouped, tab);
+  const searching = query.trim().length > 0;
+  const ranked = useMemo(
+    () => (searching ? rankAnalysisItems(filtered, query) : filtered),
+    [filtered, query, searching]
+  );
+  const grouped = useMemo(
+    () => groupAnalysisItems(searching ? ranked : filtered),
+    [filtered, ranked, searching]
+  );
+  const sections = searching
+    ? { Matches: ranked }
+    : tab === PLUGINS_TAB_VALUE
+      ? {}
+      : getPaletteTabContent(grouped, tab);
   const sectionNames = Object.keys(sections).filter(name => !query || sections[name]?.length);
   const activeSection = section && sections[section] ? section : sectionNames[0] || null;
   const analyses = activeSection ? sections[activeSection] || [] : [];
@@ -4318,12 +4331,7 @@ function ReportScreen({
         findings?: { id: string; title: string; number?: number | null }[];
         runs?: { id?: string; dataset_id?: string; in_report?: boolean; report_pin?: unknown }[];
       }>(overviewUrl);
-      if (!first?.stamps_pending || !fileIds.length) return first;
-      await flowJson('/datasets/file-stamps', {
-        method: 'POST',
-        body: JSON.stringify({ dataset_ids: fileIds }),
-      }).catch(() => null);
-      return flowJson<typeof first>(overviewUrl);
+      return first;
     })
       .then(async overview => {
         if (!live || !overview?.ok || !Array.isArray(overview.tables)) {
@@ -4370,7 +4378,7 @@ function ReportScreen({
                 book?: Record<string, unknown>;
                 stale?: boolean;
               }[];
-            }>(`/api/projects/${projectId}/tables/open`, {
+            }>(`/datasets/projects/${projectId}/tables/open`, {
               method: 'POST',
               body: JSON.stringify({
                 tables: liveRows.map(row => ({
@@ -4590,15 +4598,17 @@ function ReportScreen({
   };
 
   const topline = async () => {
-    if (!datasetId || !selected[0]) {
+    const live = specs.filter(row => row.id);
+    if (!datasetId || !live.length) {
       setError('Save a table before building a topline.');
       return;
     }
     setError('');
-    await downloadExport(
-      `/datasets/${selected[0].datasetId || datasetId}/tables/${selected[0].id}/export.docx`,
-      'topline.docx'
-    );
+    await downloadExport(`/datasets/${datasetId}/export/topline`, 'topline.docx', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ spec_ids: live.map(row => row.id) }),
+    });
     setNote('Topline downloaded.');
   };
 
@@ -4873,7 +4883,7 @@ function ReportScreen({
               </div>
               <div>
                 <h3>Topline summary</h3>
-                <p>The first saved table</p>
+                <p>Every live table</p>
               </div>
               <Button type="button" disabled={busy !== ''} onClick={() => run('topline', topline)}>
                 Download
@@ -4905,6 +4915,7 @@ function ReportScreen({
           </div>
           {staleTables.length ? (
             <div className="report-stale-list">
+              <h2>Needs rebuild</h2>
               {staleTables.map(table => (
                 <article
                   key={staleCardKey(table)}
