@@ -2794,6 +2794,7 @@ function ChatScreen({
 
   const clearChat = () => {
     sessionRef.current = null;
+    publishLiveChatRun(null);
     rememberChat(null);
     setPast([]);
     setSent('');
