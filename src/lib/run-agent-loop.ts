@@ -189,16 +189,12 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
         attempt === 0 &&
         (WARMUP_AGENT_LOOP_STATUSES.has(status) || isStreamEndedWithoutResult(error));
       if (warmup) {
-        params.onProgress?.({ type: 'progress', step: 'warming', message: 'Warming up' });
         await new Promise<void>(resolve => {
           window.setTimeout(resolve, 800);
         });
         continue;
       }
       if (RETRYABLE_AGENT_LOOP_STATUSES.has(status) && attempt < maxAttempts - 1) {
-        if (attempt === 0) {
-          params.onProgress?.({ type: 'progress', step: 'warming', message: 'Warming up' });
-        }
         await new Promise<void>(resolve => {
           window.setTimeout(resolve, 1200 * (attempt + 1));
         });

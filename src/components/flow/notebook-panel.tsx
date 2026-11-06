@@ -106,8 +106,22 @@ function download(filename: string, text: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
+export function notebookSource(
+  cells: NotebookCell[],
+  index: number,
+  language: 'python' | 'r'
+): string {
+  if (language === 'python') return sessionCode(cells, index);
+  return cells
+    .slice(0, index + 1)
+    .filter(cell => cell.kind === 'code' && cell.source.trim())
+    .map(cell => cell.source)
+    .join('\n\n');
+}
+
 export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: ReactNode }) {
   const [cells, setCells] = useState<NotebookCell[]>(() => [blankCell('code')]);
+  const [language, setLanguage] = useState<'python' | 'r'>('python');
   const [loadedOnce, setLoadedOnce] = useState(false);
 
   useEffect(() => {
@@ -128,11 +142,11 @@ export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: R
       output: firstLoad ? 'Loading data…' : 'Running…',
     });
     return flowJson<{ stdout?: string | null; output?: unknown; error?: string | null }>(
-      '/api/execute/python',
+      language === 'r' ? '/api/execute/r' : '/api/execute/python',
       {
         method: 'POST',
         body: JSON.stringify({
-          code: sessionCode(list, index < 0 ? 0 : index),
+          code: notebookSource(list, index < 0 ? 0 : index, language),
           dataset_id: datasetId,
           save_as_dataset: false,
         }),
@@ -184,7 +198,23 @@ export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: R
         <span className="notebook-chip">No sheet filter · df is the open file</span>
         <span className="sheet-spacer" />
         <span className="notebook-kernel">
-          <i /> Python · {cells.some(cell => cell.running) ? 'running' : 'idle'}
+          <Button
+            type="button"
+            data-active={language === 'python'}
+            aria-pressed={language === 'python'}
+            onClick={() => setLanguage('python')}
+          >
+            Python
+          </Button>
+          <Button
+            type="button"
+            data-active={language === 'r'}
+            aria-pressed={language === 'r'}
+            onClick={() => setLanguage('r')}
+          >
+            R
+          </Button>
+          <i /> {cells.some(cell => cell.running) ? 'running' : 'idle'}
         </span>
         <Button
           className="flow-btn"

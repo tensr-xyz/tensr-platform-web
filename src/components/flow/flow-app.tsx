@@ -33,6 +33,9 @@ import {
   type AgentLoopResponse,
 } from '@/lib/run-agent-loop';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
+import { visibleAgentStep } from '@/lib/agent-step-copy';
+import { savePin } from '@/components/flow/report-pins';
+import { datasetFileLabel } from '@/components/flow/survey-screens';
 import {
   answerTables,
   answerWithoutBase,
@@ -47,6 +50,8 @@ import {
   outputTakeaway,
   outputTitle,
 } from '@/components/flow/chat-output';
+import { AnalysisResult } from '@/components/flow/analysis-result';
+import { resultFootnote, resultViewFromToolResults } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { SourcesScreen } from '@/components/flow/sources-screen';
@@ -56,7 +61,7 @@ import { AnovaModal } from '@/components/flow/anova-modal';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
-import { placePins, runDocument } from '@/components/flow/run-document';
+import { documentApa, placePins, runDocument } from '@/components/flow/run-document';
 import {
   pinsFromRuns,
   rememberReportRuns,
@@ -2199,19 +2204,20 @@ function chatTitle(session: FlowSession): string {
 function replyLines(result: AgentLoopResponse): string[] {
   const summary = result.execution_summary?.trim();
   if (summary) {
-    return summary
-      .split('\n')
-      .map(line => line.replace(/^[\s\-*•]+/, '').trim())
-      .filter(Boolean);
+    return summary.split('\n').flatMap(line => {
+      const visible = visibleAgentStep('', line.replace(/^[\s\-*•]+/, '').trim());
+      return visible ? [visible] : [];
+    });
   }
-  return (result.tool_trace || [])
-    .map(item => {
-      const message = item.message || item.summary;
-      if (typeof message === 'string' && message.trim()) return message.trim();
-      const name = item.name || item.tool;
-      return typeof name === 'string' ? name.replaceAll('_', ' ') : '';
-    })
-    .filter(Boolean);
+  return (result.tool_trace || []).flatMap(item => {
+    const message = item.message || item.summary;
+    const name = item.name || item.tool;
+    const line = visibleAgentStep(
+      typeof name === 'string' ? name : '',
+      typeof message === 'string' ? message : ''
+    );
+    return line ? [line] : [];
+  });
 }
 
 function chatFile(
@@ -2314,7 +2320,7 @@ function EmptyChat({
   setQuestion: (value: string) => void;
   mode: 'ask' | 'plan' | 'agent';
   setMode: (value: 'ask' | 'plan' | 'agent') => void;
-  send: () => void;
+  send: (text?: string) => void;
   sourcesHref: string;
   columns: string[] | null;
   attachments: AgentLoopAttachment[];
@@ -2353,7 +2359,7 @@ function EmptyChat({
                   key={starter.prompt}
                   className="chat-starter whitespace-normal items-start h-auto"
                   type="button"
-                  onClick={() => setQuestion(starter.prompt)}
+                  onClick={() => send(starter.prompt)}
                 >
                   <span className="chat-starter-mark">
                     <StarterIcon index={index} />
@@ -2428,7 +2434,7 @@ function ChatScreen({
   const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
   const [stepsOpen, setStepsOpen] = useState(true);
-  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [columns, setColumns] = useState<string[] | null>(null);
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -2503,7 +2509,7 @@ function ChatScreen({
 
   const sendText = useCallback(
     async (text: string, nextMode: 'ask' | 'plan' | 'agent' = mode) => {
-      if (!text.trim() || status === 'Warming up') return;
+      if (!text.trim() || status === 'Thinking…') return;
       const turnFiles = attachmentsRef.current;
       setPast(current =>
         archiveChatTurn(
@@ -2522,9 +2528,8 @@ function ChatScreen({
       setPlan(null);
       setTurn(null);
       setSteps([]);
-      setPanelOpen(true);
       setDownloads([]);
-      setStatus('Warming up');
+      setStatus('Thinking…');
       setAnswer('');
       let draft = '';
       try {
@@ -2537,7 +2542,7 @@ function ChatScreen({
           sessionId: sessionRef.current,
           signal: AbortSignal.timeout(120_000),
           onProgress: progress => {
-            const line = progress.message || progress.step;
+            const line = visibleAgentStep(progress.step, progress.message);
             if (!line) return;
             setSteps(current => (current.includes(line) ? current : [...current, line]));
           },
@@ -2586,7 +2591,7 @@ function ChatScreen({
     return () => window.clearTimeout(handle);
   }, [pendingAsk, onAsked, sendText]);
 
-  const send = () => void sendText(question);
+  const send = (text?: string) => void sendText(text ?? question);
 
   const approve = () => {
     if (!plan || !sent) return;
@@ -2595,7 +2600,7 @@ function ChatScreen({
         ? plan.pending_approvals
         : null;
     const calls = Array.isArray(plan.pending_approvals) ? plan.pending_approvals : null;
-    setStatus('Warming up');
+    setStatus('Thinking…');
     void runAgentLoop({
       message: sent,
       mode,
@@ -2731,6 +2736,33 @@ function ChatScreen({
     setAttachments([]);
     setAttachError(null);
     setStatus(null);
+    setPanelOpen(false);
+  };
+
+  const openChat = (sessionId: string) => {
+    if (!chatProjectId || !sessionId) return;
+    void flowJson<{ turns?: { user?: string; answer?: string }[] }>(
+      `/api/projects/${chatProjectId}/sessions/${sessionId}`
+    )
+      .then(page => {
+        sessionRef.current = sessionId;
+        setPast(
+          (page.turns || []).flatMap(turn =>
+            turn.user ? [{ user: turn.user, note: '', answer: turn.answer || '' }] : []
+          )
+        );
+        setSent('');
+        setAttachedNote('');
+        setAnswer('');
+        setQuestion('');
+        setPlan(null);
+        setTurn(null);
+        setSteps([]);
+        setDownloads([]);
+        setStatus(null);
+        setPanelOpen(false);
+      })
+      .catch(() => setStatus('That chat could not be opened.'));
   };
 
   const kind = outputKind(turn?.tool_results);
@@ -2740,11 +2772,30 @@ function ChatScreen({
   const stat = outputStat(turn?.tool_results, answer, takeaway);
   const runIds = outputRunIds(turn?.tool_results);
   const outputReady = outputCardReady(turn, Boolean(plan));
+  useEffect(() => {
+    if (outputReady) setPanelOpen(true);
+  }, [outputReady]);
+  useEffect(() => {
+    const sessionId = new URLSearchParams(window.location.search).get('session');
+    if (sessionId) openChat(sessionId);
+    // The address is read once when this chat screen opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatProjectId]);
   const checks = outputChecks(turn?.tool_results);
   const tables = answerTables(answer);
   const thread = answerWithoutBase(panelOpen && tables ? answerWithoutTables(answer) : answer);
   const tableMode = kind === 'Crosstab' && Boolean(tables);
   const ledger = (turn?.turn_state?.ledger || {}) as { weight?: string | null };
+  const resultView = resultViewFromToolResults(turn?.tool_results);
+  const structuredTables = resultView.tables;
+  const footnote = resultFootnote(
+    { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
+    baseNote,
+    kind
+  );
+  const resultChecks = resultView.checks.length
+    ? resultView.checks
+    : checks.map(check => check.label);
   const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
   const respondents = baseCount(baseNote);
   const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
@@ -2775,9 +2826,14 @@ function ChatScreen({
           </div>
         ) : (
           sessions.map(session => (
-            <div key={session.session_id} className="chat-item">
+            <Button
+              key={session.session_id}
+              className="chat-item"
+              type="button"
+              onClick={() => openChat(session.session_id)}
+            >
               {chatTitle(session)}
-            </div>
+            </Button>
           ))
         )}
         <div className="chat-recipe-head">
@@ -2904,7 +2960,17 @@ function ChatScreen({
                   </div>
                 ) : null}
                 {answer && !plan ? (
-                  <FlowMarkdown className="chat-prose">{thread}</FlowMarkdown>
+                  structuredTables.length ? (
+                    <AnalysisResult
+                      lead={takeaway}
+                      tables={structuredTables}
+                      footnote={footnote}
+                      checks={resultChecks}
+                      script={resultView.script}
+                    />
+                  ) : (
+                    <FlowMarkdown className="chat-prose">{thread}</FlowMarkdown>
+                  )
                 ) : null}
                 {plan ? (
                   <div className="chat-plan">
@@ -2941,12 +3007,40 @@ function ChatScreen({
                       <span className="chat-viewing">Viewing</span>
                     </div>
                     <div className="chat-result-actions">
-                      <Link className="flow-btn primary" href={`${projectHref}/tables`}>
+                      <Link
+                        className="flow-btn primary"
+                        href={
+                          runIds[0]
+                            ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runIds[0])}`
+                            : `${projectHref}/report?pane=outputs`
+                        }
+                      >
                         Open
                       </Link>
-                      <Link className="flow-btn" href={`${projectHref}/report`}>
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        disabled={!runIds[0] || !datasetId}
+                        onClick={() => {
+                          if (!runIds[0] || !datasetId || !project?.id) return;
+                          void savePin(project.id, datasetId, {
+                            id: runIds[0],
+                            runId: runIds[0],
+                            datasetId,
+                            headline: title,
+                            support: takeaway,
+                            citation: kind,
+                            afterId: '',
+                            deck: true,
+                            topline: true,
+                            keepLive: true,
+                          }).catch(() =>
+                            setStatus('That result could not be added to the report.')
+                          );
+                        }}
+                      >
                         Add to report
-                      </Link>
+                      </Button>
                       {downloads[0] ? (
                         <Button
                           className="flow-btn"
@@ -2959,8 +3053,8 @@ function ChatScreen({
                     </div>
                   </div>
                 ) : null}
-                {status === 'Warming up' ? <p className="flow-status">Warming up</p> : null}
-                {status && status !== 'Warming up' ? <p className="flow-error">{status}</p> : null}
+                {status === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
+                {status && status !== 'Thinking…' ? <p className="flow-error">{status}</p> : null}
               </div>
               <FlowComposer
                 layout="thread"
@@ -2970,7 +3064,7 @@ function ChatScreen({
                 placeholder="Ask a follow-up... Type @ to point at a column."
                 mode={mode}
                 onMode={setMode}
-                busy={status === 'Warming up'}
+                busy={status === 'Thinking…'}
                 columns={columns}
                 attachments={attachments}
                 onAttach={attachFiles}
@@ -3055,17 +3149,31 @@ function ChatScreen({
                   {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
                 </div>
                 <div className="output-body">
-                  {takeaway && takeaway !== title ? (
-                    <div className="output-takeaway">{takeaway}</div>
-                  ) : null}
-                  {tables ? <FlowMarkdown className="output-table">{tables}</FlowMarkdown> : null}
-                  {stat ? (
-                    <div>
-                      <div className="flow-muted">Key stat</div>
-                      <div>{stat}</div>
-                    </div>
-                  ) : null}
-                  {checks.length ? (
+                  {structuredTables.length ? (
+                    <AnalysisResult
+                      lead={takeaway}
+                      tables={structuredTables}
+                      footnote={footnote}
+                      checks={resultChecks}
+                      script={resultView.script}
+                    />
+                  ) : (
+                    <>
+                      {takeaway && takeaway !== title ? (
+                        <div className="output-takeaway">{takeaway}</div>
+                      ) : null}
+                      {tables ? (
+                        <FlowMarkdown className="output-table">{tables}</FlowMarkdown>
+                      ) : null}
+                      {stat ? (
+                        <div>
+                          <div className="flow-muted">Key stat</div>
+                          <div>{stat}</div>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                  {structuredTables.length ? null : checks.length ? (
                     <div>
                       <div className="flow-muted">Checks</div>
                       <div className="report-chips">
@@ -3080,6 +3188,40 @@ function ChatScreen({
                       </div>
                     </div>
                   ) : null}
+                  <div className="flow-row">
+                    <Link
+                      className="flow-btn primary"
+                      href={
+                        runIds[0]
+                          ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runIds[0])}`
+                          : `${projectHref}/report?pane=outputs`
+                      }
+                    >
+                      Open
+                    </Link>
+                    {structuredTables.length ? (
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        onClick={() =>
+                          void navigator.clipboard.writeText(
+                            documentApa({
+                              title,
+                              op: kind,
+                              summary: takeaway,
+                              base: respondents ? Number(respondents.replace(/,/g, '')) : null,
+                              createdAt: '',
+                              tables: structuredTables,
+                              checks: resultChecks,
+                              script: resultView.script,
+                            })
+                          )
+                        }
+                      >
+                        Copy APA 7
+                      </Button>
+                    ) : null}
+                  </div>
                   <div>
                     <div className="flow-muted">Used in</div>
                     <span className="output-badge">This chat · not in the report yet</span>
@@ -3173,7 +3315,7 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
     if (phase === 'warming' || !question.trim()) return;
     const text = question;
     setPhase('warming');
-    setNote('Warming up');
+    setNote('Thinking…');
     try {
       await runAgentLoop({
         message: text,
@@ -3208,7 +3350,7 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
       >
         Ask about the open table
       </Button>
-      {phase === 'warming' ? <p>Warming up</p> : null}
+      {phase === 'warming' ? <p>Thinking…</p> : null}
       {phase === 'error' ? <p className="flow-error">{note}</p> : null}
     </aside>
   );
@@ -3239,6 +3381,20 @@ function ResponsesScreen({
   const [rowTotal, setRowTotal] = useState(0);
   const pageSize = 50;
   const [query, setQuery] = useState('');
+  const [hiddenCols, setHiddenCols] = useState<string[]>([]);
+  const [sortCol, setSortCol] = useState<{ index: number; dir: 'asc' | 'desc' } | null>(null);
+  const [editingCell, setEditingCell] = useState<{
+    index: number;
+    column: string;
+    value: string;
+  } | null>(null);
+  const [colMenu, setColMenu] = useState<{
+    name: string;
+    index: number;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [sheetNote, setSheetNote] = useState('');
   const [sessions, setSessions] = useState<FlowSession[] | null>(null);
   const [specs, setSpecs] = useState<
     { id: string; label: string; note?: string; number?: number }[] | null
@@ -3266,6 +3422,7 @@ function ResponsesScreen({
   const [valueFilter, setValueFilter] = useState<string | null>(null);
   const [agentText, setAgentText] = useState('');
   const [agentAnswer, setAgentAnswer] = useState('');
+  const [agentMode, setAgentMode] = useState<'ask' | 'plan' | 'agent'>('ask');
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
@@ -3363,7 +3520,52 @@ function ResponsesScreen({
   const headerHits = visibleNames.filter(
     column => !needle || column.name.toLowerCase().includes(needle)
   );
-  const shownCols = headerHits.length ? headerHits : visibleNames;
+  const shownCols = (headerHits.length ? headerHits : visibleNames).filter(
+    column => !hiddenCols.includes(column.name)
+  );
+  const saveCell = (column: string, previewIndex: number, value: string) => {
+    if (!datasetId) return;
+    const row = (filters.length ? 0 : pageOffset) + previewIndex;
+    void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/edit-cell`, {
+      method: 'POST',
+      body: JSON.stringify({ column, row, value }),
+    })
+      .then(saved => {
+        const next = String(saved.dataset_id || '');
+        setEditingCell(null);
+        setSheetNote('Saved as a new version.');
+        if (!next || !project?.id) return;
+        setChosenId(next);
+        void flowJson(`/api/projects/${project.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active_dataset_id: next }),
+        });
+        onChanged?.();
+      })
+      .catch(err => setSheetNote(err instanceof Error ? err.message : 'The cell was not saved.'));
+  };
+  const reviseColumn = (path: string, body: Record<string, unknown>, note: string) => {
+    if (!datasetId) return;
+    setColMenu(null);
+    void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/${path}`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+      .then(saved => {
+        const next = String(saved.dataset_id || '');
+        setSheetNote(note);
+        if (!next || !project?.id) return;
+        setChosenId(next);
+        void flowJson(`/api/projects/${project.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active_dataset_id: next }),
+        });
+        onChanged?.();
+      })
+      .catch(err =>
+        setSheetNote(err instanceof Error ? err.message : 'That change was not saved.')
+      );
+  };
   const columnMeta = (name: string) =>
     columns.find(column => column.name === name || column.label === name);
   const firstSubstantive = Math.max(
@@ -3404,6 +3606,16 @@ function ResponsesScreen({
           .includes(needle)
       );
     });
+  const orderedRows = !sortCol
+    ? shownRows
+    : [...shownRows].sort((left, right) => {
+        const compared = String(left.row[sortCol.index] ?? '').localeCompare(
+          String(right.row[sortCol.index] ?? ''),
+          undefined,
+          { numeric: true }
+        );
+        return sortCol.dir === 'asc' ? compared : -compared;
+      });
   const activeName = names[activeIndex] || 'Variable';
   const isCoded = (column: FlowColumn) =>
     column.name.endsWith('_codes') || String(column.label || '').startsWith('Codes for');
@@ -3475,11 +3687,11 @@ function ResponsesScreen({
   const askAboutColumn = () => {
     const text = agentText.trim();
     if (!text || !datasetId) return;
-    setAgentStatus('Warming up');
+    setAgentStatus('Thinking…');
     setAgentAnswer('');
     void runAgentLoop({
       message: text,
-      mode: 'ask',
+      mode: agentMode,
       datasetId,
       agentVersion: 'v2',
       signal: AbortSignal.timeout(120_000),
@@ -3549,10 +3761,17 @@ function ResponsesScreen({
             <p className="flow-muted">No saved chats yet</p>
           ) : (
             sessions.slice(0, 6).map(session => (
-              <div key={session.session_id} className="chat-item rail-chat">
+              <Button
+                key={session.session_id}
+                className="chat-item rail-chat"
+                type="button"
+                onClick={() =>
+                  project && router.push(`/flow/p/${project.id}/chat?session=${session.session_id}`)
+                }
+              >
                 <span>{chatTitle(session)}</span>
                 <span className="flow-muted">{shortAgo(session.updated_at)}</span>
-              </div>
+              </Button>
             ))
           )}
         </div>
@@ -3593,7 +3812,7 @@ function ResponsesScreen({
             }}
             options={projectDatasets.map(row => ({
               value: datasetRowId(row),
-              label: row.original_filename || datasetRowId(row),
+              label: datasetFileLabel(row),
             }))}
           />
           {viewSwitch}
@@ -3743,7 +3962,7 @@ function ResponsesScreen({
                 if (result?.datasetId) {
                   const files = projectDatasets.map(row => ({
                     id: datasetRowId(row),
-                    name: row.original_filename || datasetRowId(row),
+                    name: datasetFileLabel(row),
                     createdAt: row.updated_at,
                     updatedAt: row.updated_at,
                     lineageLabel: row.lineage_label,
@@ -3785,7 +4004,7 @@ function ResponsesScreen({
               projectId={project?.id}
               files={projectDatasets.map(row => ({
                 id: datasetRowId(row),
-                name: row.original_filename || datasetRowId(row),
+                name: datasetFileLabel(row),
                 createdAt: row.created_at,
                 updatedAt: row.updated_at,
                 lineageLabel: row.lineage_label,
@@ -3862,7 +4081,41 @@ function ResponsesScreen({
             </div>
           ) : (
             <>
-              <div ref={sheetRef} className="sheet-frame">
+              <div
+                ref={sheetRef}
+                className="sheet-frame"
+                tabIndex={0}
+                onKeyDown={event => {
+                  if (editingCell || !orderedRows.length) return;
+                  const row = selectedRow ?? 0;
+                  const col = selectedCol ?? 0;
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    setSelectedRow(Math.min(row + 1, orderedRows.length - 1));
+                  } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    setSelectedRow(Math.max(row - 1, 0));
+                  } else if (event.key === 'ArrowRight') {
+                    event.preventDefault();
+                    setSelectedCol(Math.min(col + 1, shownCols.length - 1));
+                  } else if (event.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    setSelectedCol(Math.max(col - 1, 0));
+                  } else if (event.key === 'Enter' && shownCols[col]) {
+                    const current = orderedRows[row];
+                    if (!current) return;
+                    const column = shownCols[col];
+                    setEditingCell({
+                      index: current.index,
+                      column: column.name,
+                      value:
+                        current.row[column.index] == null || current.row[column.index] === 'null'
+                          ? ''
+                          : String(current.row[column.index]),
+                    });
+                  }
+                }}
+              >
                 <ScrollArea className="sheet-scroll">
                   <Table className="flow-table">
                     <thead>
@@ -3880,6 +4133,15 @@ function ResponsesScreen({
                               onClick={() => {
                                 setSelectedCol(position);
                                 if (!surveyCell) setSide('variable');
+                              }}
+                              onContextMenu={event => {
+                                event.preventDefault();
+                                setColMenu({
+                                  name: column.name,
+                                  index: column.index,
+                                  x: event.clientX,
+                                  y: event.clientY,
+                                });
                               }}
                             >
                               <span className="sheet-col-name">{column.name}</span>
@@ -3912,7 +4174,7 @@ function ResponsesScreen({
                       </tr>
                     </thead>
                     <tbody>
-                      {shownRows.map(({ row, index }) => {
+                      {orderedRows.map(({ row, index }) => {
                         const inEvidence =
                           (uidIndex >= 0 && evidenceIds.has(String(row[uidIndex] ?? ''))) ||
                           (idIndex >= 0 && evidenceIds.has(String(row[idIndex] ?? '')));
@@ -3935,10 +4197,39 @@ function ResponsesScreen({
                                 className="sheet-cell"
                                 data-numeric={isNumberValue(row[column.index]) || undefined}
                                 data-active={columnMarked(column.name, column.index)}
+                                onDoubleClick={() =>
+                                  setEditingCell({
+                                    index,
+                                    column: column.name,
+                                    value:
+                                      row[column.index] == null || row[column.index] === 'null'
+                                        ? ''
+                                        : String(row[column.index]),
+                                  })
+                                }
                               >
-                                {row[column.index] == null || row[column.index] === 'null'
-                                  ? ''
-                                  : String(row[column.index])}
+                                {editingCell &&
+                                editingCell.index === index &&
+                                editingCell.column === column.name ? (
+                                  <Input
+                                    aria-label={`Edit ${column.name}`}
+                                    value={editingCell.value}
+                                    autoFocus
+                                    onChange={event =>
+                                      setEditingCell({ ...editingCell, value: event.target.value })
+                                    }
+                                    onKeyDown={event => {
+                                      if (event.key === 'Enter')
+                                        saveCell(column.name, index, editingCell.value);
+                                      if (event.key === 'Escape') setEditingCell(null);
+                                    }}
+                                    onBlur={() => saveCell(column.name, index, editingCell.value)}
+                                  />
+                                ) : row[column.index] == null || row[column.index] === 'null' ? (
+                                  ''
+                                ) : (
+                                  String(row[column.index])
+                                )}
                               </td>
                             ))}
                           </tr>
@@ -3948,6 +4239,162 @@ function ResponsesScreen({
                   </Table>
                 </ScrollArea>
               </div>
+              {colMenu ? (
+                <div
+                  className="column-menu"
+                  style={{ left: colMenu.x, top: colMenu.y }}
+                  role="menu"
+                >
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setSortCol({ index: colMenu.index, dir: 'asc' });
+                      setColMenu(null);
+                    }}
+                  >
+                    Sort ascending
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setSortCol({ index: colMenu.index, dir: 'desc' });
+                      setColMenu(null);
+                    }}
+                  >
+                    Sort descending
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setFiltersOpen(true);
+                      setColMenu(null);
+                    }}
+                  >
+                    Filter
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const from = window.prompt('Value to recode') || '';
+                      const to = window.prompt('New value') || '';
+                      if (!from) return;
+                      reviseColumn(
+                        'recode',
+                        {
+                          source_column: colMenu.name,
+                          mappings: [{ from_value: from, to_value: to }],
+                          replace_existing: true,
+                          unmapped_policy: 'copy',
+                        },
+                        'Recode saved as a new version.'
+                      );
+                    }}
+                  >
+                    Recode
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const target = window.prompt('New column name') || '';
+                      const expr = window.prompt('Expression, such as this column >= 1') || '';
+                      if (!target || !expr) return;
+                      reviseColumn(
+                        'compute',
+                        { transforms: [{ kind: 'formula', target, expr }] },
+                        'Computed column saved as a new version.'
+                      );
+                    }}
+                  >
+                    Compute from this column
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const measure =
+                        window.prompt('Measure level: nominal, ordinal, or scale') || '';
+                      if (!measure || !datasetId) return;
+                      setColMenu(null);
+                      void flowJson(`/datasets/${datasetId}/metadata`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ columns: { [colMenu.name]: { measure } } }),
+                      })
+                        .then(() => setSheetNote('Measure level saved.'))
+                        .catch(err =>
+                          setSheetNote(
+                            err instanceof Error ? err.message : 'The measure was not saved.'
+                          )
+                        );
+                    }}
+                  >
+                    Change measure level
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      const label = window.prompt('Column label') || '';
+                      if (!label || !datasetId) return;
+                      setColMenu(null);
+                      void flowJson(`/datasets/${datasetId}/metadata`, {
+                        method: 'PUT',
+                        body: JSON.stringify({ columns: { [colMenu.name]: { label } } }),
+                      })
+                        .then(() => setSheetNote('Label saved.'))
+                        .catch(err =>
+                          setSheetNote(
+                            err instanceof Error ? err.message : 'The label was not saved.'
+                          )
+                        );
+                    }}
+                  >
+                    Edit label
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (project)
+                        router.push(
+                          `/flow/p/${project.id}/tables?banner=${encodeURIComponent(colMenu.name)}`
+                        );
+                      setColMenu(null);
+                    }}
+                  >
+                    Use as banner
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      if (project)
+                        router.push(
+                          `/flow/p/${project.id}/tables?stub=${encodeURIComponent(colMenu.name)}`
+                        );
+                      setColMenu(null);
+                    }}
+                  >
+                    Use as stub
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setHiddenCols(current => [...current, colMenu.name]);
+                      setColMenu(null);
+                    }}
+                  >
+                    Hide
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() =>
+                      reviseColumn(
+                        'drop-column',
+                        { column: colMenu.name },
+                        'Column removed in a new version.'
+                      )
+                    }
+                  >
+                    Delete
+                  </Button>
+                </div>
+              ) : null}
               <div className="sheet-foot">
                 <span>
                   {rowTotal} respondent{rowTotal === 1 ? '' : 's'}
@@ -3956,6 +4403,7 @@ function ResponsesScreen({
                   {selectedRow == null
                     ? 'No row selected'
                     : `Row ${pageOffset + selectedRow + 1} selected`}
+                  {sheetNote ? ` · ${sheetNote}` : ''}
                 </span>
                 <span>
                   <Button
@@ -4142,16 +4590,25 @@ function ResponsesScreen({
             ) : null}
             {side === 'agent' ? (
               <div className="output-body">
-                <Textarea
-                  value={agentText}
-                  placeholder={`Ask about ${activeName}`}
-                  onChange={event => setAgentText(event.target.value)}
-                />
-                <Button className="flow-btn primary" type="button" onClick={askAboutColumn}>
-                  Ask
-                </Button>
-                {agentStatus ? <p className="flow-status">{agentStatus}</p> : null}
+                {agentStatus === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
+                {agentStatus && agentStatus !== 'Thinking…' ? (
+                  <p className="flow-error">{agentStatus}</p>
+                ) : null}
                 {agentAnswer ? <FlowMarkdown>{agentAnswer}</FlowMarkdown> : null}
+                <FlowComposer
+                  value={agentText}
+                  onChange={setAgentText}
+                  onSend={askAboutColumn}
+                  placeholder={`Ask about ${activeName}`}
+                  mode={agentMode}
+                  onMode={setAgentMode}
+                  busy={agentStatus === 'Thinking…'}
+                  columns={names}
+                  attachments={[]}
+                  onAttach={() => undefined}
+                  onRemoveAttachment={() => undefined}
+                  layout="thread"
+                />
               </div>
             ) : null}
           </ScrollArea>
@@ -4188,6 +4645,13 @@ function ResponsesScreen({
 
 function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: DatasetRow[] }) {
   const [chosen, setChosen] = useState('');
+  const [initialStub, setInitialStub] = useState('');
+  const [initialBanner, setInitialBanner] = useState('');
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setInitialStub(params.get('stub') || '');
+    setInitialBanner(params.get('banner') || '');
+  }, [project?.id]);
   const files = datasets.filter(row => row.project_id === project?.id && datasetRowId(row));
   const datasetId =
     chosen || project?.active_dataset_id || (files[0] ? datasetRowId(files[0]) : undefined);
@@ -4196,9 +4660,11 @@ function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: 
       key={datasetId}
       datasetId={datasetId}
       projectId={project?.id}
+      initialStub={initialStub}
+      initialBanner={initialBanner}
       files={files.map(row => ({
         id: datasetRowId(row),
-        name: row.original_filename || datasetRowId(row),
+        name: datasetFileLabel(row),
         inUse: datasetRowId(row) === project?.active_dataset_id,
       }))}
       datasets={files}
@@ -4627,7 +5093,7 @@ function ReportScreen({
             .filter(row => row.project_id === projectId)
             .map(row => ({
               id: datasetRowId(row),
-              name: row.original_filename || datasetRowId(row),
+              name: datasetFileLabel(row),
             }))
             .filter(file => file.id)}
         />
@@ -4967,7 +5433,9 @@ function ReportScreen({
           ) : findingsPhase === 'error' ? (
             <p className="flow-error">{findingsError || 'Could not write the findings.'}</p>
           ) : findings.length === 0 && reportPins.length === 0 && !staleTables.length ? (
-            <p className="report-empty">Save a table to generate findings.</p>
+            <p className="report-empty">
+              Add an output from Outputs, or save a table, to generate findings.
+            </p>
           ) : (
             <>
               {placePins(findings, reportPins).map(entry => {
