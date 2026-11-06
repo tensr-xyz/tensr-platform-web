@@ -57,6 +57,19 @@ describe('sign-in polish', () => {
     expect(css).not.toMatch(/--signin-card/);
   });
 
+  test('4: a phone can shrink the page, and the desktop card stays 520px', () => {
+    const css = fs.readFileSync(path.join(__dirname, 'signin.css'), 'utf8');
+    const narrow = css.match(/@media \(max-width: 960px\) \{([\s\S]*?)\n\}/)![1];
+    expect(narrow).toMatch(/grid-template-columns: minmax\(0, 1fr\)/);
+    expect(narrow).not.toMatch(/grid-template-columns: 1fr;/);
+    const phone = css.match(/@media \(max-width: 800px\) \{([\s\S]*)/)![1];
+    expect(phone).toMatch(/padding: 0 0 28px/);
+    expect(phone).toMatch(/padding: 32px 20px 40px/);
+    expect(phone).toMatch(/font-size: 44px/);
+    expect(phone).toMatch(/height: 56px/);
+    expect(phone).toMatch(/repeat\(6, minmax\(0, 1fr\)\)/);
+  });
+
   test('3: an OAuth return or a paid checkout already counts as signed in', () => {
     expect(isAuthReturn(new URLSearchParams('stytch_token_type=oauth&token=t'))).toBe(true);
     expect(isAuthReturn(new URLSearchParams('checkout=success'))).toBe(true);
