@@ -3,6 +3,7 @@ import {
   fileMark,
   sourceFileNote,
   sourceRowCount,
+  orderedVersionGroup,
   sourceVersionTitle,
 } from './sources-screen';
 
@@ -53,6 +54,15 @@ describe('sources screen', () => {
       })
     ).toBe('weighted to region · 5 Nov 15:42');
     expect(sourceVersionTitle({ original_filename: 'panel.sav' })).toBe('panel.sav');
+  });
+
+  it('lists every version of one upload with the newest first', () => {
+    const ordered = orderedVersionGroup([
+      { dataset_id: 'early', updated_at: '2026-01-02T00:00:00Z' },
+      { dataset_id: 'late', updated_at: '2026-03-02T00:00:00Z' },
+      { dataset_id: 'mid', created_at: '2026-02-02T00:00:00Z' },
+    ]);
+    expect(ordered.map(file => file.dataset_id)).toEqual(['late', 'mid', 'early']);
   });
 
   it('marks context documents by kind', () => {

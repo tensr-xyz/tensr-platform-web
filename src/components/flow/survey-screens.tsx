@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
 import { loadOutputPreferences, saveOutputPreferences } from '@/lib/output-preferences';
+import { formatStat } from '@/lib/number-format';
 import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
 import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
 import {
@@ -123,7 +124,13 @@ export function displayedCount(
   return String(Math.round(Number(raw)));
 }
 
+/** The footer says Saved only once the open table matches what was stored. */
+export function tableFootStatus(hasSavedSpec: boolean, dirty: boolean): string {
+  return hasSavedSpec && !dirty ? 'Saved' : '';
+}
+
 /** The cell measure stays selected when the mean row is on. Counts stay whole numbers. */
+
 export function shownStatistics(statistic: string, meanOn: boolean): string[] {
   return meanOn ? [statistic, 'column_mean'] : [statistic];
 }
@@ -148,7 +155,9 @@ function cellFigure(
 ): string {
   if (!cell) return '—';
   if (figure === 'count') return displayedCount(cell, weighted);
-  if (figure === 'mean') return cell.mean != null ? cell.mean.toFixed(digits) : '—';
+  if (figure === 'mean') {
+    return cell.mean != null ? formatStat(cell.mean, 'mean', digits) : '—';
+  }
   const value =
     figure === 'row_percent'
       ? cell.row_percent
@@ -2537,7 +2546,7 @@ export function TablesBuilder({
             </div>
             <div className="tables-foot">
               <span>{totalBase}</span>
-              <span>{specId ? 'Saved' : ''}</span>
+              <span>{tableFootStatus(Boolean(specId) && matchesSaved(), dirty)}</span>
             </div>
           </section>
           <aside className="tables-agent">

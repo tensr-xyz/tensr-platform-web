@@ -33,6 +33,13 @@ describe('saved run document', () => {
     expect(document.base).toBe(400);
     expect(document.summary).toBe('Score differs by region.');
     expect(document.tables[0].rows[0]).toEqual(['North', '80', '4.2', '1.1']);
+    const labelled = runDocument({
+      ...run,
+      result: {
+        group_descriptives: [{ group: '1', label: 'North region', n: 80, mean: 4.2, std: 1.1 }],
+      },
+    });
+    expect(labelled.tables[0].rows[0][0]).toBe('North region');
     expect(document.checks).toEqual(['Levene p = .21', '8 rows dropped']);
     expect(runDocument({ ...run, result: { ...run.result, n_used: 22 } }).base).toBe(22);
     expect(document.script).toContain('aov');

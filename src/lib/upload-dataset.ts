@@ -35,14 +35,50 @@ export function contentTypeForDatasetUpload(fileType?: string | null): string {
 
 const GATEWAY_TIMEOUT = new Set([500, 502, 503, 504]);
 
+/** Poll the background finish. Delay is injectable so tests do not wait. */
+export async function waitForFinishedUpload(
+  datasetId: string,
+  token: string,
+  orgHeader: Record<string, string>,
+  onProgress?: (pct: number) => void,
+  attempts = 40,
+  delayMs = 2000
+): Promise<DatasetUploadResult | null> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (delayMs) await new Promise(resolve => setTimeout(resolve, delayMs));
+    onProgress?.(Math.min(99, 92 + attempt));
+    const statusRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/upload-status`), {
+      headers: { Authorization: `Bearer ${token}`, ...orgHeader },
+    }).catch(() => null);
+    if (statusRes?.ok) {
+      const job = (await statusRes.json().catch(() => null)) as {
+        status?: string;
+        message?: string;
+      } | null;
+      if (job?.status === 'failed') {
+        throw new Error(job.message || 'The file could not be prepared.');
+      }
+      if (job?.status === 'ready') {
+        const stored = await datasetIfStored(datasetId, token, orgHeader, 1, 0);
+        if (stored) return stored;
+      }
+    }
+    const stored = await datasetIfStored(datasetId, token, orgHeader, 1, 0);
+    if (stored) return stored;
+  }
+  return null;
+}
+
 /** The finish call can outlive the gateway. The file is often stored anyway. */
 async function datasetIfStored(
   datasetId: string,
   token: string,
-  orgHeader: Record<string, string>
+  orgHeader: Record<string, string>,
+  attempts = 1,
+  delayMs = 0
 ): Promise<DatasetUploadResult | null> {
-  for (let attempt = 0; attempt < 12; attempt += 1) {
-    await new Promise(resolve => setTimeout(resolve, 2000));
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (delayMs) await new Promise(resolve => setTimeout(resolve, delayMs));
     const res = await fetch(tensrApiUrl(`/datasets/${datasetId}`), {
       headers: { Authorization: `Bearer ${token}`, ...orgHeader },
     }).catch(() => null);
@@ -147,11 +183,19 @@ export async function uploadDatasetFile(
     if (handleUnauthorizedResponse(completeRes)) {
       throw new Error('Session expired');
     }
-    if (!completeRes.ok) {
-      const bodyText = await completeRes.text();
-      if (GATEWAY_TIMEOUT.has(completeRes.status)) {
-        const stored = await datasetIfStored(presign.dataset_id, token, orgHeader);
+    if (completeRes.status === 202 || !completeRes.ok) {
+      const bodyText = completeRes.status === 202 ? '' : await completeRes.text();
+      if (completeRes.status === 202 || GATEWAY_TIMEOUT.has(completeRes.status)) {
+        const stored = await waitForFinishedUpload(
+          presign.dataset_id,
+          token,
+          orgHeader,
+          onProgress
+        );
         if (stored) return stored;
+      }
+      if (completeRes.status === 202) {
+        throw new Error('The file is still being prepared. Try again in a moment.');
       }
       throw new Error(formatApiErrorMessage(new ApiRequestError(completeRes.status, bodyText)));
     }

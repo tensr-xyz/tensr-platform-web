@@ -43,8 +43,14 @@ function groupTable(result: Record<string, unknown>): RunTable | null {
   const rows = groups
     .filter(group => group && typeof group === 'object')
     .map(group => {
-      const row = group as { group?: unknown; n?: unknown; mean?: unknown; std?: unknown };
-      return [text(row.group), text(row.n), text(row.mean), text(row.std)];
+      const row = group as {
+        group?: unknown;
+        label?: unknown;
+        n?: unknown;
+        mean?: unknown;
+        std?: unknown;
+      };
+      return [text(row.label || row.group), text(row.n), text(row.mean), text(row.std)];
     })
     .filter(row => row[0]);
   if (!rows.length) return null;

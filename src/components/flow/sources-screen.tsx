@@ -33,9 +33,19 @@ export type SourceFile = {
   parent_dataset_id?: string | null;
   lineage_label?: string | null;
   source_filenames?: string[] | null;
+  origin_dataset_id?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
+
+/** Newest version first. The list is every version of one upload, not only the latest edit. */
+export function orderedVersionGroup(files: SourceFile[]): SourceFile[] {
+  return [...files].sort((left, right) =>
+    String(right.updated_at || right.created_at || '').localeCompare(
+      String(left.updated_at || left.created_at || '')
+    )
+  );
+}
 
 export type ContextDoc = {
   id: string;
@@ -232,7 +242,7 @@ export function SourcesScreen({
     .filter((name, index, all) => all.indexOf(name) === index);
   const lineageGroups = new Map<string, SourceFile[]>();
   for (const file of versions) {
-    const key = file.parent_dataset_id || datasetRowId(file);
+    const key = file.origin_dataset_id || file.parent_dataset_id || datasetRowId(file);
     const group = lineageGroups.get(key) || [];
     group.push(file);
     lineageGroups.set(key, group);
@@ -360,8 +370,9 @@ export function SourcesScreen({
           {lineageGroups.size ? (
             <div className="sources-datasets">
               {[...lineageGroups.entries()].map(([key, group]) => {
-                const newest = group[group.length - 1];
-                const older = group.slice(0, -1);
+                const ordered = orderedVersionGroup(group);
+                const newest = ordered[0];
+                const older = ordered.slice(1);
                 const openOlder = Boolean(olderOpen[key]);
                 return (
                   <div key={key}>
