@@ -1,6 +1,11 @@
 import { archiveChatTurn } from '@/components/flow/chat-thread';
 import { codingVersionStatus, type CodingFile } from '@/components/flow/coding-versions';
-import { displayedCount, shownDecimals, shownStatistics } from '@/components/flow/survey-screens';
+import {
+  displayedCount,
+  shownDecimals,
+  shownStatistics,
+  tableFootStatus,
+} from '@/components/flow/survey-screens';
 import { findingFromOverview } from '@/lib/flow-report';
 
 describe('round 13', () => {
@@ -22,6 +27,12 @@ describe('round 13', () => {
     expect(displayedCount(cell, true)).toBe('39');
     expect(displayedCount(cell, false)).toBe('36');
     expect(displayedCount({ count: 76.2, unweighted_n: 70 }, true)).toBe('76');
+  });
+
+  it('does not call an edited table saved', () => {
+    expect(tableFootStatus(true, false)).toBe('Saved');
+    expect(tableFootStatus(true, true)).toBe('');
+    expect(tableFootStatus(false, false)).toBe('');
   });
 
   it('notices a newer coding file whose origin was stored as its own id', () => {
