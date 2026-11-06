@@ -11,6 +11,7 @@ import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
+import { titledWithQuestions } from '@/lib/flow-report';
 import { loadOutputPreferences, saveOutputPreferences } from '@/lib/output-preferences';
 import { visibleAgentStep } from '@/lib/agent-step-copy';
 import { FlowComposer } from '@/components/flow/chat-composer';
@@ -27,7 +28,7 @@ import {
 } from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
 import { TableBars } from '@/components/flow/table-bars';
-import { projectPins, savePin, setProjectPins } from '@/components/flow/report-pins';
+import { rememberTablePin, savePin } from '@/components/flow/report-pins';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { runAgentLoop } from '@/lib/run-agent-loop';
 import { WeightPanel } from '@/components/flow/weight-modal';
@@ -1900,7 +1901,9 @@ export function TablesBuilder({
     const nets: { label: string; values: string[] }[] = [];
     if (top2) {
       const values = await netCodes('top');
+      if (token !== tableRequest.current) return;
       if (values.length < 2) {
+        setBook(null);
         setError('That column has no numbered scale for a top 2 box.');
         return;
       }
@@ -1908,12 +1911,15 @@ export function TablesBuilder({
     }
     if (bottom2) {
       const values = await netCodes('bottom');
+      if (token !== tableRequest.current) return;
       if (values.length < 2) {
+        setBook(null);
         setError('That column has no numbered scale for a bottom 2 box.');
         return;
       }
       nets.push({ label: 'Bottom 2 box', values });
     }
+    if (token !== tableRequest.current) return;
     nets.push(...customNets);
     setError('');
     const statistics = shownStatistics(statistic, meanOn);
@@ -1962,7 +1968,10 @@ export function TablesBuilder({
           ],
         }));
       })
-      .catch(err => setError(err instanceof Error ? err.message : 'Could not save the table'));
+      .catch(err => {
+        if (token !== tableRequest.current) return;
+        setError(err instanceof Error ? err.message : 'Could not save the table');
+      });
   }
 
   const optionsKey = [
@@ -2002,6 +2011,7 @@ export function TablesBuilder({
       setDirty(false);
       return;
     }
+    setBook(null);
     setDirty(true);
     void runTable(false);
     // A saved table sets the stub itself. Only a later change rebuilds the body.
@@ -2102,18 +2112,11 @@ export function TablesBuilder({
   const selectedNumber = openSaved?.number
     ? Math.max(1, openSaved.number - numberShift)
     : undefined;
-  const railLabel = (spec: SavedSpec) => {
-    const raw = spec.label || spec.name || '';
-    let next = raw;
-    const sorted = [...columns].sort((left, right) => right.name.length - left.name.length);
-    for (const column of sorted) {
-      const label = columnChoiceLabel(column);
-      if (!column.name || label === column.name) continue;
-      const escaped = column.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      next = next.replace(new RegExp(`(?<![\\w])${escaped}(?![\\w])`, 'g'), label);
-    }
-    return next || raw;
-  };
+  const railLabel = (spec: SavedSpec) =>
+    titledWithQuestions(
+      spec.label || spec.name || '',
+      columns.map(column => ({ name: column.name, label: columnChoiceLabel(column) }))
+    );
   const title = book
     ? `${selectedNumber ? `T${selectedNumber} · ` : ''}${labelFor(stub)}${
         banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
@@ -2667,9 +2670,14 @@ export function TablesBuilder({
                     <TableBars
                       series={chartSeriesFromBook(book)}
                       onAddToReport={
-                        projectId && datasetId
+                        projectId && datasetId && (book.run_id || specId)
                           ? () => {
-                              const runId = String(book.run_id || specId || 'chart');
+                              const runId = book.run_id
+                                ? String(book.run_id)
+                                : specId
+                                  ? `table:${specId}`
+                                  : '';
+                              if (!runId) return;
                               const series = chartSeriesFromBook(book);
                               const pin = {
                                 id: runId,
@@ -2693,11 +2701,7 @@ export function TablesBuilder({
                                 ),
                               };
                               if (book.run_id) void savePin(projectId, datasetId, pin);
-                              else
-                                setProjectPins(projectId, [
-                                  ...projectPins(projectId).filter(item => item.runId !== runId),
-                                  pin,
-                                ]);
+                              else rememberTablePin(projectId, pin);
                             }
                           : undefined
                       }

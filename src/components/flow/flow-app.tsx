@@ -5134,7 +5134,9 @@ function ReportScreen({
             table: reportTableFromBook(row.id, label, row.number, detail, labels),
           };
         });
-        const usedNumbers = ready.map(row => row.number).filter(number => number > 0);
+        const usedNumbers = liveRows
+          .map(row => Number(row.table_number) || 0)
+          .filter(number => number > 0);
         const numberShift = usedNumbers.length ? Math.min(...usedNumbers) - 1 : 0;
         setSpecs(
           ready.map(row => ({
@@ -5151,7 +5153,10 @@ function ReportScreen({
           .map(row => ({
             id: String(row.spec_id || ''),
             label: String(row.label || ''),
-            number: Number(row.table_number) || 0,
+            number:
+              Number(row.table_number) > 0
+                ? Math.max(1, Number(row.table_number) - numberShift)
+                : 0,
             datasetId: String(row.dataset_id || ''),
             filename: String(row.filename || ''),
             detail: String(row.detail || 'Rebuild this table on the current file.'),

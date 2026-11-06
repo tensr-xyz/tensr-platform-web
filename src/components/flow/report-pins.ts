@@ -92,6 +92,27 @@ export function projectPins(projectId: string): ReportPin[] {
   return store.get(projectId) || EMPTY;
 }
 
+function tableChartPin(pin: ReportPin): boolean {
+  return pin.runId.startsWith('table:');
+}
+
+/** Keep a table chart on the report in this browser. A table has no analysis run to pin. */
+export function rememberTablePin(projectId: string, pin: ReportPin) {
+  const kept = [
+    ...legacyPins(projectId).filter(item => tableChartPin(item) && item.runId !== pin.runId),
+    pin,
+  ];
+  try {
+    window.localStorage.setItem(pinKey(projectId), JSON.stringify(kept));
+  } catch {
+    // The in-memory copy still shows the chart until the page is closed.
+  }
+  setProjectPins(projectId, [
+    ...projectPins(projectId).filter(item => item.runId !== pin.runId),
+    pin,
+  ]);
+}
+
 function legacyPins(projectId: string): ReportPin[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -126,7 +147,12 @@ export async function loadProjectPins(projectId: string, fileIds: string[]): Pro
   );
   const runs = pages.flat();
   let pins = pinsFromRuns(runs);
-  const legacy = legacyPins(projectId).filter(pin => !pins.some(item => item.runId === pin.runId));
+  const stored = legacyPins(projectId);
+  const tables = stored.filter(tableChartPin);
+  const legacy = stored.filter(
+    pin => !tableChartPin(pin) && !pins.some(item => item.runId === pin.runId)
+  );
+  pins = [...pins, ...tables];
   if (legacy.length) {
     const datasetOf = new Map(runs.map(run => [String(run.id), String(run.dataset_id || '')]));
     const moved = await Promise.all(
@@ -146,7 +172,8 @@ export async function loadProjectPins(projectId: string, fileIds: string[]): Pro
     );
     pins = [...pins, ...(moved.filter(Boolean) as ReportPin[])];
     try {
-      window.localStorage.removeItem(pinKey(projectId));
+      if (tables.length) window.localStorage.setItem(pinKey(projectId), JSON.stringify(tables));
+      else window.localStorage.removeItem(pinKey(projectId));
     } catch {
       // Storage can be unavailable; the server copy is what counts.
     }

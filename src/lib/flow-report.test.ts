@@ -2,6 +2,7 @@ import {
   distinctTables,
   findingFromTable,
   reportTableFromBook,
+  titledWithQuestions,
   type ReportTable,
 } from './flow-report';
 
@@ -154,6 +155,14 @@ describe('report findings', () => {
     expect(finding.eyebrow.startsWith('T6')).toBe(true);
     const unnumbered = findingFromTable({ ...table, index: 0 }, null, null);
     expect(unnumbered.citation).toBe('');
+  });
+
+  it('replaces a variable name once, and leaves the question text alone', () => {
+    const titled = titledWithQuestions('region by gender', [
+      { name: 'region', label: 'Which region do you live in?' },
+      { name: 'gender', label: 'Gender' },
+    ]);
+    expect(titled).toBe('Which region do you live in? by gender');
   });
 
   it('keeps one finding when saved tables repeat or overlap', () => {

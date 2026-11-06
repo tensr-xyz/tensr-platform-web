@@ -69,23 +69,27 @@ export type ReportFinding = {
 
 type NumberedRow = { row: BannerRow; number: number };
 
-/** Replace variable names in a title with the question label. */
+/** Replace variable names in a title with the question label, once, on the original text. */
 export function titledWithQuestions(
   title: string,
   columns: { name?: string; label?: string }[]
 ): string {
-  let next = title;
-  const sorted = [...columns].sort(
-    (left, right) => (right.name || '').length - (left.name || '').length
+  const usable = columns
+    .map(column => ({ name: column.name || '', label: (column.label || '').trim() }))
+    .filter(
+      column =>
+        column.name && column.label && column.label.toLowerCase() !== column.name.toLowerCase()
+    )
+    .sort((left, right) => right.name.length - left.name.length);
+  if (!usable.length) return title;
+  const labels = new Map(usable.map(column => [column.name.toLowerCase(), column.label]));
+  const pattern = usable
+    .map(column => column.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  return title.replace(
+    new RegExp(`(?<![\\w])(?:${pattern})(?![\\w])`, 'gi'),
+    match => labels.get(match.toLowerCase()) || match
   );
-  for (const column of sorted) {
-    const name = column.name || '';
-    const label = (column.label || '').trim();
-    if (!name || !label || label.toLowerCase() === name.toLowerCase()) continue;
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    next = next.replace(new RegExp(`(?<![\\w])${escaped}(?![\\w])`, 'g'), label);
-  }
-  return next;
 }
 
 export function reportTableFromBook(
