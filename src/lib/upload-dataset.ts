@@ -35,7 +35,7 @@ export function contentTypeForDatasetUpload(fileType?: string | null): string {
 
 const GATEWAY_TIMEOUT = new Set([500, 502, 503, 504]);
 
-/** Poll the background finish. Delay is injectable so tests do not wait. */
+/** Poll only the finish status. Opening the dataset is a different route. */
 export async function waitForFinishedUpload(
   datasetId: string,
   token: string,
@@ -50,45 +50,18 @@ export async function waitForFinishedUpload(
     const statusRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/upload-status`), {
       headers: { Authorization: `Bearer ${token}`, ...orgHeader },
     }).catch(() => null);
-    if (statusRes?.ok) {
-      const job = (await statusRes.json().catch(() => null)) as {
-        status?: string;
-        message?: string;
-      } | null;
-      if (job?.status === 'failed') {
-        throw new Error(job.message || 'The file could not be prepared.');
-      }
-      if (job?.status === 'ready') {
-        const stored = await datasetIfStored(datasetId, token, orgHeader, 1, 0);
-        if (stored) return stored;
-      }
-    }
-    const stored = await datasetIfStored(datasetId, token, orgHeader, 1, 0);
-    if (stored) return stored;
-  }
-  return null;
-}
-
-/** The finish call can outlive the gateway. The file is often stored anyway. */
-async function datasetIfStored(
-  datasetId: string,
-  token: string,
-  orgHeader: Record<string, string>,
-  attempts = 1,
-  delayMs = 0
-): Promise<DatasetUploadResult | null> {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    if (delayMs) await new Promise(resolve => setTimeout(resolve, delayMs));
-    const res = await fetch(tensrApiUrl(`/datasets/${datasetId}`), {
-      headers: { Authorization: `Bearer ${token}`, ...orgHeader },
-    }).catch(() => null);
-    if (!res || !res.ok) continue;
-    const body = (await res.json().catch(() => null)) as {
-      dataset_id?: string;
-      id?: string;
+    if (!statusRes?.ok) continue;
+    const job = (await statusRes.json().catch(() => null)) as {
+      status?: string;
+      message?: string;
     } | null;
-    const id = body?.dataset_id || body?.id;
-    if (id) return { ...(body || {}), dataset_id: String(id) };
+    if (job?.status === 'failed') {
+      throw new Error(job.message || 'The file could not be prepared.');
+    }
+    if (job?.status === 'ready') {
+      onProgress?.(100);
+      return { dataset_id: datasetId };
+    }
   }
   return null;
 }
