@@ -69,7 +69,7 @@ const LoginTemplate = () => {
     stytch,
   } = useAuth();
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(() => searchParams.get('email')?.trim() ?? '');
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [error, setError] = useState('');

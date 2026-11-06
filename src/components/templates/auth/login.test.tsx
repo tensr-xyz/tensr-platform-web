@@ -122,6 +122,13 @@ describe('LoginTemplate', () => {
     mockRedeemStoredReferral.mockResolvedValue(null);
   });
 
+  it('prefills the work email from ?email= and does not send a code', () => {
+    searchParams = new URLSearchParams('email=ada%40example.com');
+    render(<LoginTemplate />);
+    expect(screen.getByLabelText(/work email/i)).toHaveValue('ada@example.com');
+    expect(mockInitiateAuth).not.toHaveBeenCalled();
+  });
+
   it('offers Google, Microsoft, GitHub and email sign-in', () => {
     render(<LoginTemplate />);
     expect(screen.getByRole('button', { name: /continue with google/i })).toBeEnabled();

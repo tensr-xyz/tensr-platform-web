@@ -302,7 +302,13 @@
 
 @media (max-width: 960px) {
   .signin {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    overflow-x: clip;
+  }
+
+  .signin-pane,
+  .signin-card {
+    min-width: 0;
   }
 
   .signin-side {
@@ -311,6 +317,86 @@
 
   .signin-card {
     margin: auto;
+  }
+}
+
+@media (max-width: 800px) {
+  .signin-pane {
+    padding: 0 0 28px;
+  }
+
+  .signin-head {
+    height: 64px;
+    padding: 0 12px 0 20px;
+    border-bottom: 1px solid #14473a26;
+  }
+
+  .signin-logo {
+    font-size: 24px;
+    line-height: 24px;
+  }
+
+  .signin-back {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 8px;
+    font-size: 15px;
+  }
+
+  .signin-card {
+    width: 100%;
+    margin: 0;
+    padding: 32px 20px 40px;
+  }
+
+  .signin-form h1 {
+    font-size: 44px;
+    line-height: 46px;
+    letter-spacing: -0.045em;
+  }
+
+  .signin-lede {
+    font-size: 17px;
+    line-height: 26px;
+  }
+
+  .signin .signin-provider,
+  .signin .signin-input,
+  .signin .signin-primary {
+    height: 56px;
+    width: 100%;
+  }
+
+  .signin-boxes {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .signin-boxes span {
+    height: 64px;
+    font-size: 30px;
+  }
+
+  .signin-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .signin .signin-resend,
+  .signin .signin-link {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .signin-foot {
+    gap: 12px;
+    padding: 0 20px;
+  }
+
+  .signin-foot span:last-child {
+    flex-shrink: 0;
+    gap: 16px;
   }
 }
 
