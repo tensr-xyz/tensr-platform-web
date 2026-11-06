@@ -123,6 +123,23 @@ export function displayedCount(
   return String(Math.round(Number(raw)));
 }
 
+/** The cell measure stays selected when the mean row is on. Counts stay whole numbers. */
+export function shownStatistics(statistic: string, meanOn: boolean): string[] {
+  return meanOn ? [statistic, 'column_mean'] : [statistic];
+}
+
+export function shownDecimals(
+  statistic: string,
+  digits: number,
+  meanOn: boolean
+): Record<string, number> {
+  const places = Number.isFinite(digits) ? digits : 0;
+  return {
+    [statistic]: statistic === 'count' ? 0 : places,
+    ...(meanOn ? { column_mean: Math.max(places, 1) } : {}),
+  };
+}
+
 function cellFigure(
   cell: BannerCell | undefined,
   figure: 'percent' | 'row_percent' | 'total_percent' | 'count' | 'mean',
@@ -1791,7 +1808,7 @@ export function TablesBuilder({
     }
     nets.push(...customNets);
     setError('');
-    const statistics = meanOn ? [statistic, 'column_mean'] : [statistic];
+    const statistics = shownStatistics(statistic, meanOn);
     const openId = String((book?.spec as { id?: string } | undefined)?.id || '');
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
@@ -1803,7 +1820,7 @@ export function TablesBuilder({
         nest_banners: nest,
         low_base_threshold: lowBase ? 30 : 0,
         suppress_low_base: false,
-        decimals: { [statistic]: digits, ...(meanOn ? { column_mean: digits } : {}) },
+        decimals: shownDecimals(statistic, digits, meanOn),
         weight: weight || 'none',
         ...(openId ? { spec_id: openId } : {}),
         ...(tableFilter?.filters.length ? { filter_ref: tableFilter } : {}),
@@ -2189,11 +2206,8 @@ export function TablesBuilder({
                       key={value}
                       className="flow-btn"
                       type="button"
-                      data-active={statistic === value && !meanOn}
-                      onClick={() => {
-                        setStatistic(value);
-                        setMeanOn(false);
-                      }}
+                      data-active={statistic === value}
+                      onClick={() => setStatistic(value)}
                     >
                       {label}
                     </Button>

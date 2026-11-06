@@ -33,6 +33,8 @@ export type SourceFile = {
   parent_dataset_id?: string | null;
   lineage_label?: string | null;
   source_filenames?: string[] | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
 
 export type ContextDoc = {
@@ -51,6 +53,37 @@ const CONTEXT_KINDS = [
 export function sourceFileName(file: SourceFile): string {
   if (file.parent_dataset_id && file.lineage_label) return file.lineage_label;
   return file.original_filename || file.dataset_id || file.id || 'File';
+}
+
+const VERSION_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+export function versionWhen(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${date.getDate()} ${VERSION_MONTHS[date.getMonth()]} ${hours}:${minutes}`;
+}
+
+export function sourceVersionTitle(file: SourceFile): string {
+  const name = sourceFileName(file);
+  if (!file.parent_dataset_id || /\d{1,2}:\d{2}/.test(name)) return name;
+  const stamp = versionWhen(file.updated_at || file.created_at);
+  return stamp ? `${name} · ${stamp}` : name;
 }
 
 export function sourceFileNote(file: SourceFile): string {
@@ -219,7 +252,7 @@ export function SourcesScreen({
       <div key={id} className="sources-dataset" data-active={inUse}>
         <span className="sources-kind">{fileMark(sourceFileName(file))}</span>
         <span>
-          <span className="sources-file-name">{sourceFileName(file)}</span>
+          <span className="sources-file-name">{sourceVersionTitle(file)}</span>
           <span className="flow-muted">{note}</span>
         </span>
         <span className="flow-muted sources-rows">{sourceRowCount(file)}</span>

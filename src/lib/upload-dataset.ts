@@ -1,6 +1,7 @@
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { PERSONAL_ACCOUNT_KEY } from '@/lib/active-organisation';
+import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 
 export type UploadScope = 'personal' | 'team' | 'workspace';
 
@@ -30,6 +31,30 @@ export type DatasetUploadResult = {
 export function contentTypeForDatasetUpload(fileType?: string | null): string {
   const trimmed = (fileType || '').trim();
   return trimmed || 'application/octet-stream';
+}
+
+const GATEWAY_TIMEOUT = new Set([500, 502, 503, 504]);
+
+/** The finish call can outlive the gateway. The file is often stored anyway. */
+async function datasetIfStored(
+  datasetId: string,
+  token: string,
+  orgHeader: Record<string, string>
+): Promise<DatasetUploadResult | null> {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    const res = await fetch(tensrApiUrl(`/datasets/${datasetId}`), {
+      headers: { Authorization: `Bearer ${token}`, ...orgHeader },
+    }).catch(() => null);
+    if (!res || !res.ok) continue;
+    const body = (await res.json().catch(() => null)) as {
+      dataset_id?: string;
+      id?: string;
+    } | null;
+    const id = body?.dataset_id || body?.id;
+    if (id) return { ...(body || {}), dataset_id: String(id) };
+  }
+  return null;
 }
 
 /** Presigned S3 upload when bucket is configured; direct POST for local dev only. */
@@ -66,7 +91,9 @@ export async function uploadDatasetFile(
     throw new Error('Session expired');
   }
   if (!uploadUrlRes.ok) {
-    throw new Error(await uploadUrlRes.text());
+    throw new Error(
+      formatApiErrorMessage(new ApiRequestError(uploadUrlRes.status, await uploadUrlRes.text()))
+    );
   }
 
   const presign = (await uploadUrlRes.json()) as {
@@ -121,7 +148,12 @@ export async function uploadDatasetFile(
       throw new Error('Session expired');
     }
     if (!completeRes.ok) {
-      throw new Error(await completeRes.text());
+      const bodyText = await completeRes.text();
+      if (GATEWAY_TIMEOUT.has(completeRes.status)) {
+        const stored = await datasetIfStored(presign.dataset_id, token, orgHeader);
+        if (stored) return stored;
+      }
+      throw new Error(formatApiErrorMessage(new ApiRequestError(completeRes.status, bodyText)));
     }
     const body = (await completeRes.json()) as DatasetUploadResult;
     if (!body.dataset_id) {
@@ -155,7 +187,9 @@ export async function uploadDatasetFile(
           reject(new Error('Invalid response from server'));
         }
       } else {
-        reject(new Error(xhr.responseText || `Upload failed (${xhr.status})`));
+        reject(
+          new Error(formatApiErrorMessage(new ApiRequestError(xhr.status, xhr.responseText || '')))
+        );
       }
     });
     xhr.addEventListener('error', () =>
