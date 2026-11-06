@@ -54,7 +54,8 @@ export function openEndColumns(columns: FlowColumn[]): string[] {
 }
 
 /** System columns stay out of every picker: row ids, coding scratch, and stored theme codes. */
-export function isInternalColumn(name: string): boolean {
+export function isInternalColumn(name: unknown): boolean {
+  if (typeof name !== 'string') return true;
   const trimmed = name.trim();
   return (
     !trimmed || trimmed.startsWith('_') || trimmed.endsWith('_coding') || trimmed.endsWith('_codes')
@@ -63,7 +64,7 @@ export function isInternalColumn(name: string): boolean {
 
 export function pickerColumns<T extends { name: string; role?: string | null }>(columns: T[]): T[] {
   return columns.filter(column => {
-    if (isInternalColumn(column.name)) return false;
+    if (!column || typeof column.name !== 'string' || isInternalColumn(column.name)) return false;
     const role = String(column.role || '').toLowerCase();
     return role !== 'stacked_source' && role !== 'helper' && role !== 'system';
   });

@@ -11,6 +11,7 @@ import { OutputPage } from '@/components/flow/output-page';
 import {
   cachedReportRuns,
   pinsFromRuns,
+  savePin,
   setProjectPins,
   useProjectPins,
   type RunSummary,
@@ -266,6 +267,17 @@ export function ReportOutputs({
       downloadText(`${stem}.md`, documentMarkdown(document), 'text/markdown');
     else downloadText(`${stem}-apa.txt`, documentApa(document), 'text/plain');
   };
+
+  if (opened && detailPhase === 'error') {
+    return (
+      <div className="outputs-board">
+        <p className="flow-error">{exportError || 'This result could not be opened.'}</p>
+        <Button className="flow-btn" type="button" onClick={() => setOpened(false)}>
+          Back
+        </Button>
+      </div>
+    );
+  }
 
   if (opened && detailPhase === 'loading') {
     return (
@@ -546,8 +558,29 @@ export function ReportOutputs({
                 <Button
                   className="flow-btn"
                   type="button"
-                  disabled={!detail}
-                  onClick={() => setOpened(true)}
+                  disabled={!detail || !selected}
+                  onClick={() => {
+                    if (!detail || !selected) return;
+                    const document = runDocument(detail);
+                    const datasetId = String(detail.dataset_id || '');
+                    if (!datasetId) return;
+                    void savePin(projectId, datasetId, {
+                      id: selected.id,
+                      runId: selected.id,
+                      datasetId,
+                      headline: document.title || selected.title,
+                      support: document.base != null ? `n = ${document.base}` : '',
+                      citation: kindLabel(selected.op),
+                      afterId: '',
+                      deck: true,
+                      topline: true,
+                      keepLive: true,
+                    }).catch(err =>
+                      setExportError(
+                        err instanceof Error ? err.message : 'Could not add this to the report.'
+                      )
+                    );
+                  }}
                 >
                   Add to report
                 </Button>

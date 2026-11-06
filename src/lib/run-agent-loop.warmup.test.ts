@@ -20,7 +20,7 @@ describe('runAgentLoop cold start', () => {
 
   const progress = jest.fn();
 
-  it('retries a first 503 once and says the service is warming up', async () => {
+  it('retries a first 503 once without a filler step', async () => {
     progress.mockReset();
     stream
       .mockRejectedValueOnce(new ApiRequestError(503, 'starting'))
@@ -29,9 +29,7 @@ describe('runAgentLoop cold start', () => {
     await jest.advanceTimersByTimeAsync(1000);
     await expect(pending).resolves.toEqual({ status: 'ok', mode: 'agent' });
     expect(stream).toHaveBeenCalledTimes(2);
-    expect(progress).toHaveBeenCalledWith(
-      expect.objectContaining({ step: 'warming', message: 'Warming up' })
-    );
+    expect(progress).not.toHaveBeenCalled();
   });
 
   it('retries once when the stream ends without a result', async () => {

@@ -12,6 +12,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
 import { loadOutputPreferences, saveOutputPreferences } from '@/lib/output-preferences';
+import { visibleAgentStep } from '@/lib/agent-step-copy';
+import { FlowComposer } from '@/components/flow/chat-composer';
 import { formatStat } from '@/lib/number-format';
 import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
 import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
@@ -127,6 +129,46 @@ export function displayedCount(
 /** The footer says Saved only once the open table matches what was stored. */
 export function tableFootStatus(hasSavedSpec: boolean, dirty: boolean): string {
   return hasSavedSpec && !dirty ? 'Saved' : '';
+}
+
+/** A preview id is not a saved table. The id has to be in the saved list. */
+export function savedTableMatches(
+  listed: boolean,
+  savedStub: string,
+  savedBanners: string[],
+  stub: string,
+  banners: string[]
+): boolean {
+  if (!listed) return false;
+  return (
+    savedStub === stub &&
+    savedBanners.length === banners.length &&
+    savedBanners.every((name, index) => name === banners[index])
+  );
+}
+
+const FILE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** The name a person gave the file. A stored id is not a name. */
+export function datasetFileLabel(row: {
+  original_filename?: string | null;
+  source_filenames?: string[] | null;
+}): string {
+  const names = [row.original_filename, ...(row.source_filenames || [])];
+  for (const name of names) {
+    const text = String(name || '').trim();
+    if (!text) continue;
+    const stem = text.replace(/\.[^.]+$/, '');
+    if (!FILE_UUID.test(text) && !FILE_UUID.test(stem)) return text;
+  }
+  return 'Untitled file';
+}
+
+/** The file's active weight, including the internal copy of a raked column. */
+export function defaultTableWeight(active: string, choices: string[]): string {
+  if (active && active !== '_weight' && choices.includes(active)) return active;
+  if (active === '_weight') return choices[0] || '';
+  return '';
 }
 
 /** The cell measure stays selected when the mean row is on. Counts stay whole numbers. */
@@ -994,7 +1036,7 @@ export function CodeFramePanel({
           type="button"
           onClick={() => {
             setError('');
-            proposeCodes().catch(err =>
+            proposeCodes(!schemaOnly).catch(err =>
               setError(err instanceof Error ? err.message : 'Propose failed')
             );
           }}
@@ -1002,53 +1044,53 @@ export function CodeFramePanel({
           Propose
         </Button>
         <Button
-          className="flow-btn"
+          className="flow-btn primary"
           type="button"
-          disabled={!textColumn}
+          disabled={!textColumn || schemaOnly}
           onClick={() => {
             setError('');
-            const ready = codes.length ? Promise.resolve(codes) : proposeCodes();
-            ready
+            proposeCodes(true)
               .then(next => {
                 if (!next.length) {
-                  setError('No themes were proposed for that column.');
+                  setError('No themes were read from those answers.');
                   return;
                 }
-                return applyCodes(false, next);
+                return applyCodes(true, next);
               })
-              .catch(err => setError(err instanceof Error ? err.message : 'Keyword coding failed'));
+              .catch(err => setError(err instanceof Error ? err.message : 'Coding failed'));
           }}
         >
-          Code with keywords
+          Code themes
         </Button>
-        {schemaOnly ? null : (
-          <Button
-            className="flow-btn primary"
-            type="button"
-            disabled={!textColumn}
-            onClick={() => {
-              setError('');
-              proposeCodes(true)
-                .then(next => {
-                  if (!next.length) {
-                    setError('Haiku did not propose any themes for that column.');
-                    return;
-                  }
-                  return applyCodes(true, next);
-                })
-                .catch(err => setError(err instanceof Error ? err.message : 'Haiku coding failed'));
-            }}
-          >
-            Code with Haiku
-          </Button>
-        )}
       </div>
       {schemaOnly ? (
-        <p className="flow-muted">Schema-only studies code with keywords.</p>
+        <p className="flow-muted">Schema-only studies keep the answers in this workspace.</p>
       ) : (
-        <p className="flow-muted">Haiku proposes themes from a sample, then codes every row.</p>
+        <p className="flow-muted">
+          Themes are read from the answers. Everyone who answered is assigned, and blank answers
+          stay out of the base.
+        </p>
       )}
       {error ? <p className="flow-error">{error}</p> : null}
+      {Array.isArray(progress?.shares) ? (
+        <ul className="flow-muted">
+          {(
+            progress.shares as {
+              id?: string;
+              label?: string;
+              n?: number;
+              percent?: number;
+              example?: string;
+            }[]
+          ).map(share => (
+            <li key={String(share.id || share.label)}>
+              {share.label}: {share.n} ({share.percent}% of {String(progress.base ?? '')} who
+              answered)
+              {share.example ? ` — “${share.example}”` : ''}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <ul>
         {codes.map(code => (
           <li key={code.id} className="flow-row">
@@ -1493,6 +1535,8 @@ export function TablesBuilder({
   datasets = [],
   onFile,
   onAdopted,
+  initialStub = '',
+  initialBanner = '',
 }: {
   datasetId?: string;
   projectId?: string;
@@ -1505,6 +1549,8 @@ export function TablesBuilder({
   }[];
   onFile?: (id: string) => void;
   onAdopted?: (datasetId: string) => void;
+  initialStub?: string;
+  initialBanner?: string;
 }) {
   const router = useRouter();
   const [weightOpen, setWeightOpen] = useState(false);
@@ -1537,12 +1583,12 @@ export function TablesBuilder({
   const [dirty, setDirty] = useState(false);
   const [specs, setSpecs] = useState<SavedSpec[]>([]);
   const [books, setBooks] = useState<SavedBook[]>([]);
-  const [stub, setStub] = useState('');
-  const [banners, setBanners] = useState<string[]>([]);
+  const [stub, setStub] = useState(initialStub);
+  const [banners, setBanners] = useState<string[]>(initialBanner ? [initialBanner] : []);
   const [weight, setWeight] = useState('');
   const activeWeightName = useRef('');
   const [statistic, setStatistic] = useState('column_proportion');
-  const [digits, setDigits] = useState(() => loadOutputPreferences().decimalPlaces);
+  const [digits, setDigits] = useState(0);
   const [lettersOn, setLettersOn] = useState(true);
   const [nest, setNest] = useState(false);
   const [lowBase, setLowBase] = useState(true);
@@ -1652,8 +1698,8 @@ export function TablesBuilder({
         setWeightColumns(choices);
         // A saved table's weight wins. The file weight is only the default before one is open.
         const active = meta.active_weight_column || '';
-        if (!weightFromTable.current && active && choices.includes(active))
-          setWeight(current => current || active);
+        const chosen = defaultTableWeight(active, choices);
+        if (!weightFromTable.current && chosen) setWeight(current => current || chosen);
         setWeightNeedsRefresh(Boolean(meta.weight_vector?.needs_refresh));
         setColumns(
           (meta.columns || [])
@@ -1906,13 +1952,14 @@ export function TablesBuilder({
       stubs?: { column?: string }[];
       banners?: { column?: string; columns?: string[] }[];
     } | null;
-    if (!spec) return false;
-    const savedStub = String(spec.stubs?.[0]?.column || '');
-    const savedBanners = bannerNames(spec);
-    return (
-      savedStub === stub &&
-      savedBanners.length === banners.length &&
-      savedBanners.every((name, index) => name === banners[index])
+    const id = String((book?.spec as { id?: string } | undefined)?.id || '');
+    const listed = Boolean(id) && specs.some(item => (item.spec_id || item.id) === id);
+    return savedTableMatches(
+      listed,
+      String(spec?.stubs?.[0]?.column || ''),
+      bannerNames(spec || undefined),
+      stub,
+      banners
     );
   }
 
@@ -2581,13 +2628,13 @@ export function TablesBuilder({
                 )
               )}
               {asking ? (
-                <p className="flow-status">{agentSteps[agentSteps.length - 1] || 'Warming up'}</p>
+                <p className="flow-status">{agentSteps.filter(Boolean).at(-1) || 'Thinking…'}</p>
               ) : null}
             </div>
-            <form
-              className="tables-composer"
-              onSubmit={event => {
-                event.preventDefault();
+            <FlowComposer
+              value={ask}
+              onChange={setAsk}
+              onSend={() => {
                 const text = ask.trim();
                 if (!text || asking) return;
                 setThread(current => [...current, { role: 'user', text }]);
@@ -2605,7 +2652,7 @@ export function TablesBuilder({
                   conversationHistory: history,
                   signal: AbortSignal.timeout(180_000),
                   onProgress: progress => {
-                    const line = progress.message || progress.step;
+                    const line = visibleAgentStep(progress.step, progress.message);
                     if (line)
                       setAgentSteps(current =>
                         current.includes(line) ? current : [...current, line]
@@ -2646,26 +2693,17 @@ export function TablesBuilder({
                   )
                   .finally(() => setAsking(false));
               }}
-            >
-              <Input
-                value={ask}
-                onChange={event => setAsk(event.target.value)}
-                placeholder="Ask, or tell it to change the table…"
-                aria-label="Ask about this table"
-              />
-              <div className="tables-composer-row">
-                <span className="tables-agent-chip">Agent</span>
-                {selectedNumber ? <span className="flow-muted">@T{selectedNumber}</span> : null}
-                <Button
-                  className="chat-send"
-                  type="submit"
-                  aria-label="Ask"
-                  disabled={asking || !ask.trim()}
-                >
-                  ↑
-                </Button>
-              </div>
-            </form>
+              placeholder="Ask, or tell it to change the table…"
+              mode="agent"
+              onMode={() => undefined}
+              showModes={false}
+              busy={asking}
+              columns={columns.map(column => column.name)}
+              attachments={[]}
+              onAttach={() => undefined}
+              onRemoveAttachment={() => undefined}
+              layout="thread"
+            />
           </aside>
         </>
       )}

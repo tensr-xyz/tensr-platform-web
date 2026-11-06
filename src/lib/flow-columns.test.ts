@@ -45,6 +45,11 @@ describe('picker columns', () => {
       ]).map((column: { name: string }) => column.name)
     ).toEqual(['region']);
     expect(isInternalColumn('source_wave')).toBe(false);
+    expect(
+      pickerColumns([{ name: 'region' }, { name: undefined as unknown as string }]).map(
+        (column: { name: string }) => column.name
+      )
+    ).toEqual(['region']);
   });
 
   it('offers coded open ends by their open-end name', () => {
