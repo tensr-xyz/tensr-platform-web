@@ -84,7 +84,7 @@ export function FlowComposer({
 }: {
   value: string;
   onChange: (value: string) => void;
-  onSend: () => void;
+  onSend: (text?: string) => void;
   placeholder: string;
   mode: 'ask' | 'plan' | 'agent';
   onMode: (value: 'ask' | 'plan' | 'agent') => void;
@@ -101,7 +101,9 @@ export function FlowComposer({
   const fileRef = useRef<HTMLInputElement>(null);
   const send = () => {
     if (busy || !value.trim()) return;
-    onSend();
+    const text = value;
+    onChange('');
+    onSend(text);
   };
   const pick = (column: string) => {
     onChange(insertColumnMention(value, column));
@@ -158,7 +160,7 @@ export function FlowComposer({
             </Button>
           ) : null}
           <Textarea
-            className="flow-text"
+            className="flow-text border-0 shadow-none focus-visible:ring-0"
             value={value}
             onChange={event => {
               const next = event.target.value;

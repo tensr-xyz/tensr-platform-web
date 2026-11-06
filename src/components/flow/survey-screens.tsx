@@ -19,6 +19,7 @@ import { loadProjectTables, numberTables } from '@/components/flow/project-table
 import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
 import {
   isIdColumn,
+  isInternalColumn,
   openEndColumns,
   pickerColumns,
   themeColumns,
@@ -1291,7 +1292,27 @@ export function CodeFramePanel({
   );
 }
 
-type TableColumn = { name: string; label: string; labels: Record<string, string> };
+type TableColumn = {
+  name: string;
+  label: string;
+  labels: Record<string, string>;
+  type?: string;
+  role?: string;
+};
+
+/** Stub and banner choices. Ids, open text, and weight columns are not questions. */
+export function tablePickerColumns(columns: TableColumn[], weights: string[] = []): TableColumn[] {
+  const weightNames = new Set(weights.map(name => name.toLowerCase()).filter(Boolean));
+  return columns.filter(column => {
+    if (!column.name || isInternalColumn(column.name) || isIdColumn(column.name)) return false;
+    if (weightNames.has(column.name.toLowerCase())) return false;
+    if (String(column.role || '').toLowerCase() === 'weight') return false;
+    const labelled = Object.keys(column.labels || {}).length > 0;
+    const type = String(column.type || '').toLowerCase();
+    if (!labelled && (type === 'string' || type === 'text')) return false;
+    return true;
+  });
+}
 type SavedSpec = {
   spec_id?: string;
   id?: string;
@@ -1687,7 +1708,13 @@ export function TablesBuilder({
       }
     });
     void flowJson<{
-      columns?: { name?: string; label?: string; value_labels?: Record<string, string> }[];
+      columns?: {
+        name?: string;
+        label?: string;
+        type?: string;
+        role?: string | null;
+        value_labels?: Record<string, string>;
+      }[];
       active_weight_column?: string | null;
       weight_columns?: string[];
       weight_vector?: { needs_refresh?: boolean } | null;
@@ -1707,6 +1734,8 @@ export function TablesBuilder({
               name: column.name || '',
               label: column.label || column.name || '',
               labels: column.value_labels || {},
+              type: column.type,
+              role: column.role || undefined,
             }))
             .filter(column => column.name)
         );
@@ -1720,7 +1749,7 @@ export function TablesBuilder({
   const labelFor = (name: string) => columns.find(column => column.name === name)?.label || name;
   const questionText = (name: string) => {
     const label = columns.find(column => column.name === name)?.label;
-    return label && label !== name ? `${name} ${label}` : name;
+    return label && label !== name ? label : name;
   };
   const figure =
     statistic === 'count'
@@ -2212,7 +2241,7 @@ export function TablesBuilder({
                   }}
                   options={[
                     { value: '', label: '+ Drop variable' },
-                    ...pickerColumns(columns).map(column => ({
+                    ...tablePickerColumns(columns, weightColumns).map(column => ({
                       value: column.name,
                       label: column.label,
                     })),
@@ -2241,7 +2270,7 @@ export function TablesBuilder({
                   }}
                   options={[
                     { value: '', label: '+' },
-                    ...pickerColumns(columns)
+                    ...tablePickerColumns(columns, weightColumns)
                       .filter(column => column.name !== stub && !banners.includes(column.name))
                       .map(column => ({ value: column.name, label: column.label })),
                   ]}
