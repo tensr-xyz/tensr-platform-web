@@ -7,6 +7,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { archiveChatTurn, type ChatExchange } from '@/components/flow/chat-thread';
+import {
+  chatRunInFlight,
+  liveChatRun,
+  publishLiveChatRun,
+  subscribeLiveChatRun,
+} from '@/components/flow/chat-live-run';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import {
   loadProjectTables,
@@ -35,6 +41,7 @@ import {
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import { visibleAgentStep } from '@/lib/agent-step-copy';
 import { savePin } from '@/components/flow/report-pins';
+import { tableBodyFromAgentRun } from '@/components/flow/survey-screens';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
 import {
   answerTables,
@@ -2512,7 +2519,23 @@ function ChatScreen({
   const sendText = useCallback(
     async (text: string, nextMode: 'ask' | 'plan' | 'agent' = mode) => {
       if (!text.trim() || status === 'Thinking…' || sendingRef.current) return;
+      if (chatProjectId && chatRunInFlight(chatProjectId)) return;
       sendingRef.current = true;
+      const publish = (patch: Partial<ReturnType<typeof liveChatRun>>) => {
+        if (!chatProjectId) return;
+        const prior = liveChatRun();
+        publishLiveChatRun({
+          projectId: chatProjectId,
+          sessionId: prior?.projectId === chatProjectId ? prior.sessionId : sessionRef.current,
+          question: text,
+          answer: prior?.projectId === chatProjectId ? prior.answer : '',
+          steps: prior?.projectId === chatProjectId ? prior.steps : [],
+          status: 'Thinking…',
+          running: true,
+          ...patch,
+        });
+      };
+      publish({ answer: '', steps: [], status: 'Thinking…', running: true });
       const turnFiles = attachmentsRef.current;
       setPast(current =>
         archiveChatTurn(
@@ -2548,11 +2571,18 @@ function ChatScreen({
             const line = visibleAgentStep(progress.step, progress.message);
             if (!line) return;
             setSteps(current => (current.includes(line) ? current : [...current, line]));
+            const prior = liveChatRun();
+            publish({
+              steps: prior?.steps.includes(line) ? prior.steps : [...(prior?.steps || []), line],
+              status: null,
+              answer: draft,
+            });
           },
           onDelta: chunk => {
             draft += chunk;
             setAnswer(draft);
             setStatus(null);
+            publish({ answer: draft, status: null });
           },
           onReplace: next => {
             draft = next;
@@ -2563,6 +2593,7 @@ function ChatScreen({
         if (result.session_id) {
           sessionRef.current = result.session_id;
           rememberChat(result.session_id);
+          publish({ sessionId: result.session_id, answer: result.answer_markdown || draft });
           setSessions(current => {
             const title = text.trim();
             const row = {
@@ -2588,9 +2619,17 @@ function ChatScreen({
         setDownloads(downloadsFromToolResults(entries));
         if (result.status !== 'awaiting_approval') setAttachments([]);
         setStatus(null);
+        publish({
+          running: false,
+          status: null,
+          answer: result.answer_markdown || draft,
+          sessionId: result.session_id || sessionRef.current,
+        });
         loadRail();
       } catch (err) {
-        setStatus(err instanceof Error ? err.message : 'The reply did not finish. Ask again.');
+        const message = err instanceof Error ? err.message : 'The reply did not finish. Ask again.';
+        setStatus(message);
+        publish({ running: false, status: message });
       } finally {
         sendingRef.current = false;
       }
@@ -2832,6 +2871,25 @@ function ChatScreen({
     if (outputReady) setPanelOpen(true);
   }, [outputReady]);
   useEffect(() => {
+    const apply = () => {
+      const run = liveChatRun();
+      if (!run || run.projectId !== chatProjectId) return;
+      setSent(run.question);
+      setAnswer(run.answer);
+      setSteps(run.steps);
+      setStatus(run.status);
+      if (run.sessionId) {
+        sessionRef.current = run.sessionId;
+        rememberChat(run.sessionId);
+      }
+    };
+    apply();
+    return subscribeLiveChatRun(apply);
+    // rememberChat is stable for this screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatProjectId]);
+  useEffect(() => {
+    if (chatRunInFlight(chatProjectId)) return;
     const fromUrl = new URLSearchParams(window.location.search).get('session');
     const stored = window.sessionStorage.getItem(`tensr-open-chat:${chatProjectId}`);
     const sessionId = fromUrl || stored;
@@ -2977,6 +3035,8 @@ function ChatScreen({
                         )}
                         checks={resultViewFromToolResults(turn.toolResults).checks}
                         script={resultViewFromToolResults(turn.toolResults).script}
+                        rCheck={resultViewFromToolResults(turn.toolResults).rCheck}
+                        rStatement={resultViewFromToolResults(turn.toolResults).rStatement}
                       />
                     ) : turn.answer ? (
                       <FlowMarkdown className="chat-prose">
@@ -3038,6 +3098,8 @@ function ChatScreen({
                       footnote={footnote}
                       checks={resultChecks}
                       script={resultView.script}
+                      rCheck={resultView.rCheck}
+                      rStatement={resultView.rStatement}
                     />
                   ) : (
                     <FlowMarkdown className="chat-prose">{thread}</FlowMarkdown>
@@ -3111,6 +3173,26 @@ function ChatScreen({
                         }}
                       >
                         Add to report
+                      </Button>
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        disabled={!datasetId}
+                        onClick={() => {
+                          const request = tableBodyFromAgentRun(turn?.tool_results);
+                          if (!request || !datasetId) {
+                            setStatus('This result is not a table that can be saved.');
+                            return;
+                          }
+                          void flowJson(`/datasets/${datasetId}/tables`, {
+                            method: 'POST',
+                            body: JSON.stringify(request),
+                          })
+                            .then(() => setStatus('Saved to Tables.'))
+                            .catch(() => setStatus('That table could not be saved.'));
+                        }}
+                      >
+                        Save table
                       </Button>
                       {downloads[0] ? (
                         <Button
@@ -3227,6 +3309,8 @@ function ChatScreen({
                       footnote={footnote}
                       checks={resultChecks}
                       script={resultView.script}
+                      rCheck={resultView.rCheck}
+                      rStatement={resultView.rStatement}
                     />
                   ) : (
                     <>

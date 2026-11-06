@@ -6,6 +6,9 @@ export type ResultView = {
   checks: string[];
   weight: string;
   filter: string;
+  /** match, mismatch, pending, or empty when this result has no R reproduction. */
+  rCheck: string;
+  rStatement: string;
 };
 
 function cell(value: unknown): string {
@@ -14,6 +17,12 @@ function cell(value: unknown): string {
     if (!Number.isFinite(value)) return '';
     const rounded = Math.round(value * 1000) / 1000;
     return String(rounded);
+  }
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const label = record.label ?? record.name ?? record.text ?? record.value ?? record.title;
+    if (label != null && typeof label !== 'object') return cell(label);
+    return '';
   }
   return String(value).trim();
 }
@@ -79,6 +88,37 @@ function marginTable(margins: unknown): RunTable | null {
   };
 }
 
+function recordTable(rows: unknown, title: string, keys: string[]): RunTable | null {
+  if (!rows) return null;
+  const list = Array.isArray(rows)
+    ? rows
+    : typeof rows === 'object'
+      ? Object.entries(rows as Record<string, unknown>).map(([name, value]) =>
+          value && typeof value === 'object'
+            ? { term: name, ...(value as Record<string, unknown>) }
+            : { term: name, estimate: value }
+        )
+      : [];
+  return shareTable(
+    list,
+    title,
+    keys.map(key => ({
+      header: key.replaceAll('_', ' '),
+      keys: [key, key === 'term' ? 'name' : key],
+    }))
+  );
+}
+
+function statRow(record: Record<string, unknown>, title: string, keys: string[]): RunTable | null {
+  const present = keys.filter(key => record[key] != null && typeof record[key] !== 'object');
+  if (present.length < 2) return null;
+  return {
+    title,
+    columns: present.map(key => key.replaceAll('_', ' ')),
+    rows: [present.map(key => cell(record[key]))],
+  };
+}
+
 function groupTable(groups: unknown): RunTable | null {
   if (!Array.isArray(groups) || !groups.length) return null;
   const rows = groups
@@ -96,7 +136,15 @@ function groupTable(groups: unknown): RunTable | null {
 
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
 export function resultViewFromToolResults(results: unknown): ResultView {
-  const view: ResultView = { tables: [], script: '', checks: [], weight: '', filter: '' };
+  const view: ResultView = {
+    tables: [],
+    script: '',
+    checks: [],
+    weight: '',
+    filter: '',
+    rCheck: '',
+    rStatement: '',
+  };
   const seen = new Set<string>();
   const add = (table: RunTable | null) => {
     if (!table) return;
@@ -146,6 +194,20 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     if (assumptions && typeof assumptions === 'object') {
       notes((assumptions as { notes?: unknown }).notes);
       notes((assumptions as { warnings?: unknown }).warnings);
+    }
+    add(
+      recordTable(record.coefficients, 'Coefficients', ['term', 'estimate', 'std_error', 'p_value'])
+    );
+    add(recordTable(record.correlations, 'Correlations', ['column', 'with', 'r', 'p_value']));
+    add(recordTable(record.descriptives, 'Descriptives', ['column', 'n', 'mean', 'std']));
+    add(statRow(record, 'Test', ['statistic', 'df', 'p_value', 'effect_size']));
+    add(recordTable(record.loadings, 'Loadings', ['variable', 'factor', 'loading']));
+    add(recordTable(record.items, 'Reliability', ['item', 'alpha_if_deleted', 'item_total']));
+    const mark = record.r_syntax_verification;
+    if (mark && typeof mark === 'object' && !view.rCheck) {
+      const verification = mark as { kind?: unknown; statement?: unknown; status?: unknown };
+      view.rCheck = cell(verification.kind || verification.status);
+      view.rStatement = cell(verification.statement);
     }
     if (!view.weight && record.weight && typeof record.weight === 'object') {
       view.weight = cell((record.weight as { column?: unknown }).column);

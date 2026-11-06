@@ -26,13 +26,17 @@ import {
   type FlowColumn,
 } from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
+import { TableBars } from '@/components/flow/table-bars';
+import { savePin } from '@/components/flow/report-pins';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { runAgentLoop } from '@/lib/run-agent-loop';
 import { WeightPanel } from '@/components/flow/weight-modal';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import {
   bannerColumns,
+  bannerFootnote,
   bannerHeading,
+  chartSeriesFromBook,
   codedStub,
   lettersFor,
   selectionFromCell,
@@ -402,11 +406,7 @@ export function BannerGrid({
           </tbody>
         </Table>
       </div>
-      {book.answered_n != null && book.respondent_n != null ? (
-        <p className="flow-muted">
-          Base: answered {String(book.answered_n)} of {String(book.respondent_n)}
-        </p>
-      ) : null}
+      {bannerFootnote(book) ? <p className="flow-muted">{bannerFootnote(book)}</p> : null}
     </div>
   );
 }
@@ -2168,7 +2168,31 @@ export function TablesBuilder({
           <p className="flow-muted">No banner books yet</p>
         )}
       </aside>
-      {view === 'chart' ? (
+      {view === 'chart' && chartSeriesFromBook(book).length ? (
+        <TableBars
+          series={chartSeriesFromBook(book)}
+          onShowTable={() => setView('table')}
+          onAddToReport={
+            projectId && datasetId && book?.run_id
+              ? () => {
+                  const runId = String(book.run_id);
+                  void savePin(projectId, datasetId, {
+                    id: runId,
+                    runId,
+                    datasetId,
+                    headline: String(book.title || stub || 'Chart'),
+                    support: bannerFootnote(book),
+                    citation: 'Chart',
+                    afterId: '',
+                    deck: true,
+                    topline: true,
+                    keepLive: true,
+                  });
+                }
+              : undefined
+          }
+        />
+      ) : view === 'chart' ? (
         <TableChart
           datasetId={datasetId}
           projectId={projectId}
@@ -2318,6 +2342,9 @@ export function TablesBuilder({
                   onClick={() => setLettersOn(current => !current)}
                 >
                   Sig 95% · A/a letters
+                </Button>
+                <Button className="flow-btn" type="button" onClick={() => setView('chart')}>
+                  Chart
                 </Button>
                 <Button
                   className="flow-btn"

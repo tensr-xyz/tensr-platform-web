@@ -97,4 +97,24 @@ describe('result tables', () => {
       'n = 40 · Filter: region = North · Weight: design_w · t-test'
     );
   });
+
+  it('prints a label when a header is an object, and keeps the R check', () => {
+    const view = resultViewFromToolResults({
+      tables: [
+        {
+          title: 'By area',
+          columns: [{ label: 'Area' }, { label: 'East' }],
+          rows: [['High', 4]],
+        },
+      ],
+      statistic: 2.2,
+      p_value: 0.03,
+      r_syntax_verification: { kind: 'verified', statement: 'The displayed figure matches R.' },
+    });
+    expect(view.tables[0].columns).toEqual(['Area', 'East']);
+    const flat = view.tables.flatMap(table => [...table.columns, ...table.rows.flat()]);
+    expect(flat.join(' ')).not.toContain('[object Object]');
+    expect(view.rCheck).toBe('verified');
+    expect(view.rStatement).toContain('matches R');
+  });
 });

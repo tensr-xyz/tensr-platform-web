@@ -2384,14 +2384,15 @@ select.flow-input {
 
 .responses-layout {
   display: grid;
-  grid-template-columns: 244px minmax(0, 1fr) 320px;
+  /* The sheet keeps a usable width. The side panel shrinks instead of covering it. */
+  grid-template-columns: minmax(140px, 220px) minmax(420px, 1fr) minmax(200px, 300px);
   grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   background: var(--color-canvas);
   border: 1px solid var(--color-line);
   border-radius: 14px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .responses-rail {
@@ -2404,12 +2405,44 @@ select.flow-input {
   gap: 14px;
 }
 
+.table-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+.table-bars-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 180px) 1fr;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.table-bars-track,
+.table-bars-stack {
+  display: flex;
+  gap: 3px;
+  min-height: 14px;
+}
+
+.table-bars-track i,
+.table-bars-stack i {
+  display: block;
+  height: 14px;
+  background: var(--color-accent);
+  border-radius: 3px;
+}
+
 .responses-sheet,
 .responses-side {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  background: var(--color-canvas);
 }
 
 .responses-side {
@@ -2438,6 +2471,8 @@ select.flow-input {
 .sheet-scroll {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  overflow: auto;
 }
 
 .sheet-frame {

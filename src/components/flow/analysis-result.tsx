@@ -12,18 +12,32 @@ export function AnalysisResult({
   footnote,
   checks,
   script,
+  rCheck,
+  rStatement,
 }: {
   lead?: string;
   tables: RunTable[];
   footnote?: string;
   checks?: string[];
   script?: string;
+  rCheck?: string;
+  rStatement?: string;
 }) {
   const [checksOpen, setChecksOpen] = useState(false);
   const [scriptOpen, setScriptOpen] = useState(false);
   if (!lead && !tables.length && !footnote) return null;
   return (
     <div className="analysis-result">
+      {rCheck ? (
+        <p className="analysis-r">
+          {rCheck === 'pending'
+            ? 'R check running'
+            : rCheck === 'mismatch' || rCheck === 'not_verified'
+              ? 'R mismatch'
+              : 'Checked in R'}
+          {rStatement ? ` · ${rStatement}` : ''}
+        </p>
+      ) : null}
       {lead ? <p className="analysis-lead">{lead}</p> : null}
       {tables.map(table => (
         <section key={`${table.title}-${table.columns.join('-')}`} className="analysis-table">
