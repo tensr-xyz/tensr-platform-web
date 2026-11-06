@@ -50,6 +50,8 @@ import {
   outputTakeaway,
   outputTitle,
 } from '@/components/flow/chat-output';
+import { AnalysisResult } from '@/components/flow/analysis-result';
+import { resultFootnote, resultViewFromToolResults } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { SourcesScreen } from '@/components/flow/sources-screen';
@@ -59,7 +61,7 @@ import { AnovaModal } from '@/components/flow/anova-modal';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
-import { placePins, runDocument } from '@/components/flow/run-document';
+import { documentApa, placePins, runDocument } from '@/components/flow/run-document';
 import {
   pinsFromRuns,
   rememberReportRuns,
@@ -2318,7 +2320,7 @@ function EmptyChat({
   setQuestion: (value: string) => void;
   mode: 'ask' | 'plan' | 'agent';
   setMode: (value: 'ask' | 'plan' | 'agent') => void;
-  send: () => void;
+  send: (text?: string) => void;
   sourcesHref: string;
   columns: string[] | null;
   attachments: AgentLoopAttachment[];
@@ -2357,7 +2359,7 @@ function EmptyChat({
                   key={starter.prompt}
                   className="chat-starter whitespace-normal items-start h-auto"
                   type="button"
-                  onClick={() => setQuestion(starter.prompt)}
+                  onClick={() => send(starter.prompt)}
                 >
                   <span className="chat-starter-mark">
                     <StarterIcon index={index} />
@@ -2589,7 +2591,7 @@ function ChatScreen({
     return () => window.clearTimeout(handle);
   }, [pendingAsk, onAsked, sendText]);
 
-  const send = () => void sendText(question);
+  const send = (text?: string) => void sendText(text ?? question);
 
   const approve = () => {
     if (!plan || !sent) return;
@@ -2784,6 +2786,16 @@ function ChatScreen({
   const thread = answerWithoutBase(panelOpen && tables ? answerWithoutTables(answer) : answer);
   const tableMode = kind === 'Crosstab' && Boolean(tables);
   const ledger = (turn?.turn_state?.ledger || {}) as { weight?: string | null };
+  const resultView = resultViewFromToolResults(turn?.tool_results);
+  const structuredTables = resultView.tables;
+  const footnote = resultFootnote(
+    { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
+    baseNote,
+    kind
+  );
+  const resultChecks = resultView.checks.length
+    ? resultView.checks
+    : checks.map(check => check.label);
   const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
   const respondents = baseCount(baseNote);
   const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
@@ -2948,7 +2960,17 @@ function ChatScreen({
                   </div>
                 ) : null}
                 {answer && !plan ? (
-                  <FlowMarkdown className="chat-prose">{thread}</FlowMarkdown>
+                  structuredTables.length ? (
+                    <AnalysisResult
+                      lead={takeaway}
+                      tables={structuredTables}
+                      footnote={footnote}
+                      checks={resultChecks}
+                      script={resultView.script}
+                    />
+                  ) : (
+                    <FlowMarkdown className="chat-prose">{thread}</FlowMarkdown>
+                  )
                 ) : null}
                 {plan ? (
                   <div className="chat-plan">
@@ -3127,17 +3149,31 @@ function ChatScreen({
                   {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
                 </div>
                 <div className="output-body">
-                  {takeaway && takeaway !== title ? (
-                    <div className="output-takeaway">{takeaway}</div>
-                  ) : null}
-                  {tables ? <FlowMarkdown className="output-table">{tables}</FlowMarkdown> : null}
-                  {stat ? (
-                    <div>
-                      <div className="flow-muted">Key stat</div>
-                      <div>{stat}</div>
-                    </div>
-                  ) : null}
-                  {checks.length ? (
+                  {structuredTables.length ? (
+                    <AnalysisResult
+                      lead={takeaway}
+                      tables={structuredTables}
+                      footnote={footnote}
+                      checks={resultChecks}
+                      script={resultView.script}
+                    />
+                  ) : (
+                    <>
+                      {takeaway && takeaway !== title ? (
+                        <div className="output-takeaway">{takeaway}</div>
+                      ) : null}
+                      {tables ? (
+                        <FlowMarkdown className="output-table">{tables}</FlowMarkdown>
+                      ) : null}
+                      {stat ? (
+                        <div>
+                          <div className="flow-muted">Key stat</div>
+                          <div>{stat}</div>
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                  {structuredTables.length ? null : checks.length ? (
                     <div>
                       <div className="flow-muted">Checks</div>
                       <div className="report-chips">
@@ -3152,6 +3188,40 @@ function ChatScreen({
                       </div>
                     </div>
                   ) : null}
+                  <div className="flow-row">
+                    <Link
+                      className="flow-btn primary"
+                      href={
+                        runIds[0]
+                          ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runIds[0])}`
+                          : `${projectHref}/report?pane=outputs`
+                      }
+                    >
+                      Open
+                    </Link>
+                    {structuredTables.length ? (
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        onClick={() =>
+                          void navigator.clipboard.writeText(
+                            documentApa({
+                              title,
+                              op: kind,
+                              summary: takeaway,
+                              base: respondents ? Number(respondents.replace(/,/g, '')) : null,
+                              createdAt: '',
+                              tables: structuredTables,
+                              checks: resultChecks,
+                              script: resultView.script,
+                            })
+                          )
+                        }
+                      >
+                        Copy APA 7
+                      </Button>
+                    ) : null}
+                  </div>
                   <div>
                     <div className="flow-muted">Used in</div>
                     <span className="output-badge">This chat · not in the report yet</span>

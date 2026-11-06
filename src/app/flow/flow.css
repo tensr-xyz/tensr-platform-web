@@ -1727,6 +1727,36 @@ select.flow-input {
   flex: 1;
 }
 
+.analysis-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analysis-lead {
+  margin: 0;
+}
+
+.analysis-table h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.analysis-footnote {
+  margin: 0;
+}
+
+.analysis-fold ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.analysis-script {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
 .chat-new {
   width: 100%;
   display: flex;
