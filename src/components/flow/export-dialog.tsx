@@ -61,6 +61,13 @@ function downloadSvg(svg: string, filename: string, scale: number) {
   image.src = url;
 }
 
+/** The open file as SPSS, plus the syntax that reads it. */
+export async function savAndSyntax(datasetId: string, stem: string) {
+  if (!datasetId) throw new Error('Open a file first.');
+  await downloadExport(`/datasets/${datasetId}/export?format=sav`, `${stem}.sav`);
+  await downloadExport(`/datasets/${datasetId}/export?format=sps`, `${stem}.sps`);
+}
+
 /** The same deck Report builds: every saved table on the file, one slide each. */
 export async function deckFromTables(datasetId: string, stem: string) {
   const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
@@ -186,7 +193,14 @@ export function ExportDialog({
         note: 'Plain text, tables as Markdown',
         run: () => downloadText(`${stem}.md`, documentMarkdown(reportDoc), 'text/markdown'),
       },
-      { id: 'sav', ext: '.SAV + .SPS', label: 'Data for SPSS', note: 'Coming soon', soon: true },
+      {
+        id: 'sav',
+        ext: '.SAV + .SPS',
+        label: 'Data for SPSS',
+        note: datasetId ? 'The file and its syntax' : 'Open a file first',
+        soon: !datasetId,
+        run: () => savAndSyntax(datasetId || '', stem),
+      },
     ];
     const format = formats.find(item => item.id === reportFormat) || formats[0];
     return (
@@ -322,7 +336,11 @@ export function ExportDialog({
             <Button
               className="flow-btn primary"
               type="button"
-              disabled={busy !== '' || !format.run || (!chosen.length && format.id !== 'pptx')}
+              disabled={
+                busy !== '' ||
+                !format.run ||
+                (!chosen.length && format.id !== 'pptx' && format.id !== 'sav')
+              }
               onClick={() => format.run && save(format.label, format.run)}
             >
               {busy ? 'Working…' : `↓ Export ${format.ext.toLowerCase().split(' ')[0]}`}
