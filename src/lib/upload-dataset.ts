@@ -27,6 +27,29 @@ export type DatasetUploadResult = {
   [key: string]: unknown;
 };
 
+export type RememberedUpload = {
+  name: string;
+  size: number;
+  lastModified: number;
+  datasetId: string;
+};
+
+/** A retry of the same file keeps the dataset the first upload created. */
+export function rememberedDatasetId(
+  remembered: RememberedUpload | null,
+  file: { name: string; size: number; lastModified: number }
+): string | null {
+  if (
+    !remembered ||
+    remembered.name !== file.name ||
+    remembered.size !== file.size ||
+    remembered.lastModified !== file.lastModified
+  ) {
+    return null;
+  }
+  return remembered.datasetId;
+}
+
 /** Same Content-Type must be signed on the presign and sent on the S3 PUT. */
 export function contentTypeForDatasetUpload(fileType?: string | null): string {
   const trimmed = (fileType || '').trim();

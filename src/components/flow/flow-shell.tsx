@@ -31,7 +31,11 @@ import {
 import { moveDatasetToProject } from '@/components/flow/move-dataset';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
-import { uploadDatasetFile } from '@/lib/upload-dataset';
+import {
+  rememberedDatasetId,
+  uploadDatasetFile,
+  type RememberedUpload,
+} from '@/lib/upload-dataset';
 import { formatApiErrorMessage } from '@/lib/api-error';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { useAuth } from '@/hooks/api/use-auth';
@@ -724,6 +728,7 @@ export function NewProjectDialog({
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
   const createdProjectId = useRef<string | null>(null);
+  const uploadedDataset = useRef<RememberedUpload | null>(null);
   const pickable = useMemo(
     () =>
       datasets
@@ -745,6 +750,7 @@ export function NewProjectDialog({
     setError('');
     setProgress(null);
     createdProjectId.current = null;
+    uploadedDataset.current = null;
   };
 
   const create = async () => {
@@ -770,10 +776,21 @@ export function NewProjectDialog({
         createdProjectId.current = id;
       }
       if (choice === 'upload' && file) {
-        const token = getStytchBearerForTensrApi();
-        if (!token) throw new Error('Sign in again to upload a file.');
-        const uploaded = await uploadDatasetFile(file, token, 'workspace', setProgress);
-        datasetId = uploaded.dataset_id;
+        const reused = rememberedDatasetId(uploadedDataset.current, file);
+        if (reused) {
+          datasetId = reused;
+        } else {
+          const token = getStytchBearerForTensrApi();
+          if (!token) throw new Error('Sign in again to upload a file.');
+          const uploaded = await uploadDatasetFile(file, token, 'workspace', setProgress);
+          datasetId = uploaded.dataset_id;
+          uploadedDataset.current = {
+            name: file.name,
+            size: file.size,
+            lastModified: file.lastModified,
+            datasetId,
+          };
+        }
       } else if (choice === 'existing') {
         datasetId = existing;
       }
