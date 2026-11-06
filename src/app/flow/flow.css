@@ -2194,7 +2194,6 @@ select.flow-input {
 
 .chat-item[data-active='true'] {
   background: var(--color-accent-soft);
-  font-weight: 600;
 }
 
 .chat-column {

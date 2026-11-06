@@ -4310,24 +4310,17 @@ function ResponsesScreen({
                                   columnMeta(column.name)?.value_labels &&
                                   Object.keys(columnMeta(column.name)?.value_labels || {})
                                     .length ? (
-                                    <select
+                                    <ChoiceSelect
                                       aria-label={`Edit ${column.name}`}
                                       value={editingCell.value}
-                                      autoFocus
-                                      onChange={event => {
-                                        const next = event.target.value;
+                                      onValueChange={next => {
                                         setEditingCell({ ...editingCell, value: next });
                                         saveCell(fieldAt(column.index, column.name), index, next);
                                       }}
-                                    >
-                                      {Object.entries(
+                                      options={Object.entries(
                                         columnMeta(column.name)?.value_labels || {}
-                                      ).map(([code, label]) => (
-                                        <option key={code} value={code}>
-                                          {label}
-                                        </option>
-                                      ))}
-                                    </select>
+                                      ).map(([code, label]) => ({ value: code, label }))}
+                                    />
                                   ) : (
                                     <Input
                                       aria-label={`Edit ${column.name}`}
