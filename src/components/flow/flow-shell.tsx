@@ -32,6 +32,7 @@ import { moveDatasetToProject } from '@/components/flow/move-dataset';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { uploadDatasetFile } from '@/lib/upload-dataset';
+import { formatApiErrorMessage } from '@/lib/api-error';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { useAuth } from '@/hooks/api/use-auth';
 
@@ -720,7 +721,9 @@ export function NewProjectDialog({
   const [file, setFile] = useState<File | null>(null);
   const [existing, setExisting] = useState('');
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const createdProjectId = useRef<string | null>(null);
   const pickable = useMemo(
     () =>
       datasets
@@ -740,6 +743,8 @@ export function NewProjectDialog({
     setFile(null);
     setExisting('');
     setError('');
+    setProgress(null);
+    createdProjectId.current = null;
   };
 
   const create = async () => {
@@ -754,16 +759,20 @@ export function NewProjectDialog({
         }
       }
       if (choice === 'existing' && !existing) throw new Error('Pick a dataset, or skip for now.');
-      const page = await flowJson<{ project?: { id?: string } }>('/api/projects', {
-        method: 'POST',
-        body: JSON.stringify({ name: name.trim(), folder: folder || null, keep_empty: true }),
-      });
-      const id = page.project?.id;
-      if (!id) throw new Error('The project did not save.');
+      let id = createdProjectId.current;
+      if (!id) {
+        const page = await flowJson<{ project?: { id?: string } }>('/api/projects', {
+          method: 'POST',
+          body: JSON.stringify({ name: name.trim(), folder: folder || null, keep_empty: true }),
+        });
+        id = page.project?.id || null;
+        if (!id) throw new Error('The project did not save.');
+        createdProjectId.current = id;
+      }
       if (choice === 'upload' && file) {
         const token = getStytchBearerForTensrApi();
         if (!token) throw new Error('Sign in again to upload a file.');
-        const uploaded = await uploadDatasetFile(file, token, 'workspace');
+        const uploaded = await uploadDatasetFile(file, token, 'workspace', setProgress);
         datasetId = uploaded.dataset_id;
       } else if (choice === 'existing') {
         datasetId = existing;
@@ -780,7 +789,7 @@ export function NewProjectDialog({
       reset();
       router.push(`/flow/p/${id}/${datasetId ? 'responses' : 'sources'}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'The project did not save.');
+      setError(formatApiErrorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -888,6 +897,7 @@ export function NewProjectDialog({
             ) : null}
           </div>
         )}
+        {progress !== null && busy ? <p className="flow-muted">Uploading… {progress}%</p> : null}
         {error ? <p className="flow-error">{error}</p> : null}
         <div className="new-project-foot">
           {step === 2 ? (
@@ -917,7 +927,7 @@ export function NewProjectDialog({
             >
               {busy
                 ? choice === 'upload'
-                  ? 'Uploading…'
+                  ? `Uploading… ${progress ?? 0}%`
                   : 'Creating…'
                 : choice === 'skip'
                   ? 'Create project'
