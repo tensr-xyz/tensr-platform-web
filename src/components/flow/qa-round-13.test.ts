@@ -1,6 +1,11 @@
 import { archiveChatTurn } from '@/components/flow/chat-thread';
 import { codingVersionStatus, type CodingFile } from '@/components/flow/coding-versions';
-import { displayedCount } from '@/components/flow/survey-screens';
+import {
+  displayedCount,
+  shownDecimals,
+  shownStatistics,
+  tableFootStatus,
+} from '@/components/flow/survey-screens';
 import { findingFromOverview } from '@/lib/flow-report';
 
 describe('round 13', () => {
@@ -22,6 +27,12 @@ describe('round 13', () => {
     expect(displayedCount(cell, true)).toBe('39');
     expect(displayedCount(cell, false)).toBe('36');
     expect(displayedCount({ count: 76.2, unweighted_n: 70 }, true)).toBe('76');
+  });
+
+  it('does not call an edited table saved', () => {
+    expect(tableFootStatus(true, false)).toBe('Saved');
+    expect(tableFootStatus(true, true)).toBe('');
+    expect(tableFootStatus(false, false)).toBe('');
   });
 
   it('notices a newer coding file whose origin was stored as its own id', () => {
@@ -55,5 +66,20 @@ describe('round 13', () => {
     expect(finding.citation).toBe('T2');
     expect(finding.eyebrow).toBe('T2 · Region by gender');
     expect(finding.bars).toEqual([]);
+  });
+
+  it('keeps the cell measure when the mean row is on, and gives means their own decimals', () => {
+    const measures = ['count', 'column_proportion', 'row_proportion', 'total_proportion'];
+    for (const measure of measures) {
+      expect(shownStatistics(measure, true)).toEqual([measure, 'column_mean']);
+      expect(shownStatistics(measure, false)).toEqual([measure]);
+    }
+    expect(shownDecimals('column_proportion', 0, true)).toEqual({
+      column_proportion: 0,
+      column_mean: 1,
+    });
+    expect(shownDecimals('count', 3, true)).toEqual({ count: 0, column_mean: 3 });
+    expect(shownDecimals('row_proportion', 2, false)).toEqual({ row_proportion: 2 });
+    expect(shownDecimals('total_proportion', 1, true).column_mean).toBe(1);
   });
 });

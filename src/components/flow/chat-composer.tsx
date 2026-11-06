@@ -80,6 +80,7 @@ export function FlowComposer({
   onRemoveAttachment,
   attachError,
   layout,
+  showModes = true,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -94,6 +95,7 @@ export function FlowComposer({
   onRemoveAttachment: (filename: string) => void;
   attachError?: string | null;
   layout: 'hero' | 'thread';
+  showModes?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -208,7 +210,7 @@ export function FlowComposer({
             {layout === 'hero' ? (
               <span className="chat-composer-hint">Attach a file or mention a column with @</span>
             ) : null}
-            {modes}
+            {showModes ? modes : null}
             <Button
               className="chat-send"
               type="button"

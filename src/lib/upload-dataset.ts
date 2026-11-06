@@ -1,6 +1,7 @@
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import { PERSONAL_ACCOUNT_KEY } from '@/lib/active-organisation';
+import { ApiRequestError, formatApiErrorMessage } from '@/lib/api-error';
 
 export type UploadScope = 'personal' | 'team' | 'workspace';
 
@@ -26,10 +27,66 @@ export type DatasetUploadResult = {
   [key: string]: unknown;
 };
 
+export type RememberedUpload = {
+  name: string;
+  size: number;
+  lastModified: number;
+  datasetId: string;
+};
+
+/** A retry of the same file keeps the dataset the first upload created. */
+export function rememberedDatasetId(
+  remembered: RememberedUpload | null,
+  file: { name: string; size: number; lastModified: number }
+): string | null {
+  if (
+    !remembered ||
+    remembered.name !== file.name ||
+    remembered.size !== file.size ||
+    remembered.lastModified !== file.lastModified
+  ) {
+    return null;
+  }
+  return remembered.datasetId;
+}
+
 /** Same Content-Type must be signed on the presign and sent on the S3 PUT. */
 export function contentTypeForDatasetUpload(fileType?: string | null): string {
   const trimmed = (fileType || '').trim();
   return trimmed || 'application/octet-stream';
+}
+
+const GATEWAY_TIMEOUT = new Set([500, 502, 503, 504]);
+
+/** Poll only the finish status. Opening the dataset is a different route. */
+export async function waitForFinishedUpload(
+  datasetId: string,
+  token: string,
+  orgHeader: Record<string, string>,
+  onProgress?: (pct: number) => void,
+  attempts = 40,
+  delayMs = 2000
+): Promise<DatasetUploadResult | null> {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    if (delayMs) await new Promise(resolve => setTimeout(resolve, delayMs));
+    onProgress?.(Math.min(99, 92 + attempt));
+    const statusRes = await fetch(tensrApiUrl(`/datasets/${datasetId}/upload-status`), {
+      headers: { Authorization: `Bearer ${token}`, ...orgHeader },
+    }).catch(() => null);
+    if (!statusRes?.ok) continue;
+    const job = (await statusRes.json().catch(() => null)) as {
+      status?: string;
+      message?: string;
+    } | null;
+    if (job?.status === 'failed') {
+      throw new Error(job.message || 'The file could not be prepared.');
+    }
+    if (job?.status === 'ready') {
+      onProgress?.(100);
+      return { dataset_id: datasetId };
+    }
+  }
+  return null;
 }
 
 /** Presigned S3 upload when bucket is configured; direct POST for local dev only. */
@@ -66,7 +123,9 @@ export async function uploadDatasetFile(
     throw new Error('Session expired');
   }
   if (!uploadUrlRes.ok) {
-    throw new Error(await uploadUrlRes.text());
+    throw new Error(
+      formatApiErrorMessage(new ApiRequestError(uploadUrlRes.status, await uploadUrlRes.text()))
+    );
   }
 
   const presign = (await uploadUrlRes.json()) as {
@@ -120,8 +179,21 @@ export async function uploadDatasetFile(
     if (handleUnauthorizedResponse(completeRes)) {
       throw new Error('Session expired');
     }
-    if (!completeRes.ok) {
-      throw new Error(await completeRes.text());
+    if (completeRes.status === 202 || !completeRes.ok) {
+      const bodyText = completeRes.status === 202 ? '' : await completeRes.text();
+      if (completeRes.status === 202 || GATEWAY_TIMEOUT.has(completeRes.status)) {
+        const stored = await waitForFinishedUpload(
+          presign.dataset_id,
+          token,
+          orgHeader,
+          onProgress
+        );
+        if (stored) return stored;
+      }
+      if (completeRes.status === 202) {
+        throw new Error('The file is still being prepared. Try again in a moment.');
+      }
+      throw new Error(formatApiErrorMessage(new ApiRequestError(completeRes.status, bodyText)));
     }
     const body = (await completeRes.json()) as DatasetUploadResult;
     if (!body.dataset_id) {
@@ -155,7 +227,9 @@ export async function uploadDatasetFile(
           reject(new Error('Invalid response from server'));
         }
       } else {
-        reject(new Error(xhr.responseText || `Upload failed (${xhr.status})`));
+        reject(
+          new Error(formatApiErrorMessage(new ApiRequestError(xhr.status, xhr.responseText || '')))
+        );
       }
     });
     xhr.addEventListener('error', () =>

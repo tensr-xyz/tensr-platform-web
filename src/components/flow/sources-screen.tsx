@@ -33,7 +33,19 @@ export type SourceFile = {
   parent_dataset_id?: string | null;
   lineage_label?: string | null;
   source_filenames?: string[] | null;
+  origin_dataset_id?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 };
+
+/** Newest version first. The list is every version of one upload, not only the latest edit. */
+export function orderedVersionGroup(files: SourceFile[]): SourceFile[] {
+  return [...files].sort((left, right) =>
+    String(right.updated_at || right.created_at || '').localeCompare(
+      String(left.updated_at || left.created_at || '')
+    )
+  );
+}
 
 export type ContextDoc = {
   id: string;
@@ -51,6 +63,37 @@ const CONTEXT_KINDS = [
 export function sourceFileName(file: SourceFile): string {
   if (file.parent_dataset_id && file.lineage_label) return file.lineage_label;
   return file.original_filename || file.dataset_id || file.id || 'File';
+}
+
+const VERSION_MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+export function versionWhen(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  return `${date.getDate()} ${VERSION_MONTHS[date.getMonth()]} ${hours}:${minutes}`;
+}
+
+export function sourceVersionTitle(file: SourceFile): string {
+  const name = sourceFileName(file);
+  if (!file.parent_dataset_id || /\d{1,2}:\d{2}/.test(name)) return name;
+  const stamp = versionWhen(file.updated_at || file.created_at);
+  return stamp ? `${name} · ${stamp}` : name;
 }
 
 export function sourceFileNote(file: SourceFile): string {
@@ -199,7 +242,7 @@ export function SourcesScreen({
     .filter((name, index, all) => all.indexOf(name) === index);
   const lineageGroups = new Map<string, SourceFile[]>();
   for (const file of versions) {
-    const key = file.parent_dataset_id || datasetRowId(file);
+    const key = file.origin_dataset_id || file.parent_dataset_id || datasetRowId(file);
     const group = lineageGroups.get(key) || [];
     group.push(file);
     lineageGroups.set(key, group);
@@ -219,7 +262,7 @@ export function SourcesScreen({
       <div key={id} className="sources-dataset" data-active={inUse}>
         <span className="sources-kind">{fileMark(sourceFileName(file))}</span>
         <span>
-          <span className="sources-file-name">{sourceFileName(file)}</span>
+          <span className="sources-file-name">{sourceVersionTitle(file)}</span>
           <span className="flow-muted">{note}</span>
         </span>
         <span className="flow-muted sources-rows">{sourceRowCount(file)}</span>
@@ -327,8 +370,9 @@ export function SourcesScreen({
           {lineageGroups.size ? (
             <div className="sources-datasets">
               {[...lineageGroups.entries()].map(([key, group]) => {
-                const newest = group[group.length - 1];
-                const older = group.slice(0, -1);
+                const ordered = orderedVersionGroup(group);
+                const newest = ordered[0];
+                const older = ordered.slice(1);
                 const openOlder = Boolean(olderOpen[key]);
                 return (
                   <div key={key}>

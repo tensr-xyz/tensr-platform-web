@@ -1727,10 +1727,43 @@ select.flow-input {
   flex: 1;
 }
 
+.analysis-result {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analysis-lead {
+  margin: 0;
+}
+
+.analysis-table h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+}
+
+.analysis-footnote {
+  margin: 0;
+}
+
+.analysis-fold ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+
+.analysis-script {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
 .chat-new {
   width: 100%;
   display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
   align-items: center;
+  justify-content: flex-start;
   gap: 8px;
   padding: 8px;
   border-radius: 8px;
@@ -2684,9 +2717,34 @@ select.flow-input {
   height: 30px;
   border: 0;
   border-radius: 15px;
-  background: var(--color-line);
+  background: var(--color-ink);
   color: white;
   cursor: pointer;
+}
+
+.chat-send:disabled {
+  background: var(--color-line);
+  cursor: default;
+}
+
+.column-menu {
+  position: fixed;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 4px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+}
+
+.column-menu button {
+  justify-content: flex-start;
+  padding: 6px 8px;
+  background: transparent;
+  border: 0;
+  text-align: left;
 }
 
 .output-head {
@@ -9377,8 +9435,8 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   gap: 14px;
 }
 
-.flow-rail button,
-.flow-rail a {
+.flow-side.flow-rail button,
+.flow-side.flow-rail a {
   width: 36px;
   height: 36px;
   display: grid;
@@ -9390,9 +9448,9 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   color: var(--color-muted);
 }
 
-.flow-rail button:hover,
-.flow-rail a:hover,
-.flow-rail [data-active='true'] {
+.flow-side.flow-rail button:hover,
+.flow-side.flow-rail a:hover,
+.flow-side.flow-rail [data-active='true'] {
   background: #ecece7;
 }
 
