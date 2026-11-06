@@ -1714,9 +1714,10 @@ select.flow-input {
   gap: 8px;
   align-items: center;
   margin-top: auto;
-  border: 1px solid var(--color-line);
+  border: 0;
   border-radius: 16px;
   padding: 10px 12px;
+  background: transparent;
 }
 
 .flow-composer .flow-text {
@@ -2175,12 +2176,25 @@ select.flow-input {
 }
 
 .chat-item {
+  display: block;
+  width: 100%;
   padding: 7px 8px;
   border-radius: 7px;
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
+  background: transparent;
+}
+
+.chat-item:hover {
+  background: var(--color-accent-soft);
+}
+
+.chat-item[data-active='true'] {
+  background: var(--color-accent-soft);
+  font-weight: 600;
 }
 
 .chat-column {

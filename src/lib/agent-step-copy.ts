@@ -11,6 +11,8 @@ const HIDDEN = new Set([
   'resume',
   'tool',
   'continuing',
+  'ask user',
+  'ask_user',
 ]);
 
 const FILLER =

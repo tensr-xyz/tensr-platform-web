@@ -2442,6 +2442,7 @@ function ChatScreen({
   const attachmentsRef = useRef<AgentLoopAttachment[]>([]);
   attachmentsRef.current = attachments;
   const sessionRef = useRef<string | null>(null);
+  const [openSessionId, setOpenSessionId] = useState<string | null>(null);
   const sentRef = useRef('');
   const answerRef = useRef('');
   const noteRef = useRef('');
@@ -2507,9 +2508,11 @@ function ChatScreen({
     });
   };
 
+  const sendingRef = useRef(false);
   const sendText = useCallback(
     async (text: string, nextMode: 'ask' | 'plan' | 'agent' = mode) => {
-      if (!text.trim() || status === 'Thinking…') return;
+      if (!text.trim() || status === 'Thinking…' || sendingRef.current) return;
+      sendingRef.current = true;
       const turnFiles = attachmentsRef.current;
       setPast(current =>
         archiveChatTurn(
@@ -2557,7 +2560,19 @@ function ChatScreen({
             setStatus(null);
           },
         });
-        if (result.session_id) sessionRef.current = result.session_id;
+        if (result.session_id) {
+          sessionRef.current = result.session_id;
+          rememberChat(result.session_id);
+          setSessions(current => {
+            const title = text.trim();
+            const row = {
+              session_id: result.session_id as string,
+              title: title.length > 80 ? `${title.slice(0, 77)}…` : title,
+            };
+            const rest = (current || []).filter(item => item.session_id !== row.session_id);
+            return [row, ...rest];
+          });
+        }
         setAnswer(result.answer_markdown || '');
         setPlan(result.status === 'awaiting_approval' ? result : null);
         setTurn(result.status === 'awaiting_approval' ? null : result);
@@ -2573,11 +2588,14 @@ function ChatScreen({
         setDownloads(downloadsFromToolResults(entries));
         if (result.status !== 'awaiting_approval') setAttachments([]);
         setStatus(null);
+        loadRail();
       } catch (err) {
         setStatus(err instanceof Error ? err.message : 'The reply did not finish. Ask again.');
+      } finally {
+        sendingRef.current = false;
       }
     },
-    [datasetId, mode, status]
+    [datasetId, mode, status, loadRail, chatProjectId]
   );
 
   useEffect(() => {
@@ -2722,8 +2740,22 @@ function ChatScreen({
     }
   };
 
+  const rememberChat = (sessionId: string | null) => {
+    if (!chatProjectId || typeof window === 'undefined') return;
+    const key = `tensr-open-chat:${chatProjectId}`;
+    if (sessionId) window.sessionStorage.setItem(key, sessionId);
+    else window.sessionStorage.removeItem(key);
+    setOpenSessionId(sessionId);
+    const url = new URL(window.location.href);
+    if (!url.pathname.endsWith('/chat')) return;
+    if (sessionId) url.searchParams.set('session', sessionId);
+    else url.searchParams.delete('session');
+    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
+  };
+
   const clearChat = () => {
     sessionRef.current = null;
+    rememberChat(null);
     setPast([]);
     setSent('');
     setAttachedNote('');
@@ -2741,26 +2773,50 @@ function ChatScreen({
 
   const openChat = (sessionId: string) => {
     if (!chatProjectId || !sessionId) return;
-    void flowJson<{ turns?: { user?: string; answer?: string }[] }>(
-      `/api/projects/${chatProjectId}/sessions/${sessionId}`
-    )
+    sessionRef.current = sessionId;
+    rememberChat(sessionId);
+    void flowJson<{
+      turns?: {
+        user?: string;
+        answer?: string;
+        tool_results?: AgentLoopResponse['tool_results'];
+      }[];
+    }>(`/api/projects/${chatProjectId}/sessions/${sessionId}`)
       .then(page => {
-        sessionRef.current = sessionId;
-        setPast(
-          (page.turns || []).flatMap(turn =>
-            turn.user ? [{ user: turn.user, note: '', answer: turn.answer || '' }] : []
-          )
+        const exchanges = (page.turns || []).flatMap(item =>
+          item.user
+            ? [
+                {
+                  user: item.user,
+                  note: '',
+                  answer: item.answer || '',
+                  toolResults: item.tool_results,
+                },
+              ]
+            : []
         );
-        setSent('');
+        const last = exchanges[exchanges.length - 1];
+        setPast(last ? exchanges.slice(0, -1) : exchanges);
+        setSent(last?.user || '');
         setAttachedNote('');
-        setAnswer('');
+        setAnswer(last?.answer || '');
         setQuestion('');
         setPlan(null);
-        setTurn(null);
+        setTurn(
+          last
+            ? {
+                status: 'ok',
+                mode: 'agent',
+                answer_markdown: last.answer,
+                session_id: sessionId,
+                tool_results: last.toolResults,
+              }
+            : null
+        );
         setSteps([]);
         setDownloads([]);
         setStatus(null);
-        setPanelOpen(false);
+        setPanelOpen(Boolean(last?.toolResults?.length));
       })
       .catch(() => setStatus('That chat could not be opened.'));
   };
@@ -2776,7 +2832,9 @@ function ChatScreen({
     if (outputReady) setPanelOpen(true);
   }, [outputReady]);
   useEffect(() => {
-    const sessionId = new URLSearchParams(window.location.search).get('session');
+    const fromUrl = new URLSearchParams(window.location.search).get('session');
+    const stored = window.sessionStorage.getItem(`tensr-open-chat:${chatProjectId}`);
+    const sessionId = fromUrl || stored;
     if (sessionId) openChat(sessionId);
     // The address is read once when this chat screen opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2830,6 +2888,7 @@ function ChatScreen({
               key={session.session_id}
               className="chat-item"
               type="button"
+              data-active={session.session_id === openSessionId}
               onClick={() => openChat(session.session_id)}
             >
               {chatTitle(session)}
@@ -2907,7 +2966,19 @@ function ChatScreen({
                       {turn.user}
                       {turn.note ? <div className="flow-muted">{turn.note}</div> : null}
                     </div>
-                    {turn.answer ? (
+                    {turn.toolResults?.length ? (
+                      <AnalysisResult
+                        lead={outputTakeaway(turn.answer)}
+                        tables={resultViewFromToolResults(turn.toolResults).tables}
+                        footnote={resultFootnote(
+                          resultViewFromToolResults(turn.toolResults),
+                          outputBaseNote(turn.answer),
+                          outputKind(turn.toolResults)
+                        )}
+                        checks={resultViewFromToolResults(turn.toolResults).checks}
+                        script={resultViewFromToolResults(turn.toolResults).script}
+                      />
+                    ) : turn.answer ? (
                       <FlowMarkdown className="chat-prose">
                         {answerWithoutBase(turn.answer)}
                       </FlowMarkdown>
@@ -3376,6 +3447,7 @@ function ResponsesScreen({
   const [tab, setTab] = useState<'sheet' | 'notebook' | 'evidence' | 'themes'>('sheet');
   const [columns, setColumns] = useState<FlowColumn[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
+  const [variableNames, setVariableNames] = useState<string[]>([]);
   const [preview, setPreview] = useState<unknown[][]>([]);
   const [pageOffset, setPageOffset] = useState(0);
   const [rowTotal, setRowTotal] = useState(0);
@@ -3390,6 +3462,7 @@ function ResponsesScreen({
   } | null>(null);
   const [colMenu, setColMenu] = useState<{
     name: string;
+    field: string;
     index: number;
     x: number;
     y: number;
@@ -3460,6 +3533,7 @@ function ResponsesScreen({
       flowJson<{
         rows?: unknown[][];
         headers?: string[];
+        variable_names?: string[];
         n_rows?: number;
         columns?: FlowColumn[];
       }>(
@@ -3472,6 +3546,7 @@ function ResponsesScreen({
         if (cancelled) return;
         setColumns(meta.columns || []);
         setHeaders(page.headers || []);
+        setVariableNames(page.variable_names || []);
         setPreview(page.rows || []);
         setRowTotal(page.n_rows || 0);
         setSheetPhase('ready');
@@ -3568,6 +3643,8 @@ function ResponsesScreen({
   };
   const columnMeta = (name: string) =>
     columns.find(column => column.name === name || column.label === name);
+  const fieldAt = (index: number, header: string) =>
+    variableNames[index] || columnMeta(header)?.name || header;
   const firstSubstantive = Math.max(
     0,
     shownCols.findIndex(
@@ -3606,11 +3683,22 @@ function ResponsesScreen({
           .includes(needle)
       );
     });
+  const sortToken = (cell: unknown, index: number) => {
+    const text = cell == null || cell === 'null' ? '' : String(cell);
+    const labels =
+      columnMeta(names[index] || '')?.value_labels ||
+      columnMeta(variableNames[index] || '')?.value_labels;
+    if (labels) {
+      const code = Object.entries(labels).find(([, label]) => label === text)?.[0];
+      if (code != null) return code;
+    }
+    return text;
+  };
   const orderedRows = !sortCol
     ? shownRows
     : [...shownRows].sort((left, right) => {
-        const compared = String(left.row[sortCol.index] ?? '').localeCompare(
-          String(right.row[sortCol.index] ?? ''),
+        const compared = sortToken(left.row[sortCol.index], sortCol.index).localeCompare(
+          sortToken(right.row[sortCol.index], sortCol.index),
           undefined,
           { numeric: true }
         );
@@ -4138,6 +4226,7 @@ function ResponsesScreen({
                                 event.preventDefault();
                                 setColMenu({
                                   name: column.name,
+                                  field: fieldAt(column.index, column.name),
                                   index: column.index,
                                   x: event.clientX,
                                   y: event.clientY,
@@ -4197,34 +4286,77 @@ function ResponsesScreen({
                                 className="sheet-cell"
                                 data-numeric={isNumberValue(row[column.index]) || undefined}
                                 data-active={columnMarked(column.name, column.index)}
-                                onDoubleClick={() =>
+                                onDoubleClick={() => {
+                                  const shown =
+                                    row[column.index] == null || row[column.index] === 'null'
+                                      ? ''
+                                      : String(row[column.index]);
+                                  const labels = columnMeta(column.name)?.value_labels;
+                                  const code =
+                                    labels &&
+                                    Object.entries(labels).find(
+                                      ([, label]) => label === shown
+                                    )?.[0];
                                   setEditingCell({
                                     index,
                                     column: column.name,
-                                    value:
-                                      row[column.index] == null || row[column.index] === 'null'
-                                        ? ''
-                                        : String(row[column.index]),
-                                  })
-                                }
+                                    value: code ?? shown,
+                                  });
+                                }}
                               >
                                 {editingCell &&
                                 editingCell.index === index &&
                                 editingCell.column === column.name ? (
-                                  <Input
-                                    aria-label={`Edit ${column.name}`}
-                                    value={editingCell.value}
-                                    autoFocus
-                                    onChange={event =>
-                                      setEditingCell({ ...editingCell, value: event.target.value })
-                                    }
-                                    onKeyDown={event => {
-                                      if (event.key === 'Enter')
-                                        saveCell(column.name, index, editingCell.value);
-                                      if (event.key === 'Escape') setEditingCell(null);
-                                    }}
-                                    onBlur={() => saveCell(column.name, index, editingCell.value)}
-                                  />
+                                  columnMeta(column.name)?.value_labels &&
+                                  Object.keys(columnMeta(column.name)?.value_labels || {})
+                                    .length ? (
+                                    <select
+                                      aria-label={`Edit ${column.name}`}
+                                      value={editingCell.value}
+                                      autoFocus
+                                      onChange={event => {
+                                        const next = event.target.value;
+                                        setEditingCell({ ...editingCell, value: next });
+                                        saveCell(fieldAt(column.index, column.name), index, next);
+                                      }}
+                                    >
+                                      {Object.entries(
+                                        columnMeta(column.name)?.value_labels || {}
+                                      ).map(([code, label]) => (
+                                        <option key={code} value={code}>
+                                          {label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  ) : (
+                                    <Input
+                                      aria-label={`Edit ${column.name}`}
+                                      value={editingCell.value}
+                                      autoFocus
+                                      onChange={event =>
+                                        setEditingCell({
+                                          ...editingCell,
+                                          value: event.target.value,
+                                        })
+                                      }
+                                      onKeyDown={event => {
+                                        if (event.key === 'Enter')
+                                          saveCell(
+                                            fieldAt(column.index, column.name),
+                                            index,
+                                            editingCell.value
+                                          );
+                                        if (event.key === 'Escape') setEditingCell(null);
+                                      }}
+                                      onBlur={() =>
+                                        saveCell(
+                                          fieldAt(column.index, column.name),
+                                          index,
+                                          editingCell.value
+                                        )
+                                      }
+                                    />
+                                  )
                                 ) : row[column.index] == null || row[column.index] === 'null' ? (
                                   ''
                                 ) : (
@@ -4281,7 +4413,7 @@ function ResponsesScreen({
                       reviseColumn(
                         'recode',
                         {
-                          source_column: colMenu.name,
+                          source_column: colMenu.field,
                           mappings: [{ from_value: from, to_value: to }],
                           replace_existing: true,
                           unmapped_policy: 'copy',
@@ -4316,7 +4448,7 @@ function ResponsesScreen({
                       setColMenu(null);
                       void flowJson(`/datasets/${datasetId}/metadata`, {
                         method: 'PUT',
-                        body: JSON.stringify({ columns: { [colMenu.name]: { measure } } }),
+                        body: JSON.stringify({ columns: { [colMenu.field]: { measure } } }),
                       })
                         .then(() => setSheetNote('Measure level saved.'))
                         .catch(err =>
@@ -4336,7 +4468,7 @@ function ResponsesScreen({
                       setColMenu(null);
                       void flowJson(`/datasets/${datasetId}/metadata`, {
                         method: 'PUT',
-                        body: JSON.stringify({ columns: { [colMenu.name]: { label } } }),
+                        body: JSON.stringify({ columns: { [colMenu.field]: { label } } }),
                       })
                         .then(() => setSheetNote('Label saved.'))
                         .catch(err =>
@@ -4353,7 +4485,7 @@ function ResponsesScreen({
                     onClick={() => {
                       if (project)
                         router.push(
-                          `/flow/p/${project.id}/tables?banner=${encodeURIComponent(colMenu.name)}`
+                          `/flow/p/${project.id}/tables?banner=${encodeURIComponent(colMenu.field)}`
                         );
                       setColMenu(null);
                     }}
@@ -4365,7 +4497,7 @@ function ResponsesScreen({
                     onClick={() => {
                       if (project)
                         router.push(
-                          `/flow/p/${project.id}/tables?stub=${encodeURIComponent(colMenu.name)}`
+                          `/flow/p/${project.id}/tables?stub=${encodeURIComponent(colMenu.field)}`
                         );
                       setColMenu(null);
                     }}
@@ -4386,7 +4518,7 @@ function ResponsesScreen({
                     onClick={() =>
                       reviseColumn(
                         'drop-column',
-                        { column: colMenu.name },
+                        { column: colMenu.field },
                         'Column removed in a new version.'
                       )
                     }

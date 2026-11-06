@@ -2,6 +2,7 @@ import {
   datasetFileLabel,
   defaultTableWeight,
   savedTableMatches,
+  tablePickerColumns,
 } from '@/components/flow/survey-screens';
 
 const FILES = [
@@ -35,6 +36,38 @@ describe('table screen defaults', () => {
     expect(defaultTableWeight('raked', ['raked', 'other'])).toBe('raked');
     expect(defaultTableWeight('_weight', ['raked'])).toBe('raked');
     expect(defaultTableWeight('', ['raked'])).toBe('');
+  });
+
+  it('leaves ids, open text, and weights out of the stub list', () => {
+    const columns = [
+      { name: 'respondent_id', label: 'Respondent', labels: {}, type: 'id' },
+      { name: 'note', label: 'Comment', labels: {}, type: 'text' },
+      { name: 'design_w', label: 'Design weight', labels: {}, type: 'numeric', role: 'weight' },
+      {
+        name: 'q_region',
+        label: 'Region',
+        labels: { '1': 'North', '2': 'South' },
+        type: 'numeric',
+      },
+      { name: 'q_score', label: 'Score', labels: {}, type: 'numeric' },
+      { name: 'q_brand', label: 'Brand', labels: { a: 'One', b: 'Two' }, type: 'string' },
+      { name: 'q_time', label: 'Time', labels: {}, type: 'numeric' },
+      { name: 'q_site', label: 'Site', labels: { x: 'East' }, type: 'string' },
+      { name: 'q_wave', label: 'Wave', labels: {}, type: 'numeric' },
+      { name: 'q_item', label: 'Item', labels: { y: 'Yes' }, type: 'string' },
+      { name: '_row_uid', label: 'Row', labels: {}, type: 'id' },
+      { name: 'comment_2', label: 'Another comment', labels: {}, type: 'string' },
+    ];
+    const names = tablePickerColumns(columns, ['design_w']).map(column => column.name);
+    expect(names).toEqual([
+      'q_region',
+      'q_score',
+      'q_brand',
+      'q_time',
+      'q_site',
+      'q_wave',
+      'q_item',
+    ]);
   });
 
   it('keeps Save until the table is in the saved list', () => {
