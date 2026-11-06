@@ -13,6 +13,7 @@ import {
   agentHistory,
   agentReplyText,
   tableBodyFromAgentBook,
+  columnChoiceLabel,
   tableWeightChoices,
   themeRows,
   weightOptionLabel,
@@ -24,6 +25,15 @@ describe('QA round 6', () => {
     expect(rakeOutputColumn(['id', 'region'])).toBe('weight');
     expect(rakeOutputColumn(['id', 'Weight'])).toBe('rake_weight');
     expect(rakeOutputColumn(['weight', 'rake_weight', 'weight_2'])).toBe('weight_3');
+  });
+
+  test('a question named like its variable stays the question, not a category', () => {
+    expect(
+      columnChoiceLabel({
+        name: 'region',
+        label: 'Region',
+      })
+    ).toBe('Region');
   });
 
   test('4: weight menu has no _weight copy, no duplicates, no "Weight Weight"', () => {

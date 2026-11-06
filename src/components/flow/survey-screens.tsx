@@ -1384,23 +1384,10 @@ export function weightOptionLabel(name: string, label: string): string {
   return clean;
 }
 
-/** A stored label that is only the variable name gives way to a value phrase. */
-export function columnChoiceLabel(column: {
-  name: string;
-  label: string;
-  labels?: Record<string, string>;
-}): string {
+/** The question. A category such as Midlands is not the question's name. */
+export function columnChoiceLabel(column: { name: string; label: string }): string {
   const label = column.label.trim();
-  const slug = column.name.replaceAll('_', ' ').trim();
-  const named =
-    label &&
-    label.toLowerCase() !== column.name.toLowerCase() &&
-    label.toLowerCase() !== slug.toLowerCase();
-  if (named) return label;
-  const phrase = Object.values(column.labels || {}).find(
-    text => text.trim().length > Math.max(label.length, slug.length)
-  );
-  return phrase?.trim() || label || column.name;
+  return label || column.name;
 }
 
 function bannerNames(spec: { banners?: { column?: string; columns?: string[] }[] } | undefined) {
