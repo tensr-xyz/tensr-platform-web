@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
 import { analysisDisplayName } from '@/lib/analysis-definitions';
 import { OutputPage } from '@/components/flow/output-page';
+import { AnalysisHistory } from '@/components/organisms/analysis-history';
 import {
   cachedReportRuns,
   pinsFromRuns,
@@ -387,8 +388,8 @@ export function ReportOutputs({
               <span>{item.count}</span>
             </Button>
           ))}
-          <p className="outputs-label">Ran from</p>
-          <p className="outputs-soon">Agent chat, dialogs, notebook and ⌘K · filters coming soon</p>
+          <p className="outputs-label">Earlier runs</p>
+          {files[0]?.id ? <AnalysisHistory projectId={files[0].id} /> : null}
           <span className="sheet-spacer" />
           <div className="outputs-howto">
             <strong>How outputs work</strong>

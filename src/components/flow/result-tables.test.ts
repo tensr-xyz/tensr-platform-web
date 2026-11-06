@@ -85,6 +85,8 @@ describe('result tables', () => {
     const views = payloads.map(payload => resultViewFromToolResults(payload));
     expect(views.filter(view => view.tables.length || view.filter || view.weight)).toHaveLength(12);
     expect(views[0].tables[0].rows[0][0]).toBe('North');
+    expect(views[0].tables[0].columns[0]).toBe('');
+    expect(views[0].tables[0].columns[1]).toBe('Frequency');
     expect(views[1].tables[0].columns).toEqual(['Theme', 'Count', '%', 'Example']);
     expect(views[2].tables[0].title).toBe('Group means');
     expect(views[3].tables[0].columns).toContain('Achieved %');

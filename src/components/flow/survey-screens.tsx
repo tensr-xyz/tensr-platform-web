@@ -2176,6 +2176,7 @@ export function TablesBuilder({
             projectId && datasetId && book?.run_id
               ? () => {
                   const runId = String(book.run_id);
+                  const series = chartSeriesFromBook(book);
                   void savePin(projectId, datasetId, {
                     id: runId,
                     runId,
@@ -2187,6 +2188,12 @@ export function TablesBuilder({
                     deck: true,
                     topline: true,
                     keepLive: true,
+                    bars: series.flatMap(row =>
+                      row.values.map(item => ({
+                        label: row.values.length > 1 ? `${row.label} · ${item.name}` : row.label,
+                        percent: item.value,
+                      }))
+                    ),
                   });
                 }
               : undefined

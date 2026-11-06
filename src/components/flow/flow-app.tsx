@@ -5657,6 +5657,24 @@ function ReportScreen({
                         <p className="flow-muted">{pin.citation}</p>
                         <h3>{pin.headline}</h3>
                         {pin.support ? <p>{pin.support}</p> : null}
+                        {pin.bars?.length ? (
+                          <div className="report-bars">
+                            {pin.bars.map(bar => (
+                              <div key={`${pin.id}-${bar.label}`}>
+                                <div className="report-bar-label">
+                                  <span>{bar.label}</span>
+                                  <span>{bar.percent.toFixed(1)}%</span>
+                                </div>
+                                <div className="report-bar-track">
+                                  <div
+                                    className="report-bar"
+                                    style={{ width: `${Math.max(0, Math.min(100, bar.percent))}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </article>
                   );

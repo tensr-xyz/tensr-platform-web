@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 /** Bars from the same cells the table shows. One group of bars per row. */
@@ -14,6 +15,7 @@ export function TableBars({
 }) {
   const peak = Math.max(1, ...series.flatMap(row => row.values.map(item => item.value)));
   const grouped = series.some(row => row.values.length > 1);
+  const [added, setAdded] = useState(false);
   return (
     <section className="tables-main">
       <div className="tables-tools">
@@ -21,8 +23,15 @@ export function TableBars({
           Table
         </Button>
         {onAddToReport ? (
-          <Button className="flow-btn" type="button" onClick={onAddToReport}>
-            Add chart to report
+          <Button
+            className="flow-btn"
+            type="button"
+            onClick={() => {
+              onAddToReport?.();
+              setAdded(true);
+            }}
+          >
+            {added ? 'In report' : 'Add chart to report'}
           </Button>
         ) : null}
       </div>

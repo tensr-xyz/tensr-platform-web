@@ -14,6 +14,7 @@ type ServerPin = {
   deck?: boolean;
   topline?: boolean;
   keep_live?: boolean;
+  bars?: { label?: string; percent?: number }[];
 };
 
 export type RunSummary = {
@@ -61,6 +62,11 @@ export function pinsFromRuns(runs: RunSummary[]): ReportPin[] {
         deck: pin.deck !== false,
         topline: pin.topline !== false,
         keepLive: pin.keep_live !== false,
+        bars: Array.isArray(pin.bars)
+          ? pin.bars
+              .filter(bar => bar && typeof bar.label === 'string')
+              .map(bar => ({ label: String(bar.label), percent: Number(bar.percent) || 0 }))
+          : [],
       };
     });
 }
@@ -105,6 +111,7 @@ function serverBody(pin: ReportPin): ServerPin {
     deck: pin.deck,
     topline: pin.topline,
     keep_live: pin.keepLive,
+    bars: (pin.bars || []).map(bar => ({ label: bar.label, percent: bar.percent })),
   };
 }
 

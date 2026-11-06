@@ -2189,10 +2189,11 @@ select.flow-input {
 }
 
 .chat-item:hover {
-  background: var(--color-accent-soft);
+  background: var(--color-well);
 }
 
-.chat-item[data-active='true'] {
+.chat-item[data-active='true'],
+.chat-item[data-active='true']:hover {
   background: var(--color-accent-soft);
 }
 

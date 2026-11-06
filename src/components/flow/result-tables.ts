@@ -30,14 +30,14 @@ function cell(value: unknown): string {
 function asTable(value: unknown): RunTable | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as { title?: unknown; columns?: unknown; rows?: unknown };
-  const columns = Array.isArray(record.columns) ? record.columns.map(cell).filter(Boolean) : [];
+  const columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
   const rows = Array.isArray(record.rows)
     ? record.rows
         .filter(row => Array.isArray(row))
         .map(row => (row as unknown[]).map(cell))
         .filter(row => row.some(Boolean))
     : [];
-  if (columns.length < 2 || !rows.length) return null;
+  if (columns.filter(Boolean).length < 2 || !rows.length) return null;
   return { title: cell(record.title) || 'Table', columns, rows };
 }
 
