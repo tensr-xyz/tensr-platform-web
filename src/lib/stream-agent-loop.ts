@@ -17,6 +17,10 @@ export type AgentLoopStreamHandlers = {
   onProgress?: (progress: AgentLoopStreamProgress) => void;
   onDelta?: (text: string) => void;
   onReplace?: (text: string) => void;
+  onPreview?: (preview: {
+    text?: string;
+    tool_results?: AgentLoopResponse['tool_results'];
+  }) => void;
   signal?: AbortSignal;
 };
 
@@ -75,11 +79,18 @@ function processSseLine(
     text?: string;
     status?: string;
     replace?: boolean;
+    tool_results?: AgentLoopResponse['tool_results'];
     response?: AgentLoopResponse;
   };
   try {
     payload = JSON.parse(jsonStr);
   } catch {
+    return;
+  }
+
+  if (payload.type === 'preview') {
+    handlers.onPreview?.({ text: payload.text, tool_results: payload.tool_results });
+    if (payload.text) handlers.onReplace?.(payload.text);
     return;
   }
 

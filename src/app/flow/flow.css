@@ -2406,6 +2406,50 @@ select.flow-input {
   gap: 14px;
 }
 
+.table-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.table-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.table-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.table-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-chart-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.table-chart-svg {
+  width: 100%;
+  height: auto;
+}
+
+.table-chart-value,
+.table-chart-label {
+  fill: var(--color-ink);
+  font-size: 11px;
+}
+
 .table-bars {
   display: flex;
   flex-direction: column;

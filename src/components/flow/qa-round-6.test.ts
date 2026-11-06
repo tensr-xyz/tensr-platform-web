@@ -32,8 +32,9 @@ describe('QA round 6', () => {
     ).toEqual(['rake_weight', 'weight']);
     expect(weightOptionLabel('weight', 'Weight')).toBe('weight');
     expect(weightOptionLabel('rake_weight', 'Survey weight, raked to targets.csv')).toBe(
-      'rake_weight · Survey weight, raked to targets.csv'
+      'Survey weight, raked to targets.csv'
     );
+    expect(weightOptionLabel('design_weight', 'Design weight')).toBe('Design weight');
   });
 
   test('3: an answer to the agent question carries the earlier turns', () => {

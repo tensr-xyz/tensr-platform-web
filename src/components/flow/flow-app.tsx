@@ -151,6 +151,7 @@ import {
   findingFromOverview,
   findingFromTable,
   reportTableFromBook,
+  titledWithQuestions,
   segmentChoices,
   valueRows,
   type ReportFinding,
@@ -2588,6 +2589,25 @@ function ChatScreen({
             draft = next;
             setAnswer(next);
             setStatus(null);
+            publish({ answer: next, status: null });
+          },
+          onPreview: preview => {
+            const text = preview.text || draft;
+            if (text) {
+              draft = text;
+              setAnswer(text);
+            }
+            setStatus(null);
+            if (preview.tool_results?.length) {
+              setTurn({
+                status: 'ok',
+                mode: nextMode,
+                answer_markdown: text,
+                session_id: sessionRef.current || undefined,
+                tool_results: preview.tool_results,
+              });
+            }
+            publish({ answer: text, status: null });
           },
         });
         if (result.session_id) {
@@ -5042,9 +5062,17 @@ function ReportScreen({
           return;
         }
         const meta = await flowJson<{
-          columns?: { name?: string; value_labels?: Record<string, string> | null }[];
+          columns?: {
+            name?: string;
+            label?: string;
+            value_labels?: Record<string, string> | null;
+          }[];
         }>(`/datasets/${datasetId}/metadata`).catch(() => ({ columns: [] }));
         if (!live) return;
+        const questions = (meta.columns || []).map(column => ({
+          name: column.name || '',
+          label: column.label || '',
+        }));
         const labels = Object.fromEntries(
           (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
         );
@@ -5094,7 +5122,8 @@ function ReportScreen({
         if (!live) return;
         const ready = settled.ready.map(({ row, detail }) => {
           const note = tableFileNote(row, datasetId);
-          const label = note ? `${row.label} (${note})` : row.label;
+          const named = titledWithQuestions(row.label, questions);
+          const label = note ? `${named} (${note})` : named;
           const spec = (detail.spec as Record<string, unknown>) || {};
           return {
             id: row.id,
@@ -5105,13 +5134,15 @@ function ReportScreen({
             table: reportTableFromBook(row.id, label, row.number, detail, labels),
           };
         });
+        const usedNumbers = ready.map(row => row.number).filter(number => number > 0);
+        const numberShift = usedNumbers.length ? Math.min(...usedNumbers) - 1 : 0;
         setSpecs(
           ready.map(row => ({
             id: row.id,
             label: row.label,
             spec: row.spec,
             datasetId: row.datasetId,
-            number: row.number,
+            number: row.number > 0 ? row.number - numberShift : row.number,
           }))
         );
         setPicked(ready.map(row => row.id));
@@ -5127,10 +5158,15 @@ function ReportScreen({
           }));
         setStaleTables(current => uniqueStale([...current, ...refused, ...settled.stale]));
         const nextTables = distinctTables(ready.map(row => row.table));
-        setTables(nextTables);
+        const numbered = numberShift
+          ? nextTables.map(table =>
+              table.index > 0 ? { ...table, index: table.index - numberShift } : table
+            )
+          : nextTables;
+        setTables(numbered);
         setSegmentId(null);
         setRowCut(null);
-        writeFindings(nextTables, null, null);
+        writeFindings(numbered, null, null);
         setPhase('ready');
       })
       .catch(err => {
@@ -5206,6 +5242,9 @@ function ReportScreen({
         method: 'POST',
         body: JSON.stringify({
           spec_ids: selected.map(row => row.id),
+          headlines: findings
+            .filter(finding => finding.headline)
+            .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
           ...(template ? { template_base64: template } : {}),
         }),
       }

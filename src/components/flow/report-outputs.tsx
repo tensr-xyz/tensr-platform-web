@@ -8,7 +8,6 @@ import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
 import { analysisDisplayName } from '@/lib/analysis-definitions';
 import { OutputPage } from '@/components/flow/output-page';
-import { AnalysisHistory } from '@/components/organisms/analysis-history';
 import {
   cachedReportRuns,
   pinsFromRuns,
@@ -154,7 +153,7 @@ export function ReportOutputs({
     )
       .then(overview => {
         if (!live) return;
-        if (overview?.ok && Array.isArray(overview.runs)) {
+        if (overview?.ok && Array.isArray(overview.runs) && overview.runs.length) {
           const next = uniqueRuns(outputRuns(overview.runs)).sort((left, right) =>
             right.created_at.localeCompare(left.created_at)
           );
@@ -243,7 +242,19 @@ export function ReportOutputs({
     }
     return order.map(label => ({ label, runs: buckets.get(label) || [] }));
   }, [visible]);
-  const selected = runs.find(run => run.id === selectedId) || null;
+  const selected =
+    runs.find(run => run.id === selectedId) ||
+    (opened && selectedId && detail
+      ? {
+          id: selectedId,
+          title: String(detail.title || detail.op || 'Analysis'),
+          op: String(detail.op || detail.analysis_type || ''),
+          created_at: String(detail.created_at || ''),
+          status: String(detail.status || 'complete'),
+          file: String(detail.dataset_id || ''),
+          datasetId: String(detail.dataset_id || ''),
+        }
+      : null);
   const base = detail ? baseCount(detail) : null;
   const summary = detail ? summaryText(detail) : '';
   const metrics = detail ? metricLines(detail) : [];
@@ -388,8 +399,6 @@ export function ReportOutputs({
               <span>{item.count}</span>
             </Button>
           ))}
-          <p className="outputs-label">Earlier runs</p>
-          {files[0]?.id ? <AnalysisHistory projectId={files[0].id} /> : null}
           <span className="sheet-spacer" />
           <div className="outputs-howto">
             <strong>How outputs work</strong>

@@ -23,6 +23,7 @@ export type ReportTable = {
   letters: SigLetter[];
   tested: boolean;
   key?: string;
+  decimals?: number;
 };
 
 export type ValueLabels = Record<string, Record<string, string> | null | undefined>;
@@ -68,6 +69,25 @@ export type ReportFinding = {
 
 type NumberedRow = { row: BannerRow; number: number };
 
+/** Replace variable names in a title with the question label. */
+export function titledWithQuestions(
+  title: string,
+  columns: { name?: string; label?: string }[]
+): string {
+  let next = title;
+  const sorted = [...columns].sort(
+    (left, right) => (right.name || '').length - (left.name || '').length
+  );
+  for (const column of sorted) {
+    const name = column.name || '';
+    const label = (column.label || '').trim();
+    if (!name || !label || label.toLowerCase() === name.toLowerCase()) continue;
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    next = next.replace(new RegExp(`(?<![\\w])${escaped}(?![\\w])`, 'g'), label);
+  }
+  return next;
+}
+
 export function reportTableFromBook(
   id: string,
   label: string,
@@ -105,6 +125,8 @@ export function reportTableFromBook(
     };
   });
   const banners = [...byColumn.keys()].sort();
+  const decimals = book.spec as { decimals?: Record<string, number> } | undefined;
+  const places = Object.values(decimals?.decimals || {}).find(value => typeof value === 'number');
   return {
     id,
     label,
@@ -114,6 +136,7 @@ export function reportTableFromBook(
     letters: (book.letters as SigLetter[]) || [],
     tested: significanceTested(book),
     key: `${stub}|${banners.join(',')}`,
+    ...(typeof places === 'number' ? { decimals: places } : {}),
   };
 }
 
@@ -188,8 +211,9 @@ type Gap = {
   low: number;
 };
 
-function shown(percent: number): string {
-  return `${percent.toFixed(1).replace(/\.0$/, '')}%`;
+function shown(percent: number, places = 1): string {
+  const text = percent.toFixed(places);
+  return `${places > 0 ? text.replace(/\.0+$/, '') : text}%`;
 }
 
 function columnForLetter(table: ReportTable, letter: string): BannerColumn | undefined {
@@ -252,6 +276,8 @@ export function notableFinding(
 ): { headline: string; support: string; lead: NumberedRow | null; significant: boolean } {
   const columns = visibleColumns(table, segmentId);
   const rows = candidateRows(table, rowCut);
+  const places = table.decimals ?? 1;
+  const format = (percent: number) => shown(percent, places);
   const gaps = significantGaps(table, rows, columns);
   if (gaps.length) {
     const gap = gaps[0];
@@ -261,7 +287,7 @@ export function notableFinding(
       item => item !== gap && !/^not /i.test(String(item.row.row.label || ''))
     ).length;
     return {
-      headline: `${label}: ${shown(gap.high)} among ${bannerHeading(gap.host)} vs ${shown(gap.low)} among ${bannerHeading(gap.source)}.`,
+      headline: `${label}: ${format(gap.high)} among ${bannerHeading(gap.host)} vs ${format(gap.low)} among ${bannerHeading(gap.source)}.`,
       support:
         `That ${points}-point gap is significant at 95%.` +
         (others
@@ -283,7 +309,7 @@ export function notableFinding(
     const top = sorted[0];
     const bottom = sorted[sorted.length - 1];
     return {
-      headline: `${label} is highest in ${bannerHeading(top.column)} at ${shown(top.percent)} and lowest in ${bannerHeading(bottom.column)} at ${shown(bottom.percent)}.`,
+      headline: `${label} is highest in ${bannerHeading(top.column)} at ${format(top.percent)} and lowest in ${bannerHeading(bottom.column)} at ${format(bottom.percent)}.`,
       support: table.tested ? 'None of the differences between columns is significant at 95%.' : '',
       lead,
       significant: false,
@@ -294,8 +320,8 @@ export function notableFinding(
   return {
     headline: only
       ? net
-        ? `${label} is ${shown(only.percent)}${where}.`
-        : `${label} is the largest answer${where}, at ${shown(only.percent)}.`
+        ? `${label} is ${format(only.percent)}${where}.`
+        : `${label} is the largest answer${where}, at ${format(only.percent)}.`
       : table.label,
     support: '',
     lead,
