@@ -11,6 +11,7 @@ import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
+import { loadOutputPreferences, saveOutputPreferences } from '@/lib/output-preferences';
 import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
 import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
 import {
@@ -313,7 +314,12 @@ export function BannerGrid({
                             onSelectCell(selected);
                           }}
                         >
-                          {cellFigure(cell, figure, digits, weighted)}
+                          {cellFigure(
+                            cell,
+                            row.kind === 'mean' || row.kind === 'sd' ? 'mean' : figure,
+                            digits,
+                            weighted
+                          )}
                           {markLowBase && cell?.low_base ? ' *' : ''}
                           {letter ? <span className="grid-letter"> {letter}</span> : null}
                         </Button>
@@ -1508,8 +1514,9 @@ export function TablesBuilder({
   const [stub, setStub] = useState('');
   const [banners, setBanners] = useState<string[]>([]);
   const [weight, setWeight] = useState('');
+  const activeWeightName = useRef('');
   const [statistic, setStatistic] = useState('column_proportion');
-  const [digits, setDigits] = useState(0);
+  const [digits, setDigits] = useState(() => loadOutputPreferences().decimalPlaces);
   const [lettersOn, setLettersOn] = useState(true);
   const [nest, setNest] = useState(false);
   const [lowBase, setLowBase] = useState(true);
@@ -1615,6 +1622,7 @@ export function TablesBuilder({
     }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         const choices = tableWeightChoices(meta.weight_columns, meta.active_weight_column || '');
+        activeWeightName.current = meta.active_weight_column || '';
         setWeightColumns(choices);
         // A saved table's weight wins. The file weight is only the default before one is open.
         const active = meta.active_weight_column || '';
@@ -1642,9 +1650,8 @@ export function TablesBuilder({
     const label = columns.find(column => column.name === name)?.label;
     return label && label !== name ? `${name} ${label}` : name;
   };
-  const figure = meanOn
-    ? 'mean'
-    : statistic === 'count'
+  const figure =
+    statistic === 'count'
       ? 'count'
       : statistic === 'row_proportion'
         ? 'row_percent'
@@ -1680,9 +1687,7 @@ export function TablesBuilder({
     setBottom2(storedNets.some(net => /^bottom 2 box$/i.test(String(net.label || ''))));
     const names = bannerNames(spec);
     if (names.length) setBanners(names);
-    setNest(
-      Boolean(spec?.nest_banners) || (spec?.banners || []).some(banner => Boolean(banner.nested))
-    );
+    setNest(Boolean(spec?.nest_banners));
     const decimals = spec?.decimals;
     if (decimals && typeof decimals === 'object') {
       const first = Object.values(decimals).find(value => typeof value === 'number');
@@ -1694,7 +1699,11 @@ export function TablesBuilder({
     if (savedWeight && typeof savedWeight === 'object' && 'column' in savedWeight) {
       weightFromTable.current = true;
       const column = String(savedWeight.column || '');
-      setWeight(!column || column === '_weight' ? '' : column);
+      if (!column) setWeight('');
+      else if (column === '_weight') {
+        const visible = activeWeightName.current;
+        setWeight(visible && visible !== '_weight' ? visible : '');
+      } else setWeight(column);
     }
     const id = String(spec?.id || '');
     if (id) {
@@ -1859,6 +1868,12 @@ export function TablesBuilder({
   useEffect(() => {
     loadingSaved.current = false;
   });
+  useEffect(() => {
+    if (!datasetId || !stub || !banners.length || book) return;
+    void runTable(false);
+    // The first preview runs once a stub and a banner are both set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId, stub, banners, book]);
 
   function matchesSaved(): boolean {
     const spec = currentSpec() as {
@@ -1970,7 +1985,7 @@ export function TablesBuilder({
       <aside className="tables-rail">
         <div className="tables-rail-head">
           <span>Tables</span>
-          <span>{specs.filter(spec => !spec.stale).length}</span>
+          <span>{specs.length}</span>
         </div>
         {!railReady ? (
           <div aria-busy="true">
@@ -1987,6 +2002,10 @@ export function TablesBuilder({
                 type="button"
                 data-active={id === specId}
                 onClick={() => {
+                  if (dirty) {
+                    setError('This table has unsaved changes. Save it before opening another.');
+                    return;
+                  }
                   if (spec.dataset_id && spec.dataset_id !== datasetId && onFile && !spec.stale) {
                     try {
                       window.sessionStorage.setItem(`tensr-open-table:${spec.dataset_id}`, id);
@@ -2056,6 +2075,7 @@ export function TablesBuilder({
           tables={specs.map(item => ({
             id: item.spec_id || item.id || '',
             label: item.label || item.name || '',
+            number: item.number,
           }))}
           onOpenTable={id => {
             setView('table');
@@ -2182,7 +2202,13 @@ export function TablesBuilder({
                 <Button
                   className="flow-btn"
                   type="button"
-                  onClick={() => setDigits(current => (current + 1) % 3)}
+                  onClick={() =>
+                    setDigits(current => {
+                      const next = (current + 1) % 7;
+                      saveOutputPreferences({ ...loadOutputPreferences(), decimalPlaces: next });
+                      return next;
+                    })
+                  }
                 >
                   {digits} dp
                 </Button>
@@ -2217,10 +2243,15 @@ export function TablesBuilder({
                   onValueChange={setWeight}
                   options={[
                     { value: '', label: 'Unweighted' },
-                    ...weightColumns.map(name => ({
-                      value: name,
-                      label: weightOptionLabel(name, labelFor(name)),
-                    })),
+                    ...weightColumns.map(name => {
+                      const label = labelFor(name);
+                      const shared = weightColumns.filter(other => labelFor(other) === label);
+                      return {
+                        value: name,
+                        label:
+                          shared.length > 1 ? `${label} · ${name}` : weightOptionLabel(name, label),
+                      };
+                    }),
                   ]}
                 />
                 <span className="flow-muted">Scale</span>
@@ -2374,6 +2405,7 @@ export function TablesBuilder({
                       Save table
                     </Button>
                   ) : null}
+                  {dirty ? <span className="flow-muted">Unsaved changes</span> : null}
                   <Button className="flow-btn" type="button" onClick={() => setView('chart')}>
                     Chart
                   </Button>
@@ -2388,9 +2420,11 @@ export function TablesBuilder({
                         setError('Save the table before exporting.');
                         return;
                       }
+                      const title = String(openSaved?.label || 'table');
+                      const filename = `${title.replace(/[^\w.-]+/g, ' ').trim() || 'table'}.docx`;
                       void downloadExport(
                         `/datasets/${datasetId}/tables/${specId}/export.docx`,
-                        'table.docx'
+                        filename
                       ).catch(err =>
                         setError(err instanceof Error ? err.message : 'Could not export the table')
                       );
@@ -2478,7 +2512,13 @@ export function TablesBuilder({
                   />
                 </>
               ) : (
-                <p className="flow-muted">Choose a stub and save the table.</p>
+                <p className="flow-muted">
+                  {stub && banners.length
+                    ? 'Building the preview.'
+                    : stub
+                      ? 'Choose a banner to preview the table.'
+                      : 'Choose a stub to preview the table.'}
+                </p>
               )}
             </div>
             <div className="tables-foot">

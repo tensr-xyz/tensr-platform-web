@@ -1,3 +1,5 @@
+import { analysisDisplayName } from '@/lib/analysis-definitions';
+
 export type OutputRun = {
   id: string;
   title: string;
@@ -46,7 +48,7 @@ export function outputRuns(rows: unknown[]): OutputRun[] {
     const id = String(record.id || '');
     const op = String(record.op || '');
     if (!id || !op) continue;
-    const split = splitRunTitle(String(record.title || '').trim() || op.replaceAll('_', ' '));
+    const split = splitRunTitle(String(record.title || '').trim() || analysisDisplayName(op));
     const storedBase = typeof record.base_n === 'number' ? record.base_n : null;
     const weightedBase = typeof record.weighted_base === 'number' ? record.weighted_base : null;
     runs.push({
@@ -102,7 +104,16 @@ export function baseCount(run: Record<string, unknown>): number | null {
 }
 
 export function summaryText(run: Record<string, unknown>): string {
-  const report = run.report as { summary?: unknown } | undefined;
+  const report = run.report as
+    | { summary?: unknown; answer?: unknown; answer_from_result?: unknown }
+    | undefined;
+  if (
+    report?.answer_from_result === true &&
+    typeof report.answer === 'string' &&
+    report.answer.trim()
+  ) {
+    return report.answer.trim();
+  }
   return typeof report?.summary === 'string' ? report.summary.trim() : '';
 }
 

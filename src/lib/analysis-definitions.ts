@@ -1,10 +1,11 @@
 import type { AnalysisReport, DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
-import { schemaColumnSlotType } from '@/lib/analysis-column-types';
+import { isListedColumn, isWeightColumn, schemaColumnSlotType } from '@/lib/analysis-column-types';
 import { isIdColumn, type StarterColumn } from '@/lib/agent-starter-prompts';
 import { isIdColumn as isFlowIdColumn } from '@/lib/flow-columns';
 
 export type AnalysisKey =
   | 'descriptives'
+  | 'frequencies'
   | 'correlation'
   | 'ttest_independent'
   | 'ttest_paired'
@@ -94,8 +95,14 @@ export type AnalysisKey =
 
 export type KolmogorovTestType = 'normality' | 'two_sample';
 
+export function analysisDisplayName(op: string): string {
+  const known = ANALYSIS_LABELS[op as AnalysisKey];
+  return known || op.replace(/_/g, ' ');
+}
+
 export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
   descriptives: 'Descriptive statistics',
+  frequencies: 'Frequencies',
   correlation: 'Bivariate Correlations',
   ttest_independent: 'Independent-Samples T Test',
   ttest_paired: 'Paired-Samples T Test',
@@ -186,6 +193,7 @@ export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
 
 export const SPSS_MENU_PATHS: Record<AnalysisKey, string> = {
   descriptives: 'Analyze → Descriptive Statistics → Descriptives',
+  frequencies: 'Analyze → Descriptive Statistics → Frequencies',
   correlation: 'Analyze → Correlate → Bivariate',
   ttest_independent: 'Analyze → Compare Means → Independent-Samples T Test',
   ttest_paired: 'Analyze → Compare Means → Paired-Samples T Test',
@@ -294,6 +302,7 @@ export const PALETTE_CATEGORY_TITLES: Record<PaletteCategoryId, string> = {
 
 export const ANALYSIS_PALETTE_CATEGORY: Record<AnalysisKey, PaletteCategoryId> = {
   descriptives: 'describe',
+  frequencies: 'frequencies',
   ttest_independent: 'compare',
   ttest_paired: 'compare',
   ttest_one_sample: 'compare',
@@ -765,6 +774,11 @@ function deriveBinaryPayload(form: AnalysisFormState): Record<string, unknown> {
   };
 }
 
+function requestedWeight(column: string): { weight_column: string } {
+  const name = column.trim();
+  return { weight_column: name || 'none' };
+}
+
 export function buildBodyFromForm(form: AnalysisFormState): Record<string, unknown> {
   const {
     analysis,
@@ -839,15 +853,14 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     openTextLexicon,
   } = form;
 
-  if (analysis === 'descriptives') {
+  if (analysis === 'descriptives' || analysis === 'frequencies') {
     const statistics = (Object.entries(descriptiveStats) as [DescriptiveStatKey, boolean][])
       .filter(([, on]) => on)
       .map(([key]) => key);
-    const weight = form.weightCol.trim();
     return {
       columns: selectedCols.length ? selectedCols : undefined,
       statistics: statistics.length ? statistics : undefined,
-      ...(weight ? { weight_column: weight } : {}),
+      ...requestedWeight(form.weightCol),
     };
   }
   if (analysis === 'correlation') {
@@ -871,6 +884,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       hypothesized_difference: Number(hypothesizedDifference) || 0,
       missing_values: anovaMissingValues,
       ...(gv.length === 2 ? { group_values: gv } : {}),
+      ...requestedWeight(form.weightCol),
     };
   }
   if (analysis === 'ttest_paired') {
@@ -899,6 +913,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       effect_size: anovaEffectSize,
       missing_values: anovaMissingValues,
       output_chart: anovaOutputChart,
+      ...requestedWeight(form.weightCol),
     };
   }
   if (analysis === 'mann_whitney_u') {
@@ -1037,6 +1052,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       residual_plots: regressionResidualPlots,
       collinearity_diagnostics: regressionCollinearity,
       ...(clusterByCol.trim() ? { cluster_by: clusterByCol } : {}),
+      weight: form.weightCol.trim() || 'none',
     };
   }
   if (analysis === 'stepwise_regression') {
@@ -1069,6 +1085,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       hosmer_lemeshow: logisticHosmerLemeshow,
       ...(clusterByCol.trim() ? { cluster_by: clusterByCol } : {}),
       ...deriveBinaryPayload(form),
+      ...requestedWeight(form.weightCol),
     };
   }
   if (analysis === 'banner_table') {
@@ -1114,6 +1131,7 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       include_phi: chiIncludePhi,
       include_cramers_v: chiIncludeCramersV,
       use_fishers_exact: false,
+      ...requestedWeight(form.weightCol),
     };
   }
   if (analysis === 'fishers_exact' || analysis === 'odds_ratio' || analysis === 'relative_risk') {
@@ -1562,13 +1580,19 @@ function isHighCardinalityNumeric(column: SchemaColumn, preview?: DatasetPreview
   return declaredNumeric(column) || valuesLookNumeric(column, preview);
 }
 
-/** Categorical columns for setup slots: distinct, not an id, not a high-cardinality numeric. */
+/** Categorical columns for setup slots: factors and short labelled codes, never a weight. */
 export function categoricalColumnNames(
   schema: SchemaColumn[],
   preview?: DatasetPreview | null
 ): string[] {
   return schema
     .filter(column => {
+      if (!isListedColumn(column) || isWeightColumn(column)) return false;
+      const measure = String(column.measure || '').toLowerCase();
+      if (measure === 'scale') return false;
+      if (measure === 'nominal' || measure === 'ordinal') {
+        return !isIdColumn(asStarterColumn(column, preview));
+      }
       if (declaredNumeric(column) || isHighCardinalityNumeric(column, preview)) return false;
       const slot = schemaColumnSlotType(column);
       if (slot !== 'categorical' && slot !== 'string') return false;
@@ -1666,7 +1690,9 @@ export function twoGroupColumnNames(
 ): string[] {
   const categorical = new Set(categoricalColumnNames(schema, preview));
   const candidates = schema.filter(
-    column => categorical.has(column.name) || columnLevelCount(column, preview) === 2
+    column =>
+      !isWeightColumn(column) &&
+      (categorical.has(column.name) || columnLevelCount(column, preview) === 2)
   );
   const usable = candidates.filter(column => !isIdLikeSchemaColumn(column, preview));
   const counts = usable.map(column => columnLevelCount(column, preview));
@@ -1677,15 +1703,17 @@ export function twoGroupColumnNames(
 }
 
 function numericColumnNames(schema: SchemaColumn[], preview?: DatasetPreview | null): string[] {
-  const usable = schema.filter(column => !isIdLikeSchemaColumn(column, preview));
-  const numeric = usable.filter(column => column.type === 'numeric').map(column => column.name);
-  if (numeric.length) return numeric;
-  // Integer storage types (int64, ...) without value labels are measures too. Never an id.
+  const usable = schema.filter(
+    column => isListedColumn(column) && !isIdLikeSchemaColumn(column, preview)
+  );
   return usable
-    .filter(
-      column =>
-        declaredNumeric(column) && !(column.value_labels && Object.keys(column.value_labels).length)
-    )
+    .filter(column => {
+      if (isWeightColumn(column)) return false;
+      const measure = String(column.measure || '').toLowerCase();
+      if (measure === 'nominal') return false;
+      if (measure === 'ordinal' || measure === 'scale') return true;
+      return column.type === 'numeric' || declaredNumeric(column);
+    })
     .map(column => column.name);
 }
 
@@ -2200,6 +2228,9 @@ export type AnalysisWizardMeta = {
 export const ANALYSIS_WIZARD_META: Record<AnalysisKey, AnalysisWizardMeta> = {
   descriptives: {
     summary: 'Summarize columns with counts, central tendency, spread, and extremes.',
+  },
+  frequencies: {
+    summary: 'Count each code and show its share of the base.',
   },
   correlation: {
     summary: 'Measure the strength and direction of relationships between numeric variables.',

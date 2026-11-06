@@ -1,7 +1,11 @@
 'use client';
 
 import type { ColumnSlotType } from '@/lib/analysis-column-types';
-import { columnSlotType, slotTypeMatchesExpected } from '@/lib/analysis-column-types';
+import {
+  columnHeading,
+  columnSlotType,
+  slotTypeMatchesExpected,
+} from '@/lib/analysis-column-types';
 import type { SchemaColumn } from '@/lib/analysis-report-types';
 import type { WizardFieldNotice } from '@/lib/analysis-setup-validation';
 import { Label } from '@/components/atoms/label';
@@ -46,8 +50,11 @@ export function ColumnSelect({
   emptyLabel?: string;
   id?: string;
 }) {
+  const chosen = value ? schema.find(column => column.name === value) : undefined;
   const actual = value ? columnSlotType(schema, value) : null;
-  const mismatch = !!expectedType && !!actual && !slotTypeMatchesExpected(actual, expectedType);
+  const mismatch =
+    !!expectedType && !!actual && !slotTypeMatchesExpected(actual, expectedType, chosen);
+  const chosenHeading = columnHeading(chosen, value);
 
   const mismatchError =
     mismatch && expectedType ? `This slot expects a ${expectedType} column.` : undefined;
@@ -67,7 +74,7 @@ export function ColumnSelect({
         >
           {value ? (
             <div className="flex min-w-0 w-full items-center justify-start gap-2 overflow-hidden text-left">
-              <span className="truncate text-sm">{value}</span>
+              <span className="truncate text-sm">{chosenHeading.primary}</span>
               {actual ? (
                 <SlotTypeBadge slot={actual} mismatch={mismatch} className="shrink-0" />
               ) : null}
@@ -81,11 +88,20 @@ export function ColumnSelect({
         <SelectContent className={SELECT_CONTENT_CLASS}>
           {allowEmpty ? <SelectItem value="__none__">{emptyLabel}</SelectItem> : null}
           {names.map(n => {
+            const column = schema.find(item => item.name === n);
             const slot = columnSlotType(schema, n);
+            const heading = columnHeading(column, n);
             return (
               <SelectItem key={n} value={n}>
                 <span className="flex w-full max-w-[280px] items-center justify-between gap-2">
-                  <span className="truncate">{n}</span>
+                  <span className="min-w-0">
+                    <span className="block truncate">{heading.primary}</span>
+                    {heading.secondary ? (
+                      <span className="block truncate text-[10px] text-muted-foreground">
+                        {heading.secondary}
+                      </span>
+                    ) : null}
+                  </span>
                   <SlotTypeBadge slot={slot} className="shrink-0" />
                 </span>
               </SelectItem>

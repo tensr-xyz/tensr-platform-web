@@ -239,6 +239,8 @@ function ReportTable({
   onCopy: () => void;
   emphasized?: boolean;
 }) {
+  const [showCounts, setShowCounts] = React.useState(false);
+  const rows = showCounts && table.count_rows?.length ? table.count_rows : table.rows;
   return (
     <div
       className={cn(
@@ -248,6 +250,17 @@ function ReportTable({
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2">
         <h4 className="text-[12.5px] font-medium text-foreground">{table.title}</h4>
+        {table.count_rows?.length ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="compact"
+            className="h-7 px-2 text-[11px] print:hidden"
+            onClick={() => setShowCounts(current => !current)}
+          >
+            {showCounts ? 'Column %' : 'Counts'}
+          </Button>
+        ) : null}
         <Button
           type="button"
           variant="ghost"
@@ -284,7 +297,7 @@ function ReportTable({
             </tr>
           </thead>
           <tbody>
-            {table.rows.map((row, ri) => (
+            {rows.map((row, ri) => (
               <tr
                 key={ri}
                 className={cn(
@@ -587,10 +600,9 @@ export function AnalysisReportView({
   const canReveal =
     canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
   const rowsUsedLabel = sourceRowsUsedLabel(report.exclusion_summary, report.meta.rows_dataset);
-  const nSubtitle = rowsUsedLabel;
   const isBannerTable = report.meta.analysis_key === 'banner_table';
-  const blockTitle = report.meta.subtitle?.trim() || report.meta.title;
-  const blockSubtitle = [canReveal ? null : nSubtitle].filter(Boolean).join(' · ') || undefined;
+  const blockTitle = report.answer?.trim() || report.meta.subtitle?.trim() || report.meta.title;
+  const blockSubtitle = undefined;
   const metaTestLabel =
     isBannerTable && report.meta.subtitle ? report.meta.subtitle : report.meta.title;
   const approachCopy = reportApproachCopy(report);
@@ -848,6 +860,13 @@ export function AnalysisReportView({
           ))
         ) : (
           <>
+            {report.answer ? (
+              <div id="report-section-answer" className="scroll-mt-24">
+                <InterpretationBlock>
+                  <p>{report.answer}</p>
+                </InterpretationBlock>
+              </div>
+            ) : null}
             {report.summary ? (
               isBannerTable ? (
                 <ReportSection sectionId="interpretation" label="Summary">

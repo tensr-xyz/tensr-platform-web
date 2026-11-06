@@ -148,6 +148,14 @@ describe('report findings', () => {
     );
   });
 
+  it('keeps the number a table was given when it is the only one left', () => {
+    const finding = findingFromTable({ ...table, index: 6 }, null, null);
+    expect(finding.citation).toBe('T6');
+    expect(finding.eyebrow.startsWith('T6')).toBe(true);
+    const unnumbered = findingFromTable({ ...table, index: 0 }, null, null);
+    expect(unnumbered.citation).toBe('');
+  });
+
   it('keeps one finding when saved tables repeat or overlap', () => {
     const make = (id: string, key: string) => ({ ...table, id, key });
     const kept = distinctTables([

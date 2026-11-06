@@ -1,3 +1,4 @@
+import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
 import {
   bannerColumns,
   bannerHeading,
@@ -7,6 +8,11 @@ import {
   type BannerRow,
   type SigLetter,
 } from '@/lib/flow-survey';
+
+function missingBanner(column: BannerColumn): boolean {
+  const label = String(column.label || column.column_label || column.id || '');
+  return isNonAnswerTheme(label);
+}
 
 export type ReportTable = {
   id: string;
@@ -161,8 +167,8 @@ function visibleColumns(table: ReportTable, segmentId: string | null): BannerCol
     const match = table.columns.filter(column => column.id === segmentId);
     if (match.length) return match;
   }
-  const compared = table.columns.filter(column => column.id !== 'total');
-  return compared.length ? compared : table.columns;
+  const compared = table.columns.filter(column => column.id !== 'total' && !missingBanner(column));
+  return compared.length ? compared : table.columns.filter(column => !missingBanner(column));
 }
 
 function cellFor(row: BannerRow, bannerId: string): BannerCell | undefined {
@@ -352,10 +358,10 @@ export function findingFromTable(
   return {
     id: table.id,
     tableId: table.id,
-    eyebrow: `T${table.index} · ${table.label}`,
+    eyebrow: table.index > 0 ? `T${table.index} · ${table.label}` : table.label,
     headline: copy.headline,
     support: copy.support,
-    citation: `T${table.index}`,
+    citation: table.index > 0 ? `T${table.index}` : '',
     significant: copy.significant,
     lowBase: Boolean(
       copy.lead && columns.some(column => cellFor(copy.lead!.row, column.id)?.low_base)

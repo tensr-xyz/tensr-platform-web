@@ -2,6 +2,7 @@ import cases from './analysis-spec-dialog-cases.json';
 import {
   defaultsLine,
   installAnalysisSpecs,
+  isWeightParam,
   namesForParam,
   resetAnalysisSpecs,
   valuesFromSpec,
@@ -46,6 +47,7 @@ const SCHEMA: SchemaColumn[] = [
   { name: 'score', type: 'numeric', missing_count: 0 },
   { name: 'group', type: 'categorical', missing_count: 0 },
   { name: 'note', type: 'string', missing_count: 0 },
+  { name: 'design', type: 'numeric', missing_count: 0, role: 'weight' },
 ];
 
 function looksRaw(label: string, name: string): boolean {
@@ -99,9 +101,12 @@ describe.each(DIALOG_CASES)('$key setup dialog', row => {
       if (param.type !== 'column' && param.type !== 'columns') continue;
       if (!param.columnTypes || param.columnTypes.length !== 1) continue;
       const offered = namesForParam(SCHEMA, param);
-      if (param.columnTypes[0] === 'numeric') {
+      if (isWeightParam(param)) {
+        expect(offered).toEqual(['design']);
+      } else if (param.columnTypes[0] === 'numeric') {
         expect(offered).toContain('score');
         expect(offered).not.toContain('group');
+        expect(offered).not.toContain('design');
       }
       if (param.columnTypes[0] === 'categorical') {
         expect(offered).not.toContain('score');

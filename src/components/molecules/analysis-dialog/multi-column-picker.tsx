@@ -3,8 +3,14 @@
 import * as React from 'react';
 import { X } from 'lucide-react';
 
-import type { ColumnSlotType } from '@/lib/analysis-column-types';
-import { columnSlotType } from '@/lib/analysis-column-types';
+import {
+  columnHeading,
+  columnSlotType,
+  isListedColumn,
+  isNumericOutcome,
+  isWeightColumn,
+  type ColumnSlotType,
+} from '@/lib/analysis-column-types';
 import type { SchemaColumn } from '@/lib/analysis-report-types';
 import type { WizardFieldNotice } from '@/lib/analysis-setup-validation';
 import { Input } from '@/components/atoms/input';
@@ -52,13 +58,20 @@ export function MultiColumnPicker({
 }) {
   const [query, setQuery] = React.useState('');
   const [touched, setTouched] = React.useState(false);
-  const allNames = schema.map(c => c.name);
+  const listed = schema.filter(isListedColumn);
+  const allNames = listed.map(c => c.name);
 
   const filtered = React.useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return allNames;
-    return allNames.filter(n => n.toLowerCase().includes(q));
-  }, [allNames, query]);
+    return allNames.filter(n => {
+      const heading = columnHeading(
+        listed.find(column => column.name === n),
+        n
+      );
+      return `${heading.primary} ${heading.secondary} ${n}`.toLowerCase().includes(q);
+    });
+  }, [allNames, listed, query]);
 
   const changeSelection = (cols: string[]) => {
     setTouched(true);
@@ -74,7 +87,13 @@ export function MultiColumnPicker({
   };
 
   const selectBySlot = (slot: ColumnSlotType) => {
-    const names = schema.filter(c => columnSlotType(schema, c.name) === slot).map(c => c.name);
+    const names = schema
+      .filter(column =>
+        slot === 'numeric'
+          ? isNumericOutcome(column)
+          : !isWeightColumn(column) && columnSlotType(schema, column.name) === slot
+      )
+      .map(column => column.name);
     const merged = new Set([...selected, ...names]);
     changeSelection([...merged]);
   };
@@ -103,22 +122,28 @@ export function MultiColumnPicker({
       <div className="min-h-[2rem] rounded-md border border-border bg-muted/20 px-2 py-1.5">
         {selected.length ? (
           <div className="flex flex-wrap gap-1">
-            {selected.map(name => (
-              <span
-                key={name}
-                className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-[11px]"
-              >
-                <span className="max-w-[140px] truncate">{name}</span>
-                <button
-                  type="button"
-                  className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-                  aria-label={`Remove ${name}`}
-                  onClick={() => changeSelection(selected.filter(c => c !== name))}
+            {selected.map(name => {
+              const heading = columnHeading(
+                schema.find(column => column.name === name),
+                name
+              );
+              return (
+                <span
+                  key={name}
+                  className="inline-flex items-center gap-1 rounded-md border border-border bg-background px-1.5 py-0.5 text-[11px]"
                 >
-                  <X className="h-3 w-3" />
-                </button>
-              </span>
-            ))}
+                  <span className="max-w-[140px] truncate">{heading.primary}</span>
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={`Remove ${name}`}
+                    onClick={() => changeSelection(selected.filter(c => c !== name))}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              );
+            })}
           </div>
         ) : (
           <p className="text-[11px] text-muted-foreground">{emptyMessage}</p>
@@ -155,8 +180,17 @@ export function MultiColumnPicker({
       <div className="max-h-40 overflow-y-auto rounded-md border border-border">
         {filtered.map(name => {
           const slot = columnSlotType(schema, name);
+          const measure = String(
+            schema.find(column => column.name === name)?.measure || ''
+          ).toLowerCase();
           const isSelected = selected.includes(name);
-          const dimmed = filterSlot != null && slot !== filterSlot && !isSelected;
+          const column = schema.find(item => item.name === name);
+          const weightInVariableSlot = filterSlot === 'numeric' && isWeightColumn(column || {});
+          const dimmed =
+            filterSlot != null &&
+            !isSelected &&
+            (weightInVariableSlot ||
+              (measure !== 'ordinal' && measure !== 'scale' && slot !== filterSlot));
           return (
             <button
               key={name}
@@ -169,7 +203,29 @@ export function MultiColumnPicker({
                 dimmed && 'opacity-60'
               )}
             >
-              <span className="truncate">{name}</span>
+              <span className="min-w-0">
+                <span className="block truncate">
+                  {
+                    columnHeading(
+                      schema.find(column => column.name === name),
+                      name
+                    ).primary
+                  }
+                </span>
+                {columnHeading(
+                  schema.find(column => column.name === name),
+                  name
+                ).secondary ? (
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {
+                      columnHeading(
+                        schema.find(column => column.name === name),
+                        name
+                      ).secondary
+                    }
+                  </span>
+                ) : null}
+              </span>
               <SlotTypeBadge slot={slot} />
             </button>
           );

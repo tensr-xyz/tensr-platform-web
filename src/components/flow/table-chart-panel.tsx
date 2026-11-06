@@ -68,7 +68,7 @@ export function TableChart({
   projectId?: string;
   columns: ChartColumn[];
   onShowTable: () => void;
-  tables?: { id: string; label: string }[];
+  tables?: { id: string; label: string; number?: number }[];
   onOpenTable?: (id: string) => void;
 }) {
   const [kind, setKind] = useState<ChartKind>('scatter');
@@ -377,14 +377,14 @@ export function TableChart({
                   </span>
                 </div>
                 <div className="chart-others-row">
-                  {tables.slice(0, 5).map((table, index) => (
+                  {tables.slice(0, 5).map(table => (
                     <Button
                       key={table.id}
                       className="chart-other"
                       type="button"
                       onClick={() => onOpenTable?.(table.id)}
                     >
-                      <span>T{index + 1}</span>
+                      <span>{table.number ? `T${table.number}` : ''}</span>
                       <strong>{table.label}</strong>
                     </Button>
                   ))}

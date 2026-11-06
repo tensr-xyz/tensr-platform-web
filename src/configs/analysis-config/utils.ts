@@ -38,19 +38,15 @@ export const PALETTE_TAB_LABELS: Record<string, string> = {
   analyze: 'Analyze',
   transform: 'Transform',
   visualization: 'Charts',
-  time_series: 'Time series',
-  ml_ai: 'ML & AI',
   multivariate: 'Multivariate & SEM',
 };
 
-/** Shipped palette tabs. */
+/** Shipped palette tabs. Time series and machine-learning families stay in code, off this bar. */
 export const ACTIVE_PALETTE_TABS = [
   DATA_TAB_VALUE,
   'analyze',
   'transform',
   'visualization',
-  'time_series',
-  'ml_ai',
   'multivariate',
 ] as const;
 
@@ -350,6 +346,22 @@ export function filterAnalysisItems(items: AnalysisItem[], searchTerm: string): 
     return items;
   }
   return items.filter(item => searchTextMatches(analysisSearchText(item), searchTerm));
+}
+
+/** Exact and prefix name matches come before a hit that only shares a word in the search text. */
+export function rankAnalysisItems(items: AnalysisItem[], query: string): AnalysisItem[] {
+  const needle = normalizeSearchText(query);
+  if (!needle) return items;
+  const score = (item: AnalysisItem) => {
+    const name = normalizeSearchText(item.name);
+    if (name === needle) return 0;
+    if (name.startsWith(needle)) return 1;
+    if (name.includes(needle)) return 2;
+    return 3;
+  };
+  return [...items].sort(
+    (left, right) => score(left) - score(right) || left.name.localeCompare(right.name)
+  );
 }
 
 /**

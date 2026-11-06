@@ -46,6 +46,7 @@ type RakeDiagnostics = {
   converged?: boolean;
   margins?: WeightMargin[];
   missing_category_warning?: string;
+  weight_base_note?: string;
 };
 
 type RakePayload = {
@@ -77,6 +78,7 @@ export type RakePreview = {
   iterations?: number;
   converged?: boolean;
   warning?: string;
+  weight_base_note?: string;
 };
 
 export type MissingChoice = '' | 'keep_unweighted' | 'missing_target' | 'exclude';
@@ -496,6 +498,9 @@ export function WeightPanel({
           <div>
             <span>Efficiency</span>
             <strong>
+              {preview?.weight_base_note || diagnostics?.weight_base_note ? (
+                <span>{preview?.weight_base_note || diagnostics?.weight_base_note}</span>
+              ) : null}
               {preview?.efficiency != null
                 ? efficiencyPercent(preview.efficiency) || '—'
                 : diagnostics

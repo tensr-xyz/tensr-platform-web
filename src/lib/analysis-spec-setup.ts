@@ -1,5 +1,11 @@
 import type { ColumnSlotType } from '@/lib/analysis-column-types';
-import { columnSlotType, slotTypeMatchesExpected } from '@/lib/analysis-column-types';
+import {
+  isListedColumn,
+  isNumericOutcome,
+  isWeightColumn,
+  schemaColumnSlotType,
+  slotTypeMatchesExpected,
+} from '@/lib/analysis-column-types';
 import { categoricalColumnNames, twoGroupColumnNames } from '@/lib/analysis-definitions';
 import type { DatasetPreview, SchemaColumn } from '@/lib/analysis-report-types';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
@@ -175,16 +181,21 @@ export function namesForParam(
   preview?: DatasetPreview | null,
   analysisKey?: string
 ): string[] {
-  if (isTwoGroupParam(analysisKey, param)) return twoGroupColumnNames(schema, preview);
-  const names = schema.map(column => column.name);
-  const slot = slotFor(param.columnTypes);
-  if (!slot) return names;
-  if (slot === 'categorical') {
-    const categorical = categoricalColumnNames(schema, preview);
-    if (categorical.length) return categorical;
+  if (isWeightParam(param)) {
+    return schema
+      .filter(column => isListedColumn(column) && isWeightColumn(column))
+      .map(column => column.name);
   }
-  const matched = names.filter(name => slotTypeMatchesExpected(columnSlotType(schema, name), slot));
-  return matched.length ? matched : names;
+  if (isTwoGroupParam(analysisKey, param)) return twoGroupColumnNames(schema, preview);
+  const listed = schema.filter(column => isListedColumn(column) && !isWeightColumn(column));
+  const slot = slotFor(param.columnTypes);
+  if (!slot) return listed.map(column => column.name);
+  if (slot === 'categorical') return categoricalColumnNames(schema, preview);
+  if (slot === 'numeric')
+    return listed.filter(column => isNumericOutcome(column)).map(column => column.name);
+  return listed
+    .filter(column => slotTypeMatchesExpected(schemaColumnSlotType(column), slot, column))
+    .map(column => column.name);
 }
 
 function sameValue(left: unknown, right: unknown): boolean {

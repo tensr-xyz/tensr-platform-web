@@ -1,5 +1,10 @@
 import { PRODUCTION_MENU_ITEMS, PRODUCTION_ANALYSIS_LABELS } from './production-menu';
-import { ACTIVE_PALETTE_TABS, getAllAnalysisItems, filterAnalysisItems } from './utils';
+import {
+  ACTIVE_PALETTE_TABS,
+  getAllAnalysisItems,
+  filterAnalysisItems,
+  rankAnalysisItems,
+} from './utils';
 import { COMING_SOON_SECTIONS } from './palette-catalog';
 import { isDialogMenuItem, getAnalysisOpForMenuName } from './menu-registry';
 import { RETIRED_FROM_UI_OPS } from '@/lib/retired-from-ui';
@@ -15,7 +20,7 @@ const DEAD_OR_MISLEADING_LABELS = [
   'Mixed between/within ANOVA',
 ];
 
-const REQUIRED_DIALOG_LABELS = ['Compute Variable', 'Shift Values', 'Rake Weights'];
+const REQUIRED_DIALOG_LABELS = ['Compute Variable', 'Rake Weights'];
 
 function flattenMenuLabels(): string[] {
   const labels: string[] = [];
@@ -78,10 +83,12 @@ describe('production menu false-door sweep', () => {
     expect(PRODUCTION_MENU_ITEMS.analyze.sections['Tables']).toEqual([
       'Custom Tables',
       'Banner Book',
+      'Chi-square',
       'Pivot table',
     ]);
     expect(PRODUCTION_MENU_ITEMS.analyze.sections['Descriptive Statistics']).toEqual([
       'Descriptives',
+      'Frequencies',
       'Batch Tables',
     ]);
     expect(isDialogMenuItem('Custom Tables')).toBe(true);
@@ -102,15 +109,7 @@ describe('production menu false-door sweep', () => {
 
   it('wires Legacy import dialogs under Data', () => {
     const legacy = PRODUCTION_MENU_ITEMS.data.sections['Legacy import'];
-    expect(legacy).toEqual([
-      'WinCross Job Import',
-      'Qualtrics Definition',
-      'QPack Ingest',
-      'Triple-S Import',
-      'MDD Import',
-      'SPS Translate',
-      'Quantum Axis',
-    ]);
+    expect(legacy).toEqual(['Triple-S Import']);
     for (const name of legacy) {
       expect(isDialogMenuItem(name)).toBe(true);
       expect(getAnalysisOpForMenuName(name)).toBeUndefined();
@@ -121,32 +120,31 @@ describe('production menu false-door sweep', () => {
     const labels = flattenMenuLabels();
     expect(labels).toContain('Stepwise Regression');
     expect(labels).toContain('McNemar Test');
-    expect(labels).toContain('Loglinear Analysis');
+    expect(labels).not.toContain('Loglinear Analysis');
     expect(labels).toContain('Open-text coding');
     expect(getAnalysisOpForMenuName('Stepwise Regression')).toBe('stepwise_regression');
     expect(getAnalysisOpForMenuName('McNemar Test')).toBe('mcnemar');
-    expect(getAnalysisOpForMenuName('Loglinear Analysis')).toBe('loglinear');
     // Open-text coding stays an agency dialog on development (Q scorecard).
     expect(isDialogMenuItem('Open-text coding')).toBe(true);
     expect(getAnalysisOpForMenuName('Open-text coding')).toBeUndefined();
   });
 
-  it('surfaces formerly hidden families including time series', () => {
-    const labels = flattenMenuLabels();
-    expect(labels).toContain('Kaplan–Meier');
-    expect(labels).toContain('ARIMA / SARIMA');
-    expect(labels).toContain('Support Vector Machines (Classification)');
-    expect(labels).toContain('Three-Way ANOVA');
-    expect(labels).toContain('Find Outliers');
-    expect(labels).toContain('Verbatim Coding');
-    expect(PRODUCTION_MENU_ITEMS.time_series.sections.Forecasting).toContain('ARIMA / SARIMA');
-    expect(ACTIVE_PALETTE_TABS).toContain('time_series');
+  it('keeps time series and machine learning off the command palette', () => {
+    const names = getAllAnalysisItems().map(item => item.name);
+    expect(names).not.toContain('Kaplan–Meier');
+    expect(names).not.toContain('ARIMA / SARIMA');
+    expect(names).not.toContain('Support Vector Machines (Classification)');
+    expect(names).not.toContain('Verbatim Coding');
+    expect(names).not.toContain('Pie Chart');
+    expect(names).not.toContain('Moses Test');
+    expect(ACTIVE_PALETTE_TABS).not.toContain('time_series');
+    expect(ACTIVE_PALETTE_TABS).not.toContain('ml_ai');
   });
 
-  it('keeps both Gradient Boosting mode variants on the palette', () => {
+  it('keeps machine-learning mode variants out of the command palette', () => {
     const names = getAllAnalysisItems().map(item => item.name);
-    expect(names).toContain('Gradient Boosting (Classification)');
-    expect(names).toContain('Gradient Boosting (Regression)');
+    expect(names).not.toContain('Gradient Boosting (Classification)');
+    expect(names).not.toContain('Gradient Boosting (Regression)');
   });
 
   it('every remaining catalog label launches a dialog or a real analysis op', () => {
@@ -205,24 +203,15 @@ describe('production menu false-door sweep', () => {
     }
     const merge = getAllAnalysisItems().find(item => item.name === 'Merge Datasets');
     const waves = getAllAnalysisItems().find(item => item.name === 'Fuse Waves');
-    const datasets = getAllAnalysisItems().find(item => item.name === 'Fuse Datasets');
     expect(merge?.hint).toMatch(/stack or append/i);
     expect(waves?.hint).toMatch(/waves/i);
-    expect(datasets?.hint).toMatch(/respondent key/i);
+    expect(getAllAnalysisItems().some(item => item.name === 'Fuse Datasets')).toBe(false);
   });
 
   it('shows choice modelling unless the flag is off', () => {
     const previousFlag = process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
     delete process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
-    const shown = [
-      'MaxDiff',
-      'Conjoint',
-      'MaxDiff (counting / MNL)',
-      'MaxDiff (Count)',
-      'MaxDiff (MNL)',
-      'MaxDiff (individual utilities)',
-      'Choice Simulator',
-    ];
+    const shown = ['Conjoint', 'MaxDiff (counting / MNL)', 'Choice Simulator'];
     try {
       const names = getAllAnalysisItems().map(item => item.name);
       for (const name of shown) expect(names).toContain(name);
@@ -235,5 +224,14 @@ describe('production menu false-door sweep', () => {
       if (previousFlag === undefined) delete process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED;
       else process.env.NEXT_PUBLIC_CHOICE_MODELLING_ENABLED = previousFlag;
     }
+  });
+
+  it('ranks the analysis named by the query ahead of one that only shares a word', () => {
+    const ranked = rankAnalysisItems(
+      filterAnalysisItems(getAllAnalysisItems(), 'frequencies'),
+      'frequencies'
+    );
+    expect(ranked[0]?.name).toBe('Frequencies');
+    expect(ranked.some(item => item.name === 'McNemar Test')).toBe(true);
   });
 });
