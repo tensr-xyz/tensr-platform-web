@@ -147,7 +147,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   };
   const seen = new Set<string>();
   const add = (table: RunTable | null) => {
-    if (!table) return;
+    if (!table || table.title === 'Equivalent R and SPSS syntax') return;
     const key = `${table.title}\n${table.columns.join('\t')}\n${table.rows.map(row => row.join('\t')).join('\n')}`;
     if (seen.has(key)) return;
     seen.add(key);
@@ -167,7 +167,10 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       return;
     }
     const record = value as Record<string, unknown>;
-    add(asTable(record));
+    const title = cell(record.title);
+    const syntaxDump =
+      record.id === 'equivalent_syntax' || title === 'Equivalent R and SPSS syntax';
+    if (!syntaxDump) add(asTable(record));
     for (const key of ['frequency_tables', 'tables'] as const) {
       const list = record[key];
       if (Array.isArray(list)) for (const item of list) add(asTable(item));
@@ -204,10 +207,13 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     add(recordTable(record.loadings, 'Loadings', ['variable', 'factor', 'loading']));
     add(recordTable(record.items, 'Reliability', ['item', 'alpha_if_deleted', 'item_total']));
     const mark = record.r_syntax_verification;
-    if (mark && typeof mark === 'object' && !view.rCheck) {
+    if (mark && typeof mark === 'object') {
       const verification = mark as { kind?: unknown; statement?: unknown; status?: unknown };
-      view.rCheck = cell(verification.kind || verification.status);
-      view.rStatement = cell(verification.statement);
+      const kind = cell(verification.kind || verification.status);
+      if (!view.rCheck || (view.rCheck === 'pending' && kind && kind !== 'pending')) {
+        view.rCheck = kind;
+        view.rStatement = cell(verification.statement);
+      }
     }
     if (!view.weight && record.weight && typeof record.weight === 'object') {
       view.weight = cell((record.weight as { column?: unknown }).column);

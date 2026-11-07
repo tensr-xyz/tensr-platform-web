@@ -122,12 +122,11 @@ export function storedRunIdToHydrate(entry: {
 
 export function sourceRowsUsedLabel(
   exclusion?: { rows_used?: number; rows_total?: number } | null,
-  datasetRows?: number
+  _datasetRows?: number
 ): string | null {
   const used = exclusion?.rows_used;
-  const total = exclusion?.rows_total ?? datasetRows;
-  if (typeof used !== 'number' || typeof total !== 'number') return null;
-  return `${used.toLocaleString()} of ${total.toLocaleString()} source rows used`;
+  if (typeof used !== 'number') return null;
+  return `Base ${used.toLocaleString()}`;
 }
 
 export type RSyntaxVerificationKind =

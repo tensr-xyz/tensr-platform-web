@@ -119,4 +119,32 @@ describe('result tables', () => {
     expect(view.rCheck).toBe('verified');
     expect(view.rStatement).toContain('matches R');
   });
+
+  it('skips the syntax dump and keeps a finished R check over a pending one', () => {
+    const view = resultViewFromToolResults({
+      r_syntax_verification: { kind: 'pending', statement: 'R syntax is being checked.' },
+      tables: [
+        {
+          id: 'equivalent_syntax',
+          title: 'Equivalent R and SPSS syntax',
+          columns: ['System', 'Syntax'],
+          rows: [
+            ['R', 'table(x)'],
+            ['SPSS', ''],
+          ],
+        },
+        {
+          title: 'Aware',
+          columns: ['Answer', 'Percent'],
+          rows: [['Yes', '87.0']],
+        },
+      ],
+      report: {
+        r_syntax_verification: { kind: 'verified', statement: 'The displayed figure matches R.' },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Aware']);
+    expect(view.rCheck).toBe('verified');
+    expect(view.rStatement).toContain('matches R');
+  });
 });
