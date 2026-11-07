@@ -192,7 +192,7 @@ function BlockHeader({
           <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-primary">
             {kind}
           </span>
-          <span className="text-[15px] font-medium text-foreground">{title}</span>
+          {title ? <span className="text-[15px] font-medium text-foreground">{title}</span> : null}
         </div>
         {subtitle ? (
           <p className="mt-1 text-xs leading-snug text-muted-foreground">{subtitle}</p>
@@ -323,7 +323,7 @@ function ReportTable({
                       ) : (
                         <span
                           className={cn(
-                            alignRight && 'font-mono tabular-nums text-foreground',
+                            alignRight && 'tabular-nums text-foreground',
                             !alignRight && 'font-medium text-foreground'
                           )}
                         >
@@ -601,7 +601,9 @@ export function AnalysisReportView({
     canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
   const rowsUsedLabel = sourceRowsUsedLabel(report.exclusion_summary, report.meta.rows_dataset);
   const isBannerTable = report.meta.analysis_key === 'banner_table';
-  const blockTitle = report.answer?.trim() || report.meta.subtitle?.trim() || report.meta.title;
+  const pageTitle = report.meta.title?.trim() || 'Analysis';
+  const answerLead = report.answer?.trim() || '';
+  const blockTitle = answerLead && answerLead !== pageTitle ? answerLead : '';
   const blockSubtitle = undefined;
   const metaTestLabel =
     isBannerTable && report.meta.subtitle ? report.meta.subtitle : report.meta.title;
@@ -626,7 +628,7 @@ export function AnalysisReportView({
           </span>
         </div>
         <h1 className="text-2xl font-medium tracking-[-0.018em] text-foreground md:text-[26px]">
-          {report.meta.title}
+          {pageTitle}
         </h1>
         {report.meta.subtitle ? (
           <p className="mt-2 max-w-[40rem] text-sm leading-relaxed text-muted-foreground">
@@ -653,7 +655,9 @@ export function AnalysisReportView({
         />
 
         <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/20 px-[22px] py-3">
-          <MetaChip label="Rows" value={String(report.meta.rows_dataset)} mono />
+          {rowsUsedLabel ? null : (
+            <MetaChip label="Base" value={report.meta.rows_dataset.toLocaleString()} />
+          )}
           <MetaChip label="Run" value={generatedLabel} />
           {metaTestLabel ? <MetaChip label="Test" value={metaTestLabel} /> : null}
           <span className="flex-1" />
@@ -684,7 +688,16 @@ export function AnalysisReportView({
                 'border-border/60 bg-muted/20'
             )}
           >
-            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">{rBadgeTitle}</p>
+            <p
+              className={cn(
+                'text-xs font-medium',
+                rBadge.kind === 'verified' || rBadge.kind === 'verified_in_ci'
+                  ? 'text-primary'
+                  : 'text-amber-800 dark:text-amber-200'
+              )}
+            >
+              {rBadgeTitle}
+            </p>
             <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{rBadgeBody}</p>
             {rCheckUnavailable && analysisRunId ? (
               <Button
@@ -697,22 +710,6 @@ export function AnalysisReportView({
               >
                 Re-check
               </Button>
-            ) : null}
-            {report.reproducibility?.r_script ? (
-              <pre
-                data-testid="r-equivalent-syntax"
-                className="mt-2 max-h-40 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[11px] leading-relaxed text-foreground"
-              >
-                {report.reproducibility.r_script}
-              </pre>
-            ) : null}
-            {report.spss_syntax ? (
-              <pre
-                data-testid="spss-equivalent-syntax"
-                className="mt-2 max-h-32 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[11px] leading-relaxed text-foreground"
-              >
-                {report.spss_syntax}
-              </pre>
             ) : null}
           </div>
         ) : null}
@@ -984,30 +981,34 @@ export function AnalysisReportView({
               </ReportSection>
             ))}
 
-            {report.tables.map((t, i) => (
-              <ReportSection
-                key={t.id}
-                sectionId={`table-${t.id}`}
-                label={
-                  t.id === 'banner_table'
-                    ? 'Crosstab'
-                    : i === 0 && !report.spss_blocks?.length
-                      ? 'Primary result'
-                      : t.title
-                }
-              >
-                <ReportTable
-                  table={t}
-                  emphasized={i === 0 && !report.spss_blocks?.length}
-                  onCopy={() => onCopyTable(t)}
-                />
-                {t.interpretation ? (
-                  <p className="mt-3 text-[13px] leading-relaxed text-foreground">
-                    {t.interpretation}
-                  </p>
-                ) : null}
-              </ReportSection>
-            ))}
+            {report.tables
+              .filter(
+                t => t.id !== 'equivalent_syntax' && t.title !== 'Equivalent R and SPSS syntax'
+              )
+              .map((t, i) => (
+                <ReportSection
+                  key={t.id}
+                  sectionId={`table-${t.id}`}
+                  label={
+                    t.id === 'banner_table'
+                      ? 'Crosstab'
+                      : i === 0 && !report.spss_blocks?.length
+                        ? 'Primary result'
+                        : t.title
+                  }
+                >
+                  <ReportTable
+                    table={t}
+                    emphasized={i === 0 && !report.spss_blocks?.length}
+                    onCopy={() => onCopyTable(t)}
+                  />
+                  {t.interpretation ? (
+                    <p className="mt-3 text-[13px] leading-relaxed text-foreground">
+                      {t.interpretation}
+                    </p>
+                  ) : null}
+                </ReportSection>
+              ))}
           </>
         )}
 
@@ -1120,28 +1121,6 @@ export function AnalysisReportView({
             Copy log
           </Button>
         </details>
-      ) : null}
-
-      {report.spss_syntax && !showRBadge ? (
-        <details className="mt-4 print:hidden">
-          <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
-            SPSS syntax (reference)
-          </summary>
-          <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-border bg-muted/30 p-3 font-mono text-[10px] leading-relaxed text-muted-foreground">
-            {report.spss_syntax}
-          </pre>
-        </details>
-      ) : null}
-
-      {report.reproducibility?.r_script && !showRBadge ? (
-        <div className="mt-4 print:hidden">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Reproducibility (R)
-          </p>
-          <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted/30 p-3 font-mono text-[10px] leading-relaxed text-muted-foreground">
-            {report.reproducibility.r_script}
-          </pre>
-        </div>
       ) : null}
 
       {report.analysis_spec ? (

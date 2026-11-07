@@ -13,6 +13,7 @@ import {
   agentHistory,
   agentReplyText,
   tableBodyFromAgentBook,
+  columnChoiceLabel,
   tableWeightChoices,
   themeRows,
   weightOptionLabel,
@@ -26,14 +27,24 @@ describe('QA round 6', () => {
     expect(rakeOutputColumn(['weight', 'rake_weight', 'weight_2'])).toBe('weight_3');
   });
 
+  test('a question named like its variable stays the question, not a category', () => {
+    expect(
+      columnChoiceLabel({
+        name: 'region',
+        label: 'Region',
+      })
+    ).toBe('Region');
+  });
+
   test('4: weight menu has no _weight copy, no duplicates, no "Weight Weight"', () => {
     expect(
       tableWeightChoices(['rake_weight', '_weight', 'weight', 'Weight'], 'rake_weight')
     ).toEqual(['rake_weight', 'weight']);
     expect(weightOptionLabel('weight', 'Weight')).toBe('weight');
     expect(weightOptionLabel('rake_weight', 'Survey weight, raked to targets.csv')).toBe(
-      'rake_weight · Survey weight, raked to targets.csv'
+      'Survey weight, raked to targets.csv'
     );
+    expect(weightOptionLabel('design_weight', 'Design weight')).toBe('Design weight');
   });
 
   test('3: an answer to the agent question carries the earlier turns', () => {

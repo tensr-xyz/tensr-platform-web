@@ -243,3 +243,27 @@ describe('AnalysisReportRail spec labels', () => {
     }
   });
 });
+
+describe('AnalysisReportRail syntax', () => {
+  it('keeps the R script and the SPSS syntax in the rail', () => {
+    render(
+      <AnalysisReportRail
+        report={
+          {
+            ...report,
+            reproducibility: { r_script: 'aov(Time_90 ~ Interval, data = d)' },
+            spss_syntax: 'ONEWAY Time_90 BY Interval.',
+          } as AnalysisReport
+        }
+        outline={[]}
+      />
+    );
+    expect(screen.getByText('R and SPSS')).toBeInTheDocument();
+    expect(screen.getByTestId('r-equivalent-syntax', { hidden: true })).toHaveTextContent(
+      'aov(Time_90 ~ Interval, data = d)'
+    );
+    expect(screen.getByTestId('spss-equivalent-syntax', { hidden: true })).toHaveTextContent(
+      'ONEWAY Time_90 BY Interval.'
+    );
+  });
+});

@@ -503,6 +503,30 @@ export function AnalysisReportRail({
         </div>
       </RailSection>
 
+      {report.reproducibility?.r_script || report.spss_syntax ? (
+        <RailSection label="Syntax">
+          <details className="text-[11px] text-muted-foreground">
+            <summary className="cursor-pointer text-foreground">R and SPSS</summary>
+            {report.reproducibility?.r_script ? (
+              <pre
+                data-testid="r-equivalent-syntax"
+                className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-card p-2 font-mono text-[10px] leading-relaxed text-foreground"
+              >
+                {report.reproducibility.r_script}
+              </pre>
+            ) : null}
+            {report.spss_syntax ? (
+              <pre
+                data-testid="spss-equivalent-syntax"
+                className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-md border border-border bg-card p-2 font-mono text-[10px] leading-relaxed text-foreground"
+              >
+                {report.spss_syntax}
+              </pre>
+            ) : null}
+          </details>
+        </RailSection>
+      ) : null}
+
       <RailSection label="Session artifacts">
         <div className="flex flex-col gap-1.5">
           <p className="text-[11px] font-medium text-foreground">{report.meta.title}</p>

@@ -85,6 +85,8 @@ describe('result tables', () => {
     const views = payloads.map(payload => resultViewFromToolResults(payload));
     expect(views.filter(view => view.tables.length || view.filter || view.weight)).toHaveLength(12);
     expect(views[0].tables[0].rows[0][0]).toBe('North');
+    expect(views[0].tables[0].columns[0]).toBe('');
+    expect(views[0].tables[0].columns[1]).toBe('Frequency');
     expect(views[1].tables[0].columns).toEqual(['Theme', 'Count', '%', 'Example']);
     expect(views[2].tables[0].title).toBe('Group means');
     expect(views[3].tables[0].columns).toContain('Achieved %');
@@ -96,5 +98,53 @@ describe('result tables', () => {
     expect(resultFootnote(views[7], 'n = 40', 't-test')).toBe(
       'n = 40 · Filter: region = North · Weight: design_w · t-test'
     );
+  });
+
+  it('prints a label when a header is an object, and keeps the R check', () => {
+    const view = resultViewFromToolResults({
+      tables: [
+        {
+          title: 'By area',
+          columns: [{ label: 'Area' }, { label: 'East' }],
+          rows: [['High', 4]],
+        },
+      ],
+      statistic: 2.2,
+      p_value: 0.03,
+      r_syntax_verification: { kind: 'verified', statement: 'The displayed figure matches R.' },
+    });
+    expect(view.tables[0].columns).toEqual(['Area', 'East']);
+    const flat = view.tables.flatMap(table => [...table.columns, ...table.rows.flat()]);
+    expect(flat.join(' ')).not.toContain('[object Object]');
+    expect(view.rCheck).toBe('verified');
+    expect(view.rStatement).toContain('matches R');
+  });
+
+  it('skips the syntax dump and keeps a finished R check over a pending one', () => {
+    const view = resultViewFromToolResults({
+      r_syntax_verification: { kind: 'pending', statement: 'R syntax is being checked.' },
+      tables: [
+        {
+          id: 'equivalent_syntax',
+          title: 'Equivalent R and SPSS syntax',
+          columns: ['System', 'Syntax'],
+          rows: [
+            ['R', 'table(x)'],
+            ['SPSS', ''],
+          ],
+        },
+        {
+          title: 'Aware',
+          columns: ['Answer', 'Percent'],
+          rows: [['Yes', '87.0']],
+        },
+      ],
+      report: {
+        r_syntax_verification: { kind: 'verified', statement: 'The displayed figure matches R.' },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Aware']);
+    expect(view.rCheck).toBe('verified');
+    expect(view.rStatement).toContain('matches R');
   });
 });

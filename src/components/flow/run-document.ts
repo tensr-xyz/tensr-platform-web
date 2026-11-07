@@ -193,6 +193,8 @@ export function documentApa(document: RunDocument): string {
   return parts.filter(Boolean).join('\n');
 }
 
+export type ReportPinBar = { label: string; percent: number };
+
 export type ReportPin = {
   id: string;
   runId: string;
@@ -204,6 +206,7 @@ export type ReportPin = {
   deck: boolean;
   topline: boolean;
   keepLive: boolean;
+  bars?: ReportPinBar[];
 };
 
 const PIN_KEY = 'tensr-report-pins';

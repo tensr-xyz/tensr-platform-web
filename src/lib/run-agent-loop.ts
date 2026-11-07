@@ -101,6 +101,10 @@ export type RunAgentLoopParams = {
   onProgress?: (progress: { type: string; step: string; message: string }) => void;
   onDelta?: (text: string) => void;
   onReplace?: (text: string) => void;
+  onPreview?: (preview: {
+    text?: string;
+    tool_results?: AgentLoopResponse['tool_results'];
+  }) => void;
   signal?: AbortSignal;
 };
 
@@ -173,6 +177,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           onProgress: params.onProgress,
           onDelta: params.onDelta,
           onReplace: params.onReplace,
+          onPreview: params.onPreview,
           signal: params.signal,
         }
       );

@@ -175,10 +175,8 @@ describe('canRevealConsumedRows', () => {
 });
 
 describe('sourceRowsUsedLabel', () => {
-  it('prints N of M source rows used', () => {
-    expect(sourceRowsUsedLabel({ rows_used: 504, rows_total: 505 })).toBe(
-      '504 of 505 source rows used'
-    );
+  it('prints the analysis base once', () => {
+    expect(sourceRowsUsedLabel({ rows_used: 504, rows_total: 505 })).toBe('Base 504');
     expect(sourceRowsUsedLabel(undefined)).toBeNull();
   });
 });

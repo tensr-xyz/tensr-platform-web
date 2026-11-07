@@ -20,6 +20,18 @@ import { analysisDisplayName } from '@/lib/analysis-definitions';
 import { clearPin, savePin, useProjectPins } from '@/components/flow/report-pins';
 import { ExportDialog, copyText, figureSvg } from '@/components/flow/export-dialog';
 import { documentApa, runDocument, type ReportPin } from '@/components/flow/run-document';
+import { AnalysisReportView } from '@/components/organisms/analysis-report-view';
+import type { AnalysisReport } from '@/lib/analysis-report-types';
+
+function storedReport(run: Record<string, unknown>): AnalysisReport | null {
+  const report = run.report;
+  if (!report || typeof report !== 'object') return null;
+  const record = report as AnalysisReport;
+  if (!record.meta || typeof record.meta.title !== 'string' || !Array.isArray(record.tables)) {
+    return null;
+  }
+  return record;
+}
 
 type Comment = {
   id: string;
@@ -47,6 +59,7 @@ export function OutputPage({
   onBack: () => void;
 }) {
   const document = useMemo(() => runDocument(run), [run]);
+  const fullReport = useMemo(() => storedReport(run), [run]);
   const [comments, setComments] = useState<Comment[]>([]);
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -200,47 +213,66 @@ export function OutputPage({
               .filter(Boolean)
               .join('  |  ')}
           </p>
-          {document.summary ? (
+          {fullReport ? (
+            <AnalysisReportView
+              report={fullReport}
+              rawResult={
+                run.result && typeof run.result === 'object'
+                  ? (run.result as Record<string, unknown>)
+                  : null
+              }
+              provenance={
+                run.provenance && typeof run.provenance === 'object'
+                  ? (run.provenance as Record<string, unknown>)
+                  : null
+              }
+              datasetId={datasetId}
+              analysisRunId={runId}
+            />
+          ) : null}
+          {document.summary && !fullReport ? (
             <div className="output-answer">
               <span>Answer</span>
               <p className="output-answer-lead">{answer}</p>
               {rest.length ? <p className="output-answer-rest">{rest.join(' ')}</p> : null}
             </div>
-          ) : (
+          ) : fullReport ? null : (
             <p className="flow-muted">This run has no stored summary.</p>
           )}
-          {document.tables
-            .filter(table => !/syntax/i.test(table.title))
-            .map((table, index) => (
-              <section key={table.title} className="output-section">
-                <div className="output-section-head">
-                  <h2>{table.title}</h2>
-                </div>
-                <div className={index === 0 && plot ? 'output-split' : undefined}>
-                  <Table className="flow-table output-grid">
-                    <thead>
-                      <tr>
-                        {table.columns.map(column => (
-                          <th key={column}>{column}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {table.rows.map(row => (
-                        <tr key={row.join('|')}>
-                          {row.map((cell, cellIndex) => (
-                            <td key={`${cell}-${cellIndex}`}>{cell}</td>
+          {fullReport
+            ? null
+            : document.tables
+                .filter(table => !/syntax/i.test(table.title))
+                .map((table, index) => (
+                  <section key={table.title} className="output-section">
+                    <div className="output-section-head">
+                      <h2>{table.title}</h2>
+                    </div>
+                    <div className={index === 0 && plot ? 'output-split' : undefined}>
+                      <Table className="flow-table output-grid">
+                        <thead>
+                          <tr>
+                            {table.columns.map(column => (
+                              <th key={column}>{column}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {table.rows.map(row => (
+                            <tr key={row.join('|')}>
+                              {row.map((cell, cellIndex) => (
+                                <td key={`${cell}-${cellIndex}`}>{cell}</td>
+                              ))}
+                            </tr>
                           ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </Table>
-                  {index === 0 && plot ? (
-                    <div className="output-plot" dangerouslySetInnerHTML={{ __html: plot }} />
-                  ) : null}
-                </div>
-              </section>
-            ))}
+                        </tbody>
+                      </Table>
+                      {index === 0 && plot ? (
+                        <div className="output-plot" dangerouslySetInnerHTML={{ __html: plot }} />
+                      ) : null}
+                    </div>
+                  </section>
+                ))}
           {document.checks.length ? (
             <section className="output-section">
               <h2>Checks</h2>
