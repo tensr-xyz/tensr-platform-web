@@ -87,7 +87,12 @@ describe('result tables', () => {
     expect(views[0].tables[0].rows[0][0]).toBe('North');
     expect(views[0].tables[0].columns[0]).toBe('');
     expect(views[0].tables[0].columns[1]).toBe('Frequency');
-    expect(views[1].tables[0].columns).toEqual(['Theme', 'Count', '%', 'Example']);
+    expect(views[1].tables[0].columns).toEqual([
+      'Theme',
+      'Count',
+      '% of people who answered',
+      'Quote',
+    ]);
     expect(views[2].tables[0].title).toBe('Group means');
     expect(views[3].tables[0].columns).toContain('Achieved %');
     expect(views[4].script).toContain('lm(');

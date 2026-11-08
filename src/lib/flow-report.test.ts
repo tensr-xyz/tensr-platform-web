@@ -149,6 +149,47 @@ describe('report findings', () => {
     );
   });
 
+  it('leads a yes/no question with the yes row', () => {
+    const book = {
+      stubs: [{ column: 'aware' }],
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'midlands', label: 'Midlands', letter_slot: 'A' },
+        { id: 'london', label: 'London', letter_slot: 'B' },
+      ],
+      letters: [
+        { stub_row_id: 'aware:1', banner_id: 'london', letter: 'A' },
+        { stub_row_id: 'aware:0', banner_id: 'midlands', letter: 'B' },
+      ],
+      rows: [
+        {
+          id: 'aware:1',
+          label: 'Yes',
+          kind: 'value',
+          cells: [
+            { banner_id: 'midlands', percent: 68 },
+            { banner_id: 'london', percent: 88 },
+          ],
+        },
+        {
+          id: 'aware:0',
+          label: 'No',
+          kind: 'value',
+          cells: [
+            { banner_id: 'midlands', percent: 32 },
+            { banner_id: 'london', percent: 12 },
+          ],
+        },
+      ],
+    };
+    const finding = findingFromTable(
+      reportTableFromBook('t1', 'Have you heard of Brew & Co?', 1, book),
+      null,
+      null
+    );
+    expect(finding.headline).toBe('Yes: 88% among London vs 68% among Midlands.');
+  });
+
   it('keeps the number a table was given when it is the only one left', () => {
     const finding = findingFromTable({ ...table, index: 6 }, null, null);
     expect(finding.citation).toBe('T6');

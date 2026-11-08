@@ -253,10 +253,27 @@ function significantGaps(table: ReportTable, rows: NumberedRow[], columns: Banne
     }
   }
   const negative = (gap: Gap) => (/^not /i.test(String(gap.row.row.label || '')) ? 1 : 0);
-  return gaps.sort(
-    (left, right) =>
-      right.high - right.low - (left.high - left.low) || negative(left) - negative(right)
-  );
+  const positiveId = positiveRowId(rows);
+  return gaps.sort((left, right) => {
+    const pole =
+      (positiveId && right.row.row.id === positiveId ? 1 : 0) -
+      (positiveId && left.row.row.id === positiveId ? 1 : 0);
+    return (
+      pole || right.high - right.low - (left.high - left.low) || negative(left) - negative(right)
+    );
+  });
+}
+
+/** The affirmative row of a yes/no table. Other tables keep the largest gap. */
+function positiveRowId(rows: NumberedRow[]): string | null {
+  const values = rows.filter(item => !item.row.kind || item.row.kind === 'value');
+  if (values.length !== 2) return null;
+  const positive = /^(yes|true|agree|aware)$/i;
+  const negative = /^(no|false|disagree|not aware|unaware)$/i;
+  const yes = values.find(item => positive.test(String(item.row.label || '').trim()));
+  const no = values.find(item => negative.test(String(item.row.label || '').trim()));
+  if (!yes || !no) return null;
+  return yes.row.id;
 }
 
 function netRow(table: ReportTable): NumberedRow | null {

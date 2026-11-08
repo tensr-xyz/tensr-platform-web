@@ -14,6 +14,8 @@ import {
   type AnalysisRelatedLink,
 } from '@/lib/analysis-chain-links';
 import { resolveReportBlocks } from '@/lib/report-blocks';
+import { loadOutputPreferences } from '@/lib/output-preferences';
+import { presentStoredReport } from '@/lib/stored-report-display';
 import { reportApproachCopy } from '@/lib/report-approach-copy';
 import { ApproachText } from './approach-text';
 import {
@@ -404,7 +406,15 @@ function BlockRenderer({
             const inner = (
               <>
                 <span className="text-muted-foreground">{m.label}: </span>
-                <span className="font-mono tabular-nums text-foreground">{m.value}</span>
+                <span
+                  className={
+                    /^-?\d/.test(m.value.trim())
+                      ? 'font-mono tabular-nums text-foreground'
+                      : 'text-foreground'
+                  }
+                >
+                  {m.value}
+                </span>
               </>
             );
             if (clickable) {
@@ -490,6 +500,10 @@ export function AnalysisReportView({
   datasetId,
   analysisRunId,
 }: Props) {
+  const shown = React.useMemo(
+    () => presentStoredReport(report, loadOutputPreferences().decimalPlaces),
+    [report]
+  );
   const [copyState, setCopyState] = React.useState<string | null>(null);
   const [rVerification, setRVerification] = React.useState(report.r_syntax_verification);
   const [rPhase, setRPhase] = React.useState<'checking' | 'still' | 'unavailable'>('checking');
@@ -536,8 +550,8 @@ export function AnalysisReportView({
     });
   };
   const [rawOpen, setRawOpen] = React.useState(false);
-  const primaryTable = report.tables[0];
-  const blocks = resolveReportBlocks(report);
+  const primaryTable = shown.tables[0];
+  const blocks = resolveReportBlocks(shown);
   const useBlockLayout = blocks.length > 0;
   const related = relatedLinksFromReportAndTab({
     tabRelated: relatedAnalyses,
@@ -553,7 +567,7 @@ export function AnalysisReportView({
   };
 
   const onCopySummary = async () => {
-    const ok = await copyText(buildSummaryText(report));
+    const ok = await copyText(buildSummaryText(shown));
     flash(ok ? 'Summary copied' : 'Copy failed');
   };
 
@@ -599,14 +613,16 @@ export function AnalysisReportView({
   const rBadgeBody = rStillChecking ? 'Still checking.' : rBadge.text;
   const canReveal =
     canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
-  const rowsUsedLabel = sourceRowsUsedLabel(report.exclusion_summary, report.meta.rows_dataset);
+  const rowsUsedLabel = sourceRowsUsedLabel(shown.exclusion_summary, shown.meta.rows_dataset);
   const isBannerTable = report.meta.analysis_key === 'banner_table';
-  const pageTitle = report.meta.title?.trim() || 'Analysis';
-  const answerLead = report.answer?.trim() || '';
+  const pageTitle = shown.meta.title?.trim() || 'Analysis';
+  const answerLead = shown.answer?.trim() || '';
   const blockTitle = answerLead && answerLead !== pageTitle ? answerLead : '';
   const blockSubtitle = undefined;
   const metaTestLabel =
-    isBannerTable && report.meta.subtitle ? report.meta.subtitle : report.meta.title;
+    isBannerTable && report.meta.subtitle && report.meta.subtitle !== pageTitle
+      ? report.meta.subtitle
+      : '';
   const approachCopy = reportApproachCopy(report);
   const approachExploration = approachCopy.exploration;
   const assumptionInterpretations = (report.assumption_checks?.interpretations ?? []).filter(
@@ -857,31 +873,31 @@ export function AnalysisReportView({
           ))
         ) : (
           <>
-            {report.answer ? (
+            {shown.answer ? (
               <div id="report-section-answer" className="scroll-mt-24">
                 <InterpretationBlock>
-                  <p>{report.answer}</p>
+                  <p>{shown.answer}</p>
                 </InterpretationBlock>
               </div>
             ) : null}
-            {report.summary ? (
+            {shown.summary ? (
               isBannerTable ? (
                 <ReportSection sectionId="interpretation" label="Summary">
-                  <p className="text-[13px] leading-relaxed text-foreground">{report.summary}</p>
+                  <p className="text-[13px] leading-relaxed text-foreground">{shown.summary}</p>
                 </ReportSection>
               ) : (
                 <div id="report-section-interpretation" className="scroll-mt-24">
                   <InterpretationBlock>
-                    <p>{report.summary}</p>
+                    <p>{shown.summary}</p>
                   </InterpretationBlock>
                 </div>
               )
             ) : null}
 
-            {report.metrics.length > 0 ? (
+            {shown.metrics.length > 0 ? (
               <ReportSection sectionId="metrics" label="Key metrics" dense>
                 <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
-                  {report.metrics.map((m, i) => {
+                  {shown.metrics.map((m, i) => {
                     const clickable = canReveal && isConsumedRowsMetric(m.label);
                     if (clickable) {
                       return (
@@ -981,7 +997,7 @@ export function AnalysisReportView({
               </ReportSection>
             ))}
 
-            {report.tables
+            {shown.tables
               .filter(
                 t => t.id !== 'equivalent_syntax' && t.title !== 'Equivalent R and SPSS syntax'
               )
@@ -1052,7 +1068,7 @@ export function AnalysisReportView({
                 flash('Excel download started');
                 return;
               }
-              void downloadReportXlsx(report, {
+              void downloadReportXlsx(shown, {
                 provenance: inspectorProvenance,
                 datasetId,
                 raw: rawResult ?? null,
@@ -1064,7 +1080,7 @@ export function AnalysisReportView({
             Excel
           </Button>
           <ReportExportMenu
-            report={report}
+            report={shown}
             rawResult={rawResult}
             provenance={inspectorProvenance}
             datasetId={datasetId}

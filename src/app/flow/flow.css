@@ -1469,6 +1469,7 @@ body:has(.flow) [data-radix-popper-content-wrapper],
 .flow-output {
   border-left: 1px solid var(--color-line);
   padding: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -2265,6 +2266,7 @@ select.flow-input {
 
 .output-body {
   flex: 1;
+  min-width: 0;
   overflow: auto;
   padding: 16px 20px 12px;
   display: flex;
@@ -2349,6 +2351,11 @@ select.flow-input {
   overflow-x: auto;
   border: 1px solid var(--color-line);
   border-radius: 10px;
+}
+
+.flow-md-table .flow-table {
+  width: max-content;
+  min-width: 100%;
 }
 
 .flow-md-table .flow-table th {

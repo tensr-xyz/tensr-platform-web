@@ -179,8 +179,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       shareTable(record.code_frequency, 'Themes', [
         { header: 'Theme', keys: ['label', 'code'] },
         { header: 'Count', keys: ['n', 'count'] },
-        { header: '%', keys: ['percent'] },
-        { header: 'Example', keys: ['example', 'quote', 'quote_span'] },
+        { header: '% of people who answered', keys: ['percent'] },
+        { header: 'Quote', keys: ['quote', 'example', 'quote_span'] },
       ])
     );
     add(groupTable(record.group_descriptives));

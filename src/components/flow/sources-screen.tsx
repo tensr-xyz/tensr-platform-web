@@ -34,6 +34,7 @@ export type SourceFile = {
   lineage_label?: string | null;
   source_filenames?: string[] | null;
   origin_dataset_id?: string | null;
+  offer_switch_back?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -316,7 +317,7 @@ export function SourcesScreen({
                     type="button"
                     onClick={() => openFile(datasetRowId(file))}
                   >
-                    Open
+                    {file.offer_switch_back ? 'Switch back' : 'Open'}
                   </Button>
                 )
               )}
