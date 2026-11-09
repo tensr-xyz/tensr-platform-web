@@ -197,7 +197,7 @@ export function SourcesScreen({
     };
   }, [projectId]);
 
-  const openFile = (id: string, name = '') => {
+  const openFile = (id: string, name = '', stay = false) => {
     setError(null);
     rememberFileName(id, name);
     void flowJson(`/api/projects/${projectId}`, {
@@ -206,7 +206,7 @@ export function SourcesScreen({
     })
       .then(() => {
         onChanged();
-        router.push(`/flow/p/${projectId}/responses`);
+        if (!stay) router.push(`/flow/p/${projectId}/responses`);
       })
       .catch(err => setError(err instanceof Error ? err.message : 'The file did not open.'));
   };
@@ -350,7 +350,13 @@ export function SourcesScreen({
                   <Button
                     className="flow-btn"
                     type="button"
-                    onClick={() => openFile(datasetRowId(file), sourceFileName(file))}
+                    onClick={() =>
+                      openFile(
+                        datasetRowId(file),
+                        sourceFileName(file),
+                        Boolean(file.offer_switch_back)
+                      )
+                    }
                   >
                     {file.offer_switch_back ? 'Switch back' : 'Open'}
                   </Button>
