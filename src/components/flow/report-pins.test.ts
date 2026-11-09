@@ -23,6 +23,7 @@ describe('server report pins', () => {
         deck: false,
         topline: true,
         keepLive: true,
+        bars: [],
       },
     ]);
   });

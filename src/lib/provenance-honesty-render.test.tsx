@@ -115,7 +115,7 @@ describe('analysis report F/n click-through (menu-catalog)', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: /show rows for f statistic/i }));
     expect(onReveal).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole('button', { name: /504 of 505 source rows used/i }));
+    fireEvent.click(screen.getByRole('button', { name: /show rows for base 504/i }));
     expect(onReveal).toHaveBeenCalledTimes(2);
   });
 
@@ -123,7 +123,7 @@ describe('analysis report F/n click-through (menu-catalog)', () => {
     const onReveal = jest.fn();
     render(<AnalysisReportView report={sampleReport()} onRevealConsumedRows={onReveal} />);
     expect(screen.queryByRole('button', { name: /show rows for f statistic/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /504 of 505 source rows used/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /show rows for base 504/i })).toBeNull();
   });
 
   it('does not offer F/n click-through when provenance is unavailable', () => {
@@ -136,7 +136,7 @@ describe('analysis report F/n click-through (menu-catalog)', () => {
       />
     );
     expect(screen.queryByRole('button', { name: /show rows for f statistic/i })).toBeNull();
-    expect(screen.queryByRole('button', { name: /504 of 505 source rows used/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /show rows for base 504/i })).toBeNull();
   });
 });
 
