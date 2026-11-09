@@ -4777,7 +4777,19 @@ function ResponsesScreen({
           />
         </div>
         {side === 'evidence' ? (
-          <EvidencePanel datasetId={datasetId} projectId={project?.id} />
+          <EvidencePanel
+            datasetId={datasetId}
+            projectId={project?.id}
+            variable={
+              countsSettled
+                ? {
+                    label: columnMeta(activeName)?.label || activeName,
+                    rows: counts,
+                    total: countTotal,
+                  }
+                : undefined
+            }
+          />
         ) : side === 'agent' ? (
           <div className="responses-agent">
             <ScrollArea className="sheet-scroll">

@@ -768,9 +768,11 @@ export function ThemesPanel({
 export function EvidencePanel({
   datasetId,
   projectId,
+  variable,
 }: {
   datasetId?: string;
   projectId?: string;
+  variable?: { label: string; rows: { label: string; count: number }[]; total: number };
 }) {
   const cell = useSurveyCell();
   const [quotes, setQuotes] = useState<Record<string, unknown> | null>(null);
@@ -821,6 +823,26 @@ export function EvidencePanel({
       });
     return () => controller.abort();
   }, [datasetId, cell]);
+  if (!cell && variable && variable.rows.length) {
+    const total = variable.total || 1;
+    return (
+      <div className="evidence">
+        <div className="evidence-lead">
+          <p className="flow-muted">{variable.label}</p>
+        </div>
+        <div className="evidence-said">
+          {variable.rows.map((row, index) => (
+            <article key={`${row.label}-${index}`}>
+              <p>{row.label || 'Blank'}</p>
+              <p>
+                {row.count.toLocaleString('en-GB')} · {Math.round((row.count / total) * 100)}%
+              </p>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (!cell) {
     return (
       <div className="evidence">
