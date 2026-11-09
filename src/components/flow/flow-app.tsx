@@ -1,12 +1,26 @@
 'use client';
 
 import Link from 'next/link';
+import { MessageSquare } from 'lucide-react';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { clearSigningIn } from '@/lib/signing-in';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { archiveChatTurn, type ChatExchange } from '@/components/flow/chat-thread';
+import {
+  chatRunInFlight,
+  liveChatRun,
+  publishLiveChatRun,
+  subscribeLiveChatRun,
+} from '@/components/flow/chat-live-run';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import {
   loadProjectTables,
@@ -16,12 +30,7 @@ import {
 } from '@/components/flow/project-tables';
 import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
 import { PaletteNoMatch } from '@/components/flow/palette-no-match';
-import {
-  dependentColumns,
-  isIdColumn,
-  isInternalColumn,
-  type FlowColumn,
-} from '@/lib/flow-columns';
+import { isIdColumn, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
 import {
   downloadsFromToolResults,
   openSignedDownload,
@@ -35,13 +44,14 @@ import {
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import { visibleAgentStep } from '@/lib/agent-step-copy';
 import { savePin } from '@/components/flow/report-pins';
+import { tableBodyFromAgentRun } from '@/components/flow/survey-screens';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
 import {
   answerTables,
   answerWithoutBase,
   answerWithoutTables,
   baseCount,
-  outputBaseNote,
+  outputBaseClause,
   outputCardReady,
   outputChecks,
   outputKind,
@@ -49,12 +59,14 @@ import {
   outputStat,
   outputTakeaway,
   outputTitle,
+  titledWithQuestion,
 } from '@/components/flow/chat-output';
+import { ThreadResult, useEnrichedToolResults } from '@/components/flow/use-enriched-results';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { resultFootnote, resultViewFromToolResults } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { DetailsScreen } from '@/components/flow/details-screen';
-import { SourcesScreen } from '@/components/flow/sources-screen';
+import { rememberedFileName, SourcesScreen } from '@/components/flow/sources-screen';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
@@ -144,6 +156,7 @@ import {
   findingFromOverview,
   findingFromTable,
   reportTableFromBook,
+  titledWithQuestions,
   segmentChoices,
   valueRows,
   type ReportFinding,
@@ -2436,6 +2449,9 @@ function ChatScreen({
   const [stepsOpen, setStepsOpen] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
   const [columns, setColumns] = useState<string[] | null>(null);
+  const [columnLabels, setColumnLabels] = useState<
+    { name: string; label?: string | null; value_labels?: Record<string, string> | null }[]
+  >([]);
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [attachedNote, setAttachedNote] = useState('');
@@ -2446,6 +2462,8 @@ function ChatScreen({
   const sentRef = useRef('');
   const answerRef = useRef('');
   const noteRef = useRef('');
+  const toolResultsRef = useRef(turn?.tool_results);
+  toolResultsRef.current = turn?.tool_results;
   sentRef.current = sent;
   answerRef.current = answer;
   noteRef.current = attachedNote;
@@ -2478,21 +2496,39 @@ function ChatScreen({
   useEffect(() => {
     if (!datasetId) {
       setColumns([]);
+      setColumnLabels([]);
       return;
     }
     let cancelled = false;
     setColumns(null);
-    void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${datasetId}/metadata`)
+    void flowJson<{
+      columns?: {
+        name?: string;
+        label?: string | null;
+        value_labels?: Record<string, string> | null;
+      }[];
+    }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         if (cancelled) return;
+        const listed = meta.columns || [];
         setColumns(
-          (meta.columns || [])
-            .map(column => column.name || '')
-            .filter(name => name && !isInternalColumn(name))
+          listed.map(column => column.name || '').filter(name => name && !isInternalColumn(name))
+        );
+        setColumnLabels(
+          listed
+            .filter(column => column.name)
+            .map(column => ({
+              name: column.name || '',
+              label: column.label,
+              value_labels: column.value_labels,
+            }))
         );
       })
       .catch(() => {
-        if (!cancelled) setColumns([]);
+        if (!cancelled) {
+          setColumns([]);
+          setColumnLabels([]);
+        }
       });
     return () => {
       cancelled = true;
@@ -2512,13 +2548,34 @@ function ChatScreen({
   const sendText = useCallback(
     async (text: string, nextMode: 'ask' | 'plan' | 'agent' = mode) => {
       if (!text.trim() || status === 'Thinking…' || sendingRef.current) return;
+      if (chatProjectId && chatRunInFlight(chatProjectId)) return;
       sendingRef.current = true;
+      const publish = (patch: Partial<ReturnType<typeof liveChatRun>>) => {
+        if (!chatProjectId) return;
+        const prior = liveChatRun();
+        publishLiveChatRun({
+          projectId: chatProjectId,
+          sessionId: prior?.projectId === chatProjectId ? prior.sessionId : sessionRef.current,
+          question: text,
+          answer: prior?.projectId === chatProjectId ? prior.answer : '',
+          steps: prior?.projectId === chatProjectId ? prior.steps : [],
+          status: 'Thinking…',
+          running: true,
+          ...patch,
+        });
+      };
+      publish({ answer: '', steps: [], status: 'Thinking…', running: true });
       const turnFiles = attachmentsRef.current;
       setPast(current =>
         archiveChatTurn(
           current,
           sentRef.current
-            ? { user: sentRef.current, note: noteRef.current, answer: answerRef.current }
+            ? {
+                user: sentRef.current,
+                note: noteRef.current,
+                answer: answerRef.current,
+                toolResults: toolResultsRef.current,
+              }
             : null
         )
       );
@@ -2548,21 +2605,48 @@ function ChatScreen({
             const line = visibleAgentStep(progress.step, progress.message);
             if (!line) return;
             setSteps(current => (current.includes(line) ? current : [...current, line]));
+            const prior = liveChatRun();
+            publish({
+              steps: prior?.steps.includes(line) ? prior.steps : [...(prior?.steps || []), line],
+              status: null,
+              answer: draft,
+            });
           },
           onDelta: chunk => {
             draft += chunk;
             setAnswer(draft);
             setStatus(null);
+            publish({ answer: draft, status: null });
           },
           onReplace: next => {
             draft = next;
             setAnswer(next);
             setStatus(null);
+            publish({ answer: next, status: null });
+          },
+          onPreview: preview => {
+            const text = preview.text || draft;
+            if (text) {
+              draft = text;
+              setAnswer(text);
+            }
+            setStatus(null);
+            if (preview.tool_results?.length) {
+              setTurn({
+                status: 'ok',
+                mode: nextMode,
+                answer_markdown: text,
+                session_id: sessionRef.current || undefined,
+                tool_results: preview.tool_results,
+              });
+            }
+            publish({ answer: text, status: null });
           },
         });
         if (result.session_id) {
           sessionRef.current = result.session_id;
           rememberChat(result.session_id);
+          publish({ sessionId: result.session_id, answer: result.answer_markdown || draft });
           setSessions(current => {
             const title = text.trim();
             const row = {
@@ -2588,9 +2672,17 @@ function ChatScreen({
         setDownloads(downloadsFromToolResults(entries));
         if (result.status !== 'awaiting_approval') setAttachments([]);
         setStatus(null);
+        publish({
+          running: false,
+          status: null,
+          answer: result.answer_markdown || draft,
+          sessionId: result.session_id || sessionRef.current,
+        });
         loadRail();
       } catch (err) {
-        setStatus(err instanceof Error ? err.message : 'The reply did not finish. Ask again.');
+        const message = err instanceof Error ? err.message : 'The reply did not finish. Ask again.';
+        setStatus(message);
+        publish({ running: false, status: message });
       } finally {
         sendingRef.current = false;
       }
@@ -2755,6 +2847,7 @@ function ChatScreen({
 
   const clearChat = () => {
     sessionRef.current = null;
+    publishLiveChatRun(null);
     rememberChat(null);
     setPast([]);
     setSent('');
@@ -2821,17 +2914,37 @@ function ChatScreen({
       .catch(() => setStatus('That chat could not be opened.'));
   };
 
-  const kind = outputKind(turn?.tool_results);
-  const title = outputTitle(turn?.tool_results, answer);
+  const toolResults = useEnrichedToolResults(turn?.tool_results);
+  const kind = outputKind(toolResults);
+  const title = outputTitle(toolResults, answer, columnLabels);
   const takeaway = outputTakeaway(answer);
-  const baseNote = outputBaseNote(answer);
-  const stat = outputStat(turn?.tool_results, answer, takeaway);
-  const runIds = outputRunIds(turn?.tool_results);
+  const baseNote = outputBaseClause(toolResults, answer);
+  const stat = outputStat(toolResults, answer, takeaway);
+  const runIds = outputRunIds(toolResults);
   const outputReady = outputCardReady(turn, Boolean(plan));
   useEffect(() => {
     if (outputReady) setPanelOpen(true);
   }, [outputReady]);
   useEffect(() => {
+    const apply = () => {
+      const run = liveChatRun();
+      if (!run || run.projectId !== chatProjectId) return;
+      setSent(run.question);
+      setAnswer(run.answer);
+      setSteps(run.steps);
+      setStatus(run.status);
+      if (run.sessionId) {
+        sessionRef.current = run.sessionId;
+        rememberChat(run.sessionId);
+      }
+    };
+    apply();
+    return subscribeLiveChatRun(apply);
+    // rememberChat is stable for this screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chatProjectId]);
+  useEffect(() => {
+    if (chatRunInFlight(chatProjectId)) return;
     const fromUrl = new URLSearchParams(window.location.search).get('session');
     const stored = window.sessionStorage.getItem(`tensr-open-chat:${chatProjectId}`);
     const sessionId = fromUrl || stored;
@@ -2839,17 +2952,21 @@ function ChatScreen({
     // The address is read once when this chat screen opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatProjectId]);
-  const checks = outputChecks(turn?.tool_results);
+  const checks = outputChecks(toolResults);
   const tables = answerTables(answer);
   const thread = answerWithoutBase(panelOpen && tables ? answerWithoutTables(answer) : answer);
   const tableMode = kind === 'Crosstab' && Boolean(tables);
   const ledger = (turn?.turn_state?.ledger || {}) as { weight?: string | null };
-  const resultView = resultViewFromToolResults(turn?.tool_results);
-  const structuredTables = resultView.tables;
+  const resultView = resultViewFromToolResults(toolResults);
+  const structuredTables = resultView.tables.map(table => ({
+    ...table,
+    title: titledWithQuestion(table.title, columnLabels),
+  }));
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
     baseNote,
-    kind
+    kind,
+    columnLabels
   );
   const resultChecks = resultView.checks.length
     ? resultView.checks
@@ -2966,23 +3083,11 @@ function ChatScreen({
                       {turn.user}
                       {turn.note ? <div className="flow-muted">{turn.note}</div> : null}
                     </div>
-                    {turn.toolResults?.length ? (
-                      <AnalysisResult
-                        lead={outputTakeaway(turn.answer)}
-                        tables={resultViewFromToolResults(turn.toolResults).tables}
-                        footnote={resultFootnote(
-                          resultViewFromToolResults(turn.toolResults),
-                          outputBaseNote(turn.answer),
-                          outputKind(turn.toolResults)
-                        )}
-                        checks={resultViewFromToolResults(turn.toolResults).checks}
-                        script={resultViewFromToolResults(turn.toolResults).script}
-                      />
-                    ) : turn.answer ? (
-                      <FlowMarkdown className="chat-prose">
-                        {answerWithoutBase(turn.answer)}
-                      </FlowMarkdown>
-                    ) : null}
+                    <ThreadResult
+                      results={turn.toolResults}
+                      answer={turn.answer}
+                      columns={columnLabels}
+                    />
                   </div>
                 ))}
                 {sent ? (
@@ -3038,6 +3143,9 @@ function ChatScreen({
                       footnote={footnote}
                       checks={resultChecks}
                       script={resultView.script}
+                      rCheck={resultView.rCheck}
+                      rStatement={resultView.rStatement}
+                      runId={runIds[0]}
                     />
                   ) : (
                     <FlowMarkdown className="chat-prose">{thread}</FlowMarkdown>
@@ -3111,6 +3219,26 @@ function ChatScreen({
                         }}
                       >
                         Add to report
+                      </Button>
+                      <Button
+                        className="flow-btn"
+                        type="button"
+                        disabled={!datasetId}
+                        onClick={() => {
+                          const request = tableBodyFromAgentRun(turn?.tool_results);
+                          if (!request || !datasetId) {
+                            setStatus('This result is not a table that can be saved.');
+                            return;
+                          }
+                          void flowJson(`/datasets/${datasetId}/tables`, {
+                            method: 'POST',
+                            body: JSON.stringify(request),
+                          })
+                            .then(() => setStatus('Saved to Tables.'))
+                            .catch(() => setStatus('That table could not be saved.'));
+                        }}
+                      >
+                        Save table
                       </Button>
                       {downloads[0] ? (
                         <Button
@@ -3217,22 +3345,23 @@ function ChatScreen({
                     </Button>
                   </div>
                   <h2>{title}</h2>
-                  {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
+                  {baseNote && !structuredTables.length ? (
+                    <p className="flow-muted output-base">{baseNote}</p>
+                  ) : null}
                 </div>
                 <div className="output-body">
                   {structuredTables.length ? (
                     <AnalysisResult
-                      lead={takeaway}
                       tables={structuredTables}
                       footnote={footnote}
                       checks={resultChecks}
                       script={resultView.script}
+                      rCheck={resultView.rCheck}
+                      rStatement={resultView.rStatement}
+                      runId={runIds[0]}
                     />
                   ) : (
                     <>
-                      {takeaway && takeaway !== title ? (
-                        <div className="output-takeaway">{takeaway}</div>
-                      ) : null}
                       {tables ? (
                         <FlowMarkdown className="output-table">{tables}</FlowMarkdown>
                       ) : null}
@@ -3427,6 +3556,33 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
   );
 }
 
+type CachedSheet = {
+  columns: FlowColumn[];
+  headers: string[];
+  variableNames: string[];
+  rows: unknown[][];
+  n: number;
+};
+
+const sheetPages = new Map<string, CachedSheet>();
+
+function fileChoices(
+  rows: {
+    dataset_id?: string;
+    id?: string;
+    original_filename?: string;
+    source_filenames?: string[];
+  }[],
+  selected: string
+): { value: string; label: string }[] {
+  const options = rows.map(row => ({
+    value: datasetRowId(row),
+    label: datasetFileLabel(row),
+  }));
+  if (!selected || options.some(option => option.value === selected)) return options;
+  return [{ value: selected, label: rememberedFileName(selected) || 'Opening file' }, ...options];
+}
+
 function ResponsesScreen({
   project,
   datasets,
@@ -3492,6 +3648,7 @@ function ResponsesScreen({
   // The theme last reviewed reopens with its new counts once the coded version is in use.
   const [reopenTheme, setReopenTheme] = useState('');
   const filtersKey = JSON.stringify(filters);
+  const sheetKey = `${datasetId || ''}:${pageOffset}:${filtersKey}`;
   const [valueFilter, setValueFilter] = useState<string | null>(null);
   const [agentText, setAgentText] = useState('');
   const [agentAnswer, setAgentAnswer] = useState('');
@@ -3499,7 +3656,6 @@ function ResponsesScreen({
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
-  const [descError, setDescError] = useState<string | null>(null);
   const [columnCounts, setColumnCounts] = useState<
     Record<
       string,
@@ -3528,7 +3684,17 @@ function ResponsesScreen({
       return;
     }
     let cancelled = false;
-    setSheetPhase('loading');
+    const cached = sheetPages.get(sheetKey);
+    if (cached) {
+      setColumns(cached.columns);
+      setHeaders(cached.headers);
+      setVariableNames(cached.variableNames);
+      setPreview(cached.rows);
+      setRowTotal(cached.n);
+      setSheetPhase('ready');
+    } else {
+      setSheetPhase('loading');
+    }
     const load = () =>
       flowJson<{
         rows?: unknown[][];
@@ -3544,11 +3710,19 @@ function ResponsesScreen({
       .catch(() => wait(1200).then(load))
       .then(([meta, page]) => {
         if (cancelled) return;
-        setColumns(meta.columns || []);
-        setHeaders(page.headers || []);
-        setVariableNames(page.variable_names || []);
-        setPreview(page.rows || []);
-        setRowTotal(page.n_rows || 0);
+        const next = {
+          columns: meta.columns || [],
+          headers: page.headers || [],
+          variableNames: page.variable_names || [],
+          rows: page.rows || [],
+          n: page.n_rows || 0,
+        };
+        sheetPages.set(sheetKey, next);
+        setColumns(next.columns);
+        setHeaders(next.headers);
+        setVariableNames(next.variableNames);
+        setPreview(next.rows);
+        setRowTotal(next.n);
         setSheetPhase('ready');
       })
       .catch(() => {
@@ -3560,7 +3734,7 @@ function ResponsesScreen({
     return () => {
       cancelled = true;
     };
-  }, [datasetId, pageOffset, ready, projectKey, sheetAttempt, filtersKey]);
+  }, [datasetId, pageOffset, ready, projectKey, sheetAttempt, filtersKey, sheetKey]);
   useEffect(() => {
     if (!project) return;
     void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
@@ -3874,7 +4048,15 @@ function ResponsesScreen({
               <Link key={spec.id} className="rail-analysis" href={`/flow/p/${project?.id}/tables`}>
                 <span className="rail-badge">T{spec.number || ''}</span>
                 <span className="rail-analysis-copy">
-                  <span>{spec.label}</span>
+                  <span>
+                    {titledWithQuestions(
+                      spec.label,
+                      columns.map(column => ({
+                        name: column.name,
+                        label: column.label || undefined,
+                      }))
+                    )}
+                  </span>
                   <span className="flow-muted">{spec.note || 'Custom Tables'}</span>
                 </span>
               </Link>
@@ -3898,10 +4080,7 @@ function ResponsesScreen({
                 body: JSON.stringify({ active_dataset_id: nextId }),
               });
             }}
-            options={projectDatasets.map(row => ({
-              value: datasetRowId(row),
-              label: datasetFileLabel(row),
-            }))}
+            options={fileChoices(projectDatasets, datasetId || '')}
           />
           {viewSwitch}
           {tab === 'themes' || tab === 'notebook' ? null : (
@@ -3956,48 +4135,9 @@ function ResponsesScreen({
                 </>
               ) : null}
               <span className="sheet-spacer" />
-              {surveyCell ? null : (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button className="flow-btn sheet-analyse" type="button">
-                      Analyse
-                      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                        <path
-                          d="M3 4l2 2 2-2"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setWeightOpen(true)}>Weight</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setAnovaOpen(true)}>ANOVA</DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        if (!datasetId) return;
-                        setDescError(null);
-                        void flowFetch(`/datasets/${datasetId}/analyze/descriptives`, {
-                          method: 'POST',
-                          body: JSON.stringify({ columns: dependentColumns(columns).slice(0, 1) }),
-                        }).then(async response => {
-                          if (!response.ok) setDescError(await response.text());
-                          else setDescError(null);
-                        });
-                      }}
-                    >
-                      Descriptives
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
             </>
           )}
         </div>
-        {descError ? <p className="flow-error">{descError}</p> : null}
         {filters.length ? (
           <div className="sheet-toolbar sheet-filter-bar">
             <span>
@@ -4237,6 +4377,13 @@ function ResponsesScreen({
                               <span className="sheet-col-label">
                                 {(() => {
                                   const meta = columnMeta(column.name);
+                                  const measure = String(meta?.measure || '').toLowerCase();
+                                  if (
+                                    measure === 'nominal' ||
+                                    measure === 'ordinal' ||
+                                    measure === 'scale'
+                                  )
+                                    return measure;
                                   const label =
                                     meta?.label && meta.label !== column.name ? meta.label : '';
                                   if (label) return label;
@@ -4617,6 +4764,46 @@ function ResponsesScreen({
         </div>
         {side === 'evidence' ? (
           <EvidencePanel datasetId={datasetId} projectId={project?.id} />
+        ) : side === 'agent' ? (
+          <div className="responses-agent">
+            <ScrollArea className="sheet-scroll">
+              <div className="output-body">
+                {agentStatus === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
+                {agentStatus && agentStatus !== 'Thinking…' ? (
+                  <p className="flow-error">{agentStatus}</p>
+                ) : null}
+                {agentAnswer ? (
+                  <FlowMarkdown>{agentAnswer}</FlowMarkdown>
+                ) : agentStatus ? null : (
+                  <Empty className="min-h-[280px] border-0 bg-transparent">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <MessageSquare />
+                      </EmptyMedia>
+                      <EmptyTitle className="text-sm">Ask about these responses</EmptyTitle>
+                      <EmptyDescription>
+                        Questions about the open file show up here.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                )}
+              </div>
+            </ScrollArea>
+            <FlowComposer
+              value={agentText}
+              onChange={setAgentText}
+              onSend={askAboutColumn}
+              placeholder={`Ask about ${activeName}`}
+              mode={agentMode}
+              onMode={setAgentMode}
+              busy={agentStatus === 'Thinking…'}
+              columns={names}
+              attachments={[]}
+              onAttach={() => undefined}
+              onRemoveAttachment={() => undefined}
+              layout="thread"
+            />
+          </div>
         ) : (
           <ScrollArea className="sheet-scroll">
             {side === 'variable' && codedColumn ? (
@@ -4711,29 +4898,6 @@ function ResponsesScreen({
                     Use as banner column <span aria-hidden="true">+</span>
                   </Link>
                 ) : null}
-              </div>
-            ) : null}
-            {side === 'agent' ? (
-              <div className="output-body">
-                {agentStatus === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
-                {agentStatus && agentStatus !== 'Thinking…' ? (
-                  <p className="flow-error">{agentStatus}</p>
-                ) : null}
-                {agentAnswer ? <FlowMarkdown>{agentAnswer}</FlowMarkdown> : null}
-                <FlowComposer
-                  value={agentText}
-                  onChange={setAgentText}
-                  onSend={askAboutColumn}
-                  placeholder={`Ask about ${activeName}`}
-                  mode={agentMode}
-                  onMode={setAgentMode}
-                  busy={agentStatus === 'Thinking…'}
-                  columns={names}
-                  attachments={[]}
-                  onAttach={() => undefined}
-                  onRemoveAttachment={() => undefined}
-                  layout="thread"
-                />
               </div>
             ) : null}
           </ScrollArea>
@@ -4957,9 +5121,17 @@ function ReportScreen({
           return;
         }
         const meta = await flowJson<{
-          columns?: { name?: string; value_labels?: Record<string, string> | null }[];
+          columns?: {
+            name?: string;
+            label?: string;
+            value_labels?: Record<string, string> | null;
+          }[];
         }>(`/datasets/${datasetId}/metadata`).catch(() => ({ columns: [] }));
         if (!live) return;
+        const questions = (meta.columns || []).map(column => ({
+          name: column.name || '',
+          label: column.label || '',
+        }));
         const labels = Object.fromEntries(
           (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
         );
@@ -5009,7 +5181,8 @@ function ReportScreen({
         if (!live) return;
         const ready = settled.ready.map(({ row, detail }) => {
           const note = tableFileNote(row, datasetId);
-          const label = note ? `${row.label} (${note})` : row.label;
+          const named = titledWithQuestions(row.label, questions);
+          const label = note ? `${named} (${note})` : named;
           const spec = (detail.spec as Record<string, unknown>) || {};
           return {
             id: row.id,
@@ -5020,13 +5193,17 @@ function ReportScreen({
             table: reportTableFromBook(row.id, label, row.number, detail, labels),
           };
         });
+        const usedNumbers = liveRows
+          .map(row => Number(row.table_number) || 0)
+          .filter(number => number > 0);
+        const numberShift = usedNumbers.length ? Math.min(...usedNumbers) - 1 : 0;
         setSpecs(
           ready.map(row => ({
             id: row.id,
             label: row.label,
             spec: row.spec,
             datasetId: row.datasetId,
-            number: row.number,
+            number: row.number > 0 ? row.number - numberShift : row.number,
           }))
         );
         setPicked(ready.map(row => row.id));
@@ -5035,17 +5212,25 @@ function ReportScreen({
           .map(row => ({
             id: String(row.spec_id || ''),
             label: String(row.label || ''),
-            number: Number(row.table_number) || 0,
+            number:
+              Number(row.table_number) > 0
+                ? Math.max(1, Number(row.table_number) - numberShift)
+                : 0,
             datasetId: String(row.dataset_id || ''),
             filename: String(row.filename || ''),
             detail: String(row.detail || 'Rebuild this table on the current file.'),
           }));
         setStaleTables(current => uniqueStale([...current, ...refused, ...settled.stale]));
         const nextTables = distinctTables(ready.map(row => row.table));
-        setTables(nextTables);
+        const numbered = numberShift
+          ? nextTables.map(table =>
+              table.index > 0 ? { ...table, index: table.index - numberShift } : table
+            )
+          : nextTables;
+        setTables(numbered);
         setSegmentId(null);
         setRowCut(null);
-        writeFindings(nextTables, null, null);
+        writeFindings(numbered, null, null);
         setPhase('ready');
       })
       .catch(err => {
@@ -5121,6 +5306,9 @@ function ReportScreen({
         method: 'POST',
         body: JSON.stringify({
           spec_ids: selected.map(row => row.id),
+          headlines: findings
+            .filter(finding => finding.headline)
+            .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
           ...(template ? { template_base64: template } : {}),
         }),
       }
@@ -5572,6 +5760,24 @@ function ReportScreen({
                         <p className="flow-muted">{pin.citation}</p>
                         <h3>{pin.headline}</h3>
                         {pin.support ? <p>{pin.support}</p> : null}
+                        {pin.bars?.length ? (
+                          <div className="report-bars">
+                            {pin.bars.map(bar => (
+                              <div key={`${pin.id}-${bar.label}`}>
+                                <div className="report-bar-label">
+                                  <span>{bar.label}</span>
+                                  <span>{bar.percent.toFixed(1)}%</span>
+                                </div>
+                                <div className="report-bar-track">
+                                  <div
+                                    className="report-bar"
+                                    style={{ width: `${Math.max(0, Math.min(100, bar.percent))}%` }}
+                                  />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                     </article>
                   );

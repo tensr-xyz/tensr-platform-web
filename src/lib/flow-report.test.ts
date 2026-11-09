@@ -2,6 +2,7 @@ import {
   distinctTables,
   findingFromTable,
   reportTableFromBook,
+  titledWithQuestions,
   type ReportTable,
 } from './flow-report';
 
@@ -71,6 +72,70 @@ const flat: ReportTable = {
 };
 
 describe('report findings', () => {
+  it('leads with Top 2 when another row has the larger gap', () => {
+    const scale: ReportTable = {
+      ...table,
+      id: 'sat',
+      letters: [
+        { stub_row_id: 'neither', banner_id: 'east', letter: 'A' },
+        { stub_row_id: 'top2', banner_id: 'north', letter: 'B' },
+      ],
+      rows: [
+        {
+          id: 'neither',
+          label: 'Neither',
+          kind: 'value',
+          cells: [
+            { banner_id: 'north', percent: 19 },
+            { banner_id: 'east', percent: 41 },
+          ],
+        },
+        {
+          id: 'top2',
+          label: 'Top 2',
+          kind: 'net',
+          cells: [
+            { banner_id: 'north', percent: 62 },
+            { banner_id: 'east', percent: 48 },
+          ],
+        },
+      ],
+    };
+    const finding = findingFromTable(scale, null, null);
+    expect(finding.headline).toBe('Top 2: 62% among North vs 48% among East.');
+    expect(finding.significant).toBe(true);
+  });
+
+  it('leads with the mean when the table has no Yes or Top 2 row', () => {
+    const means: ReportTable = {
+      ...table,
+      id: 'mean',
+      letters: [{ stub_row_id: 'other', banner_id: 'east', letter: 'A' }],
+      rows: [
+        {
+          id: 'other',
+          label: 'Other',
+          kind: 'value',
+          cells: [
+            { banner_id: 'north', percent: 10 },
+            { banner_id: 'east', percent: 40 },
+          ],
+        },
+        {
+          id: 'mean',
+          label: 'Mean',
+          kind: 'mean',
+          cells: [
+            { banner_id: 'north', percent: 3.2 },
+            { banner_id: 'east', percent: 4.1 },
+          ],
+        },
+      ],
+    };
+    const finding = findingFromTable(means, null, null);
+    expect(finding.headline.startsWith('Mean')).toBe(true);
+  });
+
   it('leads with the largest significant gap in plain English', () => {
     const finding = findingFromTable(table, null, null);
     expect(finding.headline).toBe('Price too high: 16% among East vs 7.5% among North.');
@@ -148,12 +213,61 @@ describe('report findings', () => {
     );
   });
 
+  it('leads a yes/no question with the yes row', () => {
+    const book = {
+      stubs: [{ column: 'aware' }],
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'midlands', label: 'Midlands', letter_slot: 'A' },
+        { id: 'london', label: 'London', letter_slot: 'B' },
+      ],
+      letters: [
+        { stub_row_id: 'aware:1', banner_id: 'london', letter: 'A' },
+        { stub_row_id: 'aware:0', banner_id: 'midlands', letter: 'B' },
+      ],
+      rows: [
+        {
+          id: 'aware:1',
+          label: 'Yes',
+          kind: 'value',
+          cells: [
+            { banner_id: 'midlands', percent: 68 },
+            { banner_id: 'london', percent: 88 },
+          ],
+        },
+        {
+          id: 'aware:0',
+          label: 'No',
+          kind: 'value',
+          cells: [
+            { banner_id: 'midlands', percent: 32 },
+            { banner_id: 'london', percent: 12 },
+          ],
+        },
+      ],
+    };
+    const finding = findingFromTable(
+      reportTableFromBook('t1', 'Have you heard of Brew & Co?', 1, book),
+      null,
+      null
+    );
+    expect(finding.headline).toBe('Yes: 88% among London vs 68% among Midlands.');
+  });
+
   it('keeps the number a table was given when it is the only one left', () => {
     const finding = findingFromTable({ ...table, index: 6 }, null, null);
     expect(finding.citation).toBe('T6');
     expect(finding.eyebrow.startsWith('T6')).toBe(true);
     const unnumbered = findingFromTable({ ...table, index: 0 }, null, null);
     expect(unnumbered.citation).toBe('');
+  });
+
+  it('replaces a variable name once, and leaves the question text alone', () => {
+    const titled = titledWithQuestions('region by gender', [
+      { name: 'region', label: 'Which region do you live in?' },
+      { name: 'gender', label: 'Gender' },
+    ]);
+    expect(titled).toBe('Which region do you live in? by gender');
   });
 
   it('keeps one finding when saved tables repeat or overlap', () => {

@@ -61,6 +61,13 @@ function downloadSvg(svg: string, filename: string, scale: number) {
   image.src = url;
 }
 
+/** The open file as SPSS, plus the syntax that reads it. */
+export async function savAndSyntax(datasetId: string, stem: string) {
+  if (!datasetId) throw new Error('Open a file first.');
+  await downloadExport(`/datasets/${datasetId}/export?format=sav`, `${stem}.sav`);
+  await downloadExport(`/datasets/${datasetId}/export?format=sps`, `${stem}.sps`);
+}
+
 /** The same deck Report builds: every saved table on the file, one slide each. */
 export async function deckFromTables(datasetId: string, stem: string) {
   const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
@@ -104,6 +111,8 @@ export function ExportDialog({
   const [number, setNumber] = useState('1');
   const [italics, setItalics] = useState(true);
   const [withNote, setWithNote] = useState(kind === 'chart' || Boolean(document.summary));
+  const [methodsOn, setMethodsOn] = useState(true);
+  const [liveOn, setLiveOn] = useState(false);
   const [reportFormat, setReportFormat] = useState('docx');
   const [included, setIncluded] = useState<Record<number, boolean>>({});
   const stem = caption.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
@@ -122,11 +131,26 @@ export function ExportDialog({
       .finally(() => setBusy(''));
   };
 
+  const exportBody = (ids: string[]) => {
+    const path = typeof window === 'undefined' ? '' : window.location.pathname;
+    const project = path.match(/\/flow\/p\/[^/]+/);
+    const link =
+      liveOn && project && typeof window !== 'undefined'
+        ? `${window.location.origin}${project[0]}/report`
+        : '';
+    return JSON.stringify({
+      run_ids: ids,
+      style,
+      include_methods: methodsOn,
+      live_link: link,
+    });
+  };
+
   const serverFor = (format: 'pdf' | 'docx' | 'html', filename: string, ids: string[]) => {
     if (!ids.length) throw new Error('Pin a saved analysis before exporting this format.');
     return downloadExport(`/datasets/reports/pipeline/export?format=${format}`, filename, {
       method: 'POST',
-      body: JSON.stringify({ run_ids: ids }),
+      body: exportBody(ids),
     });
   };
 
@@ -134,7 +158,7 @@ export function ExportDialog({
     if (!runIds.length) throw new Error('Save the analysis before exporting this format.');
     return downloadExport(`/datasets/reports/pipeline/export?format=${format}`, filename, {
       method: 'POST',
-      body: JSON.stringify({ run_ids: runIds }),
+      body: exportBody(runIds),
     });
   };
 
@@ -186,7 +210,14 @@ export function ExportDialog({
         note: 'Plain text, tables as Markdown',
         run: () => downloadText(`${stem}.md`, documentMarkdown(reportDoc), 'text/markdown'),
       },
-      { id: 'sav', ext: '.SAV + .SPS', label: 'Data for SPSS', note: 'Coming soon', soon: true },
+      {
+        id: 'sav',
+        ext: '.SAV + .SPS',
+        label: 'Data for SPSS',
+        note: datasetId ? 'The file and its syntax' : 'Open a file first',
+        soon: !datasetId,
+        run: () => savAndSyntax(datasetId || '', stem),
+      },
     ];
     const format = formats.find(item => item.id === reportFormat) || formats[0];
     return (
@@ -230,13 +261,12 @@ export function ExportDialog({
                     key={item}
                     type="button"
                     data-active={style === item}
-                    disabled={item === 'client'}
                     onClick={() => setStyle(item)}
                   >
                     {item === 'apa'
                       ? 'APA 7 manuscript'
                       : item === 'client'
-                        ? 'Client template · soon'
+                        ? 'Client template'
                         : 'Plain'}
                   </Button>
                 ))}
@@ -252,19 +282,21 @@ export function ExportDialog({
                     aria-label="Results paragraphs"
                   />
                 </label>
-                <label className="xp-toggle" data-soon>
+                <label className="xp-toggle">
                   <span>
                     <strong>Include methods appendix</strong>
-                    <span>Coming soon</span>
                   </span>
-                  <Switch checked={false} disabled aria-label="Methods appendix" />
+                  <Switch
+                    checked={methodsOn}
+                    onCheckedChange={setMethodsOn}
+                    aria-label="Methods appendix"
+                  />
                 </label>
-                <label className="xp-toggle" data-soon>
+                <label className="xp-toggle">
                   <span>
                     <strong>Keep live link back to Tensr in captions</strong>
-                    <span>Coming soon</span>
                   </span>
-                  <Switch checked={false} disabled aria-label="Live link" />
+                  <Switch checked={liveOn} onCheckedChange={setLiveOn} aria-label="Live link" />
                 </label>
               </div>
             </div>
@@ -322,7 +354,11 @@ export function ExportDialog({
             <Button
               className="flow-btn primary"
               type="button"
-              disabled={busy !== '' || !format.run || (!chosen.length && format.id !== 'pptx')}
+              disabled={
+                busy !== '' ||
+                !format.run ||
+                (!chosen.length && format.id !== 'pptx' && format.id !== 'sav')
+              }
               onClick={() => format.run && save(format.label, format.run)}
             >
               {busy ? 'Working…' : `↓ Export ${format.ext.toLowerCase().split(' ')[0]}`}
@@ -467,8 +503,6 @@ export function ExportDialog({
                   key={item}
                   type="button"
                   data-active={style === item}
-                  disabled={item === 'client'}
-                  title={item === 'client' ? 'Client templates are coming soon' : undefined}
                   onClick={() => setStyle(item)}
                 >
                   {item === 'apa' ? 'APA 7' : item === 'client' ? 'Client template' : 'Plain'}
@@ -550,7 +584,9 @@ export function ExportDialog({
           </div>
           <div className="xp-col xp-preview">
             <div className="xp-preview-head">
-              <span>Preview · {style === 'plain' ? 'plain' : 'APA 7'}</span>
+              <span>
+                Preview · {style === 'plain' ? 'plain' : style === 'client' ? 'client' : 'APA 7'}
+              </span>
               <span>100%</span>
             </div>
             <div className="xp-page" data-style={style} data-italics={italics || undefined}>

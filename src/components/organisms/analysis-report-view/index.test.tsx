@@ -66,15 +66,10 @@ describe('AnalysisReportView provenance banner', () => {
       />
     );
     expect(screen.getByTestId('r-syntax-badge')).toHaveTextContent('Verified against R ✓');
-    expect(screen.getByTestId('r-equivalent-syntax')).toHaveTextContent(
-      'aov(Time_90 ~ Interval, data = d)'
-    );
-    expect(screen.getByTestId('spss-equivalent-syntax')).toHaveTextContent(
-      'ONEWAY Time_90 BY Interval.'
-    );
-    expect(
-      screen.getByRole('button', { name: /504 of 505 source rows used/i })
-    ).toBeInTheDocument();
+    expect(screen.queryByTestId('r-equivalent-syntax')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('spss-equivalent-syntax')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /base 504/i })).toBeInTheDocument();
+    expect(screen.queryByText('Rows')).not.toBeInTheDocument();
     expect(screen.queryByText('variance_mode')).not.toBeInTheDocument();
     expect(screen.queryByTestId('provenance-inspector')).not.toBeInTheDocument();
   });

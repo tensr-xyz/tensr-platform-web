@@ -109,10 +109,10 @@ export function mergeTableLists(project: ProjectTable[], file: ProjectTable[]): 
   return [...file.filter(table => !known.has(`${table.datasetId}:${table.id}`)), ...project];
 }
 
-/** "on cars_EN - weighted 3 Nov" for a table built on another file than the one open. */
+/** "on cars_EN - weighted 3 Nov" when the table was built on a different file. */
 export function tableFileNote(table: ProjectTable, openDatasetId: string | undefined): string {
-  if (table.filename) return `on ${table.filename}`;
   if (!table.datasetId || table.datasetId === openDatasetId) return '';
+  if (table.filename) return `on ${table.filename}`;
   return 'on another file';
 }
 

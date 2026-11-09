@@ -34,6 +34,7 @@ export type SourceFile = {
   lineage_label?: string | null;
   source_filenames?: string[] | null;
   origin_dataset_id?: string | null;
+  offer_switch_back?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -60,9 +61,43 @@ const CONTEXT_KINDS = [
   { value: 'report', label: 'Report' },
 ];
 
+const FILE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function looksLikeFileId(value: string): boolean {
+  const text = value.trim();
+  const stem = text.replace(/\.[^.]+$/, '');
+  return FILE_UUID.test(text) || FILE_UUID.test(stem);
+}
+
+const FILE_NAME_KEY = 'tensr.openingFile';
+
+export function rememberFileName(id: string, name: string): void {
+  if (!id || !name || looksLikeFileId(name) || typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(`${FILE_NAME_KEY}:${id}`, name);
+  } catch {
+    // The picker can still use the name once the file list arrives.
+  }
+}
+
+export function rememberedFileName(id: string): string {
+  if (!id || typeof window === 'undefined') return '';
+  try {
+    const name = window.sessionStorage.getItem(`${FILE_NAME_KEY}:${id}`) || '';
+    return name && !looksLikeFileId(name) ? name : '';
+  } catch {
+    return '';
+  }
+}
+
 export function sourceFileName(file: SourceFile): string {
-  if (file.parent_dataset_id && file.lineage_label) return file.lineage_label;
-  return file.original_filename || file.dataset_id || file.id || 'File';
+  const names = [file.original_filename, ...(file.source_filenames || [])];
+  for (const name of names) {
+    const text = String(name || '').trim();
+    if (text && !looksLikeFileId(text)) return text;
+  }
+  if (file.lineage_label && !looksLikeFileId(file.lineage_label)) return file.lineage_label;
+  return 'Untitled file';
 }
 
 const VERSION_MONTHS = [
@@ -162,8 +197,9 @@ export function SourcesScreen({
     };
   }, [projectId]);
 
-  const openFile = (id: string) => {
+  const openFile = (id: string, name = '') => {
     setError(null);
+    rememberFileName(id, name);
     void flowJson(`/api/projects/${projectId}`, {
       method: 'PATCH',
       body: JSON.stringify({ active_dataset_id: id }),
@@ -314,9 +350,9 @@ export function SourcesScreen({
                   <Button
                     className="flow-btn"
                     type="button"
-                    onClick={() => openFile(datasetRowId(file))}
+                    onClick={() => openFile(datasetRowId(file), sourceFileName(file))}
                   >
-                    Open
+                    {file.offer_switch_back ? 'Switch back' : 'Open'}
                   </Button>
                 )
               )}
@@ -392,7 +428,7 @@ export function SourcesScreen({
                         <Button
                           className="flow-btn"
                           type="button"
-                          onClick={() => openFile(datasetRowId(newest))}
+                          onClick={() => openFile(datasetRowId(newest), sourceFileName(newest))}
                         >
                           Open
                         </Button>
@@ -418,7 +454,7 @@ export function SourcesScreen({
                                 <Button
                                   className="flow-btn"
                                   type="button"
-                                  onClick={() => openFile(datasetRowId(file))}
+                                  onClick={() => openFile(datasetRowId(file), sourceFileName(file))}
                                 >
                                   Open
                                 </Button>

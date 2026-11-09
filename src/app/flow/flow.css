@@ -442,6 +442,53 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   flex: 1;
   min-height: 0;
   gap: 0;
+  padding: 16px 18px;
+}
+
+.responses-agent {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.responses-agent .sheet-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.responses-agent .sheet-scroll [data-radix-scroll-area-viewport] > div {
+  height: 100%;
+}
+
+.responses-agent .output-body {
+  flex: 1;
+  height: 100%;
+  min-height: 100%;
+}
+
+.evidence [data-slot='empty'] {
+  flex: 1;
+}
+
+.responses-agent .flow-composer:not(.chat-composer) {
+  flex-wrap: wrap;
+  align-items: stretch;
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--color-line);
+  border-radius: 0;
+}
+
+.responses-agent .flow-composer:not(.chat-composer) .flow-text {
+  min-height: 72px;
+  height: auto;
+  width: 100%;
+}
+
+.responses-agent .flow-composer:not(.chat-composer) .chat-composer-row {
+  width: 100%;
 }
 
 .evidence-percent {
@@ -1469,6 +1516,7 @@ body:has(.flow) [data-radix-popper-content-wrapper],
 .flow-output {
   border-left: 1px solid var(--color-line);
   padding: 0;
+  min-width: 0;
   overflow: hidden;
 }
 
@@ -1732,15 +1780,28 @@ select.flow-input {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .analysis-lead {
   margin: 0;
 }
 
+.analysis-table {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
 .analysis-table h3 {
   margin: 0 0 6px;
   font-size: 13px;
+}
+
+.analysis-table .output-grid {
+  width: max-content;
+  min-width: 100%;
 }
 
 .analysis-footnote {
@@ -2189,10 +2250,11 @@ select.flow-input {
 }
 
 .chat-item:hover {
-  background: var(--color-accent-soft);
+  background: var(--color-well);
 }
 
-.chat-item[data-active='true'] {
+.chat-item[data-active='true'],
+.chat-item[data-active='true']:hover {
   background: var(--color-accent-soft);
 }
 
@@ -2264,6 +2326,7 @@ select.flow-input {
 
 .output-body {
   flex: 1;
+  min-width: 0;
   overflow: auto;
   padding: 16px 20px 12px;
   display: flex;
@@ -2350,6 +2413,11 @@ select.flow-input {
   border-radius: 10px;
 }
 
+.flow-md-table .flow-table {
+  width: max-content;
+  min-width: 100%;
+}
+
 .flow-md-table .flow-table th {
   position: static;
 }
@@ -2384,14 +2452,15 @@ select.flow-input {
 
 .responses-layout {
   display: grid;
-  grid-template-columns: 244px minmax(0, 1fr) 320px;
+  /* The sheet keeps a usable width. The side panel shrinks instead of covering it. */
+  grid-template-columns: minmax(140px, 220px) minmax(420px, 1fr) minmax(200px, 300px);
   grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
   background: var(--color-canvas);
   border: 1px solid var(--color-line);
   border-radius: 14px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .responses-rail {
@@ -2404,12 +2473,88 @@ select.flow-input {
   gap: 14px;
 }
 
+.table-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.table-chart-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.table-chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.table-chart-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-chart-legend i {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.table-chart-svg {
+  width: 100%;
+  height: auto;
+}
+
+.table-chart-value,
+.table-chart-label {
+  fill: var(--color-ink);
+  font-size: 11px;
+}
+
+.table-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+}
+
+.table-bars-row {
+  display: grid;
+  grid-template-columns: minmax(80px, 180px) 1fr;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.table-bars-track,
+.table-bars-stack {
+  display: flex;
+  gap: 3px;
+  min-height: 14px;
+}
+
+.table-bars-track i,
+.table-bars-stack i {
+  display: block;
+  height: 14px;
+  background: var(--color-accent);
+  border-radius: 3px;
+}
+
 .responses-sheet,
 .responses-side {
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
+  overflow: hidden;
+  background: var(--color-canvas);
 }
 
 .responses-side {
@@ -2438,6 +2583,8 @@ select.flow-input {
 .sheet-scroll {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  overflow: auto;
 }
 
 .sheet-frame {
@@ -3658,6 +3805,20 @@ select.flow-input {
 .outputs-switch {
   width: 100%;
   padding: 12px 16px 0;
+}
+
+.outputs-missing {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 28px 24px;
+}
+
+.outputs-missing h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: var(--weight-medium);
 }
 
 .outputs-board {

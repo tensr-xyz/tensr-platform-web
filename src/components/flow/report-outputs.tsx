@@ -153,7 +153,7 @@ export function ReportOutputs({
     )
       .then(overview => {
         if (!live) return;
-        if (overview?.ok && Array.isArray(overview.runs)) {
+        if (overview?.ok && Array.isArray(overview.runs) && overview.runs.length) {
           const next = uniqueRuns(outputRuns(overview.runs)).sort((left, right) =>
             right.created_at.localeCompare(left.created_at)
           );
@@ -242,7 +242,19 @@ export function ReportOutputs({
     }
     return order.map(label => ({ label, runs: buckets.get(label) || [] }));
   }, [visible]);
-  const selected = runs.find(run => run.id === selectedId) || null;
+  const selected =
+    runs.find(run => run.id === selectedId) ||
+    (opened && selectedId && detail
+      ? {
+          id: selectedId,
+          title: String(detail.title || detail.op || 'Analysis'),
+          op: String(detail.op || detail.analysis_type || ''),
+          created_at: String(detail.created_at || ''),
+          status: String(detail.status || 'complete'),
+          file: String(detail.dataset_id || ''),
+          datasetId: String(detail.dataset_id || ''),
+        }
+      : null);
   const base = detail ? baseCount(detail) : null;
   const summary = detail ? summaryText(detail) : '';
   const metrics = detail ? metricLines(detail) : [];
@@ -270,10 +282,17 @@ export function ReportOutputs({
 
   if (opened && detailPhase === 'error') {
     return (
-      <div className="outputs-board">
-        <p className="flow-error">{exportError || 'This result could not be opened.'}</p>
-        <Button className="flow-btn" type="button" onClick={() => setOpened(false)}>
-          Back
+      <div className="outputs-missing">
+        <h2>This output was deleted or isn&apos;t in this project</h2>
+        <Button
+          className="flow-btn"
+          type="button"
+          onClick={() => {
+            setOpened(false);
+            setSelectedId('');
+          }}
+        >
+          Back to Outputs
         </Button>
       </div>
     );
@@ -387,8 +406,6 @@ export function ReportOutputs({
               <span>{item.count}</span>
             </Button>
           ))}
-          <p className="outputs-label">Ran from</p>
-          <p className="outputs-soon">Agent chat, dialogs, notebook and ⌘K · filters coming soon</p>
           <span className="sheet-spacer" />
           <div className="outputs-howto">
             <strong>How outputs work</strong>

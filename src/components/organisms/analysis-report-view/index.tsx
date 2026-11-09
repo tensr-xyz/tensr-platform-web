@@ -14,6 +14,8 @@ import {
   type AnalysisRelatedLink,
 } from '@/lib/analysis-chain-links';
 import { resolveReportBlocks } from '@/lib/report-blocks';
+import { loadOutputPreferences, OUTPUT_PREFERENCES_EVENT } from '@/lib/output-preferences';
+import { presentStoredReport } from '@/lib/stored-report-display';
 import { reportApproachCopy } from '@/lib/report-approach-copy';
 import { ApproachText } from './approach-text';
 import {
@@ -192,7 +194,7 @@ function BlockHeader({
           <span className="rounded-sm bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-primary">
             {kind}
           </span>
-          <span className="text-[15px] font-medium text-foreground">{title}</span>
+          {title ? <span className="text-[15px] font-medium text-foreground">{title}</span> : null}
         </div>
         {subtitle ? (
           <p className="mt-1 text-xs leading-snug text-muted-foreground">{subtitle}</p>
@@ -234,10 +236,12 @@ function ReportTable({
   table,
   onCopy,
   emphasized = false,
+  pageTitle = '',
 }: {
   table: AnalysisReportTable;
   onCopy: () => void;
   emphasized?: boolean;
+  pageTitle?: string;
 }) {
   const [showCounts, setShowCounts] = React.useState(false);
   const rows = showCounts && table.count_rows?.length ? table.count_rows : table.rows;
@@ -249,28 +253,32 @@ function ReportTable({
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2">
-        <h4 className="text-[12.5px] font-medium text-foreground">{table.title}</h4>
-        {table.count_rows?.length ? (
+        {table.title.trim() && table.title.trim() !== pageTitle.trim() ? (
+          <h4 className="text-[12.5px] font-medium text-foreground">{table.title}</h4>
+        ) : null}
+        <div className="ml-auto flex items-center gap-2">
+          {table.count_rows?.length ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="compact"
+              className="h-7 px-2 text-[11px] print:hidden"
+              onClick={() => setShowCounts(current => !current)}
+            >
+              {showCounts ? 'Column %' : 'Counts'}
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
             size="compact"
             className="h-7 px-2 text-[11px] print:hidden"
-            onClick={() => setShowCounts(current => !current)}
+            onClick={onCopy}
           >
-            {showCounts ? 'Column %' : 'Counts'}
+            <Copy className="mr-1 size-3" aria-hidden />
+            Copy
           </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="compact"
-          className="h-7 px-2 text-[11px] print:hidden"
-          onClick={onCopy}
-        >
-          <Copy className="mr-1 size-3" aria-hidden />
-          Copy
-        </Button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[280px] border-collapse text-left text-[12.5px]">
@@ -323,7 +331,7 @@ function ReportTable({
                       ) : (
                         <span
                           className={cn(
-                            alignRight && 'font-mono tabular-nums text-foreground',
+                            alignRight && 'tabular-nums text-foreground',
                             !alignRight && 'font-medium text-foreground'
                           )}
                         >
@@ -379,6 +387,7 @@ function BlockRenderer({
   onChartExportError,
   emphasized,
   onRevealConsumedRows,
+  pageTitle = '',
 }: {
   block: AnalysisReportBlock;
   blockIndex: number;
@@ -387,6 +396,7 @@ function BlockRenderer({
   onChartExportError?: (message: string) => void;
   emphasized?: boolean;
   onRevealConsumedRows?: (group?: string) => void;
+  pageTitle?: string;
 }) {
   if (block.type === 'interpretation') {
     return (
@@ -404,7 +414,15 @@ function BlockRenderer({
             const inner = (
               <>
                 <span className="text-muted-foreground">{m.label}: </span>
-                <span className="font-mono tabular-nums text-foreground">{m.value}</span>
+                <span
+                  className={
+                    /^-?\d/.test(m.value.trim())
+                      ? 'font-mono tabular-nums text-foreground'
+                      : 'text-foreground'
+                  }
+                >
+                  {m.value}
+                </span>
               </>
             );
             if (clickable) {
@@ -438,8 +456,16 @@ function BlockRenderer({
   if (block.type === 'table') {
     const t = block.table;
     return (
-      <ReportSection sectionId={`table-${t.id}`} label={t.title}>
-        <ReportTable table={t} emphasized={emphasized} onCopy={() => onCopyTable(t)} />
+      <ReportSection
+        sectionId={`table-${t.id}`}
+        label={blockIndex === 0 && t.title.trim() === pageTitle.trim() ? 'Primary result' : t.title}
+      >
+        <ReportTable
+          table={t}
+          emphasized={emphasized}
+          pageTitle={pageTitle}
+          onCopy={() => onCopyTable(t)}
+        />
         {t.interpretation ? (
           <p className="mt-3 text-[13px] leading-relaxed text-foreground">{t.interpretation}</p>
         ) : null}
@@ -490,6 +516,14 @@ export function AnalysisReportView({
   datasetId,
   analysisRunId,
 }: Props) {
+  const [places, setPlaces] = React.useState(3);
+  React.useLayoutEffect(() => {
+    const apply = () => setPlaces(loadOutputPreferences().decimalPlaces);
+    apply();
+    window.addEventListener(OUTPUT_PREFERENCES_EVENT, apply);
+    return () => window.removeEventListener(OUTPUT_PREFERENCES_EVENT, apply);
+  }, [report]);
+  const shown = React.useMemo(() => presentStoredReport(report, places), [report, places]);
   const [copyState, setCopyState] = React.useState<string | null>(null);
   const [rVerification, setRVerification] = React.useState(report.r_syntax_verification);
   const [rPhase, setRPhase] = React.useState<'checking' | 'still' | 'unavailable'>('checking');
@@ -536,8 +570,8 @@ export function AnalysisReportView({
     });
   };
   const [rawOpen, setRawOpen] = React.useState(false);
-  const primaryTable = report.tables[0];
-  const blocks = resolveReportBlocks(report);
+  const primaryTable = shown.tables[0];
+  const blocks = resolveReportBlocks(shown);
   const useBlockLayout = blocks.length > 0;
   const related = relatedLinksFromReportAndTab({
     tabRelated: relatedAnalyses,
@@ -553,7 +587,7 @@ export function AnalysisReportView({
   };
 
   const onCopySummary = async () => {
-    const ok = await copyText(buildSummaryText(report));
+    const ok = await copyText(buildSummaryText(shown));
     flash(ok ? 'Summary copied' : 'Copy failed');
   };
 
@@ -599,12 +633,16 @@ export function AnalysisReportView({
   const rBadgeBody = rStillChecking ? 'Still checking.' : rBadge.text;
   const canReveal =
     canRevealConsumedRows(inspectorProvenance) && typeof onRevealConsumedRows === 'function';
-  const rowsUsedLabel = sourceRowsUsedLabel(report.exclusion_summary, report.meta.rows_dataset);
+  const rowsUsedLabel = sourceRowsUsedLabel(shown.exclusion_summary, shown.meta.rows_dataset);
   const isBannerTable = report.meta.analysis_key === 'banner_table';
-  const blockTitle = report.answer?.trim() || report.meta.subtitle?.trim() || report.meta.title;
+  const pageTitle = shown.meta.title?.trim() || 'Analysis';
+  const answerLead = shown.answer?.trim() || '';
+  const blockTitle = answerLead && answerLead !== pageTitle ? answerLead : '';
   const blockSubtitle = undefined;
   const metaTestLabel =
-    isBannerTable && report.meta.subtitle ? report.meta.subtitle : report.meta.title;
+    isBannerTable && report.meta.subtitle && report.meta.subtitle !== pageTitle
+      ? report.meta.subtitle
+      : '';
   const approachCopy = reportApproachCopy(report);
   const approachExploration = approachCopy.exploration;
   const assumptionInterpretations = (report.assumption_checks?.interpretations ?? []).filter(
@@ -626,7 +664,7 @@ export function AnalysisReportView({
           </span>
         </div>
         <h1 className="text-2xl font-medium tracking-[-0.018em] text-foreground md:text-[26px]">
-          {report.meta.title}
+          {pageTitle}
         </h1>
         {report.meta.subtitle ? (
           <p className="mt-2 max-w-[40rem] text-sm leading-relaxed text-muted-foreground">
@@ -653,7 +691,9 @@ export function AnalysisReportView({
         />
 
         <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-muted/20 px-[22px] py-3">
-          <MetaChip label="Rows" value={String(report.meta.rows_dataset)} mono />
+          {rowsUsedLabel ? null : (
+            <MetaChip label="Base" value={report.meta.rows_dataset.toLocaleString()} />
+          )}
           <MetaChip label="Run" value={generatedLabel} />
           {metaTestLabel ? <MetaChip label="Test" value={metaTestLabel} /> : null}
           <span className="flex-1" />
@@ -684,7 +724,16 @@ export function AnalysisReportView({
                 'border-border/60 bg-muted/20'
             )}
           >
-            <p className="text-xs font-medium text-amber-800 dark:text-amber-200">{rBadgeTitle}</p>
+            <p
+              className={cn(
+                'text-xs font-medium',
+                rBadge.kind === 'verified' || rBadge.kind === 'verified_in_ci'
+                  ? 'text-primary'
+                  : 'text-amber-800 dark:text-amber-200'
+              )}
+            >
+              {rBadgeTitle}
+            </p>
             <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{rBadgeBody}</p>
             {rCheckUnavailable && analysisRunId ? (
               <Button
@@ -697,22 +746,6 @@ export function AnalysisReportView({
               >
                 Re-check
               </Button>
-            ) : null}
-            {report.reproducibility?.r_script ? (
-              <pre
-                data-testid="r-equivalent-syntax"
-                className="mt-2 max-h-40 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[11px] leading-relaxed text-foreground"
-              >
-                {report.reproducibility.r_script}
-              </pre>
-            ) : null}
-            {report.spss_syntax ? (
-              <pre
-                data-testid="spss-equivalent-syntax"
-                className="mt-2 max-h-32 overflow-auto rounded-md border border-border/60 bg-background/80 p-2 font-mono text-[11px] leading-relaxed text-foreground"
-              >
-                {report.spss_syntax}
-              </pre>
             ) : null}
           </div>
         ) : null}
@@ -855,36 +888,37 @@ export function AnalysisReportView({
               onAnnotateChart={onAnnotateChart}
               onChartExportError={msg => flash(msg)}
               emphasized={i === 0}
+              pageTitle={pageTitle}
               onRevealConsumedRows={canReveal ? onRevealConsumedRows : undefined}
             />
           ))
         ) : (
           <>
-            {report.answer ? (
+            {shown.answer ? (
               <div id="report-section-answer" className="scroll-mt-24">
                 <InterpretationBlock>
-                  <p>{report.answer}</p>
+                  <p>{shown.answer}</p>
                 </InterpretationBlock>
               </div>
             ) : null}
-            {report.summary ? (
+            {shown.summary ? (
               isBannerTable ? (
                 <ReportSection sectionId="interpretation" label="Summary">
-                  <p className="text-[13px] leading-relaxed text-foreground">{report.summary}</p>
+                  <p className="text-[13px] leading-relaxed text-foreground">{shown.summary}</p>
                 </ReportSection>
               ) : (
                 <div id="report-section-interpretation" className="scroll-mt-24">
                   <InterpretationBlock>
-                    <p>{report.summary}</p>
+                    <p>{shown.summary}</p>
                   </InterpretationBlock>
                 </div>
               )
             ) : null}
 
-            {report.metrics.length > 0 ? (
+            {shown.metrics.length > 0 ? (
               <ReportSection sectionId="metrics" label="Key metrics" dense>
                 <div className="grid gap-px overflow-hidden rounded-md border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
-                  {report.metrics.map((m, i) => {
+                  {shown.metrics.map((m, i) => {
                     const clickable = canReveal && isConsumedRowsMetric(m.label);
                     if (clickable) {
                       return (
@@ -974,6 +1008,7 @@ export function AnalysisReportView({
                 <ReportTable
                   table={{ ...t, apa_style: true }}
                   emphasized={i === 0}
+                  pageTitle={pageTitle}
                   onCopy={() => onCopyTable(t)}
                 />
                 {t.notes?.length ? (
@@ -984,30 +1019,35 @@ export function AnalysisReportView({
               </ReportSection>
             ))}
 
-            {report.tables.map((t, i) => (
-              <ReportSection
-                key={t.id}
-                sectionId={`table-${t.id}`}
-                label={
-                  t.id === 'banner_table'
-                    ? 'Crosstab'
-                    : i === 0 && !report.spss_blocks?.length
-                      ? 'Primary result'
-                      : t.title
-                }
-              >
-                <ReportTable
-                  table={t}
-                  emphasized={i === 0 && !report.spss_blocks?.length}
-                  onCopy={() => onCopyTable(t)}
-                />
-                {t.interpretation ? (
-                  <p className="mt-3 text-[13px] leading-relaxed text-foreground">
-                    {t.interpretation}
-                  </p>
-                ) : null}
-              </ReportSection>
-            ))}
+            {shown.tables
+              .filter(
+                t => t.id !== 'equivalent_syntax' && t.title !== 'Equivalent R and SPSS syntax'
+              )
+              .map((t, i) => (
+                <ReportSection
+                  key={t.id}
+                  sectionId={`table-${t.id}`}
+                  label={
+                    t.id === 'banner_table'
+                      ? 'Crosstab'
+                      : i === 0 && !report.spss_blocks?.length
+                        ? 'Primary result'
+                        : t.title
+                  }
+                >
+                  <ReportTable
+                    table={t}
+                    emphasized={i === 0 && !report.spss_blocks?.length}
+                    pageTitle={pageTitle}
+                    onCopy={() => onCopyTable(t)}
+                  />
+                  {t.interpretation ? (
+                    <p className="mt-3 text-[13px] leading-relaxed text-foreground">
+                      {t.interpretation}
+                    </p>
+                  ) : null}
+                </ReportSection>
+              ))}
           </>
         )}
 
@@ -1051,7 +1091,7 @@ export function AnalysisReportView({
                 flash('Excel download started');
                 return;
               }
-              void downloadReportXlsx(report, {
+              void downloadReportXlsx(shown, {
                 provenance: inspectorProvenance,
                 datasetId,
                 raw: rawResult ?? null,
@@ -1063,7 +1103,7 @@ export function AnalysisReportView({
             Excel
           </Button>
           <ReportExportMenu
-            report={report}
+            report={shown}
             rawResult={rawResult}
             provenance={inspectorProvenance}
             datasetId={datasetId}
@@ -1120,28 +1160,6 @@ export function AnalysisReportView({
             Copy log
           </Button>
         </details>
-      ) : null}
-
-      {report.spss_syntax && !showRBadge ? (
-        <details className="mt-4 print:hidden">
-          <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
-            SPSS syntax (reference)
-          </summary>
-          <pre className="mt-2 max-h-48 overflow-auto rounded-md border border-border bg-muted/30 p-3 font-mono text-[10px] leading-relaxed text-muted-foreground">
-            {report.spss_syntax}
-          </pre>
-        </details>
-      ) : null}
-
-      {report.reproducibility?.r_script && !showRBadge ? (
-        <div className="mt-4 print:hidden">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-            Reproducibility (R)
-          </p>
-          <pre className="max-h-48 overflow-auto rounded-md border border-border bg-muted/30 p-3 font-mono text-[10px] leading-relaxed text-muted-foreground">
-            {report.reproducibility.r_script}
-          </pre>
-        </div>
       ) : null}
 
       {report.analysis_spec ? (

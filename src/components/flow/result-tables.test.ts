@@ -85,7 +85,14 @@ describe('result tables', () => {
     const views = payloads.map(payload => resultViewFromToolResults(payload));
     expect(views.filter(view => view.tables.length || view.filter || view.weight)).toHaveLength(12);
     expect(views[0].tables[0].rows[0][0]).toBe('North');
-    expect(views[1].tables[0].columns).toEqual(['Theme', 'Count', '%', 'Example']);
+    expect(views[0].tables[0].columns[0]).toBe('');
+    expect(views[0].tables[0].columns[1]).toBe('Frequency');
+    expect(views[1].tables[0].columns).toEqual([
+      'Theme',
+      'Count',
+      '% of people who answered',
+      'Quote',
+    ]);
     expect(views[2].tables[0].title).toBe('Group means');
     expect(views[3].tables[0].columns).toContain('Achieved %');
     expect(views[4].script).toContain('lm(');
@@ -96,5 +103,193 @@ describe('result tables', () => {
     expect(resultFootnote(views[7], 'n = 40', 't-test')).toBe(
       'n = 40 · Filter: region = North · Weight: design_w · t-test'
     );
+  });
+
+  it('renders every summary table with its question, and keeps one set when the engine grid is there too', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'What is your gender?',
+            rows: [
+              { value: 'Female', frequency: 12, percent: 60 },
+              { value: 'Male', frequency: 8, percent: 40 },
+            ],
+          },
+          {
+            title: 'Which region do you live in?',
+            rows: [{ value: 'West', frequency: 11, percent: 55.5 }],
+          },
+        ],
+      },
+      frequency_tables: [
+        {
+          title: 'Frequency Table: What is your gender?',
+          columns: ['', 'Frequency', 'Percent (incl. missing)', 'Valid Percent'],
+          rows: [['Female', '12', '60.0', '60.0']],
+        },
+      ],
+      filters: [{ column: 'region', op: '=', value: 'London' }],
+    });
+    expect(view.tables.map(table => table.title)).toEqual([
+      'What is your gender?',
+      'Which region do you live in?',
+    ]);
+    expect(view.tables[0].columns).toEqual(['Answer', 'Frequency', 'Percent']);
+    expect(view.tables[0].rows[0]).toEqual(['Female', '12', '60']);
+    expect(view.tables[1].rows[0][2]).toBe('55.5');
+    expect(view.filter).toBe('region = London');
+    expect(resultFootnote(view, 'Unweighted base 191.', 'Frequencies')).toBe(
+      'Unweighted base 191. · Filter: region = London · Unweighted · Frequencies'
+    );
+  });
+
+  it('writes the filter and the weight with their labels', () => {
+    const view = resultViewFromToolResults({
+      filters: [{ column: 'region', op: '=', value: '4' }],
+      weight: { column: 'design_weight' },
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Satisfaction',
+          columns: ['', 'Frequency', 'Valid Percent'],
+          rows: [['Satisfied', '60', '31.4']],
+        },
+      ],
+    });
+    const columns = [
+      {
+        name: 'region',
+        label: 'Region',
+        value_labels: { '4': 'London' },
+      },
+      { name: 'design_weight', label: 'Design weight' },
+      { name: 'weight', label: 'weight' },
+    ];
+    expect(resultFootnote(view, 'Base 191', 'Frequencies', columns)).toBe(
+      'Base 191 · Filter: Region = London · Weight: Design weight · Frequencies'
+    );
+    const namedWeight = resultViewFromToolResults({ weight: { column: 'weight' } });
+    expect(resultFootnote(namedWeight, '', 'Frequencies', columns)).toBe('Weighted · Frequencies');
+  });
+
+  it('keeps the frequency base and drops an exclusion count that is not this table', () => {
+    const kept = resultViewFromToolResults({
+      report: {
+        exclusion_summary: { rows_used: 191 },
+        tables: [
+          {
+            title: 'Frequency Table: Satisfaction',
+            columns: ['', 'Frequency', 'Valid Percent'],
+            rows: [
+              ['Satisfied', '60', '31.4'],
+              ['Total', '248', ''],
+            ],
+          },
+        ],
+      },
+    });
+    expect(kept.base).toBe('Base 191');
+    const dropped = resultViewFromToolResults({
+      report: {
+        exclusion_summary: { rows_used: 17 },
+        tables: [
+          {
+            title: 'Frequency Table: Gender',
+            columns: ['', 'Frequency', 'Valid Percent'],
+            rows: [
+              ['Female', '108', '54.3'],
+              ['Total', '200', '100'],
+            ],
+          },
+        ],
+      },
+    });
+    expect(dropped.base).toBe('');
+  });
+
+  it('uses the answered base when the footnote has no exclusion count', () => {
+    const fromRows = resultViewFromToolResults({
+      procedure: 'frequencies',
+      summary: {
+        table: [
+          {
+            title: 'How satisfied are you?',
+            rows: [
+              { value: 'Satisfied', frequency: 60, percent: 31.4 },
+              { value: 'Very satisfied', frequency: 20, percent: 10.5 },
+            ],
+          },
+        ],
+      },
+    });
+    expect(fromRows.base).toBe('Base 80');
+    const fromStats = resultViewFromToolResults({
+      procedure: 'frequencies',
+      summary: { stats: { n_valid: 191 } },
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Satisfaction',
+          columns: ['', 'Frequency', 'Valid Percent'],
+          rows: [
+            ['Satisfied', '60', '31.4'],
+            ['Very satisfied', '20', '10.5'],
+            ['Missing', '58', ''],
+            ['Total', '249', '100'],
+          ],
+        },
+      ],
+    });
+    expect(fromStats.base).toBe('Base 191');
+    expect(resultFootnote(fromStats, '', 'Frequencies')).toBe(
+      'Base 191 · Unweighted · Frequencies'
+    );
+  });
+
+  it('prints a label when a header is an object, and keeps the R check', () => {
+    const view = resultViewFromToolResults({
+      tables: [
+        {
+          title: 'By area',
+          columns: [{ label: 'Area' }, { label: 'East' }],
+          rows: [['High', 4]],
+        },
+      ],
+      statistic: 2.2,
+      p_value: 0.03,
+      r_syntax_verification: { kind: 'verified', statement: 'The displayed figure matches R.' },
+    });
+    expect(view.tables[0].columns).toEqual(['Area', 'East']);
+    const flat = view.tables.flatMap(table => [...table.columns, ...table.rows.flat()]);
+    expect(flat.join(' ')).not.toContain('[object Object]');
+    expect(view.rCheck).toBe('verified');
+    expect(view.rStatement).toContain('matches R');
+  });
+
+  it('skips the syntax dump and keeps a finished R check over a pending one', () => {
+    const view = resultViewFromToolResults({
+      r_syntax_verification: { kind: 'pending', statement: 'R syntax is being checked.' },
+      tables: [
+        {
+          id: 'equivalent_syntax',
+          title: 'Equivalent R and SPSS syntax',
+          columns: ['System', 'Syntax'],
+          rows: [
+            ['R', 'table(x)'],
+            ['SPSS', ''],
+          ],
+        },
+        {
+          title: 'Aware',
+          columns: ['Answer', 'Percent'],
+          rows: [['Yes', '87.0']],
+        },
+      ],
+      report: {
+        r_syntax_verification: { kind: 'verified', statement: 'The displayed figure matches R.' },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Aware']);
+    expect(view.rCheck).toBe('verified');
+    expect(view.rStatement).toContain('matches R');
   });
 });
