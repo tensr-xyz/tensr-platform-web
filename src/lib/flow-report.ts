@@ -289,7 +289,65 @@ function leadRow(rows: NumberedRow[], columns: BannerColumn[]): NumberedRow | nu
   return [...rows].sort((left, right) => score(right) - score(left))[0] || null;
 }
 
-/** The most notable result in plain English: a significant gap, then Top 2, then the largest answer. */
+/** Yes, Top 2, or the mean. A gap on another row does not lead the finding. */
+function summaryRow(table: ReportTable): NumberedRow | null {
+  const rows = table.rows.map((row, index) => ({ row, number: index + 1 }));
+  const labelOf = (item: NumberedRow) => String(item.row.label || '').trim();
+  const top = rows.find(item => item.row.kind === 'net' && /top\s*2|top box/i.test(labelOf(item)));
+  if (top) return top;
+  const yes = rows.find(
+    item => item.row.kind !== 'net' && /^(yes|true|agree|aware)$/i.test(labelOf(item))
+  );
+  if (yes) return yes;
+  const net = netRow(table);
+  if (net) return net;
+  return rows.find(item => item.row.kind === 'mean' || /^mean$/i.test(labelOf(item))) || null;
+}
+
+function findingForRow(
+  table: ReportTable,
+  lead: NumberedRow,
+  columns: BannerColumn[],
+  segmentId: string | null,
+  gap: { host: BannerColumn; source: BannerColumn; high: number; low: number } | undefined,
+  places: number
+): { headline: string; support: string; lead: NumberedRow | null; significant: boolean } {
+  const format = (percent: number) => shown(percent, places);
+  const label = lead.row.label || 'This answer';
+  if (gap) {
+    const points = Math.round((gap.high - gap.low) * 10) / 10;
+    return {
+      headline: `${label}: ${format(gap.high)} among ${bannerHeading(gap.host)} vs ${format(gap.low)} among ${bannerHeading(gap.source)}.`,
+      support: `That ${points}-point gap is significant at 95%.`,
+      lead,
+      significant: true,
+    };
+  }
+  const figures = columns
+    .map(column => ({ column, percent: cellPercent(lead.row, column.id) }))
+    .filter((item): item is { column: BannerColumn; percent: number } => item.percent != null);
+  if (figures.length > 1) {
+    const sorted = [...figures].sort((left, right) => right.percent - left.percent);
+    const top = sorted[0];
+    const bottom = sorted[sorted.length - 1];
+    return {
+      headline: `${label} is highest in ${bannerHeading(top.column)} at ${format(top.percent)} and lowest in ${bannerHeading(bottom.column)} at ${format(bottom.percent)}.`,
+      support: table.tested ? 'None of the differences between columns is significant at 95%.' : '',
+      lead,
+      significant: false,
+    };
+  }
+  const only = figures[0];
+  const where = segmentId && only ? ` in ${bannerHeading(only.column)}` : '';
+  return {
+    headline: only ? `${label} is ${format(only.percent)}${where}.` : table.label,
+    support: '',
+    lead,
+    significant: false,
+  };
+}
+
+/** The most notable result in plain English: the summary row, then a significant gap, then the largest answer. */
 export function notableFinding(
   table: ReportTable,
   segmentId: string | null,
@@ -299,7 +357,14 @@ export function notableFinding(
   const rows = candidateRows(table, rowCut);
   const places = table.decimals ?? 1;
   const format = (percent: number) => shown(percent, places);
-  const gaps = significantGaps(table, rows, columns);
+  const summary = rowCut ? null : summaryRow(table);
+  const gapRows =
+    summary && !rows.some(item => item.row.id === summary.row.id) ? [...rows, summary] : rows;
+  const gaps = significantGaps(table, gapRows, columns);
+  if (summary) {
+    const gap = gaps.find(item => item.row.row.id === summary.row.id);
+    return findingForRow(table, summary, columns, segmentId, gap, places);
+  }
   if (gaps.length) {
     const gap = gaps[0];
     const label = gap.row.row.label || 'this answer';

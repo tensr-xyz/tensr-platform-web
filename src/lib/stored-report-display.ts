@@ -40,6 +40,14 @@ function withPercents(table: AnalysisReportTable, places: number): AnalysisRepor
   return { ...table, rows };
 }
 
+function columnToken(summary: string, question: string): string {
+  const token = (summary || '').match(/\bfor\s+([A-Za-z_][\w]*)\b/)?.[1] || '';
+  if (!token) return '';
+  // The summary already contains the question, so the first word is not a column id.
+  if (question && summary.includes(question)) return '';
+  return token;
+}
+
 function prose(text: string, variable: string, label: string): string {
   let next = text || '';
   if (variable && label && variable !== label) {
@@ -86,7 +94,7 @@ export function presentStoredReport(report: AnalysisReport, decimalPlaces: numbe
   const generic = GENERIC_TITLE.test(report.meta?.title || '');
   const title = question && generic ? question : report.meta.title;
   const base = tables.map(frequencyTotal).find(value => value != null) ?? null;
-  const variable = (report.summary || '').match(/\bfor\s+([A-Za-z_][\w]*)\b/)?.[1] || '';
+  const variable = columnToken(report.summary || '', question);
   const summary = prose(report.summary || '', variable, question);
   const interpretation = report.interpretation
     ? prose(report.interpretation, variable, question)
@@ -100,15 +108,13 @@ export function presentStoredReport(report: AnalysisReport, decimalPlaces: numbe
     if (block.type === 'metrics') return { ...block, metrics: block.metrics.map(weightMetric) };
     return block;
   });
-  const exclusion =
-    base != null && (report.meta?.analysis_key === 'frequencies' || Boolean(question))
+  const exclusion = report.exclusion_summary
+    ? report.exclusion_summary
+    : base != null && (report.meta?.analysis_key === 'frequencies' || Boolean(question))
       ? {
-          rows_total: report.exclusion_summary?.rows_total ?? report.meta.rows_dataset,
+          rows_total: report.meta.rows_dataset,
           rows_used: base,
-          rows_excluded: Math.max(
-            0,
-            (report.exclusion_summary?.rows_total ?? report.meta.rows_dataset) - base
-          ),
+          rows_excluded: Math.max(0, report.meta.rows_dataset - base),
         }
       : report.exclusion_summary;
   return {

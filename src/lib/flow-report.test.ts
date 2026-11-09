@@ -72,6 +72,70 @@ const flat: ReportTable = {
 };
 
 describe('report findings', () => {
+  it('leads with Top 2 when another row has the larger gap', () => {
+    const scale: ReportTable = {
+      ...table,
+      id: 'sat',
+      letters: [
+        { stub_row_id: 'neither', banner_id: 'east', letter: 'A' },
+        { stub_row_id: 'top2', banner_id: 'north', letter: 'B' },
+      ],
+      rows: [
+        {
+          id: 'neither',
+          label: 'Neither',
+          kind: 'value',
+          cells: [
+            { banner_id: 'north', percent: 19 },
+            { banner_id: 'east', percent: 41 },
+          ],
+        },
+        {
+          id: 'top2',
+          label: 'Top 2',
+          kind: 'net',
+          cells: [
+            { banner_id: 'north', percent: 62 },
+            { banner_id: 'east', percent: 48 },
+          ],
+        },
+      ],
+    };
+    const finding = findingFromTable(scale, null, null);
+    expect(finding.headline).toBe('Top 2: 62% among North vs 48% among East.');
+    expect(finding.significant).toBe(true);
+  });
+
+  it('leads with the mean when the table has no Yes or Top 2 row', () => {
+    const means: ReportTable = {
+      ...table,
+      id: 'mean',
+      letters: [{ stub_row_id: 'other', banner_id: 'east', letter: 'A' }],
+      rows: [
+        {
+          id: 'other',
+          label: 'Other',
+          kind: 'value',
+          cells: [
+            { banner_id: 'north', percent: 10 },
+            { banner_id: 'east', percent: 40 },
+          ],
+        },
+        {
+          id: 'mean',
+          label: 'Mean',
+          kind: 'mean',
+          cells: [
+            { banner_id: 'north', percent: 3.2 },
+            { banner_id: 'east', percent: 4.1 },
+          ],
+        },
+      ],
+    };
+    const finding = findingFromTable(means, null, null);
+    expect(finding.headline.startsWith('Mean')).toBe(true);
+  });
+
   it('leads with the largest significant gap in plain English', () => {
     const finding = findingFromTable(table, null, null);
     expect(finding.headline).toBe('Price too high: 16% among East vs 7.5% among North.');

@@ -61,7 +61,7 @@ import { AnalysisResult } from '@/components/flow/analysis-result';
 import { resultFootnote, resultViewFromToolResults } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { DetailsScreen } from '@/components/flow/details-screen';
-import { SourcesScreen } from '@/components/flow/sources-screen';
+import { rememberedFileName, SourcesScreen } from '@/components/flow/sources-screen';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
@@ -3058,6 +3058,7 @@ function ChatScreen({
                         script={resultViewFromToolResults(turn.toolResults).script}
                         rCheck={resultViewFromToolResults(turn.toolResults).rCheck}
                         rStatement={resultViewFromToolResults(turn.toolResults).rStatement}
+                        runId={outputRunIds(turn.toolResults)[0]}
                       />
                     ) : turn.answer ? (
                       <FlowMarkdown className="chat-prose">
@@ -3121,6 +3122,7 @@ function ChatScreen({
                       script={resultView.script}
                       rCheck={resultView.rCheck}
                       rStatement={resultView.rStatement}
+                      runId={runIds[0]}
                     />
                   ) : (
                     <FlowMarkdown className="chat-prose">{thread}</FlowMarkdown>
@@ -3332,6 +3334,7 @@ function ChatScreen({
                       script={resultView.script}
                       rCheck={resultView.rCheck}
                       rStatement={resultView.rStatement}
+                      runId={runIds[0]}
                     />
                   ) : (
                     <>
@@ -3532,6 +3535,33 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
   );
 }
 
+type CachedSheet = {
+  columns: FlowColumn[];
+  headers: string[];
+  variableNames: string[];
+  rows: unknown[][];
+  n: number;
+};
+
+const sheetPages = new Map<string, CachedSheet>();
+
+function fileChoices(
+  rows: {
+    dataset_id?: string;
+    id?: string;
+    original_filename?: string;
+    source_filenames?: string[];
+  }[],
+  selected: string
+): { value: string; label: string }[] {
+  const options = rows.map(row => ({
+    value: datasetRowId(row),
+    label: datasetFileLabel(row),
+  }));
+  if (!selected || options.some(option => option.value === selected)) return options;
+  return [{ value: selected, label: rememberedFileName(selected) || 'Opening file' }, ...options];
+}
+
 function ResponsesScreen({
   project,
   datasets,
@@ -3597,6 +3627,7 @@ function ResponsesScreen({
   // The theme last reviewed reopens with its new counts once the coded version is in use.
   const [reopenTheme, setReopenTheme] = useState('');
   const filtersKey = JSON.stringify(filters);
+  const sheetKey = `${datasetId || ''}:${pageOffset}:${filtersKey}`;
   const [valueFilter, setValueFilter] = useState<string | null>(null);
   const [agentText, setAgentText] = useState('');
   const [agentAnswer, setAgentAnswer] = useState('');
@@ -3633,7 +3664,17 @@ function ResponsesScreen({
       return;
     }
     let cancelled = false;
-    setSheetPhase('loading');
+    const cached = sheetPages.get(sheetKey);
+    if (cached) {
+      setColumns(cached.columns);
+      setHeaders(cached.headers);
+      setVariableNames(cached.variableNames);
+      setPreview(cached.rows);
+      setRowTotal(cached.n);
+      setSheetPhase('ready');
+    } else {
+      setSheetPhase('loading');
+    }
     const load = () =>
       flowJson<{
         rows?: unknown[][];
@@ -3649,11 +3690,19 @@ function ResponsesScreen({
       .catch(() => wait(1200).then(load))
       .then(([meta, page]) => {
         if (cancelled) return;
-        setColumns(meta.columns || []);
-        setHeaders(page.headers || []);
-        setVariableNames(page.variable_names || []);
-        setPreview(page.rows || []);
-        setRowTotal(page.n_rows || 0);
+        const next = {
+          columns: meta.columns || [],
+          headers: page.headers || [],
+          variableNames: page.variable_names || [],
+          rows: page.rows || [],
+          n: page.n_rows || 0,
+        };
+        sheetPages.set(sheetKey, next);
+        setColumns(next.columns);
+        setHeaders(next.headers);
+        setVariableNames(next.variableNames);
+        setPreview(next.rows);
+        setRowTotal(next.n);
         setSheetPhase('ready');
       })
       .catch(() => {
@@ -3665,7 +3714,7 @@ function ResponsesScreen({
     return () => {
       cancelled = true;
     };
-  }, [datasetId, pageOffset, ready, projectKey, sheetAttempt, filtersKey]);
+  }, [datasetId, pageOffset, ready, projectKey, sheetAttempt, filtersKey, sheetKey]);
   useEffect(() => {
     if (!project) return;
     void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
@@ -4003,10 +4052,7 @@ function ResponsesScreen({
                 body: JSON.stringify({ active_dataset_id: nextId }),
               });
             }}
-            options={projectDatasets.map(row => ({
-              value: datasetRowId(row),
-              label: datasetFileLabel(row),
-            }))}
+            options={fileChoices(projectDatasets, datasetId || '')}
           />
           {viewSwitch}
           {tab === 'themes' || tab === 'notebook' ? null : (

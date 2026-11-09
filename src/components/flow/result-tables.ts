@@ -219,7 +219,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       view.weight = cell((record.weight as { column?: unknown }).column);
     }
     if (!view.filter) {
-      const named = record.filter_ref ?? record.filter ?? record.filters;
+      const named = record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters;
       if (typeof named === 'string' && named.trim()) view.filter = named.trim();
       else if (Array.isArray(named)) {
         const parts = named

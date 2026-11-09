@@ -51,4 +51,16 @@ describe('stored frequency reports', () => {
     const shown = presentStoredReport(report, 1);
     expect(shown.summary).toBe('Frequency table for What is your age? None of these stayed.');
   });
+
+  it('does not rewrite a question that is already in the summary', () => {
+    const report = frequencyReport();
+    report.meta.title = 'How satisfied are you with Brew & Co overall?';
+    report.summary = 'Frequency table for How satisfied are you with Brew & Co overall?';
+    report.tables[0].title = 'Frequency Table: How satisfied are you with Brew & Co overall?';
+    report.exclusion_summary = { rows_total: 249, rows_used: 249, rows_excluded: 0 };
+    const shown = presentStoredReport(report, 1);
+    expect(shown.summary).toBe('Frequency table for How satisfied are you with Brew & Co overall?');
+    expect(shown.exclusion_summary?.rows_excluded).toBe(0);
+    expect(shown.tables[0].rows[0][2]).toBe('7.1');
+  });
 });

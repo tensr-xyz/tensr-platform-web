@@ -14,7 +14,7 @@ import {
   type AnalysisRelatedLink,
 } from '@/lib/analysis-chain-links';
 import { resolveReportBlocks } from '@/lib/report-blocks';
-import { loadOutputPreferences } from '@/lib/output-preferences';
+import { loadOutputPreferences, OUTPUT_PREFERENCES_EVENT } from '@/lib/output-preferences';
 import { presentStoredReport } from '@/lib/stored-report-display';
 import { reportApproachCopy } from '@/lib/report-approach-copy';
 import { ApproachText } from './approach-text';
@@ -500,10 +500,14 @@ export function AnalysisReportView({
   datasetId,
   analysisRunId,
 }: Props) {
-  const shown = React.useMemo(
-    () => presentStoredReport(report, loadOutputPreferences().decimalPlaces),
-    [report]
-  );
+  const [places, setPlaces] = React.useState(3);
+  React.useLayoutEffect(() => {
+    const apply = () => setPlaces(loadOutputPreferences().decimalPlaces);
+    apply();
+    window.addEventListener(OUTPUT_PREFERENCES_EVENT, apply);
+    return () => window.removeEventListener(OUTPUT_PREFERENCES_EVENT, apply);
+  }, [report]);
+  const shown = React.useMemo(() => presentStoredReport(report, places), [report, places]);
   const [copyState, setCopyState] = React.useState<string | null>(null);
   const [rVerification, setRVerification] = React.useState(report.r_syntax_verification);
   const [rPhase, setRPhase] = React.useState<'checking' | 'still' | 'unavailable'>('checking');

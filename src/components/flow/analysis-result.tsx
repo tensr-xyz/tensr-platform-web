@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
 import type { RunTable } from '@/components/flow/run-document';
+import { fetchAnalysisRun, R_CHECK_POLL_MS, rCheckPhase } from '@/lib/analysis-runs';
 
 /** The shared result: a lead, the tables, one footnote, and checks folded away. */
 export function AnalysisResult({
@@ -14,6 +15,7 @@ export function AnalysisResult({
   script,
   rCheck,
   rStatement,
+  runId,
 }: {
   lead?: string;
   tables: RunTable[];
@@ -22,20 +24,58 @@ export function AnalysisResult({
   script?: string;
   rCheck?: string;
   rStatement?: string;
+  runId?: string;
 }) {
   const [checksOpen, setChecksOpen] = useState(false);
   const [scriptOpen, setScriptOpen] = useState(false);
+  const [mark, setMark] = useState({ kind: rCheck || '', statement: rStatement || '' });
+  useEffect(() => {
+    setMark({ kind: rCheck || '', statement: rStatement || '' });
+  }, [rCheck, rStatement]);
+  useEffect(() => {
+    if ((rCheck || '') !== 'pending') return;
+    if (!runId) {
+      setMark({ kind: 'unknown', statement: 'R check unavailable.' });
+      return;
+    }
+    let cancelled = false;
+    let polls = 0;
+    const timer = window.setInterval(() => {
+      polls += 1;
+      if (rCheckPhase(polls) === 'unavailable') {
+        window.clearInterval(timer);
+        if (!cancelled) setMark({ kind: 'unknown', statement: 'R check unavailable.' });
+        return;
+      }
+      void fetchAnalysisRun(runId).then(run => {
+        const next = run?.report?.r_syntax_verification;
+        if (cancelled || !next || next.kind === 'pending') return;
+        setMark({ kind: next.kind, statement: next.statement || '' });
+        window.clearInterval(timer);
+      });
+    }, R_CHECK_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [rCheck, runId]);
+  const shownCheck = mark.kind || rCheck;
+  const shownStatement = mark.statement || rStatement;
   if (!lead && !tables.length && !footnote) return null;
   return (
     <div className="analysis-result">
-      {rCheck ? (
+      {shownCheck ? (
         <p className="analysis-r">
-          {rCheck === 'pending'
+          {shownCheck === 'pending'
             ? 'R check running'
-            : rCheck === 'mismatch' || rCheck === 'not_verified'
+            : shownCheck === 'mismatch' || shownCheck === 'not_verified'
               ? 'R mismatch'
-              : 'Checked in R'}
-          {rStatement ? ` · ${rStatement}` : ''}
+              : shownCheck === 'unknown'
+                ? 'R check unavailable'
+                : 'Checked in R'}
+          {shownStatement && shownStatement !== 'R check unavailable.'
+            ? ` · ${shownStatement}`
+            : ''}
         </p>
       ) : null}
       {lead ? <p className="analysis-lead">{lead}</p> : null}
