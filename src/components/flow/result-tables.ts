@@ -453,7 +453,7 @@ export function weightNote(column: string, columns: ColumnLabels[] = []): string
   if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== name.toLowerCase()) {
     return `Weight: ${label}`;
   }
-  if (name.toLowerCase() === 'weight') return '';
+  if (name.toLowerCase() === 'weight') return 'Weighted';
   return `Weight: ${name}`;
 }
 

@@ -169,7 +169,7 @@ describe('result tables', () => {
       'Base 191 · Filter: Region = London · Weight: Design weight · Frequencies'
     );
     const namedWeight = resultViewFromToolResults({ weight: { column: 'weight' } });
-    expect(resultFootnote(namedWeight, '', 'Frequencies', columns)).toBe('Frequencies');
+    expect(resultFootnote(namedWeight, '', 'Frequencies', columns)).toBe('Weighted · Frequencies');
   });
 
   it('keeps the frequency base and drops an exclusion count that is not this table', () => {
