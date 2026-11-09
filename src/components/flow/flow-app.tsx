@@ -1,6 +1,14 @@
 'use client';
 
 import Link from 'next/link';
+import { MessageSquare } from 'lucide-react';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { clearSigningIn } from '@/lib/signing-in';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -51,6 +59,7 @@ import {
   outputStat,
   outputTakeaway,
   outputTitle,
+  titledWithQuestion,
 } from '@/components/flow/chat-output';
 import { ThreadResult, useEnrichedToolResults } from '@/components/flow/use-enriched-results';
 import { AnalysisResult } from '@/components/flow/analysis-result';
@@ -2907,7 +2916,7 @@ function ChatScreen({
 
   const toolResults = useEnrichedToolResults(turn?.tool_results);
   const kind = outputKind(toolResults);
-  const title = outputTitle(toolResults, answer);
+  const title = outputTitle(toolResults, answer, columnLabels);
   const takeaway = outputTakeaway(answer);
   const baseNote = outputBaseClause(toolResults, answer);
   const stat = outputStat(toolResults, answer, takeaway);
@@ -2949,7 +2958,10 @@ function ChatScreen({
   const tableMode = kind === 'Crosstab' && Boolean(tables);
   const ledger = (turn?.turn_state?.ledger || {}) as { weight?: string | null };
   const resultView = resultViewFromToolResults(toolResults);
-  const structuredTables = resultView.tables;
+  const structuredTables = resultView.tables.map(table => ({
+    ...table,
+    title: titledWithQuestion(table.title, columnLabels),
+  }));
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
     baseNote,
@@ -4760,7 +4772,21 @@ function ResponsesScreen({
                 {agentStatus && agentStatus !== 'Thinking…' ? (
                   <p className="flow-error">{agentStatus}</p>
                 ) : null}
-                {agentAnswer ? <FlowMarkdown>{agentAnswer}</FlowMarkdown> : null}
+                {agentAnswer ? (
+                  <FlowMarkdown>{agentAnswer}</FlowMarkdown>
+                ) : agentStatus ? null : (
+                  <Empty className="min-h-[280px] border-0 bg-transparent">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <MessageSquare />
+                      </EmptyMedia>
+                      <EmptyTitle className="text-sm">Ask about these responses</EmptyTitle>
+                      <EmptyDescription>
+                        Questions about the open file show up here.
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                )}
               </div>
             </ScrollArea>
             <FlowComposer

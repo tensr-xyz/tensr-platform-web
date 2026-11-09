@@ -208,6 +208,7 @@ function isFrequencyRecord(record: Record<string, unknown>): boolean {
 
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
 export function resultViewFromToolResults(results: unknown): ResultView {
+  let answered = 0;
   const view: ResultView = {
     tables: [],
     script: '',
@@ -312,6 +313,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
         const current = Number(view.base.replace(/[^\d]/g, ''));
         if (!view.base || used > current) view.base = `Base ${used.toLocaleString('en-GB')}`;
       }
+      const counted = answeredCount(record);
+      if (counted > answered) answered = counted;
     }
     if (!view.weight && record.weight && typeof record.weight === 'object') {
       view.weight = cell((record.weight as { column?: unknown }).column);
@@ -342,7 +345,55 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   const total = largestFrequencyTotal(view);
   const used = Number(view.base.replace(/[^\d.]/g, ''));
   if (total && used && used < total / 2) view.base = '';
+  if (answered) view.base = `Base ${answered.toLocaleString('en-GB')}`;
+  else if (!view.base) {
+    const fromTable = frequencyAnswered(view);
+    if (fromTable) view.base = `Base ${fromTable.toLocaleString('en-GB')}`;
+  }
   return view;
+}
+
+function answeredCount(record: Record<string, unknown>): number {
+  const summary = record.summary;
+  const stats =
+    summary && typeof summary === 'object'
+      ? (summary as { stats?: { n_valid?: unknown } }).stats
+      : undefined;
+  const block = record.statistics_block as { 'N Valid'?: unknown } | undefined;
+  const raw = stats?.n_valid ?? block?.['N Valid'];
+  const count = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(count) && count > 0 ? count : 0;
+}
+
+/** Valid answers on a frequency table. A partial table that does not add up to its total is left out. */
+function frequencyAnswered(view: ResultView): number {
+  let reconciled = 0;
+  let open = 0;
+  for (const table of view.tables) {
+    const frequencyAt = table.columns.findIndex(column => column.toLowerCase() === 'frequency');
+    if (frequencyAt < 0) continue;
+    let categories = 0;
+    let missing = 0;
+    let total = 0;
+    let sawTotal = false;
+    for (const row of table.rows) {
+      const label = (row[0] || '').toLowerCase();
+      const count = Number(String(row[frequencyAt]).replace(/,/g, ''));
+      if (!Number.isFinite(count)) continue;
+      if (label === 'total') {
+        sawTotal = true;
+        total = count;
+      } else if (label === 'missing') missing = count;
+      else categories += count;
+    }
+    if (!categories) continue;
+    if (sawTotal) {
+      const matches =
+        Math.abs(categories - total) < 0.5 || Math.abs(categories + missing - total) < 0.5;
+      if (matches && categories > reconciled) reconciled = categories;
+    } else if (categories > open) open = categories;
+  }
+  return reconciled || open;
 }
 
 function largestFrequencyTotal(view: ResultView): number {

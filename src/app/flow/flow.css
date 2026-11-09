@@ -452,6 +452,25 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   min-height: 0;
 }
 
+.responses-agent .sheet-scroll {
+  flex: 1;
+  min-height: 0;
+}
+
+.responses-agent .sheet-scroll [data-radix-scroll-area-viewport] > div {
+  height: 100%;
+}
+
+.responses-agent .output-body {
+  flex: 1;
+  height: 100%;
+  min-height: 100%;
+}
+
+.evidence [data-slot='empty'] {
+  flex: 1;
+}
+
 .responses-agent .flow-composer:not(.chat-composer) {
   flex-wrap: wrap;
   align-items: stretch;

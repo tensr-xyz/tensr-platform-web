@@ -207,6 +207,44 @@ describe('result tables', () => {
     expect(dropped.base).toBe('');
   });
 
+  it('uses the answered base when the footnote has no exclusion count', () => {
+    const fromRows = resultViewFromToolResults({
+      procedure: 'frequencies',
+      summary: {
+        table: [
+          {
+            title: 'How satisfied are you?',
+            rows: [
+              { value: 'Satisfied', frequency: 60, percent: 31.4 },
+              { value: 'Very satisfied', frequency: 20, percent: 10.5 },
+            ],
+          },
+        ],
+      },
+    });
+    expect(fromRows.base).toBe('Base 80');
+    const fromStats = resultViewFromToolResults({
+      procedure: 'frequencies',
+      summary: { stats: { n_valid: 191 } },
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Satisfaction',
+          columns: ['', 'Frequency', 'Valid Percent'],
+          rows: [
+            ['Satisfied', '60', '31.4'],
+            ['Very satisfied', '20', '10.5'],
+            ['Missing', '58', ''],
+            ['Total', '249', '100'],
+          ],
+        },
+      ],
+    });
+    expect(fromStats.base).toBe('Base 191');
+    expect(resultFootnote(fromStats, '', 'Frequencies')).toBe(
+      'Base 191 · Unweighted · Frequencies'
+    );
+  });
+
   it('prints a label when a header is an object, and keeps the R check', () => {
     const view = resultViewFromToolResults({
       tables: [

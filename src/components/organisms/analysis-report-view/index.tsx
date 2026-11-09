@@ -236,10 +236,12 @@ function ReportTable({
   table,
   onCopy,
   emphasized = false,
+  pageTitle = '',
 }: {
   table: AnalysisReportTable;
   onCopy: () => void;
   emphasized?: boolean;
+  pageTitle?: string;
 }) {
   const [showCounts, setShowCounts] = React.useState(false);
   const rows = showCounts && table.count_rows?.length ? table.count_rows : table.rows;
@@ -251,28 +253,32 @@ function ReportTable({
       )}
     >
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2">
-        <h4 className="text-[12.5px] font-medium text-foreground">{table.title}</h4>
-        {table.count_rows?.length ? (
+        {table.title.trim() && table.title.trim() !== pageTitle.trim() ? (
+          <h4 className="text-[12.5px] font-medium text-foreground">{table.title}</h4>
+        ) : null}
+        <div className="ml-auto flex items-center gap-2">
+          {table.count_rows?.length ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="compact"
+              className="h-7 px-2 text-[11px] print:hidden"
+              onClick={() => setShowCounts(current => !current)}
+            >
+              {showCounts ? 'Column %' : 'Counts'}
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
             size="compact"
             className="h-7 px-2 text-[11px] print:hidden"
-            onClick={() => setShowCounts(current => !current)}
+            onClick={onCopy}
           >
-            {showCounts ? 'Column %' : 'Counts'}
+            <Copy className="mr-1 size-3" aria-hidden />
+            Copy
           </Button>
-        ) : null}
-        <Button
-          type="button"
-          variant="ghost"
-          size="compact"
-          className="h-7 px-2 text-[11px] print:hidden"
-          onClick={onCopy}
-        >
-          <Copy className="mr-1 size-3" aria-hidden />
-          Copy
-        </Button>
+        </div>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[280px] border-collapse text-left text-[12.5px]">
@@ -381,6 +387,7 @@ function BlockRenderer({
   onChartExportError,
   emphasized,
   onRevealConsumedRows,
+  pageTitle = '',
 }: {
   block: AnalysisReportBlock;
   blockIndex: number;
@@ -389,6 +396,7 @@ function BlockRenderer({
   onChartExportError?: (message: string) => void;
   emphasized?: boolean;
   onRevealConsumedRows?: (group?: string) => void;
+  pageTitle?: string;
 }) {
   if (block.type === 'interpretation') {
     return (
@@ -448,8 +456,16 @@ function BlockRenderer({
   if (block.type === 'table') {
     const t = block.table;
     return (
-      <ReportSection sectionId={`table-${t.id}`} label={t.title}>
-        <ReportTable table={t} emphasized={emphasized} onCopy={() => onCopyTable(t)} />
+      <ReportSection
+        sectionId={`table-${t.id}`}
+        label={blockIndex === 0 && t.title.trim() === pageTitle.trim() ? 'Primary result' : t.title}
+      >
+        <ReportTable
+          table={t}
+          emphasized={emphasized}
+          pageTitle={pageTitle}
+          onCopy={() => onCopyTable(t)}
+        />
         {t.interpretation ? (
           <p className="mt-3 text-[13px] leading-relaxed text-foreground">{t.interpretation}</p>
         ) : null}
@@ -872,6 +888,7 @@ export function AnalysisReportView({
               onAnnotateChart={onAnnotateChart}
               onChartExportError={msg => flash(msg)}
               emphasized={i === 0}
+              pageTitle={pageTitle}
               onRevealConsumedRows={canReveal ? onRevealConsumedRows : undefined}
             />
           ))
@@ -991,6 +1008,7 @@ export function AnalysisReportView({
                 <ReportTable
                   table={{ ...t, apa_style: true }}
                   emphasized={i === 0}
+                  pageTitle={pageTitle}
                   onCopy={() => onCopyTable(t)}
                 />
                 {t.notes?.length ? (
@@ -1020,6 +1038,7 @@ export function AnalysisReportView({
                   <ReportTable
                     table={t}
                     emphasized={i === 0 && !report.spss_blocks?.length}
+                    pageTitle={pageTitle}
                     onCopy={() => onCopyTable(t)}
                   />
                   {t.interpretation ? (

@@ -201,9 +201,27 @@ function frequencyQuestions(results: ToolResult[] | undefined): string[] {
   return found;
 }
 
+export type QuestionLabel = { name: string; label?: string | null };
+
+/** A column code becomes its question when the file has a label for it. */
+export function titledWithQuestion(title: string, columns: QuestionLabel[] = []): string {
+  const stripped = title.replace(/^frequency table:\s*/i, '').trim();
+  const key = stripped.replace(/\.\s*$/, '').toLowerCase();
+  const meta = columns.find(column => column.name.trim().toLowerCase() === key);
+  const label = (meta?.label || '').trim();
+  if (label && label.toLowerCase() !== key) return label;
+  return stripped || title;
+}
+
 /** The table title the API put on the result, or the first prose line that is not the base. */
-export function outputTitle(results: ToolResult[] | undefined, answer: string): string {
-  const questions = frequencyQuestions(results);
+export function outputTitle(
+  results: ToolResult[] | undefined,
+  answer: string,
+  columns: QuestionLabel[] = []
+): string {
+  const questions = frequencyQuestions(results).map(question =>
+    titledWithQuestion(question, columns)
+  );
   if (questions.length) return questions.join(', ');
   for (const item of analysisItems(results)) {
     const result = item.result || {};
@@ -212,7 +230,7 @@ export function outputTitle(results: ToolResult[] | undefined, answer: string): 
         ? (result.result as Record<string, unknown>)
         : {};
     const title = summaryOf(item).title ?? result.title ?? nested.title;
-    if (typeof title === 'string' && title.trim()) return title.trim();
+    if (typeof title === 'string' && title.trim()) return titledWithQuestion(title, columns);
     const body = bodyOf(item);
     const measure = first(body, [
       'value_column',
@@ -224,8 +242,10 @@ export function outputTitle(results: ToolResult[] | undefined, answer: string): 
       'outcome',
     ]);
     const group = first(body, ['group_column', 'banner_column', 'factor', 'by']);
-    if (measure && group) return `${measure} by ${group}`;
-    if (measure) return measure;
+    if (measure && group) {
+      return `${titledWithQuestion(measure, columns)} by ${titledWithQuestion(group, columns)}`;
+    }
+    if (measure) return titledWithQuestion(measure, columns);
   }
   const lines = proseLines(answer).filter(line => !FILE_LINE.test(line));
   for (const line of lines) {

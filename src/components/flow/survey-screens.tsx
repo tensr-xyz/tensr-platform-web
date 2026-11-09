@@ -1,6 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Quote } from 'lucide-react';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger, Skeleton } from '@/components/ui/rest';
@@ -816,7 +824,17 @@ export function EvidencePanel({
   if (!cell) {
     return (
       <div className="evidence">
-        <p className="flow-muted">Select a cell in Themes or Tables to open its verbatims.</p>
+        <Empty className="min-h-[280px] border-0 bg-transparent">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Quote />
+            </EmptyMedia>
+            <EmptyTitle className="text-sm">No cell selected</EmptyTitle>
+            <EmptyDescription>
+              Select a cell in Themes or Tables to open its verbatims.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </div>
     );
   }

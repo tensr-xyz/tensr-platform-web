@@ -207,12 +207,16 @@ export function OutputPage({
             <span className="output-badge-saved">Saved</span>
             {pinned ? <span className="output-badge-in">In report</span> : null}
           </div>
-          <h1>{document.title}</h1>
-          <p className="output-meta">
-            {[when, document.base != null ? `n = ${document.base}` : '']
-              .filter(Boolean)
-              .join('  |  ')}
-          </p>
+          {fullReport ? null : (
+            <>
+              <h1>{document.title}</h1>
+              <p className="output-meta">
+                {[when, document.base != null ? `n = ${document.base}` : '']
+                  .filter(Boolean)
+                  .join('  |  ')}
+              </p>
+            </>
+          )}
           {fullReport ? (
             <AnalysisReportView
               report={fullReport}
