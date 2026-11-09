@@ -21,6 +21,7 @@ export type AgentLoopStreamHandlers = {
     text?: string;
     tool_results?: AgentLoopResponse['tool_results'];
   }) => void;
+  onSession?: (sessionId: string) => void;
   signal?: AbortSignal;
 };
 
@@ -81,10 +82,16 @@ function processSseLine(
     replace?: boolean;
     tool_results?: AgentLoopResponse['tool_results'];
     response?: AgentLoopResponse;
+    session_id?: string;
   };
   try {
     payload = JSON.parse(jsonStr);
   } catch {
+    return;
+  }
+
+  if (payload.type === 'session' && payload.session_id) {
+    handlers.onSession?.(payload.session_id);
     return;
   }
 

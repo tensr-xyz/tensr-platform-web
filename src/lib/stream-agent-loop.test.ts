@@ -71,6 +71,24 @@ describe('streamAgentLoop', () => {
     });
   });
 
+  it('reports the chat id before the result', async () => {
+    const onSession = jest.fn();
+    (global.fetch as jest.Mock).mockResolvedValue(
+      sseFetchResponse(
+        'data: {"type":"session","session_id":"sess-early"}\n\n' +
+          'data: {"type":"result","response":{"status":"ok","mode":"agent","session_id":"sess-early","answer_markdown":"Done."}}\n\n'
+      )
+    );
+
+    const result = await streamAgentLoop(
+      { message: 'hello', mode: 'agent', agentVersion: 'v2' },
+      { onSession }
+    );
+
+    expect(onSession).toHaveBeenCalledWith('sess-early');
+    expect(result.session_id).toBe('sess-early');
+  });
+
   it('surfaces progress then returns the result payload', async () => {
     const onProgress = jest.fn();
     (global.fetch as jest.Mock).mockResolvedValue(

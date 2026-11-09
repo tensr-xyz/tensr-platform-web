@@ -2624,6 +2624,20 @@ function ChatScreen({
             setStatus(null);
             publish({ answer: next, status: null });
           },
+          onSession: sessionId => {
+            sessionRef.current = sessionId;
+            rememberChat(sessionId);
+            publish({ sessionId });
+            const title = text.trim();
+            setSessions(current => {
+              const row = {
+                session_id: sessionId,
+                title: title.length > 80 ? `${title.slice(0, 77)}…` : title,
+              };
+              const rest = (current || []).filter(item => item.session_id !== row.session_id);
+              return [row, ...rest];
+            });
+          },
           onPreview: preview => {
             const text = preview.text || draft;
             if (text) {
