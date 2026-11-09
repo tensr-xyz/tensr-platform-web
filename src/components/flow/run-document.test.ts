@@ -42,6 +42,13 @@ describe('saved run document', () => {
     expect(labelled.tables[0].rows[0][0]).toBe('North region');
     expect(document.checks).toEqual(['Levene p = .21', '8 rows dropped']);
     expect(runDocument({ ...run, result: { ...run.result, n_used: 22 } }).base).toBe(22);
+    expect(
+      runDocument({
+        ...run,
+        report: { ...run.report, exclusion_summary: { rows_used: 191 } },
+        result: { ...run.result, n_used: 248, bases: [{ unweighted: 191 }] },
+      }).base
+    ).toBe(191);
     expect(document.script).toContain('aov');
     const lead = runDocument({
       ...run,

@@ -388,6 +388,7 @@ function BlockRenderer({
   emphasized,
   onRevealConsumedRows,
   pageTitle = '',
+  primaryTable = false,
 }: {
   block: AnalysisReportBlock;
   blockIndex: number;
@@ -397,6 +398,7 @@ function BlockRenderer({
   emphasized?: boolean;
   onRevealConsumedRows?: (group?: string) => void;
   pageTitle?: string;
+  primaryTable?: boolean;
 }) {
   if (block.type === 'interpretation') {
     return (
@@ -458,7 +460,7 @@ function BlockRenderer({
     return (
       <ReportSection
         sectionId={`table-${t.id}`}
-        label={blockIndex === 0 && t.title.trim() === pageTitle.trim() ? 'Primary result' : t.title}
+        label={primaryTable && t.title.trim() === pageTitle.trim() ? 'Primary result' : t.title}
       >
         <ReportTable
           table={t}
@@ -637,13 +639,15 @@ export function AnalysisReportView({
   const isBannerTable = report.meta.analysis_key === 'banner_table';
   const pageTitle = shown.meta.title?.trim() || 'Analysis';
   const answerLead = shown.answer?.trim() || '';
-  const blockTitle = answerLead && answerLead !== pageTitle ? answerLead : '';
+  const engineFrequencyLead = /^frequency tables?\./i.test(answerLead);
+  const blockTitle =
+    answerLead && answerLead !== pageTitle && !(engineFrequencyLead && pageTitle) ? answerLead : '';
   const blockSubtitle = undefined;
   const metaTestLabel =
     isBannerTable && report.meta.subtitle && report.meta.subtitle !== pageTitle
       ? report.meta.subtitle
       : '';
-  const approachCopy = reportApproachCopy(report);
+  const approachCopy = reportApproachCopy(shown);
   const approachExploration = approachCopy.exploration;
   const assumptionInterpretations = (report.assumption_checks?.interpretations ?? []).filter(
     line =>
@@ -889,6 +893,7 @@ export function AnalysisReportView({
               onChartExportError={msg => flash(msg)}
               emphasized={i === 0}
               pageTitle={pageTitle}
+              primaryTable={i === blocks.findIndex(item => item.type === 'table')}
               onRevealConsumedRows={canReveal ? onRevealConsumedRows : undefined}
             />
           ))
@@ -1004,7 +1009,11 @@ export function AnalysisReportView({
             )}
 
             {(report.spss_blocks ?? []).map((t, i) => (
-              <ReportSection key={t.id} sectionId={`spss-${t.id}`} label={t.title}>
+              <ReportSection
+                key={t.id}
+                sectionId={`spss-${t.id}`}
+                label={i === 0 && t.title.trim() === pageTitle.trim() ? 'Primary result' : t.title}
+              >
                 <ReportTable
                   table={{ ...t, apa_style: true }}
                   emphasized={i === 0}
@@ -1030,7 +1039,8 @@ export function AnalysisReportView({
                   label={
                     t.id === 'banner_table'
                       ? 'Crosstab'
-                      : i === 0 && !report.spss_blocks?.length
+                      : i === 0 &&
+                          (!report.spss_blocks?.length || t.title.trim() === pageTitle.trim())
                         ? 'Primary result'
                         : t.title
                   }

@@ -123,14 +123,23 @@ export function runDocument(run: Record<string, unknown>): RunDocument {
         ? repro.python
         : '';
   const rows = meta.rows_dataset;
+  const bases = result.bases;
+  const oneBase =
+    Array.isArray(bases) && bases.length === 1 && bases[0] && typeof bases[0] === 'object'
+      ? (bases[0] as { unweighted?: unknown }).unweighted
+      : undefined;
+  const exclusion = report.exclusion_summary as { rows_used?: unknown } | undefined;
+  const answered = typeof oneBase === 'number' ? oneBase : exclusion?.rows_used;
   const base =
-    typeof result.n_used === 'number'
-      ? result.n_used
-      : typeof rows === 'number'
-        ? rows
-        : typeof result.n_rows === 'number'
-          ? result.n_rows
-          : null;
+    typeof answered === 'number'
+      ? answered
+      : typeof result.n_used === 'number'
+        ? result.n_used
+        : typeof rows === 'number'
+          ? rows
+          : typeof result.n_rows === 'number'
+            ? result.n_rows
+            : null;
   const structured =
     report.answer_from_result === true && typeof report.answer === 'string'
       ? report.answer.trim()
