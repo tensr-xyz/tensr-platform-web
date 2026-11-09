@@ -55,9 +55,34 @@ function analysisItems(results: ToolResult[] | undefined): ToolResult[] {
   });
 }
 
+function hasFrequencyTable(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  if (Array.isArray(record.frequency_tables)) return true;
+  if (Array.isArray(record.table)) {
+    return record.table.some(row => {
+      if (!row || typeof row !== 'object') return false;
+      const item = row as Record<string, unknown>;
+      return 'frequency' in item || Array.isArray(item.rows);
+    });
+  }
+  const nested = record.result;
+  return Boolean(nested && typeof nested === 'object' && hasFrequencyTable(nested));
+}
+
+function isFrequencyResult(item: ToolResult): boolean {
+  if (procedureOf(item) === 'frequencies') return true;
+  const summary = summaryOf(item);
+  const text = `${summary.title || ''} ${summary.line || ''}`;
+  if (/\bfrequency table\b/i.test(text)) return true;
+  return hasFrequencyTable(summary) || hasFrequencyTable(item.result);
+}
+
 /** The analysis kind for the badge: ANOVA, Crosstab, and so on. */
 export function outputKind(results: ToolResult[] | undefined): string {
-  const procedure = procedureOf(analysisItems(results)[0] || {});
+  const items = analysisItems(results);
+  if (items.some(isFrequencyResult)) return 'Frequencies';
+  const procedure = procedureOf(items[0] || {});
   if (!procedure) return 'Output';
   return KIND_LABELS[procedure] || analysisDisplayName(procedure);
 }
@@ -118,8 +143,68 @@ function isBaseSentence(sentence: string): boolean {
   return BASE_SENTENCE.test(sentence);
 }
 
+function questionFromFrequency(text: string): string {
+  const match = text.match(/frequency table(?: for)?:\s*(.+)/i);
+  if (!match) return '';
+  return match[1].replace(/\.\s*$/, '').trim();
+}
+
+function questionFromTableTitle(text: string): string {
+  return text
+    .replace(/^frequency table:\s*/i, '')
+    .replace(/\.\s*$/, '')
+    .trim();
+}
+
+function isQuestion(text: string): boolean {
+  return text.includes(' ');
+}
+
+/** Question labels on the frequency tables, in order. A variable code such as Q5 is not a question. */
+function frequencyQuestions(results: ToolResult[] | undefined): string[] {
+  const found: string[] = [];
+  const push = (text: string) => {
+    const question = questionFromTableTitle(text);
+    if (question && isQuestion(question) && !found.includes(question)) found.push(question);
+  };
+  for (const item of analysisItems(results)) {
+    const summary = summaryOf(item);
+    const table = summary.table;
+    if (Array.isArray(table)) {
+      for (const block of table) {
+        if (!block || typeof block !== 'object') continue;
+        const title = (block as { title?: unknown }).title;
+        if (typeof title === 'string') push(title);
+      }
+    }
+    for (const layer of [item.result, summary]) {
+      if (!layer || typeof layer !== 'object') continue;
+      const tables = (layer as { frequency_tables?: unknown }).frequency_tables;
+      const nested = (layer as { result?: { frequency_tables?: unknown } }).result;
+      const lists = [tables, nested?.frequency_tables];
+      for (const list of lists) {
+        if (!Array.isArray(list)) continue;
+        for (const block of list) {
+          if (!block || typeof block !== 'object') continue;
+          const title = (block as { title?: unknown }).title;
+          if (typeof title === 'string') push(title);
+        }
+      }
+    }
+    for (const key of ['title', 'line'] as const) {
+      const text = summary[key];
+      if (typeof text !== 'string') continue;
+      const question = questionFromFrequency(text);
+      if (question && !found.some(existing => question.includes(existing))) push(question);
+    }
+  }
+  return found;
+}
+
 /** The table title the API put on the result, or the first prose line that is not the base. */
 export function outputTitle(results: ToolResult[] | undefined, answer: string): string {
+  const questions = frequencyQuestions(results);
+  if (questions.length) return questions.join(', ');
   for (const item of analysisItems(results)) {
     const result = item.result || {};
     const nested =
@@ -144,8 +229,8 @@ export function outputTitle(results: ToolResult[] | undefined, answer: string): 
   }
   const lines = proseLines(answer).filter(line => !FILE_LINE.test(line));
   for (const line of lines) {
-    const first = sentences(line).find(sentence => !isBaseSentence(sentence));
-    if (first) return first.length > 90 ? `${first.slice(0, 89).trimEnd()}…` : first;
+    const opening = sentences(line).find(sentence => !isBaseSentence(sentence));
+    if (opening) return opening.length > 90 ? `${opening.slice(0, 89).trimEnd()}…` : opening;
   }
   return 'Result';
 }
@@ -156,6 +241,18 @@ export function outputTakeaway(answer: string): string {
     if (FILE_LINE.test(line)) continue;
     const kept = sentences(line).filter(sentence => !isBaseSentence(sentence));
     if (kept.length) return kept[0];
+  }
+  return '';
+}
+
+/** The base and weight clause from a frequency summary, when the answer did not keep one. */
+export function outputBaseClause(results: ToolResult[] | undefined, answer: string): string {
+  const noted = outputBaseNote(answer);
+  if (noted) return noted;
+  for (const item of analysisItems(results)) {
+    const line = String(summaryOf(item).line || '');
+    const match = line.match(/((?:weighted by|unweighted)\b[\s\S]*)$/i);
+    if (match && /base/i.test(match[1])) return match[1].replace(/\s+/g, ' ').trim();
   }
   return '';
 }

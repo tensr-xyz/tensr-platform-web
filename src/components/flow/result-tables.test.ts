@@ -105,6 +105,108 @@ describe('result tables', () => {
     );
   });
 
+  it('renders every summary table with its question, and keeps one set when the engine grid is there too', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'What is your gender?',
+            rows: [
+              { value: 'Female', frequency: 12, percent: 60 },
+              { value: 'Male', frequency: 8, percent: 40 },
+            ],
+          },
+          {
+            title: 'Which region do you live in?',
+            rows: [{ value: 'West', frequency: 11, percent: 55.5 }],
+          },
+        ],
+      },
+      frequency_tables: [
+        {
+          title: 'Frequency Table: What is your gender?',
+          columns: ['', 'Frequency', 'Percent (incl. missing)', 'Valid Percent'],
+          rows: [['Female', '12', '60.0', '60.0']],
+        },
+      ],
+      filters: [{ column: 'region', op: '=', value: 'London' }],
+    });
+    expect(view.tables.map(table => table.title)).toEqual([
+      'What is your gender?',
+      'Which region do you live in?',
+    ]);
+    expect(view.tables[0].columns).toEqual(['Answer', 'Frequency', 'Percent']);
+    expect(view.tables[0].rows[0]).toEqual(['Female', '12', '60']);
+    expect(view.tables[1].rows[0][2]).toBe('55.5');
+    expect(view.filter).toBe('region = London');
+    expect(resultFootnote(view, 'Unweighted base 191.', 'Frequencies')).toBe(
+      'Unweighted base 191. · Filter: region = London · Unweighted · Frequencies'
+    );
+  });
+
+  it('writes the filter and the weight with their labels', () => {
+    const view = resultViewFromToolResults({
+      filters: [{ column: 'region', op: '=', value: '4' }],
+      weight: { column: 'design_weight' },
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Satisfaction',
+          columns: ['', 'Frequency', 'Valid Percent'],
+          rows: [['Satisfied', '60', '31.4']],
+        },
+      ],
+    });
+    const columns = [
+      {
+        name: 'region',
+        label: 'Region',
+        value_labels: { '4': 'London' },
+      },
+      { name: 'design_weight', label: 'Design weight' },
+      { name: 'weight', label: 'weight' },
+    ];
+    expect(resultFootnote(view, 'Base 191', 'Frequencies', columns)).toBe(
+      'Base 191 · Filter: Region = London · Weight: Design weight · Frequencies'
+    );
+    const namedWeight = resultViewFromToolResults({ weight: { column: 'weight' } });
+    expect(resultFootnote(namedWeight, '', 'Frequencies', columns)).toBe('Frequencies');
+  });
+
+  it('keeps the frequency base and drops an exclusion count that is not this table', () => {
+    const kept = resultViewFromToolResults({
+      report: {
+        exclusion_summary: { rows_used: 191 },
+        tables: [
+          {
+            title: 'Frequency Table: Satisfaction',
+            columns: ['', 'Frequency', 'Valid Percent'],
+            rows: [
+              ['Satisfied', '60', '31.4'],
+              ['Total', '248', ''],
+            ],
+          },
+        ],
+      },
+    });
+    expect(kept.base).toBe('Base 191');
+    const dropped = resultViewFromToolResults({
+      report: {
+        exclusion_summary: { rows_used: 17 },
+        tables: [
+          {
+            title: 'Frequency Table: Gender',
+            columns: ['', 'Frequency', 'Valid Percent'],
+            rows: [
+              ['Female', '108', '54.3'],
+              ['Total', '200', '100'],
+            ],
+          },
+        ],
+      },
+    });
+    expect(dropped.base).toBe('');
+  });
+
   it('prints a label when a header is an object, and keeps the R check', () => {
     const view = resultViewFromToolResults({
       tables: [

@@ -457,6 +457,29 @@ export function normalizeStoredAnalysisRun(row: unknown): StoredAnalysisRun | nu
   };
 }
 
+/** The stream keeps the summary and the run id. The stored run still has every table. */
+export function attachStoredRuns(results: unknown, runs: StoredAnalysisRun[]): unknown {
+  if (!Array.isArray(results) || !runs.length) return results;
+  const byId = new Map(runs.map(run => [run.id, run]));
+  return results.map(item => {
+    if (!item || typeof item !== 'object') return item;
+    const record = item as Record<string, unknown>;
+    const nested = record.result as { run_id?: unknown } | undefined;
+    const id = String(record.run_id || nested?.run_id || '');
+    const stored = byId.get(id);
+    if (!stored) return item;
+    return {
+      ...record,
+      analysis_type: stored.op || record.analysis_type,
+      procedure: stored.op || record.procedure,
+      result: analysisEnvelopeFromStoredRun(
+        stored,
+        nested && typeof nested === 'object' ? nested : null
+      ),
+    };
+  });
+}
+
 export function analysisEnvelopeFromStoredRun(
   stored: StoredAnalysisRun,
   prior?: Record<string, unknown> | null

@@ -282,10 +282,17 @@ export function ReportOutputs({
 
   if (opened && detailPhase === 'error') {
     return (
-      <div className="outputs-board">
-        <p className="flow-error">{exportError || 'This result could not be opened.'}</p>
-        <Button className="flow-btn" type="button" onClick={() => setOpened(false)}>
-          Back
+      <div className="outputs-missing">
+        <h2>This output was deleted or isn&apos;t in this project</h2>
+        <Button
+          className="flow-btn"
+          type="button"
+          onClick={() => {
+            setOpened(false);
+            setSelectedId('');
+          }}
+        >
+          Back to Outputs
         </Button>
       </div>
     );

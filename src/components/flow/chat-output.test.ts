@@ -47,6 +47,36 @@ describe('chat output panel', () => {
     ).toBe('likes_A by region');
   });
 
+  it('titles a frequency card with the question and badges Frequencies', () => {
+    const results = [
+      {
+        name: 'run_analysis',
+        procedure: 'descriptives',
+        request_body: { columns: ['Q5'] },
+        summary: { title: 'Q5' },
+      },
+      {
+        procedure: 'frequencies',
+        analysis_type: 'frequencies',
+        request_body: { columns: ['Q5'] },
+        summary: {
+          title: 'Frequency table: How would you rate the product? (1-5).',
+          line: 'Frequency table: How would you rate the product? (1-5). unweighted. Unweighted base 200.',
+          table: [
+            {
+              title: 'How would you rate the product? (1-5)',
+              rows: [{ value: '4', frequency: 20, percent: 31.4 }],
+            },
+          ],
+        },
+      },
+    ];
+    expect(outputTitle(results, 'Frequency table: How would you rate the product? (1-5).')).toBe(
+      'How would you rate the product? (1-5)'
+    );
+    expect(outputKind(results)).toBe('Frequencies');
+  });
+
   it('falls back to the first prose sentence that is not the base', () => {
     expect(outputTitle([], 'Liking is flat across markets.\n\n| a | b |\n| --- | --- |')).toBe(
       'Liking is flat across markets.'

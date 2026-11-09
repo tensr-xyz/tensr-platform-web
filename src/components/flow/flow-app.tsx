@@ -22,12 +22,7 @@ import {
 } from '@/components/flow/project-tables';
 import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
 import { PaletteNoMatch } from '@/components/flow/palette-no-match';
-import {
-  dependentColumns,
-  isIdColumn,
-  isInternalColumn,
-  type FlowColumn,
-} from '@/lib/flow-columns';
+import { isIdColumn, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
 import {
   downloadsFromToolResults,
   openSignedDownload,
@@ -48,7 +43,7 @@ import {
   answerWithoutBase,
   answerWithoutTables,
   baseCount,
-  outputBaseNote,
+  outputBaseClause,
   outputCardReady,
   outputChecks,
   outputKind,
@@ -57,6 +52,7 @@ import {
   outputTakeaway,
   outputTitle,
 } from '@/components/flow/chat-output';
+import { ThreadResult, useEnrichedToolResults } from '@/components/flow/use-enriched-results';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { resultFootnote, resultViewFromToolResults } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
@@ -2444,6 +2440,9 @@ function ChatScreen({
   const [stepsOpen, setStepsOpen] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
   const [columns, setColumns] = useState<string[] | null>(null);
+  const [columnLabels, setColumnLabels] = useState<
+    { name: string; label?: string | null; value_labels?: Record<string, string> | null }[]
+  >([]);
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
   const [attachedNote, setAttachedNote] = useState('');
@@ -2454,6 +2453,8 @@ function ChatScreen({
   const sentRef = useRef('');
   const answerRef = useRef('');
   const noteRef = useRef('');
+  const toolResultsRef = useRef(turn?.tool_results);
+  toolResultsRef.current = turn?.tool_results;
   sentRef.current = sent;
   answerRef.current = answer;
   noteRef.current = attachedNote;
@@ -2486,21 +2487,39 @@ function ChatScreen({
   useEffect(() => {
     if (!datasetId) {
       setColumns([]);
+      setColumnLabels([]);
       return;
     }
     let cancelled = false;
     setColumns(null);
-    void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${datasetId}/metadata`)
+    void flowJson<{
+      columns?: {
+        name?: string;
+        label?: string | null;
+        value_labels?: Record<string, string> | null;
+      }[];
+    }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         if (cancelled) return;
+        const listed = meta.columns || [];
         setColumns(
-          (meta.columns || [])
-            .map(column => column.name || '')
-            .filter(name => name && !isInternalColumn(name))
+          listed.map(column => column.name || '').filter(name => name && !isInternalColumn(name))
+        );
+        setColumnLabels(
+          listed
+            .filter(column => column.name)
+            .map(column => ({
+              name: column.name || '',
+              label: column.label,
+              value_labels: column.value_labels,
+            }))
         );
       })
       .catch(() => {
-        if (!cancelled) setColumns([]);
+        if (!cancelled) {
+          setColumns([]);
+          setColumnLabels([]);
+        }
       });
     return () => {
       cancelled = true;
@@ -2542,7 +2561,12 @@ function ChatScreen({
         archiveChatTurn(
           current,
           sentRef.current
-            ? { user: sentRef.current, note: noteRef.current, answer: answerRef.current }
+            ? {
+                user: sentRef.current,
+                note: noteRef.current,
+                answer: answerRef.current,
+                toolResults: toolResultsRef.current,
+              }
             : null
         )
       );
@@ -2881,12 +2905,13 @@ function ChatScreen({
       .catch(() => setStatus('That chat could not be opened.'));
   };
 
-  const kind = outputKind(turn?.tool_results);
-  const title = outputTitle(turn?.tool_results, answer);
+  const toolResults = useEnrichedToolResults(turn?.tool_results);
+  const kind = outputKind(toolResults);
+  const title = outputTitle(toolResults, answer);
   const takeaway = outputTakeaway(answer);
-  const baseNote = outputBaseNote(answer);
-  const stat = outputStat(turn?.tool_results, answer, takeaway);
-  const runIds = outputRunIds(turn?.tool_results);
+  const baseNote = outputBaseClause(toolResults, answer);
+  const stat = outputStat(toolResults, answer, takeaway);
+  const runIds = outputRunIds(toolResults);
   const outputReady = outputCardReady(turn, Boolean(plan));
   useEffect(() => {
     if (outputReady) setPanelOpen(true);
@@ -2918,17 +2943,18 @@ function ChatScreen({
     // The address is read once when this chat screen opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatProjectId]);
-  const checks = outputChecks(turn?.tool_results);
+  const checks = outputChecks(toolResults);
   const tables = answerTables(answer);
   const thread = answerWithoutBase(panelOpen && tables ? answerWithoutTables(answer) : answer);
   const tableMode = kind === 'Crosstab' && Boolean(tables);
   const ledger = (turn?.turn_state?.ledger || {}) as { weight?: string | null };
-  const resultView = resultViewFromToolResults(turn?.tool_results);
+  const resultView = resultViewFromToolResults(toolResults);
   const structuredTables = resultView.tables;
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
     baseNote,
-    kind
+    kind,
+    columnLabels
   );
   const resultChecks = resultView.checks.length
     ? resultView.checks
@@ -3045,26 +3071,11 @@ function ChatScreen({
                       {turn.user}
                       {turn.note ? <div className="flow-muted">{turn.note}</div> : null}
                     </div>
-                    {turn.toolResults?.length ? (
-                      <AnalysisResult
-                        lead={outputTakeaway(turn.answer)}
-                        tables={resultViewFromToolResults(turn.toolResults).tables}
-                        footnote={resultFootnote(
-                          resultViewFromToolResults(turn.toolResults),
-                          outputBaseNote(turn.answer),
-                          outputKind(turn.toolResults)
-                        )}
-                        checks={resultViewFromToolResults(turn.toolResults).checks}
-                        script={resultViewFromToolResults(turn.toolResults).script}
-                        rCheck={resultViewFromToolResults(turn.toolResults).rCheck}
-                        rStatement={resultViewFromToolResults(turn.toolResults).rStatement}
-                        runId={outputRunIds(turn.toolResults)[0]}
-                      />
-                    ) : turn.answer ? (
-                      <FlowMarkdown className="chat-prose">
-                        {answerWithoutBase(turn.answer)}
-                      </FlowMarkdown>
-                    ) : null}
+                    <ThreadResult
+                      results={turn.toolResults}
+                      answer={turn.answer}
+                      columns={columnLabels}
+                    />
                   </div>
                 ))}
                 {sent ? (
@@ -3322,12 +3333,13 @@ function ChatScreen({
                     </Button>
                   </div>
                   <h2>{title}</h2>
-                  {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
+                  {baseNote && !structuredTables.length ? (
+                    <p className="flow-muted output-base">{baseNote}</p>
+                  ) : null}
                 </div>
                 <div className="output-body">
                   {structuredTables.length ? (
                     <AnalysisResult
-                      lead={takeaway}
                       tables={structuredTables}
                       footnote={footnote}
                       checks={resultChecks}
@@ -3338,9 +3350,6 @@ function ChatScreen({
                     />
                   ) : (
                     <>
-                      {takeaway && takeaway !== title ? (
-                        <div className="output-takeaway">{takeaway}</div>
-                      ) : null}
                       {tables ? (
                         <FlowMarkdown className="output-table">{tables}</FlowMarkdown>
                       ) : null}
@@ -3635,7 +3644,6 @@ function ResponsesScreen({
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
-  const [descError, setDescError] = useState<string | null>(null);
   const [columnCounts, setColumnCounts] = useState<
     Record<
       string,
@@ -4028,7 +4036,15 @@ function ResponsesScreen({
               <Link key={spec.id} className="rail-analysis" href={`/flow/p/${project?.id}/tables`}>
                 <span className="rail-badge">T{spec.number || ''}</span>
                 <span className="rail-analysis-copy">
-                  <span>{spec.label}</span>
+                  <span>
+                    {titledWithQuestions(
+                      spec.label,
+                      columns.map(column => ({
+                        name: column.name,
+                        label: column.label || undefined,
+                      }))
+                    )}
+                  </span>
                   <span className="flow-muted">{spec.note || 'Custom Tables'}</span>
                 </span>
               </Link>
@@ -4107,48 +4123,9 @@ function ResponsesScreen({
                 </>
               ) : null}
               <span className="sheet-spacer" />
-              {surveyCell ? null : (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button className="flow-btn sheet-analyse" type="button">
-                      Analyse
-                      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                        <path
-                          d="M3 4l2 2 2-2"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setWeightOpen(true)}>Weight</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setAnovaOpen(true)}>ANOVA</DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        if (!datasetId) return;
-                        setDescError(null);
-                        void flowFetch(`/datasets/${datasetId}/analyze/descriptives`, {
-                          method: 'POST',
-                          body: JSON.stringify({ columns: dependentColumns(columns).slice(0, 1) }),
-                        }).then(async response => {
-                          if (!response.ok) setDescError(await response.text());
-                          else setDescError(null);
-                        });
-                      }}
-                    >
-                      Descriptives
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
             </>
           )}
         </div>
-        {descError ? <p className="flow-error">{descError}</p> : null}
         {filters.length ? (
           <div className="sheet-toolbar sheet-filter-bar">
             <span>
@@ -4388,6 +4365,13 @@ function ResponsesScreen({
                               <span className="sheet-col-label">
                                 {(() => {
                                   const meta = columnMeta(column.name);
+                                  const measure = String(meta?.measure || '').toLowerCase();
+                                  if (
+                                    measure === 'nominal' ||
+                                    measure === 'ordinal' ||
+                                    measure === 'scale'
+                                  )
+                                    return measure;
                                   const label =
                                     meta?.label && meta.label !== column.name ? meta.label : '';
                                   if (label) return label;
@@ -4768,6 +4752,32 @@ function ResponsesScreen({
         </div>
         {side === 'evidence' ? (
           <EvidencePanel datasetId={datasetId} projectId={project?.id} />
+        ) : side === 'agent' ? (
+          <div className="responses-agent">
+            <ScrollArea className="sheet-scroll">
+              <div className="output-body">
+                {agentStatus === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
+                {agentStatus && agentStatus !== 'Thinking…' ? (
+                  <p className="flow-error">{agentStatus}</p>
+                ) : null}
+                {agentAnswer ? <FlowMarkdown>{agentAnswer}</FlowMarkdown> : null}
+              </div>
+            </ScrollArea>
+            <FlowComposer
+              value={agentText}
+              onChange={setAgentText}
+              onSend={askAboutColumn}
+              placeholder={`Ask about ${activeName}`}
+              mode={agentMode}
+              onMode={setAgentMode}
+              busy={agentStatus === 'Thinking…'}
+              columns={names}
+              attachments={[]}
+              onAttach={() => undefined}
+              onRemoveAttachment={() => undefined}
+              layout="thread"
+            />
+          </div>
         ) : (
           <ScrollArea className="sheet-scroll">
             {side === 'variable' && codedColumn ? (
@@ -4862,29 +4872,6 @@ function ResponsesScreen({
                     Use as banner column <span aria-hidden="true">+</span>
                   </Link>
                 ) : null}
-              </div>
-            ) : null}
-            {side === 'agent' ? (
-              <div className="output-body">
-                {agentStatus === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
-                {agentStatus && agentStatus !== 'Thinking…' ? (
-                  <p className="flow-error">{agentStatus}</p>
-                ) : null}
-                {agentAnswer ? <FlowMarkdown>{agentAnswer}</FlowMarkdown> : null}
-                <FlowComposer
-                  value={agentText}
-                  onChange={setAgentText}
-                  onSend={askAboutColumn}
-                  placeholder={`Ask about ${activeName}`}
-                  mode={agentMode}
-                  onMode={setAgentMode}
-                  busy={agentStatus === 'Thinking…'}
-                  columns={names}
-                  attachments={[]}
-                  onAttach={() => undefined}
-                  onRemoveAttachment={() => undefined}
-                  layout="thread"
-                />
               </div>
             ) : null}
           </ScrollArea>

@@ -9,6 +9,7 @@ export type ResultView = {
   /** match, mismatch, pending, or empty when this result has no R reproduction. */
   rCheck: string;
   rStatement: string;
+  base: string;
 };
 
 function cell(value: unknown): string {
@@ -27,18 +28,65 @@ function cell(value: unknown): string {
   return String(value).trim();
 }
 
+function questionTitle(title: string): string {
+  const stripped = title.replace(/^frequency table:\s*/i, '').trim();
+  return stripped || title || 'Table';
+}
+
+function percentCell(value: unknown): string {
+  const text = cell(value);
+  const number = Number(text);
+  if (!text || Number.isNaN(number)) return text;
+  if (Number.isInteger(number)) return String(number);
+  return (Math.round(number * 10) / 10).toFixed(1);
+}
+
 function asTable(value: unknown): RunTable | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as { title?: unknown; columns?: unknown; rows?: unknown };
   const columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
+  const percentAt = columns.map(column => column.toLowerCase().includes('percent'));
   const rows = Array.isArray(record.rows)
     ? record.rows
         .filter(row => Array.isArray(row))
-        .map(row => (row as unknown[]).map(cell))
+        .map(row =>
+          (row as unknown[]).map((value, index) =>
+            percentAt[index] ? percentCell(value) : cell(value)
+          )
+        )
         .filter(row => row.some(Boolean))
     : [];
   if (columns.filter(Boolean).length < 2 || !rows.length) return null;
-  return { title: cell(record.title) || 'Table', columns, rows };
+  return { title: questionTitle(cell(record.title)), columns, rows };
+}
+
+/** summary["table"]: one titled block per question, or a flat list of value rows. */
+function summaryTables(table: unknown, fallbackTitle: string): RunTable[] {
+  if (!Array.isArray(table) || !table.length) return [];
+  const titled = table.every(
+    item => item && typeof item === 'object' && Array.isArray((item as { rows?: unknown }).rows)
+  );
+  const blocks = titled
+    ? (table as { title?: unknown; rows: unknown[] }[])
+    : [{ title: fallbackTitle, rows: table }];
+  const built: RunTable[] = [];
+  for (const block of blocks) {
+    const body: string[][] = [];
+    for (const row of block.rows) {
+      if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
+      const record = row as Record<string, unknown>;
+      const label = cell(record.value ?? record.label);
+      if (!label || label === 'Total' || label === 'Missing') continue;
+      body.push([label, cell(record.frequency ?? record.n), percentCell(record.percent)]);
+    }
+    if (!body.length) continue;
+    built.push({
+      title: questionTitle(cell(block.title) || fallbackTitle),
+      columns: ['Answer', 'Frequency', 'Percent'],
+      rows: body,
+    });
+  }
+  return built;
 }
 
 function shareTable(
@@ -134,6 +182,30 @@ function groupTable(groups: unknown): RunTable | null {
   return { title: 'Group means', columns: ['Group', 'n', 'Mean', 'SD'], rows };
 }
 
+function isFrequencyRecord(record: Record<string, unknown>): boolean {
+  if (
+    record.analysis_type === 'frequencies' ||
+    record.op === 'frequencies' ||
+    record.procedure === 'frequencies'
+  ) {
+    return true;
+  }
+  const lists = [record.frequency_tables, record.tables];
+  return lists.some(
+    list =>
+      Array.isArray(list) &&
+      list.some(item => {
+        if (!item || typeof item !== 'object') return false;
+        const block = item as { title?: unknown; columns?: unknown };
+        if (/frequency table/i.test(cell(block.title))) return true;
+        return (
+          Array.isArray(block.columns) &&
+          block.columns.some(column => cell(column).toLowerCase() === 'frequency')
+        );
+      })
+  );
+}
+
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
 export function resultViewFromToolResults(results: unknown): ResultView {
   const view: ResultView = {
@@ -144,14 +216,24 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     filter: '',
     rCheck: '',
     rStatement: '',
+    base: '',
   };
   const seen = new Set<string>();
-  const add = (table: RunTable | null) => {
+  let usedSummary = false;
+  const add = (table: RunTable | null, source: 'summary' | 'grid' = 'grid') => {
     if (!table || table.title === 'Equivalent R and SPSS syntax') return;
+    if (
+      usedSummary &&
+      source === 'grid' &&
+      table.columns.some(column => /frequency|percent/i.test(column))
+    ) {
+      return;
+    }
     const key = `${table.title}\n${table.columns.join('\t')}\n${table.rows.map(row => row.join('\t')).join('\n')}`;
     if (seen.has(key)) return;
     seen.add(key);
     view.tables.push(table);
+    if (source === 'summary') usedSummary = true;
   };
   const notes = (value: unknown) => {
     if (!Array.isArray(value)) return;
@@ -171,6 +253,12 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     const syntaxDump =
       record.id === 'equivalent_syntax' || title === 'Equivalent R and SPSS syntax';
     if (!syntaxDump) add(asTable(record));
+    const summary = record.summary;
+    if (summary && typeof summary === 'object') {
+      const block = summary as { table?: unknown; title?: unknown };
+      for (const table of summaryTables(block.table, cell(block.title))) add(table, 'summary');
+    }
+    for (const table of summaryTables(record.table, cell(record.title))) add(table, 'summary');
     for (const key of ['frequency_tables', 'tables'] as const) {
       const list = record[key];
       if (Array.isArray(list)) for (const item of list) add(asTable(item));
@@ -215,6 +303,16 @@ export function resultViewFromToolResults(results: unknown): ResultView {
         view.rStatement = cell(verification.statement);
       }
     }
+    if (isFrequencyRecord(record)) {
+      const exclusion = (record.exclusion_summary || record.exclusion) as
+        | { rows_used?: unknown }
+        | undefined;
+      const used = exclusion?.rows_used;
+      if (typeof used === 'number') {
+        const current = Number(view.base.replace(/[^\d]/g, ''));
+        if (!view.base || used > current) view.base = `Base ${used.toLocaleString('en-GB')}`;
+      }
+    }
     if (!view.weight && record.weight && typeof record.weight === 'object') {
       view.weight = cell((record.weight as { column?: unknown }).column);
     }
@@ -241,14 +339,84 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     }
   };
   visit(results, 0);
+  const total = largestFrequencyTotal(view);
+  const used = Number(view.base.replace(/[^\d.]/g, ''));
+  if (total && used && used < total / 2) view.base = '';
   return view;
 }
 
-export function resultFootnote(view: ResultView, base: string, test: string): string {
+function largestFrequencyTotal(view: ResultView): number {
+  let largest = 0;
+  for (const table of view.tables) {
+    const frequencyAt = table.columns.findIndex(column => column.toLowerCase() === 'frequency');
+    if (frequencyAt < 0) continue;
+    for (const row of table.rows) {
+      if ((row[0] || '').toLowerCase() !== 'total') continue;
+      const count = Number(String(row[frequencyAt]).replace(/,/g, ''));
+      if (count > largest) largest = count;
+    }
+  }
+  return largest;
+}
+
+export type ColumnLabels = {
+  name: string;
+  label?: string | null;
+  value_labels?: Record<string, string> | null;
+};
+
+function columnMeta(columns: ColumnLabels[], name: string): ColumnLabels | undefined {
+  const key = name.trim().toLowerCase();
+  return columns.find(column => column.name.trim().toLowerCase() === key);
+}
+
+function valueLabel(meta: ColumnLabels | undefined, raw: string): string {
+  const labels = meta?.value_labels || {};
+  const shown = labels[raw] || labels[raw.replace(/\.0$/, '')] || labels[`${raw}.0`] || '';
+  return shown && shown.trim().toLowerCase() !== raw.trim().toLowerCase() ? shown.trim() : raw;
+}
+
+/** Column and value labels. A code stays a code when this file has no label for it. */
+export function labelFilter(filter: string, columns: ColumnLabels[] = []): string {
+  if (!filter.trim() || !columns.length) return filter;
+  return filter
+    .split(', ')
+    .map(part => {
+      const match = /^(.+?)\s+(\S+)\s+(.+)$/.exec(part.trim());
+      if (!match) return part;
+      const [, column, op, raw] = match;
+      const meta = columnMeta(columns, column);
+      if (!meta) return part;
+      const named = (meta.label || '').trim();
+      return `${named || column} ${op} ${valueLabel(meta, raw)}`;
+    })
+    .join(', ');
+}
+
+/** The weight's label. The bare column name "weight" is not a label. */
+export function weightNote(column: string, columns: ColumnLabels[] = []): string {
+  const name = column.trim();
+  if (!name) return 'Unweighted';
+  const meta = columnMeta(columns, name);
+  const label = (meta?.label || '').trim();
+  if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== name.toLowerCase()) {
+    return `Weight: ${label}`;
+  }
+  if (name.toLowerCase() === 'weight') return '';
+  return `Weight: ${name}`;
+}
+
+export function resultFootnote(
+  view: ResultView,
+  base: string,
+  test: string,
+  columns: ColumnLabels[] = []
+): string {
+  const filter = labelFilter(view.filter, columns);
   const parts = [
-    base.trim(),
-    view.filter ? `Filter: ${view.filter}` : '',
-    view.weight ? `Weight: ${view.weight}` : '',
+    base.trim() || view.base,
+    filter ? `Filter: ${filter}` : '',
+    view.weight ? weightNote(view.weight, columns) : 'Unweighted',
     test && test !== 'Output' ? test : '',
   ];
   return parts.filter(Boolean).join(' · ');

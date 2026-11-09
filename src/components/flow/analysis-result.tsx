@@ -61,24 +61,28 @@ export function AnalysisResult({
   }, [rCheck, runId]);
   const shownCheck = mark.kind || rCheck;
   const shownStatement = mark.statement || rStatement;
-  if (!lead && !tables.length && !footnote) return null;
+  const checkLabel =
+    shownCheck === 'pending'
+      ? 'R check running'
+      : shownCheck === 'mismatch' || shownCheck === 'not_verified'
+        ? 'R mismatch'
+        : shownCheck === 'unknown'
+          ? 'R check unavailable'
+          : shownCheck
+            ? 'Checked in R'
+            : '';
+  const checkDetail =
+    shownStatement && shownStatement !== 'R check unavailable.' ? ` · ${shownStatement}` : '';
+  const checkNote = checkLabel ? `${checkLabel}${checkDetail}` : '';
+  const leadText =
+    lead && shownStatement && lead.includes(shownStatement)
+      ? lead.replace(shownStatement, '').replace(/\s+/g, ' ').trim()
+      : lead;
+  const foot = [footnote, checkNote].filter(Boolean).join(' · ');
+  if (!leadText && !tables.length && !foot) return null;
   return (
     <div className="analysis-result">
-      {shownCheck ? (
-        <p className="analysis-r">
-          {shownCheck === 'pending'
-            ? 'R check running'
-            : shownCheck === 'mismatch' || shownCheck === 'not_verified'
-              ? 'R mismatch'
-              : shownCheck === 'unknown'
-                ? 'R check unavailable'
-                : 'Checked in R'}
-          {shownStatement && shownStatement !== 'R check unavailable.'
-            ? ` · ${shownStatement}`
-            : ''}
-        </p>
-      ) : null}
-      {lead ? <p className="analysis-lead">{lead}</p> : null}
+      {leadText ? <p className="analysis-lead">{leadText}</p> : null}
       {tables.map(table => {
         const columns = Array.isArray(table.columns) ? table.columns : [];
         const rows = Array.isArray(table.rows) ? table.rows : [];
@@ -107,7 +111,7 @@ export function AnalysisResult({
           </section>
         );
       })}
-      {footnote ? <p className="flow-muted analysis-footnote">{footnote}</p> : null}
+      {foot ? <p className="flow-muted analysis-footnote">{foot}</p> : null}
       {checks && checks.length ? (
         <div className="analysis-fold">
           <Button type="button" className="flow-btn" onClick={() => setChecksOpen(open => !open)}>
