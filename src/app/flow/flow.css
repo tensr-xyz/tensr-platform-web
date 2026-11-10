@@ -452,6 +452,18 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   min-height: 0;
 }
 
+.agent-thread-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.agent-thread-panel .chat-scroll {
+  padding: 12px 14px 0;
+}
+
 .responses-agent .sheet-scroll {
   flex: 1;
   min-height: 0;
@@ -1269,6 +1281,7 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   background: var(--color-canvas);
   border-left: 1px solid var(--color-line);
   padding: 0;
+  overflow: hidden;
 }
 
 .tables-rail-head,
