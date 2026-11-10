@@ -105,6 +105,7 @@ export type RunAgentLoopParams = {
     text?: string;
     tool_results?: AgentLoopResponse['tool_results'];
   }) => void;
+  onSession?: (sessionId: string) => void;
   signal?: AbortSignal;
 };
 
@@ -178,6 +179,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           onDelta: params.onDelta,
           onReplace: params.onReplace,
           onPreview: params.onPreview,
+          onSession: params.onSession,
           signal: params.signal,
         }
       );

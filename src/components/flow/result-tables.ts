@@ -89,6 +89,25 @@ function summaryTables(table: unknown, fallbackTitle: string): RunTable[] {
   return built;
 }
 
+function themeShareTable(rows: unknown): RunTable | null {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const weighted = rows.some(
+    row =>
+      row &&
+      typeof row === 'object' &&
+      (row as { weighted_percent?: unknown }).weighted_percent != null &&
+      String((row as { weighted_percent?: unknown }).weighted_percent).trim() !== ''
+  );
+  const fields = [
+    { header: 'Theme', keys: ['label', 'code'] },
+    { header: 'Count', keys: ['n', 'count'] },
+    { header: '% of people who answered', keys: ['percent'] },
+  ];
+  if (weighted) fields.push({ header: 'Weighted %', keys: ['weighted_percent'] });
+  fields.push({ header: 'Quote', keys: ['quote', 'example', 'quote_span'] });
+  return shareTable(rows, 'Themes', fields);
+}
+
 function shareTable(
   rows: unknown,
   title: string,
@@ -264,14 +283,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       const list = record[key];
       if (Array.isArray(list)) for (const item of list) add(asTable(item));
     }
-    add(
-      shareTable(record.code_frequency, 'Themes', [
-        { header: 'Theme', keys: ['label', 'code'] },
-        { header: 'Count', keys: ['n', 'count'] },
-        { header: '% of people who answered', keys: ['percent'] },
-        { header: 'Quote', keys: ['quote', 'example', 'quote_span'] },
-      ])
-    );
+    add(themeShareTable(record.code_frequency));
     add(groupTable(record.group_descriptives));
     const diagnostics = record.diagnostics;
     if (diagnostics && typeof diagnostics === 'object') {
@@ -342,6 +354,11 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     }
   };
   visit(results, 0);
+  if (view.tables.some(table => table.title === 'Themes')) {
+    view.tables = view.tables.filter(
+      table => !/themes among people who answered/i.test(table.title)
+    );
+  }
   const total = largestFrequencyTotal(view);
   const used = Number(view.base.replace(/[^\d.]/g, ''));
   if (total && used && used < total / 2) view.base = '';

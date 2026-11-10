@@ -63,7 +63,10 @@ function prose(text: string, variable: string, label: string): string {
     /([.!?])\s+([a-z])/g,
     (_all, mark: string, letter: string) => `${mark} ${letter.toUpperCase()}`
   );
-  return next;
+  return next
+    .replace(/\?\./g, '?')
+    .replace(/!\./g, '!')
+    .replace(/\.{2,}/g, '.');
 }
 
 function weightMetric(metric: AnalysisReportMetric): AnalysisReportMetric {
@@ -108,6 +111,16 @@ export function presentStoredReport(report: AnalysisReport, decimalPlaces: numbe
     if (block.type === 'metrics') return { ...block, metrics: block.metrics.map(weightMetric) };
     return block;
   });
+  const inputs = report.analysis_spec?.inputs;
+  const named = Array.isArray(inputs?.columns) ? inputs.columns.map(item => String(item)) : [];
+  const approach = report.approach;
+  const plan =
+    named.length === 1 && question && named[0] && named[0] !== question && approach?.plan
+      ? approach.plan.replace(
+          new RegExp(`\\b${named[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g'),
+          question
+        )
+      : approach?.plan;
   const exclusion = report.exclusion_summary
     ? report.exclusion_summary
     : base != null && (report.meta?.analysis_key === 'frequencies' || Boolean(question))
@@ -125,6 +138,7 @@ export function presentStoredReport(report: AnalysisReport, decimalPlaces: numbe
     metrics,
     tables: shownTables,
     blocks,
+    approach: approach && plan !== approach.plan ? { ...approach, plan } : approach,
     exclusion_summary: exclusion,
     answer: question && GENERIC_TITLE.test(report.answer || '') ? question : report.answer,
   };

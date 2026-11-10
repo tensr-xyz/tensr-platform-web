@@ -88,7 +88,12 @@ export function AnalysisResult({
         const rows = Array.isArray(table.rows) ? table.rows : [];
         if (!columns.length || !rows.length) return null;
         return (
-          <section key={`${table.title}-${columns.join('-')}`} className="analysis-table">
+          <section
+            key={`${table.title}-${columns.join('-')}`}
+            className={
+              columns.includes('Quote') ? 'analysis-table analysis-table-quote' : 'analysis-table'
+            }
+          >
             <h3>{table.title}</h3>
             <Table className="flow-table output-grid">
               <thead>

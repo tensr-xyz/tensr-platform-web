@@ -21,8 +21,7 @@ import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
 import { titledWithQuestions } from '@/lib/flow-report';
 import { loadOutputPreferences, saveOutputPreferences } from '@/lib/output-preferences';
-import { visibleAgentStep } from '@/lib/agent-step-copy';
-import { FlowComposer } from '@/components/flow/chat-composer';
+import { AgentThread } from '@/components/flow/agent-thread';
 import { formatStat } from '@/lib/number-format';
 import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
 import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
@@ -37,8 +36,6 @@ import {
 import { TableChart } from '@/components/flow/table-chart-panel';
 import { TableBars } from '@/components/flow/table-bars';
 import { rememberTablePin, savePin } from '@/components/flow/report-pins';
-import { FlowMarkdown } from '@/components/flow/flow-markdown';
-import { runAgentLoop } from '@/lib/run-agent-loop';
 import { WeightPanel } from '@/components/flow/weight-modal';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import {
@@ -768,9 +765,11 @@ export function ThemesPanel({
 export function EvidencePanel({
   datasetId,
   projectId,
+  variable,
 }: {
   datasetId?: string;
   projectId?: string;
+  variable?: { label: string; rows: { label: string; count: number }[]; total: number };
 }) {
   const cell = useSurveyCell();
   const [quotes, setQuotes] = useState<Record<string, unknown> | null>(null);
@@ -821,6 +820,26 @@ export function EvidencePanel({
       });
     return () => controller.abort();
   }, [datasetId, cell]);
+  if (!cell && variable && variable.rows.length) {
+    const total = variable.total || 1;
+    return (
+      <div className="evidence">
+        <div className="evidence-lead">
+          <p className="flow-muted">{variable.label}</p>
+        </div>
+        <div className="evidence-said">
+          {variable.rows.map((row, index) => (
+            <article key={`${row.label}-${index}`}>
+              <p>{row.label || 'Blank'}</p>
+              <p>
+                {row.count.toLocaleString('en-GB')} · {Math.round((row.count / total) * 100)}%
+              </p>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (!cell) {
     return (
       <div className="evidence">
@@ -1606,7 +1625,6 @@ export function TablesBuilder({
   const [netOptions, setNetOptions] = useState<string[]>([]);
   const [netPicked, setNetPicked] = useState<string[]>([]);
   const [netLabel, setNetLabel] = useState('');
-  const [agentSteps, setAgentSteps] = useState<string[]>([]);
   const [tableFilter, setTableFilter] = useState<{
     filters: { column: string; op: string; value: string | string[] }[];
   } | null>(null);
@@ -1644,13 +1662,6 @@ export function TablesBuilder({
   const [book, setBook] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
-  const [ask, setAsk] = useState('');
-  const [threads, setThreads] = useState<
-    Record<string, { role: 'user' | 'run' | 'reply'; text: string }[]>
-  >({});
-  const [asking, setAsking] = useState(false);
-  // One agent conversation per file, so an answer to its question resumes the same request.
-  const [agentSessions, setAgentSessions] = useState<Record<string, string>>({});
   const [railReady, setRailReady] = useState(false);
   const [opening, setOpening] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
@@ -1874,13 +1885,6 @@ export function TablesBuilder({
     setTop2(nets.some(net => /^top 2 box$/i.test(String(net.label || ''))));
     setBottom2(nets.some(net => /^bottom 2 box$/i.test(String(net.label || ''))));
     setDirty(false);
-    const savedId = String((saved.spec as { id?: string } | undefined)?.id || '');
-    // The conversation that built the table stays with it.
-    if (savedId && savedId !== threadKey)
-      setThreads(all => ({
-        ...all,
-        [savedId]: [...(all[savedId] || []), ...(all[threadKey] || [])],
-      }));
     remember(saved);
   }
 
@@ -1954,24 +1958,6 @@ export function TablesBuilder({
         }
         setDirty(false);
         remember(body);
-        const across = banners.length ? banners.map(labelFor).join(', ') : 'the total';
-        const savedId = String((body.spec as { id?: string } | undefined)?.id || threadKey);
-        setThreads(all => ({
-          ...all,
-          [savedId]: [
-            ...(all[threadKey] || []),
-            {
-              role: 'run',
-              text: `Built ${labelFor(stub)} × ${across}`,
-            },
-            {
-              role: 'run',
-              text: `${weight ? `Weighted by ${labelFor(weight)}` : 'Unweighted'}, ${
-                lettersOn ? 'sig at 95%' : 'no significance letters'
-              }`,
-            },
-          ],
-        }));
       })
       .catch(err => {
         if (token !== tableRequest.current) return;
@@ -2104,13 +2090,6 @@ export function TablesBuilder({
   }
 
   const specId = String((book?.spec as { id?: string } | undefined)?.id || '');
-  const threadKey = specId || 'draft';
-  const thread = threads[threadKey] || [];
-  const setThread = (
-    update: (
-      current: { role: 'user' | 'run' | 'reply'; text: string }[]
-    ) => { role: 'user' | 'run' | 'reply'; text: string }[]
-  ) => setThreads(current => ({ ...current, [threadKey]: update(current[threadKey] || []) }));
   const openSaved = specs.find(item => (item.spec_id || item.id) === specId);
   const usedNumbers = specs.map(item => item.number || 0).filter(number => number > 0);
   const numberShift = usedNumbers.length ? Math.min(...usedNumbers) - 1 : 0;
@@ -2748,108 +2727,30 @@ export function TablesBuilder({
               <span className="tables-dot" />
               <span>{book ? title.replace(/^T\d+ · /, '') : 'Table'}</span>
             </div>
-            <div className="tables-thread">
-              {thread.length === 0 && !asking ? (
-                <div className="tables-thread-empty">
-                  <strong>
-                    {selectedNumber ? `Ask about T${selectedNumber}` : 'Ask about this table'}
-                  </strong>
-                  <p className="flow-muted">
-                    Ask what moved, or tell it to change the table: add a banner, net the top two
-                    boxes, or weight it.
-                  </p>
-                </div>
-              ) : null}
-              {thread.map((item, index) =>
-                item.role === 'reply' ? (
-                  <FlowMarkdown key={`reply-${index}`} className="tables-reply">
-                    {item.text}
-                  </FlowMarkdown>
-                ) : (
-                  <p
-                    key={`${item.role}-${index}`}
-                    className={item.role === 'user' ? 'tables-ask' : 'flow-muted'}
-                  >
-                    {item.role === 'run' ? `✓ ${item.text}` : item.text}
-                  </p>
-                )
-              )}
-              {asking ? (
-                <p className="flow-status">{agentSteps.filter(Boolean).at(-1) || 'Thinking…'}</p>
-              ) : null}
-            </div>
-            <FlowComposer
-              value={ask}
-              onChange={setAsk}
-              onSend={() => {
-                const text = ask.trim();
-                if (!text || asking) return;
-                setThread(current => [...current, { role: 'user', text }]);
-                setAsk('');
-                setAsking(true);
-                setAgentSteps([]);
-                const history = agentHistory(thread);
-                const sessionKey = `${datasetId}:${threadKey}`;
-                void runAgentLoop({
-                  message: text,
-                  mode: 'agent',
-                  datasetId: datasetId || null,
-                  agentVersion: 'v2',
-                  sessionId: agentSessions[sessionKey] || null,
-                  conversationHistory: history,
-                  signal: AbortSignal.timeout(180_000),
-                  onProgress: progress => {
-                    const line = visibleAgentStep(progress.step, progress.message);
-                    if (line)
-                      setAgentSteps(current =>
-                        current.includes(line) ? current : [...current, line]
-                      );
-                  },
-                })
-                  .then(result => {
-                    const session = agentSessionId(result);
-                    if (session)
-                      setAgentSessions(current => ({ ...current, [sessionKey]: session }));
-                    const built = bookFromToolResults(result.tool_results);
-                    const request = built
-                      ? tableBodyFromAgentBook(built)
-                      : tableBodyFromAgentRun(result.tool_results);
-                    if (built) {
-                      setBook(built);
-                      setView('table');
-                    }
-                    if (request) void adoptAgentTable(request);
-                    setThread(current => [
-                      ...current,
-                      {
-                        role: 'reply',
-                        text:
-                          agentReplyText(result) ||
-                          (built || request ? 'Built the table.' : 'No answer came back.'),
-                      },
-                    ]);
-                  })
-                  .catch(err =>
-                    setThread(current => [
-                      ...current,
-                      {
-                        role: 'run',
-                        text: err instanceof Error ? err.message : 'The reply did not finish.',
-                      },
-                    ])
-                  )
-                  .finally(() => setAsking(false));
-              }}
+            <AgentThread
+              projectId={projectId || ''}
+              datasetId={datasetId}
+              columnNames={columns.map(column => column.name)}
+              columnLabels={columns.map(column => ({
+                name: column.name,
+                label: column.label,
+                value_labels: column.labels,
+              }))}
               placeholder="Ask, or tell it to change the table…"
-              mode="agent"
-              onMode={() => undefined}
-              showModes={false}
-              busy={asking}
-              columns={columns.map(column => column.name)}
-              attachments={[]}
-              onAttach={() => undefined}
-              onRemoveAttachment={() => undefined}
-              layout="thread"
+              projectHref={projectId ? `/flow/p/${projectId}` : '/flow'}
+              emptyTitle={selectedNumber ? `Ask about T${selectedNumber}` : 'Ask about this table'}
+              emptyDescription="Ask what moved, or tell it to change the table: add a banner, net the top two boxes, or weight it."
+              onFinished={result => {
+                const built = bookFromToolResults(result.tool_results);
+                const request = built
+                  ? tableBodyFromAgentBook(built)
+                  : tableBodyFromAgentRun(result.tool_results);
+                if (built) {
+                  setBook(built);
+                  setView('table');
+                }
+                if (request) void adoptAgentTable(request);
+              }}
             />
           </aside>
         </>

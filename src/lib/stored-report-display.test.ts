@@ -60,6 +60,16 @@ describe('stored frequency reports', () => {
     report.exclusion_summary = { rows_total: 249, rows_used: 249, rows_excluded: 0 };
     const shown = presentStoredReport(report, 1);
     expect(shown.summary).toBe('Frequency table for How satisfied are you with Brew & Co overall?');
+    report.summary = 'Frequency table for How satisfied are you with Brew & Co overall?.';
+    report.analysis_spec = { analysis_key: 'frequencies', inputs: { columns: ['sat_brewco'] } };
+    report.approach = { plan: 'Running frequencies on sat_brewco as requested.' };
+    const cleaned = presentStoredReport(report, 1);
+    expect(cleaned.summary).toBe(
+      'Frequency table for How satisfied are you with Brew & Co overall?'
+    );
+    expect(cleaned.approach?.plan).toBe(
+      'Running frequencies on How satisfied are you with Brew & Co overall? as requested.'
+    );
     expect(shown.exclusion_summary?.rows_excluded).toBe(0);
     expect(shown.tables[0].rows[0][2]).toBe('7.1');
   });

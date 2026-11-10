@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import { MessageSquare } from 'lucide-react';
 import {
   Empty,
   EmptyDescription,
@@ -14,13 +13,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
-import { archiveChatTurn, type ChatExchange } from '@/components/flow/chat-thread';
-import {
-  chatRunInFlight,
-  liveChatRun,
-  publishLiveChatRun,
-  subscribeLiveChatRun,
-} from '@/components/flow/chat-live-run';
+import { AgentThread, AgentThreadColumn, useAgentThread } from '@/components/flow/agent-thread';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import {
   loadProjectTables,
@@ -31,39 +24,12 @@ import {
 import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
 import { PaletteNoMatch } from '@/components/flow/palette-no-match';
 import { isIdColumn, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
-import {
-  downloadsFromToolResults,
-  openSignedDownload,
-  type ExportDownload,
-} from '@/lib/excel-download';
-import {
-  runAgentLoop,
-  type AgentLoopAttachment,
-  type AgentLoopResponse,
-} from '@/lib/run-agent-loop';
-import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
-import { visibleAgentStep } from '@/lib/agent-step-copy';
-import { savePin } from '@/components/flow/report-pins';
-import { tableBodyFromAgentRun } from '@/components/flow/survey-screens';
+import { openSignedDownload } from '@/lib/excel-download';
+import { runAgentLoop, type AgentLoopAttachment } from '@/lib/run-agent-loop';
+import { FlowComposer } from '@/components/flow/chat-composer';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
-import {
-  answerTables,
-  answerWithoutBase,
-  answerWithoutTables,
-  baseCount,
-  outputBaseClause,
-  outputCardReady,
-  outputChecks,
-  outputKind,
-  outputRunIds,
-  outputStat,
-  outputTakeaway,
-  outputTitle,
-  titledWithQuestion,
-} from '@/components/flow/chat-output';
-import { ThreadResult, useEnrichedToolResults } from '@/components/flow/use-enriched-results';
+import { baseCount } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
-import { resultFootnote, resultViewFromToolResults } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { rememberedFileName, SourcesScreen } from '@/components/flow/sources-screen';
@@ -2214,25 +2180,6 @@ function chatTitle(session: FlowSession): string {
   return session.title?.trim() || 'Untitled chat';
 }
 
-function replyLines(result: AgentLoopResponse): string[] {
-  const summary = result.execution_summary?.trim();
-  if (summary) {
-    return summary.split('\n').flatMap(line => {
-      const visible = visibleAgentStep('', line.replace(/^[\s\-*•]+/, '').trim());
-      return visible ? [visible] : [];
-    });
-  }
-  return (result.tool_trace || []).flatMap(item => {
-    const message = item.message || item.summary;
-    const name = item.name || item.tool;
-    const line = visibleAgentStep(
-      typeof name === 'string' ? name : '',
-      typeof message === 'string' ? message : ''
-    );
-    return line ? [line] : [];
-  });
-}
-
 function chatFile(
   project: FlowProject | undefined,
   datasets: DatasetRow[]
@@ -2436,62 +2383,14 @@ function ChatScreen({
 }) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
-  const [question, setQuestion] = useState('');
-  const [sent, setSent] = useState('');
-  const [past, setPast] = useState<ChatExchange[]>([]);
-  const [mode, setMode] = useState<'ask' | 'plan' | 'agent'>('agent');
-  const [answer, setAnswer] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
-  const [downloads, setDownloads] = useState<ExportDownload[]>([]);
-  const [plan, setPlan] = useState<AgentLoopResponse | null>(null);
-  const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
-  const [steps, setSteps] = useState<string[]>([]);
-  const [stepsOpen, setStepsOpen] = useState(true);
-  const [panelOpen, setPanelOpen] = useState(false);
   const [columns, setColumns] = useState<string[] | null>(null);
   const [columnLabels, setColumnLabels] = useState<
     { name: string; label?: string | null; value_labels?: Record<string, string> | null }[]
   >([]);
-  const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
-  const [attachError, setAttachError] = useState<string | null>(null);
-  const [attachedNote, setAttachedNote] = useState('');
-  const attachmentsRef = useRef<AgentLoopAttachment[]>([]);
-  attachmentsRef.current = attachments;
-  const sessionRef = useRef<string | null>(null);
-  const [openSessionId, setOpenSessionId] = useState<string | null>(null);
-  const sentRef = useRef('');
-  const answerRef = useRef('');
-  const noteRef = useRef('');
-  const toolResultsRef = useRef(turn?.tool_results);
-  toolResultsRef.current = turn?.tool_results;
-  sentRef.current = sent;
-  answerRef.current = answer;
-  noteRef.current = attachedNote;
-  const askedRef = useRef<string | null>(null);
-  const [sessions, setSessions] = useState<FlowSession[] | null>(null);
   const [recipes, setRecipes] = useState<FlowRecipe[] | null>(null);
   const file = chatFile(project, datasets);
-  const showThread = Boolean(past.length || sent || answer || plan || status);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
-
   const chatProjectId = project?.id || '';
-  const loadRail = useCallback(() => {
-    if (!chatProjectId) return;
-    void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${chatProjectId}/sessions`, {
-      signal: AbortSignal.timeout(15000),
-    })
-      .then(page => setSessions(page.sessions || []))
-      .catch(() => setSessions(current => current || []));
-    void flowJson<{ recipes?: FlowRecipe[] }>(`/datasets/recipes?project_id=${chatProjectId}`, {
-      signal: AbortSignal.timeout(15000),
-    })
-      .then(page => setRecipes(page.recipes || []))
-      .catch(() => setRecipes(current => current || []));
-  }, [chatProjectId]);
-
-  useEffect(() => {
-    loadRail();
-  }, [loadRail]);
 
   useEffect(() => {
     if (!datasetId) {
@@ -2535,218 +2434,59 @@ function ChatScreen({
     };
   }, [datasetId]);
 
-  const attachFiles = (list: FileList | null) => {
-    void readChatAttachments(list).then(result => {
-      setAttachError(result.rejected.length ? result.rejected.join(' ') : null);
-      if (result.accepted.length) {
-        setAttachments(current => [...current, ...result.accepted]);
-      }
-    });
-  };
-
-  const sendingRef = useRef(false);
-  const sendText = useCallback(
-    async (text: string, nextMode: 'ask' | 'plan' | 'agent' = mode) => {
-      if (!text.trim() || status === 'Thinking…' || sendingRef.current) return;
-      if (chatProjectId && chatRunInFlight(chatProjectId)) return;
-      sendingRef.current = true;
-      const publish = (patch: Partial<ReturnType<typeof liveChatRun>>) => {
-        if (!chatProjectId) return;
-        const prior = liveChatRun();
-        publishLiveChatRun({
-          projectId: chatProjectId,
-          sessionId: prior?.projectId === chatProjectId ? prior.sessionId : sessionRef.current,
-          question: text,
-          answer: prior?.projectId === chatProjectId ? prior.answer : '',
-          steps: prior?.projectId === chatProjectId ? prior.steps : [],
-          status: 'Thinking…',
-          running: true,
-          ...patch,
-        });
-      };
-      publish({ answer: '', steps: [], status: 'Thinking…', running: true });
-      const turnFiles = attachmentsRef.current;
-      setPast(current =>
-        archiveChatTurn(
-          current,
-          sentRef.current
-            ? {
-                user: sentRef.current,
-                note: noteRef.current,
-                answer: answerRef.current,
-                toolResults: toolResultsRef.current,
-              }
-            : null
-        )
-      );
-      setSent(text);
-      setAttachedNote(
-        turnFiles.length ? `Attached: ${turnFiles.map(item => item.filename).join(', ')}` : ''
-      );
-      setQuestion('');
-      setMode(nextMode);
-      setPlan(null);
-      setTurn(null);
-      setSteps([]);
-      setDownloads([]);
-      setStatus('Thinking…');
-      setAnswer('');
-      let draft = '';
-      try {
-        const result = await runAgentLoop({
-          message: text,
-          mode: nextMode,
-          datasetId: datasetId || null,
-          attachments: turnFiles,
-          agentVersion: 'v2',
-          sessionId: sessionRef.current,
-          signal: AbortSignal.timeout(120_000),
-          onProgress: progress => {
-            const line = visibleAgentStep(progress.step, progress.message);
-            if (!line) return;
-            setSteps(current => (current.includes(line) ? current : [...current, line]));
-            const prior = liveChatRun();
-            publish({
-              steps: prior?.steps.includes(line) ? prior.steps : [...(prior?.steps || []), line],
-              status: null,
-              answer: draft,
-            });
-          },
-          onDelta: chunk => {
-            draft += chunk;
-            setAnswer(draft);
-            setStatus(null);
-            publish({ answer: draft, status: null });
-          },
-          onReplace: next => {
-            draft = next;
-            setAnswer(next);
-            setStatus(null);
-            publish({ answer: next, status: null });
-          },
-          onPreview: preview => {
-            const text = preview.text || draft;
-            if (text) {
-              draft = text;
-              setAnswer(text);
-            }
-            setStatus(null);
-            if (preview.tool_results?.length) {
-              setTurn({
-                status: 'ok',
-                mode: nextMode,
-                answer_markdown: text,
-                session_id: sessionRef.current || undefined,
-                tool_results: preview.tool_results,
-              });
-            }
-            publish({ answer: text, status: null });
-          },
-        });
-        if (result.session_id) {
-          sessionRef.current = result.session_id;
-          rememberChat(result.session_id);
-          publish({ sessionId: result.session_id, answer: result.answer_markdown || draft });
-          setSessions(current => {
-            const title = text.trim();
-            const row = {
-              session_id: result.session_id as string,
-              title: title.length > 80 ? `${title.slice(0, 77)}…` : title,
-            };
-            const rest = (current || []).filter(item => item.session_id !== row.session_id);
-            return [row, ...rest];
-          });
-        }
-        setAnswer(result.answer_markdown || '');
-        setPlan(result.status === 'awaiting_approval' ? result : null);
-        setTurn(result.status === 'awaiting_approval' ? null : result);
-        const traced = replyLines(result);
-        if (traced.length) setSteps(traced);
-        const entries = (result.tool_results || []).flatMap(item => {
-          const nested =
-            item.result && typeof item.result === 'object'
-              ? [item.result as Record<string, unknown>]
-              : [];
-          return [item as unknown as Record<string, unknown>, ...nested];
-        });
-        setDownloads(downloadsFromToolResults(entries));
-        if (result.status !== 'awaiting_approval') setAttachments([]);
-        setStatus(null);
-        publish({
-          running: false,
-          status: null,
-          answer: result.answer_markdown || draft,
-          sessionId: result.session_id || sessionRef.current,
-        });
-        loadRail();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'The reply did not finish. Ask again.';
-        setStatus(message);
-        publish({ running: false, status: message });
-      } finally {
-        sendingRef.current = false;
-      }
-    },
-    [datasetId, mode, status, loadRail, chatProjectId]
-  );
-
-  useEffect(() => {
-    if (!pendingAsk || askedRef.current === pendingAsk) return;
-    const text = pendingAsk;
-    const handle = window.setTimeout(() => {
-      askedRef.current = text;
-      onAsked?.();
-      void sendText(text, 'agent');
-    }, 0);
-    return () => window.clearTimeout(handle);
-  }, [pendingAsk, onAsked, sendText]);
-
-  const send = (text?: string) => void sendText(text ?? question);
-
-  const approve = () => {
-    if (!plan || !sent) return;
-    const batch =
-      plan.pending_approvals && !Array.isArray(plan.pending_approvals)
-        ? plan.pending_approvals
-        : null;
-    const calls = Array.isArray(plan.pending_approvals) ? plan.pending_approvals : null;
-    setStatus('Thinking…');
-    void runAgentLoop({
-      message: sent,
-      mode,
-      datasetId: datasetId || null,
-      attachments: attachmentsRef.current,
-      agentVersion: 'v2',
-      sessionId: plan.session_id,
-      approvedToolCalls: calls,
-      approvedBatch:
-        batch && typeof batch.mac === 'string' ? { batch: batch.batch, mac: batch.mac } : null,
-      signal: AbortSignal.timeout(120_000),
-      onDelta: chunk => {
-        setAnswer(current => current + chunk);
-        setStatus(null);
-      },
-    })
-      .then(result => {
-        setAnswer(result.answer_markdown || '');
-        setPlan(result.status === 'awaiting_approval' ? result : null);
-        setTurn(result.status === 'awaiting_approval' ? null : result);
-        const traced = replyLines(result);
-        if (traced.length) setSteps(traced);
-        const entries = (result.tool_results || []).flatMap(item => {
-          const nested =
-            item.result && typeof item.result === 'object'
-              ? [item.result as Record<string, unknown>]
-              : [];
-          return [item as unknown as Record<string, unknown>, ...nested];
-        });
-        setDownloads(downloadsFromToolResults(entries));
-        if (result.status !== 'awaiting_approval') setAttachments([]);
-        setStatus(null);
-      })
-      .catch(err => {
-        setStatus(err instanceof Error ? err.message : 'The plan did not run.');
-      });
+  const thread = useAgentThread({
+    projectId: chatProjectId,
+    datasetId,
+    columnNames: columns,
+    columnLabels,
+    syncAddress: true,
+    pendingAsk,
+    onAsked,
+  });
+  const {
+    question,
+    setQuestion,
+    mode,
+    setMode,
+    send,
+    attachments,
+    setAttachments,
+    attachError,
+    attachFiles,
+    sessions,
+    openSessionId,
+    openChat,
+    clearChat,
+    loadRail,
+    setStatus,
+    showThread,
+    panelOpen,
+    setPanelOpen,
+    outputReady,
+    tableMode,
+    title,
+    runIds,
+    baseNote,
+    ledger,
+    tables,
+    kind,
+    structuredTables,
+    footnote,
+    resultChecks,
+    resultView,
+    takeaway,
+    stat,
+    checks,
+    downloads,
+  } = thread;
+  const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
+  const respondents = baseCount(baseNote);
+  const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
+    const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
+    void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
+      method: 'POST',
+      body: JSON.stringify({ run_ids: runIds }),
+    }).catch(() => setStatus(`The ${label} export did not finish. Try again.`));
   };
 
   const [recipeNote, setRecipeNote] = useState<{
@@ -2830,155 +2570,6 @@ function ChatScreen({
     } finally {
       setRecipeBusy('');
     }
-  };
-
-  const rememberChat = (sessionId: string | null) => {
-    if (!chatProjectId || typeof window === 'undefined') return;
-    const key = `tensr-open-chat:${chatProjectId}`;
-    if (sessionId) window.sessionStorage.setItem(key, sessionId);
-    else window.sessionStorage.removeItem(key);
-    setOpenSessionId(sessionId);
-    const url = new URL(window.location.href);
-    if (!url.pathname.endsWith('/chat')) return;
-    if (sessionId) url.searchParams.set('session', sessionId);
-    else url.searchParams.delete('session');
-    window.history.replaceState(window.history.state, '', `${url.pathname}${url.search}`);
-  };
-
-  const clearChat = () => {
-    sessionRef.current = null;
-    publishLiveChatRun(null);
-    rememberChat(null);
-    setPast([]);
-    setSent('');
-    setAttachedNote('');
-    setAnswer('');
-    setQuestion('');
-    setPlan(null);
-    setTurn(null);
-    setSteps([]);
-    setDownloads([]);
-    setAttachments([]);
-    setAttachError(null);
-    setStatus(null);
-    setPanelOpen(false);
-  };
-
-  const openChat = (sessionId: string) => {
-    if (!chatProjectId || !sessionId) return;
-    sessionRef.current = sessionId;
-    rememberChat(sessionId);
-    void flowJson<{
-      turns?: {
-        user?: string;
-        answer?: string;
-        tool_results?: AgentLoopResponse['tool_results'];
-      }[];
-    }>(`/api/projects/${chatProjectId}/sessions/${sessionId}`)
-      .then(page => {
-        const exchanges = (page.turns || []).flatMap(item =>
-          item.user
-            ? [
-                {
-                  user: item.user,
-                  note: '',
-                  answer: item.answer || '',
-                  toolResults: item.tool_results,
-                },
-              ]
-            : []
-        );
-        const last = exchanges[exchanges.length - 1];
-        setPast(last ? exchanges.slice(0, -1) : exchanges);
-        setSent(last?.user || '');
-        setAttachedNote('');
-        setAnswer(last?.answer || '');
-        setQuestion('');
-        setPlan(null);
-        setTurn(
-          last
-            ? {
-                status: 'ok',
-                mode: 'agent',
-                answer_markdown: last.answer,
-                session_id: sessionId,
-                tool_results: last.toolResults,
-              }
-            : null
-        );
-        setSteps([]);
-        setDownloads([]);
-        setStatus(null);
-        setPanelOpen(Boolean(last?.toolResults?.length));
-      })
-      .catch(() => setStatus('That chat could not be opened.'));
-  };
-
-  const toolResults = useEnrichedToolResults(turn?.tool_results);
-  const kind = outputKind(toolResults);
-  const title = outputTitle(toolResults, answer, columnLabels);
-  const takeaway = outputTakeaway(answer);
-  const baseNote = outputBaseClause(toolResults, answer);
-  const stat = outputStat(toolResults, answer, takeaway);
-  const runIds = outputRunIds(toolResults);
-  const outputReady = outputCardReady(turn, Boolean(plan));
-  useEffect(() => {
-    if (outputReady) setPanelOpen(true);
-  }, [outputReady]);
-  useEffect(() => {
-    const apply = () => {
-      const run = liveChatRun();
-      if (!run || run.projectId !== chatProjectId) return;
-      setSent(run.question);
-      setAnswer(run.answer);
-      setSteps(run.steps);
-      setStatus(run.status);
-      if (run.sessionId) {
-        sessionRef.current = run.sessionId;
-        rememberChat(run.sessionId);
-      }
-    };
-    apply();
-    return subscribeLiveChatRun(apply);
-    // rememberChat is stable for this screen.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatProjectId]);
-  useEffect(() => {
-    if (chatRunInFlight(chatProjectId)) return;
-    const fromUrl = new URLSearchParams(window.location.search).get('session');
-    const stored = window.sessionStorage.getItem(`tensr-open-chat:${chatProjectId}`);
-    const sessionId = fromUrl || stored;
-    if (sessionId) openChat(sessionId);
-    // The address is read once when this chat screen opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatProjectId]);
-  const checks = outputChecks(toolResults);
-  const tables = answerTables(answer);
-  const thread = answerWithoutBase(panelOpen && tables ? answerWithoutTables(answer) : answer);
-  const tableMode = kind === 'Crosstab' && Boolean(tables);
-  const ledger = (turn?.turn_state?.ledger || {}) as { weight?: string | null };
-  const resultView = resultViewFromToolResults(toolResults);
-  const structuredTables = resultView.tables.map(table => ({
-    ...table,
-    title: titledWithQuestion(table.title, columnLabels),
-  }));
-  const footnote = resultFootnote(
-    { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
-    baseNote,
-    kind,
-    columnLabels
-  );
-  const resultChecks = resultView.checks.length
-    ? resultView.checks
-    : checks.map(check => check.label);
-  const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
-  const respondents = baseCount(baseNote);
-  const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
-    const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
-    void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
-      method: 'POST',
-      body: JSON.stringify({ run_ids: runIds }),
-    }).catch(() => setStatus(`The ${label} export did not finish. Try again.`));
   };
 
   return (
@@ -3075,204 +2666,11 @@ function ChatScreen({
       {showThread ? (
         <>
           <section className="flow-thread">
-            <div className="chat-column">
-              <div className="chat-scroll">
-                {past.map((turn, index) => (
-                  <div key={`${index}-${turn.user.slice(0, 24)}`}>
-                    <div className="chat-bubble">
-                      {turn.user}
-                      {turn.note ? <div className="flow-muted">{turn.note}</div> : null}
-                    </div>
-                    <ThreadResult
-                      results={turn.toolResults}
-                      answer={turn.answer}
-                      columns={columnLabels}
-                    />
-                  </div>
-                ))}
-                {sent ? (
-                  <div className="chat-bubble">
-                    {sent}
-                    {attachedNote ? <div className="flow-muted">{attachedNote}</div> : null}
-                  </div>
-                ) : null}
-                {steps.length > 0 ? (
-                  <div className="chat-steps">
-                    <Button
-                      className="chat-steps-head"
-                      type="button"
-                      aria-expanded={stepsOpen}
-                      onClick={() => setStepsOpen(current => !current)}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                        <path
-                          d="M2.5 6.5l2.2 2.2L9.5 3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                      Ran {steps.length} {steps.length === 1 ? 'step' : 'steps'}
-                      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                        <path
-                          d={stepsOpen ? 'M3 4l2 2 2-2' : 'M4 3l2 2-2 2'}
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </Button>
-                    {stepsOpen ? (
-                      <div className="chat-steps-list">
-                        {steps.map(step => (
-                          <div key={step}>{step}</div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {answer && !plan ? (
-                  structuredTables.length ? (
-                    <AnalysisResult
-                      lead={takeaway}
-                      tables={structuredTables}
-                      footnote={footnote}
-                      checks={resultChecks}
-                      script={resultView.script}
-                      rCheck={resultView.rCheck}
-                      rStatement={resultView.rStatement}
-                      runId={runIds[0]}
-                    />
-                  ) : (
-                    <FlowMarkdown className="chat-prose">{thread}</FlowMarkdown>
-                  )
-                ) : null}
-                {plan ? (
-                  <div className="chat-plan">
-                    <strong>Waiting for approval · Plan</strong>
-                    <FlowMarkdown>{answer}</FlowMarkdown>
-                    <div className="flow-row">
-                      <Button className="flow-btn primary" type="button" onClick={approve}>
-                        Approve
-                      </Button>
-                      <Button className="flow-btn" type="button" onClick={() => setPlan(null)}>
-                        Edit plan
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-                {outputReady ? (
-                  <div className="chat-result">
-                    <div className="chat-result-top">
-                      <span className="chat-result-icon" aria-hidden="true">
-                        <svg width="14" height="14" viewBox="0 0 14 14">
-                          <path
-                            d="M3 11V7M6 11V4M9 11V6M12 11V3"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.3"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </span>
-                      <div>
-                        <strong>{title}</strong>
-                        <div className="flow-muted">{kind} · Output</div>
-                      </div>
-                      <span className="chat-viewing">Viewing</span>
-                    </div>
-                    <div className="chat-result-actions">
-                      <Link
-                        className="flow-btn primary"
-                        href={
-                          runIds[0]
-                            ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runIds[0])}`
-                            : `${projectHref}/report?pane=outputs`
-                        }
-                      >
-                        Open
-                      </Link>
-                      <Button
-                        className="flow-btn"
-                        type="button"
-                        disabled={!runIds[0] || !datasetId}
-                        onClick={() => {
-                          if (!runIds[0] || !datasetId || !project?.id) return;
-                          void savePin(project.id, datasetId, {
-                            id: runIds[0],
-                            runId: runIds[0],
-                            datasetId,
-                            headline: title,
-                            support: takeaway,
-                            citation: kind,
-                            afterId: '',
-                            deck: true,
-                            topline: true,
-                            keepLive: true,
-                          }).catch(() =>
-                            setStatus('That result could not be added to the report.')
-                          );
-                        }}
-                      >
-                        Add to report
-                      </Button>
-                      <Button
-                        className="flow-btn"
-                        type="button"
-                        disabled={!datasetId}
-                        onClick={() => {
-                          const request = tableBodyFromAgentRun(turn?.tool_results);
-                          if (!request || !datasetId) {
-                            setStatus('This result is not a table that can be saved.');
-                            return;
-                          }
-                          void flowJson(`/datasets/${datasetId}/tables`, {
-                            method: 'POST',
-                            body: JSON.stringify(request),
-                          })
-                            .then(() => setStatus('Saved to Tables.'))
-                            .catch(() => setStatus('That table could not be saved.'));
-                        }}
-                      >
-                        Save table
-                      </Button>
-                      {downloads[0] ? (
-                        <Button
-                          className="flow-btn"
-                          type="button"
-                          onClick={() => void openSignedDownload(downloads[0])}
-                        >
-                          Download {downloads[0].filename}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-                {status === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
-                {status && status !== 'Thinking…' ? <p className="flow-error">{status}</p> : null}
-              </div>
-              <FlowComposer
-                layout="thread"
-                value={question}
-                onChange={setQuestion}
-                onSend={send}
-                placeholder="Ask a follow-up... Type @ to point at a column."
-                mode={mode}
-                onMode={setMode}
-                busy={status === 'Thinking…'}
-                columns={columns}
-                attachments={attachments}
-                onAttach={attachFiles}
-                onRemoveAttachment={filename =>
-                  setAttachments(current => current.filter(item => item.filename !== filename))
-                }
-                attachError={attachError}
-              />
-            </div>
+            <AgentThreadColumn
+              thread={thread}
+              projectHref={projectHref}
+              placeholder="Ask a follow-up... Type @ to point at a column."
+            />
           </section>
           <aside className="flow-output" hidden={!panelOpen}>
             {outputReady && tableMode ? (
@@ -3650,10 +3048,6 @@ function ResponsesScreen({
   const filtersKey = JSON.stringify(filters);
   const sheetKey = `${datasetId || ''}:${pageOffset}:${filtersKey}`;
   const [valueFilter, setValueFilter] = useState<string | null>(null);
-  const [agentText, setAgentText] = useState('');
-  const [agentAnswer, setAgentAnswer] = useState('');
-  const [agentMode, setAgentMode] = useState<'ask' | 'plan' | 'agent'>('ask');
-  const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
   const [columnCounts, setColumnCounts] = useState<
@@ -3945,27 +3339,6 @@ function ResponsesScreen({
       cancelled = true;
     };
   }, [datasetId, sheetPhase, variableName, fileKey, columnCounts]);
-
-  const askAboutColumn = () => {
-    const text = agentText.trim();
-    if (!text || !datasetId) return;
-    setAgentStatus('Thinking…');
-    setAgentAnswer('');
-    void runAgentLoop({
-      message: text,
-      mode: agentMode,
-      datasetId,
-      agentVersion: 'v2',
-      signal: AbortSignal.timeout(120_000),
-    })
-      .then(result => {
-        setAgentAnswer(result.answer_markdown || '');
-        setAgentStatus(null);
-      })
-      .catch(err => {
-        setAgentStatus(err instanceof Error ? err.message : 'The reply did not finish.');
-      });
-  };
 
   const viewSwitch = (
     <Segmented
@@ -4763,45 +4136,40 @@ function ResponsesScreen({
           />
         </div>
         {side === 'evidence' ? (
-          <EvidencePanel datasetId={datasetId} projectId={project?.id} />
+          <EvidencePanel
+            datasetId={datasetId}
+            projectId={project?.id}
+            variable={
+              countsSettled
+                ? {
+                    label: columnMeta(activeName)?.label || activeName,
+                    rows: counts,
+                    total: countTotal,
+                  }
+                : undefined
+            }
+          />
         ) : side === 'agent' ? (
           <div className="responses-agent">
-            <ScrollArea className="sheet-scroll">
-              <div className="output-body">
-                {agentStatus === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
-                {agentStatus && agentStatus !== 'Thinking…' ? (
-                  <p className="flow-error">{agentStatus}</p>
-                ) : null}
-                {agentAnswer ? (
-                  <FlowMarkdown>{agentAnswer}</FlowMarkdown>
-                ) : agentStatus ? null : (
-                  <Empty className="min-h-[280px] border-0 bg-transparent">
-                    <EmptyHeader>
-                      <EmptyMedia variant="icon">
-                        <MessageSquare />
-                      </EmptyMedia>
-                      <EmptyTitle className="text-sm">Ask about these responses</EmptyTitle>
-                      <EmptyDescription>
-                        Questions about the open file show up here.
-                      </EmptyDescription>
-                    </EmptyHeader>
-                  </Empty>
-                )}
-              </div>
-            </ScrollArea>
-            <FlowComposer
-              value={agentText}
-              onChange={setAgentText}
-              onSend={askAboutColumn}
+            <AgentThread
+              projectId={project?.id || ''}
+              datasetId={datasetId}
+              columnNames={names}
+              columnLabels={columns.map(column => ({
+                name: column.name,
+                label: column.label,
+                value_labels: column.value_labels,
+              }))}
               placeholder={`Ask about ${activeName}`}
-              mode={agentMode}
-              onMode={setAgentMode}
-              busy={agentStatus === 'Thinking…'}
-              columns={names}
-              attachments={[]}
-              onAttach={() => undefined}
-              onRemoveAttachment={() => undefined}
-              layout="thread"
+              projectHref={project ? `/flow/p/${project.id}` : '/flow'}
+              emptyTitle="Ask about these responses"
+              emptyDescription="Questions about the open file show up here."
+              onSession={row =>
+                setSessions(current => {
+                  const rest = (current || []).filter(item => item.session_id !== row.session_id);
+                  return [row, ...rest];
+                })
+              }
             />
           </div>
         ) : (
