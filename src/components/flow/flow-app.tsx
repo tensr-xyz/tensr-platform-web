@@ -41,6 +41,7 @@ import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
 import { documentApa, placePins, runDocument } from '@/components/flow/run-document';
 import {
+  deliverableOutputs,
   pinsFromRuns,
   rememberReportRuns,
   setProjectPins,
@@ -4688,22 +4689,27 @@ function ReportScreen({
     }
   };
 
+  const exportFileId =
+    selected[0]?.datasetId || reportPins.find(pin => pin.datasetId)?.datasetId || datasetId;
+
   const deck = async () => {
-    if (!datasetId || !selected.length) {
+    const outputs = deliverableOutputs(reportPins, 'deck');
+    if (!exportFileId || (!selected.length && !outputs.length)) {
       setError(
-        staleTables.length
+        staleTables.length && !outputs.length
           ? 'Rebuild or deselect tables built on an older file before exporting.'
-          : 'Save a table before building a deck.'
+          : 'Add an output to the report, or save a table, before building a deck.'
       );
       return;
     }
     setError('');
     const created = await flowJson<{ export_id?: string; filename?: string }>(
-      `/datasets/${datasetId}/export/deck`,
+      `/datasets/${exportFileId}/export/deck`,
       {
         method: 'POST',
         body: JSON.stringify({
           spec_ids: selected.map(row => row.id),
+          outputs,
           headlines: findings
             .filter(finding => finding.headline)
             .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
@@ -4724,16 +4730,21 @@ function ReportScreen({
   };
 
   const generate = async () => {
-    if (!datasetId || !selected.length) {
-      setError('Save a table before generating the report.');
+    const outputs = deliverableOutputs(reportPins, 'deck');
+    if (!exportFileId || (!selected.length && !outputs.length)) {
+      setError('Add an output to the report, or save a table, before generating.');
       return;
     }
     setError('');
     setNote('');
     await deck();
-    await bannerBook();
+    if (selected.length) await bannerBook();
     await topline();
-    setNote('Deck, banner book, and topline downloaded.');
+    setNote(
+      selected.length
+        ? 'Deck, banner book, and topline downloaded.'
+        : 'Deck and topline downloaded.'
+    );
   };
 
   const bannerBook = async () => {
@@ -4778,15 +4789,16 @@ function ReportScreen({
 
   const topline = async () => {
     const live = specs.filter(row => row.id);
-    if (!datasetId || !live.length) {
-      setError('Save a table before building a topline.');
+    const outputs = deliverableOutputs(reportPins, 'topline');
+    if (!exportFileId || (!live.length && !outputs.length)) {
+      setError('Add an output to the report, or save a table, before building a topline.');
       return;
     }
     setError('');
-    await downloadExport(`/datasets/${datasetId}/export/topline`, 'topline.docx', {
+    await downloadExport(`/datasets/${exportFileId}/export/topline`, 'topline.docx', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spec_ids: live.map(row => row.id) }),
+      body: JSON.stringify({ spec_ids: live.map(row => row.id), outputs }),
     });
     setNote('Topline downloaded.');
   };
@@ -5000,9 +5012,7 @@ function ReportScreen({
           <div className="report-head">
             <div>
               <h2>Deliverables</h2>
-              <p className="flow-muted">
-                Built from this project&apos;s tables, in the client&apos;s template
-              </p>
+              <p className="flow-muted">Built from saved tables and outputs added to the report</p>
             </div>
             <Button
               className="flow-btn"
