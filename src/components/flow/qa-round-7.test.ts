@@ -38,6 +38,27 @@ describe('QA round 7', () => {
       save: true,
     });
     expect(tableBodyFromAgentRun([{ procedure: 'frequencies', request_body: {} }])).toBeNull();
+    expect(
+      tableBodyFromAgentRun([
+        {
+          procedure: 'frequencies',
+          request_body: {
+            columns: ['sat_brewco'],
+            row_filters: [{ column: 'region', op: 'eq', value: 'London' }],
+            weight_column: 'none',
+          },
+        },
+      ])
+    ).toEqual({
+      stubs: [{ column: 'sat_brewco' }],
+      banner: [],
+      statistics: ['column_proportion'],
+      significance_display: 'none',
+      nest_banners: false,
+      filter_ref: { filters: [{ column: 'region', op: 'eq', value: 'London' }], combine: 'and' },
+      weight: 'none',
+      save: true,
+    });
   });
 
   test('1: the open file tables show even when the project list misses them', () => {
