@@ -93,6 +93,7 @@ describe('result tables', () => {
       '% of people who answered',
       'Quote',
     ]);
+    expect(views[1].tables).toHaveLength(1);
     expect(views[2].tables[0].title).toBe('Group means');
     expect(views[3].tables[0].columns).toContain('Achieved %');
     expect(views[4].script).toContain('lm(');
@@ -103,6 +104,41 @@ describe('result tables', () => {
     expect(resultFootnote(views[7], 'n = 40', 't-test')).toBe(
       'n = 40 · Filter: region = North · Weight: design_w · t-test'
     );
+  });
+
+  it('shows one theme table, with a weighted column only when a weight is present', () => {
+    const plain = resultViewFromToolResults({
+      code_frequency: [
+        { label: 'Price', n: 6, percent: 60, quote: 'Too dear' },
+        { label: 'Other', n: 1, percent: 10, quote: 'Something else' },
+      ],
+      report: {
+        tables: [
+          {
+            title: 'Themes among people who answered',
+            columns: ['Theme', 'Unweighted count', 'Unweighted %', 'Example'],
+            rows: [
+              ['Price', '6', '60', 'Too dear'],
+              ['Other', '1', '10', 'Something else'],
+            ],
+          },
+        ],
+      },
+    });
+    expect(plain.tables.map(table => table.title)).toEqual(['Themes']);
+    expect(plain.tables[0].columns).not.toContain('Weighted %');
+    const weighted = resultViewFromToolResults({
+      code_frequency: [
+        { label: 'Price', n: 6, percent: 60, weighted_percent: 55, quote: 'Too dear' },
+      ],
+    });
+    expect(weighted.tables[0].columns).toEqual([
+      'Theme',
+      'Count',
+      '% of people who answered',
+      'Weighted %',
+      'Quote',
+    ]);
   });
 
   it('renders every summary table with its question, and keeps one set when the engine grid is there too', () => {

@@ -1804,6 +1804,19 @@ select.flow-input {
   min-width: 100%;
 }
 
+.analysis-table-quote .output-grid {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.analysis-table-quote .output-grid th:last-child,
+.analysis-table-quote .output-grid td:last-child {
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .analysis-footnote {
   margin: 0;
 }
