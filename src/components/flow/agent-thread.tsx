@@ -230,7 +230,9 @@ export function useAgentThread({
 
   const sendText = useCallback(
     async (text: string, nextMode: Mode = modeRef.current) => {
-      if (!text.trim() || statusRef.current === 'Thinking…' || sendingRef.current) return false;
+      if (!text.trim() || sendingRef.current) return false;
+      if (statusRef.current === 'Thinking…' && (!projectId || chatRunInFlight(projectId)))
+        return false;
       if (projectId && chatRunInFlight(projectId)) return false;
       sendingRef.current = true;
       const publish = (patch: Partial<NonNullable<ReturnType<typeof liveChatRun>>>) => {
@@ -373,15 +375,24 @@ export function useAgentThread({
   useEffect(() => {
     if (!pendingAsk || askedRef.current === pendingAsk) return;
     const text = pendingAsk;
-    const handle = window.setTimeout(() => {
+    let cancelled = false;
+    const trySend = () => {
+      if (cancelled || askedRef.current === text) return;
+      if (projectId && chatRunInFlight(projectId)) return;
       void sendText(text, 'agent').then(started => {
-        if (!started) return;
+        if (!started || cancelled) return;
         askedRef.current = text;
         onAskedRef.current?.();
       });
-    }, 0);
-    return () => window.clearTimeout(handle);
-  }, [pendingAsk, sendText]);
+    };
+    const handle = window.setTimeout(trySend, 0);
+    const unsubscribe = subscribeLiveChatRun(trySend);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+      unsubscribe();
+    };
+  }, [pendingAsk, projectId, sendText]);
 
   const send = (text?: string) => void sendText(text ?? question);
 

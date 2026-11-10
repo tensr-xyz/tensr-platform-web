@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { AgentThread } from './agent-thread';
 import { publishLiveChatRun } from './chat-live-run';
 import { runAgentLoop } from '@/lib/run-agent-loop';
@@ -50,6 +50,45 @@ describe('shared agent thread', () => {
         pendingAsk="How many answered?"
       />
     );
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+    expect(send.mock.calls[0][0].message).toBe('How many answered?');
+  });
+
+  it('sends a queued question after the run already on screen finishes', async () => {
+    send.mockResolvedValue({ status: 'ok', answer_markdown: 'Done', session_id: 's1' });
+    publishLiveChatRun({
+      projectId: 'project',
+      sessionId: 's0',
+      question: 'Earlier',
+      answer: '',
+      steps: [],
+      status: 'Thinking…',
+      running: true,
+    });
+    render(
+      <AgentThread
+        projectId="project"
+        datasetId="file"
+        columnNames={['region']}
+        columnLabels={[{ name: 'region', label: 'Region' }]}
+        placeholder="Ask a follow-up..."
+        projectHref="/flow/p/project"
+        pendingAsk="How many answered?"
+      />
+    );
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(send).not.toHaveBeenCalled();
+    publishLiveChatRun({
+      projectId: 'project',
+      sessionId: 's0',
+      question: 'Earlier',
+      answer: 'Done earlier',
+      steps: [],
+      status: null,
+      running: false,
+    });
     await waitFor(() => expect(send).toHaveBeenCalledTimes(1));
     expect(send.mock.calls[0][0].message).toBe('How many answered?');
   });
