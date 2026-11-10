@@ -46,6 +46,20 @@ function emit() {
   listeners.forEach(listener => listener());
 }
 
+/** Slides and topline sections from outputs that were added to the report. */
+export function deliverableOutputs(
+  pins: ReportPin[],
+  kind: 'deck' | 'topline'
+): { title: string; support: string; bars: { label: string; percent: number }[] }[] {
+  return pins
+    .filter(pin => pin.headline && (kind === 'deck' ? pin.deck !== false : pin.topline !== false))
+    .map(pin => ({
+      title: pin.headline,
+      support: pin.support,
+      bars: pin.bars || [],
+    }));
+}
+
 export function pinsFromRuns(runs: RunSummary[]): ReportPin[] {
   return runs
     .filter(run => run.in_report && run.report_pin && run.id)
