@@ -2457,7 +2457,6 @@ function ChatScreen({
     openSessionId,
     openChat,
     clearChat,
-    loadRail,
     setStatus,
     showThread,
     panelOpen,
@@ -2496,6 +2495,37 @@ function ChatScreen({
   } | null>(null);
   const [recipeBusy, setRecipeBusy] = useState('');
 
+  const recipesAbort = useRef<AbortController | null>(null);
+  const loadRecipes = useCallback(() => {
+    recipesAbort.current?.abort();
+    if (!chatProjectId) {
+      setRecipes([]);
+      return;
+    }
+    const controller = new AbortController();
+    recipesAbort.current = controller;
+    const timer = window.setTimeout(() => controller.abort('timeout'), 15000);
+    void flowJson<{ recipes?: FlowRecipe[] }>(`/datasets/recipes?project_id=${chatProjectId}`, {
+      signal: controller.signal,
+    })
+      .then(page => {
+        if (recipesAbort.current !== controller) return;
+        setRecipes(page.recipes || []);
+      })
+      .catch(err => {
+        if (recipesAbort.current !== controller) return;
+        const timedOut = controller.signal.reason === 'timeout';
+        if (!timedOut && err instanceof DOMException && err.name === 'AbortError') return;
+        setRecipes(current => current || []);
+      })
+      .finally(() => window.clearTimeout(timer));
+  }, [chatProjectId]);
+
+  useEffect(() => {
+    loadRecipes();
+    return () => recipesAbort.current?.abort();
+  }, [loadRecipes]);
+
   const saveRecipe = async (name: string, ids: string[]) => {
     if (!project) return;
     if (!ids.length) {
@@ -2531,7 +2561,7 @@ function ChatScreen({
         }),
       });
       setRecipeNote({ text: `Saved “${name}” as a recipe. Run it on any file from Recipes.` });
-      loadRail();
+      loadRecipes();
     } catch (err) {
       setRecipeNote({
         text: err instanceof Error ? err.message : 'The recipe did not save.',

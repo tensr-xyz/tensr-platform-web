@@ -141,13 +141,33 @@ export function useAgentThread({
   noteRef.current = attachedNote;
   const askedRef = useRef<string | null>(null);
   const sendingRef = useRef(false);
+  const aliveRef = useRef(true);
+  const statusRef = useRef<string | null>(null);
+  const modeRef = useRef<Mode>('agent');
+  const openToken = useRef(0);
+  const openAbort = useRef<AbortController | null>(null);
   const onSessionRef = useRef(onSession);
   const onFinishedRef = useRef(onFinished);
   const onAskedRef = useRef(onAsked);
   const openChatRef = useRef<(sessionId: string) => void>(() => undefined);
+  statusRef.current = status;
+  modeRef.current = mode;
   onSessionRef.current = onSession;
   onFinishedRef.current = onFinished;
   onAskedRef.current = onAsked;
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+      openToken.current += 1;
+      openAbort.current?.abort();
+    };
+  }, []);
+
+  const shown = useCallback((update: () => void) => {
+    if (aliveRef.current) update();
+  }, []);
 
   const showThread = Boolean(past.length || sent || answer || plan || status);
 
@@ -176,6 +196,7 @@ export function useAgentThread({
         session_id: sessionId,
         title: title.length > 80 ? `${title.slice(0, 77)}…` : title,
       };
+      if (!aliveRef.current) return;
       setSessions(current => {
         const rest = (current || []).filter(item => item.session_id !== row.session_id);
         return [row, ...rest];
@@ -208,9 +229,11 @@ export function useAgentThread({
   };
 
   const sendText = useCallback(
-    async (text: string, nextMode: Mode = mode) => {
-      if (!text.trim() || status === 'Thinking…' || sendingRef.current) return;
-      if (projectId && chatRunInFlight(projectId)) return;
+    async (text: string, nextMode: Mode = modeRef.current) => {
+      if (!text.trim() || sendingRef.current) return false;
+      if (statusRef.current === 'Thinking…' && (!projectId || chatRunInFlight(projectId)))
+        return false;
+      if (projectId && chatRunInFlight(projectId)) return false;
       sendingRef.current = true;
       const publish = (patch: Partial<NonNullable<ReturnType<typeof liveChatRun>>>) => {
         if (!projectId) return;
@@ -266,7 +289,9 @@ export function useAgentThread({
           onProgress: progress => {
             const line = visibleAgentStep(progress.step, progress.message);
             if (!line) return;
-            setSteps(current => (current.includes(line) ? current : [...current, line]));
+            shown(() =>
+              setSteps(current => (current.includes(line) ? current : [...current, line]))
+            );
             const prior = liveChatRun();
             publish({
               steps: prior?.steps.includes(line) ? prior.steps : [...(prior?.steps || []), line],
@@ -276,14 +301,18 @@ export function useAgentThread({
           },
           onDelta: chunk => {
             draft += chunk;
-            setAnswer(draft);
-            setStatus(null);
+            shown(() => {
+              setAnswer(draft);
+              setStatus(null);
+            });
             publish({ answer: draft, status: null });
           },
           onReplace: next => {
             draft = next;
-            setAnswer(next);
-            setStatus(null);
+            shown(() => {
+              setAnswer(next);
+              setStatus(null);
+            });
             publish({ answer: next, status: null });
           },
           onSession: sessionId => {
@@ -292,63 +321,78 @@ export function useAgentThread({
           },
           onPreview: preview => {
             const previewText = preview.text || draft;
-            if (previewText) {
-              draft = previewText;
-              setAnswer(previewText);
-            }
-            setStatus(null);
-            if (preview.tool_results?.length) {
-              setTurn({
-                status: 'ok',
-                mode: nextMode,
-                answer_markdown: previewText,
-                session_id: sessionRef.current || undefined,
-                tool_results: preview.tool_results,
-              });
-            }
+            if (previewText) draft = previewText;
+            shown(() => {
+              if (previewText) setAnswer(previewText);
+              setStatus(null);
+              if (preview.tool_results?.length) {
+                setTurn({
+                  status: 'ok',
+                  mode: nextMode,
+                  answer_markdown: previewText,
+                  session_id: sessionRef.current || undefined,
+                  tool_results: preview.tool_results,
+                });
+              }
+            });
             publish({ answer: previewText, status: null });
           },
         });
         if (result.session_id) noteSession(result.session_id, text.trim());
-        setAnswer(result.answer_markdown || '');
-        setPlan(result.status === 'awaiting_approval' ? result : null);
-        setTurn(result.status === 'awaiting_approval' ? null : result);
         const traced = replyLines(result);
-        if (traced.length) setSteps(traced);
-        setDownloads(downloadEntries(result));
-        if (result.status !== 'awaiting_approval') {
-          setAttachments([]);
+        const entries = downloadEntries(result);
+        shown(() => {
+          setAnswer(result.answer_markdown || '');
+          setPlan(result.status === 'awaiting_approval' ? result : null);
+          setTurn(result.status === 'awaiting_approval' ? null : result);
+          if (traced.length) setSteps(traced);
+          setDownloads(entries);
+          if (result.status !== 'awaiting_approval') setAttachments([]);
+          setStatus(null);
+        });
+        if (result.status !== 'awaiting_approval' && aliveRef.current)
           onFinishedRef.current?.(result);
-        }
-        setStatus(null);
         publish({
           running: false,
           status: null,
           answer: result.answer_markdown || draft,
           sessionId: result.session_id || sessionRef.current,
         });
-        loadRail();
+        if (aliveRef.current) loadRail();
+        return true;
       } catch (err) {
         const message = err instanceof Error ? err.message : 'The reply did not finish. Ask again.';
-        setStatus(message);
+        shown(() => setStatus(message));
         publish({ running: false, status: message });
+        return true;
       } finally {
         sendingRef.current = false;
       }
     },
-    [datasetId, mode, status, loadRail, projectId, noteSession]
+    [datasetId, loadRail, projectId, noteSession, shown]
   );
 
   useEffect(() => {
     if (!pendingAsk || askedRef.current === pendingAsk) return;
     const text = pendingAsk;
-    const handle = window.setTimeout(() => {
-      askedRef.current = text;
-      onAskedRef.current?.();
-      void sendText(text, 'agent');
-    }, 0);
-    return () => window.clearTimeout(handle);
-  }, [pendingAsk, sendText]);
+    let cancelled = false;
+    const trySend = () => {
+      if (cancelled || askedRef.current === text) return;
+      if (projectId && chatRunInFlight(projectId)) return;
+      void sendText(text, 'agent').then(started => {
+        if (!started || cancelled) return;
+        askedRef.current = text;
+        onAskedRef.current?.();
+      });
+    };
+    const handle = window.setTimeout(trySend, 0);
+    const unsubscribe = subscribeLiveChatRun(trySend);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(handle);
+      unsubscribe();
+    };
+  }, [pendingAsk, projectId, sendText]);
 
   const send = (text?: string) => void sendText(text ?? question);
 
@@ -360,6 +404,18 @@ export function useAgentThread({
         : null;
     const calls = Array.isArray(plan.pending_approvals) ? plan.pending_approvals : null;
     setStatus('Thinking…');
+    const prior = liveChatRun();
+    if (projectId) {
+      publishLiveChatRun({
+        projectId,
+        sessionId: plan.session_id || sessionRef.current,
+        question: prior?.projectId === projectId ? prior.question : sent,
+        answer: prior?.projectId === projectId ? prior.answer : '',
+        steps: prior?.projectId === projectId ? prior.steps : [],
+        status: 'Thinking…',
+        running: true,
+      });
+    }
     void runAgentLoop({
       message: sent,
       mode,
@@ -372,25 +428,43 @@ export function useAgentThread({
         batch && typeof batch.mac === 'string' ? { batch: batch.batch, mac: batch.mac } : null,
       signal: AbortSignal.timeout(120_000),
       onDelta: chunk => {
-        setAnswer(current => current + chunk);
-        setStatus(null);
+        shown(() => {
+          setAnswer(current => current + chunk);
+          setStatus(null);
+        });
       },
     })
       .then(result => {
-        setAnswer(result.answer_markdown || '');
-        setPlan(result.status === 'awaiting_approval' ? result : null);
-        setTurn(result.status === 'awaiting_approval' ? null : result);
         const traced = replyLines(result);
-        if (traced.length) setSteps(traced);
-        setDownloads(downloadEntries(result));
-        if (result.status !== 'awaiting_approval') {
-          setAttachments([]);
+        const entries = downloadEntries(result);
+        shown(() => {
+          setAnswer(result.answer_markdown || '');
+          setPlan(result.status === 'awaiting_approval' ? result : null);
+          setTurn(result.status === 'awaiting_approval' ? null : result);
+          if (traced.length) setSteps(traced);
+          setDownloads(entries);
+          if (result.status !== 'awaiting_approval') setAttachments([]);
+          setStatus(null);
+        });
+        if (result.status !== 'awaiting_approval' && aliveRef.current)
           onFinishedRef.current?.(result);
+        const current = liveChatRun();
+        if (projectId && current?.projectId === projectId) {
+          publishLiveChatRun({
+            ...current,
+            running: false,
+            status: null,
+            answer: result.answer_markdown || current.answer,
+          });
         }
-        setStatus(null);
       })
       .catch(err => {
-        setStatus(err instanceof Error ? err.message : 'The plan did not run.');
+        const message = err instanceof Error ? err.message : 'The plan did not run.';
+        shown(() => setStatus(message));
+        const current = liveChatRun();
+        if (projectId && current?.projectId === projectId) {
+          publishLiveChatRun({ ...current, running: false, status: message });
+        }
       });
   };
 
@@ -416,6 +490,10 @@ export function useAgentThread({
   const openChat = useCallback(
     (sessionId: string) => {
       if (!projectId || !sessionId) return;
+      const token = ++openToken.current;
+      openAbort.current?.abort();
+      const controller = new AbortController();
+      openAbort.current = controller;
       sessionRef.current = sessionId;
       rememberChat(sessionId);
       void flowJson<{
@@ -424,8 +502,9 @@ export function useAgentThread({
           answer?: string;
           tool_results?: AgentLoopResponse['tool_results'];
         }[];
-      }>(`/api/projects/${projectId}/sessions/${sessionId}`)
+      }>(`/api/projects/${projectId}/sessions/${sessionId}`, { signal: controller.signal })
         .then(page => {
+          if (token !== openToken.current) return;
           const exchanges = (page.turns || []).flatMap(item =>
             item.user
               ? [
@@ -439,31 +518,39 @@ export function useAgentThread({
               : []
           );
           const last = exchanges[exchanges.length - 1];
-          setPast(last ? exchanges.slice(0, -1) : exchanges);
-          setSent(last?.user || '');
-          setAttachedNote('');
-          setAnswer(last?.answer || '');
-          setQuestion('');
-          setPlan(null);
-          setTurn(
-            last
-              ? {
-                  status: 'ok',
-                  mode: 'agent',
-                  answer_markdown: last.answer,
-                  session_id: sessionId,
-                  tool_results: last.toolResults,
-                }
-              : null
-          );
-          setSteps([]);
-          setDownloads([]);
-          setStatus(null);
-          setPanelOpen(Boolean(last?.toolResults?.length));
+          shown(() => {
+            setPast(last ? exchanges.slice(0, -1) : exchanges);
+            setSent(last?.user || '');
+            setAttachedNote('');
+            setAnswer(last?.answer || '');
+            setQuestion('');
+            setPlan(null);
+            setTurn(
+              last
+                ? {
+                    status: 'ok',
+                    mode: 'agent',
+                    answer_markdown: last.answer,
+                    session_id: sessionId,
+                    tool_results: last.toolResults,
+                  }
+                : null
+            );
+            setSteps([]);
+            setDownloads([]);
+            setAttachments([]);
+            setAttachError(null);
+            setStatus(null);
+            setPanelOpen(Boolean(last?.toolResults?.length));
+          });
         })
-        .catch(() => setStatus('That chat could not be opened.'));
+        .catch(err => {
+          if (token !== openToken.current) return;
+          if (err instanceof DOMException && err.name === 'AbortError') return;
+          shown(() => setStatus('That chat could not be opened.'));
+        });
     },
-    [projectId, rememberChat]
+    [projectId, rememberChat, shown]
   );
   openChatRef.current = openChat;
 
