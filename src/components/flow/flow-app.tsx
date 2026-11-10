@@ -2457,7 +2457,6 @@ function ChatScreen({
     openSessionId,
     openChat,
     clearChat,
-    loadRail,
     setStatus,
     showThread,
     panelOpen,
@@ -2496,6 +2495,22 @@ function ChatScreen({
   } | null>(null);
   const [recipeBusy, setRecipeBusy] = useState('');
 
+  const loadRecipes = useCallback(() => {
+    if (!chatProjectId) {
+      setRecipes([]);
+      return;
+    }
+    void flowJson<{ recipes?: FlowRecipe[] }>(`/datasets/recipes?project_id=${chatProjectId}`, {
+      signal: AbortSignal.timeout(15000),
+    })
+      .then(page => setRecipes(page.recipes || []))
+      .catch(() => setRecipes(current => current || []));
+  }, [chatProjectId]);
+
+  useEffect(() => {
+    loadRecipes();
+  }, [loadRecipes]);
+
   const saveRecipe = async (name: string, ids: string[]) => {
     if (!project) return;
     if (!ids.length) {
@@ -2531,7 +2546,7 @@ function ChatScreen({
         }),
       });
       setRecipeNote({ text: `Saved “${name}” as a recipe. Run it on any file from Recipes.` });
-      loadRail();
+      loadRecipes();
     } catch (err) {
       setRecipeNote({
         text: err instanceof Error ? err.message : 'The recipe did not save.',
