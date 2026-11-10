@@ -2495,20 +2495,35 @@ function ChatScreen({
   } | null>(null);
   const [recipeBusy, setRecipeBusy] = useState('');
 
+  const recipesAbort = useRef<AbortController | null>(null);
   const loadRecipes = useCallback(() => {
+    recipesAbort.current?.abort();
     if (!chatProjectId) {
       setRecipes([]);
       return;
     }
+    const controller = new AbortController();
+    recipesAbort.current = controller;
+    const timer = window.setTimeout(() => controller.abort('timeout'), 15000);
     void flowJson<{ recipes?: FlowRecipe[] }>(`/datasets/recipes?project_id=${chatProjectId}`, {
-      signal: AbortSignal.timeout(15000),
+      signal: controller.signal,
     })
-      .then(page => setRecipes(page.recipes || []))
-      .catch(() => setRecipes(current => current || []));
+      .then(page => {
+        if (recipesAbort.current !== controller) return;
+        setRecipes(page.recipes || []);
+      })
+      .catch(err => {
+        if (recipesAbort.current !== controller) return;
+        const timedOut = controller.signal.reason === 'timeout';
+        if (!timedOut && err instanceof DOMException && err.name === 'AbortError') return;
+        setRecipes(current => current || []);
+      })
+      .finally(() => window.clearTimeout(timer));
   }, [chatProjectId]);
 
   useEffect(() => {
     loadRecipes();
+    return () => recipesAbort.current?.abort();
   }, [loadRecipes]);
 
   const saveRecipe = async (name: string, ids: string[]) => {
