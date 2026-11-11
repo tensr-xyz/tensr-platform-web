@@ -93,14 +93,27 @@ export function clockLabel(iso: string): string {
   return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
+function finiteNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
 export function baseCount(run: Record<string, unknown>): number | null {
-  const result = run.result as { n_used?: unknown; n_rows?: unknown } | undefined;
-  if (typeof result?.n_used === 'number' && Number.isFinite(result.n_used)) return result.n_used;
+  const result = run.result as Record<string, unknown> | undefined;
+  const nested =
+    result?.result && typeof result.result === 'object'
+      ? (result.result as Record<string, unknown>)
+      : undefined;
+  for (const source of [result, nested]) {
+    if (!source) continue;
+    for (const key of ['n_used', 'n_answered', 'unweighted_n', 'respondent_n']) {
+      const value = finiteNumber(source[key]);
+      if (value != null) return value;
+    }
+  }
   const report = run.report as { meta?: { rows_dataset?: unknown } } | undefined;
-  const rows = report?.meta?.rows_dataset;
-  if (typeof rows === 'number' && Number.isFinite(rows)) return rows;
-  if (typeof result?.n_rows === 'number' && Number.isFinite(result.n_rows)) return result.n_rows;
-  return null;
+  const rows = finiteNumber(report?.meta?.rows_dataset);
+  if (rows != null) return rows;
+  return finiteNumber(result?.n_rows);
 }
 
 export function summaryText(run: Record<string, unknown>): string {
@@ -126,8 +139,9 @@ export function metricLines(run: Record<string, unknown>): { label: string; valu
     const record = metric as Record<string, unknown>;
     const label = String(record.label || record.name || '').trim();
     const value = record.value;
-    if (!label || value == null || value === '') continue;
-    lines.push({ label, value: String(value) });
+    const shown = value == null ? '' : String(value).trim();
+    if (!label || !shown || shown === '—' || shown === '-' || shown === 'None') continue;
+    lines.push({ label, value: shown });
   }
   return lines;
 }

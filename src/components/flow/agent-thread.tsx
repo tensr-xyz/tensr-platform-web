@@ -133,14 +133,17 @@ export function useAgentThread({
   const sessionRef = useRef<string | null>(null);
   const sentRef = useRef('');
   const answerRef = useRef('');
+  const stepsRef = useRef<string[]>([]);
   const noteRef = useRef('');
   const toolResultsRef = useRef(turn?.tool_results);
   toolResultsRef.current = turn?.tool_results;
   sentRef.current = sent;
   answerRef.current = answer;
+  stepsRef.current = steps;
   noteRef.current = attachedNote;
   const askedRef = useRef<string | null>(null);
   const sendingRef = useRef(false);
+  const approvingRef = useRef(false);
   const aliveRef = useRef(true);
   const statusRef = useRef<string | null>(null);
   const modeRef = useRef<Mode>('agent');
@@ -403,15 +406,15 @@ export function useAgentThread({
         ? plan.pending_approvals
         : null;
     const calls = Array.isArray(plan.pending_approvals) ? plan.pending_approvals : null;
+    approvingRef.current = true;
     setStatus('Thinking…');
-    const prior = liveChatRun();
     if (projectId) {
       publishLiveChatRun({
         projectId,
         sessionId: plan.session_id || sessionRef.current,
-        question: prior?.projectId === projectId ? prior.question : sent,
-        answer: prior?.projectId === projectId ? prior.answer : '',
-        steps: prior?.projectId === projectId ? prior.steps : [],
+        question: sent,
+        answer: answerRef.current,
+        steps: stepsRef.current,
         status: 'Thinking…',
         running: true,
       });
@@ -455,8 +458,10 @@ export function useAgentThread({
             running: false,
             status: null,
             answer: result.answer_markdown || current.answer,
+            steps: stepsRef.current,
           });
         }
+        approvingRef.current = false;
       })
       .catch(err => {
         const message = err instanceof Error ? err.message : 'The plan did not run.';
@@ -465,6 +470,7 @@ export function useAgentThread({
         if (projectId && current?.projectId === projectId) {
           publishLiveChatRun({ ...current, running: false, status: message });
         }
+        approvingRef.current = false;
       });
   };
 
@@ -558,6 +564,9 @@ export function useAgentThread({
     const apply = () => {
       const run = liveChatRun();
       if (!run || run.projectId !== projectId) return;
+      // This screen is sending or approving. Its own state is the thread.
+      // Reloading the saved session here clears the plan before the column is saved.
+      if (sendingRef.current || approvingRef.current) return;
       setSent(run.question);
       setAnswer(run.answer);
       setSteps(run.steps);
@@ -671,6 +680,14 @@ export function useAgentThread({
 }
 
 export type AgentThreadState = ReturnType<typeof useAgentThread>;
+
+function planCopy(answer: string): string {
+  let text = answer.trim();
+  const waiting = 'Waiting for approval:';
+  if (text.startsWith(waiting)) text = text.slice(waiting.length).trim();
+  if (text === 'Plan' || text.startsWith('Plan\n')) text = text.slice(4).trim();
+  return text;
+}
 
 export function AgentThreadColumn({
   thread,
@@ -796,7 +813,7 @@ export function AgentThreadColumn({
         {thread.plan ? (
           <div className="chat-plan">
             <strong>Waiting for approval · Plan</strong>
-            <FlowMarkdown>{thread.answer}</FlowMarkdown>
+            <FlowMarkdown>{planCopy(thread.answer)}</FlowMarkdown>
             <div className="flow-row">
               <Button className="flow-btn primary" type="button" onClick={thread.approve}>
                 Approve
@@ -855,7 +872,9 @@ export function AgentThreadColumn({
                     deck: true,
                     topline: true,
                     keepLive: true,
-                  }).catch(() => thread.setStatus('That result could not be added to the report.'));
+                  })
+                    .then(() => thread.setStatus('Added to the report.'))
+                    .catch(() => thread.setStatus('That result could not be added to the report.'));
                 }}
               >
                 Add to report

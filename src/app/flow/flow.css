@@ -1813,8 +1813,15 @@ select.flow-input {
 }
 
 .analysis-table .output-grid {
-  width: max-content;
+  width: 100%;
   min-width: 100%;
+}
+
+.analysis-table .output-grid th,
+.analysis-table .output-grid td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: top;
 }
 
 .analysis-table-quote .output-grid {
