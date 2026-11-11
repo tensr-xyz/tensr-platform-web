@@ -13,49 +13,16 @@ import {
 } from '@/components/ui/dialog';
 import { ChoiceSelect } from '@/components/ui/select';
 import { Segmented } from '@/components/ui/segmented';
+import { AnalysisResult } from '@/components/flow/analysis-result';
 import { flowJson } from '@/lib/flow-api';
 import { dependentColumns, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
-import {
-  anovaError,
-  countedPairs,
-  formatStat,
-  pairText,
-  pPhrase,
-  type AnovaPair,
-} from '@/components/flow/anova-result';
+import { anovaError } from '@/components/flow/anova-result';
+import { resultFootnote, resultViewFromToolResults } from '@/components/flow/result-tables';
 
 type PostHoc = 'none' | 'tukey' | 'games_howell' | 'bonferroni';
 
-type GroupRow = { group?: string; n?: number; mean?: number; std?: number | null };
-
-type AnovaTable = {
-  ss_between?: number;
-  ss_within?: number;
-  df_between?: number;
-  df_within?: number;
-  ms_between?: number;
-  ms_within?: number;
-};
-
-type AnovaResult = {
-  f_statistic?: number;
-  p_value?: number;
-  eta_squared?: number | null;
-  effect_size?: number | null;
-  effect_size_type?: string;
-  use_welch?: boolean;
-  n_used?: number;
-  anova_table?: AnovaTable | null;
-  group_descriptives?: GroupRow[];
-  welch_degrees_of_freedom?: { df1?: number; df2?: number };
-  levene_test?: { statistic?: number; p_value?: number };
-  exclusion_note?: string;
-  weight?: { column?: string };
-  post_hoc?: { method?: string; pairwise?: AnovaPair[] };
-};
-
 type AnovaEnvelope = {
-  result?: AnovaResult;
+  result?: Record<string, unknown>;
   run_id?: string;
   report?: {
     summary?: string;
@@ -80,6 +47,11 @@ export function AnovaModal({
   projectId?: string;
   onClose: () => void;
 }) {
+  const columnLabel = (name: string) => {
+    const column = columns.find(item => item.name === name);
+    const label = (column?.label || '').trim();
+    return label && label.toLowerCase() !== name.toLowerCase() ? label : name;
+  };
   const outcomes = useMemo(
     () => dependentColumns(columns).filter(name => !isInternalColumn(name)),
     [columns]
@@ -99,7 +71,10 @@ export function AnovaModal({
   const [busy, setBusy] = useState(false);
 
   const result = envelope?.result;
-  const pairs = countedPairs(result?.post_hoc?.pairwise);
+  const viewResult = useMemo(
+    () => resultViewFromToolResults(envelope ? [envelope] : []),
+    [envelope]
+  );
   const syntax = [
     envelope?.report?.reproducibility?.r_script,
     envelope?.report?.reproducibility?.python,
@@ -176,7 +151,7 @@ export function AnovaModal({
                   aria-label="Dependent column"
                   value={dependent}
                   onValueChange={setDependent}
-                  options={outcomes.map(name => ({ value: name, label: name }))}
+                  options={outcomes.map(name => ({ value: name, label: columnLabel(name) }))}
                 />
               </label>
               <label>
@@ -185,7 +160,7 @@ export function AnovaModal({
                   aria-label="Factor column"
                   value={group}
                   onValueChange={setGroup}
-                  options={factors.map(name => ({ value: name, label: name }))}
+                  options={factors.map(name => ({ value: name, label: columnLabel(name) }))}
                 />
               </label>
               <div>
@@ -226,104 +201,25 @@ export function AnovaModal({
                 />
                 <span>Means plot with 95% CI</span>
               </label>
-              {result?.levene_test ? (
-                <p className="flow-muted">
-                  Levene&apos;s test {pPhrase(result.levene_test.p_value)}.
-                </p>
-              ) : null}
-              {result?.weight?.column ? (
-                <p className="flow-muted">Weighted by {result.weight.column}.</p>
-              ) : null}
-              {result?.exclusion_note ? (
-                <p className="flow-muted">{result.exclusion_note}</p>
-              ) : null}
             </div>
             <div className="anova-preview">
               {error ? (
                 <p className="flow-error">{error}</p>
-              ) : !result ? (
+              ) : !result || !viewResult.tables.length ? (
                 <p className="flow-muted">
                   Run the analysis to see the groups, the F test, and any pairs.
                 </p>
               ) : (
-                <>
-                  <p className="anova-live">
-                    <i /> Result · n = {formatStat(result.n_used, 0)}
-                    {result.weight?.column ? ' weighted' : ''}
-                  </p>
-                  {envelope?.report?.summary ? (
-                    <p className="anova-summary">{envelope.report.summary}</p>
-                  ) : null}
-                  <div className="anova-table">
-                    <div className="anova-line anova-line-head">
-                      <span>Group</span>
-                      <span>n</span>
-                      <span>Mean</span>
-                      <span>SD</span>
-                    </div>
-                    {(result.group_descriptives || []).map(row => (
-                      <div key={row.group} className="anova-line">
-                        <span>{row.group}</span>
-                        <span>{formatStat(row.n, 0)}</span>
-                        <span>{formatStat(row.mean, 2)}</span>
-                        <span>{formatStat(row.std, 2)}</span>
-                      </div>
-                    ))}
-                  </div>
-                  {result.anova_table ? (
-                    <div className="anova-table">
-                      <div className="anova-line anova-source anova-line-head">
-                        <span>Source</span>
-                        <span>SS</span>
-                        <span>df</span>
-                        <span>MS</span>
-                        <span>F</span>
-                        <span>p</span>
-                        <span>η²</span>
-                      </div>
-                      <div className="anova-line anova-source">
-                        <span>Between groups</span>
-                        <span>{formatStat(result.anova_table.ss_between, 1)}</span>
-                        <span>{formatStat(result.anova_table.df_between, 0)}</span>
-                        <span>{formatStat(result.anova_table.ms_between, 1)}</span>
-                        <span>{formatStat(result.f_statistic, 2)}</span>
-                        <span>{pPhrase(result.p_value)}</span>
-                        <span>
-                          {effect ? formatStat(result.eta_squared ?? result.effect_size, 2) : ''}
-                        </span>
-                      </div>
-                      <div className="anova-line anova-source">
-                        <span>Within groups</span>
-                        <span>{formatStat(result.anova_table.ss_within, 1)}</span>
-                        <span>{formatStat(result.anova_table.df_within, 0)}</span>
-                        <span>{formatStat(result.anova_table.ms_within, 1)}</span>
-                        <span />
-                        <span />
-                        <span />
-                      </div>
-                    </div>
-                  ) : (
-                    <p>
-                      {result.use_welch ? "Welch's F" : 'F'}(
-                      {formatStat(result.welch_degrees_of_freedom?.df1, 1)},{' '}
-                      {formatStat(result.welch_degrees_of_freedom?.df2, 1)}) ={' '}
-                      {formatStat(result.f_statistic, 2)}, {pPhrase(result.p_value)}
-                      {effect && result.effect_size != null
-                        ? `, η² = ${formatStat(result.effect_size, 2)}`
-                        : ''}
-                    </p>
-                  )}
-                  {pairs.significant.length ? (
-                    <div className="anova-pairs">
-                      {pairs.significant.map(row => (
-                        <span key={`${row.group1}-${row.group2}`}>{pairText(row)}</span>
-                      ))}
-                      {pairs.other ? (
-                        <span className="flow-muted">+ {pairs.other} not significant</span>
-                      ) : null}
-                    </div>
-                  ) : null}
-                </>
+                <AnalysisResult
+                  lead={envelope?.report?.summary}
+                  tables={viewResult.tables}
+                  footnote={resultFootnote(viewResult, '', 'ANOVA')}
+                  checks={viewResult.checks}
+                  script={viewResult.script || syntax}
+                  rCheck={viewResult.rCheck}
+                  rStatement={viewResult.rStatement}
+                  runId={envelope?.run_id}
+                />
               )}
             </div>
           </div>

@@ -15,6 +15,7 @@ export const CHOICE_MODELLING_MENU_NAMES: ReadonlySet<string> = new Set([
   'MaxDiff (Count)',
   'MaxDiff (MNL)',
   'MaxDiff (individual utilities)',
+  'Conjoint individual utilities',
   'Choice Simulator',
 ]);
 

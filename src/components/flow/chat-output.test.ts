@@ -1,11 +1,13 @@
 import {
   answerWithoutBase,
   keepLineBreaks,
+  withoutResultTokens,
   outputChecks,
   outputKind,
   outputBaseNote,
   outputTakeaway,
   outputTitle,
+  titledWithQuestion,
 } from './chat-output';
 
 const answer = [
@@ -45,6 +47,51 @@ describe('chat output panel', () => {
         answer
       )
     ).toBe('likes_A by region');
+  });
+
+  it('titles a frequency card with the question and badges Frequencies', () => {
+    const results = [
+      {
+        name: 'run_analysis',
+        procedure: 'descriptives',
+        request_body: { columns: ['Q5'] },
+        summary: { title: 'Q5' },
+      },
+      {
+        procedure: 'frequencies',
+        analysis_type: 'frequencies',
+        request_body: { columns: ['Q5'] },
+        summary: {
+          title: 'Frequency table: How would you rate the product? (1-5).',
+          line: 'Frequency table: How would you rate the product? (1-5). unweighted. Unweighted base 200.',
+          table: [
+            {
+              title: 'How would you rate the product? (1-5)',
+              rows: [{ value: '4', frequency: 20, percent: 31.4 }],
+            },
+          ],
+        },
+      },
+    ];
+    expect(outputTitle(results, 'Frequency table: How would you rate the product? (1-5).')).toBe(
+      'How would you rate the product? (1-5)'
+    );
+    expect(outputKind(results)).toBe('Frequencies');
+  });
+
+  it('uses the question label when the result only names the column', () => {
+    const results = [
+      {
+        procedure: 'frequencies',
+        request_body: { columns: ['sat_brewco'] },
+        summary: { title: 'sat_brewco', line: 'Frequency table.' },
+      },
+    ];
+    const columns = [{ name: 'sat_brewco', label: 'How satisfied are you with Brew & Co?' }];
+    expect(outputTitle(results, 'Frequency table.', columns)).toBe(
+      'How satisfied are you with Brew & Co?'
+    );
+    expect(titledWithQuestion('sat_brewco', columns)).toBe('How satisfied are you with Brew & Co?');
   });
 
   it('falls back to the first prose sentence that is not the base', () => {
@@ -106,6 +153,11 @@ describe('chat output panel', () => {
     expect(labels).toContain('1 rows excluded because they were filtered out');
     expect(labels).toContain('3 rows excluded for another counted reason');
     expect(labels.join(' ')).not.toMatch(/missing values/);
+  });
+
+  it('drops an unfilled table citation', () => {
+    expect(withoutResultTokens('The subset is below.\n\n{table:r1}')).toBe('The subset is below.');
+    expect(withoutResultTokens('See {{table:r2}}.')).toBe('See .');
   });
 
   it('puts each download on its own line', () => {

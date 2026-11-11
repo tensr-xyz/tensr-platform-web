@@ -4,6 +4,7 @@ import {
   sourceFileNote,
   sourceRowCount,
   orderedVersionGroup,
+  sourceFileName,
   sourceVersionTitle,
 } from './sources-screen';
 
@@ -71,5 +72,21 @@ describe('sources screen', () => {
     expect(contextMark('report')).toBe('PPT');
     expect(fileMark('wave.sav')).toBe('SAV');
     expect(fileMark('extra.csv')).toBe('CSV');
+  });
+
+  it('shows the file name and never the id', () => {
+    expect(
+      sourceFileName({
+        id: 'fa975e35-6c23-4a11-8abc-1234567890ab',
+        original_filename: 'fa975e35-6c23-4a11-8abc-1234567890ab.sav',
+        source_filenames: ['coffee_tracker_demo.sav'],
+      })
+    ).toBe('coffee_tracker_demo.sav');
+    expect(
+      sourceFileName({
+        id: 'fa975e35-6c23-4a11-8abc-1234567890ab',
+        lineage_label: 'Coded',
+      })
+    ).toBe('Coded');
   });
 });

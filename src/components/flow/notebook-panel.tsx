@@ -40,12 +40,15 @@ export function notebookTable(output: unknown): Record<string, unknown>[] | null
 
 let cellKey = 0;
 
-export function blankCell(kind: NotebookCell['kind']): NotebookCell {
+export function blankCell(
+  kind: NotebookCell['kind'],
+  language: 'python' | 'r' = 'python'
+): NotebookCell {
   cellKey += 1;
   return {
     id: `cell-${cellKey}`,
     kind,
-    source: kind === 'code' ? 'df.head()' : '',
+    source: kind === 'code' && language === 'python' ? 'df.head()' : '',
     output: '',
     running: false,
   };
@@ -120,8 +123,18 @@ export function notebookSource(
 }
 
 export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: ReactNode }) {
-  const [cells, setCells] = useState<NotebookCell[]>(() => [blankCell('code')]);
+  const [notebooks, setNotebooks] = useState<{ python: NotebookCell[]; r: NotebookCell[] }>(() => ({
+    python: [blankCell('code', 'python')],
+    r: [blankCell('code', 'r')],
+  }));
   const [language, setLanguage] = useState<'python' | 'r'>('python');
+  const cells = notebooks[language];
+  const setCells = (next: NotebookCell[] | ((current: NotebookCell[]) => NotebookCell[])) => {
+    setNotebooks(current => ({
+      ...current,
+      [language]: typeof next === 'function' ? next(current[language]) : next,
+    }));
+  };
   const [loadedOnce, setLoadedOnce] = useState(false);
 
   useEffect(() => {
@@ -184,7 +197,7 @@ export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: R
         <Button
           className="flow-btn"
           type="button"
-          onClick={() => setCells(current => [...current, blankCell('code')])}
+          onClick={() => setCells(current => [...current, blankCell('code', language)])}
         >
           + Code
         </Button>
@@ -219,9 +232,15 @@ export function FlowNotebook({ datasetId, lead }: { datasetId?: string; lead?: R
         <Button
           className="flow-btn"
           type="button"
-          onClick={() => download('notebook.py', notebookPy(cells), 'text/x-python')}
+          onClick={() =>
+            download(
+              language === 'r' ? 'notebook.R' : 'notebook.py',
+              notebookPy(cells),
+              language === 'r' ? 'text/x-r' : 'text/x-python'
+            )
+          }
         >
-          Export .py
+          {language === 'r' ? 'Export .R' : 'Export .py'}
         </Button>
         <Button
           className="flow-btn"

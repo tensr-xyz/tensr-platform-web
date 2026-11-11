@@ -1,6 +1,14 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Quote } from 'lucide-react';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger, Skeleton } from '@/components/ui/rest';
@@ -11,27 +19,30 @@ import { Table } from '@/components/ui/table';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { flowFetch, flowJson } from '@/lib/flow-api';
+import { titledWithQuestions } from '@/lib/flow-report';
 import { loadOutputPreferences, saveOutputPreferences } from '@/lib/output-preferences';
-import { visibleAgentStep } from '@/lib/agent-step-copy';
-import { FlowComposer } from '@/components/flow/chat-composer';
+import { AgentThread } from '@/components/flow/agent-thread';
 import { formatStat } from '@/lib/number-format';
 import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
 import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
 import {
   isIdColumn,
+  isInternalColumn,
   openEndColumns,
   pickerColumns,
   themeColumns,
   type FlowColumn,
 } from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
-import { FlowMarkdown } from '@/components/flow/flow-markdown';
-import { runAgentLoop } from '@/lib/run-agent-loop';
+import { TableBars } from '@/components/flow/table-bars';
+import { rememberTablePin, savePin } from '@/components/flow/report-pins';
 import { WeightPanel } from '@/components/flow/weight-modal';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import {
   bannerColumns,
+  bannerFootnote,
   bannerHeading,
+  chartSeriesFromBook,
   codedStub,
   lettersFor,
   selectionFromCell,
@@ -401,11 +412,7 @@ export function BannerGrid({
           </tbody>
         </Table>
       </div>
-      {book.answered_n != null && book.respondent_n != null ? (
-        <p className="flow-muted">
-          Base: answered {String(book.answered_n)} of {String(book.respondent_n)}
-        </p>
-      ) : null}
+      {bannerFootnote(book) ? <p className="flow-muted">{bannerFootnote(book)}</p> : null}
     </div>
   );
 }
@@ -758,9 +765,11 @@ export function ThemesPanel({
 export function EvidencePanel({
   datasetId,
   projectId,
+  variable,
 }: {
   datasetId?: string;
   projectId?: string;
+  variable?: { label: string; rows: { label: string; count: number }[]; total: number };
 }) {
   const cell = useSurveyCell();
   const [quotes, setQuotes] = useState<Record<string, unknown> | null>(null);
@@ -811,10 +820,40 @@ export function EvidencePanel({
       });
     return () => controller.abort();
   }, [datasetId, cell]);
+  if (!cell && variable && variable.rows.length) {
+    const total = variable.total || 1;
+    return (
+      <div className="evidence">
+        <div className="evidence-lead">
+          <p className="flow-muted">{variable.label}</p>
+        </div>
+        <div className="evidence-said">
+          {variable.rows.map((row, index) => (
+            <article key={`${row.label}-${index}`}>
+              <p>{row.label || 'Blank'}</p>
+              <p>
+                {row.count.toLocaleString('en-GB')} · {Math.round((row.count / total) * 100)}%
+              </p>
+            </article>
+          ))}
+        </div>
+      </div>
+    );
+  }
   if (!cell) {
     return (
       <div className="evidence">
-        <p className="flow-muted">Select a cell in Themes or Tables to open its verbatims.</p>
+        <Empty className="min-h-[280px] border-0 bg-transparent">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <Quote />
+            </EmptyMedia>
+            <EmptyTitle className="text-sm">No cell selected</EmptyTitle>
+            <EmptyDescription>
+              Select a cell in Themes or Tables to open its verbatims.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       </div>
     );
   }
@@ -1291,7 +1330,27 @@ export function CodeFramePanel({
   );
 }
 
-type TableColumn = { name: string; label: string; labels: Record<string, string> };
+type TableColumn = {
+  name: string;
+  label: string;
+  labels: Record<string, string>;
+  type?: string;
+  role?: string;
+};
+
+/** Stub and banner choices. Ids, open text, and weight columns are not questions. */
+export function tablePickerColumns(columns: TableColumn[], weights: string[] = []): TableColumn[] {
+  const weightNames = new Set(weights.map(name => name.toLowerCase()).filter(Boolean));
+  return columns.filter(column => {
+    if (!column.name || isInternalColumn(column.name) || isIdColumn(column.name)) return false;
+    if (weightNames.has(column.name.toLowerCase())) return false;
+    if (String(column.role || '').toLowerCase() === 'weight') return false;
+    const labelled = Object.keys(column.labels || {}).length > 0;
+    const type = String(column.type || '').toLowerCase();
+    if (!labelled && (type === 'string' || type === 'text')) return false;
+    return true;
+  });
+}
 type SavedSpec = {
   spec_id?: string;
   id?: string;
@@ -1355,11 +1414,17 @@ export function tableWeightChoices(listed: string[] | undefined, active: string)
   );
 }
 
-/** One line per weight column: its name, and its label when that says more. */
+/** The weight's label. The variable name is only used when there is no label. */
 export function weightOptionLabel(name: string, label: string): string {
   const clean = label.trim();
   if (!clean || clean.toLowerCase() === name.toLowerCase() || /^weight$/i.test(clean)) return name;
-  return `${name} · ${clean}`;
+  return clean;
+}
+
+/** The question. A category such as Midlands is not the question's name. */
+export function columnChoiceLabel(column: { name: string; label: string }): string {
+  const label = column.label.trim();
+  return label || column.name;
 }
 
 function bannerNames(spec: { banners?: { column?: string; columns?: string[] }[] } | undefined) {
@@ -1470,8 +1535,39 @@ export function tableBodyFromAgentRun(results: unknown): Record<string, unknown>
     const item = (items[index] || {}) as Record<string, unknown>;
     const args = (item.args || {}) as Record<string, unknown>;
     const kind = String(item.analysis_type || item.procedure || args.analysis_type || '');
-    if (kind !== 'banner_table') continue;
     const body = (item.request_body || args.request_body || {}) as Record<string, unknown>;
+    if (kind === 'frequencies') {
+      const named = [
+        ...(Array.isArray(body.columns) ? body.columns : []),
+        ...(body.column ? [body.column] : []),
+      ]
+        .map(column => String(column || '').trim())
+        .filter(Boolean);
+      const columns = [...new Set(named)];
+      if (!columns.length) continue;
+      const filters = Array.isArray(body.row_filters) ? body.row_filters : [];
+      const weight =
+        typeof body.weight_column === 'string'
+          ? body.weight_column
+          : typeof body.weight === 'string'
+            ? body.weight
+            : '';
+      return {
+        stubs: columns.map(column => ({ column })),
+        banner: [],
+        statistics: ['column_proportion'],
+        significance_display: 'none',
+        nest_banners: false,
+        ...(body.filter_ref
+          ? { filter_ref: body.filter_ref }
+          : filters.length
+            ? { filter_ref: { filters, combine: 'and' } }
+            : {}),
+        ...(weight ? { weight } : {}),
+        save: true,
+      };
+    }
+    if (kind !== 'banner_table') continue;
     const netsOnBody = Array.isArray(body.nets) ? body.nets : [];
     const listed: Record<string, unknown>[] = Array.isArray(body.stubs)
       ? (body.stubs as Record<string, unknown>[])
@@ -1537,9 +1633,11 @@ export function TablesBuilder({
   onAdopted,
   initialStub = '',
   initialBanner = '',
+  ready = false,
 }: {
   datasetId?: string;
   projectId?: string;
+  ready?: boolean;
   files?: { id: string; name: string; inUse?: boolean }[];
   datasets?: {
     dataset_id?: string;
@@ -1560,7 +1658,6 @@ export function TablesBuilder({
   const [netOptions, setNetOptions] = useState<string[]>([]);
   const [netPicked, setNetPicked] = useState<string[]>([]);
   const [netLabel, setNetLabel] = useState('');
-  const [agentSteps, setAgentSteps] = useState<string[]>([]);
   const [tableFilter, setTableFilter] = useState<{
     filters: { column: string; op: string; value: string | string[] }[];
   } | null>(null);
@@ -1598,13 +1695,6 @@ export function TablesBuilder({
   const [book, setBook] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
-  const [ask, setAsk] = useState('');
-  const [threads, setThreads] = useState<
-    Record<string, { role: 'user' | 'run' | 'reply'; text: string }[]>
-  >({});
-  const [asking, setAsking] = useState(false);
-  // One agent conversation per file, so an answer to its question resumes the same request.
-  const [agentSessions, setAgentSessions] = useState<Record<string, string>>({});
   const [railReady, setRailReady] = useState(false);
   const [opening, setOpening] = useState(false);
   const [view, setView] = useState<'table' | 'chart'>('table');
@@ -1615,7 +1705,8 @@ export function TablesBuilder({
 
   useEffect(() => {
     if (!datasetId) {
-      setRailReady(true);
+      setRailReady(ready);
+      if (ready) setSpecs([]);
       return;
     }
     setRailReady(false);
@@ -1687,7 +1778,13 @@ export function TablesBuilder({
       }
     });
     void flowJson<{
-      columns?: { name?: string; label?: string; value_labels?: Record<string, string> }[];
+      columns?: {
+        name?: string;
+        label?: string;
+        type?: string;
+        role?: string | null;
+        value_labels?: Record<string, string>;
+      }[];
       active_weight_column?: string | null;
       weight_columns?: string[];
       weight_vector?: { needs_refresh?: boolean } | null;
@@ -1707,6 +1804,8 @@ export function TablesBuilder({
               name: column.name || '',
               label: column.label || column.name || '',
               labels: column.value_labels || {},
+              type: column.type,
+              role: column.role || undefined,
             }))
             .filter(column => column.name)
         );
@@ -1715,12 +1814,15 @@ export function TablesBuilder({
     return () => {
       live = false;
     };
-  }, [datasetId]);
+  }, [datasetId, ready]);
 
-  const labelFor = (name: string) => columns.find(column => column.name === name)?.label || name;
+  const labelFor = (name: string) => {
+    const column = columns.find(item => item.name === name);
+    return column ? columnChoiceLabel(column) : name;
+  };
   const questionText = (name: string) => {
     const label = columns.find(column => column.name === name)?.label;
-    return label && label !== name ? `${name} ${label}` : name;
+    return label && label !== name ? label : name;
   };
   const figure =
     statistic === 'count'
@@ -1817,13 +1919,6 @@ export function TablesBuilder({
     setTop2(nets.some(net => /^top 2 box$/i.test(String(net.label || ''))));
     setBottom2(nets.some(net => /^bottom 2 box$/i.test(String(net.label || ''))));
     setDirty(false);
-    const savedId = String((saved.spec as { id?: string } | undefined)?.id || '');
-    // The conversation that built the table stays with it.
-    if (savedId && savedId !== threadKey)
-      setThreads(all => ({
-        ...all,
-        [savedId]: [...(all[savedId] || []), ...(all[threadKey] || [])],
-      }));
     remember(saved);
   }
 
@@ -1842,12 +1937,16 @@ export function TablesBuilder({
     void runTable(true);
   }
 
+  const tableRequest = useRef(0);
   async function runTable(save: boolean) {
+    const token = ++tableRequest.current;
     if (!datasetId || !stub) return;
     const nets: { label: string; values: string[] }[] = [];
     if (top2) {
       const values = await netCodes('top');
+      if (token !== tableRequest.current) return;
       if (values.length < 2) {
+        setBook(null);
         setError('That column has no numbered scale for a top 2 box.');
         return;
       }
@@ -1855,12 +1954,15 @@ export function TablesBuilder({
     }
     if (bottom2) {
       const values = await netCodes('bottom');
+      if (token !== tableRequest.current) return;
       if (values.length < 2) {
+        setBook(null);
         setError('That column has no numbered scale for a bottom 2 box.');
         return;
       }
       nets.push({ label: 'Bottom 2 box', values });
     }
+    if (token !== tableRequest.current) return;
     nets.push(...customNets);
     setError('');
     const statistics = shownStatistics(statistic, meanOn);
@@ -1883,32 +1985,18 @@ export function TablesBuilder({
       }),
     })
       .then(body => {
+        if (token !== tableRequest.current) return;
         if (!save) {
           setBook(body);
           return;
         }
         setDirty(false);
         remember(body);
-        const across = banners.length ? banners.map(labelFor).join(', ') : 'the total';
-        const savedId = String((body.spec as { id?: string } | undefined)?.id || threadKey);
-        setThreads(all => ({
-          ...all,
-          [savedId]: [
-            ...(all[threadKey] || []),
-            {
-              role: 'run',
-              text: `Built ${labelFor(stub)} × ${across}`,
-            },
-            {
-              role: 'run',
-              text: `${weight ? `Weighted by ${labelFor(weight)}` : 'Unweighted'}, ${
-                lettersOn ? 'sig at 95%' : 'no significance letters'
-              }`,
-            },
-          ],
-        }));
       })
-      .catch(err => setError(err instanceof Error ? err.message : 'Could not save the table'));
+      .catch(err => {
+        if (token !== tableRequest.current) return;
+        setError(err instanceof Error ? err.message : 'Could not save the table');
+      });
   }
 
   const optionsKey = [
@@ -1937,6 +2025,23 @@ export function TablesBuilder({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [optionsKey]);
   // Runs after the options effect in the same commit, so the flag covers exactly one update.
+  const shapeKey = `${stub}|${banners.join(',')}`;
+  const lastShape = useRef(shapeKey);
+  useEffect(() => {
+    if (lastShape.current === shapeKey) return;
+    lastShape.current = shapeKey;
+    if (loadingSaved.current) return;
+    if (!stub) {
+      setBook(null);
+      setDirty(false);
+      return;
+    }
+    setBook(null);
+    setDirty(true);
+    void runTable(false);
+    // A saved table sets the stub itself. Only a later change rebuilds the body.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapeKey]);
   useEffect(() => {
     loadingSaved.current = false;
   });
@@ -2019,15 +2124,13 @@ export function TablesBuilder({
   }
 
   const specId = String((book?.spec as { id?: string } | undefined)?.id || '');
-  const threadKey = specId || 'draft';
-  const thread = threads[threadKey] || [];
-  const setThread = (
-    update: (
-      current: { role: 'user' | 'run' | 'reply'; text: string }[]
-    ) => { role: 'user' | 'run' | 'reply'; text: string }[]
-  ) => setThreads(current => ({ ...current, [threadKey]: update(current[threadKey] || []) }));
   const openSaved = specs.find(item => (item.spec_id || item.id) === specId);
-  const selectedNumber = openSaved?.number;
+  const selectedNumber = openSaved?.number && openSaved.number > 0 ? openSaved.number : undefined;
+  const railLabel = (spec: SavedSpec) =>
+    titledWithQuestions(
+      spec.label || spec.name || '',
+      columns.map(column => ({ name: column.name, label: columnChoiceLabel(column) }))
+    );
   const title = book
     ? `${selectedNumber ? `T${selectedNumber} · ` : ''}${labelFor(stub)}${
         banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
@@ -2058,7 +2161,7 @@ export function TablesBuilder({
       <aside className="tables-rail">
         <div className="tables-rail-head">
           <span>Tables</span>
-          <span>{specs.length}</span>
+          <span>{railReady ? specs.length : ''}</span>
         </div>
         {!railReady ? (
           <div aria-busy="true">
@@ -2102,9 +2205,9 @@ export function TablesBuilder({
                     });
                 }}
               >
-                <span>T{spec.number}</span>
+                <span>T{spec.number || ''}</span>
                 <span className="tables-saved-copy">
-                  <span>{spec.label || spec.name || id}</span>
+                  <span>{railLabel(spec)}</span>
                   {spec.stale ? (
                     <span className="flow-muted">Rebuild</span>
                   ) : spec.filename ? (
@@ -2139,7 +2242,7 @@ export function TablesBuilder({
           <p className="flow-muted">No banner books yet</p>
         )}
       </aside>
-      {view === 'chart' ? (
+      {view === 'chart' && !chartSeriesFromBook(book).length ? (
         <TableChart
           datasetId={datasetId}
           projectId={projectId}
@@ -2212,9 +2315,9 @@ export function TablesBuilder({
                   }}
                   options={[
                     { value: '', label: '+ Drop variable' },
-                    ...pickerColumns(columns).map(column => ({
+                    ...tablePickerColumns(columns, weightColumns).map(column => ({
                       value: column.name,
-                      label: column.label,
+                      label: columnChoiceLabel(column),
                     })),
                   ]}
                 />
@@ -2241,9 +2344,9 @@ export function TablesBuilder({
                   }}
                   options={[
                     { value: '', label: '+' },
-                    ...pickerColumns(columns)
+                    ...tablePickerColumns(columns, weightColumns)
                       .filter(column => column.name !== stub && !banners.includes(column.name))
-                      .map(column => ({ value: column.name, label: column.label })),
+                      .map(column => ({ value: column.name, label: columnChoiceLabel(column) })),
                   ]}
                 />
               </div>
@@ -2289,6 +2392,13 @@ export function TablesBuilder({
                   onClick={() => setLettersOn(current => !current)}
                 >
                   Sig 95% · A/a letters
+                </Button>
+                <Button
+                  className="flow-btn"
+                  type="button"
+                  onClick={() => setView(current => (current === 'chart' ? 'table' : 'chart'))}
+                >
+                  {view === 'chart' ? 'Table' : 'Chart'}
                 </Button>
                 <Button
                   className="flow-btn"
@@ -2476,8 +2586,12 @@ export function TablesBuilder({
                     </Button>
                   ) : null}
                   {dirty ? <span className="flow-muted">Unsaved changes</span> : null}
-                  <Button className="flow-btn" type="button" onClick={() => setView('chart')}>
-                    Chart
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => setView(current => (current === 'chart' ? 'table' : 'chart'))}
+                  >
+                    {view === 'chart' ? 'Table' : 'Chart'}
                   </Button>
                   <Button className="flow-btn" type="button" onClick={addToBook}>
                     Add to book
@@ -2566,20 +2680,62 @@ export function TablesBuilder({
                       </Button>
                     </div>
                   ) : null}
-                  <BannerGrid
-                    book={book}
-                    onSelectCell={openCell}
-                    muted={Boolean(openSaved?.stale)}
-                    baseAtEnd
-                    showNets={
-                      top2 ||
-                      bottom2 ||
-                      ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
-                    }
-                    figure={figure}
-                    digits={digits}
-                    markLowBase={lowBase}
-                  />
+                  {view === 'chart' && chartSeriesFromBook(book).length ? (
+                    <TableBars
+                      series={chartSeriesFromBook(book)}
+                      onAddToReport={
+                        projectId && datasetId && (book.run_id || specId)
+                          ? () => {
+                              const runId = book.run_id
+                                ? String(book.run_id)
+                                : specId
+                                  ? `table:${specId}`
+                                  : '';
+                              if (!runId) return;
+                              const series = chartSeriesFromBook(book);
+                              const pin = {
+                                id: runId,
+                                runId,
+                                datasetId,
+                                headline: String(book.title || labelFor(stub) || 'Chart'),
+                                support: bannerFootnote(book),
+                                citation: 'Chart',
+                                afterId: '',
+                                deck: true,
+                                topline: true,
+                                keepLive: true,
+                                bars: series.flatMap(row =>
+                                  row.values.map(item => ({
+                                    label:
+                                      row.values.length > 1
+                                        ? `${row.label} · ${item.name}`
+                                        : row.label,
+                                    percent: item.value,
+                                  }))
+                                ),
+                              };
+                              if (book.run_id) void savePin(projectId, datasetId, pin);
+                              else rememberTablePin(projectId, pin);
+                            }
+                          : undefined
+                      }
+                    />
+                  ) : (
+                    <BannerGrid
+                      book={book}
+                      onSelectCell={openCell}
+                      muted={Boolean(openSaved?.stale)}
+                      baseAtEnd
+                      showNets={
+                        top2 ||
+                        bottom2 ||
+                        ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
+                      }
+                      figure={figure}
+                      digits={digits}
+                      markLowBase={lowBase}
+                    />
+                  )}
                 </>
               ) : (
                 <p className="flow-muted">
@@ -2601,108 +2757,30 @@ export function TablesBuilder({
               <span className="tables-dot" />
               <span>{book ? title.replace(/^T\d+ · /, '') : 'Table'}</span>
             </div>
-            <div className="tables-thread">
-              {thread.length === 0 && !asking ? (
-                <div className="tables-thread-empty">
-                  <strong>
-                    {selectedNumber ? `Ask about T${selectedNumber}` : 'Ask about this table'}
-                  </strong>
-                  <p className="flow-muted">
-                    Ask what moved, or tell it to change the table: add a banner, net the top two
-                    boxes, or weight it.
-                  </p>
-                </div>
-              ) : null}
-              {thread.map((item, index) =>
-                item.role === 'reply' ? (
-                  <FlowMarkdown key={`reply-${index}`} className="tables-reply">
-                    {item.text}
-                  </FlowMarkdown>
-                ) : (
-                  <p
-                    key={`${item.role}-${index}`}
-                    className={item.role === 'user' ? 'tables-ask' : 'flow-muted'}
-                  >
-                    {item.role === 'run' ? `✓ ${item.text}` : item.text}
-                  </p>
-                )
-              )}
-              {asking ? (
-                <p className="flow-status">{agentSteps.filter(Boolean).at(-1) || 'Thinking…'}</p>
-              ) : null}
-            </div>
-            <FlowComposer
-              value={ask}
-              onChange={setAsk}
-              onSend={() => {
-                const text = ask.trim();
-                if (!text || asking) return;
-                setThread(current => [...current, { role: 'user', text }]);
-                setAsk('');
-                setAsking(true);
-                setAgentSteps([]);
-                const history = agentHistory(thread);
-                const sessionKey = `${datasetId}:${threadKey}`;
-                void runAgentLoop({
-                  message: text,
-                  mode: 'agent',
-                  datasetId: datasetId || null,
-                  agentVersion: 'v2',
-                  sessionId: agentSessions[sessionKey] || null,
-                  conversationHistory: history,
-                  signal: AbortSignal.timeout(180_000),
-                  onProgress: progress => {
-                    const line = visibleAgentStep(progress.step, progress.message);
-                    if (line)
-                      setAgentSteps(current =>
-                        current.includes(line) ? current : [...current, line]
-                      );
-                  },
-                })
-                  .then(result => {
-                    const session = agentSessionId(result);
-                    if (session)
-                      setAgentSessions(current => ({ ...current, [sessionKey]: session }));
-                    const built = bookFromToolResults(result.tool_results);
-                    const request = built
-                      ? tableBodyFromAgentBook(built)
-                      : tableBodyFromAgentRun(result.tool_results);
-                    if (built) {
-                      setBook(built);
-                      setView('table');
-                    }
-                    if (request) void adoptAgentTable(request);
-                    setThread(current => [
-                      ...current,
-                      {
-                        role: 'reply',
-                        text:
-                          agentReplyText(result) ||
-                          (built || request ? 'Built the table.' : 'No answer came back.'),
-                      },
-                    ]);
-                  })
-                  .catch(err =>
-                    setThread(current => [
-                      ...current,
-                      {
-                        role: 'run',
-                        text: err instanceof Error ? err.message : 'The reply did not finish.',
-                      },
-                    ])
-                  )
-                  .finally(() => setAsking(false));
-              }}
+            <AgentThread
+              projectId={projectId || ''}
+              datasetId={datasetId}
+              columnNames={columns.map(column => column.name)}
+              columnLabels={columns.map(column => ({
+                name: column.name,
+                label: column.label,
+                value_labels: column.labels,
+              }))}
               placeholder="Ask, or tell it to change the table…"
-              mode="agent"
-              onMode={() => undefined}
-              showModes={false}
-              busy={asking}
-              columns={columns.map(column => column.name)}
-              attachments={[]}
-              onAttach={() => undefined}
-              onRemoveAttachment={() => undefined}
-              layout="thread"
+              projectHref={projectId ? `/flow/p/${projectId}` : '/flow'}
+              emptyTitle={selectedNumber ? `Ask about T${selectedNumber}` : 'Ask about this table'}
+              emptyDescription="Ask what moved, or tell it to change the table: add a banner, net the top two boxes, or weight it."
+              onFinished={result => {
+                const built = bookFromToolResults(result.tool_results);
+                const request = built
+                  ? tableBodyFromAgentBook(built)
+                  : tableBodyFromAgentRun(result.tool_results);
+                if (built) {
+                  setBook(built);
+                  setView('table');
+                }
+                if (request) void adoptAgentTable(request);
+              }}
             />
           </aside>
         </>

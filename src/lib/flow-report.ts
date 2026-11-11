@@ -23,6 +23,7 @@ export type ReportTable = {
   letters: SigLetter[];
   tested: boolean;
   key?: string;
+  decimals?: number;
 };
 
 export type ValueLabels = Record<string, Record<string, string> | null | undefined>;
@@ -68,6 +69,29 @@ export type ReportFinding = {
 
 type NumberedRow = { row: BannerRow; number: number };
 
+/** Replace variable names in a title with the question label, once, on the original text. */
+export function titledWithQuestions(
+  title: string,
+  columns: { name?: string; label?: string }[]
+): string {
+  const usable = columns
+    .map(column => ({ name: column.name || '', label: (column.label || '').trim() }))
+    .filter(
+      column =>
+        column.name && column.label && column.label.toLowerCase() !== column.name.toLowerCase()
+    )
+    .sort((left, right) => right.name.length - left.name.length);
+  if (!usable.length) return title;
+  const labels = new Map(usable.map(column => [column.name.toLowerCase(), column.label]));
+  const pattern = usable
+    .map(column => column.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  return title.replace(
+    new RegExp(`(?<![\\w])(?:${pattern})(?![\\w])`, 'gi'),
+    match => labels.get(match.toLowerCase()) || match
+  );
+}
+
 export function reportTableFromBook(
   id: string,
   label: string,
@@ -105,6 +129,8 @@ export function reportTableFromBook(
     };
   });
   const banners = [...byColumn.keys()].sort();
+  const decimals = book.spec as { decimals?: Record<string, number> } | undefined;
+  const places = Object.values(decimals?.decimals || {}).find(value => typeof value === 'number');
   return {
     id,
     label,
@@ -114,6 +140,7 @@ export function reportTableFromBook(
     letters: (book.letters as SigLetter[]) || [],
     tested: significanceTested(book),
     key: `${stub}|${banners.join(',')}`,
+    ...(typeof places === 'number' ? { decimals: places } : {}),
   };
 }
 
@@ -188,8 +215,9 @@ type Gap = {
   low: number;
 };
 
-function shown(percent: number): string {
-  return `${percent.toFixed(1).replace(/\.0$/, '')}%`;
+function shown(percent: number, places = 1): string {
+  const text = percent.toFixed(places);
+  return `${places > 0 ? text.replace(/\.0+$/, '') : text}%`;
 }
 
 function columnForLetter(table: ReportTable, letter: string): BannerColumn | undefined {
@@ -225,10 +253,27 @@ function significantGaps(table: ReportTable, rows: NumberedRow[], columns: Banne
     }
   }
   const negative = (gap: Gap) => (/^not /i.test(String(gap.row.row.label || '')) ? 1 : 0);
-  return gaps.sort(
-    (left, right) =>
-      right.high - right.low - (left.high - left.low) || negative(left) - negative(right)
-  );
+  const positiveId = positiveRowId(rows);
+  return gaps.sort((left, right) => {
+    const pole =
+      (positiveId && right.row.row.id === positiveId ? 1 : 0) -
+      (positiveId && left.row.row.id === positiveId ? 1 : 0);
+    return (
+      pole || right.high - right.low - (left.high - left.low) || negative(left) - negative(right)
+    );
+  });
+}
+
+/** The affirmative row of a yes/no table. Other tables keep the largest gap. */
+function positiveRowId(rows: NumberedRow[]): string | null {
+  const values = rows.filter(item => !item.row.kind || item.row.kind === 'value');
+  if (values.length !== 2) return null;
+  const positive = /^(yes|true|agree|aware)$/i;
+  const negative = /^(no|false|disagree|not aware|unaware)$/i;
+  const yes = values.find(item => positive.test(String(item.row.label || '').trim()));
+  const no = values.find(item => negative.test(String(item.row.label || '').trim()));
+  if (!yes || !no) return null;
+  return yes.row.id;
 }
 
 function netRow(table: ReportTable): NumberedRow | null {
@@ -244,7 +289,65 @@ function leadRow(rows: NumberedRow[], columns: BannerColumn[]): NumberedRow | nu
   return [...rows].sort((left, right) => score(right) - score(left))[0] || null;
 }
 
-/** The most notable result in plain English: a significant gap, then Top 2, then the largest answer. */
+/** Yes, Top 2, or the mean. A gap on another row does not lead the finding. */
+function summaryRow(table: ReportTable): NumberedRow | null {
+  const rows = table.rows.map((row, index) => ({ row, number: index + 1 }));
+  const labelOf = (item: NumberedRow) => String(item.row.label || '').trim();
+  const top = rows.find(item => item.row.kind === 'net' && /top\s*2|top box/i.test(labelOf(item)));
+  if (top) return top;
+  const yes = rows.find(
+    item => item.row.kind !== 'net' && /^(yes|true|agree|aware)$/i.test(labelOf(item))
+  );
+  if (yes) return yes;
+  const net = netRow(table);
+  if (net) return net;
+  return rows.find(item => item.row.kind === 'mean' || /^mean$/i.test(labelOf(item))) || null;
+}
+
+function findingForRow(
+  table: ReportTable,
+  lead: NumberedRow,
+  columns: BannerColumn[],
+  segmentId: string | null,
+  gap: { host: BannerColumn; source: BannerColumn; high: number; low: number } | undefined,
+  places: number
+): { headline: string; support: string; lead: NumberedRow | null; significant: boolean } {
+  const format = (percent: number) => shown(percent, places);
+  const label = lead.row.label || 'This answer';
+  if (gap) {
+    const points = Math.round((gap.high - gap.low) * 10) / 10;
+    return {
+      headline: `${label}: ${format(gap.high)} among ${bannerHeading(gap.host)} vs ${format(gap.low)} among ${bannerHeading(gap.source)}.`,
+      support: `That ${points}-point gap is significant at 95%.`,
+      lead,
+      significant: true,
+    };
+  }
+  const figures = columns
+    .map(column => ({ column, percent: cellPercent(lead.row, column.id) }))
+    .filter((item): item is { column: BannerColumn; percent: number } => item.percent != null);
+  if (figures.length > 1) {
+    const sorted = [...figures].sort((left, right) => right.percent - left.percent);
+    const top = sorted[0];
+    const bottom = sorted[sorted.length - 1];
+    return {
+      headline: `${label} is highest in ${bannerHeading(top.column)} at ${format(top.percent)} and lowest in ${bannerHeading(bottom.column)} at ${format(bottom.percent)}.`,
+      support: table.tested ? 'None of the differences between columns is significant at 95%.' : '',
+      lead,
+      significant: false,
+    };
+  }
+  const only = figures[0];
+  const where = segmentId && only ? ` in ${bannerHeading(only.column)}` : '';
+  return {
+    headline: only ? `${label} is ${format(only.percent)}${where}.` : table.label,
+    support: '',
+    lead,
+    significant: false,
+  };
+}
+
+/** The most notable result in plain English: the summary row, then a significant gap, then the largest answer. */
 export function notableFinding(
   table: ReportTable,
   segmentId: string | null,
@@ -252,7 +355,16 @@ export function notableFinding(
 ): { headline: string; support: string; lead: NumberedRow | null; significant: boolean } {
   const columns = visibleColumns(table, segmentId);
   const rows = candidateRows(table, rowCut);
-  const gaps = significantGaps(table, rows, columns);
+  const places = table.decimals ?? 1;
+  const format = (percent: number) => shown(percent, places);
+  const summary = rowCut ? null : summaryRow(table);
+  const gapRows =
+    summary && !rows.some(item => item.row.id === summary.row.id) ? [...rows, summary] : rows;
+  const gaps = significantGaps(table, gapRows, columns);
+  if (summary) {
+    const gap = gaps.find(item => item.row.row.id === summary.row.id);
+    return findingForRow(table, summary, columns, segmentId, gap, places);
+  }
   if (gaps.length) {
     const gap = gaps[0];
     const label = gap.row.row.label || 'this answer';
@@ -261,7 +373,7 @@ export function notableFinding(
       item => item !== gap && !/^not /i.test(String(item.row.row.label || ''))
     ).length;
     return {
-      headline: `${label}: ${shown(gap.high)} among ${bannerHeading(gap.host)} vs ${shown(gap.low)} among ${bannerHeading(gap.source)}.`,
+      headline: `${label}: ${format(gap.high)} among ${bannerHeading(gap.host)} vs ${format(gap.low)} among ${bannerHeading(gap.source)}.`,
       support:
         `That ${points}-point gap is significant at 95%.` +
         (others
@@ -283,7 +395,7 @@ export function notableFinding(
     const top = sorted[0];
     const bottom = sorted[sorted.length - 1];
     return {
-      headline: `${label} is highest in ${bannerHeading(top.column)} at ${shown(top.percent)} and lowest in ${bannerHeading(bottom.column)} at ${shown(bottom.percent)}.`,
+      headline: `${label} is highest in ${bannerHeading(top.column)} at ${format(top.percent)} and lowest in ${bannerHeading(bottom.column)} at ${format(bottom.percent)}.`,
       support: table.tested ? 'None of the differences between columns is significant at 95%.' : '',
       lead,
       significant: false,
@@ -294,8 +406,8 @@ export function notableFinding(
   return {
     headline: only
       ? net
-        ? `${label} is ${shown(only.percent)}${where}.`
-        : `${label} is the largest answer${where}, at ${shown(only.percent)}.`
+        ? `${label} is ${format(only.percent)}${where}.`
+        : `${label} is the largest answer${where}, at ${format(only.percent)}.`
       : table.label,
     support: '',
     lead,

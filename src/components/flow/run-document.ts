@@ -123,14 +123,23 @@ export function runDocument(run: Record<string, unknown>): RunDocument {
         ? repro.python
         : '';
   const rows = meta.rows_dataset;
+  const bases = result.bases;
+  const oneBase =
+    Array.isArray(bases) && bases.length === 1 && bases[0] && typeof bases[0] === 'object'
+      ? (bases[0] as { unweighted?: unknown }).unweighted
+      : undefined;
+  const exclusion = report.exclusion_summary as { rows_used?: unknown } | undefined;
+  const answered = typeof oneBase === 'number' ? oneBase : exclusion?.rows_used;
   const base =
-    typeof result.n_used === 'number'
-      ? result.n_used
-      : typeof rows === 'number'
-        ? rows
-        : typeof result.n_rows === 'number'
-          ? result.n_rows
-          : null;
+    typeof answered === 'number'
+      ? answered
+      : typeof result.n_used === 'number'
+        ? result.n_used
+        : typeof rows === 'number'
+          ? rows
+          : typeof result.n_rows === 'number'
+            ? result.n_rows
+            : null;
   const structured =
     report.answer_from_result === true && typeof report.answer === 'string'
       ? report.answer.trim()
@@ -193,6 +202,43 @@ export function documentApa(document: RunDocument): string {
   return parts.filter(Boolean).join('\n');
 }
 
+export type ReportPinBar = { label: string; percent: number };
+
+/** The lead and the share bars a report card shows for a saved run. */
+export function pinStory(document: RunDocument): { support: string; bars: ReportPinBar[] } {
+  const table =
+    document.tables.find(item => item.columns.some(column => /%|percent|share/i.test(column))) ||
+    document.tables[0];
+  return { support: document.summary.trim(), bars: shareBars(table) };
+}
+
+function shareBars(table: RunTable | undefined): ReportPinBar[] {
+  if (!table) return [];
+  let percentAt = table.columns.findIndex(column => /%|percent|share/i.test(column));
+  if (percentAt < 0 && table.columns.length >= 2) {
+    const last = table.columns.length - 1;
+    const sample = table.rows.map(row => row[last] || '');
+    if (sample.some(value => /%|\d+\.\d+/.test(value))) percentAt = last;
+  }
+  if (percentAt < 0) return [];
+  const bars: ReportPinBar[] = [];
+  for (const row of table.rows) {
+    const label = (row[0] || '').trim();
+    const raw = (row[percentAt] || '').replace('%', '').replace(/,/g, '').trim();
+    const percent = Number(raw);
+    if (!label || !Number.isFinite(percent)) continue;
+    bars.push({ label, percent: Math.round(percent * 10) / 10 });
+    if (bars.length >= 8) break;
+  }
+  return bars;
+}
+
+/** A card that only has a type and a title still needs its lead and table. */
+export function pinIsThin(pin: { support?: string; bars?: unknown[] }): boolean {
+  const support = (pin.support || '').trim();
+  return !pin.bars?.length && (!support || /^n\s*=/i.test(support));
+}
+
 export type ReportPin = {
   id: string;
   runId: string;
@@ -204,6 +250,7 @@ export type ReportPin = {
   deck: boolean;
   topline: boolean;
   keepLive: boolean;
+  bars?: ReportPinBar[];
 };
 
 const PIN_KEY = 'tensr-report-pins';

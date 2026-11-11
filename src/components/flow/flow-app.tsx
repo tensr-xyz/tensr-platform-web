@@ -1,70 +1,61 @@
 'use client';
 
 import Link from 'next/link';
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from '@/components/atoms/empty';
 import { clearSigningIn } from '@/lib/signing-in';
 import { usePathname, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
-import { archiveChatTurn, type ChatExchange } from '@/components/flow/chat-thread';
+import { AgentThread, AgentThreadColumn, useAgentThread } from '@/components/flow/agent-thread';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import {
   loadProjectTables,
+  savedTableTotal,
   staleCardKey,
   tableFileNote,
   uniqueStale,
 } from '@/components/flow/project-tables';
 import { loadTablesSettled, type StaleTable } from '@/components/flow/stale-table';
 import { PaletteNoMatch } from '@/components/flow/palette-no-match';
-import {
-  dependentColumns,
-  isIdColumn,
-  isInternalColumn,
-  type FlowColumn,
-} from '@/lib/flow-columns';
-import {
-  downloadsFromToolResults,
-  openSignedDownload,
-  type ExportDownload,
-} from '@/lib/excel-download';
-import {
-  runAgentLoop,
-  type AgentLoopAttachment,
-  type AgentLoopResponse,
-} from '@/lib/run-agent-loop';
-import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
-import { visibleAgentStep } from '@/lib/agent-step-copy';
-import { savePin } from '@/components/flow/report-pins';
+import { isIdColumn, isInternalColumn, type FlowColumn } from '@/lib/flow-columns';
+import { openSignedDownload } from '@/lib/excel-download';
+import { runAgentLoop, type AgentLoopAttachment } from '@/lib/run-agent-loop';
+import { FlowComposer } from '@/components/flow/chat-composer';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
-import {
-  answerTables,
-  answerWithoutBase,
-  answerWithoutTables,
-  baseCount,
-  outputBaseNote,
-  outputCardReady,
-  outputChecks,
-  outputKind,
-  outputRunIds,
-  outputStat,
-  outputTakeaway,
-  outputTitle,
-} from '@/components/flow/chat-output';
+import { baseCount } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
-import { resultFootnote, resultViewFromToolResults } from '@/components/flow/result-tables';
+import { fetchAnalysisRun } from '@/lib/analysis-runs';
+import { resultViewFromToolResults } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { DetailsScreen } from '@/components/flow/details-screen';
-import { SourcesScreen } from '@/components/flow/sources-screen';
+import { rememberedFileName, SourcesScreen } from '@/components/flow/sources-screen';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
-import { documentApa, placePins, runDocument } from '@/components/flow/run-document';
 import {
+  documentApa,
+  pinIsThin,
+  pinStory,
+  placePins,
+  runDocument,
+  type ReportPin,
+  type RunTable,
+} from '@/components/flow/run-document';
+import {
+  deliverableOutputs,
   pinsFromRuns,
   rememberReportRuns,
+  savePin,
   setProjectPins,
   shareRequest,
   useProjectPins,
@@ -144,6 +135,7 @@ import {
   findingFromOverview,
   findingFromTable,
   reportTableFromBook,
+  titledWithQuestions,
   segmentChoices,
   valueRows,
   type ReportFinding,
@@ -774,7 +766,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 onChanged={reload}
               />
             ) : section === 'tables' ? (
-              <TablesScreen project={project} datasets={datasets} />
+              <TablesScreen project={project} datasets={datasets} ready={tabReady} />
             ) : section === 'report' ? (
               <ReportScreen
                 projectId={projectId}
@@ -2201,25 +2193,6 @@ function chatTitle(session: FlowSession): string {
   return session.title?.trim() || 'Untitled chat';
 }
 
-function replyLines(result: AgentLoopResponse): string[] {
-  const summary = result.execution_summary?.trim();
-  if (summary) {
-    return summary.split('\n').flatMap(line => {
-      const visible = visibleAgentStep('', line.replace(/^[\s\-*•]+/, '').trim());
-      return visible ? [visible] : [];
-    });
-  }
-  return (result.tool_trace || []).flatMap(item => {
-    const message = item.message || item.summary;
-    const name = item.name || item.tool;
-    const line = visibleAgentStep(
-      typeof name === 'string' ? name : '',
-      typeof message === 'string' ? message : ''
-    );
-    return line ? [line] : [];
-  });
-}
-
 function chatFile(
   project: FlowProject | undefined,
   datasets: DatasetRow[]
@@ -2423,220 +2396,138 @@ function ChatScreen({
 }) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
-  const [question, setQuestion] = useState('');
-  const [sent, setSent] = useState('');
-  const [past, setPast] = useState<ChatExchange[]>([]);
-  const [mode, setMode] = useState<'ask' | 'plan' | 'agent'>('agent');
-  const [answer, setAnswer] = useState('');
-  const [status, setStatus] = useState<string | null>(null);
-  const [downloads, setDownloads] = useState<ExportDownload[]>([]);
-  const [plan, setPlan] = useState<AgentLoopResponse | null>(null);
-  const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
-  const [steps, setSteps] = useState<string[]>([]);
-  const [stepsOpen, setStepsOpen] = useState(true);
-  const [panelOpen, setPanelOpen] = useState(false);
   const [columns, setColumns] = useState<string[] | null>(null);
-  const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
-  const [attachError, setAttachError] = useState<string | null>(null);
-  const [attachedNote, setAttachedNote] = useState('');
-  const attachmentsRef = useRef<AgentLoopAttachment[]>([]);
-  attachmentsRef.current = attachments;
-  const sessionRef = useRef<string | null>(null);
-  const sentRef = useRef('');
-  const answerRef = useRef('');
-  const noteRef = useRef('');
-  sentRef.current = sent;
-  answerRef.current = answer;
-  noteRef.current = attachedNote;
-  const askedRef = useRef<string | null>(null);
-  const [sessions, setSessions] = useState<FlowSession[] | null>(null);
+  const [columnLabels, setColumnLabels] = useState<
+    { name: string; label?: string | null; value_labels?: Record<string, string> | null }[]
+  >([]);
   const [recipes, setRecipes] = useState<FlowRecipe[] | null>(null);
+  const [reportedRun, setReportedRun] = useState('');
   const file = chatFile(project, datasets);
-  const showThread = Boolean(past.length || sent || answer || plan || status);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
-
   const chatProjectId = project?.id || '';
-  const loadRail = useCallback(() => {
-    if (!chatProjectId) return;
-    void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${chatProjectId}/sessions`, {
-      signal: AbortSignal.timeout(15000),
-    })
-      .then(page => setSessions(page.sessions || []))
-      .catch(() => setSessions(current => current || []));
-    void flowJson<{ recipes?: FlowRecipe[] }>(`/datasets/recipes?project_id=${chatProjectId}`, {
-      signal: AbortSignal.timeout(15000),
-    })
-      .then(page => setRecipes(page.recipes || []))
-      .catch(() => setRecipes(current => current || []));
-  }, [chatProjectId]);
-
-  useEffect(() => {
-    loadRail();
-  }, [loadRail]);
+  const reportPins = useProjectPins(chatProjectId, datasetId ? [datasetId] : []);
 
   useEffect(() => {
     if (!datasetId) {
       setColumns([]);
+      setColumnLabels([]);
       return;
     }
     let cancelled = false;
     setColumns(null);
-    void flowJson<{ columns?: { name?: string }[] }>(`/datasets/${datasetId}/metadata`)
+    void flowJson<{
+      columns?: {
+        name?: string;
+        label?: string | null;
+        value_labels?: Record<string, string> | null;
+      }[];
+    }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         if (cancelled) return;
+        const listed = meta.columns || [];
         setColumns(
-          (meta.columns || [])
-            .map(column => column.name || '')
-            .filter(name => name && !isInternalColumn(name))
+          listed.map(column => column.name || '').filter(name => name && !isInternalColumn(name))
+        );
+        setColumnLabels(
+          listed
+            .filter(column => column.name)
+            .map(column => ({
+              name: column.name || '',
+              label: column.label,
+              value_labels: column.value_labels,
+            }))
         );
       })
       .catch(() => {
-        if (!cancelled) setColumns([]);
+        if (!cancelled) {
+          setColumns([]);
+          setColumnLabels([]);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [datasetId]);
 
-  const attachFiles = (list: FileList | null) => {
-    void readChatAttachments(list).then(result => {
-      setAttachError(result.rejected.length ? result.rejected.join(' ') : null);
-      if (result.accepted.length) {
-        setAttachments(current => [...current, ...result.accepted]);
-      }
-    });
-  };
-
-  const sendText = useCallback(
-    async (text: string, nextMode: 'ask' | 'plan' | 'agent' = mode) => {
-      if (!text.trim() || status === 'Thinking…') return;
-      const turnFiles = attachmentsRef.current;
-      setPast(current =>
-        archiveChatTurn(
-          current,
-          sentRef.current
-            ? { user: sentRef.current, note: noteRef.current, answer: answerRef.current }
-            : null
-        )
-      );
-      setSent(text);
-      setAttachedNote(
-        turnFiles.length ? `Attached: ${turnFiles.map(item => item.filename).join(', ')}` : ''
-      );
-      setQuestion('');
-      setMode(nextMode);
-      setPlan(null);
-      setTurn(null);
-      setSteps([]);
-      setDownloads([]);
-      setStatus('Thinking…');
-      setAnswer('');
-      let draft = '';
-      try {
-        const result = await runAgentLoop({
-          message: text,
-          mode: nextMode,
-          datasetId: datasetId || null,
-          attachments: turnFiles,
-          agentVersion: 'v2',
-          sessionId: sessionRef.current,
-          signal: AbortSignal.timeout(120_000),
-          onProgress: progress => {
-            const line = visibleAgentStep(progress.step, progress.message);
-            if (!line) return;
-            setSteps(current => (current.includes(line) ? current : [...current, line]));
-          },
-          onDelta: chunk => {
-            draft += chunk;
-            setAnswer(draft);
-            setStatus(null);
-          },
-          onReplace: next => {
-            draft = next;
-            setAnswer(next);
-            setStatus(null);
-          },
-        });
-        if (result.session_id) sessionRef.current = result.session_id;
-        setAnswer(result.answer_markdown || '');
-        setPlan(result.status === 'awaiting_approval' ? result : null);
-        setTurn(result.status === 'awaiting_approval' ? null : result);
-        const traced = replyLines(result);
-        if (traced.length) setSteps(traced);
-        const entries = (result.tool_results || []).flatMap(item => {
-          const nested =
-            item.result && typeof item.result === 'object'
-              ? [item.result as Record<string, unknown>]
-              : [];
-          return [item as unknown as Record<string, unknown>, ...nested];
-        });
-        setDownloads(downloadsFromToolResults(entries));
-        if (result.status !== 'awaiting_approval') setAttachments([]);
-        setStatus(null);
-      } catch (err) {
-        setStatus(err instanceof Error ? err.message : 'The reply did not finish. Ask again.');
-      }
-    },
-    [datasetId, mode, status]
-  );
-
-  useEffect(() => {
-    if (!pendingAsk || askedRef.current === pendingAsk) return;
-    const text = pendingAsk;
-    const handle = window.setTimeout(() => {
-      askedRef.current = text;
-      onAsked?.();
-      void sendText(text, 'agent');
-    }, 0);
-    return () => window.clearTimeout(handle);
-  }, [pendingAsk, onAsked, sendText]);
-
-  const send = (text?: string) => void sendText(text ?? question);
-
-  const approve = () => {
-    if (!plan || !sent) return;
-    const batch =
-      plan.pending_approvals && !Array.isArray(plan.pending_approvals)
-        ? plan.pending_approvals
-        : null;
-    const calls = Array.isArray(plan.pending_approvals) ? plan.pending_approvals : null;
-    setStatus('Thinking…');
-    void runAgentLoop({
-      message: sent,
-      mode,
-      datasetId: datasetId || null,
-      attachments: attachmentsRef.current,
-      agentVersion: 'v2',
-      sessionId: plan.session_id,
-      approvedToolCalls: calls,
-      approvedBatch:
-        batch && typeof batch.mac === 'string' ? { batch: batch.batch, mac: batch.mac } : null,
-      signal: AbortSignal.timeout(120_000),
-      onDelta: chunk => {
-        setAnswer(current => current + chunk);
-        setStatus(null);
-      },
+  const thread = useAgentThread({
+    projectId: chatProjectId,
+    datasetId,
+    columnNames: columns,
+    columnLabels,
+    syncAddress: true,
+    pendingAsk,
+    onAsked,
+  });
+  const {
+    question,
+    setQuestion,
+    mode,
+    setMode,
+    send,
+    attachments,
+    setAttachments,
+    attachError,
+    attachFiles,
+    sessions,
+    openSessionId,
+    openChat,
+    clearChat,
+    setStatus,
+    showThread,
+    panelOpen,
+    setPanelOpen,
+    outputReady,
+    tableMode,
+    title,
+    runIds,
+    baseNote,
+    ledger,
+    tables,
+    kind,
+    structuredTables,
+    footnote,
+    resultChecks,
+    resultView,
+    takeaway,
+    stat,
+    checks,
+    downloads,
+  } = thread;
+  const inReport =
+    Boolean(runIds[0] && reportPins.some(pin => pin.runId === runIds[0])) ||
+    reportedRun === runIds[0];
+  const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
+  const respondents = baseCount(baseNote);
+  const addOutputToReport = () => {
+    const runId = runIds[0];
+    if (!runId || !datasetId || !chatProjectId) {
+      setStatus('That result could not be added to the report.');
+      return;
+    }
+    void savePin(chatProjectId, datasetId, {
+      id: runId,
+      runId,
+      datasetId,
+      headline: title,
+      support: takeaway,
+      citation: kind,
+      afterId: '',
+      deck: true,
+      topline: true,
+      keepLive: true,
     })
-      .then(result => {
-        setAnswer(result.answer_markdown || '');
-        setPlan(result.status === 'awaiting_approval' ? result : null);
-        setTurn(result.status === 'awaiting_approval' ? null : result);
-        const traced = replyLines(result);
-        if (traced.length) setSteps(traced);
-        const entries = (result.tool_results || []).flatMap(item => {
-          const nested =
-            item.result && typeof item.result === 'object'
-              ? [item.result as Record<string, unknown>]
-              : [];
-          return [item as unknown as Record<string, unknown>, ...nested];
-        });
-        setDownloads(downloadsFromToolResults(entries));
-        if (result.status !== 'awaiting_approval') setAttachments([]);
-        setStatus(null);
+      .then(() => {
+        setReportedRun(runId);
+        setStatus('Added to the report.');
       })
-      .catch(err => {
-        setStatus(err instanceof Error ? err.message : 'The plan did not run.');
-      });
+      .catch(() => setStatus('That result could not be added to the report.'));
+  };
+  const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
+    const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
+    void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
+      method: 'POST',
+      body: JSON.stringify({ run_ids: runIds }),
+    }).catch(() => setStatus(`The ${label} export did not finish. Try again.`));
   };
 
   const [recipeNote, setRecipeNote] = useState<{
@@ -2645,6 +2536,37 @@ function ChatScreen({
     outputs?: boolean;
   } | null>(null);
   const [recipeBusy, setRecipeBusy] = useState('');
+
+  const recipesAbort = useRef<AbortController | null>(null);
+  const loadRecipes = useCallback(() => {
+    recipesAbort.current?.abort();
+    if (!chatProjectId) {
+      setRecipes([]);
+      return;
+    }
+    const controller = new AbortController();
+    recipesAbort.current = controller;
+    const timer = window.setTimeout(() => controller.abort('timeout'), 15000);
+    void flowJson<{ recipes?: FlowRecipe[] }>(`/datasets/recipes?project_id=${chatProjectId}`, {
+      signal: controller.signal,
+    })
+      .then(page => {
+        if (recipesAbort.current !== controller) return;
+        setRecipes(page.recipes || []);
+      })
+      .catch(err => {
+        if (recipesAbort.current !== controller) return;
+        const timedOut = controller.signal.reason === 'timeout';
+        if (!timedOut && err instanceof DOMException && err.name === 'AbortError') return;
+        setRecipes(current => current || []);
+      })
+      .finally(() => window.clearTimeout(timer));
+  }, [chatProjectId]);
+
+  useEffect(() => {
+    loadRecipes();
+    return () => recipesAbort.current?.abort();
+  }, [loadRecipes]);
 
   const saveRecipe = async (name: string, ids: string[]) => {
     if (!project) return;
@@ -2681,7 +2603,7 @@ function ChatScreen({
         }),
       });
       setRecipeNote({ text: `Saved “${name}” as a recipe. Run it on any file from Recipes.` });
-      loadRail();
+      loadRecipes();
     } catch (err) {
       setRecipeNote({
         text: err instanceof Error ? err.message : 'The recipe did not save.',
@@ -2722,90 +2644,6 @@ function ChatScreen({
     }
   };
 
-  const clearChat = () => {
-    sessionRef.current = null;
-    setPast([]);
-    setSent('');
-    setAttachedNote('');
-    setAnswer('');
-    setQuestion('');
-    setPlan(null);
-    setTurn(null);
-    setSteps([]);
-    setDownloads([]);
-    setAttachments([]);
-    setAttachError(null);
-    setStatus(null);
-    setPanelOpen(false);
-  };
-
-  const openChat = (sessionId: string) => {
-    if (!chatProjectId || !sessionId) return;
-    void flowJson<{ turns?: { user?: string; answer?: string }[] }>(
-      `/api/projects/${chatProjectId}/sessions/${sessionId}`
-    )
-      .then(page => {
-        sessionRef.current = sessionId;
-        setPast(
-          (page.turns || []).flatMap(turn =>
-            turn.user ? [{ user: turn.user, note: '', answer: turn.answer || '' }] : []
-          )
-        );
-        setSent('');
-        setAttachedNote('');
-        setAnswer('');
-        setQuestion('');
-        setPlan(null);
-        setTurn(null);
-        setSteps([]);
-        setDownloads([]);
-        setStatus(null);
-        setPanelOpen(false);
-      })
-      .catch(() => setStatus('That chat could not be opened.'));
-  };
-
-  const kind = outputKind(turn?.tool_results);
-  const title = outputTitle(turn?.tool_results, answer);
-  const takeaway = outputTakeaway(answer);
-  const baseNote = outputBaseNote(answer);
-  const stat = outputStat(turn?.tool_results, answer, takeaway);
-  const runIds = outputRunIds(turn?.tool_results);
-  const outputReady = outputCardReady(turn, Boolean(plan));
-  useEffect(() => {
-    if (outputReady) setPanelOpen(true);
-  }, [outputReady]);
-  useEffect(() => {
-    const sessionId = new URLSearchParams(window.location.search).get('session');
-    if (sessionId) openChat(sessionId);
-    // The address is read once when this chat screen opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatProjectId]);
-  const checks = outputChecks(turn?.tool_results);
-  const tables = answerTables(answer);
-  const thread = answerWithoutBase(panelOpen && tables ? answerWithoutTables(answer) : answer);
-  const tableMode = kind === 'Crosstab' && Boolean(tables);
-  const ledger = (turn?.turn_state?.ledger || {}) as { weight?: string | null };
-  const resultView = resultViewFromToolResults(turn?.tool_results);
-  const structuredTables = resultView.tables;
-  const footnote = resultFootnote(
-    { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
-    baseNote,
-    kind
-  );
-  const resultChecks = resultView.checks.length
-    ? resultView.checks
-    : checks.map(check => check.label);
-  const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
-  const respondents = baseCount(baseNote);
-  const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
-    const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
-    void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
-      method: 'POST',
-      body: JSON.stringify({ run_ids: runIds }),
-    }).catch(() => setStatus(`The ${label} export did not finish. Try again.`));
-  };
-
   return (
     <div
       className={
@@ -2830,6 +2668,7 @@ function ChatScreen({
               key={session.session_id}
               className="chat-item"
               type="button"
+              data-active={session.session_id === openSessionId}
               onClick={() => openChat(session.session_id)}
             >
               {chatTitle(session)}
@@ -2899,181 +2738,11 @@ function ChatScreen({
       {showThread ? (
         <>
           <section className="flow-thread">
-            <div className="chat-column">
-              <div className="chat-scroll">
-                {past.map((turn, index) => (
-                  <div key={`${index}-${turn.user.slice(0, 24)}`}>
-                    <div className="chat-bubble">
-                      {turn.user}
-                      {turn.note ? <div className="flow-muted">{turn.note}</div> : null}
-                    </div>
-                    {turn.answer ? (
-                      <FlowMarkdown className="chat-prose">
-                        {answerWithoutBase(turn.answer)}
-                      </FlowMarkdown>
-                    ) : null}
-                  </div>
-                ))}
-                {sent ? (
-                  <div className="chat-bubble">
-                    {sent}
-                    {attachedNote ? <div className="flow-muted">{attachedNote}</div> : null}
-                  </div>
-                ) : null}
-                {steps.length > 0 ? (
-                  <div className="chat-steps">
-                    <Button
-                      className="chat-steps-head"
-                      type="button"
-                      aria-expanded={stepsOpen}
-                      onClick={() => setStepsOpen(current => !current)}
-                    >
-                      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                        <path
-                          d="M2.5 6.5l2.2 2.2L9.5 3.5"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                      Ran {steps.length} {steps.length === 1 ? 'step' : 'steps'}
-                      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                        <path
-                          d={stepsOpen ? 'M3 4l2 2 2-2' : 'M4 3l2 2-2 2'}
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </Button>
-                    {stepsOpen ? (
-                      <div className="chat-steps-list">
-                        {steps.map(step => (
-                          <div key={step}>{step}</div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {answer && !plan ? (
-                  structuredTables.length ? (
-                    <AnalysisResult
-                      lead={takeaway}
-                      tables={structuredTables}
-                      footnote={footnote}
-                      checks={resultChecks}
-                      script={resultView.script}
-                    />
-                  ) : (
-                    <FlowMarkdown className="chat-prose">{thread}</FlowMarkdown>
-                  )
-                ) : null}
-                {plan ? (
-                  <div className="chat-plan">
-                    <strong>Waiting for approval · Plan</strong>
-                    <FlowMarkdown>{answer}</FlowMarkdown>
-                    <div className="flow-row">
-                      <Button className="flow-btn primary" type="button" onClick={approve}>
-                        Approve
-                      </Button>
-                      <Button className="flow-btn" type="button" onClick={() => setPlan(null)}>
-                        Edit plan
-                      </Button>
-                    </div>
-                  </div>
-                ) : null}
-                {outputReady ? (
-                  <div className="chat-result">
-                    <div className="chat-result-top">
-                      <span className="chat-result-icon" aria-hidden="true">
-                        <svg width="14" height="14" viewBox="0 0 14 14">
-                          <path
-                            d="M3 11V7M6 11V4M9 11V6M12 11V3"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.3"
-                            strokeLinecap="round"
-                          />
-                        </svg>
-                      </span>
-                      <div>
-                        <strong>{title}</strong>
-                        <div className="flow-muted">{kind} · Output</div>
-                      </div>
-                      <span className="chat-viewing">Viewing</span>
-                    </div>
-                    <div className="chat-result-actions">
-                      <Link
-                        className="flow-btn primary"
-                        href={
-                          runIds[0]
-                            ? `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runIds[0])}`
-                            : `${projectHref}/report?pane=outputs`
-                        }
-                      >
-                        Open
-                      </Link>
-                      <Button
-                        className="flow-btn"
-                        type="button"
-                        disabled={!runIds[0] || !datasetId}
-                        onClick={() => {
-                          if (!runIds[0] || !datasetId || !project?.id) return;
-                          void savePin(project.id, datasetId, {
-                            id: runIds[0],
-                            runId: runIds[0],
-                            datasetId,
-                            headline: title,
-                            support: takeaway,
-                            citation: kind,
-                            afterId: '',
-                            deck: true,
-                            topline: true,
-                            keepLive: true,
-                          }).catch(() =>
-                            setStatus('That result could not be added to the report.')
-                          );
-                        }}
-                      >
-                        Add to report
-                      </Button>
-                      {downloads[0] ? (
-                        <Button
-                          className="flow-btn"
-                          type="button"
-                          onClick={() => void openSignedDownload(downloads[0])}
-                        >
-                          Download {downloads[0].filename}
-                        </Button>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
-                {status === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
-                {status && status !== 'Thinking…' ? <p className="flow-error">{status}</p> : null}
-              </div>
-              <FlowComposer
-                layout="thread"
-                value={question}
-                onChange={setQuestion}
-                onSend={send}
-                placeholder="Ask a follow-up... Type @ to point at a column."
-                mode={mode}
-                onMode={setMode}
-                busy={status === 'Thinking…'}
-                columns={columns}
-                attachments={attachments}
-                onAttach={attachFiles}
-                onRemoveAttachment={filename =>
-                  setAttachments(current => current.filter(item => item.filename !== filename))
-                }
-                attachError={attachError}
-              />
-            </div>
+            <AgentThreadColumn
+              thread={thread}
+              projectHref={projectHref}
+              placeholder="Ask a follow-up... Type @ to point at a column."
+            />
           </section>
           <aside className="flow-output" hidden={!panelOpen}>
             {outputReady && tableMode ? (
@@ -3146,22 +2815,23 @@ function ChatScreen({
                     </Button>
                   </div>
                   <h2>{title}</h2>
-                  {baseNote ? <p className="flow-muted output-base">{baseNote}</p> : null}
+                  {baseNote && !structuredTables.length ? (
+                    <p className="flow-muted output-base">{baseNote}</p>
+                  ) : null}
                 </div>
                 <div className="output-body">
                   {structuredTables.length ? (
                     <AnalysisResult
-                      lead={takeaway}
                       tables={structuredTables}
                       footnote={footnote}
                       checks={resultChecks}
                       script={resultView.script}
+                      rCheck={resultView.rCheck}
+                      rStatement={resultView.rStatement}
+                      runId={runIds[0]}
                     />
                   ) : (
                     <>
-                      {takeaway && takeaway !== title ? (
-                        <div className="output-takeaway">{takeaway}</div>
-                      ) : null}
                       {tables ? (
                         <FlowMarkdown className="output-table">{tables}</FlowMarkdown>
                       ) : null}
@@ -3224,7 +2894,9 @@ function ChatScreen({
                   </div>
                   <div>
                     <div className="flow-muted">Used in</div>
-                    <span className="output-badge">This chat · not in the report yet</span>
+                    <span className="output-badge">
+                      {inReport ? 'This chat · in the report' : 'This chat · not in the report yet'}
+                    </span>
                   </div>
                   {downloads.length > 0 || runIds.length > 0 ? (
                     <div className="output-export">
@@ -3271,9 +2943,14 @@ function ChatScreen({
                   >
                     {recipeBusy === 'save' ? 'Saving…' : 'Save as recipe'}
                   </Button>
-                  <Link className="flow-btn" href={`${projectHref}/report`}>
-                    Add to report
-                  </Link>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={!runIds[0] || !datasetId || inReport}
+                    onClick={addOutputToReport}
+                  >
+                    {inReport ? 'In report' : 'Add to report'}
+                  </Button>
                   <Link className="flow-btn primary output-open" href={`${projectHref}/tables`}>
                     Open
                   </Link>
@@ -3356,6 +3033,33 @@ function SidePanel({ datasetId }: { datasetId?: string }) {
   );
 }
 
+type CachedSheet = {
+  columns: FlowColumn[];
+  headers: string[];
+  variableNames: string[];
+  rows: unknown[][];
+  n: number;
+};
+
+const sheetPages = new Map<string, CachedSheet>();
+
+function fileChoices(
+  rows: {
+    dataset_id?: string;
+    id?: string;
+    original_filename?: string;
+    source_filenames?: string[];
+  }[],
+  selected: string
+): { value: string; label: string }[] {
+  const options = rows.map(row => ({
+    value: datasetRowId(row),
+    label: datasetFileLabel(row),
+  }));
+  if (!selected || options.some(option => option.value === selected)) return options;
+  return [{ value: selected, label: rememberedFileName(selected) || 'Opening file' }, ...options];
+}
+
 function ResponsesScreen({
   project,
   datasets,
@@ -3376,6 +3080,7 @@ function ResponsesScreen({
   const [tab, setTab] = useState<'sheet' | 'notebook' | 'evidence' | 'themes'>('sheet');
   const [columns, setColumns] = useState<FlowColumn[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
+  const [variableNames, setVariableNames] = useState<string[]>([]);
   const [preview, setPreview] = useState<unknown[][]>([]);
   const [pageOffset, setPageOffset] = useState(0);
   const [rowTotal, setRowTotal] = useState(0);
@@ -3390,6 +3095,7 @@ function ResponsesScreen({
   } | null>(null);
   const [colMenu, setColMenu] = useState<{
     name: string;
+    field: string;
     index: number;
     x: number;
     y: number;
@@ -3419,14 +3125,10 @@ function ResponsesScreen({
   // The theme last reviewed reopens with its new counts once the coded version is in use.
   const [reopenTheme, setReopenTheme] = useState('');
   const filtersKey = JSON.stringify(filters);
+  const sheetKey = `${datasetId || ''}:${pageOffset}:${filtersKey}`;
   const [valueFilter, setValueFilter] = useState<string | null>(null);
-  const [agentText, setAgentText] = useState('');
-  const [agentAnswer, setAgentAnswer] = useState('');
-  const [agentMode, setAgentMode] = useState<'ask' | 'plan' | 'agent'>('ask');
-  const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
-  const [descError, setDescError] = useState<string | null>(null);
   const [columnCounts, setColumnCounts] = useState<
     Record<
       string,
@@ -3455,11 +3157,22 @@ function ResponsesScreen({
       return;
     }
     let cancelled = false;
-    setSheetPhase('loading');
+    const cached = sheetPages.get(sheetKey);
+    if (cached) {
+      setColumns(cached.columns);
+      setHeaders(cached.headers);
+      setVariableNames(cached.variableNames);
+      setPreview(cached.rows);
+      setRowTotal(cached.n);
+      setSheetPhase('ready');
+    } else {
+      setSheetPhase('loading');
+    }
     const load = () =>
       flowJson<{
         rows?: unknown[][];
         headers?: string[];
+        variable_names?: string[];
         n_rows?: number;
         columns?: FlowColumn[];
       }>(
@@ -3470,10 +3183,19 @@ function ResponsesScreen({
       .catch(() => wait(1200).then(load))
       .then(([meta, page]) => {
         if (cancelled) return;
-        setColumns(meta.columns || []);
-        setHeaders(page.headers || []);
-        setPreview(page.rows || []);
-        setRowTotal(page.n_rows || 0);
+        const next = {
+          columns: meta.columns || [],
+          headers: page.headers || [],
+          variableNames: page.variable_names || [],
+          rows: page.rows || [],
+          n: page.n_rows || 0,
+        };
+        sheetPages.set(sheetKey, next);
+        setColumns(next.columns);
+        setHeaders(next.headers);
+        setVariableNames(next.variableNames);
+        setPreview(next.rows);
+        setRowTotal(next.n);
         setSheetPhase('ready');
       })
       .catch(() => {
@@ -3485,7 +3207,7 @@ function ResponsesScreen({
     return () => {
       cancelled = true;
     };
-  }, [datasetId, pageOffset, ready, projectKey, sheetAttempt, filtersKey]);
+  }, [datasetId, pageOffset, ready, projectKey, sheetAttempt, filtersKey, sheetKey]);
   useEffect(() => {
     if (!project) return;
     void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
@@ -3568,6 +3290,8 @@ function ResponsesScreen({
   };
   const columnMeta = (name: string) =>
     columns.find(column => column.name === name || column.label === name);
+  const fieldAt = (index: number, header: string) =>
+    variableNames[index] || columnMeta(header)?.name || header;
   const firstSubstantive = Math.max(
     0,
     shownCols.findIndex(
@@ -3606,11 +3330,22 @@ function ResponsesScreen({
           .includes(needle)
       );
     });
+  const sortToken = (cell: unknown, index: number) => {
+    const text = cell == null || cell === 'null' ? '' : String(cell);
+    const labels =
+      columnMeta(names[index] || '')?.value_labels ||
+      columnMeta(variableNames[index] || '')?.value_labels;
+    if (labels) {
+      const code = Object.entries(labels).find(([, label]) => label === text)?.[0];
+      if (code != null) return code;
+    }
+    return text;
+  };
   const orderedRows = !sortCol
     ? shownRows
     : [...shownRows].sort((left, right) => {
-        const compared = String(left.row[sortCol.index] ?? '').localeCompare(
-          String(right.row[sortCol.index] ?? ''),
+        const compared = sortToken(left.row[sortCol.index], sortCol.index).localeCompare(
+          sortToken(right.row[sortCol.index], sortCol.index),
           undefined,
           { numeric: true }
         );
@@ -3683,27 +3418,6 @@ function ResponsesScreen({
       cancelled = true;
     };
   }, [datasetId, sheetPhase, variableName, fileKey, columnCounts]);
-
-  const askAboutColumn = () => {
-    const text = agentText.trim();
-    if (!text || !datasetId) return;
-    setAgentStatus('Thinking…');
-    setAgentAnswer('');
-    void runAgentLoop({
-      message: text,
-      mode: agentMode,
-      datasetId,
-      agentVersion: 'v2',
-      signal: AbortSignal.timeout(120_000),
-    })
-      .then(result => {
-        setAgentAnswer(result.answer_markdown || '');
-        setAgentStatus(null);
-      })
-      .catch(err => {
-        setAgentStatus(err instanceof Error ? err.message : 'The reply did not finish.');
-      });
-  };
 
   const viewSwitch = (
     <Segmented
@@ -3786,7 +3500,15 @@ function ResponsesScreen({
               <Link key={spec.id} className="rail-analysis" href={`/flow/p/${project?.id}/tables`}>
                 <span className="rail-badge">T{spec.number || ''}</span>
                 <span className="rail-analysis-copy">
-                  <span>{spec.label}</span>
+                  <span>
+                    {titledWithQuestions(
+                      spec.label,
+                      columns.map(column => ({
+                        name: column.name,
+                        label: column.label || undefined,
+                      }))
+                    )}
+                  </span>
                   <span className="flow-muted">{spec.note || 'Custom Tables'}</span>
                 </span>
               </Link>
@@ -3810,10 +3532,7 @@ function ResponsesScreen({
                 body: JSON.stringify({ active_dataset_id: nextId }),
               });
             }}
-            options={projectDatasets.map(row => ({
-              value: datasetRowId(row),
-              label: datasetFileLabel(row),
-            }))}
+            options={fileChoices(projectDatasets, datasetId || '')}
           />
           {viewSwitch}
           {tab === 'themes' || tab === 'notebook' ? null : (
@@ -3868,48 +3587,9 @@ function ResponsesScreen({
                 </>
               ) : null}
               <span className="sheet-spacer" />
-              {surveyCell ? null : (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button className="flow-btn sheet-analyse" type="button">
-                      Analyse
-                      <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                        <path
-                          d="M3 4l2 2 2-2"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onSelect={() => setWeightOpen(true)}>Weight</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setAnovaOpen(true)}>ANOVA</DropdownMenuItem>
-                    <DropdownMenuItem
-                      onSelect={() => {
-                        if (!datasetId) return;
-                        setDescError(null);
-                        void flowFetch(`/datasets/${datasetId}/analyze/descriptives`, {
-                          method: 'POST',
-                          body: JSON.stringify({ columns: dependentColumns(columns).slice(0, 1) }),
-                        }).then(async response => {
-                          if (!response.ok) setDescError(await response.text());
-                          else setDescError(null);
-                        });
-                      }}
-                    >
-                      Descriptives
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
             </>
           )}
         </div>
-        {descError ? <p className="flow-error">{descError}</p> : null}
         {filters.length ? (
           <div className="sheet-toolbar sheet-filter-bar">
             <span>
@@ -4138,6 +3818,7 @@ function ResponsesScreen({
                                 event.preventDefault();
                                 setColMenu({
                                   name: column.name,
+                                  field: fieldAt(column.index, column.name),
                                   index: column.index,
                                   x: event.clientX,
                                   y: event.clientY,
@@ -4148,6 +3829,13 @@ function ResponsesScreen({
                               <span className="sheet-col-label">
                                 {(() => {
                                   const meta = columnMeta(column.name);
+                                  const measure = String(meta?.measure || '').toLowerCase();
+                                  if (
+                                    measure === 'nominal' ||
+                                    measure === 'ordinal' ||
+                                    measure === 'scale'
+                                  )
+                                    return measure;
                                   const label =
                                     meta?.label && meta.label !== column.name ? meta.label : '';
                                   if (label) return label;
@@ -4197,34 +3885,70 @@ function ResponsesScreen({
                                 className="sheet-cell"
                                 data-numeric={isNumberValue(row[column.index]) || undefined}
                                 data-active={columnMarked(column.name, column.index)}
-                                onDoubleClick={() =>
+                                onDoubleClick={() => {
+                                  const shown =
+                                    row[column.index] == null || row[column.index] === 'null'
+                                      ? ''
+                                      : String(row[column.index]);
+                                  const labels = columnMeta(column.name)?.value_labels;
+                                  const code =
+                                    labels &&
+                                    Object.entries(labels).find(
+                                      ([, label]) => label === shown
+                                    )?.[0];
                                   setEditingCell({
                                     index,
                                     column: column.name,
-                                    value:
-                                      row[column.index] == null || row[column.index] === 'null'
-                                        ? ''
-                                        : String(row[column.index]),
-                                  })
-                                }
+                                    value: code ?? shown,
+                                  });
+                                }}
                               >
                                 {editingCell &&
                                 editingCell.index === index &&
                                 editingCell.column === column.name ? (
-                                  <Input
-                                    aria-label={`Edit ${column.name}`}
-                                    value={editingCell.value}
-                                    autoFocus
-                                    onChange={event =>
-                                      setEditingCell({ ...editingCell, value: event.target.value })
-                                    }
-                                    onKeyDown={event => {
-                                      if (event.key === 'Enter')
-                                        saveCell(column.name, index, editingCell.value);
-                                      if (event.key === 'Escape') setEditingCell(null);
-                                    }}
-                                    onBlur={() => saveCell(column.name, index, editingCell.value)}
-                                  />
+                                  columnMeta(column.name)?.value_labels &&
+                                  Object.keys(columnMeta(column.name)?.value_labels || {})
+                                    .length ? (
+                                    <ChoiceSelect
+                                      aria-label={`Edit ${column.name}`}
+                                      value={editingCell.value}
+                                      onValueChange={next => {
+                                        setEditingCell({ ...editingCell, value: next });
+                                        saveCell(fieldAt(column.index, column.name), index, next);
+                                      }}
+                                      options={Object.entries(
+                                        columnMeta(column.name)?.value_labels || {}
+                                      ).map(([code, label]) => ({ value: code, label }))}
+                                    />
+                                  ) : (
+                                    <Input
+                                      aria-label={`Edit ${column.name}`}
+                                      value={editingCell.value}
+                                      autoFocus
+                                      onChange={event =>
+                                        setEditingCell({
+                                          ...editingCell,
+                                          value: event.target.value,
+                                        })
+                                      }
+                                      onKeyDown={event => {
+                                        if (event.key === 'Enter')
+                                          saveCell(
+                                            fieldAt(column.index, column.name),
+                                            index,
+                                            editingCell.value
+                                          );
+                                        if (event.key === 'Escape') setEditingCell(null);
+                                      }}
+                                      onBlur={() =>
+                                        saveCell(
+                                          fieldAt(column.index, column.name),
+                                          index,
+                                          editingCell.value
+                                        )
+                                      }
+                                    />
+                                  )
                                 ) : row[column.index] == null || row[column.index] === 'null' ? (
                                   ''
                                 ) : (
@@ -4281,7 +4005,7 @@ function ResponsesScreen({
                       reviseColumn(
                         'recode',
                         {
-                          source_column: colMenu.name,
+                          source_column: colMenu.field,
                           mappings: [{ from_value: from, to_value: to }],
                           replace_existing: true,
                           unmapped_policy: 'copy',
@@ -4316,7 +4040,7 @@ function ResponsesScreen({
                       setColMenu(null);
                       void flowJson(`/datasets/${datasetId}/metadata`, {
                         method: 'PUT',
-                        body: JSON.stringify({ columns: { [colMenu.name]: { measure } } }),
+                        body: JSON.stringify({ columns: { [colMenu.field]: { measure } } }),
                       })
                         .then(() => setSheetNote('Measure level saved.'))
                         .catch(err =>
@@ -4336,7 +4060,7 @@ function ResponsesScreen({
                       setColMenu(null);
                       void flowJson(`/datasets/${datasetId}/metadata`, {
                         method: 'PUT',
-                        body: JSON.stringify({ columns: { [colMenu.name]: { label } } }),
+                        body: JSON.stringify({ columns: { [colMenu.field]: { label } } }),
                       })
                         .then(() => setSheetNote('Label saved.'))
                         .catch(err =>
@@ -4353,7 +4077,7 @@ function ResponsesScreen({
                     onClick={() => {
                       if (project)
                         router.push(
-                          `/flow/p/${project.id}/tables?banner=${encodeURIComponent(colMenu.name)}`
+                          `/flow/p/${project.id}/tables?banner=${encodeURIComponent(colMenu.field)}`
                         );
                       setColMenu(null);
                     }}
@@ -4365,7 +4089,7 @@ function ResponsesScreen({
                     onClick={() => {
                       if (project)
                         router.push(
-                          `/flow/p/${project.id}/tables?stub=${encodeURIComponent(colMenu.name)}`
+                          `/flow/p/${project.id}/tables?stub=${encodeURIComponent(colMenu.field)}`
                         );
                       setColMenu(null);
                     }}
@@ -4386,7 +4110,7 @@ function ResponsesScreen({
                     onClick={() =>
                       reviseColumn(
                         'drop-column',
-                        { column: colMenu.name },
+                        { column: colMenu.field },
                         'Column removed in a new version.'
                       )
                     }
@@ -4491,7 +4215,42 @@ function ResponsesScreen({
           />
         </div>
         {side === 'evidence' ? (
-          <EvidencePanel datasetId={datasetId} projectId={project?.id} />
+          <EvidencePanel
+            datasetId={datasetId}
+            projectId={project?.id}
+            variable={
+              countsSettled
+                ? {
+                    label: columnMeta(activeName)?.label || activeName,
+                    rows: counts,
+                    total: countTotal,
+                  }
+                : undefined
+            }
+          />
+        ) : side === 'agent' ? (
+          <div className="responses-agent">
+            <AgentThread
+              projectId={project?.id || ''}
+              datasetId={datasetId}
+              columnNames={names}
+              columnLabels={columns.map(column => ({
+                name: column.name,
+                label: column.label,
+                value_labels: column.value_labels,
+              }))}
+              placeholder={`Ask about ${activeName}`}
+              projectHref={project ? `/flow/p/${project.id}` : '/flow'}
+              emptyTitle="Ask about these responses"
+              emptyDescription="Questions about the open file show up here."
+              onSession={row =>
+                setSessions(current => {
+                  const rest = (current || []).filter(item => item.session_id !== row.session_id);
+                  return [row, ...rest];
+                })
+              }
+            />
+          </div>
         ) : (
           <ScrollArea className="sheet-scroll">
             {side === 'variable' && codedColumn ? (
@@ -4588,29 +4347,6 @@ function ResponsesScreen({
                 ) : null}
               </div>
             ) : null}
-            {side === 'agent' ? (
-              <div className="output-body">
-                {agentStatus === 'Thinking…' ? <p className="flow-status">Thinking…</p> : null}
-                {agentStatus && agentStatus !== 'Thinking…' ? (
-                  <p className="flow-error">{agentStatus}</p>
-                ) : null}
-                {agentAnswer ? <FlowMarkdown>{agentAnswer}</FlowMarkdown> : null}
-                <FlowComposer
-                  value={agentText}
-                  onChange={setAgentText}
-                  onSend={askAboutColumn}
-                  placeholder={`Ask about ${activeName}`}
-                  mode={agentMode}
-                  onMode={setAgentMode}
-                  busy={agentStatus === 'Thinking…'}
-                  columns={names}
-                  attachments={[]}
-                  onAttach={() => undefined}
-                  onRemoveAttachment={() => undefined}
-                  layout="thread"
-                />
-              </div>
-            ) : null}
           </ScrollArea>
         )}
       </aside>
@@ -4643,7 +4379,15 @@ function ResponsesScreen({
   );
 }
 
-function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: DatasetRow[] }) {
+function TablesScreen({
+  project,
+  datasets,
+  ready = false,
+}: {
+  project?: FlowProject;
+  datasets: DatasetRow[];
+  ready?: boolean;
+}) {
   const [chosen, setChosen] = useState('');
   const [initialStub, setInitialStub] = useState('');
   const [initialBanner, setInitialBanner] = useState('');
@@ -4662,6 +4406,7 @@ function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: 
       projectId={project?.id}
       initialStub={initialStub}
       initialBanner={initialBanner}
+      ready={ready}
       files={files.map(row => ({
         id: datasetRowId(row),
         name: datasetFileLabel(row),
@@ -4678,6 +4423,80 @@ function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: 
         });
       }}
     />
+  );
+}
+
+function OutputPin({ pin }: { pin: ReportPin }) {
+  const thin = pinIsThin(pin);
+  const [lead, setLead] = useState(pin.support);
+  const [bars, setBars] = useState(pin.bars || []);
+  const [tables, setTables] = useState<RunTable[]>([]);
+  const [phase, setPhase] = useState<'loading' | 'ready'>(thin && pin.runId ? 'loading' : 'ready');
+  useEffect(() => {
+    if (!thin || !pin.runId) return;
+    let live = true;
+    void fetchAnalysisRun(pin.runId).then(run => {
+      if (!live) return;
+      if (run) {
+        const document = runDocument({
+          op: run.op,
+          title: run.report?.meta?.title,
+          report: run.report,
+          result: run.result,
+          created_at: run.created_at,
+        });
+        const story = pinStory(document);
+        if (story.support) setLead(story.support);
+        if (story.bars.length) setBars(story.bars);
+        const view = resultViewFromToolResults([{ result: run.result, report: run.report }]);
+        if (view.tables.length) setTables(view.tables);
+      }
+      setPhase('ready');
+    });
+    return () => {
+      live = false;
+    };
+  }, [thin, pin.runId]);
+  if (phase === 'loading') {
+    return (
+      <article className="report-finding" aria-busy="true">
+        <Skeleton className="h-36 w-full" />
+      </article>
+    );
+  }
+  if (tables.length) {
+    return (
+      <article className="report-finding">
+        <AnalysisResult lead={lead || pin.headline} tables={tables} />
+      </article>
+    );
+  }
+  return (
+    <article className="report-finding">
+      <div className="report-finding-copy">
+        <p className="flow-muted">{pin.citation}</p>
+        <h3>{pin.headline}</h3>
+        {lead ? <p>{lead}</p> : null}
+        {bars.length ? (
+          <div className="report-bars">
+            {bars.map(bar => (
+              <div key={`${pin.id}-${bar.label}`}>
+                <div className="report-bar-label">
+                  <span>{bar.label}</span>
+                  <span>{bar.percent.toFixed(1)}%</span>
+                </div>
+                <div className="report-bar-track">
+                  <div
+                    className="report-bar"
+                    style={{ width: `${Math.max(0, Math.min(100, bar.percent))}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
@@ -4741,6 +4560,7 @@ function ReportScreen({
     setOpenRunId(lastRun.runId);
   }, [lastRun]);
   const reportPins = useProjectPins(projectId, []);
+  const stampTries = useRef(0);
 
   const templateInput = useRef<HTMLInputElement>(null);
 
@@ -4764,6 +4584,7 @@ function ReportScreen({
 
   useEffect(() => {
     if (!datasetId) {
+      if (!ready) return;
       setSpecs([]);
       setPicked([]);
       setTables([]);
@@ -4805,6 +4626,14 @@ function ReportScreen({
         if (!live || !overview?.ok || !Array.isArray(overview.tables)) {
           throw new Error('Could not load saved tables');
         }
+        if (overview.stamps_pending && stampTries.current < 4) {
+          stampTries.current += 1;
+          window.setTimeout(() => {
+            if (live) setRefreshKey(key => key + 1);
+          }, 400);
+          return;
+        }
+        stampTries.current = 0;
         const runs = (overview.runs || []) as Parameters<typeof pinsFromRuns>[0];
         rememberReportRuns(projectId, runs);
         setProjectPins(projectId, pinsFromRuns(runs));
@@ -4824,17 +4653,18 @@ function ReportScreen({
         );
         setFindings((overview.findings || []).map(findingFromOverview));
         setFindingsPhase('ready');
-        if (!liveRows.length) {
-          setSpecs([]);
-          setPicked([]);
-          setTables([]);
-          setPhase('ready');
-          return;
-        }
         const meta = await flowJson<{
-          columns?: { name?: string; value_labels?: Record<string, string> | null }[];
+          columns?: {
+            name?: string;
+            label?: string;
+            value_labels?: Record<string, string> | null;
+          }[];
         }>(`/datasets/${datasetId}/metadata`).catch(() => ({ columns: [] }));
         if (!live) return;
+        const questions = (meta.columns || []).map(column => ({
+          name: column.name || '',
+          label: column.label || '',
+        }));
         const labels = Object.fromEntries(
           (meta.columns || []).map(column => [column.name || '', column.value_labels || null])
         );
@@ -4884,7 +4714,8 @@ function ReportScreen({
         if (!live) return;
         const ready = settled.ready.map(({ row, detail }) => {
           const note = tableFileNote(row, datasetId);
-          const label = note ? `${row.label} (${note})` : row.label;
+          const named = titledWithQuestions(row.label, questions);
+          const label = note ? `${named} (${note})` : named;
           const spec = (detail.spec as Record<string, unknown>) || {};
           return {
             id: row.id,
@@ -4909,13 +4740,18 @@ function ReportScreen({
           .filter(row => staleFromOpen.has(String(row.spec_id || '')))
           .map(row => ({
             id: String(row.spec_id || ''),
-            label: String(row.label || ''),
+            label: titledWithQuestions(String(row.label || ''), questions),
             number: Number(row.table_number) || 0,
             datasetId: String(row.dataset_id || ''),
             filename: String(row.filename || ''),
             detail: String(row.detail || 'Rebuild this table on the current file.'),
           }));
-        setStaleTables(current => uniqueStale([...current, ...refused, ...settled.stale]));
+        setStaleTables(current =>
+          uniqueStale([...current, ...refused, ...settled.stale]).map(table => ({
+            ...table,
+            label: titledWithQuestions(table.label, questions),
+          }))
+        );
         const nextTables = distinctTables(ready.map(row => row.table));
         setTables(nextTables);
         setSegmentId(null);
@@ -4936,6 +4772,7 @@ function ReportScreen({
   const selected = specs.filter(
     row => picked.includes(row.id) && Object.keys(row.spec || {}).length > 0
   );
+  const savedCount = savedTableTotal([specs, staleTables]);
 
   const rebuildStale = async (table: StaleTable, targetId?: string) => {
     setBusy(`rebuild-${table.id}`);
@@ -4980,22 +4817,30 @@ function ReportScreen({
     }
   };
 
+  const exportFileId =
+    selected[0]?.datasetId || reportPins.find(pin => pin.datasetId)?.datasetId || datasetId;
+
   const deck = async () => {
-    if (!datasetId || !selected.length) {
+    const outputs = deliverableOutputs(reportPins, 'deck');
+    if (!exportFileId || (!selected.length && !outputs.length)) {
       setError(
-        staleTables.length
+        staleTables.length && !outputs.length
           ? 'Rebuild or deselect tables built on an older file before exporting.'
-          : 'Save a table before building a deck.'
+          : 'Add an output to the report, or save a table, before building a deck.'
       );
       return;
     }
     setError('');
     const created = await flowJson<{ export_id?: string; filename?: string }>(
-      `/datasets/${datasetId}/export/deck`,
+      `/datasets/${exportFileId}/export/deck`,
       {
         method: 'POST',
         body: JSON.stringify({
           spec_ids: selected.map(row => row.id),
+          outputs,
+          headlines: findings
+            .filter(finding => finding.headline)
+            .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
           ...(template ? { template_base64: template } : {}),
         }),
       }
@@ -5013,16 +4858,21 @@ function ReportScreen({
   };
 
   const generate = async () => {
-    if (!datasetId || !selected.length) {
-      setError('Save a table before generating the report.');
+    const outputs = deliverableOutputs(reportPins, 'deck');
+    if (!exportFileId || (!selected.length && !outputs.length)) {
+      setError('Add an output to the report, or save a table, before generating.');
       return;
     }
     setError('');
     setNote('');
     await deck();
-    await bannerBook();
+    if (selected.length) await bannerBook();
     await topline();
-    setNote('Deck, banner book, and topline downloaded.');
+    setNote(
+      selected.length
+        ? 'Deck, banner book, and topline downloaded.'
+        : 'Deck and topline downloaded.'
+    );
   };
 
   const bannerBook = async () => {
@@ -5067,15 +4917,16 @@ function ReportScreen({
 
   const topline = async () => {
     const live = specs.filter(row => row.id);
-    if (!datasetId || !live.length) {
-      setError('Save a table before building a topline.');
+    const outputs = deliverableOutputs(reportPins, 'topline');
+    if (!exportFileId || (!live.length && !outputs.length)) {
+      setError('Add an output to the report, or save a table, before building a topline.');
       return;
     }
     setError('');
-    await downloadExport(`/datasets/${datasetId}/export/topline`, 'topline.docx', {
+    await downloadExport(`/datasets/${exportFileId}/export/topline`, 'topline.docx', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ spec_ids: live.map(row => row.id) }),
+      body: JSON.stringify({ spec_ids: live.map(row => row.id), outputs }),
     });
     setNote('Topline downloaded.');
   };
@@ -5088,6 +4939,7 @@ function ReportScreen({
           projectId={projectId}
           openRunId={openRunId}
           refreshKey={lastRun?.nonce || 0}
+          ready={ready}
           findings={findings.map(finding => ({ id: finding.id, label: finding.eyebrow }))}
           files={datasets
             .filter(row => row.project_id === projectId)
@@ -5281,7 +5133,7 @@ function ReportScreen({
           <h1>{project?.name || 'Report'}</h1>
           <p className="report-meta">
             <span className="ink">
-              {specs.length} saved table{specs.length === 1 ? '' : 's'}
+              {savedCount} saved table{savedCount === 1 ? '' : 's'}
             </span>
           </p>
         </div>
@@ -5289,9 +5141,7 @@ function ReportScreen({
           <div className="report-head">
             <div>
               <h2>Deliverables</h2>
-              <p className="flow-muted">
-                Built from this project&apos;s tables, in the client&apos;s template
-              </p>
+              <p className="flow-muted">Built from saved tables and outputs added to the report</p>
             </div>
             <Button
               className="flow-btn"
@@ -5330,7 +5180,7 @@ function ReportScreen({
               <div className="report-tags">
                 <span>.XLSX</span>
                 <span>
-                  {specs.length} table{specs.length === 1 ? '' : 's'}
+                  {savedCount} table{savedCount === 1 ? '' : 's'}
                 </span>
               </div>
               <div>
@@ -5440,16 +5290,7 @@ function ReportScreen({
             <>
               {placePins(findings, reportPins).map(entry => {
                 if (entry.kind === 'pin') {
-                  const pin = entry.item;
-                  return (
-                    <article key={pin.id} className="report-finding">
-                      <div className="report-finding-copy">
-                        <p className="flow-muted">{pin.citation}</p>
-                        <h3>{pin.headline}</h3>
-                        {pin.support ? <p>{pin.support}</p> : null}
-                      </div>
-                    </article>
-                  );
+                  return <OutputPin key={entry.item.id} pin={entry.item} />;
                 }
                 const finding = entry.item;
                 const edit = edits[finding.id] || {};

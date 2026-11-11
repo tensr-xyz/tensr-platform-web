@@ -5,10 +5,15 @@ import type {
   AnalysisReportTable,
 } from '@/lib/analysis-report-types';
 
+function isSyntaxDump(table: AnalysisReportTable | undefined): boolean {
+  if (!table) return false;
+  return table.id === 'equivalent_syntax' || table.title === 'Equivalent R and SPSS syntax';
+}
+
 /** Resolve ordered blocks with backward compatibility for legacy reports. */
 export function resolveReportBlocks(report: AnalysisReport): AnalysisReportBlock[] {
   if (report.blocks?.length) {
-    return report.blocks;
+    return report.blocks.filter(block => block.type !== 'table' || !isSyntaxDump(block.table));
   }
   const blocks: AnalysisReportBlock[] = [];
   if (report.summary) {
@@ -21,7 +26,7 @@ export function resolveReportBlocks(report: AnalysisReport): AnalysisReportBlock
     blocks.push({ type: 'table', table: t });
   }
   for (const t of report.tables ?? []) {
-    blocks.push({ type: 'table', table: t });
+    if (!isSyntaxDump(t)) blocks.push({ type: 'table', table: t });
   }
   const charts = report.charts?.length ? report.charts : report.chart ? [report.chart] : [];
   for (const ch of charts) {

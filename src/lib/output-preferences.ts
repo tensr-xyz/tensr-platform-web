@@ -29,9 +29,12 @@ export function loadOutputPreferences(): OutputPreferences {
   }
 }
 
+export const OUTPUT_PREFERENCES_EVENT = 'tensr-output-preferences';
+
 export function saveOutputPreferences(prefs: OutputPreferences): void {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+  window.dispatchEvent(new Event(OUTPUT_PREFERENCES_EVENT));
 }
 
 const OUTPUT_ALIAS_PAIRS = [

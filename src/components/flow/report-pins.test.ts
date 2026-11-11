@@ -1,4 +1,4 @@
-import { pinsFromRuns } from './report-pins';
+import { deliverableOutputs, pinsFromRuns } from './report-pins';
 
 describe('server report pins', () => {
   it('maps pinned runs from the run list', () => {
@@ -23,7 +23,35 @@ describe('server report pins', () => {
         deck: false,
         topline: true,
         keepLive: true,
+        bars: [],
       },
     ]);
+  });
+
+  it('keeps an output out of the deck when that pin says so', () => {
+    const pins = pinsFromRuns([
+      {
+        id: 'r1',
+        dataset_id: 'd1',
+        in_report: true,
+        report_pin: {
+          headline: 'Aware is higher',
+          deck: false,
+          bars: [{ label: 'Aware', percent: 62 }],
+        },
+      },
+      {
+        id: 'r2',
+        dataset_id: 'd1',
+        in_report: true,
+        report_pin: {
+          headline: 'London is 42%',
+          support: 'Satisfied',
+          bars: [{ label: 'Satisfied', percent: 42 }],
+        },
+      },
+    ]);
+    expect(deliverableOutputs(pins, 'deck').map(item => item.title)).toEqual(['London is 42%']);
+    expect(deliverableOutputs(pins, 'topline')).toHaveLength(2);
   });
 });

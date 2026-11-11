@@ -177,3 +177,58 @@ export function themeRead(book: Record<string, unknown>): {
   }
   return { text, ...pick };
 }
+
+/** The one line under a banner: base, weight, filter, effective base, and the test. */
+export function bannerFootnote(book: Record<string, unknown>): string {
+  const parts: string[] = [];
+  if (book.answered_n != null) {
+    parts.push(
+      book.respondent_n != null
+        ? `Base: answered ${book.answered_n} of ${book.respondent_n}`
+        : `Base: ${book.answered_n}`
+    );
+  }
+  const weight = book.weight as
+    | { label?: string; column?: string; weight_aware?: boolean }
+    | undefined;
+  if (weight?.weight_aware) parts.push(`Weight: ${weight.label || weight.column || 'on'}`);
+  const filter = book.filter_ref as
+    | { filters?: { column?: string; value?: unknown }[] }
+    | undefined;
+  const named = (filter?.filters || [])
+    .map(item => [item.column, item.value].filter(part => part != null && part !== '').join(' = '))
+    .filter(Boolean);
+  if (named.length) parts.push(`Filter: ${named.join(', ')}`);
+  const ess = bannerColumns(book)
+    .map(column => (column as { kish_effective_base?: number }).kish_effective_base)
+    .find(value => typeof value === 'number');
+  if (typeof ess === 'number') parts.push(`Effective base: ${Math.round(ess)}`);
+  const letters = book.letters as unknown[] | undefined;
+  if (String(book.significance_display || '') !== 'none' && letters?.length) {
+    parts.push('Column proportions test at 95%');
+  }
+  return parts.join(' · ');
+}
+
+/** The same cells the table shows, as one series per row. */
+export function chartSeriesFromBook(
+  book: Record<string, unknown> | null
+): { label: string; values: { name: string; value: number }[] }[] {
+  if (!book) return [];
+  const rows = ((book.rows as BannerRow[]) || []).filter(
+    row => row.label && row.kind !== 'net' && row.kind !== 'base' && row.kind !== 'mean'
+  );
+  const hosts = bannerColumns(book).filter(column => column.id !== 'total');
+  const columns = hosts.length ? hosts : bannerColumns(book);
+  return rows
+    .map(row => ({
+      label: String(row.label),
+      values: columns.map(column => {
+        const found = (row.cells || []).find(item => item.banner_id === column.id);
+        const raw =
+          typeof found?.percent === 'number' ? found.percent : Number(found?.unweighted_n ?? 0);
+        return { name: column.label || column.id, value: Number.isFinite(raw) ? raw : 0 };
+      }),
+    }))
+    .filter(row => row.values.some(item => item.value));
+}

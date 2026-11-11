@@ -98,6 +98,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       Correlate: [
         'Bivariate Correlations',
         'Partial Correlation',
+        'Canonical Correlation',
         'Goodman-Kruskal Gamma',
         "Somers' D",
         'Goodman-Kruskal Lambda',
@@ -107,6 +108,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Principal Component Analysis',
         'Exploratory Factor Analysis',
         'Multidimensional Scaling (MDS)',
+        'Network',
       ],
       'General Linear Model': [
         'Two-Way ANOVA',
@@ -129,7 +131,13 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       Agreement: ["Cohen's Kappa", "Fleiss' Kappa", 'Weighted Kappa'],
       'Normality & related': ['Shapiro–Wilk Test'],
       'Descriptive Statistics (tables)': ["Fisher's Exact Test", 'Odds Ratio', 'Relative Risk'],
-      'Choice modelling': ['Conjoint'],
+      'Choice modelling': [
+        'MaxDiff',
+        'MaxDiff (MNL)',
+        'MaxDiff (individual utilities)',
+        'Conjoint',
+        'Conjoint individual utilities',
+      ],
       'Survey techniques': [
         'TURF',
         'Driver Analysis',

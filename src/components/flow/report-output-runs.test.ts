@@ -1,4 +1,11 @@
-import { baseCount, dayLabel, outputRuns, statusCounts, summaryText } from './report-output-runs';
+import {
+  baseCount,
+  dayLabel,
+  metricLines,
+  outputRuns,
+  statusCounts,
+  summaryText,
+} from './report-output-runs';
 
 describe('report outputs', () => {
   it('keeps saved runs and counts the statuses the list actually returned', () => {
@@ -36,7 +43,21 @@ describe('report outputs', () => {
     expect(baseCount(run)).toBe(403);
     expect(baseCount({ report: { meta: { rows_dataset: 30 } }, result: { n_used: 22 } })).toBe(22);
     expect(baseCount({ result: { n_used: 3 } })).toBe(3);
+    expect(baseCount({ result: { n_answered: 500, n_rows: 800 } })).toBe(500);
     expect(baseCount({})).toBeNull();
+    expect(
+      metricLines({
+        report: {
+          metrics: [
+            { label: 'Responses coded', value: '500' },
+            { label: 'Krippendorff α', value: '—' },
+          ],
+        },
+      })
+    ).toEqual([{ label: 'Responses coded', value: '500' }]);
+    expect(metricLines({ report: { metrics: [{ label: 'Weight', value: 'none' }] } })).toEqual([
+      { label: 'Weight', value: 'Unweighted' },
+    ]);
   });
 });
 
@@ -53,6 +74,14 @@ describe('output titles and states', () => {
       weighting: '',
       base: null,
     });
+  });
+
+  it('labels a new variable and does not show the tool name', () => {
+    const { outputKindLabel } = jest.requireActual('./report-output-runs');
+    expect(outputKindLabel('compute')).toBe('New variable');
+    expect(outputKindLabel('descriptives')).toBe('Descriptive statistics');
+    expect(outputKindLabel('code_open_text')).toBe('Open-text coding');
+    expect(outputKindLabel('not_a_tool')).toBe('Analysis');
   });
 
   it('reads In report, Saved, or Draft from real state', () => {
