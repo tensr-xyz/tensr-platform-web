@@ -1,4 +1,4 @@
-import { resultFootnote, resultViewFromToolResults } from './result-tables';
+import { resultFootnote, resultViewFromToolResults, weightNote } from './result-tables';
 
 const payloads = [
   {
@@ -382,5 +382,56 @@ describe('result tables', () => {
     expect(view.tables.map(table => table.title)).toEqual(['Aware']);
     expect(view.rCheck).toBe('verified');
     expect(view.rStatement).toContain('matches R');
+  });
+
+  it('puts the column-letter test in the footnote and keeps the R script', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'banner_table',
+      r_syntax: 'cat(sprintf("n=%.16g\\n", nrow(df)))',
+      r_syntax_verification: { kind: 'verified', statement: 'Re-derived 2 column letters.' },
+      summary: {
+        letter_test: 'Column letters at 95%.',
+        table: [
+          {
+            title: 'Satisfaction by region',
+            columns: ['Stub', 'North (A)', 'South (B)'],
+            rows: [['Satisfied', '40.0%', '55.0% A']],
+          },
+        ],
+      },
+    });
+    expect(view.tables[0].rows[0]).toContain('55.0% A');
+    expect(view.letterNote).toBe('Column letters at 95%.');
+    expect(resultFootnote(view, 'Base 191', 'Crosstab')).toContain('Column letters at 95%.');
+    expect(view.rCheck).toBe('verified');
+    expect(view.script).toContain('nrow(df)');
+  });
+
+  it('shows the new column and not a preview of the whole file', () => {
+    const view = resultViewFromToolResults({
+      derived: {
+        preview: {
+          headers: ['id', 'region'],
+          variable_names: ['id', 'region'],
+          columns: ['id', 'region'],
+          rows: [['1', 'North']],
+        },
+      },
+      summary: {
+        title: 'Value for money: Agree or above',
+        table: [
+          {
+            title: 'Value for money: Agree or above',
+            rows: [
+              { label: 'Agree or above', frequency: 2, percent: 50 },
+              { label: 'Below agree', frequency: 2, percent: 50 },
+            ],
+          },
+        ],
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Value for money: Agree or above']);
+    expect(view.tables[0].rows[0][0]).toBe('Agree or above');
+    expect(weightNote('none')).toBe('Unweighted');
   });
 });

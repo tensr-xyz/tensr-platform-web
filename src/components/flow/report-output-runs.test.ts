@@ -55,6 +55,9 @@ describe('report outputs', () => {
         },
       })
     ).toEqual([{ label: 'Responses coded', value: '500' }]);
+    expect(metricLines({ report: { metrics: [{ label: 'Weight', value: 'none' }] } })).toEqual([
+      { label: 'Weight', value: 'Unweighted' },
+    ]);
   });
 });
 

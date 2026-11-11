@@ -1,5 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { AgentThread } from './agent-thread';
+import { AgentThread, liveRunShouldReplaceChat } from './agent-thread';
 import { publishLiveChatRun } from './chat-live-run';
 import { runAgentLoop } from '@/lib/run-agent-loop';
 
@@ -14,6 +14,12 @@ jest.mock('@/lib/run-agent-loop', () => ({
 const send = runAgentLoop as jest.Mock;
 
 describe('shared agent thread', () => {
+  it('keeps the open chat when another finished run is still in memory', () => {
+    expect(liveRunShouldReplaceChat('current', 'older')).toBe(false);
+    expect(liveRunShouldReplaceChat('current', 'current')).toBe(true);
+    expect(liveRunShouldReplaceChat('', 'older')).toBe(true);
+  });
+
   afterEach(() => {
     publishLiveChatRun(null);
     send.mockReset();
