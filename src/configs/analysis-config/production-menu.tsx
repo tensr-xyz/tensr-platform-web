@@ -129,7 +129,13 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       Agreement: ["Cohen's Kappa", "Fleiss' Kappa", 'Weighted Kappa'],
       'Normality & related': ['Shapiro–Wilk Test'],
       'Descriptive Statistics (tables)': ["Fisher's Exact Test", 'Odds Ratio', 'Relative Risk'],
-      'Choice modelling': ['Conjoint'],
+      'Choice modelling': [
+        'MaxDiff',
+        'MaxDiff (MNL)',
+        'MaxDiff (individual utilities)',
+        'Conjoint',
+        'Conjoint individual utilities',
+      ],
       'Survey techniques': [
         'TURF',
         'Driver Analysis',
