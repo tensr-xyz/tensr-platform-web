@@ -71,18 +71,37 @@ function summaryTables(table: unknown, fallbackTitle: string): RunTable[] {
     : [{ title: fallbackTitle, rows: table }];
   const built: RunTable[] = [];
   for (const block of blocks) {
+    const records = block.rows.filter(
+      (row): row is Record<string, unknown> =>
+        Boolean(row) && typeof row === 'object' && !Array.isArray(row)
+    );
+    const means = records.some(row => row.mean != null || row.sd != null || row.std != null);
     const body: string[][] = [];
-    for (const row of block.rows) {
-      if (!row || typeof row !== 'object' || Array.isArray(row)) continue;
-      const record = row as Record<string, unknown>;
-      const label = cell(record.value ?? record.label);
+    for (const record of records) {
+      const label = cell(record.label ?? record.value ?? record.variable);
       if (!label || label === 'Total' || label === 'Missing') continue;
-      body.push([label, cell(record.frequency ?? record.n), percentCell(record.percent)]);
+      body.push(
+        means
+          ? [
+              label,
+              cell(record.mean),
+              cell(record.sd ?? record.std),
+              cell(record.median),
+              cell(record.min),
+              cell(record.max),
+              cell(record.n),
+            ]
+          : [label, cell(record.frequency ?? record.n), percentCell(record.percent)]
+      );
     }
     if (!body.length) continue;
     built.push({
-      title: questionTitle(cell(block.title) || fallbackTitle),
-      columns: ['Answer', 'Frequency', 'Percent'],
+      title: questionTitle(
+        cell(block.title) || fallbackTitle || (means ? 'Descriptives' : 'Table')
+      ),
+      columns: means
+        ? ['Variable', 'Mean', 'SD', 'Median', 'Min', 'Max', 'n']
+        : ['Answer', 'Frequency', 'Percent'],
       rows: body,
     });
   }
@@ -186,6 +205,33 @@ function statRow(record: Record<string, unknown>, title: string, keys: string[])
   };
 }
 
+function describeTable(describe: unknown): RunTable | null {
+  if (!describe || typeof describe !== 'object' || Array.isArray(describe)) return null;
+  const block = describe as Record<string, unknown>;
+  const mean = block.mean;
+  if (!mean || typeof mean !== 'object' || Array.isArray(mean)) return null;
+  const names = Object.keys(mean as Record<string, unknown>);
+  if (!names.length) return null;
+  const stat = (name: string, column: string) => {
+    const row = block[name];
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return '';
+    return cell((row as Record<string, unknown>)[column]);
+  };
+  return {
+    title: 'Descriptives',
+    columns: ['Variable', 'Mean', 'SD', 'Median', 'Min', 'Max', 'n'],
+    rows: names.map(name => [
+      name,
+      stat('mean', name),
+      stat('std', name),
+      stat('50%', name),
+      stat('min', name),
+      stat('max', name),
+      stat('count', name),
+    ]),
+  };
+}
+
 function groupTable(groups: unknown): RunTable | null {
   if (!Array.isArray(groups) || !groups.length) return null;
   const rows = groups
@@ -279,9 +325,20 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       for (const table of summaryTables(block.table, cell(block.title))) add(table, 'summary');
     }
     for (const table of summaryTables(record.table, cell(record.title))) add(table, 'summary');
-    for (const key of ['frequency_tables', 'tables'] as const) {
-      const list = record[key];
-      if (Array.isArray(list)) for (const item of list) add(asTable(item));
+    const means = describeTable(record.describe);
+    if (means) add(means);
+    const summaryBlock =
+      summary && typeof summary === 'object'
+        ? (summary as { table?: unknown }).table
+        : record.table;
+    const showedMeans =
+      Boolean(means) ||
+      summaryTables(summaryBlock, '').some(table => table.columns.includes('Mean'));
+    if (!(record.procedure === 'descriptives' && showedMeans)) {
+      for (const key of ['frequency_tables', 'tables'] as const) {
+        const list = record[key];
+        if (Array.isArray(list)) for (const item of list) add(asTable(item));
+      }
     }
     add(themeShareTable(record.code_frequency));
     add(groupTable(record.group_descriptives));
