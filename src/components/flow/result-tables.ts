@@ -364,17 +364,41 @@ function npsTable(groups: unknown): RunTable | null {
 
 function groupTable(groups: unknown): RunTable | null {
   if (!Array.isArray(groups) || !groups.length) return null;
-  const rows = groups
-    .filter(row => row && typeof row === 'object')
-    .map(row => {
-      const record = row as Record<string, unknown>;
+  const records = groups.filter(row => row && typeof row === 'object') as Record<string, unknown>[];
+  const weighted = records.some(record => record.weighted_n != null);
+  const rows = records
+    .map(record => {
       const label = cell(record.label || record.group);
       if (!label) return null;
-      return [label, cell(record.n), cell(record.mean), cell(record.std ?? record.sd)];
+      const mean = cell(record.mean);
+      const sd = cell(record.std ?? record.sd);
+      if (weighted) {
+        return [label, cell(record.unweighted_n ?? record.n), cell(record.weighted_n), mean, sd];
+      }
+      return [label, cell(record.n), mean, sd];
     })
     .filter((row): row is string[] => Boolean(row));
   if (!rows.length) return null;
-  return { title: 'Group means', columns: ['Group', 'n', 'Mean', 'SD'], rows };
+  return {
+    title: 'Group means',
+    columns: weighted
+      ? ['Group', 'Unweighted n', 'Weighted n', 'Mean', 'SD']
+      : ['Group', 'n', 'Mean', 'SD'],
+    rows,
+  };
+}
+
+function groupLabels(groups: unknown): Map<string, string> {
+  const labels = new Map<string, string>();
+  if (!Array.isArray(groups)) return labels;
+  for (const row of groups) {
+    if (!row || typeof row !== 'object') continue;
+    const record = row as Record<string, unknown>;
+    const code = cell(record.group);
+    const label = cell(record.label);
+    if (code && label && label !== code) labels.set(code, label);
+  }
+  return labels;
 }
 
 function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
@@ -410,7 +434,7 @@ function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
   };
 }
 
-function postHocTable(value: unknown): RunTable | null {
+function postHocTable(value: unknown, labels: Map<string, string> = new Map()): RunTable | null {
   const block =
     value && typeof value === 'object' && !Array.isArray(value)
       ? (value as { pairwise?: unknown; method?: unknown })
@@ -420,8 +444,12 @@ function postHocTable(value: unknown): RunTable | null {
     .filter(row => row && typeof row === 'object')
     .map(row => {
       const record = row as Record<string, unknown>;
-      const left = cell(record.group1 ?? record.group_a ?? record.a);
-      const right = cell(record.group2 ?? record.group_b ?? record.b);
+      const left =
+        labels.get(cell(record.group1 ?? record.group_a ?? record.a)) ||
+        cell(record.group1 ?? record.group_a ?? record.a);
+      const right =
+        labels.get(cell(record.group2 ?? record.group_b ?? record.b)) ||
+        cell(record.group2 ?? record.group_b ?? record.b);
       if (!left || !right) return null;
       return [
         left,
@@ -500,6 +528,24 @@ function weightName(record: Record<string, unknown>): string {
   return text;
 }
 
+function isGroupMeanTable(table: RunTable): boolean {
+  const headers = table.columns.map(column => column.toLowerCase());
+  return (
+    headers.some(column => column === 'mean') &&
+    headers.some(column => column === 'group' || column.startsWith('group ')) &&
+    headers.some(column => column === 'n' || column.endsWith(' n'))
+  );
+}
+
+function groupMeanScore(table: RunTable): number {
+  if (!isGroupMeanTable(table)) return 0;
+  const blob = table.columns.join(' ').toLowerCase();
+  let score = blob.includes('weighted') ? 3 : 1;
+  const title = table.title.trim().toLowerCase();
+  if (title && title !== 'group means' && title !== 'group summaries') score += 1;
+  return score;
+}
+
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
 export function resultViewFromToolResults(results: unknown): ResultView {
   let answered = 0;
@@ -516,6 +562,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   };
   const seen = new Set<string>();
   let usedSummary = false;
+  const spareGroupTables: RunTable[] = [];
   const add = (table: RunTable | null, source: 'summary' | 'grid' = 'grid') => {
     if (!table || table.title === 'Equivalent R and SPSS syntax') return;
     if (
@@ -524,6 +571,14 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       table.columns.some(column => /frequency|percent/i.test(column))
     ) {
       return;
+    }
+    if (isGroupMeanTable(table)) {
+      const score = groupMeanScore(table);
+      const existing = view.tables.findIndex(item => isGroupMeanTable(item));
+      if (existing >= 0) {
+        if (score > groupMeanScore(view.tables[existing])) view.tables[existing] = table;
+        return;
+      }
     }
     const key = `${table.title}\n${table.columns.join('\t')}\n${table.rows.map(row => row.join('\t')).join('\n')}`;
     if (seen.has(key)) return;
@@ -552,7 +607,14 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     const title = cell(record.title);
     const syntaxDump =
       record.id === 'equivalent_syntax' || title === 'Equivalent R and SPSS syntax';
-    if (!syntaxDump) add(asTable(record));
+    if (!syntaxDump) {
+      const table = asTable(record);
+      if (table && (record.id === 'group_statistics' || table.title === 'Group Statistics')) {
+        spareGroupTables.push(table);
+      } else {
+        add(table);
+      }
+    }
     const summary = record.summary;
     if (summary && typeof summary === 'object') {
       const block = summary as {
@@ -599,7 +661,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     if (!summaryHasNps) add(npsTable(record.groups));
     add(groupTable(record.group_descriptives));
     add(anovaSourceTable(record));
-    add(postHocTable(record.post_hoc));
+    add(postHocTable(record.post_hoc, groupLabels(record.group_descriptives)));
     const levene = record.levene_test;
     if (levene && typeof levene === 'object') {
       const p = cell((levene as { p_value?: unknown }).p_value);
@@ -666,6 +728,9 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     }
   };
   visit(results, 0);
+  if (!view.tables.some(isGroupMeanTable)) {
+    for (const table of spareGroupTables) add(table);
+  }
   if (view.tables.some(table => table.title === 'Themes')) {
     view.tables = view.tables.filter(
       table => !/themes among people who answered/i.test(table.title)

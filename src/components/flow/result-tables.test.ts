@@ -545,6 +545,68 @@ describe('mean comparison tables', () => {
     expect(view.tables[2].rows[0].slice(0, 2)).toEqual(['A', 'B']);
     expect(view.checks).toContain('Levene p = 0.42');
   });
+
+  it('keeps one labelled group table when the export repeats it', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        group_descriptives: [
+          {
+            group: '2.0',
+            label: 'Female',
+            n: 10,
+            unweighted_n: 10,
+            weighted_n: 12.4,
+            mean: 4.2,
+            std: 1.1,
+          },
+          {
+            group: '1.0',
+            label: 'Male',
+            n: 8,
+            unweighted_n: 8,
+            weighted_n: 9.1,
+            mean: 3.1,
+            std: 0.9,
+          },
+        ],
+        post_hoc: {
+          method: 'tukey',
+          pairwise: [{ group1: '2.0', group2: '1.0', meandiff: 1.1, 'p-adj': 0.03 }],
+        },
+      },
+      report: {
+        spss_blocks: [
+          {
+            id: 'group_statistics',
+            title: 'Group Statistics',
+            columns: ['score', 'N', 'Mean', 'Std. Deviation'],
+            rows: [
+              ['2.0', '10', '4.2', '1.1'],
+              ['1.0', '8', '3.1', '0.9'],
+            ],
+          },
+        ],
+        tables: [
+          {
+            id: 'ttest_groups',
+            title: 'Satisfaction by Gender',
+            columns: ['Group', 'Unweighted n', 'Weighted n', 'Mean', 'SD'],
+            rows: [
+              ['Female', '10', '12.4', '4.2', '1.1'],
+              ['Male', '8', '9.1', '3.1', '0.9'],
+            ],
+          },
+        ],
+      },
+    });
+    const groups = view.tables.filter(table => table.columns.includes('Mean'));
+    expect(groups).toHaveLength(1);
+    expect(groups[0].title).toBe('Satisfaction by Gender');
+    expect(groups[0].rows.map(row => row[0])).toEqual(['Female', 'Male']);
+    expect(groups[0].columns).not.toContain('score');
+    const pairs = view.tables.find(table => table.title.startsWith('Post hoc'));
+    expect(pairs?.rows[0].slice(0, 2)).toEqual(['Female', 'Male']);
+  });
 });
 
 describe('answer tables', () => {
