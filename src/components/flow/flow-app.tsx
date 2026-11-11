@@ -34,7 +34,11 @@ import { AnalysisResult } from '@/components/flow/analysis-result';
 import { fetchAnalysisRun } from '@/lib/analysis-runs';
 import { resultViewFromToolResults } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
-import { DetailsScreen } from '@/components/flow/details-screen';
+import {
+  PROJECT_TABS,
+  projectSectionPath,
+  visibleProjectSection,
+} from '@/components/flow/project-tabs';
 import {
   rememberedFileName,
   sourceVersionTitle,
@@ -304,15 +308,6 @@ function editedLabel(value?: string | null): string {
 
 const PROJECT_PAGE = 24;
 
-const PROJECT_TABS = [
-  ['chat', 'Chat'],
-  ['details', 'Details'],
-  ['sources', 'Sources'],
-  ['responses', 'Responses'],
-  ['tables', 'Tables'],
-  ['report', 'Report'],
-] as const;
-
 export function FlowApp({ slug }: { slug: string[] }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -566,6 +561,11 @@ export function FlowApp({ slug }: { slug: string[] }) {
       );
     }
   }, [finishedRun, projectId, section, router]);
+  useEffect(() => {
+    if (section !== 'details' || !projectId) return;
+    router.replace(projectSectionPath(projectId, section));
+  }, [section, projectId, router]);
+  const page = visibleProjectSection(section);
   const [cachedName, setCachedName] = useState('');
   useEffect(() => {
     try {
@@ -664,7 +664,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                       current={project}
                       fallbackName={cachedName}
                       projects={projects}
-                      section={section}
+                      section={page}
                       hasMore={Boolean(projectCursor)}
                       onLoadMore={loadMoreProjects}
                     />
@@ -693,7 +693,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   <Link
                     key={key}
                     href={`/flow/p/${projectId}/${key}`}
-                    data-active={section === key || (key === 'sources' && section === 'interviews')}
+                    data-active={page === key || (key === 'sources' && section === 'interviews')}
                   >
                     {label}
                   </Link>
@@ -756,8 +756,6 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 onLoadMore={loadMoreProjects}
                 onCreate={() => setNewOpen(true)}
               />
-            ) : section === 'details' ? (
-              <DetailsScreen project={project} datasets={datasets} />
             ) : section === 'sources' ? (
               <SourcesScreen
                 project={project}
