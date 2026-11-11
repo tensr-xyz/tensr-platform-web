@@ -6,6 +6,15 @@ import { Table } from '@/components/ui/table';
 import type { RunTable } from '@/components/flow/run-document';
 import { fetchAnalysisRun, R_CHECK_POLL_MS, rCheckPhase } from '@/lib/analysis-runs';
 
+/** Column role for a theme table so the count, share, and quote each keep their own space. */
+export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'label' {
+  const name = header.trim().toLowerCase();
+  if (name === 'quote') return 'quote';
+  if (name === 'count' || name === 'n') return 'count';
+  if (name.includes('%')) return 'share';
+  return 'label';
+}
+
 /** The shared result: a lead, the tables, one footnote, and checks folded away. */
 export function AnalysisResult({
   lead,
@@ -87,19 +96,30 @@ export function AnalysisResult({
         const columns = Array.isArray(table.columns) ? table.columns : [];
         const rows = Array.isArray(table.rows) ? table.rows : [];
         if (!columns.length || !rows.length) return null;
+        const quoteTable = columns.includes('Quote');
         return (
           <section
             key={`${table.title}-${columns.join('-')}`}
-            className={
-              columns.includes('Quote') ? 'analysis-table analysis-table-quote' : 'analysis-table'
-            }
+            className={quoteTable ? 'analysis-table analysis-table-quote' : 'analysis-table'}
           >
             <h3>{table.title}</h3>
             <Table className="flow-table output-grid">
+              {quoteTable ? (
+                <colgroup>
+                  {columns.map((column, index) => (
+                    <col key={`${column}-${index}`} data-fit={quoteColumnFit(column)} />
+                  ))}
+                </colgroup>
+              ) : null}
               <thead>
                 <tr>
                   {columns.map((column, index) => (
-                    <th key={`${column}-${index}`}>{column}</th>
+                    <th
+                      key={`${column}-${index}`}
+                      data-fit={quoteTable ? quoteColumnFit(column) : undefined}
+                    >
+                      {column}
+                    </th>
                   ))}
                 </tr>
               </thead>
@@ -107,7 +127,12 @@ export function AnalysisResult({
                 {rows.map((row, index) => (
                   <tr key={`${table.title}-${index}`}>
                     {row.map((value, cellIndex) => (
-                      <td key={`${index}-${cellIndex}`}>{value}</td>
+                      <td
+                        key={`${index}-${cellIndex}`}
+                        data-fit={quoteTable ? quoteColumnFit(columns[cellIndex] || '') : undefined}
+                      >
+                        {value}
+                      </td>
                     ))}
                   </tr>
                 ))}
