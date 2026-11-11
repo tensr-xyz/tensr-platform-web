@@ -45,6 +45,8 @@ export function outputKindLabel(op: string): string {
     bin: 'Bins',
     filter_apply: 'Filter',
     set_nets: 'Net',
+    nps: 'NPS',
+    funnel: 'Funnel',
   };
   return operations[op] || 'Analysis';
 }

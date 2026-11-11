@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
+import { SidePanel } from '@/components/flow/side-panel';
 import { Input } from '@/components/ui/input';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/rest';
@@ -56,18 +57,16 @@ export function ReportPaneSwitch({
   onChange: (pane: 'report' | 'outputs') => void;
 }) {
   return (
-    <div className="outputs-switch">
-      <Segmented
-        className="home-segment"
-        aria-label="Report or outputs"
-        value={pane}
-        onValueChange={onChange}
-        options={[
-          { value: 'report', label: 'Report' },
-          { value: 'outputs', label: 'Outputs' },
-        ]}
-      />
-    </div>
+    <Segmented
+      className="home-segment report-pane"
+      aria-label="Report or outputs"
+      value={pane}
+      onValueChange={onChange}
+      options={[
+        { value: 'report', label: 'Report' },
+        { value: 'outputs', label: 'Outputs' },
+      ]}
+    />
   );
 }
 
@@ -487,7 +486,7 @@ export function ReportOutputs({
             </p>
           )}
         </div>
-        <aside className="outputs-detail">
+        <SidePanel id="outputs-detail" defaultWidth={320} className="outputs-detail">
           {selected ? (
             <>
               <div className="outputs-detail-body">
@@ -619,7 +618,7 @@ export function ReportOutputs({
           ) : (
             <p className="flow-muted outputs-detail-body">Select an analysis.</p>
           )}
-        </aside>
+        </SidePanel>
       </div>
     </div>
   );

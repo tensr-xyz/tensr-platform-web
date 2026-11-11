@@ -81,6 +81,8 @@ describe('output titles and states', () => {
     expect(outputKindLabel('compute')).toBe('New variable');
     expect(outputKindLabel('descriptives')).toBe('Descriptive statistics');
     expect(outputKindLabel('code_open_text')).toBe('Open-text coding');
+    expect(outputKindLabel('nps')).toBe('NPS');
+    expect(outputKindLabel('funnel')).toBe('Funnel');
     expect(outputKindLabel('not_a_tool')).toBe('Analysis');
   });
 

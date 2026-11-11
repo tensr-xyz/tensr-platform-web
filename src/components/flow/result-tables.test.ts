@@ -139,11 +139,12 @@ describe('result tables', () => {
     });
     expect(weighted.tables[0].columns).toEqual([
       'Theme',
-      'Count',
-      '% of people who answered',
+      'Unweighted count',
       'Weighted %',
       'Quote',
     ]);
+    expect(weighted.tables[0].rows[0][1]).toBe('6');
+    expect(weighted.tables[0].rows[0][2]).toBe('55');
   });
 
   it('renders every summary table with its question, and keeps one set when the engine grid is there too', () => {
@@ -327,6 +328,29 @@ describe('result tables', () => {
       'n',
     ]);
     expect(fromDescribe.tables[0].rows[0][0]).toBe('sat');
+    const labelled = resultViewFromToolResults({
+      procedure: 'descriptives',
+      describe: {
+        mean: { sat: 3.41 },
+        std: { sat: 1.102 },
+        '50%': { sat: 3 },
+        min: { sat: 1 },
+        max: { sat: 5 },
+        count: { sat: 800 },
+      },
+      variable_labels: { sat: 'Satisfaction' },
+      result: {
+        frequency_tables: [
+          {
+            title: 'Frequency Table: Satisfaction',
+            columns: ['', 'Frequency', 'Valid Percent'],
+            rows: [['High', '1', '100']],
+          },
+        ],
+      },
+    });
+    expect(labelled.tables).toHaveLength(1);
+    expect(labelled.tables[0].rows[0][0]).toBe('Satisfaction');
     expect(fromDescribe.tables[0].rows[0][1]).toBe('3.41');
   });
 
@@ -339,6 +363,20 @@ describe('result tables', () => {
       columns: ['Group', 'NPS', '% promoters', '% passives', '% detractors', 'n'],
       rows: [['London', '30', '50.0', '30.0', '20.0', '100']],
     });
+    const rounded = resultViewFromToolResults({
+      groups: [
+        {
+          group: '1',
+          label: 'North',
+          n: 100,
+          promoters: 20,
+          passives: 30,
+          detractors: 50,
+          nps: -43.979,
+        },
+      ],
+    });
+    expect(rounded.tables[0].rows[0]).toEqual(['North', '-44', '20.0', '30.0', '50.0', '100']);
   });
 
   it('prints a label when a header is an object, and keeps the R check', () => {
@@ -506,6 +544,110 @@ describe('mean comparison tables', () => {
     expect(view.tables[1].rows[0][0]).toBe('Between groups');
     expect(view.tables[2].rows[0].slice(0, 2)).toEqual(['A', 'B']);
     expect(view.checks).toContain('Levene p = 0.42');
+  });
+
+  it('keeps one labelled group table when the export repeats it', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        group_descriptives: [
+          {
+            group: '2.0',
+            label: 'Female',
+            n: 10,
+            unweighted_n: 10,
+            weighted_n: 12.4,
+            mean: 4.2,
+            std: 1.1,
+          },
+          {
+            group: '1.0',
+            label: 'Male',
+            n: 8,
+            unweighted_n: 8,
+            weighted_n: 9.1,
+            mean: 3.1,
+            std: 0.9,
+          },
+        ],
+        post_hoc: {
+          method: 'tukey',
+          pairwise: [{ group1: '2.0', group2: '1.0', meandiff: 1.1, 'p-adj': 0.03 }],
+        },
+      },
+      report: {
+        spss_blocks: [
+          {
+            id: 'group_statistics',
+            title: 'Group Statistics',
+            columns: ['score', 'N', 'Mean', 'Std. Deviation'],
+            rows: [
+              ['2.0', '10', '4.2', '1.1'],
+              ['1.0', '8', '3.1', '0.9'],
+            ],
+          },
+        ],
+        tables: [
+          {
+            id: 'ttest_groups',
+            title: 'Satisfaction by Gender',
+            columns: ['Group', 'Unweighted n', 'Weighted n', 'Mean', 'SD'],
+            rows: [
+              ['Female', '10', '12.4', '4.2', '1.1'],
+              ['Male', '8', '9.1', '3.1', '0.9'],
+            ],
+          },
+        ],
+      },
+    });
+    const groups = view.tables.filter(table => table.columns.includes('Mean'));
+    expect(groups).toHaveLength(1);
+    expect(groups[0].title).toBe('Satisfaction by Gender');
+    expect(groups[0].rows.map(row => row[0])).toEqual(['Female', 'Male']);
+    expect(groups[0].columns).not.toContain('score');
+    const pairs = view.tables.find(table => table.title.startsWith('Post hoc'));
+    expect(pairs?.rows[0].slice(0, 2)).toEqual(['Female', 'Male']);
+  });
+});
+
+describe('summary tables', () => {
+  it('keeps the builder tables and drops the engine copies', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Coefficients',
+            columns: ['Term', 'B', 'SE', 'p'],
+            rows: [['Brand trust', '0.420', '0.050', '0.001']],
+          },
+          {
+            title: 'Correlations',
+            columns: ['Variable', 'Trust', 'Value'],
+            rows: [['Trust', '1', '0.420']],
+          },
+        ],
+      },
+      result: {
+        coefficients: { trust: { estimate: 0.42 } },
+        correlations: [{ column: 'trust', with: 'value', r: 0.42, p_value: 0.01 }],
+        group_descriptives: [{ group: '2.0', n: 10 }],
+        report: {
+          tables: [
+            {
+              title: 'Pearson correlation matrix',
+              columns: ['', 'Trust', 'Value'],
+              rows: [['Trust', '1', '0.420']],
+            },
+            {
+              title: 'Pearson correlation p-values',
+              columns: ['', 'Trust', 'Value'],
+              rows: [['Trust', '—', '0.010']],
+            },
+          ],
+        },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Coefficients', 'Correlations']);
+    expect(view.tables[0].rows[0]).toEqual(['Brand trust', '0.420', '0.050', '0.001']);
   });
 });
 

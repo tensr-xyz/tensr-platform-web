@@ -439,6 +439,51 @@ export function findingBars(
     .slice(0, 5);
 }
 
+/** Names the saved version and the version in use. The same file is named once. */
+export function outOfDateLine(builtOn: string, inUse: string): string {
+  const saved = builtOn.trim();
+  const current = inUse.trim();
+  if (saved && current && saved !== current) {
+    return `Built on ${saved}. ${current} is in use now.`;
+  }
+  const name = saved || current;
+  if (!name) return 'The data changed after this was saved.';
+  return `Built on ${name}. The data in that file has changed.`;
+}
+
+export function findingFromStale(table: {
+  id: string;
+  label: string;
+  number: number;
+}): ReportFinding {
+  const citation = table.number > 0 ? `T${table.number}` : '';
+  return {
+    id: table.id,
+    tableId: table.id,
+    eyebrow: citation,
+    headline: table.label,
+    support: '',
+    citation,
+    significant: false,
+    lowBase: false,
+    bars: [],
+  };
+}
+
+function findingNumber(finding: { citation?: string; eyebrow?: string }): number {
+  const match = /T(\d+)/.exec(`${finding.citation || ''} ${finding.eyebrow || ''}`);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+/** Live findings, with an out-of-date table shown once in the same list. */
+export function findingsWithOutOfDate<
+  T extends { id: string; tableId: string; citation?: string; eyebrow?: string },
+>(findings: T[], stale: T[]): T[] {
+  const ids = new Set(stale.flatMap(item => [item.id, item.tableId]));
+  const live = findings.filter(item => !ids.has(item.id) && !ids.has(item.tableId));
+  return [...live, ...stale].sort((left, right) => findingNumber(left) - findingNumber(right));
+}
+
 /** A finding from the project overview, before any table grid has loaded. */
 export function findingFromOverview(row: {
   id: string;
