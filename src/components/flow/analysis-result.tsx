@@ -102,7 +102,7 @@ export function AnalysisResult({
             key={`${table.title}-${columns.join('-')}`}
             className={quoteTable ? 'analysis-table analysis-table-quote' : 'analysis-table'}
           >
-            <h3>{table.title}</h3>
+            {table.title ? <h3>{table.title}</h3> : null}
             <Table className="flow-table output-grid">
               {quoteTable ? (
                 <colgroup>

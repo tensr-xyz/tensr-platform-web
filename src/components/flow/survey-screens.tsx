@@ -1633,9 +1633,11 @@ export function TablesBuilder({
   onAdopted,
   initialStub = '',
   initialBanner = '',
+  ready = false,
 }: {
   datasetId?: string;
   projectId?: string;
+  ready?: boolean;
   files?: { id: string; name: string; inUse?: boolean }[];
   datasets?: {
     dataset_id?: string;
@@ -1703,7 +1705,8 @@ export function TablesBuilder({
 
   useEffect(() => {
     if (!datasetId) {
-      setRailReady(true);
+      setRailReady(ready);
+      if (ready) setSpecs([]);
       return;
     }
     setRailReady(false);
@@ -1811,7 +1814,7 @@ export function TablesBuilder({
     return () => {
       live = false;
     };
-  }, [datasetId]);
+  }, [datasetId, ready]);
 
   const labelFor = (name: string) => {
     const column = columns.find(item => item.name === name);
@@ -2122,11 +2125,7 @@ export function TablesBuilder({
 
   const specId = String((book?.spec as { id?: string } | undefined)?.id || '');
   const openSaved = specs.find(item => (item.spec_id || item.id) === specId);
-  const usedNumbers = specs.map(item => item.number || 0).filter(number => number > 0);
-  const numberShift = usedNumbers.length ? Math.min(...usedNumbers) - 1 : 0;
-  const selectedNumber = openSaved?.number
-    ? Math.max(1, openSaved.number - numberShift)
-    : undefined;
+  const selectedNumber = openSaved?.number && openSaved.number > 0 ? openSaved.number : undefined;
   const railLabel = (spec: SavedSpec) =>
     titledWithQuestions(
       spec.label || spec.name || '',
@@ -2162,7 +2161,7 @@ export function TablesBuilder({
       <aside className="tables-rail">
         <div className="tables-rail-head">
           <span>Tables</span>
-          <span>{specs.length}</span>
+          <span>{railReady ? specs.length : ''}</span>
         </div>
         {!railReady ? (
           <div aria-busy="true">
@@ -2206,7 +2205,7 @@ export function TablesBuilder({
                     });
                 }}
               >
-                <span>T{Math.max(1, (spec.number || 1) - numberShift)}</span>
+                <span>T{spec.number || ''}</span>
                 <span className="tables-saved-copy">
                   <span>{railLabel(spec)}</span>
                   {spec.stale ? (

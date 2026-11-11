@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { AnalysisResult } from '@/components/flow/analysis-result';
 import { OutputPage } from '@/components/flow/output-page';
 import {
   cachedReportRuns,
@@ -20,8 +21,10 @@ import {
   documentApa,
   documentCsv,
   documentMarkdown,
+  pinStory,
   runDocument,
 } from '@/components/flow/run-document';
+import { resultViewFromToolResults } from '@/components/flow/result-tables';
 import {
   baseCount,
   runState,
@@ -75,6 +78,7 @@ export function ReportOutputs({
   lead,
   openRunId = '',
   refreshKey = 0,
+  ready = true,
 }: {
   projectId: string;
   files: { id: string; name: string }[];
@@ -82,6 +86,7 @@ export function ReportOutputs({
   lead?: ReactNode;
   openRunId?: string;
   refreshKey?: number;
+  ready?: boolean;
 }) {
   const [runs, setRuns] = useState<OutputRun[]>([]);
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -97,8 +102,17 @@ export function ReportOutputs({
   const fileKey = files.map(file => `${file.id}:${file.name}`).join('|');
   const filesRef = useMemo(() => files, [fileKey]);
 
+  const detailTables = useMemo(
+    () => (detail ? resultViewFromToolResults([detail]).tables : []),
+    [detail]
+  );
+
   useEffect(() => {
     if (!filesRef.length) {
+      if (!ready) {
+        setPhase('loading');
+        return;
+      }
       setRuns([]);
       setPhase('ready');
       return;
@@ -174,7 +188,7 @@ export function ReportOutputs({
     return () => {
       live = false;
     };
-  }, [fileKey, filesRef, projectId, refreshKey, openRunId]);
+  }, [fileKey, filesRef, projectId, refreshKey, openRunId, ready]);
 
   useEffect(() => {
     if (!openRunId) return;
@@ -494,7 +508,11 @@ export function ReportOutputs({
                 </p>
                 {detailPhase === 'loading' ? <Skeleton className="outputs-skeleton" /> : null}
                 {detailPhase === 'error' ? <p className="flow-error">{exportError}</p> : null}
-                {summary ? <p className="outputs-summary">{summary}</p> : null}
+                {detailPhase === 'ready' && detailTables.length ? (
+                  <AnalysisResult lead={summary} tables={detailTables} />
+                ) : summary ? (
+                  <p className="outputs-summary">{summary}</p>
+                ) : null}
                 {metrics.length ? (
                   <div className="outputs-block">
                     <span className="outputs-label">Key stat</span>
@@ -505,7 +523,7 @@ export function ReportOutputs({
                     ))}
                   </div>
                 ) : null}
-                {!summary && detailPhase === 'ready' ? (
+                {!summary && !detailTables.length && detailPhase === 'ready' ? (
                   <p className="flow-muted">This run has no stored summary.</p>
                 ) : null}
                 <div className="outputs-export">
@@ -568,6 +586,7 @@ export function ReportOutputs({
                   onClick={() => {
                     if (!detail || !selected) return;
                     const document = runDocument(detail);
+                    const story = pinStory(document);
                     const datasetId = String(detail.dataset_id || '');
                     if (!datasetId) return;
                     void savePin(projectId, datasetId, {
@@ -575,7 +594,9 @@ export function ReportOutputs({
                       runId: selected.id,
                       datasetId,
                       headline: document.title || selected.title,
-                      support: document.base != null ? `n = ${document.base}` : '',
+                      support:
+                        story.support || (document.base != null ? `n = ${document.base}` : ''),
+                      bars: story.bars,
                       citation: kindLabel(selected.op),
                       afterId: '',
                       deck: true,

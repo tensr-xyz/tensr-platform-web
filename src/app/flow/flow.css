@@ -1813,8 +1813,15 @@ select.flow-input {
 }
 
 .analysis-table .output-grid {
-  width: 100%;
+  width: max-content;
   min-width: 100%;
+  table-layout: auto;
+}
+
+.analysis-table .output-grid th:first-child,
+.analysis-table .output-grid td:first-child {
+  min-width: 8rem;
+  text-align: left;
 }
 
 .analysis-table .output-grid th,

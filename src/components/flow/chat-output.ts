@@ -294,6 +294,14 @@ export function outputBaseNote(answer: string): string {
   return kept.join(' ');
 }
 
+/** A result citation the server did not fill. The table comes from the result, not this token. */
+export function withoutResultTokens(answer: string): string {
+  return String(answer || '')
+    .replace(/\{+\s*table:\s*[^{}\n]+\}+/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 /** The thread copy of the answer: the base sentences move to the panel note. Tables stay. */
 export function answerWithoutBase(answer: string): string {
   const kept: string[] = [];

@@ -1,4 +1,9 @@
-import { resultFootnote, resultViewFromToolResults, weightNote } from './result-tables';
+import {
+  answerResultTables,
+  resultFootnote,
+  resultViewFromToolResults,
+  weightNote,
+} from './result-tables';
 
 const payloads = [
   {
@@ -467,5 +472,31 @@ describe('result tables', () => {
     expect(view.checks).toContain('Expected counts under 5: 1 cell.');
     expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Filter: city = London');
     expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Weight: design_weight');
+  });
+});
+
+describe('answer tables', () => {
+  it('rounds share cells and drops nothing else', () => {
+    const tables = answerResultTables(
+      [
+        'People in the subset.',
+        '',
+        '| Group | Share |',
+        '| --- | --- |',
+        '| First | 2.410% |',
+        '| Second | 12.048 |',
+        '| Third | 30.120% |',
+      ].join('\n')
+    );
+    expect(tables).toHaveLength(1);
+    expect(tables[0].rows.map(row => row[1])).toEqual(['2.4%', '12.0', '30.1%']);
+    expect(tables[0].title).toBe('');
+  });
+
+  it('leaves a mean column at the decimals it was given', () => {
+    const tables = answerResultTables(
+      ['| Group | Mean |', '| --- | --- |', '| First | 4.256 |'].join('\n')
+    );
+    expect(tables[0].rows[0][1]).toBe('4.256');
   });
 });

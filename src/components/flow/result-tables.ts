@@ -42,6 +42,86 @@ function percentCell(value: unknown): string {
   return (Math.round(number * 10) / 10).toFixed(1);
 }
 
+/** A share with extra decimals becomes one decimal. Integers and other text stay. */
+export function roundShareText(value: string): string {
+  const match = value.trim().match(/^(-?\d[\d,]*)(\.\d+)?(%)?(\s+.*)?$/);
+  if (!match?.[2] || match[2].length <= 2) return value;
+  const number = Number(`${match[1].replace(/,/g, '')}${match[2]}`);
+  if (!Number.isFinite(number)) return value;
+  return `${(Math.round(number * 10) / 10).toFixed(1)}${match[3] || ''}${match[4] || ''}`;
+}
+
+const STAT_HEADER = /\b(mean|sd|std|s\.e\.|se|p-value|p value|statistic|df)\b/i;
+
+function shareColumn(header: string, rows: string[][], index: number): boolean {
+  if (/%|percent|share/i.test(header)) return true;
+  if (STAT_HEADER.test(header)) return false;
+  const values = rows.map(row => (row[index] || '').trim()).filter(Boolean);
+  if (!values.length) return false;
+  return values.every(value => {
+    const match = value.match(/^(-?\d[\d,]*(?:\.\d+)?)%?$/);
+    if (!match) return false;
+    const number = Number(match[1].replace(/,/g, ''));
+    return Number.isFinite(number) && Math.abs(number) <= 100;
+  });
+}
+
+function markdownCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map(item => item.trim());
+}
+
+/**
+ * Tables written into an answer, in the same shape as a result table.
+ * Share cells use one decimal, matching the result grid.
+ */
+export function answerResultTables(answer: string): RunTable[] {
+  const lines = String(answer || '').split('\n');
+  const tables: RunTable[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    if (!lines[index].trim().startsWith('|')) {
+      index += 1;
+      continue;
+    }
+    const block: string[] = [];
+    const start = index;
+    while (index < lines.length && lines[index].trim().startsWith('|')) {
+      block.push(lines[index]);
+      index += 1;
+    }
+    const columns = markdownCells(block[0] || '');
+    const rows = block
+      .slice(1)
+      .filter(line => !/^[\s|:-]+$/.test(line))
+      .map(markdownCells)
+      .filter(row => row.some(Boolean));
+    if (columns.filter(Boolean).length < 2 || !rows.length) continue;
+    let title = '';
+    for (let cursor = start - 1; cursor >= 0; cursor -= 1) {
+      const text = lines[cursor].trim();
+      if (!text) continue;
+      if (!text.startsWith('|') && text.length <= 80 && !/[.!?]$/.test(text)) title = text;
+      break;
+    }
+    const shares = columns.map((column, columnIndex) => shareColumn(column, rows, columnIndex));
+    tables.push({
+      title,
+      columns,
+      rows: rows.map(row =>
+        row.map((value, columnIndex) =>
+          shares[columnIndex] || /%/.test(value) ? roundShareText(value) : value
+        )
+      ),
+    });
+  }
+  return tables;
+}
+
 function asTable(value: unknown): RunTable | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as {

@@ -24,6 +24,7 @@ import {
   answerTables,
   answerWithoutBase,
   answerWithoutTables,
+  withoutResultTokens,
   outputBaseClause,
   outputCardReady,
   outputChecks,
@@ -36,6 +37,7 @@ import {
 } from '@/components/flow/chat-output';
 import { ThreadResult, useEnrichedToolResults } from '@/components/flow/use-enriched-results';
 import {
+  answerResultTables,
   resultFootnote,
   resultViewFromToolResults,
   type ColumnLabels,
@@ -655,11 +657,14 @@ export function useAgentThread({
   const tableMode = kind === 'Crosstab' && Boolean(tables);
   const ledger = (turn?.turn_state?.ledger || {}) as { weight?: string | null };
   const resultView = resultViewFromToolResults(toolResults);
-  const structuredTables = resultView.tables.map(table => ({
+  const resultTables = resultView.tables.length ? resultView.tables : answerResultTables(answer);
+  const structuredTables = resultTables.map(table => ({
     ...table,
     title: titledWithQuestion(table.title, columnLabels),
   }));
-  const prose = answerWithoutBase(structuredTables.length ? answerWithoutTables(answer) : answer);
+  const prose = answerWithoutBase(
+    withoutResultTokens(structuredTables.length ? answerWithoutTables(answer) : answer)
+  );
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
     baseNote,
