@@ -10,6 +10,7 @@ export type ResultView = {
   rCheck: string;
   rStatement: string;
   base: string;
+  letterNote: string;
 };
 
 function cell(value: unknown): string {
@@ -315,6 +316,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     rCheck: '',
     rStatement: '',
     base: '',
+    letterNote: '',
   };
   const seen = new Set<string>();
   let usedSummary = false;
@@ -353,8 +355,22 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     if (!syntaxDump) add(asTable(record));
     const summary = record.summary;
     if (summary && typeof summary === 'object') {
-      const block = summary as { table?: unknown; title?: unknown };
+      const block = summary as {
+        table?: unknown;
+        title?: unknown;
+        significance?: unknown;
+        notes?: unknown;
+        letter_test?: unknown;
+      };
+      if (typeof block.significance === 'string') notes([block.significance]);
+      notes(block.notes);
+      const letter = cell(block.letter_test);
+      if (letter && !view.letterNote) view.letterNote = letter;
       for (const table of summaryTables(block.table, cell(block.title))) add(table, 'summary');
+    }
+    notes(record.notes);
+    if (!view.script && typeof record.r_syntax === 'string' && record.r_syntax.trim()) {
+      view.script = record.r_syntax.trim();
     }
     for (const table of summaryTables(record.table, cell(record.title))) add(table, 'summary');
     const means = describeTable(record.describe);
@@ -576,6 +592,7 @@ export function resultFootnote(
     filter ? `Filter: ${filter}` : '',
     view.weight ? weightNote(view.weight, columns) : 'Unweighted',
     test && test !== 'Output' ? test : '',
+    view.letterNote,
   ];
   return parts.filter(Boolean).join(' · ');
 }

@@ -383,4 +383,27 @@ describe('result tables', () => {
     expect(view.rCheck).toBe('verified');
     expect(view.rStatement).toContain('matches R');
   });
+
+  it('puts the column-letter test in the footnote and keeps the R script', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'banner_table',
+      r_syntax: 'cat(sprintf("n=%.16g\\n", nrow(df)))',
+      r_syntax_verification: { kind: 'verified', statement: 'Re-derived 2 column letters.' },
+      summary: {
+        letter_test: 'Column letters at 95%.',
+        table: [
+          {
+            title: 'Satisfaction by region',
+            columns: ['Stub', 'North (A)', 'South (B)'],
+            rows: [['Satisfied', '40.0%', '55.0% A']],
+          },
+        ],
+      },
+    });
+    expect(view.tables[0].rows[0]).toContain('55.0% A');
+    expect(view.letterNote).toBe('Column letters at 95%.');
+    expect(resultFootnote(view, 'Base 191', 'Crosstab')).toContain('Column letters at 95%.');
+    expect(view.rCheck).toBe('verified');
+    expect(view.script).toContain('nrow(df)');
+  });
 });
