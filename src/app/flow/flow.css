@@ -841,6 +841,22 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   padding: 12px 14px;
 }
 
+.report-toolbar .report-pane,
+.outputs-top .report-pane {
+  flex: none;
+}
+
+.report-finding-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.report-finding-title h3 {
+  margin: 0;
+}
+
 .report-toolbar-actions {
   display: flex;
   gap: 8px;

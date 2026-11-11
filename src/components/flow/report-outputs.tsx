@@ -57,18 +57,16 @@ export function ReportPaneSwitch({
   onChange: (pane: 'report' | 'outputs') => void;
 }) {
   return (
-    <div className="outputs-switch">
-      <Segmented
-        className="home-segment"
-        aria-label="Report or outputs"
-        value={pane}
-        onValueChange={onChange}
-        options={[
-          { value: 'report', label: 'Report' },
-          { value: 'outputs', label: 'Outputs' },
-        ]}
-      />
-    </div>
+    <Segmented
+      className="home-segment report-pane"
+      aria-label="Report or outputs"
+      value={pane}
+      onValueChange={onChange}
+      options={[
+        { value: 'report', label: 'Report' },
+        { value: 'outputs', label: 'Outputs' },
+      ]}
+    />
   );
 }
 

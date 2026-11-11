@@ -18,7 +18,6 @@ import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import {
   loadProjectTables,
   savedTableTotal,
-  staleCardKey,
   tableFileNote,
   uniqueStale,
 } from '@/components/flow/project-tables';
@@ -36,7 +35,11 @@ import { fetchAnalysisRun } from '@/lib/analysis-runs';
 import { resultViewFromToolResults } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { DetailsScreen } from '@/components/flow/details-screen';
-import { rememberedFileName, SourcesScreen } from '@/components/flow/sources-screen';
+import {
+  rememberedFileName,
+  sourceVersionTitle,
+  SourcesScreen,
+} from '@/components/flow/sources-screen';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
@@ -134,7 +137,10 @@ import {
 import {
   distinctTables,
   findingFromOverview,
+  findingFromStale,
   findingFromTable,
+  findingsWithOutOfDate,
+  outOfDateLine,
   reportTableFromBook,
   titledWithQuestions,
   segmentChoices,
@@ -4512,6 +4518,11 @@ function OutputPin({ pin }: { pin: ReportPin }) {
   );
 }
 
+function versionLabel(files: DatasetRow[], id: string, fallback: string): string {
+  const file = files.find(row => datasetRowId(row) === id);
+  return file ? sourceVersionTitle(file) : fallback.trim();
+}
+
 function ReportScreen({
   projectId,
   project,
@@ -4544,8 +4555,6 @@ function ReportScreen({
   const [findings, setFindings] = useState<ReportFinding[]>([]);
   const [findingsPhase, setFindingsPhase] = useState<'loading' | 'ready' | 'error'>('loading');
   const [findingsError, setFindingsError] = useState('');
-  const [editing, setEditing] = useState(false);
-  const [edits, setEdits] = useState<Record<string, { headline?: string; support?: string }>>({});
   const [segmentId, setSegmentId] = useState<string | null>(null);
   const [rowCut, setRowCut] = useState<RowCut[] | null>(null);
   const [filterDraft, setFilterDraft] = useState<RowCut[]>([]);
@@ -4585,10 +4594,8 @@ function ReportScreen({
 
   const writeFindings = useCallback(
     (nextTables: ReportTable[], nextSegment: string | null, nextCut: RowCut[] | null) => {
-      setEditing(false);
       setFindingsError('');
       setFindings(nextTables.map(table => findingFromTable(table, nextSegment, nextCut)));
-      setEdits({});
       setFindingsPhase('ready');
     },
     []
@@ -4993,35 +5000,7 @@ function ReportScreen({
   return (
     <section className="report-page">
       <div className="report-toolbar">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="flow-btn report-view" type="button">
-              <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-                <path
-                  d="M2 3h8M2 6h8M2 9h8"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                />
-              </svg>
-              Overview
-              <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-                <path
-                  d="M3 4l2 2 2-2"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuItem>Overview</DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => setPane('outputs')}>Outputs</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <ReportPaneSwitch pane={pane} onChange={setPane} />
         <div className="report-toolbar-actions">
           {tables.some(table => valueRows(table).length) ? (
             <Popover
@@ -5128,16 +5107,6 @@ function ReportScreen({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}
-          {findings.length ? (
-            <Button
-              className="flow-btn"
-              type="button"
-              data-active={editing}
-              onClick={() => setEditing(current => !current)}
-            >
-              Edit
-            </Button>
-          ) : null}
         </div>
       </div>
       <div className="report-sheet">
@@ -5243,50 +5212,6 @@ function ReportScreen({
           <div className="report-head">
             <h2>Key findings</h2>
           </div>
-          {staleTables.length ? (
-            <div className="report-stale-list">
-              <h2>Needs rebuild</h2>
-              {staleTables.map(table => (
-                <article
-                  key={staleCardKey(table)}
-                  className="report-finding report-stale"
-                  role="status"
-                >
-                  <div className="report-finding-copy">
-                    <p className="flow-muted">
-                      T{table.number}
-                      {table.filename ? ` · ${table.filename}` : ''}
-                    </p>
-                    <h3>{table.label}</h3>
-                    <p>{table.detail || 'Built on an older version of the data'}</p>
-                    {staleErrors[table.id] ? (
-                      <p className="flow-error">{staleErrors[table.id]}</p>
-                    ) : null}
-                    <div className="report-chips">
-                      <Button
-                        className="report-chip accent"
-                        type="button"
-                        disabled={busy !== ''}
-                        onClick={() => void rebuildStale(table, rebuildOffers[table.id]?.id)}
-                      >
-                        {rebuildOffers[table.id]
-                          ? `Rebuild on ${rebuildOffers[table.id].filename}`
-                          : staleErrors[table.id]
-                            ? 'Retry'
-                            : 'Rebuild on current file'}
-                      </Button>
-                      <Link
-                        className="report-chip"
-                        href={`/flow/p/${projectId}/sources?file=${encodeURIComponent(table.datasetId)}`}
-                      >
-                        Open original version
-                      </Link>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : null}
           {findingsPhase === 'loading' ? (
             <>
               <Skeleton className="h-36 w-full" />
@@ -5300,54 +5225,59 @@ function ReportScreen({
             </p>
           ) : (
             <>
-              {placePins(findings, reportPins).map(entry => {
+              {placePins(
+                findingsWithOutOfDate(
+                  findings,
+                  staleTables.map(table => findingFromStale(table))
+                ),
+                reportPins
+              ).map(entry => {
                 if (entry.kind === 'pin') {
                   return <OutputPin key={entry.item.id} pin={entry.item} />;
                 }
                 const finding = entry.item;
-                const edit = edits[finding.id] || {};
-                const headline = edit.headline ?? finding.headline;
-                const support = edit.support ?? finding.support;
+                const stale = staleTables.find(
+                  table => table.id === finding.id || table.id === finding.tableId
+                );
+                const inUse = versionLabel(datasets, datasetId || '', '');
+                const builtOn = stale
+                  ? versionLabel(datasets, stale.datasetId, stale.filename)
+                  : '';
+                const headline = stale?.label || finding.headline;
+                const support = stale ? outOfDateLine(builtOn, inUse) : finding.support;
                 return (
                   <article key={finding.id} className="report-finding">
                     <div className="report-finding-copy">
-                      <p className="flow-muted">{finding.eyebrow}</p>
-                      {editing ? (
-                        <Textarea
-                          aria-label={`${finding.eyebrow} headline`}
-                          value={headline}
-                          onChange={event =>
-                            setEdits(current => ({
-                              ...current,
-                              [finding.id]: {
-                                ...current[finding.id],
-                                headline: event.target.value,
-                              },
-                            }))
-                          }
-                        />
-                      ) : (
+                      {finding.eyebrow ? <p className="flow-muted">{finding.eyebrow}</p> : null}
+                      <div className="report-finding-title">
                         <h3>{headline}</h3>
-                      )}
-                      {editing ? (
-                        <Textarea
-                          aria-label={`${finding.eyebrow} detail`}
-                          value={support}
-                          onChange={event =>
-                            setEdits(current => ({
-                              ...current,
-                              [finding.id]: { ...current[finding.id], support: event.target.value },
-                            }))
-                          }
-                        />
-                      ) : support ? (
-                        <p>{support}</p>
+                        {stale ? <Badge tone="warn">Out of date</Badge> : null}
+                      </div>
+                      {support ? <p>{support}</p> : null}
+                      {stale && staleErrors[stale.id] ? (
+                        <p className="flow-error">{staleErrors[stale.id]}</p>
                       ) : null}
                       <div className="report-chips">
-                        <span className="report-chip accent">{finding.citation}</span>
+                        {finding.citation ? (
+                          <span className="report-chip accent">{finding.citation}</span>
+                        ) : null}
                         {finding.significant ? <span className="report-chip">Sig 95%</span> : null}
                         {finding.lowBase ? (
                           <span className="report-chip warn">Low base</span>
+                        ) : null}
+                        {stale ? (
+                          <Button
+                            className="report-chip accent"
+                            type="button"
+                            disabled={busy !== ''}
+                            onClick={() => void rebuildStale(stale, rebuildOffers[stale.id]?.id)}
+                          >
+                            {rebuildOffers[stale.id]
+                              ? `Rebuild on ${rebuildOffers[stale.id].filename}`
+                              : staleErrors[stale.id]
+                                ? 'Retry'
+                                : 'Rebuild'}
+                          </Button>
                         ) : null}
                       </div>
                     </div>

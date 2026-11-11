@@ -1,6 +1,9 @@
 import {
   distinctTables,
+  findingFromStale,
   findingFromTable,
+  findingsWithOutOfDate,
+  outOfDateLine,
   reportTableFromBook,
   titledWithQuestions,
   type ReportTable,
@@ -260,6 +263,22 @@ describe('report findings', () => {
     expect(finding.eyebrow.startsWith('T6')).toBe(true);
     const unnumbered = findingFromTable({ ...table, index: 0 }, null, null);
     expect(unnumbered.citation).toBe('');
+  });
+
+  it('names the saved version and the version in use', () => {
+    expect(outOfDateLine('Wave 1', 'Wave 2')).toBe('Built on Wave 1. Wave 2 is in use now.');
+    expect(outOfDateLine('Wave 1', 'Wave 1')).toBe(
+      'Built on Wave 1. The data in that file has changed.'
+    );
+    expect(outOfDateLine('', '')).toBe('The data changed after this was saved.');
+  });
+
+  it('shows an out-of-date table once, in the findings list', () => {
+    const live = findingFromTable({ ...table, index: 2 }, null, null);
+    const stale = findingFromStale({ id: 'old', label: 'Satisfaction by region', number: 1 });
+    const shown = findingsWithOutOfDate([live, { ...stale, headline: 'duplicate' }], [stale]);
+    expect(shown.map(item => item.id)).toEqual([stale.id, live.id]);
+    expect(stale.headline).toBe('Satisfaction by region');
   });
 
   it('replaces a variable name once, and leaves the question text alone', () => {
