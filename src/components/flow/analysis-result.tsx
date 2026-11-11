@@ -38,7 +38,7 @@ export function AnalysisResult({
   runId?: string;
 }) {
   const [places, setPlaces] = useState(() =>
-    typeof window === 'undefined' ? 3 : loadOutputPreferences().decimalPlaces
+    typeof window === 'undefined' ? 1 : loadOutputPreferences().decimalPlaces
   );
   const [checksOpen, setChecksOpen] = useState(false);
   const [scriptOpen, setScriptOpen] = useState(false);
@@ -141,7 +141,9 @@ export function AnalysisResult({
                         key={`${index}-${cellIndex}`}
                         data-fit={quoteTable ? quoteColumnFit(columns[cellIndex] || '') : undefined}
                       >
-                        {cellIndex === 0 ? value : formatDecimalText(value, places)}
+                        {cellIndex === 0
+                          ? value
+                          : formatDecimalText(value, places, columns[cellIndex] || '')}
                       </td>
                     ))}
                   </tr>
