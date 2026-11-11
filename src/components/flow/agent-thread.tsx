@@ -57,6 +57,17 @@ import { visibleAgentStep } from '@/lib/agent-step-copy';
 
 export type AgentChatSession = { session_id: string; title?: string; updated_at?: string };
 
+/** A finished run from another screen must not replace the chat that is already open. */
+export function liveRunShouldReplaceChat(openSessionId: string, liveSessionId: string): boolean {
+  if (!liveSessionId) return false;
+  if (!openSessionId) return true;
+  return openSessionId === liveSessionId;
+}
+
+function draftKey(projectId: string): string {
+  return `tensr-chat-draft:${projectId}`;
+}
+
 type Mode = 'ask' | 'plan' | 'agent';
 
 export type AgentThreadOptions = {
@@ -132,12 +143,14 @@ export function useAgentThread({
   attachmentsRef.current = attachments;
   const sessionRef = useRef<string | null>(null);
   const sentRef = useRef('');
+  const questionRef = useRef('');
   const answerRef = useRef('');
   const stepsRef = useRef<string[]>([]);
   const noteRef = useRef('');
   const toolResultsRef = useRef(turn?.tool_results);
   toolResultsRef.current = turn?.tool_results;
   sentRef.current = sent;
+  questionRef.current = question;
   answerRef.current = answer;
   stepsRef.current = steps;
   noteRef.current = attachedNote;
@@ -272,6 +285,7 @@ export function useAgentThread({
         turnFiles.length ? `Attached: ${turnFiles.map(item => item.filename).join(', ')}` : ''
       );
       setQuestion('');
+      if (projectId) window.sessionStorage.removeItem(draftKey(projectId));
       setMode(nextMode);
       setPlan(null);
       setTurn(null);
@@ -483,6 +497,7 @@ export function useAgentThread({
     setAttachedNote('');
     setAnswer('');
     setQuestion('');
+    if (projectId) window.sessionStorage.removeItem(draftKey(projectId));
     setPlan(null);
     setTurn(null);
     setSteps([]);
@@ -529,7 +544,9 @@ export function useAgentThread({
             setSent(last?.user || '');
             setAttachedNote('');
             setAnswer(last?.answer || '');
-            setQuestion('');
+            if (!questionRef.current && projectId) {
+              setQuestion(window.sessionStorage.getItem(draftKey(projectId)) || '');
+            }
             setPlan(null);
             setTurn(
               last
@@ -567,6 +584,13 @@ export function useAgentThread({
       // This screen is sending or approving. Its own state is the thread.
       // Reloading the saved session here clears the plan before the column is saved.
       if (sendingRef.current || approvingRef.current) return;
+      const stored = projectId
+        ? window.sessionStorage.getItem(`tensr-open-chat:${projectId}`) || ''
+        : '';
+      const draft = projectId ? window.sessionStorage.getItem(draftKey(projectId)) || '' : '';
+      const openId = sessionRef.current || stored;
+      if (draft && openId !== (run.sessionId || '')) return;
+      if (!liveRunShouldReplaceChat(openId, run.sessionId || '')) return;
       setSent(run.question);
       setAnswer(run.answer);
       setSteps(run.steps);
@@ -587,10 +611,24 @@ export function useAgentThread({
     const fromUrl = syncAddress ? new URLSearchParams(window.location.search).get('session') : null;
     const stored = window.sessionStorage.getItem(`tensr-open-chat:${projectId}`);
     const sessionId = fromUrl || stored;
+    const draft = window.sessionStorage.getItem(draftKey(projectId)) || '';
+    if (draft) setQuestion(draft);
     if (sessionId) openChat(sessionId);
     // Read the open chat once for this project. A later keystroke must not reload it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, syncAddress]);
+
+  const draftReady = useRef(false);
+  useEffect(() => {
+    if (!projectId) return;
+    if (!draftReady.current) {
+      draftReady.current = true;
+      return;
+    }
+    const key = draftKey(projectId);
+    if (question) window.sessionStorage.setItem(key, question);
+    else window.sessionStorage.removeItem(key);
+  }, [projectId, question]);
 
   const toolResults = useEnrichedToolResults(turn?.tool_results);
   const kind = outputKind(toolResults);

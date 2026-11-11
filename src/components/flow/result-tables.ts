@@ -44,7 +44,14 @@ function percentCell(value: unknown): string {
 
 function asTable(value: unknown): RunTable | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const record = value as { title?: unknown; columns?: unknown; rows?: unknown };
+  const record = value as {
+    title?: unknown;
+    columns?: unknown;
+    rows?: unknown;
+    headers?: unknown;
+    variable_names?: unknown;
+  };
+  if (Array.isArray(record.headers) && Array.isArray(record.variable_names)) return null;
   const columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
   const percentAt = columns.map(column => column.toLowerCase().includes('percent'));
   const rows = Array.isArray(record.rows)
@@ -455,7 +462,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       }
     }
     for (const [key, nested] of Object.entries(record)) {
-      if (key === 'rows' || key === 'columns' || key === 'code_counts') continue;
+      if (key === 'rows' || key === 'columns' || key === 'code_counts' || key === 'preview')
+        continue;
       if (nested && typeof nested === 'object') visit(nested, depth + 1);
     }
   };
@@ -567,10 +575,23 @@ export function labelFilter(filter: string, columns: ColumnLabels[] = []): strin
     .join(', ');
 }
 
+/** A stored weight of "none" is an unweighted run. */
+export function shownMetric(label: string, value: string): string {
+  const name = label.trim().toLowerCase();
+  const text = value.trim();
+  const folded = text.toLowerCase();
+  if (name === 'weight' && (folded === 'none' || folded === 'unweighted' || folded === 'null')) {
+    return 'Unweighted';
+  }
+  if (name === 'weight' && folded === 'active none; weight_column none') return 'Unweighted';
+  return value;
+}
+
 /** The weight's label. The bare column name "weight" is not a label. */
 export function weightNote(column: string, columns: ColumnLabels[] = []): string {
   const name = column.trim();
-  if (!name) return 'Unweighted';
+  if (!name || name.toLowerCase() === 'none' || name.toLowerCase() === 'unweighted')
+    return 'Unweighted';
   const meta = columnMeta(columns, name);
   const label = (meta?.label || '').trim();
   if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== name.toLowerCase()) {

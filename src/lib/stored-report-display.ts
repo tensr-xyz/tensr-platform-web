@@ -73,6 +73,7 @@ function weightMetric(metric: AnalysisReportMetric): AnalysisReportMetric {
   if (!/weight/i.test(metric.label)) return metric;
   const value = metric.value.trim();
   if (!value || /^(none|unweighted)$/i.test(value)) return { ...metric, value: 'Unweighted' };
+  if (/^active none; weight_column none$/i.test(value)) return { ...metric, value: 'Unweighted' };
   return metric;
 }
 

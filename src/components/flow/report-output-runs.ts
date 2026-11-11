@@ -1,4 +1,5 @@
 import { analysisDisplayName } from '@/lib/analysis-definitions';
+import { shownMetric } from '@/components/flow/result-tables';
 
 export type OutputRun = {
   id: string;
@@ -141,7 +142,7 @@ export function metricLines(run: Record<string, unknown>): { label: string; valu
     const value = record.value;
     const shown = value == null ? '' : String(value).trim();
     if (!label || !shown || shown === '—' || shown === '-' || shown === 'None') continue;
-    lines.push({ label, value: shown });
+    lines.push({ label, value: shownMetric(label, shown) });
   }
   return lines;
 }

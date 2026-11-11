@@ -1,4 +1,4 @@
-import { resultFootnote, resultViewFromToolResults } from './result-tables';
+import { resultFootnote, resultViewFromToolResults, weightNote } from './result-tables';
 
 const payloads = [
   {
@@ -405,5 +405,33 @@ describe('result tables', () => {
     expect(resultFootnote(view, 'Base 191', 'Crosstab')).toContain('Column letters at 95%.');
     expect(view.rCheck).toBe('verified');
     expect(view.script).toContain('nrow(df)');
+  });
+
+  it('shows the new column and not a preview of the whole file', () => {
+    const view = resultViewFromToolResults({
+      derived: {
+        preview: {
+          headers: ['id', 'region'],
+          variable_names: ['id', 'region'],
+          columns: ['id', 'region'],
+          rows: [['1', 'North']],
+        },
+      },
+      summary: {
+        title: 'Value for money: Agree or above',
+        table: [
+          {
+            title: 'Value for money: Agree or above',
+            rows: [
+              { label: 'Agree or above', frequency: 2, percent: 50 },
+              { label: 'Below agree', frequency: 2, percent: 50 },
+            ],
+          },
+        ],
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Value for money: Agree or above']);
+    expect(view.tables[0].rows[0][0]).toBe('Agree or above');
+    expect(weightNote('none')).toBe('Unweighted');
   });
 });
