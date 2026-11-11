@@ -1,4 +1,11 @@
-import { baseCount, dayLabel, outputRuns, statusCounts, summaryText } from './report-output-runs';
+import {
+  baseCount,
+  dayLabel,
+  metricLines,
+  outputRuns,
+  statusCounts,
+  summaryText,
+} from './report-output-runs';
 
 describe('report outputs', () => {
   it('keeps saved runs and counts the statuses the list actually returned', () => {
@@ -36,7 +43,18 @@ describe('report outputs', () => {
     expect(baseCount(run)).toBe(403);
     expect(baseCount({ report: { meta: { rows_dataset: 30 } }, result: { n_used: 22 } })).toBe(22);
     expect(baseCount({ result: { n_used: 3 } })).toBe(3);
+    expect(baseCount({ result: { n_answered: 500, n_rows: 800 } })).toBe(500);
     expect(baseCount({})).toBeNull();
+    expect(
+      metricLines({
+        report: {
+          metrics: [
+            { label: 'Responses coded', value: '500' },
+            { label: 'Krippendorff α', value: '—' },
+          ],
+        },
+      })
+    ).toEqual([{ label: 'Responses coded', value: '500' }]);
   });
 });
 

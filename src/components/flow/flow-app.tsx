@@ -44,6 +44,7 @@ import {
   deliverableOutputs,
   pinsFromRuns,
   rememberReportRuns,
+  savePin,
   setProjectPins,
   shareRequest,
   useProjectPins,
@@ -2389,6 +2390,7 @@ function ChatScreen({
     { name: string; label?: string | null; value_labels?: Record<string, string> | null }[]
   >([]);
   const [recipes, setRecipes] = useState<FlowRecipe[] | null>(null);
+  const [reportedRun, setReportedRun] = useState('');
   const file = chatFile(project, datasets);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
   const chatProjectId = project?.id || '';
@@ -2481,6 +2483,30 @@ function ChatScreen({
   } = thread;
   const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
   const respondents = baseCount(baseNote);
+  const addOutputToReport = () => {
+    const runId = runIds[0];
+    if (!runId || !datasetId || !chatProjectId) {
+      setStatus('That result could not be added to the report.');
+      return;
+    }
+    void savePin(chatProjectId, datasetId, {
+      id: runId,
+      runId,
+      datasetId,
+      headline: title,
+      support: takeaway,
+      citation: kind,
+      afterId: '',
+      deck: true,
+      topline: true,
+      keepLive: true,
+    })
+      .then(() => {
+        setReportedRun(runId);
+        setStatus('Added to the report.');
+      })
+      .catch(() => setStatus('That result could not be added to the report.'));
+  };
   const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
     const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
     void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
@@ -2853,7 +2879,11 @@ function ChatScreen({
                   </div>
                   <div>
                     <div className="flow-muted">Used in</div>
-                    <span className="output-badge">This chat · not in the report yet</span>
+                    <span className="output-badge">
+                      {reportedRun === runIds[0]
+                        ? 'This chat · in the report'
+                        : 'This chat · not in the report yet'}
+                    </span>
                   </div>
                   {downloads.length > 0 || runIds.length > 0 ? (
                     <div className="output-export">
@@ -2900,9 +2930,14 @@ function ChatScreen({
                   >
                     {recipeBusy === 'save' ? 'Saving…' : 'Save as recipe'}
                   </Button>
-                  <Link className="flow-btn" href={`${projectHref}/report`}>
-                    Add to report
-                  </Link>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={!runIds[0] || !datasetId || reportedRun === runIds[0]}
+                    onClick={addOutputToReport}
+                  >
+                    {reportedRun === runIds[0] ? 'In report' : 'Add to report'}
+                  </Button>
                   <Link className="flow-btn primary output-open" href={`${projectHref}/tables`}>
                     Open
                   </Link>
