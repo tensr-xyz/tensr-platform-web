@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { SidePanel } from '@/components/flow/side-panel';
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/rest';
@@ -355,7 +356,7 @@ export function InterviewsScreen({ projectId }: { projectId: string }) {
           <span className="interviews-foot-right">Counts only</span>
         </div>
       </div>
-      <aside className="interviews-side">
+      <SidePanel id="interviews" defaultWidth={320} className="interviews-side">
         <div className="interviews-side-tabs">
           <span>Agent</span>
           <span>Variable</span>
@@ -420,7 +421,7 @@ export function InterviewsScreen({ projectId }: { projectId: string }) {
             Cite in report
           </Link>
         </div>
-      </aside>
+      </SidePanel>
     </section>
   );
 }

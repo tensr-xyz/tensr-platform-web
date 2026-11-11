@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
 import type { RunTable } from '@/components/flow/run-document';
+import { formatDecimalText } from '@/components/flow/result-tables';
 import { fetchAnalysisRun, R_CHECK_POLL_MS, rCheckPhase } from '@/lib/analysis-runs';
+import { loadOutputPreferences, OUTPUT_PREFERENCES_EVENT } from '@/lib/output-preferences';
 
 /** Column role for a theme table so the count, share, and quote each keep their own space. */
 export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'label' {
@@ -35,12 +37,20 @@ export function AnalysisResult({
   rStatement?: string;
   runId?: string;
 }) {
+  const [places, setPlaces] = useState(() =>
+    typeof window === 'undefined' ? 3 : loadOutputPreferences().decimalPlaces
+  );
   const [checksOpen, setChecksOpen] = useState(false);
   const [scriptOpen, setScriptOpen] = useState(false);
   const [mark, setMark] = useState({ kind: rCheck || '', statement: rStatement || '' });
   useEffect(() => {
     setMark({ kind: rCheck || '', statement: rStatement || '' });
   }, [rCheck, rStatement]);
+  useEffect(() => {
+    const apply = () => setPlaces(loadOutputPreferences().decimalPlaces);
+    window.addEventListener(OUTPUT_PREFERENCES_EVENT, apply);
+    return () => window.removeEventListener(OUTPUT_PREFERENCES_EVENT, apply);
+  }, []);
   useEffect(() => {
     if ((rCheck || '') !== 'pending') return;
     if (!runId) {
@@ -131,7 +141,7 @@ export function AnalysisResult({
                         key={`${index}-${cellIndex}`}
                         data-fit={quoteTable ? quoteColumnFit(columns[cellIndex] || '') : undefined}
                       >
-                        {value}
+                        {cellIndex === 0 ? value : formatDecimalText(value, places)}
                       </td>
                     ))}
                   </tr>

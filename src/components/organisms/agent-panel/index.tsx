@@ -2116,12 +2116,10 @@ export function AgentPanel({ variant = 'default', compactHeader = false }: Agent
               ) : null}
               <div
                 className={cn(
-                  'grid gap-x-1.5 gap-y-2 rounded-xl border border-border bg-muted/40 px-2 py-1.5 transition-shadow',
+                  'grid gap-x-1.5 gap-y-2 rounded-xl border border-border bg-background px-2 py-1.5',
+                  'shadow-[0_1px_2px_rgba(27,28,26,0.04),0_4px_16px_rgba(27,28,26,0.05)]',
                   'grid-cols-[auto_minmax(0,1fr)_auto]',
-                  composerExpanded ? 'items-end' : 'items-center',
-                  inputMessage.trim()
-                    ? 'border-border shadow-[0_0_0_3px_hsl(var(--primary)/0.12)]'
-                    : 'border-border'
+                  composerExpanded ? 'items-end' : 'items-center'
                 )}
                 style={{
                   gridTemplateAreas: composerExpanded

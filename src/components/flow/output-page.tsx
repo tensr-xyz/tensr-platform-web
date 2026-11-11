@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { SidePanel } from '@/components/flow/side-panel';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -290,7 +291,7 @@ export function OutputPage({
           {rerunNote ? <p className="flow-muted">{rerunNote}</p> : null}
         </article>
         {panel === 'info' ? (
-          <aside className="output-side">
+          <SidePanel id="output-info" defaultWidth={260} className="output-side">
             <div className="output-card">
               <span className="output-card-label">Used in</span>
               {pin ? (
@@ -340,9 +341,9 @@ export function OutputPage({
             {document.base != null ? (
               <div className="output-card output-traced">Traced to {document.base} respondents</div>
             ) : null}
-          </aside>
+          </SidePanel>
         ) : (
-          <aside className="output-comments">
+          <SidePanel id="output-comments" defaultWidth={320} className="output-comments">
             <div className="output-comments-head">
               <strong>Comments</strong>
               <span>{open.length} open</span>
@@ -429,7 +430,7 @@ export function OutputPage({
               </div>
               {commentError ? <p className="flow-error">{commentError}</p> : null}
             </div>
-          </aside>
+          </SidePanel>
         )}
       </div>
       {adding ? (

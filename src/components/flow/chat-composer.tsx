@@ -133,7 +133,13 @@ export function FlowComposer({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>
-        <div className={layout === 'hero' ? 'flow-composer chat-composer' : 'flow-composer'}>
+        <div
+          className={
+            layout === 'hero'
+              ? 'composer-shell flow-composer chat-composer'
+              : 'composer-shell flow-composer'
+          }
+        >
           {attachments.length ? (
             <div className="chat-files">
               {attachments.map(file => (

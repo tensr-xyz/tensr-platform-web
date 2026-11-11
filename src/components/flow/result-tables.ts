@@ -13,6 +13,47 @@ export type ResultView = {
   letterNote: string;
 };
 
+/** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
+export function withoutEngineCopies<T extends { title?: string; columns?: string[] }>(
+  tables: T[]
+): T[] {
+  const titles = tables.map(table => (table.title || '').trim().toLowerCase());
+  const has = (name: string) => titles.includes(name);
+  const labelledCoefficients = tables.some(
+    table =>
+      (table.title || '').trim().toLowerCase() === 'coefficients' &&
+      (table.columns || []).some(column => column.trim().toLowerCase() === 'se')
+  );
+  return tables.filter(table => {
+    const title = (table.title || '').trim().toLowerCase();
+    if (
+      has('correlations') &&
+      (title.includes('correlation matrix') || title.includes('correlation p-value'))
+    ) {
+      return false;
+    }
+    if (has('groups') && (title === 'group statistics' || title === 'group means')) return false;
+    if (
+      labelledCoefficients &&
+      title === 'coefficients' &&
+      !(table.columns || []).some(column => column.trim().toLowerCase() === 'se')
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
+/** A decimal the result already printed, at the one display setting. Labels stay as written. */
+export function formatDecimalText(value: string, places: number): string {
+  const match = value.trim().match(/^(-?\d[\d,]*)(\.\d+)(%?)$/);
+  if (!match?.[2]) return value;
+  const number = Number(`${match[1].replace(/,/g, '')}${match[2]}`);
+  if (!Number.isFinite(number)) return value;
+  const digits = Math.max(0, Math.min(6, Math.trunc(places)));
+  return `${number.toFixed(digits)}${match[3] || ''}`;
+}
+
 function cell(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'number') {
@@ -205,12 +246,17 @@ function themeShareTable(rows: unknown): RunTable | null {
       (row as { weighted_percent?: unknown }).weighted_percent != null &&
       String((row as { weighted_percent?: unknown }).weighted_percent).trim() !== ''
   );
-  const fields = [
-    { header: 'Theme', keys: ['label', 'code'] },
-    { header: 'Count', keys: ['n', 'count'] },
-    { header: '% of people who answered', keys: ['percent'] },
-  ];
-  if (weighted) fields.push({ header: 'Weighted %', keys: ['weighted_percent'] });
+  const fields = weighted
+    ? [
+        { header: 'Theme', keys: ['label', 'code'] },
+        { header: 'Unweighted count', keys: ['n', 'count'] },
+        { header: 'Weighted %', keys: ['weighted_percent'] },
+      ]
+    : [
+        { header: 'Theme', keys: ['label', 'code'] },
+        { header: 'Count', keys: ['n', 'count'] },
+        { header: '% of people who answered', keys: ['percent'] },
+      ];
   fields.push({ header: 'Quote', keys: ['quote', 'example', 'quote_span'] });
   return shareTable(rows, 'Themes', fields);
 }
@@ -293,13 +339,17 @@ function statRow(record: Record<string, unknown>, title: string, keys: string[])
   };
 }
 
-function describeTable(describe: unknown): RunTable | null {
+function describeTable(describe: unknown, labels?: unknown): RunTable | null {
   if (!describe || typeof describe !== 'object' || Array.isArray(describe)) return null;
   const block = describe as Record<string, unknown>;
   const mean = block.mean;
   if (!mean || typeof mean !== 'object' || Array.isArray(mean)) return null;
   const names = Object.keys(mean as Record<string, unknown>);
   if (!names.length) return null;
+  const named =
+    labels && typeof labels === 'object' && !Array.isArray(labels)
+      ? (labels as Record<string, unknown>)
+      : {};
   const stat = (name: string, column: string) => {
     const row = block[name];
     if (!row || typeof row !== 'object' || Array.isArray(row)) return '';
@@ -309,7 +359,7 @@ function describeTable(describe: unknown): RunTable | null {
     title: 'Descriptives',
     columns: ['Variable', 'Mean', 'SD', 'Median', 'Min', 'Max', 'n'],
     rows: names.map(name => [
-      name,
+      cell(named[name]) || name,
       stat('mean', name),
       stat('std', name),
       stat('50%', name),
@@ -335,9 +385,10 @@ function npsTable(groups: unknown): RunTable | null {
           ? (Math.round((1000 * part) / total) / 10).toFixed(1)
           : '';
       const name = cell(record.label || record.group);
+      const score = Number(record.nps);
       return [
         name && name !== 'all' ? name : 'Total',
-        cell(record.nps),
+        Number.isFinite(score) ? String(Math.round(score)) : cell(record.nps),
         share(promoters),
         share(passives),
         share(detractors),
@@ -354,17 +405,41 @@ function npsTable(groups: unknown): RunTable | null {
 
 function groupTable(groups: unknown): RunTable | null {
   if (!Array.isArray(groups) || !groups.length) return null;
-  const rows = groups
-    .filter(row => row && typeof row === 'object')
-    .map(row => {
-      const record = row as Record<string, unknown>;
+  const records = groups.filter(row => row && typeof row === 'object') as Record<string, unknown>[];
+  const weighted = records.some(record => record.weighted_n != null);
+  const rows = records
+    .map(record => {
       const label = cell(record.label || record.group);
       if (!label) return null;
-      return [label, cell(record.n), cell(record.mean), cell(record.std ?? record.sd)];
+      const mean = cell(record.mean);
+      const sd = cell(record.std ?? record.sd);
+      if (weighted) {
+        return [label, cell(record.unweighted_n ?? record.n), cell(record.weighted_n), mean, sd];
+      }
+      return [label, cell(record.n), mean, sd];
     })
     .filter((row): row is string[] => Boolean(row));
   if (!rows.length) return null;
-  return { title: 'Group means', columns: ['Group', 'n', 'Mean', 'SD'], rows };
+  return {
+    title: 'Group means',
+    columns: weighted
+      ? ['Group', 'Unweighted n', 'Weighted n', 'Mean', 'SD']
+      : ['Group', 'n', 'Mean', 'SD'],
+    rows,
+  };
+}
+
+function groupLabels(groups: unknown): Map<string, string> {
+  const labels = new Map<string, string>();
+  if (!Array.isArray(groups)) return labels;
+  for (const row of groups) {
+    if (!row || typeof row !== 'object') continue;
+    const record = row as Record<string, unknown>;
+    const code = cell(record.group);
+    const label = cell(record.label);
+    if (code && label && label !== code) labels.set(code, label);
+  }
+  return labels;
 }
 
 function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
@@ -400,7 +475,7 @@ function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
   };
 }
 
-function postHocTable(value: unknown): RunTable | null {
+function postHocTable(value: unknown, labels: Map<string, string> = new Map()): RunTable | null {
   const block =
     value && typeof value === 'object' && !Array.isArray(value)
       ? (value as { pairwise?: unknown; method?: unknown })
@@ -410,8 +485,12 @@ function postHocTable(value: unknown): RunTable | null {
     .filter(row => row && typeof row === 'object')
     .map(row => {
       const record = row as Record<string, unknown>;
-      const left = cell(record.group1 ?? record.group_a ?? record.a);
-      const right = cell(record.group2 ?? record.group_b ?? record.b);
+      const left =
+        labels.get(cell(record.group1 ?? record.group_a ?? record.a)) ||
+        cell(record.group1 ?? record.group_a ?? record.a);
+      const right =
+        labels.get(cell(record.group2 ?? record.group_b ?? record.b)) ||
+        cell(record.group2 ?? record.group_b ?? record.b);
       if (!left || !right) return null;
       return [
         left,
@@ -490,6 +569,48 @@ function weightName(record: Record<string, unknown>): string {
   return text;
 }
 
+function isGroupMeanTable(table: RunTable): boolean {
+  const headers = table.columns.map(column => column.toLowerCase());
+  return (
+    headers.some(column => column === 'mean') &&
+    headers.some(column => column === 'group' || column.startsWith('group ')) &&
+    headers.some(column => column === 'n' || column.endsWith(' n'))
+  );
+}
+
+function groupMeanScore(table: RunTable): number {
+  if (!isGroupMeanTable(table)) return 0;
+  const blob = table.columns.join(' ').toLowerCase();
+  let score = blob.includes('weighted') ? 3 : 1;
+  const title = table.title.trim().toLowerCase();
+  if (title && title !== 'group means' && title !== 'group summaries') score += 1;
+  return score;
+}
+
+/** Column-and-row tables the summary already built. Those are the tables to show. */
+function summaryGrids(value: unknown, depth = 0): RunTable[] {
+  if (!value || typeof value !== 'object' || depth > 6) return [];
+  if (Array.isArray(value)) return value.flatMap(item => summaryGrids(item, depth + 1));
+  const record = value as Record<string, unknown>;
+  const found: RunTable[] = [];
+  const summary = record.summary;
+  if (summary && typeof summary === 'object') {
+    const block = summary as { table?: unknown; title?: unknown };
+    found.push(...summaryTables(block.table, cell(block.title)));
+    if (Array.isArray(block.table)) {
+      for (const item of block.table) {
+        const grid = asTable(item);
+        if (grid) found.push(grid);
+      }
+    }
+  }
+  for (const [key, nested] of Object.entries(record)) {
+    if (key === 'summary' || key === 'rows' || key === 'columns' || key === 'preview') continue;
+    if (nested && typeof nested === 'object') found.push(...summaryGrids(nested, depth + 1));
+  }
+  return found;
+}
+
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
 export function resultViewFromToolResults(results: unknown): ResultView {
   let answered = 0;
@@ -506,7 +627,11 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   };
   const seen = new Set<string>();
   let usedSummary = false;
+  const preferred = summaryGrids(results);
+  let lockTables = false;
+  const spareGroupTables: RunTable[] = [];
   const add = (table: RunTable | null, source: 'summary' | 'grid' = 'grid') => {
+    if (lockTables) return;
     if (!table || table.title === 'Equivalent R and SPSS syntax') return;
     if (
       usedSummary &&
@@ -515,12 +640,22 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     ) {
       return;
     }
+    if (isGroupMeanTable(table)) {
+      const score = groupMeanScore(table);
+      const existing = view.tables.findIndex(item => isGroupMeanTable(item));
+      if (existing >= 0) {
+        if (score > groupMeanScore(view.tables[existing])) view.tables[existing] = table;
+        return;
+      }
+    }
     const key = `${table.title}\n${table.columns.join('\t')}\n${table.rows.map(row => row.join('\t')).join('\n')}`;
     if (seen.has(key)) return;
     seen.add(key);
     view.tables.push(table);
     if (source === 'summary') usedSummary = true;
   };
+  for (const table of preferred) add(table, 'summary');
+  if (preferred.length) lockTables = true;
   const notes = (value: unknown) => {
     if (!Array.isArray(value)) return;
     for (const note of value) {
@@ -528,17 +663,28 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       if (text && !view.checks.includes(text)) view.checks.push(text);
     }
   };
-  const visit = (value: unknown, depth: number) => {
+  const visit = (value: unknown, depth: number, inDescriptives = false) => {
     if (!value || typeof value !== 'object' || depth > 5) return;
     if (Array.isArray(value)) {
-      for (const item of value) visit(item, depth + 1);
+      for (const item of value) visit(item, depth + 1, inDescriptives);
       return;
     }
     const record = value as Record<string, unknown>;
+    const descriptives =
+      inDescriptives ||
+      record.procedure === 'descriptives' ||
+      record.analysis_type === 'descriptives';
     const title = cell(record.title);
     const syntaxDump =
       record.id === 'equivalent_syntax' || title === 'Equivalent R and SPSS syntax';
-    if (!syntaxDump) add(asTable(record));
+    if (!syntaxDump) {
+      const table = asTable(record);
+      if (table && (record.id === 'group_statistics' || table.title === 'Group Statistics')) {
+        spareGroupTables.push(table);
+      } else {
+        add(table);
+      }
+    }
     const summary = record.summary;
     if (summary && typeof summary === 'object') {
       const block = summary as {
@@ -559,26 +705,33 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       view.script = record.r_syntax.trim();
     }
     for (const table of summaryTables(record.table, cell(record.title))) add(table, 'summary');
-    const means = describeTable(record.describe);
-    if (means) add(means);
-    const summaryBlock =
-      summary && typeof summary === 'object'
-        ? (summary as { table?: unknown }).table
-        : record.table;
-    const showedMeans =
-      Boolean(means) ||
-      summaryTables(summaryBlock, '').some(table => table.columns.includes('Mean'));
-    if (!(record.procedure === 'descriptives' && showedMeans)) {
+    const means = describeTable(record.describe, record.variable_labels);
+    if (means && !view.tables.some(table => table.columns.includes('Mean'))) {
+      add(means, descriptives ? 'summary' : 'grid');
+    }
+    if (!descriptives) {
       for (const key of ['frequency_tables', 'tables'] as const) {
         const list = record[key];
         if (Array.isArray(list)) for (const item of list) add(asTable(item));
       }
     }
     add(themeShareTable(record.code_frequency));
-    add(npsTable(record.groups));
+    const summaryTable =
+      summary && typeof summary === 'object' ? (summary as { table?: unknown }).table : null;
+    const summaryHasNps =
+      Array.isArray(summaryTable) &&
+      summaryTable.some(
+        block =>
+          block &&
+          typeof block === 'object' &&
+          cell((block as { title?: unknown }).title)
+            .toLowerCase()
+            .includes('nps')
+      );
+    if (!summaryHasNps) add(npsTable(record.groups));
     add(groupTable(record.group_descriptives));
     add(anovaSourceTable(record));
-    add(postHocTable(record.post_hoc));
+    add(postHocTable(record.post_hoc, groupLabels(record.group_descriptives)));
     const levene = record.levene_test;
     if (levene && typeof levene === 'object') {
       const p = cell((levene as { p_value?: unknown }).p_value);
@@ -640,15 +793,31 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     for (const [key, nested] of Object.entries(record)) {
       if (key === 'rows' || key === 'columns' || key === 'code_counts' || key === 'preview')
         continue;
-      if (nested && typeof nested === 'object') visit(nested, depth + 1);
+      if (descriptives && (key === 'frequency_tables' || key === 'tables')) continue;
+      if (nested && typeof nested === 'object') visit(nested, depth + 1, descriptives);
     }
   };
   visit(results, 0);
+  if (!lockTables && !view.tables.some(isGroupMeanTable)) {
+    for (const table of spareGroupTables) add(table);
+  }
+  view.tables = withoutEngineCopies(view.tables).filter((table, index, all) => {
+    const blank = table.columns.some(
+      (_column, column) =>
+        column > 0 && table.rows.length > 0 && table.rows.every(row => !(row[column] || '').trim())
+    );
+    if (!blank) return true;
+    const title = table.title.trim().toLowerCase();
+    return !all.some(
+      (other, otherIndex) => otherIndex !== index && other.title.trim().toLowerCase() === title
+    );
+  });
   if (view.tables.some(table => table.title === 'Themes')) {
     view.tables = view.tables.filter(
       table => !/themes among people who answered/i.test(table.title)
     );
   }
+  view.tables = view.tables.filter(table => !/assignments \(quote spans\)/i.test(table.title));
   const total = largestFrequencyTotal(view);
   const used = Number(view.base.replace(/[^\d.]/g, ''));
   if (total && used && used < total / 2) view.base = '';

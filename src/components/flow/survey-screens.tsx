@@ -22,6 +22,7 @@ import { flowFetch, flowJson } from '@/lib/flow-api';
 import { titledWithQuestions } from '@/lib/flow-report';
 import { loadOutputPreferences, saveOutputPreferences } from '@/lib/output-preferences';
 import { AgentThread } from '@/components/flow/agent-thread';
+import { SidePanel } from '@/components/flow/side-panel';
 import { formatStat } from '@/lib/number-format';
 import { loadProjectTables, numberTables } from '@/components/flow/project-tables';
 import { isNonAnswerTheme } from '@/components/flow/coding-review-data';
@@ -2752,7 +2753,7 @@ export function TablesBuilder({
               <span>{tableFootStatus(Boolean(specId) && matchesSaved(), dirty)}</span>
             </div>
           </section>
-          <aside className="tables-agent">
+          <SidePanel id="tables-agent" defaultWidth={320} className="tables-agent">
             <div className="tables-agent-head">
               <span className="tables-dot" />
               <span>{book ? title.replace(/^T\d+ · /, '') : 'Table'}</span>
@@ -2782,7 +2783,7 @@ export function TablesBuilder({
                 if (request) void adoptAgentTable(request);
               }}
             />
-          </aside>
+          </SidePanel>
         </>
       )}
       {weightOpen ? (

@@ -1008,7 +1008,7 @@ export function AnalysisReportView({
                 ) : null
             )}
 
-            {(report.spss_blocks ?? []).map((t, i) => (
+            {(shown.tables.length ? [] : (report.spss_blocks ?? [])).map((t, i) => (
               <ReportSection
                 key={t.id}
                 sectionId={`spss-${t.id}`}

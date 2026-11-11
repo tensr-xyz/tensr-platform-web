@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { SidePanel } from '@/components/flow/side-panel';
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger, Skeleton, Switch } from '@/components/ui/rest';
@@ -404,7 +405,7 @@ export function TableChart({
           </>
         )}
       </section>
-      <aside className="table-chart-settings">
+      <SidePanel id="chart-settings" defaultWidth={320} className="table-chart-settings">
         <div className="chart-set-head">
           <span>Chart settings</span>
           <Button className="chart-reset" type="button" onClick={reset}>
@@ -571,7 +572,7 @@ export function TableChart({
             {640 * scaleFactor} × {360 * scaleFactor} px · white background
           </p>
         </div>
-      </aside>
+      </SidePanel>
       {exportOpen ? (
         <ExportDialog
           kind="chart"

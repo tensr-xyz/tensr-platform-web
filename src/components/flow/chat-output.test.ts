@@ -104,6 +104,18 @@ describe('chat output panel', () => {
     expect(outputTitle([], '')).toBe('Result');
   });
 
+  it('skips a theme count when a later sentence quotes the shares', () => {
+    expect(
+      outputTakeaway('9 themes among people who answered. Price is 28% and location is 17%.')
+    ).toBe('Price is 28% and location is 17%.');
+  });
+
+  it('skips a lead that is only the test name', () => {
+    expect(
+      outputTakeaway('Chi-square. Awareness and region are related, chi-square = 12.4, p = 0.002.')
+    ).toBe('Awareness and region are related, chi-square = 12.4, p = 0.002.');
+  });
+
   it('keeps the takeaway to the finding', () => {
     expect(outputTakeaway(answer)).toBe(
       'No group differs significantly from the one before it; Top 2 is cars_EN 51%, cars_DE 47%, cars_FR 51%.'
