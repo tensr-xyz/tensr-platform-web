@@ -281,6 +281,50 @@ describe('result tables', () => {
     );
   });
 
+  it('renders a descriptives result as means, not a frequency of the scale', () => {
+    const fromSummary = resultViewFromToolResults({
+      procedure: 'descriptives',
+      summary: {
+        table: [{ label: 'Satisfaction', mean: 3.4, sd: 1.1, median: 3, min: 1, max: 5, n: 800 }],
+      },
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Satisfaction',
+          columns: ['', 'Frequency', 'Valid Percent'],
+          rows: [['Satisfied', '60', '31.4']],
+        },
+      ],
+    });
+    expect(fromSummary.tables).toEqual([
+      {
+        title: 'Descriptives',
+        columns: ['Variable', 'Mean', 'SD', 'Median', 'Min', 'Max', 'n'],
+        rows: [['Satisfaction', '3.4', '1.1', '3', '1', '5', '800']],
+      },
+    ]);
+    const fromDescribe = resultViewFromToolResults({
+      describe: {
+        mean: { sat: 3.41 },
+        std: { sat: 1.102 },
+        '50%': { sat: 3 },
+        min: { sat: 1 },
+        max: { sat: 5 },
+        count: { sat: 800 },
+      },
+    });
+    expect(fromDescribe.tables[0].columns).toEqual([
+      'Variable',
+      'Mean',
+      'SD',
+      'Median',
+      'Min',
+      'Max',
+      'n',
+    ]);
+    expect(fromDescribe.tables[0].rows[0][0]).toBe('sat');
+    expect(fromDescribe.tables[0].rows[0][1]).toBe('3.41');
+  });
+
   it('prints a label when a header is an object, and keeps the R check', () => {
     const view = resultViewFromToolResults({
       tables: [
