@@ -458,7 +458,7 @@ export function useAgentThread({
             running: false,
             status: null,
             answer: result.answer_markdown || current.answer,
-            steps: stepsRef.current,
+            steps: traced.length ? traced : stepsRef.current,
           });
         }
         approvingRef.current = false;

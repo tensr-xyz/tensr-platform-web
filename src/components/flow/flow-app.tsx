@@ -2390,6 +2390,7 @@ function ChatScreen({
     { name: string; label?: string | null; value_labels?: Record<string, string> | null }[]
   >([]);
   const [recipes, setRecipes] = useState<FlowRecipe[] | null>(null);
+  const [reportedRun, setReportedRun] = useState('');
   const file = chatFile(project, datasets);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
   const chatProjectId = project?.id || '';
@@ -2482,7 +2483,6 @@ function ChatScreen({
   } = thread;
   const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
   const respondents = baseCount(baseNote);
-  const [reportedRun, setReportedRun] = useState('');
   const addOutputToReport = () => {
     const runId = runIds[0];
     if (!runId || !datasetId || !chatProjectId) {
@@ -2933,7 +2933,7 @@ function ChatScreen({
                   <Button
                     className="flow-btn"
                     type="button"
-                    disabled={!runIds[0] || !datasetId}
+                    disabled={!runIds[0] || !datasetId || reportedRun === runIds[0]}
                     onClick={addOutputToReport}
                   >
                     {reportedRun === runIds[0] ? 'In report' : 'Add to report'}
