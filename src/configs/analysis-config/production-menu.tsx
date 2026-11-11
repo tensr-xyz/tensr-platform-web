@@ -98,6 +98,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       Correlate: [
         'Bivariate Correlations',
         'Partial Correlation',
+        'Canonical Correlation',
         'Goodman-Kruskal Gamma',
         "Somers' D",
         'Goodman-Kruskal Lambda',
