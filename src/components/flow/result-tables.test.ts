@@ -475,6 +475,40 @@ describe('result tables', () => {
   });
 });
 
+describe('mean comparison tables', () => {
+  it('shows the ANOVA source, the pairs, and Levene with the group means', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        f_statistic: 6.2,
+        p_value: 0.004,
+        eta_squared: 0.18,
+        anova_table: {
+          ss_between: 12.4,
+          df_between: 2,
+          ms_between: 6.2,
+          ss_within: 40,
+          df_within: 27,
+          ms_within: 1.48,
+        },
+        group_descriptives: [{ group: 'A', n: 10, mean: 4.2, std: 1.1 }],
+        post_hoc: {
+          method: 'tukey',
+          pairwise: [{ group1: 'A', group2: 'B', meandiff: 1.2, 'p-adj': 0.01 }],
+        },
+        levene_test: { p_value: 0.42 },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual([
+      'Group means',
+      'ANOVA',
+      'Post hoc (tukey)',
+    ]);
+    expect(view.tables[1].rows[0][0]).toBe('Between groups');
+    expect(view.tables[2].rows[0].slice(0, 2)).toEqual(['A', 'B']);
+    expect(view.checks).toContain('Levene p = 0.42');
+  });
+});
+
 describe('answer tables', () => {
   it('rounds share cells and drops nothing else', () => {
     const tables = answerResultTables(

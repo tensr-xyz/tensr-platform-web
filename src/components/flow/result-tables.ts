@@ -367,6 +367,69 @@ function groupTable(groups: unknown): RunTable | null {
   return { title: 'Group means', columns: ['Group', 'n', 'Mean', 'SD'], rows };
 }
 
+function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
+  const table = record.anova_table;
+  if (!table || typeof table !== 'object' || Array.isArray(table)) return null;
+  const source = table as Record<string, unknown>;
+  const between = [
+    'Between groups',
+    cell(source.ss_between ?? source.ss),
+    cell(source.df_between ?? source.df),
+    cell(source.ms_between ?? source.ms),
+    cell(record.f_statistic ?? source.F ?? source.f),
+    cell(record.p_value ?? source.p_value ?? source.p),
+    cell(record.eta_squared ?? record.effect_size ?? source.eta_squared),
+  ];
+  if (!between.slice(1).some(Boolean)) return null;
+  const rows = [between];
+  if (source.ss_within != null || source.df_within != null) {
+    rows.push([
+      'Within groups',
+      cell(source.ss_within),
+      cell(source.df_within),
+      cell(source.ms_within),
+      '',
+      '',
+      '',
+    ]);
+  }
+  return {
+    title: 'ANOVA',
+    columns: ['Source', 'SS', 'df', 'MS', 'F', 'p', 'Effect size'],
+    rows,
+  };
+}
+
+function postHocTable(value: unknown): RunTable | null {
+  const block =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as { pairwise?: unknown; method?: unknown })
+      : null;
+  const pairs = Array.isArray(block?.pairwise) ? block.pairwise : Array.isArray(value) ? value : [];
+  const rows = pairs
+    .filter(row => row && typeof row === 'object')
+    .map(row => {
+      const record = row as Record<string, unknown>;
+      const left = cell(record.group1 ?? record.group_a ?? record.a);
+      const right = cell(record.group2 ?? record.group_b ?? record.b);
+      if (!left || !right) return null;
+      return [
+        left,
+        right,
+        cell(record.meandiff ?? record.mean_diff ?? record.diff),
+        cell(record['p-adj'] ?? record.p_adj ?? record.p_value),
+      ];
+    })
+    .filter((row): row is string[] => Boolean(row));
+  if (!rows.length) return null;
+  const method = cell(block?.method);
+  return {
+    title: method ? `Post hoc (${method})` : 'Post hoc',
+    columns: ['Group', 'Compared with', 'Difference', 'p'],
+    rows,
+  };
+}
+
 function isFrequencyRecord(record: Record<string, unknown>): boolean {
   if (
     record.analysis_type === 'frequencies' ||
@@ -514,6 +577,16 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     add(themeShareTable(record.code_frequency));
     add(npsTable(record.groups));
     add(groupTable(record.group_descriptives));
+    add(anovaSourceTable(record));
+    add(postHocTable(record.post_hoc));
+    const levene = record.levene_test;
+    if (levene && typeof levene === 'object') {
+      const p = cell((levene as { p_value?: unknown }).p_value);
+      if (p) notes([`Levene p = ${p}`]);
+    }
+    if (typeof record.exclusion_note === 'string' && record.exclusion_note.trim()) {
+      notes([record.exclusion_note.trim()]);
+    }
     const diagnostics = record.diagnostics;
     if (diagnostics && typeof diagnostics === 'object') {
       add(marginTable((diagnostics as { margins?: unknown }).margins));
