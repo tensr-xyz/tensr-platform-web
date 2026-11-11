@@ -24,7 +24,9 @@ function frequencyTotal(table: AnalysisReportTable): number | null {
 
 function withPercents(table: AnalysisReportTable, places: number): AnalysisReportTable {
   const rows = table.rows.map(row =>
-    row.map((cell, index) => (index === 0 ? cell : formatDecimalText(String(cell ?? ''), places)))
+    row.map((cell, index) =>
+      index === 0 ? cell : formatDecimalText(String(cell ?? ''), places, table.columns[index] || '')
+    )
   );
   return { ...table, rows };
 }
@@ -75,7 +77,7 @@ function patchTable(table: AnalysisReportTable, places: number): AnalysisReportT
 
 /** A stored run uses the current decimal setting, one title, and one analysis base. */
 export function presentStoredReport(report: AnalysisReport, decimalPlaces: number): AnalysisReport {
-  const places = Number.isFinite(decimalPlaces) ? Math.max(0, Math.min(6, decimalPlaces)) : 3;
+  const places = Number.isFinite(decimalPlaces) ? Math.max(0, Math.min(6, decimalPlaces)) : 1;
   const tables = withoutEngineCopies(report.tables || []).filter(
     table => !/assignments \(quote spans\)/i.test(table.title || '')
   );

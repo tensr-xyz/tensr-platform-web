@@ -1,5 +1,6 @@
 import {
   answerResultTables,
+  formatDecimalText,
   resultFootnote,
   resultViewFromToolResults,
   weightNote,
@@ -84,6 +85,20 @@ const payloads = [
     reproducibility: { r_script: 'survey::svymean(~score, design)' },
   },
 ];
+
+describe('decimal display', () => {
+  it('uses the project decimals for percents, and whole numbers for counts, means at 2 dp, weighted n at 0', () => {
+    expect(formatDecimalText('31.400%', 1, 'Valid Percent')).toBe('31.4%');
+    expect(formatDecimalText('12.000', 1, 'Percent')).toBe('12');
+    expect(formatDecimalText('28.200', 1, '% promoters')).toBe('28.2');
+    expect(formatDecimalText('57.000', 1, 'Frequency')).toBe('57');
+    expect(formatDecimalText('3.534', 1, 'Mean')).toBe('3.53');
+    expect(formatDecimalText('1.100', 1, 'SD')).toBe('1.10');
+    expect(formatDecimalText('251.200', 1, 'Weighted n')).toBe('251');
+    expect(formatDecimalText('-43.979', 1, 'NPS')).toBe('-44');
+    expect(formatDecimalText('0.420', 1, 'B')).toBe('0.42');
+  });
+});
 
 describe('result tables', () => {
   it('reads a table from each of twelve different result shapes', () => {
@@ -377,6 +392,47 @@ describe('result tables', () => {
       ],
     });
     expect(rounded.tables[0].rows[0]).toEqual(['North', '-44', '20.0', '30.0', '50.0', '100']);
+  });
+
+  it('drops the engine statistics table and a second NPS by group table', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'descriptives',
+      summary: {
+        table: [{ label: 'Satisfaction', mean: 3.4, sd: 1.1, median: 3, min: 1, max: 5, n: 80 }],
+      },
+      report: {
+        spss_blocks: [
+          {
+            id: 'statistics',
+            title: 'Statistics',
+            columns: ['Statistic', 'Value'],
+            rows: [['Mean (score)', '3.400']],
+          },
+        ],
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Descriptives']);
+    const nps = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'NPS by group',
+            columns: ['Group', 'NPS', '% promoters', '% passives', '% detractors', 'n'],
+            rows: [['North', '12', '40.0', '30.0', '30.0', '100']],
+          },
+        ],
+      },
+      report: {
+        tables: [
+          {
+            title: 'NPS by group',
+            columns: ['Group', 'n', '% promoters', '% passives', '% detractors', 'NPS'],
+            rows: [['North', '100', '40', '30', '30', '12']],
+          },
+        ],
+      },
+    });
+    expect(nps.tables.filter(table => table.title === 'NPS by group')).toHaveLength(1);
   });
 
   it('prints a label when a header is an object, and keeps the R check', () => {

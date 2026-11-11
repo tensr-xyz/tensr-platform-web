@@ -8,7 +8,7 @@ export type OutputPreferences = {
 
 const DEFAULTS: OutputPreferences = {
   apaFormat: true,
-  decimalPlaces: 3,
+  decimalPlaces: 1,
   includeCharts: true,
 };
 

@@ -44,14 +44,42 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
   });
 }
 
-/** A decimal the result already printed, at the one display setting. Labels stay as written. */
-export function formatDecimalText(value: string, places: number): string {
-  const match = value.trim().match(/^(-?\d[\d,]*)(\.\d+)(%?)$/);
+function decimalKind(header: string, percentSign: boolean): 'percent' | 'mean' | 'whole' | 'plain' {
+  if (percentSign) return 'percent';
+  const name = header.trim().toLowerCase().replace(/[_-]+/g, ' ');
+  if (/%|percent|share/.test(name)) return 'percent';
+  if (/weighted\s*n|weighted base/.test(name)) return 'whole';
+  if (name === 'nps' || name.endsWith(' nps')) return 'whole';
+  if (/\b(mean|sd|std\.?|s\.d\.?|standard deviation)\b/.test(name)) return 'mean';
+  if (
+    /^(n|count|frequency|cases|df)$/.test(name) ||
+    /\b(count|frequency)\b/.test(name) ||
+    name.endsWith(' n')
+  ) {
+    return 'whole';
+  }
+  return 'plain';
+}
+
+/** Percents use the project decimals. Counts and weighted n are whole. Means and SDs are 2 dp. */
+export function formatDecimalText(value: string, places: number, header = ''): string {
+  const match = value.trim().match(/^(-?\d[\d,]*)(\.\d+)?(%?)$/);
   if (!match?.[2]) return value;
   const number = Number(`${match[1].replace(/,/g, '')}${match[2]}`);
   if (!Number.isFinite(number)) return value;
-  const digits = Math.max(0, Math.min(6, Math.trunc(places)));
-  return `${number.toFixed(digits)}${match[3] || ''}`;
+  const kind = decimalKind(header, Boolean(match[3]));
+  if (kind === 'plain') {
+    const shown = number
+      .toFixed(match[2].length - 1)
+      .replace(/(\.\d*?)0+$/, '$1')
+      .replace(/\.$/, '');
+    return `${shown}${match[3] || ''}`;
+  }
+  const digits =
+    kind === 'mean' ? 2 : kind === 'percent' ? Math.max(0, Math.min(6, Math.trunc(places))) : 0;
+  let shown = number.toFixed(digits);
+  if (kind === 'percent') shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  return `${shown}${match[3] || ''}`;
 }
 
 function cell(value: unknown): string {
@@ -647,6 +675,19 @@ export function resultViewFromToolResults(results: unknown): ResultView {
         if (score > groupMeanScore(view.tables[existing])) view.tables[existing] = table;
         return;
       }
+    }
+    const title = table.title.trim().toLowerCase();
+    if (
+      title === 'statistics' &&
+      table.columns.some(column => column.trim().toLowerCase() === 'statistic')
+    ) {
+      return;
+    }
+    if (
+      title === 'nps by group' &&
+      view.tables.some(item => item.title.trim().toLowerCase() === title)
+    ) {
+      return;
     }
     const key = `${table.title}\n${table.columns.join('\t')}\n${table.rows.map(row => row.join('\t')).join('\n')}`;
     if (seen.has(key)) return;
