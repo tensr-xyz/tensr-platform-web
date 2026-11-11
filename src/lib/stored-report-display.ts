@@ -4,7 +4,7 @@ import type {
   AnalysisReportMetric,
   AnalysisReportTable,
 } from '@/lib/analysis-report-types';
-import { formatDecimalText } from '@/components/flow/result-tables';
+import { formatDecimalText, withoutEngineCopies } from '@/components/flow/result-tables';
 
 const GENERIC_TITLE = /^(frequency tables?|frequencies)$/i;
 
@@ -76,7 +76,7 @@ function patchTable(table: AnalysisReportTable, places: number): AnalysisReportT
 /** A stored run uses the current decimal setting, one title, and one analysis base. */
 export function presentStoredReport(report: AnalysisReport, decimalPlaces: number): AnalysisReport {
   const places = Number.isFinite(decimalPlaces) ? Math.max(0, Math.min(6, decimalPlaces)) : 3;
-  const tables = report.tables || [];
+  const tables = withoutEngineCopies(report.tables || []);
   const questions = [
     ...tables.map(questionFrom),
     ...(report.blocks || []).map(block =>

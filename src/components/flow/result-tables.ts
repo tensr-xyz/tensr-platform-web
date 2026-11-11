@@ -13,6 +13,37 @@ export type ResultView = {
   letterNote: string;
 };
 
+/** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
+export function withoutEngineCopies<T extends { title?: string; columns?: string[] }>(
+  tables: T[]
+): T[] {
+  const titles = tables.map(table => (table.title || '').trim().toLowerCase());
+  const has = (name: string) => titles.includes(name);
+  const labelledCoefficients = tables.some(
+    table =>
+      (table.title || '').trim().toLowerCase() === 'coefficients' &&
+      (table.columns || []).some(column => column.trim().toLowerCase() === 'se')
+  );
+  return tables.filter(table => {
+    const title = (table.title || '').trim().toLowerCase();
+    if (
+      has('correlations') &&
+      (title.includes('correlation matrix') || title.includes('correlation p-value'))
+    ) {
+      return false;
+    }
+    if (has('groups') && (title === 'group statistics' || title === 'group means')) return false;
+    if (
+      labelledCoefficients &&
+      title === 'coefficients' &&
+      !(table.columns || []).some(column => column.trim().toLowerCase() === 'se')
+    ) {
+      return false;
+    }
+    return true;
+  });
+}
+
 /** A decimal the result already printed, at the one display setting. Labels stay as written. */
 export function formatDecimalText(value: string, places: number): string {
   const match = value.trim().match(/^(-?\d[\d,]*)(\.\d+)(%?)$/);
@@ -770,7 +801,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   if (!lockTables && !view.tables.some(isGroupMeanTable)) {
     for (const table of spareGroupTables) add(table);
   }
-  view.tables = view.tables.filter((table, index, all) => {
+  view.tables = withoutEngineCopies(view.tables).filter((table, index, all) => {
     const blank = table.columns.some(
       (_column, column) =>
         column > 0 && table.rows.length > 0 && table.rows.every(row => !(row[column] || '').trim())

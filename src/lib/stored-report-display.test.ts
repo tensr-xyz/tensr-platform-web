@@ -74,3 +74,27 @@ describe('stored frequency reports', () => {
     expect(shown.tables[0].rows[0][2]).toBe('7.1');
   });
 });
+
+describe('stored analysis reports', () => {
+  it('keeps the builder table and drops the engine copy', () => {
+    const report = frequencyReport();
+    report.meta.analysis_key = 'correlation';
+    report.meta.title = 'Bivariate Correlations';
+    report.tables = [
+      {
+        id: 'correlation',
+        title: 'Pearson correlation matrix',
+        columns: ['', 'Price paid'],
+        rows: [['Price paid', '1.000']],
+      },
+      {
+        id: 'correlations',
+        title: 'Correlations',
+        columns: ['Variable', 'Price paid'],
+        rows: [['Price paid', '1.000']],
+      },
+    ];
+    const shown = presentStoredReport(report, 3);
+    expect(shown.tables.map(table => table.title)).toEqual(['Correlations']);
+  });
+});
