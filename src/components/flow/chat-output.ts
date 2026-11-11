@@ -263,6 +263,7 @@ export function outputTakeaway(answer: string): string {
   for (const line of proseLines(answer)) {
     if (FILE_LINE.test(line)) continue;
     for (const sentence of sentences(line).filter(item => !isBaseSentence(item))) {
+      if (/themes among people who answered/i.test(sentence)) continue;
       if (!fallback) fallback = sentence;
       if (/\d/.test(sentence)) return sentence;
     }

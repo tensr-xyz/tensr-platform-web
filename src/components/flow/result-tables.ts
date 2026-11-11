@@ -817,6 +817,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       table => !/themes among people who answered/i.test(table.title)
     );
   }
+  view.tables = view.tables.filter(table => !/assignments \(quote spans\)/i.test(table.title));
   const total = largestFrequencyTotal(view);
   const used = Number(view.base.replace(/[^\d.]/g, ''));
   if (total && used && used < total / 2) view.base = '';

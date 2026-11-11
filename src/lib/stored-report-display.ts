@@ -76,7 +76,9 @@ function patchTable(table: AnalysisReportTable, places: number): AnalysisReportT
 /** A stored run uses the current decimal setting, one title, and one analysis base. */
 export function presentStoredReport(report: AnalysisReport, decimalPlaces: number): AnalysisReport {
   const places = Number.isFinite(decimalPlaces) ? Math.max(0, Math.min(6, decimalPlaces)) : 3;
-  const tables = withoutEngineCopies(report.tables || []);
+  const tables = withoutEngineCopies(report.tables || []).filter(
+    table => !/assignments \(quote spans\)/i.test(table.title || '')
+  );
   const questions = [
     ...tables.map(questionFrom),
     ...(report.blocks || []).map(block =>
