@@ -108,6 +108,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Principal Component Analysis',
         'Exploratory Factor Analysis',
         'Multidimensional Scaling (MDS)',
+        'Network',
       ],
       'General Linear Model': [
         'Two-Way ANOVA',
