@@ -27,6 +27,8 @@ const KIND_LABELS: Record<string, string> = {
   correlation: 'Correlation',
   drivers: 'Drivers',
   export_set: 'Export',
+  nps: 'NPS',
+  funnel: 'Funnel',
 };
 
 function procedureOf(item: ToolResult): string {

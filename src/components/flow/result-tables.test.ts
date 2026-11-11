@@ -139,11 +139,12 @@ describe('result tables', () => {
     });
     expect(weighted.tables[0].columns).toEqual([
       'Theme',
-      'Count',
-      '% of people who answered',
+      'Unweighted count',
       'Weighted %',
       'Quote',
     ]);
+    expect(weighted.tables[0].rows[0][1]).toBe('6');
+    expect(weighted.tables[0].rows[0][2]).toBe('55');
   });
 
   it('renders every summary table with its question, and keeps one set when the engine grid is there too', () => {
@@ -327,6 +328,29 @@ describe('result tables', () => {
       'n',
     ]);
     expect(fromDescribe.tables[0].rows[0][0]).toBe('sat');
+    const labelled = resultViewFromToolResults({
+      procedure: 'descriptives',
+      describe: {
+        mean: { sat: 3.41 },
+        std: { sat: 1.102 },
+        '50%': { sat: 3 },
+        min: { sat: 1 },
+        max: { sat: 5 },
+        count: { sat: 800 },
+      },
+      variable_labels: { sat: 'Satisfaction' },
+      result: {
+        frequency_tables: [
+          {
+            title: 'Frequency Table: Satisfaction',
+            columns: ['', 'Frequency', 'Valid Percent'],
+            rows: [['High', '1', '100']],
+          },
+        ],
+      },
+    });
+    expect(labelled.tables).toHaveLength(1);
+    expect(labelled.tables[0].rows[0][0]).toBe('Satisfaction');
     expect(fromDescribe.tables[0].rows[0][1]).toBe('3.41');
   });
 
@@ -339,6 +363,20 @@ describe('result tables', () => {
       columns: ['Group', 'NPS', '% promoters', '% passives', '% detractors', 'n'],
       rows: [['London', '30', '50.0', '30.0', '20.0', '100']],
     });
+    const rounded = resultViewFromToolResults({
+      groups: [
+        {
+          group: '1',
+          label: 'North',
+          n: 100,
+          promoters: 20,
+          passives: 30,
+          detractors: 50,
+          nps: -43.979,
+        },
+      ],
+    });
+    expect(rounded.tables[0].rows[0]).toEqual(['North', '-44', '20.0', '30.0', '50.0', '100']);
   });
 
   it('prints a label when a header is an object, and keeps the R check', () => {
