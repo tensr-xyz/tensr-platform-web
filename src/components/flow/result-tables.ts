@@ -232,6 +232,38 @@ function describeTable(describe: unknown): RunTable | null {
   };
 }
 
+function npsTable(groups: unknown): RunTable | null {
+  if (!Array.isArray(groups) || !groups.length) return null;
+  const rows = groups
+    .filter(row => row && typeof row === 'object' && (row as { nps?: unknown }).nps != null)
+    .map(row => {
+      const record = row as Record<string, unknown>;
+      const promoters = Number(record.promoters);
+      const passives = Number(record.passives);
+      const detractors = Number(record.detractors);
+      const total = promoters + passives + detractors;
+      const share = (part: number) =>
+        total > 0 && Number.isFinite(part)
+          ? (Math.round((1000 * part) / total) / 10).toFixed(1)
+          : '';
+      const name = cell(record.label || record.group);
+      return [
+        name && name !== 'all' ? name : 'Total',
+        cell(record.nps),
+        share(promoters),
+        share(passives),
+        share(detractors),
+        cell(record.n),
+      ];
+    });
+  if (!rows.length) return null;
+  return {
+    title: 'NPS',
+    columns: ['Group', 'NPS', '% promoters', '% passives', '% detractors', 'n'],
+    rows,
+  };
+}
+
 function groupTable(groups: unknown): RunTable | null {
   if (!Array.isArray(groups) || !groups.length) return null;
   const rows = groups
@@ -341,6 +373,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       }
     }
     add(themeShareTable(record.code_frequency));
+    add(npsTable(record.groups));
     add(groupTable(record.group_descriptives));
     const diagnostics = record.diagnostics;
     if (diagnostics && typeof diagnostics === 'object') {

@@ -325,6 +325,17 @@ describe('result tables', () => {
     expect(fromDescribe.tables[0].rows[0][1]).toBe('3.41');
   });
 
+  it('renders NPS as shares, not the raw group dump', () => {
+    const view = resultViewFromToolResults({
+      groups: [{ group: 'London', n: 100, promoters: 50, passives: 30, detractors: 20, nps: 30 }],
+    });
+    expect(view.tables[0]).toEqual({
+      title: 'NPS',
+      columns: ['Group', 'NPS', '% promoters', '% passives', '% detractors', 'n'],
+      rows: [['London', '30', '50.0', '30.0', '20.0', '100']],
+    });
+  });
+
   it('prints a label when a header is an object, and keeps the R check', () => {
     const view = resultViewFromToolResults({
       tables: [
