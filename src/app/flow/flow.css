@@ -1813,8 +1813,15 @@ select.flow-input {
 }
 
 .analysis-table .output-grid {
-  width: 100%;
+  width: max-content;
   min-width: 100%;
+  table-layout: auto;
+}
+
+.analysis-table .output-grid th:first-child,
+.analysis-table .output-grid td:first-child {
+  min-width: 8rem;
+  text-align: left;
 }
 
 .analysis-table .output-grid th,
@@ -1824,17 +1831,43 @@ select.flow-input {
   vertical-align: top;
 }
 
-.analysis-table-quote .output-grid {
-  width: 100%;
-  min-width: 0;
-  table-layout: fixed;
+.analysis-table-quote {
+  overflow-x: auto;
 }
 
-.analysis-table-quote .output-grid th:last-child,
-.analysis-table-quote .output-grid td:last-child {
-  text-align: left;
+.analysis-table-quote .output-grid {
+  width: max-content;
+  min-width: 36rem;
+  table-layout: auto;
+}
+
+.analysis-table-quote .output-grid th,
+.analysis-table-quote .output-grid td {
   white-space: normal;
   overflow-wrap: anywhere;
+}
+
+.analysis-table-quote .output-grid [data-fit='label'] {
+  min-width: 8rem;
+  max-width: 12rem;
+}
+
+.analysis-table-quote .output-grid [data-fit='count'] {
+  width: 4.25rem;
+  min-width: 4.25rem;
+  white-space: nowrap;
+}
+
+.analysis-table-quote .output-grid [data-fit='share'] {
+  width: 6.75rem;
+  min-width: 6.75rem;
+}
+
+.analysis-table-quote .output-grid [data-fit='quote'] {
+  min-width: 14rem;
+  max-width: 24rem;
+  text-align: left;
+  white-space: normal;
 }
 
 .analysis-footnote {
@@ -7882,12 +7915,17 @@ select.flow-input {
 
 .outputs-kind {
   justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
   padding: 2px 6px;
   border-radius: 4px;
   background: var(--color-well);
   color: var(--color-muted);
   font-size: 10px;
+  line-height: 13px;
   letter-spacing: 0.02em;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .outputs-row[data-active='true'] .outputs-kind {

@@ -1,4 +1,9 @@
-import { resultFootnote, resultViewFromToolResults, weightNote } from './result-tables';
+import {
+  answerResultTables,
+  resultFootnote,
+  resultViewFromToolResults,
+  weightNote,
+} from './result-tables';
 
 const payloads = [
   {
@@ -433,5 +438,99 @@ describe('result tables', () => {
     expect(view.tables.map(table => table.title)).toEqual(['Value for money: Agree or above']);
     expect(view.tables[0].rows[0][0]).toBe('Agree or above');
     expect(weightNote('none')).toBe('Unweighted');
+  });
+
+  it('shows an association table, the filter, and the weight column', () => {
+    const view = resultViewFromToolResults({
+      request_body: {
+        filter_ref: { combine: 'and', filters: [{ column: 'city', op: '=', value: 'London' }] },
+        weight_column: 'design_weight',
+      },
+      summary: {
+        notes: ['Expected counts under 5: 1 cell.'],
+        table: [
+          {
+            title: 'Observed',
+            columns: ['Region', 'North', 'South'],
+            rows: [
+              ['Yes', '10', '2'],
+              ['No', '4', '8'],
+            ],
+          },
+          {
+            title: 'Effect size',
+            columns: ['Measure', 'Value'],
+            rows: [["Cramér's V", '0.250']],
+          },
+        ],
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Observed', 'Effect size']);
+    expect(view.tables[0].rows[0]).toEqual(['Yes', '10', '2']);
+    expect(view.filter).toBe('city = London');
+    expect(view.weight).toBe('design_weight');
+    expect(view.checks).toContain('Expected counts under 5: 1 cell.');
+    expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Filter: city = London');
+    expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Weight: design_weight');
+  });
+});
+
+describe('mean comparison tables', () => {
+  it('shows the ANOVA source, the pairs, and Levene with the group means', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        f_statistic: 6.2,
+        p_value: 0.004,
+        eta_squared: 0.18,
+        anova_table: {
+          ss_between: 12.4,
+          df_between: 2,
+          ms_between: 6.2,
+          ss_within: 40,
+          df_within: 27,
+          ms_within: 1.48,
+        },
+        group_descriptives: [{ group: 'A', n: 10, mean: 4.2, std: 1.1 }],
+        post_hoc: {
+          method: 'tukey',
+          pairwise: [{ group1: 'A', group2: 'B', meandiff: 1.2, 'p-adj': 0.01 }],
+        },
+        levene_test: { p_value: 0.42 },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual([
+      'Group means',
+      'ANOVA',
+      'Post hoc (tukey)',
+    ]);
+    expect(view.tables[1].rows[0][0]).toBe('Between groups');
+    expect(view.tables[2].rows[0].slice(0, 2)).toEqual(['A', 'B']);
+    expect(view.checks).toContain('Levene p = 0.42');
+  });
+});
+
+describe('answer tables', () => {
+  it('rounds share cells and drops nothing else', () => {
+    const tables = answerResultTables(
+      [
+        'People in the subset.',
+        '',
+        '| Group | Share |',
+        '| --- | --- |',
+        '| First | 2.410% |',
+        '| Second | 12.048 |',
+        '| Third | 30.120% |',
+      ].join('\n')
+    );
+    expect(tables).toHaveLength(1);
+    expect(tables[0].rows.map(row => row[1])).toEqual(['2.4%', '12.0', '30.1%']);
+    expect(tables[0].title).toBe('');
+  });
+
+  it('leaves a mean column at the decimals it was given', () => {
+    const tables = answerResultTables(
+      ['| Group | Mean |', '| --- | --- |', '| First | 4.256 |'].join('\n')
+    );
+    expect(tables[0].rows[0][1]).toBe('4.256');
   });
 });

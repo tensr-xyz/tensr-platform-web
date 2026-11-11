@@ -24,6 +24,18 @@ type RawRow = {
   detail?: string;
 };
 
+/** Saved tables across the screens that list them. The same id counts once. */
+export function savedTableTotal(groups: { id?: string }[][]): number {
+  const ids = new Set<string>();
+  for (const group of groups) {
+    for (const row of group) {
+      const id = String(row?.id || '');
+      if (id) ids.add(id);
+    }
+  }
+  return ids.size;
+}
+
 export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = ''): ProjectTable[] {
   const seen = new Set<string>();
   const out: ProjectTable[] = [];
@@ -62,17 +74,22 @@ export async function loadProjectTables(
 ): Promise<ProjectTable[]> {
   // Both lists, merged: the project's (every file) and the open file's own, so a gap in one never empties the rail.
   const fileIds = options.fileIds || [];
-  const projectPage = projectId
-    ? await flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(
-        projectTablesPath(projectId, fileIds)
-      ).catch(() => null)
-    : null;
-  const [filePage] = await Promise.all([
+  const filePagePromise =
     options.filePage ||
-      (datasetId
-        ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
-        : Promise.resolve(null)),
-  ]);
+    (datasetId
+      ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
+      : Promise.resolve(null));
+  let projectPage: { specs?: RawRow[]; stamps_pending?: boolean } | null = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    projectPage = projectId
+      ? await flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(
+          projectTablesPath(projectId, fileIds)
+        ).catch(() => null)
+      : null;
+    if (!projectPage?.stamps_pending || attempt === 3) break;
+    await new Promise(resolve => setTimeout(resolve, 400));
+  }
+  const filePage = await filePagePromise;
   return numberTables(
     mergeTableLists(
       projectTableRows(projectPage?.specs),

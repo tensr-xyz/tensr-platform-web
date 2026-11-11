@@ -1,6 +1,7 @@
 import {
   answerWithoutBase,
   keepLineBreaks,
+  withoutResultTokens,
   outputChecks,
   outputKind,
   outputBaseNote,
@@ -152,6 +153,11 @@ describe('chat output panel', () => {
     expect(labels).toContain('1 rows excluded because they were filtered out');
     expect(labels).toContain('3 rows excluded for another counted reason');
     expect(labels.join(' ')).not.toMatch(/missing values/);
+  });
+
+  it('drops an unfilled table citation', () => {
+    expect(withoutResultTokens('The subset is below.\n\n{table:r1}')).toBe('The subset is below.');
+    expect(withoutResultTokens('See {{table:r2}}.')).toBe('See .');
   });
 
   it('puts each download on its own line', () => {

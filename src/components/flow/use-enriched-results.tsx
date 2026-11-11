@@ -5,13 +5,16 @@ import { attachStoredRuns, fetchAnalysisRun, type StoredAnalysisRun } from '@/li
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import {
   answerWithoutBase,
+  answerWithoutTables,
   outputBaseClause,
   outputKind,
   outputRunIds,
   outputTakeaway,
+  withoutResultTokens,
 } from '@/components/flow/chat-output';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import {
+  answerResultTables,
   resultFootnote,
   resultViewFromToolResults,
   type ColumnLabels,
@@ -33,12 +36,8 @@ export function useEnrichedToolResults<T>(results: T[] | undefined): T[] | undef
   const [runs, setRuns] = useState<StoredAnalysisRun[]>([]);
   const [loadedFor, setLoadedFor] = useState('');
   const ids = runIds(results);
-  const hasLocalTables = useMemo(
-    () => Boolean(results && resultViewFromToolResults(results).tables.length),
-    [results]
-  );
   useEffect(() => {
-    if (!ids || hasLocalTables) return;
+    if (!ids) return;
     let cancelled = false;
     void Promise.all(ids.split('|').map(id => fetchAnalysisRun(id))).then(loaded => {
       if (cancelled) return;
@@ -48,9 +47,10 @@ export function useEnrichedToolResults<T>(results: T[] | undefined): T[] | undef
     return () => {
       cancelled = true;
     };
-  }, [ids, hasLocalTables]);
-  if (!results || hasLocalTables) return results;
+  }, [ids]);
+  if (!results) return results;
   const ready = ids && loadedFor === ids ? runs : [];
+  if (!ready.length) return results;
   return attachStoredRuns(results, ready) as T[];
 }
 
@@ -68,14 +68,18 @@ export function ThreadResult({
 }) {
   const enriched = useEnrichedToolResults(results);
   const view = useMemo(() => resultViewFromToolResults(enriched), [enriched]);
-  if (!view.tables.length) {
-    if (!answer) return null;
-    return <FlowMarkdown className="chat-prose">{answerWithoutBase(answer)}</FlowMarkdown>;
+  const tables = view.tables.length ? view.tables : answerResultTables(answer);
+  const prose = answerWithoutBase(
+    withoutResultTokens(tables.length ? answerWithoutTables(answer) : answer)
+  );
+  if (!tables.length) {
+    if (!prose) return null;
+    return <FlowMarkdown className="chat-prose">{prose}</FlowMarkdown>;
   }
   return (
     <AnalysisResult
-      lead={outputTakeaway(answer)}
-      tables={view.tables}
+      lead={outputTakeaway(withoutResultTokens(answer))}
+      tables={tables}
       footnote={resultFootnote(
         view,
         outputBaseClause(enriched, answer),

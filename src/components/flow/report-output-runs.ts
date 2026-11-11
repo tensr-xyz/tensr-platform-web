@@ -35,6 +35,20 @@ export function splitRunTitle(raw: string): {
   };
 }
 
+/** The type chip. A tool name such as compute is a label a person can read. */
+export function outputKindLabel(op: string): string {
+  if (op === 'compute') return 'New variable';
+  const named = analysisDisplayName(op);
+  if (named && named !== op && named !== op.replace(/_/g, ' ')) return named;
+  const operations: Record<string, string> = {
+    recode: 'Recode',
+    bin: 'Bins',
+    filter_apply: 'Filter',
+    set_nets: 'Net',
+  };
+  return operations[op] || 'Analysis';
+}
+
 /** The chip a run shows: In report when pinned, Saved once complete, otherwise Draft. */
 export function runState(status: string, pinned: boolean): 'In report' | 'Saved' | 'Draft' {
   if (pinned) return 'In report';

@@ -6,6 +6,7 @@ import {
   numberTables,
   projectTableRows,
   projectTablesPath,
+  savedTableTotal,
 } from './project-tables';
 
 describe('QA round 8', () => {
@@ -68,6 +69,15 @@ describe('QA round 8: tables load', () => {
 
   test('7: without file ids it falls back to the plain project list', () => {
     expect(projectTablesPath('p')).toBe('/api/projects/p/tables');
+  });
+
+  test('a saved table counts once across the live list and the rebuild list', () => {
+    expect(
+      savedTableTotal([
+        [{ id: 'live' }, { id: 'shared' }],
+        [{ id: 'shared' }, { id: 'rebuild' }],
+      ])
+    ).toBe(3);
   });
 });
 

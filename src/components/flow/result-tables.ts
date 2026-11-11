@@ -42,6 +42,86 @@ function percentCell(value: unknown): string {
   return (Math.round(number * 10) / 10).toFixed(1);
 }
 
+/** A share with extra decimals becomes one decimal. Integers and other text stay. */
+export function roundShareText(value: string): string {
+  const match = value.trim().match(/^(-?\d[\d,]*)(\.\d+)?(%)?(\s+.*)?$/);
+  if (!match?.[2] || match[2].length <= 2) return value;
+  const number = Number(`${match[1].replace(/,/g, '')}${match[2]}`);
+  if (!Number.isFinite(number)) return value;
+  return `${(Math.round(number * 10) / 10).toFixed(1)}${match[3] || ''}${match[4] || ''}`;
+}
+
+const STAT_HEADER = /\b(mean|sd|std|s\.e\.|se|p-value|p value|statistic|df)\b/i;
+
+function shareColumn(header: string, rows: string[][], index: number): boolean {
+  if (/%|percent|share/i.test(header)) return true;
+  if (STAT_HEADER.test(header)) return false;
+  const values = rows.map(row => (row[index] || '').trim()).filter(Boolean);
+  if (!values.length) return false;
+  return values.every(value => {
+    const match = value.match(/^(-?\d[\d,]*(?:\.\d+)?)%?$/);
+    if (!match) return false;
+    const number = Number(match[1].replace(/,/g, ''));
+    return Number.isFinite(number) && Math.abs(number) <= 100;
+  });
+}
+
+function markdownCells(line: string): string[] {
+  return line
+    .trim()
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map(item => item.trim());
+}
+
+/**
+ * Tables written into an answer, in the same shape as a result table.
+ * Share cells use one decimal, matching the result grid.
+ */
+export function answerResultTables(answer: string): RunTable[] {
+  const lines = String(answer || '').split('\n');
+  const tables: RunTable[] = [];
+  let index = 0;
+  while (index < lines.length) {
+    if (!lines[index].trim().startsWith('|')) {
+      index += 1;
+      continue;
+    }
+    const block: string[] = [];
+    const start = index;
+    while (index < lines.length && lines[index].trim().startsWith('|')) {
+      block.push(lines[index]);
+      index += 1;
+    }
+    const columns = markdownCells(block[0] || '');
+    const rows = block
+      .slice(1)
+      .filter(line => !/^[\s|:-]+$/.test(line))
+      .map(markdownCells)
+      .filter(row => row.some(Boolean));
+    if (columns.filter(Boolean).length < 2 || !rows.length) continue;
+    let title = '';
+    for (let cursor = start - 1; cursor >= 0; cursor -= 1) {
+      const text = lines[cursor].trim();
+      if (!text) continue;
+      if (!text.startsWith('|') && text.length <= 80 && !/[.!?]$/.test(text)) title = text;
+      break;
+    }
+    const shares = columns.map((column, columnIndex) => shareColumn(column, rows, columnIndex));
+    tables.push({
+      title,
+      columns,
+      rows: rows.map(row =>
+        row.map((value, columnIndex) =>
+          shares[columnIndex] || /%/.test(value) ? roundShareText(value) : value
+        )
+      ),
+    });
+  }
+  return tables;
+}
+
 function asTable(value: unknown): RunTable | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as {
@@ -287,6 +367,69 @@ function groupTable(groups: unknown): RunTable | null {
   return { title: 'Group means', columns: ['Group', 'n', 'Mean', 'SD'], rows };
 }
 
+function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
+  const table = record.anova_table;
+  if (!table || typeof table !== 'object' || Array.isArray(table)) return null;
+  const source = table as Record<string, unknown>;
+  const between = [
+    'Between groups',
+    cell(source.ss_between ?? source.ss),
+    cell(source.df_between ?? source.df),
+    cell(source.ms_between ?? source.ms),
+    cell(record.f_statistic ?? source.F ?? source.f),
+    cell(record.p_value ?? source.p_value ?? source.p),
+    cell(record.eta_squared ?? record.effect_size ?? source.eta_squared),
+  ];
+  if (!between.slice(1).some(Boolean)) return null;
+  const rows = [between];
+  if (source.ss_within != null || source.df_within != null) {
+    rows.push([
+      'Within groups',
+      cell(source.ss_within),
+      cell(source.df_within),
+      cell(source.ms_within),
+      '',
+      '',
+      '',
+    ]);
+  }
+  return {
+    title: 'ANOVA',
+    columns: ['Source', 'SS', 'df', 'MS', 'F', 'p', 'Effect size'],
+    rows,
+  };
+}
+
+function postHocTable(value: unknown): RunTable | null {
+  const block =
+    value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as { pairwise?: unknown; method?: unknown })
+      : null;
+  const pairs = Array.isArray(block?.pairwise) ? block.pairwise : Array.isArray(value) ? value : [];
+  const rows = pairs
+    .filter(row => row && typeof row === 'object')
+    .map(row => {
+      const record = row as Record<string, unknown>;
+      const left = cell(record.group1 ?? record.group_a ?? record.a);
+      const right = cell(record.group2 ?? record.group_b ?? record.b);
+      if (!left || !right) return null;
+      return [
+        left,
+        right,
+        cell(record.meandiff ?? record.mean_diff ?? record.diff),
+        cell(record['p-adj'] ?? record.p_adj ?? record.p_value),
+      ];
+    })
+    .filter((row): row is string[] => Boolean(row));
+  if (!rows.length) return null;
+  const method = cell(block?.method);
+  return {
+    title: method ? `Post hoc (${method})` : 'Post hoc',
+    columns: ['Group', 'Compared with', 'Difference', 'p'],
+    rows,
+  };
+}
+
 function isFrequencyRecord(record: Record<string, unknown>): boolean {
   if (
     record.analysis_type === 'frequencies' ||
@@ -309,6 +452,42 @@ function isFrequencyRecord(record: Record<string, unknown>): boolean {
         );
       })
   );
+}
+
+function filterText(named: unknown): string {
+  if (typeof named === 'string') return named.trim();
+  if (named && typeof named === 'object' && !Array.isArray(named)) {
+    return filterText((named as { filters?: unknown }).filters);
+  }
+  if (!Array.isArray(named)) return '';
+  const parts = named
+    .filter(item => item && typeof item === 'object')
+    .map(item => {
+      const row = item as { column?: unknown; columnId?: unknown; value?: unknown; op?: unknown };
+      const column = cell(row.column ?? row.columnId);
+      const compared = cell(row.value);
+      if (!column || !compared) return '';
+      return `${column} ${cell(row.op) || '='} ${compared}`;
+    })
+    .filter(Boolean);
+  return parts.join(', ');
+}
+
+function weightName(record: Record<string, unknown>): string {
+  if (record.weight && typeof record.weight === 'object') {
+    return cell((record.weight as { column?: unknown }).column);
+  }
+  const named =
+    typeof record.weight === 'string'
+      ? record.weight
+      : typeof record.weight_column === 'string'
+        ? record.weight_column
+        : typeof record.resolved_weight === 'string'
+          ? record.resolved_weight
+          : '';
+  const text = named.trim();
+  if (!text || text.toLowerCase() === 'none' || text.toLowerCase() === 'unweighted') return '';
+  return text;
 }
 
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
@@ -398,6 +577,16 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     add(themeShareTable(record.code_frequency));
     add(npsTable(record.groups));
     add(groupTable(record.group_descriptives));
+    add(anovaSourceTable(record));
+    add(postHocTable(record.post_hoc));
+    const levene = record.levene_test;
+    if (levene && typeof levene === 'object') {
+      const p = cell((levene as { p_value?: unknown }).p_value);
+      if (p) notes([`Levene p = ${p}`]);
+    }
+    if (typeof record.exclusion_note === 'string' && record.exclusion_note.trim()) {
+      notes([record.exclusion_note.trim()]);
+    }
     const diagnostics = record.diagnostics;
     if (diagnostics && typeof diagnostics === 'object') {
       add(marginTable((diagnostics as { margins?: unknown }).margins));
@@ -441,25 +630,12 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       const counted = answeredCount(record);
       if (counted > answered) answered = counted;
     }
-    if (!view.weight && record.weight && typeof record.weight === 'object') {
-      view.weight = cell((record.weight as { column?: unknown }).column);
-    }
+    if (!view.weight) view.weight = weightName(record);
     if (!view.filter) {
-      const named = record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters;
-      if (typeof named === 'string' && named.trim()) view.filter = named.trim();
-      else if (Array.isArray(named)) {
-        const parts = named
-          .filter(item => item && typeof item === 'object')
-          .map(item => {
-            const row = item as { column?: unknown; value?: unknown; op?: unknown };
-            const column = cell(row.column);
-            const compared = cell(row.value);
-            if (!column || !compared) return '';
-            return `${column} ${cell(row.op) || '='} ${compared}`;
-          })
-          .filter(Boolean);
-        if (parts.length) view.filter = parts.join(', ');
-      }
+      const named = filterText(
+        record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters
+      );
+      if (named) view.filter = named;
     }
     for (const [key, nested] of Object.entries(record)) {
       if (key === 'rows' || key === 'columns' || key === 'code_counts' || key === 'preview')

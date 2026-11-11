@@ -2,6 +2,8 @@ import {
   documentApa,
   documentCsv,
   documentMarkdown,
+  pinIsThin,
+  pinStory,
   placePins,
   readPins,
   runDocument,
@@ -88,5 +90,31 @@ describe('saved run document', () => {
     } as unknown as Storage;
     writePins('project', [pin], storage);
     expect(readPins('project', storage)[0].headline).toBe('North is higher');
+  });
+
+  it('a thin card keeps the lead and the share bars from the run', () => {
+    const document = runDocument({
+      op: 'frequencies',
+      report: {
+        summary: 'First is the largest group.',
+        meta: { title: 'Group' },
+        tables: [
+          {
+            title: 'Group',
+            columns: ['Answer', 'Percent'],
+            rows: [
+              ['First', '30.120'],
+              ['Second', '12.048'],
+            ],
+          },
+        ],
+      },
+      result: {},
+    });
+    const story = pinStory(document);
+    expect(story.support).toBe('First is the largest group.');
+    expect(story.bars.map(bar => bar.percent)).toEqual([30.1, 12]);
+    expect(pinIsThin({ support: 'n = 40', bars: [] })).toBe(true);
+    expect(pinIsThin({ support: story.support, bars: story.bars })).toBe(false);
   });
 });

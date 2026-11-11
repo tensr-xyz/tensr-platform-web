@@ -1,5 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { AgentThread, liveRunShouldReplaceChat } from './agent-thread';
+import { AgentThread, liveRunShouldReplaceChat, stepLines } from './agent-thread';
 import { publishLiveChatRun } from './chat-live-run';
 import { runAgentLoop } from '@/lib/run-agent-loop';
 
@@ -14,6 +14,12 @@ jest.mock('@/lib/run-agent-loop', () => ({
 const send = runAgentLoop as jest.Mock;
 
 describe('shared agent thread', () => {
+  it('restores a readable step and hides a tool name', () => {
+    expect(stepLines([{ name: 'data_edit', message: '' }])).toEqual(['Edited the data']);
+    expect(stepLines([{ name: 'compute', message: '' }])).toEqual(['Computed a new column']);
+    expect(stepLines([{ name: 'finish', message: '' }])).toEqual([]);
+  });
+
   it('keeps the open chat when another finished run is still in memory', () => {
     expect(liveRunShouldReplaceChat('current', 'older')).toBe(false);
     expect(liveRunShouldReplaceChat('current', 'current')).toBe(true);

@@ -17,6 +17,7 @@ import { AgentThread, AgentThreadColumn, useAgentThread } from '@/components/flo
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import {
   loadProjectTables,
+  savedTableTotal,
   staleCardKey,
   tableFileNote,
   uniqueStale,
@@ -30,6 +31,8 @@ import { FlowComposer } from '@/components/flow/chat-composer';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
 import { baseCount } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
+import { fetchAnalysisRun } from '@/lib/analysis-runs';
+import { resultViewFromToolResults } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { rememberedFileName, SourcesScreen } from '@/components/flow/sources-screen';
@@ -39,7 +42,15 @@ import { AnovaModal } from '@/components/flow/anova-modal';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
-import { documentApa, placePins, runDocument } from '@/components/flow/run-document';
+import {
+  documentApa,
+  pinIsThin,
+  pinStory,
+  placePins,
+  runDocument,
+  type ReportPin,
+  type RunTable,
+} from '@/components/flow/run-document';
 import {
   deliverableOutputs,
   pinsFromRuns,
@@ -755,7 +766,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 onChanged={reload}
               />
             ) : section === 'tables' ? (
-              <TablesScreen project={project} datasets={datasets} />
+              <TablesScreen project={project} datasets={datasets} ready={tabReady} />
             ) : section === 'report' ? (
               <ReportScreen
                 projectId={projectId}
@@ -2394,6 +2405,7 @@ function ChatScreen({
   const file = chatFile(project, datasets);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
   const chatProjectId = project?.id || '';
+  const reportPins = useProjectPins(chatProjectId, datasetId ? [datasetId] : []);
 
   useEffect(() => {
     if (!datasetId) {
@@ -2481,6 +2493,9 @@ function ChatScreen({
     checks,
     downloads,
   } = thread;
+  const inReport =
+    Boolean(runIds[0] && reportPins.some(pin => pin.runId === runIds[0])) ||
+    reportedRun === runIds[0];
   const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
   const respondents = baseCount(baseNote);
   const addOutputToReport = () => {
@@ -2880,9 +2895,7 @@ function ChatScreen({
                   <div>
                     <div className="flow-muted">Used in</div>
                     <span className="output-badge">
-                      {reportedRun === runIds[0]
-                        ? 'This chat · in the report'
-                        : 'This chat · not in the report yet'}
+                      {inReport ? 'This chat · in the report' : 'This chat · not in the report yet'}
                     </span>
                   </div>
                   {downloads.length > 0 || runIds.length > 0 ? (
@@ -2933,10 +2946,10 @@ function ChatScreen({
                   <Button
                     className="flow-btn"
                     type="button"
-                    disabled={!runIds[0] || !datasetId || reportedRun === runIds[0]}
+                    disabled={!runIds[0] || !datasetId || inReport}
                     onClick={addOutputToReport}
                   >
-                    {reportedRun === runIds[0] ? 'In report' : 'Add to report'}
+                    {inReport ? 'In report' : 'Add to report'}
                   </Button>
                   <Link className="flow-btn primary output-open" href={`${projectHref}/tables`}>
                     Open
@@ -4366,7 +4379,15 @@ function ResponsesScreen({
   );
 }
 
-function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: DatasetRow[] }) {
+function TablesScreen({
+  project,
+  datasets,
+  ready = false,
+}: {
+  project?: FlowProject;
+  datasets: DatasetRow[];
+  ready?: boolean;
+}) {
   const [chosen, setChosen] = useState('');
   const [initialStub, setInitialStub] = useState('');
   const [initialBanner, setInitialBanner] = useState('');
@@ -4385,6 +4406,7 @@ function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: 
       projectId={project?.id}
       initialStub={initialStub}
       initialBanner={initialBanner}
+      ready={ready}
       files={files.map(row => ({
         id: datasetRowId(row),
         name: datasetFileLabel(row),
@@ -4401,6 +4423,80 @@ function TablesScreen({ project, datasets }: { project?: FlowProject; datasets: 
         });
       }}
     />
+  );
+}
+
+function OutputPin({ pin }: { pin: ReportPin }) {
+  const thin = pinIsThin(pin);
+  const [lead, setLead] = useState(pin.support);
+  const [bars, setBars] = useState(pin.bars || []);
+  const [tables, setTables] = useState<RunTable[]>([]);
+  const [phase, setPhase] = useState<'loading' | 'ready'>(thin && pin.runId ? 'loading' : 'ready');
+  useEffect(() => {
+    if (!thin || !pin.runId) return;
+    let live = true;
+    void fetchAnalysisRun(pin.runId).then(run => {
+      if (!live) return;
+      if (run) {
+        const document = runDocument({
+          op: run.op,
+          title: run.report?.meta?.title,
+          report: run.report,
+          result: run.result,
+          created_at: run.created_at,
+        });
+        const story = pinStory(document);
+        if (story.support) setLead(story.support);
+        if (story.bars.length) setBars(story.bars);
+        const view = resultViewFromToolResults([{ result: run.result, report: run.report }]);
+        if (view.tables.length) setTables(view.tables);
+      }
+      setPhase('ready');
+    });
+    return () => {
+      live = false;
+    };
+  }, [thin, pin.runId]);
+  if (phase === 'loading') {
+    return (
+      <article className="report-finding" aria-busy="true">
+        <Skeleton className="h-36 w-full" />
+      </article>
+    );
+  }
+  if (tables.length) {
+    return (
+      <article className="report-finding">
+        <AnalysisResult lead={lead || pin.headline} tables={tables} />
+      </article>
+    );
+  }
+  return (
+    <article className="report-finding">
+      <div className="report-finding-copy">
+        <p className="flow-muted">{pin.citation}</p>
+        <h3>{pin.headline}</h3>
+        {lead ? <p>{lead}</p> : null}
+        {bars.length ? (
+          <div className="report-bars">
+            {bars.map(bar => (
+              <div key={`${pin.id}-${bar.label}`}>
+                <div className="report-bar-label">
+                  <span>{bar.label}</span>
+                  <span>{bar.percent.toFixed(1)}%</span>
+                </div>
+                <div className="report-bar-track">
+                  <div
+                    className="report-bar"
+                    style={{ width: `${Math.max(0, Math.min(100, bar.percent))}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </article>
   );
 }
 
@@ -4464,6 +4560,7 @@ function ReportScreen({
     setOpenRunId(lastRun.runId);
   }, [lastRun]);
   const reportPins = useProjectPins(projectId, []);
+  const stampTries = useRef(0);
 
   const templateInput = useRef<HTMLInputElement>(null);
 
@@ -4487,6 +4584,7 @@ function ReportScreen({
 
   useEffect(() => {
     if (!datasetId) {
+      if (!ready) return;
       setSpecs([]);
       setPicked([]);
       setTables([]);
@@ -4528,6 +4626,14 @@ function ReportScreen({
         if (!live || !overview?.ok || !Array.isArray(overview.tables)) {
           throw new Error('Could not load saved tables');
         }
+        if (overview.stamps_pending && stampTries.current < 4) {
+          stampTries.current += 1;
+          window.setTimeout(() => {
+            if (live) setRefreshKey(key => key + 1);
+          }, 400);
+          return;
+        }
+        stampTries.current = 0;
         const runs = (overview.runs || []) as Parameters<typeof pinsFromRuns>[0];
         rememberReportRuns(projectId, runs);
         setProjectPins(projectId, pinsFromRuns(runs));
@@ -4547,13 +4653,6 @@ function ReportScreen({
         );
         setFindings((overview.findings || []).map(findingFromOverview));
         setFindingsPhase('ready');
-        if (!liveRows.length) {
-          setSpecs([]);
-          setPicked([]);
-          setTables([]);
-          setPhase('ready');
-          return;
-        }
         const meta = await flowJson<{
           columns?: {
             name?: string;
@@ -4627,17 +4726,13 @@ function ReportScreen({
             table: reportTableFromBook(row.id, label, row.number, detail, labels),
           };
         });
-        const usedNumbers = liveRows
-          .map(row => Number(row.table_number) || 0)
-          .filter(number => number > 0);
-        const numberShift = usedNumbers.length ? Math.min(...usedNumbers) - 1 : 0;
         setSpecs(
           ready.map(row => ({
             id: row.id,
             label: row.label,
             spec: row.spec,
             datasetId: row.datasetId,
-            number: row.number > 0 ? row.number - numberShift : row.number,
+            number: row.number,
           }))
         );
         setPicked(ready.map(row => row.id));
@@ -4645,26 +4740,23 @@ function ReportScreen({
           .filter(row => staleFromOpen.has(String(row.spec_id || '')))
           .map(row => ({
             id: String(row.spec_id || ''),
-            label: String(row.label || ''),
-            number:
-              Number(row.table_number) > 0
-                ? Math.max(1, Number(row.table_number) - numberShift)
-                : 0,
+            label: titledWithQuestions(String(row.label || ''), questions),
+            number: Number(row.table_number) || 0,
             datasetId: String(row.dataset_id || ''),
             filename: String(row.filename || ''),
             detail: String(row.detail || 'Rebuild this table on the current file.'),
           }));
-        setStaleTables(current => uniqueStale([...current, ...refused, ...settled.stale]));
+        setStaleTables(current =>
+          uniqueStale([...current, ...refused, ...settled.stale]).map(table => ({
+            ...table,
+            label: titledWithQuestions(table.label, questions),
+          }))
+        );
         const nextTables = distinctTables(ready.map(row => row.table));
-        const numbered = numberShift
-          ? nextTables.map(table =>
-              table.index > 0 ? { ...table, index: table.index - numberShift } : table
-            )
-          : nextTables;
-        setTables(numbered);
+        setTables(nextTables);
         setSegmentId(null);
         setRowCut(null);
-        writeFindings(numbered, null, null);
+        writeFindings(nextTables, null, null);
         setPhase('ready');
       })
       .catch(err => {
@@ -4680,6 +4772,7 @@ function ReportScreen({
   const selected = specs.filter(
     row => picked.includes(row.id) && Object.keys(row.spec || {}).length > 0
   );
+  const savedCount = savedTableTotal([specs, staleTables]);
 
   const rebuildStale = async (table: StaleTable, targetId?: string) => {
     setBusy(`rebuild-${table.id}`);
@@ -4846,6 +4939,7 @@ function ReportScreen({
           projectId={projectId}
           openRunId={openRunId}
           refreshKey={lastRun?.nonce || 0}
+          ready={ready}
           findings={findings.map(finding => ({ id: finding.id, label: finding.eyebrow }))}
           files={datasets
             .filter(row => row.project_id === projectId)
@@ -5039,7 +5133,7 @@ function ReportScreen({
           <h1>{project?.name || 'Report'}</h1>
           <p className="report-meta">
             <span className="ink">
-              {specs.length} saved table{specs.length === 1 ? '' : 's'}
+              {savedCount} saved table{savedCount === 1 ? '' : 's'}
             </span>
           </p>
         </div>
@@ -5086,7 +5180,7 @@ function ReportScreen({
               <div className="report-tags">
                 <span>.XLSX</span>
                 <span>
-                  {specs.length} table{specs.length === 1 ? '' : 's'}
+                  {savedCount} table{savedCount === 1 ? '' : 's'}
                 </span>
               </div>
               <div>
@@ -5196,34 +5290,7 @@ function ReportScreen({
             <>
               {placePins(findings, reportPins).map(entry => {
                 if (entry.kind === 'pin') {
-                  const pin = entry.item;
-                  return (
-                    <article key={pin.id} className="report-finding">
-                      <div className="report-finding-copy">
-                        <p className="flow-muted">{pin.citation}</p>
-                        <h3>{pin.headline}</h3>
-                        {pin.support ? <p>{pin.support}</p> : null}
-                        {pin.bars?.length ? (
-                          <div className="report-bars">
-                            {pin.bars.map(bar => (
-                              <div key={`${pin.id}-${bar.label}`}>
-                                <div className="report-bar-label">
-                                  <span>{bar.label}</span>
-                                  <span>{bar.percent.toFixed(1)}%</span>
-                                </div>
-                                <div className="report-bar-track">
-                                  <div
-                                    className="report-bar"
-                                    style={{ width: `${Math.max(0, Math.min(100, bar.percent))}%` }}
-                                  />
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </article>
-                  );
+                  return <OutputPin key={entry.item.id} pin={entry.item} />;
                 }
                 const finding = entry.item;
                 const edit = edits[finding.id] || {};
