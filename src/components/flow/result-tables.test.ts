@@ -434,4 +434,38 @@ describe('result tables', () => {
     expect(view.tables[0].rows[0][0]).toBe('Agree or above');
     expect(weightNote('none')).toBe('Unweighted');
   });
+
+  it('shows an association table, the filter, and the weight column', () => {
+    const view = resultViewFromToolResults({
+      request_body: {
+        filter_ref: { combine: 'and', filters: [{ column: 'city', op: '=', value: 'London' }] },
+        weight_column: 'design_weight',
+      },
+      summary: {
+        notes: ['Expected counts under 5: 1 cell.'],
+        table: [
+          {
+            title: 'Observed',
+            columns: ['Region', 'North', 'South'],
+            rows: [
+              ['Yes', '10', '2'],
+              ['No', '4', '8'],
+            ],
+          },
+          {
+            title: 'Effect size',
+            columns: ['Measure', 'Value'],
+            rows: [["Cramér's V", '0.250']],
+          },
+        ],
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Observed', 'Effect size']);
+    expect(view.tables[0].rows[0]).toEqual(['Yes', '10', '2']);
+    expect(view.filter).toBe('city = London');
+    expect(view.weight).toBe('design_weight');
+    expect(view.checks).toContain('Expected counts under 5: 1 cell.');
+    expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Filter: city = London');
+    expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Weight: design_weight');
+  });
 });

@@ -311,6 +311,42 @@ function isFrequencyRecord(record: Record<string, unknown>): boolean {
   );
 }
 
+function filterText(named: unknown): string {
+  if (typeof named === 'string') return named.trim();
+  if (named && typeof named === 'object' && !Array.isArray(named)) {
+    return filterText((named as { filters?: unknown }).filters);
+  }
+  if (!Array.isArray(named)) return '';
+  const parts = named
+    .filter(item => item && typeof item === 'object')
+    .map(item => {
+      const row = item as { column?: unknown; columnId?: unknown; value?: unknown; op?: unknown };
+      const column = cell(row.column ?? row.columnId);
+      const compared = cell(row.value);
+      if (!column || !compared) return '';
+      return `${column} ${cell(row.op) || '='} ${compared}`;
+    })
+    .filter(Boolean);
+  return parts.join(', ');
+}
+
+function weightName(record: Record<string, unknown>): string {
+  if (record.weight && typeof record.weight === 'object') {
+    return cell((record.weight as { column?: unknown }).column);
+  }
+  const named =
+    typeof record.weight === 'string'
+      ? record.weight
+      : typeof record.weight_column === 'string'
+        ? record.weight_column
+        : typeof record.resolved_weight === 'string'
+          ? record.resolved_weight
+          : '';
+  const text = named.trim();
+  if (!text || text.toLowerCase() === 'none' || text.toLowerCase() === 'unweighted') return '';
+  return text;
+}
+
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
 export function resultViewFromToolResults(results: unknown): ResultView {
   let answered = 0;
@@ -441,25 +477,12 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       const counted = answeredCount(record);
       if (counted > answered) answered = counted;
     }
-    if (!view.weight && record.weight && typeof record.weight === 'object') {
-      view.weight = cell((record.weight as { column?: unknown }).column);
-    }
+    if (!view.weight) view.weight = weightName(record);
     if (!view.filter) {
-      const named = record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters;
-      if (typeof named === 'string' && named.trim()) view.filter = named.trim();
-      else if (Array.isArray(named)) {
-        const parts = named
-          .filter(item => item && typeof item === 'object')
-          .map(item => {
-            const row = item as { column?: unknown; value?: unknown; op?: unknown };
-            const column = cell(row.column);
-            const compared = cell(row.value);
-            if (!column || !compared) return '';
-            return `${column} ${cell(row.op) || '='} ${compared}`;
-          })
-          .filter(Boolean);
-        if (parts.length) view.filter = parts.join(', ');
-      }
+      const named = filterText(
+        record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters
+      );
+      if (named) view.filter = named;
     }
     for (const [key, nested] of Object.entries(record)) {
       if (key === 'rows' || key === 'columns' || key === 'code_counts' || key === 'preview')
