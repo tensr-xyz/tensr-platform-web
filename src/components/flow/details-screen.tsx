@@ -8,6 +8,7 @@ import { pickerColumns, questionKind, type FlowColumn } from '@/lib/flow-columns
 import { datasetRowId } from '@/components/flow/survey-screens';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { SidePanel } from '@/components/flow/side-panel';
 import {
   Dialog,
   DialogContent,
@@ -639,7 +640,7 @@ export function DetailsScreen({
             )}
           </div>
         </div>
-        <aside className="details-side">
+        <SidePanel id="details" defaultWidth={280} className="details-side">
           <div>
             <div className="flow-muted details-label">Waves</div>
             {files.length ? (
@@ -716,7 +717,7 @@ export function DetailsScreen({
               <p className="flow-muted">No members yet.</p>
             )}
           </div>
-        </aside>
+        </SidePanel>
       </div>
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>

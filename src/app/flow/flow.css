@@ -486,11 +486,10 @@ body:has(.flow) [data-radix-popper-content-wrapper],
 .responses-agent .flow-composer:not(.chat-composer) {
   flex-wrap: wrap;
   align-items: stretch;
-  width: 100%;
-  margin: 0;
+  width: auto;
+  margin: 10px 12px 12px;
   padding: 10px 12px 12px;
-  border-top: 1px solid var(--color-line);
-  border-radius: 0;
+  border-radius: 16px;
 }
 
 .responses-agent .flow-composer:not(.chat-composer) .flow-text {
@@ -1239,7 +1238,7 @@ body:has(.flow) [data-radix-popper-content-wrapper],
 
 .flow-split {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 440px;
+  grid-template-columns: 220px minmax(0, 1fr) auto;
   gap: 0;
   min-height: 0;
   flex: 1;
@@ -1259,7 +1258,7 @@ body:has(.flow) [data-radix-popper-content-wrapper],
 }
 
 .tables-board {
-  grid-template-columns: 236px minmax(0, 1fr) 320px;
+  grid-template-columns: 236px minmax(0, 1fr) auto;
 }
 
 .tables-rail,
@@ -1775,10 +1774,21 @@ select.flow-input {
   gap: 8px;
   align-items: center;
   margin-top: auto;
-  border: 0;
+  border: 1px solid var(--color-line);
   border-radius: 16px;
   padding: 10px 12px;
-  background: transparent;
+  background: var(--color-canvas);
+  box-shadow:
+    0 1px 2px rgba(27, 28, 26, 0.04),
+    0 4px 16px rgba(27, 28, 26, 0.05);
+}
+
+.flow-composer:focus-within {
+  outline: none;
+  border-color: var(--color-line);
+  box-shadow:
+    0 1px 2px rgba(27, 28, 26, 0.04),
+    0 4px 16px rgba(27, 28, 26, 0.05);
 }
 
 .flow-composer .flow-text {
@@ -1787,6 +1797,14 @@ select.flow-input {
   padding: 4px;
   resize: none;
   flex: 1;
+  outline: none;
+  box-shadow: none;
+}
+
+.flow-composer .flow-text:focus,
+.flow-composer .flow-text:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .analysis-result {
@@ -2083,7 +2101,6 @@ select.flow-input {
   align-items: stretch;
   margin-top: 0;
   border-radius: 14px;
-  box-shadow: 0 4px 16px #1b1c1a0d;
 }
 
 .chat-composer-row {
@@ -2185,7 +2202,7 @@ select.flow-input {
 
 .details-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) auto;
   min-height: 0;
 }
 
@@ -2518,8 +2535,8 @@ select.flow-input {
 
 .responses-layout {
   display: grid;
-  /* The sheet keeps a usable width. The side panel shrinks instead of covering it. */
-  grid-template-columns: minmax(140px, 220px) minmax(420px, 1fr) minmax(200px, 300px);
+  /* The right-hand panel sets its own width. The sheet takes the space left. */
+  grid-template-columns: minmax(140px, 220px) minmax(0, 1fr) auto;
   grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
@@ -3890,7 +3907,7 @@ select.flow-input {
 .outputs-board {
   width: 100%;
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr) 320px;
+  grid-template-columns: 200px minmax(0, 1fr) auto;
   min-height: 420px;
 }
 
@@ -10500,4 +10517,76 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 .tables-saved-copy {
   flex: 1 1 auto;
+}
+
+.flow-split,
+.tables-board,
+.responses-layout,
+.outputs-board,
+.details-body,
+.interviews-page,
+.output-page > .output-body,
+.pub-body {
+  position: relative;
+}
+
+.side-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  min-height: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.side-panel[hidden] {
+  display: none;
+}
+
+.side-panel-handle {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: col-resize;
+}
+
+.side-panel-handle:hover,
+.side-panel-handle:focus-visible {
+  background: var(--color-line);
+}
+
+.side-panel-tools {
+  display: flex;
+  justify-content: flex-end;
+  flex: none;
+  padding: 6px 8px 0;
+}
+
+.side-panel-expand {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  box-shadow: 0 1px 2px rgba(27, 28, 26, 0.06);
+}
+
+.side-panel[data-expanded='true'] {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  width: auto;
+  min-width: 0;
+  max-width: none;
+  background: var(--color-canvas);
 }

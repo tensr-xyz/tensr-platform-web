@@ -28,6 +28,7 @@ import { isIdColumn, isInternalColumn, type FlowColumn } from '@/lib/flow-column
 import { openSignedDownload } from '@/lib/excel-download';
 import { runAgentLoop, type AgentLoopAttachment } from '@/lib/run-agent-loop';
 import { FlowComposer } from '@/components/flow/chat-composer';
+import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
 import { baseCount } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
@@ -1806,7 +1807,7 @@ function PublishScreen() {
             </div>
             {message ? <p className="pub-message">{message}</p> : null}
           </section>
-          <aside className="pub-side">
+          <FlowSidePanel id="publish" defaultWidth={296} className="pub-side">
             <div className="pub-card">
               <div className="pub-card-head">
                 <span>Review · v{version || '0.1.0'}</span>
@@ -1920,7 +1921,7 @@ function PublishScreen() {
                 <path d="M0 30 L248 30" fill="none" stroke="var(--color-line)" strokeWidth="1.6" />
               </svg>
             </div>
-          </aside>
+          </FlowSidePanel>
         </div>
       )}
     </div>
@@ -2744,7 +2745,12 @@ function ChatScreen({
               placeholder="Ask a follow-up... Type @ to point at a column."
             />
           </section>
-          <aside className="flow-output" hidden={!panelOpen}>
+          <FlowSidePanel
+            id="chat-output"
+            defaultWidth={440}
+            className="flow-output"
+            hidden={!panelOpen}
+          >
             {outputReady && tableMode ? (
               <>
                 <div className="output-tabs">
@@ -2959,7 +2965,7 @@ function ChatScreen({
             ) : (
               <p className="flow-muted output-empty">An output from this chat lands here.</p>
             )}
-          </aside>
+          </FlowSidePanel>
         </>
       ) : (
         <EmptyChat
@@ -4170,7 +4176,11 @@ function ResponsesScreen({
         </aside>
       ) : null}
       {filtersOpen && datasetId ? (
-        <aside className="responses-side responses-filters">
+        <FlowSidePanel
+          id="responses"
+          defaultWidth={300}
+          className="responses-side responses-filters"
+        >
           <FiltersPanel
             datasetId={datasetId}
             columns={columns
@@ -4191,9 +4201,11 @@ function ResponsesScreen({
               if (project) router.push(`/flow/p/${project.id}/tables`);
             }}
           />
-        </aside>
+        </FlowSidePanel>
       ) : null}
-      <aside
+      <FlowSidePanel
+        id="responses"
+        defaultWidth={300}
         className="responses-side"
         hidden={
           tab === 'notebook' ||
@@ -4349,7 +4361,7 @@ function ResponsesScreen({
             ) : null}
           </ScrollArea>
         )}
-      </aside>
+      </FlowSidePanel>
       {anovaOpen ? (
         <AnovaModal
           columns={columns}
