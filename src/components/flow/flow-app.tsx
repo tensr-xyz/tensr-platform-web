@@ -2394,6 +2394,7 @@ function ChatScreen({
   const file = chatFile(project, datasets);
   const projectHref = project ? `/flow/p/${project.id}` : '/flow';
   const chatProjectId = project?.id || '';
+  const reportPins = useProjectPins(chatProjectId, datasetId ? [datasetId] : []);
 
   useEffect(() => {
     if (!datasetId) {
@@ -2481,6 +2482,9 @@ function ChatScreen({
     checks,
     downloads,
   } = thread;
+  const inReport =
+    Boolean(runIds[0] && reportPins.some(pin => pin.runId === runIds[0])) ||
+    reportedRun === runIds[0];
   const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
   const respondents = baseCount(baseNote);
   const addOutputToReport = () => {
@@ -2880,9 +2884,7 @@ function ChatScreen({
                   <div>
                     <div className="flow-muted">Used in</div>
                     <span className="output-badge">
-                      {reportedRun === runIds[0]
-                        ? 'This chat · in the report'
-                        : 'This chat · not in the report yet'}
+                      {inReport ? 'This chat · in the report' : 'This chat · not in the report yet'}
                     </span>
                   </div>
                   {downloads.length > 0 || runIds.length > 0 ? (
@@ -2933,10 +2935,10 @@ function ChatScreen({
                   <Button
                     className="flow-btn"
                     type="button"
-                    disabled={!runIds[0] || !datasetId || reportedRun === runIds[0]}
+                    disabled={!runIds[0] || !datasetId || inReport}
                     onClick={addOutputToReport}
                   >
-                    {reportedRun === runIds[0] ? 'In report' : 'Add to report'}
+                    {inReport ? 'In report' : 'Add to report'}
                   </Button>
                   <Link className="flow-btn primary output-open" href={`${projectHref}/tables`}>
                     Open

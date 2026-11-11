@@ -41,7 +41,7 @@ import {
   type ColumnLabels,
 } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
-import { savePin } from '@/components/flow/report-pins';
+import { savePin, useProjectPins } from '@/components/flow/report-pins';
 import { flowJson } from '@/lib/flow-api';
 import {
   downloadsFromToolResults,
@@ -81,6 +81,13 @@ export type AgentThreadOptions = {
   onSession?: (session: AgentChatSession) => void;
   onFinished?: (result: AgentLoopResponse) => void;
 };
+
+export function stepLines(steps: { name?: string; message?: string }[] | undefined): string[] {
+  return (steps || []).flatMap(step => {
+    const line = visibleAgentStep(step.name || '', step.message || '');
+    return line ? [line] : [];
+  });
+}
 
 function replyLines(result: AgentLoopResponse): string[] {
   const summary = result.execution_summary?.trim();
@@ -522,6 +529,7 @@ export function useAgentThread({
           user?: string;
           answer?: string;
           tool_results?: AgentLoopResponse['tool_results'];
+          steps?: { name?: string; message?: string }[];
         }[];
       }>(`/api/projects/${projectId}/sessions/${sessionId}`, { signal: controller.signal })
         .then(page => {
@@ -534,6 +542,7 @@ export function useAgentThread({
                     note: '',
                     answer: item.answer || '',
                     toolResults: item.tool_results,
+                    steps: item.steps,
                   },
                 ]
               : []
@@ -559,7 +568,7 @@ export function useAgentThread({
                   }
                 : null
             );
-            setSteps([]);
+            setSteps(stepLines(last?.steps));
             setDownloads([]);
             setAttachments([]);
             setAttachError(null);
@@ -643,7 +652,6 @@ export function useAgentThread({
   }, [outputReady]);
   const checks = outputChecks(toolResults);
   const tables = answerTables(answer);
-  const prose = answerWithoutBase(panelOpen && tables ? answerWithoutTables(answer) : answer);
   const tableMode = kind === 'Crosstab' && Boolean(tables);
   const ledger = (turn?.turn_state?.ledger || {}) as { weight?: string | null };
   const resultView = resultViewFromToolResults(toolResults);
@@ -651,6 +659,7 @@ export function useAgentThread({
     ...table,
     title: titledWithQuestion(table.title, columnLabels),
   }));
+  const prose = answerWithoutBase(structuredTables.length ? answerWithoutTables(answer) : answer);
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
     baseNote,
@@ -743,6 +752,13 @@ export function AgentThreadColumn({
   emptyDescription?: string;
 }) {
   const [stepsOpen, setStepsOpen] = useState(true);
+  const reportPins = useProjectPins(
+    thread.projectId || '',
+    thread.datasetId ? [thread.datasetId] : []
+  );
+  const inReport = Boolean(
+    thread.runIds[0] && reportPins.some(pin => pin.runId === thread.runIds[0])
+  );
   const saveTable = () => {
     if (!thread.datasetId) return;
     void import('@/components/flow/survey-screens').then(({ tableBodyFromAgentRun }) => {
@@ -896,7 +912,7 @@ export function AgentThreadColumn({
               <Button
                 className="flow-btn"
                 type="button"
-                disabled={!thread.runIds[0] || !thread.datasetId}
+                disabled={!thread.runIds[0] || !thread.datasetId || inReport}
                 onClick={() => {
                   if (!thread.runIds[0] || !thread.datasetId || !thread.projectId) return;
                   void savePin(thread.projectId, thread.datasetId, {
@@ -915,7 +931,7 @@ export function AgentThreadColumn({
                     .catch(() => thread.setStatus('That result could not be added to the report.'));
                 }}
               >
-                Add to report
+                {inReport ? 'In report' : 'Add to report'}
               </Button>
               <Button
                 className="flow-btn"

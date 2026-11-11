@@ -76,6 +76,14 @@ describe('output titles and states', () => {
     });
   });
 
+  it('labels a new variable and does not show the tool name', () => {
+    const { outputKindLabel } = jest.requireActual('./report-output-runs');
+    expect(outputKindLabel('compute')).toBe('New variable');
+    expect(outputKindLabel('descriptives')).toBe('Descriptive statistics');
+    expect(outputKindLabel('code_open_text')).toBe('Open-text coding');
+    expect(outputKindLabel('not_a_tool')).toBe('Analysis');
+  });
+
   it('reads In report, Saved, or Draft from real state', () => {
     const { runState } = jest.requireActual('./report-output-runs');
     expect(runState('complete', true)).toBe('In report');

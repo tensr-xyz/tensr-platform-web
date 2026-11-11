@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input';
 import { Segmented } from '@/components/ui/segmented';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
-import { analysisDisplayName } from '@/lib/analysis-definitions';
 import { OutputPage } from '@/components/flow/output-page';
 import {
   cachedReportRuns,
@@ -30,6 +29,7 @@ import {
   dayLabel,
   metricLines,
   outputCounts,
+  outputKindLabel,
   outputRuns,
   uniqueRuns,
   summaryText,
@@ -337,18 +337,7 @@ export function ReportOutputs({
     return <p className="flow-error">{error || 'Could not load saved analyses.'}</p>;
   }
 
-  const kindLabel = (op: string) => {
-    const known: Record<string, string> = {
-      anova_oneway: 'ANOVA',
-      banner_table: 'Crosstab',
-      descriptives: 'Descriptives',
-      chi_square: 'Chi-square',
-      frequencies: 'Frequencies',
-      linear_regression: 'Regression',
-      ttest_independent: 't-test',
-    };
-    return analysisDisplayName(op) || known[op] || 'Analysis';
-  };
+  const kindLabel = outputKindLabel;
 
   return (
     <div className="outputs-shell">
@@ -575,7 +564,7 @@ export function ReportOutputs({
                 <Button
                   className="flow-btn"
                   type="button"
-                  disabled={!detail || !selected}
+                  disabled={!detail || !selected || pinnedRuns.has(selected.id)}
                   onClick={() => {
                     if (!detail || !selected) return;
                     const document = runDocument(detail);
@@ -599,7 +588,7 @@ export function ReportOutputs({
                     );
                   }}
                 >
-                  Add to report
+                  {selected && pinnedRuns.has(selected.id) ? 'In report' : 'Add to report'}
                 </Button>
                 <Button className="flow-btn primary" type="button" onClick={() => setOpened(true)}>
                   Open
