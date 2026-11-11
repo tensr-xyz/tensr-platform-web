@@ -1535,8 +1535,39 @@ export function tableBodyFromAgentRun(results: unknown): Record<string, unknown>
     const item = (items[index] || {}) as Record<string, unknown>;
     const args = (item.args || {}) as Record<string, unknown>;
     const kind = String(item.analysis_type || item.procedure || args.analysis_type || '');
-    if (kind !== 'banner_table') continue;
     const body = (item.request_body || args.request_body || {}) as Record<string, unknown>;
+    if (kind === 'frequencies') {
+      const named = [
+        ...(Array.isArray(body.columns) ? body.columns : []),
+        ...(body.column ? [body.column] : []),
+      ]
+        .map(column => String(column || '').trim())
+        .filter(Boolean);
+      const columns = [...new Set(named)];
+      if (!columns.length) continue;
+      const filters = Array.isArray(body.row_filters) ? body.row_filters : [];
+      const weight =
+        typeof body.weight_column === 'string'
+          ? body.weight_column
+          : typeof body.weight === 'string'
+            ? body.weight
+            : '';
+      return {
+        stubs: columns.map(column => ({ column })),
+        banner: [],
+        statistics: ['column_proportion'],
+        significance_display: 'none',
+        nest_banners: false,
+        ...(body.filter_ref
+          ? { filter_ref: body.filter_ref }
+          : filters.length
+            ? { filter_ref: { filters, combine: 'and' } }
+            : {}),
+        ...(weight ? { weight } : {}),
+        save: true,
+      };
+    }
+    if (kind !== 'banner_table') continue;
     const netsOnBody = Array.isArray(body.nets) ? body.nets : [];
     const listed: Record<string, unknown>[] = Array.isArray(body.stubs)
       ? (body.stubs as Record<string, unknown>[])
