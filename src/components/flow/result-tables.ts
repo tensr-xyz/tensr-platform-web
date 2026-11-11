@@ -13,6 +13,16 @@ export type ResultView = {
   letterNote: string;
 };
 
+/** A decimal the result already printed, at the one display setting. Labels stay as written. */
+export function formatDecimalText(value: string, places: number): string {
+  const match = value.trim().match(/^(-?\d[\d,]*)(\.\d+)(%?)$/);
+  if (!match?.[2]) return value;
+  const number = Number(`${match[1].replace(/,/g, '')}${match[2]}`);
+  if (!Number.isFinite(number)) return value;
+  const digits = Math.max(0, Math.min(6, Math.trunc(places)));
+  return `${number.toFixed(digits)}${match[3] || ''}`;
+}
+
 function cell(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'number') {
@@ -546,6 +556,30 @@ function groupMeanScore(table: RunTable): number {
   return score;
 }
 
+/** Column-and-row tables the summary already built. Those are the tables to show. */
+function summaryGrids(value: unknown, depth = 0): RunTable[] {
+  if (!value || typeof value !== 'object' || depth > 6) return [];
+  if (Array.isArray(value)) return value.flatMap(item => summaryGrids(item, depth + 1));
+  const record = value as Record<string, unknown>;
+  const found: RunTable[] = [];
+  const summary = record.summary;
+  if (summary && typeof summary === 'object') {
+    const block = summary as { table?: unknown; title?: unknown };
+    found.push(...summaryTables(block.table, cell(block.title)));
+    if (Array.isArray(block.table)) {
+      for (const item of block.table) {
+        const grid = asTable(item);
+        if (grid) found.push(grid);
+      }
+    }
+  }
+  for (const [key, nested] of Object.entries(record)) {
+    if (key === 'summary' || key === 'rows' || key === 'columns' || key === 'preview') continue;
+    if (nested && typeof nested === 'object') found.push(...summaryGrids(nested, depth + 1));
+  }
+  return found;
+}
+
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
 export function resultViewFromToolResults(results: unknown): ResultView {
   let answered = 0;
@@ -562,8 +596,11 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   };
   const seen = new Set<string>();
   let usedSummary = false;
+  const preferred = summaryGrids(results);
+  let lockTables = false;
   const spareGroupTables: RunTable[] = [];
   const add = (table: RunTable | null, source: 'summary' | 'grid' = 'grid') => {
+    if (lockTables) return;
     if (!table || table.title === 'Equivalent R and SPSS syntax') return;
     if (
       usedSummary &&
@@ -586,6 +623,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     view.tables.push(table);
     if (source === 'summary') usedSummary = true;
   };
+  for (const table of preferred) add(table, 'summary');
+  if (preferred.length) lockTables = true;
   const notes = (value: unknown) => {
     if (!Array.isArray(value)) return;
     for (const note of value) {
@@ -728,9 +767,20 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     }
   };
   visit(results, 0);
-  if (!view.tables.some(isGroupMeanTable)) {
+  if (!lockTables && !view.tables.some(isGroupMeanTable)) {
     for (const table of spareGroupTables) add(table);
   }
+  view.tables = view.tables.filter((table, index, all) => {
+    const blank = table.columns.some(
+      (_column, column) =>
+        column > 0 && table.rows.length > 0 && table.rows.every(row => !(row[column] || '').trim())
+    );
+    if (!blank) return true;
+    const title = table.title.trim().toLowerCase();
+    return !all.some(
+      (other, otherIndex) => otherIndex !== index && other.title.trim().toLowerCase() === title
+    );
+  });
   if (view.tables.some(table => table.title === 'Themes')) {
     view.tables = view.tables.filter(
       table => !/themes among people who answered/i.test(table.title)

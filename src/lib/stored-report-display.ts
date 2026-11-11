@@ -4,6 +4,7 @@ import type {
   AnalysisReportMetric,
   AnalysisReportTable,
 } from '@/lib/analysis-report-types';
+import { formatDecimalText } from '@/components/flow/result-tables';
 
 const GENERIC_TITLE = /^(frequency tables?|frequencies)$/i;
 
@@ -21,21 +22,9 @@ function frequencyTotal(table: AnalysisReportTable): number | null {
   return Number.isFinite(count) ? count : null;
 }
 
-function formatPercent(value: string, places: number): string {
-  const match = /^(-?\d+\.\d+)(%?)$/.exec(value.trim());
-  if (!match) return value;
-  const number = Number(match[1]);
-  if (!Number.isFinite(number)) return value;
-  return `${number.toFixed(places)}${match[2]}`;
-}
-
 function withPercents(table: AnalysisReportTable, places: number): AnalysisReportTable {
-  const percentColumns = table.columns
-    .map((column, index) => (/percent/i.test(column) ? index : -1))
-    .filter(index => index >= 0);
-  if (!percentColumns.length) return table;
   const rows = table.rows.map(row =>
-    row.map((cell, index) => (percentColumns.includes(index) ? formatPercent(cell, places) : cell))
+    row.map((cell, index) => (index === 0 ? cell : formatDecimalText(String(cell ?? ''), places)))
   );
   return { ...table, rows };
 }

@@ -257,14 +257,17 @@ export function outputTitle(
   return 'Result';
 }
 
-/** The first prose sentence that is not the base or a file line. */
+/** The first prose sentence that states a figure. A test name on its own is skipped. */
 export function outputTakeaway(answer: string): string {
+  let fallback = '';
   for (const line of proseLines(answer)) {
     if (FILE_LINE.test(line)) continue;
-    const kept = sentences(line).filter(sentence => !isBaseSentence(sentence));
-    if (kept.length) return kept[0];
+    for (const sentence of sentences(line).filter(item => !isBaseSentence(item))) {
+      if (!fallback) fallback = sentence;
+      if (/\d/.test(sentence)) return sentence;
+    }
   }
-  return '';
+  return fallback;
 }
 
 /** The base and weight clause from a frequency summary, when the answer did not keep one. */

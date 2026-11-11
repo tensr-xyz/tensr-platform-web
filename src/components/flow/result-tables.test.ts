@@ -609,6 +609,48 @@ describe('mean comparison tables', () => {
   });
 });
 
+describe('summary tables', () => {
+  it('keeps the builder tables and drops the engine copies', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Coefficients',
+            columns: ['Term', 'B', 'SE', 'p'],
+            rows: [['Brand trust', '0.420', '0.050', '0.001']],
+          },
+          {
+            title: 'Correlations',
+            columns: ['Variable', 'Trust', 'Value'],
+            rows: [['Trust', '1', '0.420']],
+          },
+        ],
+      },
+      result: {
+        coefficients: { trust: { estimate: 0.42 } },
+        correlations: [{ column: 'trust', with: 'value', r: 0.42, p_value: 0.01 }],
+        group_descriptives: [{ group: '2.0', n: 10 }],
+        report: {
+          tables: [
+            {
+              title: 'Pearson correlation matrix',
+              columns: ['', 'Trust', 'Value'],
+              rows: [['Trust', '1', '0.420']],
+            },
+            {
+              title: 'Pearson correlation p-values',
+              columns: ['', 'Trust', 'Value'],
+              rows: [['Trust', '—', '0.010']],
+            },
+          ],
+        },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Coefficients', 'Correlations']);
+    expect(view.tables[0].rows[0]).toEqual(['Brand trust', '0.420', '0.050', '0.001']);
+  });
+});
+
 describe('answer tables', () => {
   it('rounds share cells and drops nothing else', () => {
     const tables = answerResultTables(
