@@ -4586,7 +4586,6 @@ function ReportScreen({
     setOpenRunId(lastRun.runId);
   }, [lastRun]);
   const reportPins = useProjectPins(projectId, []);
-  const stampTries = useRef(0);
 
   const templateInput = useRef<HTMLInputElement>(null);
 
@@ -4631,7 +4630,6 @@ function ReportScreen({
     void shareRequest(overviewUrl, async () => {
       const first = await flowJson<{
         ok?: boolean;
-        stamps_pending?: boolean;
         tables?: {
           spec_id?: string;
           label?: string;
@@ -4650,14 +4648,6 @@ function ReportScreen({
         if (!live || !overview?.ok || !Array.isArray(overview.tables)) {
           throw new Error('Could not load saved tables');
         }
-        if (overview.stamps_pending && stampTries.current < 4) {
-          stampTries.current += 1;
-          window.setTimeout(() => {
-            if (live) setRefreshKey(key => key + 1);
-          }, 400);
-          return;
-        }
-        stampTries.current = 0;
         const runs = (overview.runs || []) as Parameters<typeof pinsFromRuns>[0];
         rememberReportRuns(projectId, runs);
         setProjectPins(projectId, pinsFromRuns(runs));
