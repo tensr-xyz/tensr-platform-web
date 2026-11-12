@@ -102,14 +102,14 @@ export function AnalysisResult({
   return (
     <div className="analysis-result">
       {leadText ? <p className="analysis-lead">{leadText}</p> : null}
-      {tables.map(table => {
+      {tables.map((table, index) => {
         const columns = Array.isArray(table.columns) ? table.columns : [];
         const rows = Array.isArray(table.rows) ? table.rows : [];
         if (!columns.length || !rows.length) return null;
         const quoteTable = columns.includes('Quote');
         return (
           <section
-            key={`${table.title}-${columns.join('-')}`}
+            key={`${table.title}-${index}-${columns.join('-')}`}
             className={quoteTable ? 'analysis-table analysis-table-quote' : 'analysis-table'}
           >
             {table.title ? <h3>{table.title}</h3> : null}

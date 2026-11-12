@@ -96,7 +96,7 @@ describe('decimal display', () => {
     expect(formatDecimalText('3.534', 1, 'Mean')).toBe('3.53');
     expect(formatDecimalText('1.100', 1, 'SD')).toBe('1.10');
     expect(formatDecimalText('251.200', 1, 'Weighted n')).toBe('251');
-    expect(formatDecimalText('-43.979', 1, 'NPS')).toBe('-44');
+    expect(formatDecimalText('-43.979', 1, 'NPS')).toBe('-44.0');
     expect(formatDecimalText('0.420', 1, 'B')).toBe('0.42');
   });
 });
@@ -232,7 +232,7 @@ describe('result tables', () => {
 
   it('adds the base, the weight, the effective n, and a small-base caution', () => {
     const note =
-      'Weight: Sample weight; sample size = 2; total sample size = 3; 1 missing; effective sample size = 1.8 (90%); 95% confidence level. East n = 2: treat this base with caution.';
+      'Weight: Sample weight; base = 2 (of 3, 1 missing); effective base = 1.8 (90%); 95% confidence level. East n = 2: treat this base with caution.';
     const view = resultViewFromToolResults({
       summary: {
         table: [
@@ -246,12 +246,68 @@ describe('result tables', () => {
       },
     });
     expect(view.baseDetail).toBe(note);
-    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('sample size = 2');
-    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('effective sample size = 1.8 (90%)');
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('base = 2 (of 3, 1 missing)');
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('effective base = 1.8 (90%)');
     expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('95% confidence level');
     expect(resultFootnote(view, 'Base 2', 'NPS')).toContain(
       'East n = 2: treat this base with caution.'
     );
+  });
+
+  it('builds the footnote from the weight block when the table has none', () => {
+    const view = resultViewFromToolResults({
+      n_excluded_missing: 2,
+      weight: { column: 'sample_w', label: 'Sample weight', unweighted_n: 40, kish_ess: 30 },
+      groups: [
+        { group: 'east', label: 'East', n: 8 },
+        { group: 'west', label: 'West', n: 32 },
+      ],
+    });
+    const foot = resultFootnote(view, '', 'Chi-square');
+    expect(foot).toContain('Weight: Sample weight');
+    expect(foot).toContain('base = 40 (of 42, 2 missing)');
+    expect(foot).toContain('effective base = 30 (75%)');
+    expect(foot).toContain('95% confidence level');
+    expect(foot).toContain('East n = 8: treat this base with caution.');
+    expect(foot.match(/Weight:/g)).toHaveLength(1);
+  });
+
+  it('keeps the longer funnel and the banner split', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Funnel',
+            columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+            rows: [
+              ['Heard of it', '1', '50.0', '50.0'],
+              ['Used it', '1', '50.0', '100.0'],
+              ['Bought it', '1', '25.0', '50.0'],
+            ],
+          },
+          {
+            title: 'Funnel',
+            columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+            rows: [
+              ['Heard', '1', '75.0', '75.0'],
+              ['Used', '1', '62.0', '82.0'],
+              ['Bought', '1', '33.0', '53.0'],
+              ['Again', '1', '12.0', '35.0'],
+            ],
+          },
+          {
+            title: 'Funnel by group',
+            columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+            rows: [['Heard', 'East', '1', '80.0', '80.0']],
+          },
+        ],
+      },
+    });
+    const funnels = view.tables.filter(table => table.title === 'Funnel');
+    expect(funnels).toHaveLength(1);
+    expect(funnels[0].rows).toHaveLength(4);
+    expect(funnels[0].rows[0][0]).toBe('Heard');
+    expect(view.tables.some(table => table.title === 'Funnel by group')).toBe(true);
   });
 
   it('keeps the frequency base and drops an exclusion count that is not this table', () => {
@@ -401,7 +457,7 @@ describe('result tables', () => {
     expect(view.tables[0]).toEqual({
       title: 'NPS',
       columns: ['Group', 'NPS', '% promoters', '% passives', '% detractors', 'n'],
-      rows: [['London', '30', '50.0', '30.0', '20.0', '100']],
+      rows: [['London', '30.0', '50.0', '30.0', '20.0', '100']],
     });
     const rounded = resultViewFromToolResults({
       groups: [
@@ -416,7 +472,7 @@ describe('result tables', () => {
         },
       ],
     });
-    expect(rounded.tables[0].rows[0]).toEqual(['North', '-44', '20.0', '30.0', '50.0', '100']);
+    expect(rounded.tables[0].rows[0]).toEqual(['North', '-44.0', '20.0', '30.0', '50.0', '100']);
   });
 
   it('drops the engine statistics table and a second NPS by group table', () => {
