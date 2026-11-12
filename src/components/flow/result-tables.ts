@@ -11,6 +11,8 @@ export type ResultView = {
   rStatement: string;
   base: string;
   letterNote: string;
+  /** Weight, sample size, missing, effective n, and the confidence level. */
+  baseDetail?: string;
 };
 
 /** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
@@ -199,6 +201,7 @@ function asTable(value: unknown): RunTable | null {
     rows?: unknown;
     headers?: unknown;
     variable_names?: unknown;
+    note?: unknown;
   };
   if (Array.isArray(record.headers) && Array.isArray(record.variable_names)) return null;
   const columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
@@ -214,7 +217,8 @@ function asTable(value: unknown): RunTable | null {
         .filter(row => row.some(Boolean))
     : [];
   if (columns.filter(Boolean).length < 2 || !rows.length) return null;
-  return { title: questionTitle(cell(record.title)), columns, rows };
+  const note = cell(record.note);
+  return { title: questionTitle(cell(record.title)), columns, rows, ...(note ? { note } : {}) };
 }
 
 /** summary["table"]: one titled block per question, or a flat list of value rows. */
@@ -885,6 +889,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     const fromTable = frequencyAnswered(view);
     if (fromTable) view.base = `Base ${fromTable.toLocaleString('en-GB')}`;
   }
+  const detail = view.tables.find(table => table.note && /sample size/i.test(table.note))?.note;
+  if (detail) view.baseDetail = detail;
   return view;
 }
 
@@ -1033,6 +1039,7 @@ export function resultFootnote(
     view.weight ? weightNote(view.weight, columns) : 'Unweighted',
     test && test !== 'Output' ? test : '',
     view.letterNote,
+    view.baseDetail,
   ];
   return parts.filter(Boolean).join(' · ');
 }

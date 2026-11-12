@@ -230,6 +230,30 @@ describe('result tables', () => {
     expect(resultFootnote(namedWeight, '', 'Frequencies', columns)).toBe('Weighted · Frequencies');
   });
 
+  it('adds the base, the weight, the effective n, and a small-base caution', () => {
+    const note =
+      'Weight: Sample weight; sample size = 2; total sample size = 3; 1 missing; effective sample size = 1.8 (90%); 95% confidence level. East n = 2: treat this base with caution.';
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'NPS by group',
+            columns: ['Group', 'NPS'],
+            rows: [['East', '-33.3']],
+            note,
+          },
+        ],
+      },
+    });
+    expect(view.baseDetail).toBe(note);
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('sample size = 2');
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('effective sample size = 1.8 (90%)');
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('95% confidence level');
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain(
+      'East n = 2: treat this base with caution.'
+    );
+  });
+
   it('keeps the frequency base and drops an exclusion count that is not this table', () => {
     const kept = resultViewFromToolResults({
       report: {
