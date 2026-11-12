@@ -11,6 +11,8 @@ export type ResultView = {
   rStatement: string;
   base: string;
   letterNote: string;
+  /** Weight, sample size, missing, effective n, and the confidence level. */
+  baseDetail?: string;
 };
 
 /** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
@@ -80,6 +82,29 @@ export function formatDecimalText(value: string, places: number, header = ''): s
   let shown = number.toFixed(digits);
   if (kind === 'percent') shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
   return `${shown}${match[3] || ''}`;
+}
+
+function isPHeader(header: string): boolean {
+  const name = header.trim().toLowerCase().replace(/[_-]+/g, ' ');
+  return (
+    name === 'p' ||
+    name === 'p value' ||
+    name === 'p adj' ||
+    name === 'adjusted p' ||
+    name.endsWith(' p')
+  );
+}
+
+/** A p below .001 is shown as < .001, including a value that arrived in scientific notation. */
+function shownP(value: unknown): string {
+  const number =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && /e-/i.test(value.trim())
+        ? Number(value)
+        : Number.NaN;
+  if (Number.isFinite(number) && number >= 0 && number < 0.001) return '< .001';
+  return cell(value);
 }
 
 function cell(value: unknown): string {
@@ -199,6 +224,7 @@ function asTable(value: unknown): RunTable | null {
     rows?: unknown;
     headers?: unknown;
     variable_names?: unknown;
+    note?: unknown;
   };
   if (Array.isArray(record.headers) && Array.isArray(record.variable_names)) return null;
   const columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
@@ -214,7 +240,8 @@ function asTable(value: unknown): RunTable | null {
         .filter(row => row.some(Boolean))
     : [];
   if (columns.filter(Boolean).length < 2 || !rows.length) return null;
-  return { title: questionTitle(cell(record.title)), columns, rows };
+  const note = cell(record.note);
+  return { title: questionTitle(cell(record.title)), columns, rows, ...(note ? { note } : {}) };
 }
 
 /** summary["table"]: one titled block per question, or a flat list of value rows. */
@@ -302,7 +329,9 @@ function shareTable(
     const cells = fields.map(field => {
       for (const key of field.keys) {
         const value = record[key];
-        if (value != null && String(value).trim()) return cell(value);
+        if (value != null && String(value).trim()) {
+          return isPHeader(field.header) ? shownP(value) : cell(value);
+        }
       }
       return '';
     });
@@ -363,7 +392,7 @@ function statRow(record: Record<string, unknown>, title: string, keys: string[])
   return {
     title,
     columns: present.map(key => key.replaceAll('_', ' ')),
-    rows: [present.map(key => cell(record[key]))],
+    rows: [present.map(key => (isPHeader(key) ? shownP(record[key]) : cell(record[key])))],
   };
 }
 
@@ -497,7 +526,7 @@ function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
     cell(source.df_between ?? source.df),
     cell(source.ms_between ?? source.ms),
     cell(record.f_statistic ?? source.F ?? source.f),
-    cell(record.p_value ?? source.p_value ?? source.p),
+    shownP(record.p_value ?? source.p_value ?? source.p),
     cell(record.eta_squared ?? record.effect_size ?? source.eta_squared),
   ];
   if (!between.slice(1).some(Boolean)) return null;
@@ -541,7 +570,7 @@ function postHocTable(value: unknown, labels: Map<string, string> = new Map()): 
         left,
         right,
         cell(record.meandiff ?? record.mean_diff ?? record.diff),
-        cell(record['p-adj'] ?? record.p_adj ?? record.p_value),
+        shownP(record['p-adj'] ?? record.p_adj ?? record.p_value),
       ];
     })
     .filter((row): row is string[] => Boolean(row));
@@ -792,8 +821,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     add(postHocTable(record.post_hoc, groupLabels(record.group_descriptives)));
     const levene = record.levene_test;
     if (levene && typeof levene === 'object') {
-      const p = cell((levene as { p_value?: unknown }).p_value);
-      if (p) notes([`Levene p = ${p}`]);
+      const p = shownP((levene as { p_value?: unknown }).p_value);
+      if (p) notes([p.startsWith('<') ? `Levene p ${p}` : `Levene p = ${p}`]);
     }
     if (typeof record.exclusion_note === 'string' && record.exclusion_note.trim()) {
       notes([record.exclusion_note.trim()]);
@@ -885,6 +914,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     const fromTable = frequencyAnswered(view);
     if (fromTable) view.base = `Base ${fromTable.toLocaleString('en-GB')}`;
   }
+  const detail = view.tables.find(table => table.note && /sample size/i.test(table.note))?.note;
+  if (detail) view.baseDetail = detail;
   return view;
 }
 
@@ -1033,6 +1064,7 @@ export function resultFootnote(
     view.weight ? weightNote(view.weight, columns) : 'Unweighted',
     test && test !== 'Output' ? test : '',
     view.letterNote,
+    view.baseDetail,
   ];
   return parts.filter(Boolean).join(' · ');
 }

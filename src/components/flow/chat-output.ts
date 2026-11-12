@@ -162,6 +162,26 @@ function isQuestion(text: string): boolean {
   return text.includes(' ');
 }
 
+/** The question on the column this result is about, when the title is only an answer such as Yes. */
+function questionFromBody(
+  body: Record<string, unknown> | undefined,
+  columns: QuestionLabel[]
+): string {
+  const measure = first(body || {}, [
+    'column',
+    'columns',
+    'value_column',
+    'stub_column',
+    'stub_columns',
+    'dependent',
+    'outcome',
+    'score_column',
+  ]);
+  if (!measure) return '';
+  const shown = titledWithQuestion(measure, columns);
+  return isQuestion(shown) ? shown : '';
+}
+
 /** Question labels on the frequency tables, in order. A variable code such as Q5 is not a question. */
 function frequencyQuestions(results: ToolResult[] | undefined): string[] {
   const found: string[] = [];
@@ -232,7 +252,13 @@ export function outputTitle(
         ? (result.result as Record<string, unknown>)
         : {};
     const title = summaryOf(item).title ?? result.title ?? nested.title;
-    if (typeof title === 'string' && title.trim()) return titledWithQuestion(title, columns);
+    if (typeof title === 'string' && title.trim()) {
+      const shown = titledWithQuestion(title, columns);
+      if (isQuestion(shown)) return shown;
+      const fromColumn = questionFromBody(bodyOf(item), columns);
+      if (fromColumn) return fromColumn;
+      if (shown.trim()) return shown;
+    }
     const body = bodyOf(item);
     const measure = first(body, [
       'value_column',
