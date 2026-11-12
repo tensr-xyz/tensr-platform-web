@@ -80,15 +80,11 @@ export async function loadProjectTables(
       ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
       : Promise.resolve(null));
   let projectPage: { specs?: RawRow[]; stamps_pending?: boolean } | null = null;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    projectPage = projectId
-      ? await flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(
-          projectTablesPath(projectId, fileIds)
-        ).catch(() => null)
-      : null;
-    if (!projectPage?.stamps_pending || attempt === 3) break;
-    await new Promise(resolve => setTimeout(resolve, 400));
-  }
+  projectPage = projectId
+    ? await flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(
+        projectTablesPath(projectId, fileIds)
+      ).catch(() => null)
+    : null;
   const filePage = await filePagePromise;
   return numberTables(
     mergeTableLists(
