@@ -435,6 +435,38 @@ describe('result tables', () => {
     expect(nps.tables.filter(table => table.title === 'NPS by group')).toHaveLength(1);
   });
 
+  it('keeps one NPS breakdown when the groups also build a table', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        groups: [
+          {
+            group: 'North',
+            nps: -7.059,
+            promoters: 20,
+            passives: 30,
+            detractors: 50,
+            n: 100,
+          },
+        ],
+        report: {
+          tables: [
+            {
+              title: 'NPS by group',
+              columns: ['Group', 'n', '% promoters', '% passives', '% detractors', 'NPS'],
+              rows: [['North', '100', '20.0', '30.0', '50.0', '-7']],
+            },
+          ],
+        },
+      },
+    });
+    const breakdowns = view.tables.filter(table =>
+      table.columns.some(column => column.trim().toLowerCase() === 'nps')
+    );
+    expect(breakdowns).toHaveLength(1);
+    expect(breakdowns[0].title).toBe('NPS by group');
+    expect(breakdowns[0].rows[0][5]).toBe('-7');
+  });
+
   it('prints a label when a header is an object, and keeps the R check', () => {
     const view = resultViewFromToolResults({
       tables: [

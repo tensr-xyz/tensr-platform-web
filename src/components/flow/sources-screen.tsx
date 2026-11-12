@@ -132,7 +132,7 @@ export function sourceVersionTitle(file: SourceFile): string {
 }
 
 export function sourceFileNote(file: SourceFile): string {
-  if (file.parent_dataset_id) return file.lineage_label || 'Stacked';
+  if (file.parent_dataset_id) return file.lineage_label || 'New version';
   return 'Raw upload';
 }
 

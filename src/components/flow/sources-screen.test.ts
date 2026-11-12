@@ -17,7 +17,7 @@ describe('sources screen', () => {
         lineage_label: 'Stacked wave.sav + extra.csv',
       })
     ).toBe('Stacked wave.sav + extra.csv');
-    expect(sourceFileNote({ parent_dataset_id: 'parent' })).toBe('Stacked');
+    expect(sourceFileNote({ parent_dataset_id: 'parent' })).toBe('New version');
     expect(sourceRowCount({ n_rows: 2406 })).toBe('2,406 rows');
     expect(sourceRowCount({})).toBe('No rows');
   });
