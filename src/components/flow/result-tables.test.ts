@@ -3,6 +3,7 @@ import {
   formatDecimalText,
   resultFootnote,
   resultViewFromToolResults,
+  weightChipName,
   weightNote,
 } from './result-tables';
 
@@ -564,6 +565,10 @@ describe('result tables', () => {
     expect(view.tables.map(table => table.title)).toEqual(['Value for money: Agree or above']);
     expect(view.tables[0].rows[0][0]).toBe('Agree or above');
     expect(weightNote('none')).toBe('Unweighted');
+    expect(weightChipName('', 'none', [])).toBe('Unweighted');
+    expect(
+      weightChipName('design_weight', 'none', [{ name: 'design_weight', label: 'Design weight' }])
+    ).toBe('Design weight');
   });
 
   it('shows an association table, the filter, and the weight column', () => {

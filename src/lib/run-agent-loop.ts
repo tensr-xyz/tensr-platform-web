@@ -106,6 +106,8 @@ export type RunAgentLoopParams = {
     tool_results?: AgentLoopResponse['tool_results'];
   }) => void;
   onSession?: (sessionId: string) => void;
+  /** The saved session, when the stream has gone quiet or closed before a result. */
+  recover?: () => Promise<AgentLoopResponse | null>;
   signal?: AbortSignal;
 };
 
@@ -180,6 +182,7 @@ export async function runAgentLoop(params: RunAgentLoopParams): Promise<AgentLoo
           onReplace: params.onReplace,
           onPreview: params.onPreview,
           onSession: params.onSession,
+          recover: params.recover,
           signal: params.signal,
         }
       );

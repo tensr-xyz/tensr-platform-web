@@ -991,6 +991,21 @@ export function shownMetric(label: string, value: string): string {
   return value;
 }
 
+/** The name on the weight chip. A missing weight is Unweighted. The sentinel none is not a name. */
+export function weightChipName(
+  resultWeight: string,
+  ledgerWeight: string,
+  columns: ColumnLabels[] = []
+): string {
+  const chosen = [resultWeight, ledgerWeight]
+    .map(item => item.trim())
+    .find(item => item && !/^(none|unweighted|null)$/i.test(item));
+  if (!chosen) return 'Unweighted';
+  const note = weightNote(chosen, columns);
+  if (note === 'Unweighted' || note === 'Weighted') return note;
+  return note.replace(/^Weight:\s*/, '');
+}
+
 /** The weight's label. The bare column name "weight" is not a label. */
 export function weightNote(column: string, columns: ColumnLabels[] = []): string {
   const name = column.trim();

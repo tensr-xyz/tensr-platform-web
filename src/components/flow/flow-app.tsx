@@ -32,7 +32,7 @@ import { datasetFileLabel } from '@/components/flow/survey-screens';
 import { baseCount } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { fetchAnalysisRun } from '@/lib/analysis-runs';
-import { resultViewFromToolResults } from '@/components/flow/result-tables';
+import { resultViewFromToolResults, weightChipName } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import {
   PROJECT_TABS,
@@ -2487,12 +2487,12 @@ function ChatScreen({
     runIds,
     baseNote,
     ledger,
+    resultView,
     tables,
     kind,
     structuredTables,
     footnote,
     resultChecks,
-    resultView,
     takeaway,
     stat,
     checks,
@@ -2784,7 +2784,14 @@ function ChatScreen({
                   </div>
                   <div className="report-chips">
                     <span className="report-chip">
-                      Weight <span className="ink">{ledger.weight || 'none'}</span>
+                      Weight{' '}
+                      <span className="ink">
+                        {weightChipName(
+                          resultView.weight,
+                          String(ledger.weight || ''),
+                          columnLabels
+                        )}
+                      </span>
                     </span>
                     {lettered ? (
                       <span className="report-chip">

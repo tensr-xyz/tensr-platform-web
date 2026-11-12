@@ -44,6 +44,7 @@ import {
 } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { savePin, useProjectPins } from '@/components/flow/report-pins';
+import { answeredTurnCount, savedChatTurn, type StoredChatTurn } from '@/lib/chat-session-turn';
 import { flowJson } from '@/lib/flow-api';
 import {
   downloadsFromToolResults,
@@ -83,6 +84,11 @@ export type AgentThreadOptions = {
   onSession?: (session: AgentChatSession) => void;
   onFinished?: (result: AgentLoopResponse) => void;
 };
+
+/** A list key. The same step name can run twice, so the index keeps the rows apart. */
+export function stepRowKey(index: number, step: string): string {
+  return `${index}:${step}`;
+}
 
 export function stepLines(steps: { name?: string; message?: string }[] | undefined): string[] {
   return (steps || []).flatMap(step => {
@@ -253,6 +259,24 @@ export function useAgentThread({
     });
   };
 
+  const loadSavedTurn = useCallback(
+    async (question: string, nextMode: Mode, alreadyAnswered: number) => {
+      const sessionId = sessionRef.current;
+      if (!projectId || !sessionId) return null;
+      try {
+        const page = await flowJson<{ turns?: StoredChatTurn[] }>(
+          `/api/projects/${projectId}/sessions/${sessionId}`
+        );
+        const saved = savedChatTurn(page.turns, question, nextMode, alreadyAnswered);
+        if (saved) saved.session_id = sessionId;
+        return saved;
+      } catch {
+        return null;
+      }
+    },
+    [projectId]
+  );
+
   const sendText = useCallback(
     async (text: string, nextMode: Mode = modeRef.current) => {
       if (!text.trim() || sendingRef.current) return false;
@@ -303,6 +327,13 @@ export function useAgentThread({
       setStatus('Thinking…');
       setAnswer('');
       let draft = '';
+      const alreadyAnswered =
+        answeredTurnCount(past, text) +
+        (sentRef.current.trim() === text.trim() &&
+        (answerRef.current.trim() || (toolResultsRef.current || []).length)
+          ? 1
+          : 0);
+      const recover = () => loadSavedTurn(text, nextMode, alreadyAnswered);
       try {
         const result = await runAgentLoop({
           message: text,
@@ -312,6 +343,7 @@ export function useAgentThread({
           agentVersion: 'v2',
           sessionId: sessionRef.current,
           signal: AbortSignal.timeout(120_000),
+          recover,
           onProgress: progress => {
             const line = visibleAgentStep(progress.step, progress.message);
             if (!line) return;
@@ -321,7 +353,7 @@ export function useAgentThread({
             const prior = liveChatRun();
             publish({
               steps: prior?.steps.includes(line) ? prior.steps : [...(prior?.steps || []), line],
-              status: null,
+              status: 'Thinking…',
               answer: draft,
             });
           },
@@ -395,7 +427,7 @@ export function useAgentThread({
         sendingRef.current = false;
       }
     },
-    [datasetId, loadRail, projectId, noteSession, shown]
+    [datasetId, loadRail, loadSavedTurn, past, projectId, noteSession, shown]
   );
 
   useEffect(() => {
@@ -846,8 +878,8 @@ export function AgentThreadColumn({
             </Button>
             {stepsOpen ? (
               <div className="chat-steps-list">
-                {thread.steps.map(step => (
-                  <div key={step}>{step}</div>
+                {thread.steps.map((step, index) => (
+                  <div key={stepRowKey(index, step)}>{step}</div>
                 ))}
               </div>
             ) : null}

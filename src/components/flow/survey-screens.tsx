@@ -176,6 +176,38 @@ export function datasetFileLabel(row: {
   return 'Untitled file';
 }
 
+function storedWeightColumn(stored: unknown): string {
+  if (typeof stored === 'string') return stored.trim();
+  if (stored && typeof stored === 'object' && 'column' in stored) {
+    return String((stored as { column?: unknown }).column || '').trim();
+  }
+  return '';
+}
+
+function isRealWeightColumn(name: string): boolean {
+  return Boolean(name) && name !== '_weight' && !/^(none|unweighted|null)$/i.test(name);
+}
+
+/**
+ * The weight the picker shows. A stored sentinel is not a choice.
+ * A weighted book names its column. An unweighted book stays Unweighted.
+ */
+export function selectedTableWeight(
+  stored: unknown,
+  bookWeight: { column?: string | null; weight_aware?: boolean } | null | undefined,
+  active: string
+): string {
+  const specColumn = storedWeightColumn(stored);
+  if (isRealWeightColumn(specColumn)) return specColumn;
+  const bookColumn = String(bookWeight?.column || '').trim();
+  if (bookWeight?.weight_aware && isRealWeightColumn(bookColumn)) return bookColumn;
+  if (specColumn === '_weight' || bookColumn === '_weight') {
+    return active && active !== '_weight' ? active : '';
+  }
+  if (bookWeight?.weight_aware && active && active !== '_weight') return active;
+  return '';
+}
+
 /** The file's active weight, including the internal copy of a raked column. */
 export function defaultTableWeight(active: string, choices: string[]): string {
   if (active && active !== '_weight' && choices.includes(active)) return active;
@@ -1871,14 +1903,13 @@ export function TablesBuilder({
     const savedFilters = spec?.filter?.filters;
     if (Array.isArray(savedFilters)) setTableFilter({ filters: savedFilters });
     const savedWeight = spec?.weight;
-    if (savedWeight && typeof savedWeight === 'object' && 'column' in savedWeight) {
+    const bookWeight = body.weight as
+      | { column?: string | null; weight_aware?: boolean }
+      | null
+      | undefined;
+    if (savedWeight != null || (bookWeight && typeof bookWeight === 'object')) {
       weightFromTable.current = true;
-      const column = String(savedWeight.column || '');
-      if (!column) setWeight('');
-      else if (column === '_weight') {
-        const visible = activeWeightName.current;
-        setWeight(visible && visible !== '_weight' ? visible : '');
-      } else setWeight(column);
+      setWeight(selectedTableWeight(savedWeight, bookWeight, activeWeightName.current));
     }
     const id = String(spec?.id || '');
     if (id) {
