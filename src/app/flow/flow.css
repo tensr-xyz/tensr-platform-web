@@ -1833,6 +1833,7 @@ select.flow-input {
 
 .analysis-lead {
   margin: 0;
+  white-space: pre-line;
 }
 
 .analysis-table {

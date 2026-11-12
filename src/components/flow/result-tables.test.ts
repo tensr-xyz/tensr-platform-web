@@ -310,6 +310,16 @@ describe('result tables', () => {
     expect(view.tables.some(table => table.title === 'Funnel by group')).toBe(true);
   });
 
+  it('puts the funnel base on the footnote', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'funnel',
+      n: 4,
+      n_total: 5,
+      stages: [{ stage: 'heard', label: 'Heard', base: 4, percent_of_base: 75 }],
+    });
+    expect(resultFootnote(view, '', 'Funnel')).toContain('base = 4');
+  });
+
   it('keeps the frequency base and drops an exclusion count that is not this table', () => {
     const kept = resultViewFromToolResults({
       report: {

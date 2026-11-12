@@ -240,6 +240,43 @@ export function titledWithQuestion(title: string, columns: QuestionLabel[] = [])
   return stripped || title;
 }
 
+const PROCEDURE_TITLE = /^(compute|computed|run analysis|run_analysis)$/i;
+
+/** The analysis the card should be named for. A saved column is not the result. */
+function preferredProcedure(items: ToolResult[]): string {
+  const names = items.map(procedureOf);
+  for (const name of ['funnel', 'nps', 'chi_square', 'banner_table', 'rake', 'frequencies']) {
+    if (names.includes(name)) return name;
+  }
+  return names.find(name => name && name !== 'compute') || names[0] || '';
+}
+
+/** A short procedure line is not the model's answer. */
+export function isBlandAnswer(text: string): boolean {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (!words.length || words.length > 14) return false;
+  return (
+    /^(compute|computed|funnel|nps|rake|result)\b/i.test(text.trim()) ||
+    /could not be attached/i.test(text)
+  );
+}
+
+/** Keep the streamed answer when the finished text is only a procedure line. */
+export function keptModelAnswer(streamed: string, finalText: string): string {
+  const live = streamed.trim();
+  const done = finalText.trim();
+  if (!done) return live;
+  if (!live || live.includes('{{')) return done;
+  if (isBlandAnswer(done) && !isBlandAnswer(live)) return live;
+  return done;
+}
+
+/** The model's sentences. Tables and the base line stay on the card. */
+export function resultLead(answer: string): string {
+  const prose = answerWithoutBase(withoutResultTokens(answerWithoutTables(answer))).trim();
+  return prose || outputTakeaway(answer);
+}
+
 /** The table title the API put on the result, or the first prose line that is not the base. */
 export function outputTitle(
   results: ToolResult[] | undefined,
@@ -251,15 +288,26 @@ export function outputTitle(
   );
   if (questions.length) return questions.join(', ');
   const items = analysisItems(results);
+  const preferred = preferredProcedure(items);
   for (const item of items) {
+    if (procedureOf(item) === 'compute' && preferred && preferred !== 'compute') continue;
     const result = item.result || {};
     const nested =
       result.result && typeof result.result === 'object'
         ? (result.result as Record<string, unknown>)
         : {};
     const title = summaryOf(item).title ?? result.title ?? nested.title;
+    if (typeof title === 'string' && PROCEDURE_TITLE.test(title.trim())) continue;
     if (typeof title === 'string' && title.trim() && !isLeadSentence(title)) {
       const shown = titledWithQuestion(title, columns);
+      const kindName = (
+        KIND_LABELS[procedureOf(item)] ||
+        KIND_LABELS[preferred] ||
+        ''
+      ).toLowerCase();
+      if (kindName && shown.toLowerCase().startsWith(kindName) && shown.split(/\s+/).length > 2) {
+        continue;
+      }
       if (isQuestion(shown)) return shown;
       const fromColumn = questionFromBody(bodyOf(item), columns);
       if (fromColumn) return fromColumn;
@@ -281,7 +329,7 @@ export function outputTitle(
     }
     if (measure) return titledWithQuestion(measure, columns);
   }
-  const procedure = procedureOf(items[0] || {});
+  const procedure = preferred || procedureOf(items[0] || {});
   if (procedure && (KIND_LABELS[procedure] || analysisDisplayName(procedure))) {
     return KIND_LABELS[procedure] || analysisDisplayName(procedure);
   }
