@@ -2,6 +2,7 @@ export type RunTable = {
   title: string;
   columns: string[];
   rows: string[][];
+  note?: string;
 };
 
 export type RunDocument = {

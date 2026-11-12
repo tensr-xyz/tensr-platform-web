@@ -230,6 +230,30 @@ describe('result tables', () => {
     expect(resultFootnote(namedWeight, '', 'Frequencies', columns)).toBe('Weighted · Frequencies');
   });
 
+  it('adds the base, the weight, the effective n, and a small-base caution', () => {
+    const note =
+      'Weight: Sample weight; sample size = 2; total sample size = 3; 1 missing; effective sample size = 1.8 (90%); 95% confidence level. East n = 2: treat this base with caution.';
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'NPS by group',
+            columns: ['Group', 'NPS'],
+            rows: [['East', '-33.3']],
+            note,
+          },
+        ],
+      },
+    });
+    expect(view.baseDetail).toBe(note);
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('sample size = 2');
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('effective sample size = 1.8 (90%)');
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain('95% confidence level');
+    expect(resultFootnote(view, 'Base 2', 'NPS')).toContain(
+      'East n = 2: treat this base with caution.'
+    );
+  });
+
   it('keeps the frequency base and drops an exclusion count that is not this table', () => {
     const kept = resultViewFromToolResults({
       report: {
@@ -767,5 +791,14 @@ describe('answer tables', () => {
       ['| Group | Mean |', '| --- | --- |', '| First | 4.256 |'].join('\n')
     );
     expect(tables[0].rows[0][1]).toBe('4.256');
+  });
+
+  it('shows a p below .001 as < .001', () => {
+    const view = resultViewFromToolResults([
+      { result: { statistic: 18.2, df: 4, p_value: 9.56e-7, effect_size: 0.31 } },
+    ]);
+    const test = view.tables.find(table => table.title === 'Test');
+    expect(test?.rows[0].join(' ')).toContain('< .001');
+    expect(JSON.stringify(test)).not.toContain('9.56e');
   });
 });
