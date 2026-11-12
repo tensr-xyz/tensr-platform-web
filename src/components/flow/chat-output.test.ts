@@ -147,7 +147,14 @@ describe('chat output panel', () => {
     expect(thread.split('\n')[0]).toMatch(/^No group differs significantly/);
   });
 
-  it('puts a zero weight in checks and keeps the statistic as the title', () => {
+  it('titles a funnel with the short name, not the lead', () => {
+    const lead =
+      'Aware is the largest stage and the last stage converts from the one before it across the whole base.';
+    const results = [{ procedure: 'funnel', summary: { title: lead } }];
+    expect(outputTitle(results, lead)).toBe('Funnel');
+  });
+
+  it('puts a zero weight in checks and titles the card with the test', () => {
     const sentence =
       'Independent-Samples T Test. Systolic reading for Placebo and Active: t = 2.400, df = 38.000, p = 0.020. The difference is unlikely to be chance.';
     const results = [
@@ -170,7 +177,7 @@ describe('chat output panel', () => {
         },
       },
     ];
-    expect(outputTitle(results, '54 rows were excluded for missing values.')).toBe(sentence);
+    expect(outputTitle(results, '54 rows were excluded for missing values.')).toBe('t-test');
     const labels = outputChecks(results).map(check => check.label);
     expect(labels).toContain('2 rows excluded because a selected column was missing');
     expect(labels).toContain('4 rows excluded because the weight was zero or missing');

@@ -46,12 +46,15 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
   });
 }
 
-function decimalKind(header: string, percentSign: boolean): 'percent' | 'mean' | 'whole' | 'plain' {
+function decimalKind(
+  header: string,
+  percentSign: boolean
+): 'percent' | 'mean' | 'whole' | 'tenth' | 'plain' {
   if (percentSign) return 'percent';
   const name = header.trim().toLowerCase().replace(/[_-]+/g, ' ');
   if (/%|percent|share/.test(name)) return 'percent';
   if (/weighted\s*n|weighted base/.test(name)) return 'whole';
-  if (name === 'nps' || name.endsWith(' nps')) return 'whole';
+  if (name === 'nps' || name.endsWith(' nps')) return 'tenth';
   if (/\b(mean|sd|std\.?|s\.d\.?|standard deviation)\b/.test(name)) return 'mean';
   if (
     /^(n|count|frequency|cases|df)$/.test(name) ||
@@ -78,7 +81,13 @@ export function formatDecimalText(value: string, places: number, header = ''): s
     return `${shown}${match[3] || ''}`;
   }
   const digits =
-    kind === 'mean' ? 2 : kind === 'percent' ? Math.max(0, Math.min(6, Math.trunc(places))) : 0;
+    kind === 'mean'
+      ? 2
+      : kind === 'tenth'
+        ? 1
+        : kind === 'percent'
+          ? Math.max(0, Math.min(6, Math.trunc(places)))
+          : 0;
   let shown = number.toFixed(digits);
   if (kind === 'percent') shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
   return `${shown}${match[3] || ''}`;
@@ -435,6 +444,25 @@ function isNpsBreakdown(table: RunTable): boolean {
   );
 }
 
+function isStageFunnel(table: RunTable): boolean {
+  const headers = table.columns.map(column => column.trim().toLowerCase());
+  return (
+    !headers.includes('group') &&
+    headers.includes('stage') &&
+    headers.some(column => column.includes('conversion'))
+  );
+}
+
+/** One stage funnel. A shorter table of the same stages is the earlier question-label copy. */
+function oneFunnel(tables: RunTable[]): RunTable[] {
+  const funnels = tables.filter(isStageFunnel);
+  if (funnels.length < 2) return tables;
+  const kept = funnels.reduce((best, table) =>
+    table.rows.length >= best.rows.length ? table : best
+  );
+  return tables.filter(table => !isStageFunnel(table) || table === kept);
+}
+
 /** One NPS-by-group table. A second breakdown of the same groups is the same table. */
 function oneNpsBreakdown(tables: RunTable[]): RunTable[] {
   const breakdowns = tables.filter(isNpsBreakdown);
@@ -462,7 +490,7 @@ function npsTable(groups: unknown): RunTable | null {
       const score = Number(record.nps);
       return [
         name && name !== 'all' ? name : 'Total',
-        Number.isFinite(score) ? String(Math.round(score)) : cell(record.nps),
+        Number.isFinite(score) ? score.toFixed(1) : cell(record.nps),
         share(promoters),
         share(passives),
         share(detractors),
@@ -626,6 +654,142 @@ function filterText(named: unknown): string {
   return parts.join(', ');
 }
 
+type SampleBits = {
+  weight: string;
+  n: number;
+  total: number;
+  missing: number;
+  ess: number;
+  sawN: boolean;
+  sawTotal: boolean;
+  sawMissing: boolean;
+  sawEss: boolean;
+  small: string[];
+  note: string;
+};
+
+function wholeNumber(value: unknown): number | null {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number)) return null;
+  return Math.round(number);
+}
+
+function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
+  const weight = record.weight;
+  const looks =
+    (weight && typeof weight === 'object' && !Array.isArray(weight)) ||
+    record.n_observations != null ||
+    record.n_total != null ||
+    record.n_missing != null ||
+    record.n_excluded_missing != null ||
+    record.model_fit != null ||
+    record.base_note != null ||
+    record.kish_ess != null ||
+    Array.isArray(record.groups);
+  if (!looks && !Array.isArray(record.notes)) return;
+  if (weight && typeof weight === 'object' && !Array.isArray(weight) && !sample.weight) {
+    const block = weight as {
+      label?: unknown;
+      column?: unknown;
+      kish_ess?: unknown;
+      unweighted_n?: unknown;
+    };
+    const label = cell(block.label);
+    const column = cell(block.column);
+    if (label && label.toLowerCase() !== column.toLowerCase() && label.toLowerCase() !== 'weight') {
+      sample.weight = label;
+    } else if (column) sample.weight = column;
+    if (!sample.sawEss) {
+      const ess = Number(block.kish_ess);
+      if (Number.isFinite(ess)) {
+        sample.ess = ess;
+        sample.sawEss = true;
+      }
+    }
+    if (!sample.sawN) {
+      const count = wholeNumber(block.unweighted_n);
+      if (count != null) {
+        sample.n = count;
+        sample.sawN = true;
+      }
+    }
+  }
+  if (!sample.sawN) {
+    const count = wholeNumber(record.n ?? record.n_observations ?? record.n_used);
+    const fitted =
+      record.model_fit && typeof record.model_fit === 'object'
+        ? wholeNumber((record.model_fit as { n?: unknown }).n)
+        : null;
+    const chosen = count ?? fitted;
+    if (chosen != null) {
+      sample.n = chosen;
+      sample.sawN = true;
+    }
+  }
+  if (!sample.sawTotal) {
+    const total = wholeNumber(record.n_total ?? record.n_rows);
+    if (total != null) {
+      sample.total = total;
+      sample.sawTotal = true;
+    }
+  }
+  if (!sample.sawMissing) {
+    const missing = wholeNumber(record.n_missing ?? record.n_excluded_missing);
+    if (missing != null) {
+      sample.missing = missing;
+      sample.sawMissing = true;
+    }
+  }
+  const note = cell(record.base_note);
+  if (note && /base =|sample size/i.test(note) && !sample.note) sample.note = note;
+  if (Array.isArray(record.notes)) {
+    for (const item of record.notes) {
+      const text = cell(item);
+      if (text && /base =|sample size/i.test(text) && !sample.note) sample.note = text;
+    }
+  }
+  const groups = record.groups;
+  if (!Array.isArray(groups)) return;
+  for (const group of groups) {
+    if (!group || typeof group !== 'object') continue;
+    const row = group as { label?: unknown; group?: unknown; n?: unknown };
+    const count = wholeNumber(row.n);
+    if (count == null || count >= 30) continue;
+    const name = cell(row.label || row.group);
+    const shown = name === 'all' ? 'Total' : name;
+    if (!shown) continue;
+    const line = `${shown} n = ${count}`;
+    if (!sample.small.includes(line)) sample.small.push(line);
+  }
+}
+
+function sampleLine(sample: SampleBits): string {
+  const weight = sample.weight ? `Weight: ${sample.weight}` : 'Weight: none';
+  const parts = [weight];
+  if (sample.sawN && sample.sawTotal && sample.sawMissing) {
+    parts.push(`base = ${sample.n} (of ${sample.total}, ${sample.missing} missing)`);
+  } else if (sample.sawN && sample.sawMissing && !sample.sawTotal) {
+    parts.push(`base = ${sample.n} (of ${sample.n + sample.missing}, ${sample.missing} missing)`);
+  } else if (sample.sawN) parts.push(`base = ${sample.n}`);
+  else if (sample.sawTotal) parts.push(`base = ${sample.total}`);
+  const denom = sample.sawN ? sample.n : sample.total;
+  if (sample.sawEss && denom) {
+    const percent = Math.round((100 * sample.ess) / denom);
+    const shown =
+      Math.abs(sample.ess - Math.round(sample.ess)) < 0.05
+        ? String(Math.round(sample.ess))
+        : sample.ess.toFixed(1);
+    parts.push(`effective base = ${shown} (${percent}%)`);
+  } else if (!sample.weight && denom) {
+    parts.push(`effective base = ${denom} (100%)`);
+  }
+  parts.push('95% confidence level');
+  const line = `${parts.join('; ')}.`;
+  return sample.small.length
+    ? `${line} ${sample.small.join('; ')}: treat this base with caution.`
+    : line;
+}
+
 function weightName(record: Record<string, unknown>): string {
   if (record.weight && typeof record.weight === 'object') {
     return cell((record.weight as { column?: unknown }).column);
@@ -688,6 +852,19 @@ function summaryGrids(value: unknown, depth = 0): RunTable[] {
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
 export function resultViewFromToolResults(results: unknown): ResultView {
   let answered = 0;
+  const sample: SampleBits = {
+    weight: '',
+    n: 0,
+    total: 0,
+    missing: 0,
+    ess: 0,
+    sawN: false,
+    sawTotal: false,
+    sawMissing: false,
+    sawEss: false,
+    small: [],
+    note: '',
+  };
   const view: ResultView = {
     tables: [],
     script: '',
@@ -757,6 +934,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       return;
     }
     const record = value as Record<string, unknown>;
+    takeSample(record, sample);
     const descriptives =
       inDescriptives ||
       record.procedure === 'descriptives' ||
@@ -905,7 +1083,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     );
   }
   view.tables = view.tables.filter(table => !/assignments \(quote spans\)/i.test(table.title));
-  view.tables = oneNpsBreakdown(view.tables);
+  view.tables = oneFunnel(oneNpsBreakdown(view.tables));
   const total = largestFrequencyTotal(view);
   const used = Number(view.base.replace(/[^\d.]/g, ''));
   if (total && used && used < total / 2) view.base = '';
@@ -914,8 +1092,11 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     const fromTable = frequencyAnswered(view);
     if (fromTable) view.base = `Base ${fromTable.toLocaleString('en-GB')}`;
   }
-  const detail = view.tables.find(table => table.note && /sample size/i.test(table.note))?.note;
+  const detail =
+    view.tables.find(table => table.note && /sample size|base =/i.test(table.note))?.note ||
+    sample.note;
   if (detail) view.baseDetail = detail;
+  else if (sample.sawN || sample.sawTotal) view.baseDetail = sampleLine(sample);
   return view;
 }
 
@@ -1058,13 +1239,18 @@ export function resultFootnote(
   columns: ColumnLabels[] = []
 ): string {
   const filter = labelFilter(view.filter, columns);
+  const detail = view.baseDetail || '';
   const parts = [
-    base.trim() || view.base,
+    detail ? '' : base.trim() || view.base,
     filter ? `Filter: ${filter}` : '',
-    view.weight ? weightNote(view.weight, columns) : 'Unweighted',
+    detail && /weight:/i.test(detail)
+      ? ''
+      : view.weight
+        ? weightNote(view.weight, columns)
+        : 'Unweighted',
     test && test !== 'Output' ? test : '',
     view.letterNote,
-    view.baseDetail,
+    detail,
   ];
   return parts.filter(Boolean).join(' · ');
 }

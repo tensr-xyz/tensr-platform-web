@@ -162,6 +162,11 @@ function isQuestion(text: string): boolean {
   return text.includes(' ');
 }
 
+/** A long statement is the lead. The card title is a short name. */
+function isLeadSentence(text: string): boolean {
+  return text.trim().split(/\s+/).filter(Boolean).length > 14;
+}
+
 /** The question on the column this result is about, when the title is only an answer such as Yes. */
 function questionFromBody(
   body: Record<string, unknown> | undefined,
@@ -245,14 +250,15 @@ export function outputTitle(
     titledWithQuestion(question, columns)
   );
   if (questions.length) return questions.join(', ');
-  for (const item of analysisItems(results)) {
+  const items = analysisItems(results);
+  for (const item of items) {
     const result = item.result || {};
     const nested =
       result.result && typeof result.result === 'object'
         ? (result.result as Record<string, unknown>)
         : {};
     const title = summaryOf(item).title ?? result.title ?? nested.title;
-    if (typeof title === 'string' && title.trim()) {
+    if (typeof title === 'string' && title.trim() && !isLeadSentence(title)) {
       const shown = titledWithQuestion(title, columns);
       if (isQuestion(shown)) return shown;
       const fromColumn = questionFromBody(bodyOf(item), columns);
@@ -275,9 +281,15 @@ export function outputTitle(
     }
     if (measure) return titledWithQuestion(measure, columns);
   }
+  const procedure = procedureOf(items[0] || {});
+  if (procedure && (KIND_LABELS[procedure] || analysisDisplayName(procedure))) {
+    return KIND_LABELS[procedure] || analysisDisplayName(procedure);
+  }
   const lines = proseLines(answer).filter(line => !FILE_LINE.test(line));
   for (const line of lines) {
-    const opening = sentences(line).find(sentence => !isBaseSentence(sentence));
+    const opening = sentences(line).find(
+      sentence => !isBaseSentence(sentence) && !isLeadSentence(sentence)
+    );
     if (opening) return opening.length > 90 ? `${opening.slice(0, 89).trimEnd()}…` : opening;
   }
   return 'Result';
