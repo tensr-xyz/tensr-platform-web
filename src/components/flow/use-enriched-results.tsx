@@ -9,7 +9,7 @@ import {
   outputBaseClause,
   outputKind,
   outputRunIds,
-  outputTakeaway,
+  resultLead,
   withoutResultTokens,
 } from '@/components/flow/chat-output';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
@@ -78,7 +78,7 @@ export function ThreadResult({
   }
   return (
     <AnalysisResult
-      lead={outputTakeaway(withoutResultTokens(answer))}
+      lead={resultLead(answer)}
       tables={tables}
       footnote={resultFootnote(
         view,

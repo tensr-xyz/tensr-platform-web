@@ -5,6 +5,7 @@ import {
   outputChecks,
   outputKind,
   outputBaseNote,
+  keptModelAnswer,
   outputTakeaway,
   outputTitle,
   titledWithQuestion,
@@ -145,6 +146,21 @@ describe('chat output panel', () => {
     expect(thread).not.toMatch(/weighted base|Minimum base|under that base|^base \d/im);
     expect(thread).toContain('| Top 2 | 50.0% | 51.0% | 47.0% | 51.0% |');
     expect(thread.split('\n')[0]).toMatch(/^No group differs significantly/);
+  });
+
+  it('keeps the streamed answer when the finished line is only the procedure', () => {
+    const streamed = 'Aware is 75% and recommendation converts at 35% of the satisfied group.';
+    expect(keptModelAnswer(streamed, 'Funnel.')).toBe(streamed);
+    expect(keptModelAnswer(streamed, streamed)).toBe(streamed);
+    expect(keptModelAnswer('{{r1.line}}', 'Aware is 75%.')).toBe('Aware is 75%.');
+  });
+
+  it('titles a funnel with the short name, not compute', () => {
+    const results = [
+      { procedure: 'compute', summary: { title: 'compute' } },
+      { procedure: 'funnel', summary: { title: 'Funnel across the stages that were saved.' } },
+    ];
+    expect(outputTitle(results, 'Aware is the largest stage.')).toBe('Funnel');
   });
 
   it('titles a funnel with the short name, not the lead', () => {

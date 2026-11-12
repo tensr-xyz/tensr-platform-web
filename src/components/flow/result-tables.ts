@@ -685,7 +685,8 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
     record.model_fit != null ||
     record.base_note != null ||
     record.kish_ess != null ||
-    Array.isArray(record.groups);
+    Array.isArray(record.groups) ||
+    Array.isArray(record.stages);
   if (!looks && !Array.isArray(record.notes)) return;
   if (weight && typeof weight === 'object' && !Array.isArray(weight) && !sample.weight) {
     const block = weight as {
@@ -712,6 +713,16 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
         sample.n = count;
         sample.sawN = true;
       }
+    }
+  }
+  if (!sample.sawN && Array.isArray(record.stages) && record.stages.length) {
+    const first = record.stages[0];
+    const stageBase =
+      first && typeof first === 'object' ? (first as { base?: unknown }).base : undefined;
+    const count = wholeNumber(record.n ?? record.base ?? stageBase);
+    if (count != null) {
+      sample.n = count;
+      sample.sawN = true;
     }
   }
   if (!sample.sawN) {
