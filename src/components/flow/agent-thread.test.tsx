@@ -1,5 +1,5 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { AgentThread, liveRunShouldReplaceChat, stepLines } from './agent-thread';
+import { AgentThread, liveRunShouldReplaceChat, stepLines, stepRowKey } from './agent-thread';
 import { publishLiveChatRun } from './chat-live-run';
 import { runAgentLoop } from '@/lib/run-agent-loop';
 
@@ -18,6 +18,13 @@ describe('shared agent thread', () => {
     expect(stepLines([{ name: 'data_edit', message: '' }])).toEqual(['Edited the data']);
     expect(stepLines([{ name: 'compute', message: '' }])).toEqual(['Computed a new column']);
     expect(stepLines([{ name: 'finish', message: '' }])).toEqual([]);
+    expect(
+      stepLines([
+        { name: 'model', message: 'Reading the request' },
+        { name: 'run_operations', message: 'Coding the open answers' },
+      ])
+    ).toEqual(['Reading the request', 'Coding the open answers']);
+    expect(stepRowKey(0, 'Ran the analysis')).not.toBe(stepRowKey(1, 'Ran the analysis'));
   });
 
   it('keeps the open chat when another finished run is still in memory', () => {
