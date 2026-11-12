@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { AgentThread, liveRunShouldReplaceChat, stepLines, stepRowKey } from './agent-thread';
-import { publishLiveChatRun } from './chat-live-run';
+import { livePublishMatches, publishLiveChatRun } from './chat-live-run';
 import { runAgentLoop } from '@/lib/run-agent-loop';
 
 jest.mock('@/lib/flow-api', () => ({
@@ -31,6 +31,21 @@ describe('shared agent thread', () => {
     expect(liveRunShouldReplaceChat('current', 'older')).toBe(false);
     expect(liveRunShouldReplaceChat('current', 'current')).toBe(true);
     expect(liveRunShouldReplaceChat('', 'older')).toBe(true);
+  });
+
+  it('does not write a finished funnel onto the next question', () => {
+    const run = {
+      projectId: 'p1',
+      sessionId: 'funnel',
+      question: 'Build a funnel',
+      answer: 'Aware is 75%.',
+      steps: [],
+      status: null,
+      running: false,
+    };
+    expect(livePublishMatches(run, 'p1', 'funnel', 'Build a funnel')).toBe(true);
+    expect(livePublishMatches(run, 'p1', 'rake', 'Rake the sample')).toBe(false);
+    expect(livePublishMatches(run, 'p1', 'funnel', 'Rake the sample')).toBe(false);
   });
 
   afterEach(() => {

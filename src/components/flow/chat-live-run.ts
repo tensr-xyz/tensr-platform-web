@@ -32,3 +32,15 @@ export function subscribeLiveChatRun(listener: () => void) {
 export function chatRunInFlight(projectId: string): boolean {
   return Boolean(current?.running && current.projectId === projectId);
 }
+
+/** A finished turn may update only the question that started it. */
+export function livePublishMatches(
+  run: LiveChatRun | null,
+  projectId: string,
+  sessionId: string | null,
+  question: string
+): boolean {
+  if (!run || run.projectId !== projectId) return false;
+  if ((run.sessionId || '') !== (sessionId || '')) return false;
+  return run.question.trim() === question.trim();
+}

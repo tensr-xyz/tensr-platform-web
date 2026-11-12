@@ -15,6 +15,7 @@ import { archiveChatTurn, type ChatExchange } from '@/components/flow/chat-threa
 import {
   chatRunInFlight,
   liveChatRun,
+  livePublishMatches,
   publishLiveChatRun,
   subscribeLiveChatRun,
 } from '@/components/flow/chat-live-run';
@@ -28,11 +29,13 @@ import {
   outputBaseClause,
   outputCardReady,
   outputChecks,
+  keptModelAnswer,
   outputKind,
   outputRunIds,
   outputStat,
   outputTakeaway,
   outputTitle,
+  resultLead,
   titledWithQuestion,
 } from '@/components/flow/chat-output';
 import { ThreadResult, useEnrichedToolResults } from '@/components/flow/use-enriched-results';
@@ -146,6 +149,7 @@ export function useAgentThread({
   const [status, setStatus] = useState<string | null>(null);
   const [downloads, setDownloads] = useState<ExportDownload[]>([]);
   const [plan, setPlan] = useState<AgentLoopResponse | null>(null);
+  const [approving, setApproving] = useState(false);
   const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -172,6 +176,8 @@ export function useAgentThread({
   const askedRef = useRef<string | null>(null);
   const sendingRef = useRef(false);
   const approvingRef = useRef(false);
+  const turnTokenRef = useRef(0);
+  const streamedRef = useRef('');
   const aliveRef = useRef(true);
   const statusRef = useRef<string | null>(null);
   const modeRef = useRef<Mode>('agent');
@@ -280,6 +286,7 @@ export function useAgentThread({
   const sendText = useCallback(
     async (text: string, nextMode: Mode = modeRef.current) => {
       if (!text.trim() || sendingRef.current) return false;
+      const turnToken = ++turnTokenRef.current;
       if (statusRef.current === 'Thinking…' && (!projectId || chatRunInFlight(projectId)))
         return false;
       if (projectId && chatRunInFlight(projectId)) return false;
@@ -325,7 +332,9 @@ export function useAgentThread({
       setSteps([]);
       setDownloads([]);
       setStatus('Thinking…');
+      setApproving(false);
       setAnswer('');
+      streamedRef.current = '';
       let draft = '';
       const alreadyAnswered =
         answeredTurnCount(past, text) +
@@ -358,7 +367,9 @@ export function useAgentThread({
             });
           },
           onDelta: chunk => {
+            if (turnToken !== turnTokenRef.current) return;
             draft += chunk;
+            streamedRef.current = draft;
             shown(() => {
               setAnswer(draft);
               setStatus(null);
@@ -366,7 +377,9 @@ export function useAgentThread({
             publish({ answer: draft, status: null });
           },
           onReplace: next => {
+            if (turnToken !== turnTokenRef.current) return;
             draft = next;
+            streamedRef.current = next;
             shown(() => {
               setAnswer(next);
               setStatus(null);
@@ -396,11 +409,14 @@ export function useAgentThread({
             publish({ answer: previewText, status: null });
           },
         });
+        if (turnToken !== turnTokenRef.current) return true;
         if (result.session_id) noteSession(result.session_id, text.trim());
         const traced = replyLines(result);
         const entries = downloadEntries(result);
+        const kept = keptModelAnswer(draft, result.answer_markdown || '');
         shown(() => {
-          setAnswer(result.answer_markdown || '');
+          setAnswer(kept);
+          setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
           setTurn(result.status === 'awaiting_approval' ? null : result);
           if (traced.length) setSteps(traced);
@@ -413,7 +429,7 @@ export function useAgentThread({
         publish({
           running: false,
           status: null,
-          answer: result.answer_markdown || draft,
+          answer: kept,
           sessionId: result.session_id || sessionRef.current,
         });
         if (aliveRef.current) loadRail();
@@ -461,19 +477,32 @@ export function useAgentThread({
         ? plan.pending_approvals
         : null;
     const calls = Array.isArray(plan.pending_approvals) ? plan.pending_approvals : null;
+    const approvedSession = plan.session_id || sessionRef.current;
+    const turnToken = ++turnTokenRef.current;
     approvingRef.current = true;
+    setApproving(true);
     setStatus('Thinking…');
+    setAnswer('');
+    streamedRef.current = '';
     if (projectId) {
       publishLiveChatRun({
         projectId,
-        sessionId: plan.session_id || sessionRef.current,
+        sessionId: approvedSession,
         question: sent,
-        answer: answerRef.current,
+        answer: '',
         steps: stepsRef.current,
         status: 'Thinking…',
         running: true,
       });
     }
+    const writeStream = (next: string) => {
+      if (turnToken !== turnTokenRef.current) return;
+      streamedRef.current = next;
+      shown(() => {
+        setAnswer(next);
+        setStatus(null);
+      });
+    };
     void runAgentLoop({
       message: sent,
       mode,
@@ -485,18 +514,32 @@ export function useAgentThread({
       approvedBatch:
         batch && typeof batch.mac === 'string' ? { batch: batch.batch, mac: batch.mac } : null,
       signal: AbortSignal.timeout(120_000),
-      onDelta: chunk => {
-        shown(() => {
-          setAnswer(current => current + chunk);
-          setStatus(null);
-        });
+      onDelta: chunk => writeStream(streamedRef.current + chunk),
+      onReplace: next => writeStream(next),
+      onPreview: preview => {
+        if (turnToken !== turnTokenRef.current) return;
+        const previewText = preview.text || streamedRef.current;
+        if (previewText) writeStream(previewText);
+        if (!preview.tool_results?.length) return;
+        shown(() =>
+          setTurn({
+            status: 'ok',
+            mode,
+            answer_markdown: previewText,
+            session_id: approvedSession || undefined,
+            tool_results: preview.tool_results,
+          })
+        );
       },
     })
       .then(result => {
+        if (turnToken !== turnTokenRef.current) return;
         const traced = replyLines(result);
         const entries = downloadEntries(result);
+        const kept = keptModelAnswer(streamedRef.current, result.answer_markdown || '');
         shown(() => {
-          setAnswer(result.answer_markdown || '');
+          setAnswer(kept);
+          setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
           setTurn(result.status === 'awaiting_approval' ? null : result);
           if (traced.length) setSteps(traced);
@@ -507,29 +550,35 @@ export function useAgentThread({
         if (result.status !== 'awaiting_approval' && aliveRef.current)
           onFinishedRef.current?.(result);
         const current = liveChatRun();
-        if (projectId && current?.projectId === projectId) {
+        if (projectId && livePublishMatches(current, projectId, approvedSession, sent)) {
           publishLiveChatRun({
-            ...current,
+            ...current!,
             running: false,
             status: null,
-            answer: result.answer_markdown || current.answer,
+            answer: kept,
             steps: traced.length ? traced : stepsRef.current,
           });
         }
         approvingRef.current = false;
       })
       .catch(err => {
+        if (turnToken !== turnTokenRef.current) return;
         const message = err instanceof Error ? err.message : 'The plan did not run.';
-        shown(() => setStatus(message));
+        shown(() => {
+          setApproving(false);
+          setStatus(message);
+        });
         const current = liveChatRun();
-        if (projectId && current?.projectId === projectId) {
-          publishLiveChatRun({ ...current, running: false, status: message });
+        if (projectId && livePublishMatches(current, projectId, approvedSession, sent)) {
+          publishLiveChatRun({ ...current!, running: false, status: message });
         }
         approvingRef.current = false;
       });
   };
 
   const clearChat = () => {
+    turnTokenRef.current += 1;
+    approvingRef.current = false;
     sessionRef.current = null;
     publishLiveChatRun(null);
     rememberChat(null);
@@ -540,6 +589,7 @@ export function useAgentThread({
     setQuestion('');
     if (projectId) window.sessionStorage.removeItem(draftKey(projectId));
     setPlan(null);
+    setApproving(false);
     setTurn(null);
     setSteps([]);
     setDownloads([]);
@@ -697,6 +747,7 @@ export function useAgentThread({
   const prose = answerWithoutBase(
     withoutResultTokens(structuredTables.length ? answerWithoutTables(answer) : answer)
   );
+  const lead = resultLead(answer);
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
     baseNote,
@@ -719,6 +770,7 @@ export function useAgentThread({
     setStatus,
     downloads,
     plan,
+    approving,
     setPlan,
     turn,
     steps,
@@ -752,6 +804,7 @@ export function useAgentThread({
     checks,
     tables,
     prose,
+    lead,
     tableMode,
     ledger,
     resultView,
@@ -885,10 +938,26 @@ export function AgentThreadColumn({
             ) : null}
           </div>
         ) : null}
-        {thread.answer && !thread.plan ? (
+        {thread.plan ? (
+          <div className="chat-plan">
+            <strong>{thread.approving ? 'Approved · Plan' : 'Waiting for approval · Plan'}</strong>
+            <FlowMarkdown>{planCopy(thread.plan.answer_markdown || '')}</FlowMarkdown>
+            {thread.approving ? null : (
+              <div className="flow-row">
+                <Button className="flow-btn primary" type="button" onClick={thread.approve}>
+                  Approve
+                </Button>
+                <Button className="flow-btn" type="button" onClick={() => thread.setPlan(null)}>
+                  Edit plan
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : null}
+        {thread.answer && (!thread.plan || thread.approving) ? (
           thread.structuredTables.length ? (
             <AnalysisResult
-              lead={thread.takeaway}
+              lead={thread.lead || thread.takeaway}
               tables={thread.structuredTables}
               footnote={thread.footnote}
               checks={thread.resultChecks}
@@ -900,20 +969,6 @@ export function AgentThreadColumn({
           ) : (
             <FlowMarkdown className="chat-prose">{thread.prose}</FlowMarkdown>
           )
-        ) : null}
-        {thread.plan ? (
-          <div className="chat-plan">
-            <strong>Waiting for approval · Plan</strong>
-            <FlowMarkdown>{planCopy(thread.answer)}</FlowMarkdown>
-            <div className="flow-row">
-              <Button className="flow-btn primary" type="button" onClick={thread.approve}>
-                Approve
-              </Button>
-              <Button className="flow-btn" type="button" onClick={() => thread.setPlan(null)}>
-                Edit plan
-              </Button>
-            </div>
-          </div>
         ) : null}
         {thread.outputReady ? (
           <div className="chat-result">
