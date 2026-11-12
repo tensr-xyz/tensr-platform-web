@@ -1,7 +1,7 @@
 import { TextDecoder, TextEncoder } from 'util';
 import posthog from 'posthog-js';
 import { ApiRequestError } from '@/lib/api-error';
-import { streamAgentLoop } from '@/lib/stream-agent-loop';
+import { STREAM_QUIET_MS, streamAgentLoop } from '@/lib/stream-agent-loop';
 
 Object.assign(global, { TextDecoder, TextEncoder });
 
@@ -41,6 +41,10 @@ function sseFetchResponse(body: string, status = 200) {
 describe('streamAgentLoop', () => {
   beforeEach(() => {
     (global.fetch as jest.Mock).mockReset();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('surfaces a v2 tool event as panel progress', async () => {
@@ -248,6 +252,72 @@ describe('streamAgentLoop', () => {
     );
     expect(onReplace).toHaveBeenCalledWith('The table follows.\n\n| group |\n');
     expect(result.answer_markdown).toContain('| group |');
+  });
+
+  it('reads the saved session when the stream closes before a result', async () => {
+    const recover = jest.fn(async () => ({
+      status: 'ok' as const,
+      mode: 'agent' as const,
+      answer_markdown: 'Saved answer.',
+    }));
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '',
+      body: {
+        getReader() {
+          return {
+            async read() {
+              return { done: true, value: undefined };
+            },
+            releaseLock() {},
+            async cancel() {},
+          };
+        },
+      },
+    });
+
+    const result = await streamAgentLoop(
+      { message: 'compare the groups', mode: 'agent', agentVersion: 'v2' },
+      { recover }
+    );
+
+    expect(result.answer_markdown).toBe('Saved answer.');
+    expect(recover).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads the saved session when the stream stays quiet', async () => {
+    jest.useFakeTimers();
+    const recover = jest.fn(async () => ({
+      status: 'ok' as const,
+      mode: 'agent' as const,
+      answer_markdown: 'Saved answer.',
+    }));
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: async () => '',
+      body: {
+        getReader() {
+          return {
+            read() {
+              return new Promise(() => undefined);
+            },
+            releaseLock() {},
+            async cancel() {},
+          };
+        },
+      },
+    });
+
+    const pending = streamAgentLoop(
+      { message: 'compare the groups', mode: 'agent', agentVersion: 'v2' },
+      { recover }
+    );
+    await jest.advanceTimersByTimeAsync(STREAM_QUIET_MS);
+
+    await expect(pending).resolves.toMatchObject({ answer_markdown: 'Saved answer.' });
+    jest.useRealTimers();
   });
 
   it('captures a non-2xx stream with the session and distinct id', async () => {

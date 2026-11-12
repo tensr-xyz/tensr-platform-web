@@ -22,8 +22,13 @@ export type AgentLoopStreamHandlers = {
     tool_results?: AgentLoopResponse['tool_results'];
   }) => void;
   onSession?: (sessionId: string) => void;
+  /** The saved session, when the stream has gone quiet or closed before a result. */
+  recover?: () => Promise<AgentLoopResponse | null>;
   signal?: AbortSignal;
 };
+
+/** How long a quiet stream waits before the saved session is read. */
+export const STREAM_QUIET_MS = 8_000;
 
 function readDistinctId(): string | undefined {
   try {
@@ -166,6 +171,35 @@ function processSseLine(
   }
 }
 
+async function readSavedTurn(handlers: AgentLoopStreamHandlers): Promise<AgentLoopResponse | null> {
+  if (!handlers.recover) return null;
+  try {
+    return (await handlers.recover()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function nextStreamRead(
+  pending: Promise<ReadableStreamReadResult<Uint8Array>>,
+  quietMs: number
+): Promise<ReadableStreamReadResult<Uint8Array> | 'quiet'> {
+  if (quietMs <= 0) return pending;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve('quiet'), quietMs);
+    pending.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timer);
+        reject(error);
+      }
+    );
+  });
+}
+
 /**
  * POST /assistant/agent-loop/stream — SSE progress + final result envelope.
  */
@@ -248,10 +282,18 @@ export async function streamAgentLoop(
   };
 
   try {
+    let pending: Promise<ReadableStreamReadResult<Uint8Array>> | null = null;
     while (!acc.result) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+      if (!pending) pending = reader.read();
+      const winner = await nextStreamRead(pending, handlers.recover ? STREAM_QUIET_MS : 0);
+      if (winner === 'quiet') {
+        const saved = await readSavedTurn(handlers);
+        if (saved) acc.result = saved;
+        continue;
+      }
+      pending = null;
+      if (winner.done) break;
+      buffer += decoder.decode(winner.value, { stream: true });
 
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
@@ -265,6 +307,14 @@ export async function streamAgentLoop(
     if (!acc.result && buffer.trim()) {
       processSseLine(buffer, handlers, acc);
     }
+    if (!acc.result) {
+      const saved = await readSavedTurn(handlers);
+      if (saved) acc.result = saved;
+    }
+  } catch (error) {
+    const saved = await readSavedTurn(handlers);
+    if (!saved) throw error;
+    acc.result = saved;
   } finally {
     if (acc.result) {
       try {

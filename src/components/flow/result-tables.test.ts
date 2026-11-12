@@ -3,6 +3,7 @@ import {
   formatDecimalText,
   resultFootnote,
   resultViewFromToolResults,
+  weightChipName,
   weightNote,
 } from './result-tables';
 
@@ -435,6 +436,38 @@ describe('result tables', () => {
     expect(nps.tables.filter(table => table.title === 'NPS by group')).toHaveLength(1);
   });
 
+  it('keeps one NPS breakdown when the groups also build a table', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        groups: [
+          {
+            group: 'North',
+            nps: -7.059,
+            promoters: 20,
+            passives: 30,
+            detractors: 50,
+            n: 100,
+          },
+        ],
+        report: {
+          tables: [
+            {
+              title: 'NPS by group',
+              columns: ['Group', 'n', '% promoters', '% passives', '% detractors', 'NPS'],
+              rows: [['North', '100', '20.0', '30.0', '50.0', '-7']],
+            },
+          ],
+        },
+      },
+    });
+    const breakdowns = view.tables.filter(table =>
+      table.columns.some(column => column.trim().toLowerCase() === 'nps')
+    );
+    expect(breakdowns).toHaveLength(1);
+    expect(breakdowns[0].title).toBe('NPS by group');
+    expect(breakdowns[0].rows[0][5]).toBe('-7');
+  });
+
   it('prints a label when a header is an object, and keeps the R check', () => {
     const view = resultViewFromToolResults({
       tables: [
@@ -532,6 +565,10 @@ describe('result tables', () => {
     expect(view.tables.map(table => table.title)).toEqual(['Value for money: Agree or above']);
     expect(view.tables[0].rows[0][0]).toBe('Agree or above');
     expect(weightNote('none')).toBe('Unweighted');
+    expect(weightChipName('', 'none', [])).toBe('Unweighted');
+    expect(
+      weightChipName('design_weight', 'none', [{ name: 'design_weight', label: 'Design weight' }])
+    ).toBe('Design weight');
   });
 
   it('shows an association table, the filter, and the weight column', () => {

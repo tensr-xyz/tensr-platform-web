@@ -398,6 +398,23 @@ function describeTable(describe: unknown, labels?: unknown): RunTable | null {
   };
 }
 
+function isNpsBreakdown(table: RunTable): boolean {
+  const headers = table.columns.map(column => column.trim().toLowerCase());
+  return (
+    headers.includes('nps') &&
+    headers.some(column => column === 'group' || column.startsWith('group '))
+  );
+}
+
+/** One NPS-by-group table. A second breakdown of the same groups is the same table. */
+function oneNpsBreakdown(tables: RunTable[]): RunTable[] {
+  const breakdowns = tables.filter(isNpsBreakdown);
+  if (breakdowns.length < 2) return tables;
+  const kept =
+    breakdowns.find(table => table.title.trim().toLowerCase() !== 'nps') || breakdowns[0];
+  return tables.filter(table => !isNpsBreakdown(table) || table === kept);
+}
+
 function npsTable(groups: unknown): RunTable | null {
   if (!Array.isArray(groups) || !groups.length) return null;
   const rows = groups
@@ -859,6 +876,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     );
   }
   view.tables = view.tables.filter(table => !/assignments \(quote spans\)/i.test(table.title));
+  view.tables = oneNpsBreakdown(view.tables);
   const total = largestFrequencyTotal(view);
   const used = Number(view.base.replace(/[^\d.]/g, ''));
   if (total && used && used < total / 2) view.base = '';
@@ -971,6 +989,21 @@ export function shownMetric(label: string, value: string): string {
   }
   if (name === 'weight' && folded === 'active none; weight_column none') return 'Unweighted';
   return value;
+}
+
+/** The name on the weight chip. A missing weight is Unweighted. The sentinel none is not a name. */
+export function weightChipName(
+  resultWeight: string,
+  ledgerWeight: string,
+  columns: ColumnLabels[] = []
+): string {
+  const chosen = [resultWeight, ledgerWeight]
+    .map(item => item.trim())
+    .find(item => item && !/^(none|unweighted|null)$/i.test(item));
+  if (!chosen) return 'Unweighted';
+  const note = weightNote(chosen, columns);
+  if (note === 'Unweighted' || note === 'Weighted') return note;
+  return note.replace(/^Weight:\s*/, '');
 }
 
 /** The weight's label. The bare column name "weight" is not a label. */
