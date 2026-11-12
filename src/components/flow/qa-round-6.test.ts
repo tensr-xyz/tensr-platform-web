@@ -14,6 +14,7 @@ import {
   agentReplyText,
   tableBodyFromAgentBook,
   columnChoiceLabel,
+  selectedTableWeight,
   tableWeightChoices,
   themeRows,
   weightOptionLabel,
@@ -45,6 +46,15 @@ describe('QA round 6', () => {
       'Survey weight, raked to targets.csv'
     );
     expect(weightOptionLabel('design_weight', 'Design weight')).toBe('Design weight');
+    expect(
+      selectedTableWeight('none', { column: 'design_weight', weight_aware: true }, 'design_weight')
+    ).toBe('design_weight');
+    expect(
+      selectedTableWeight('none', { column: null, weight_aware: false }, 'design_weight')
+    ).toBe('');
+    expect(selectedTableWeight({ column: 'design_weight' }, { weight_aware: false }, '')).toBe(
+      'design_weight'
+    );
   });
 
   test('3: an answer to the agent question carries the earlier turns', () => {
