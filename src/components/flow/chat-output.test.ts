@@ -94,6 +94,18 @@ describe('chat output panel', () => {
     expect(titledWithQuestion('sat_brewco', columns)).toBe('How satisfied are you with Brew & Co?');
   });
 
+  it('titles a yes or no card with the question', () => {
+    const results = [
+      {
+        procedure: 'frequencies',
+        request_body: { columns: ['q_buy'] },
+        summary: { title: 'Yes.', line: 'Frequency table.' },
+      },
+    ];
+    const columns = [{ name: 'q_buy', label: 'Would you buy this again?' }];
+    expect(outputTitle(results, 'Yes.', columns)).toBe('Would you buy this again?');
+  });
+
   it('falls back to the first prose sentence that is not the base', () => {
     expect(outputTitle([], 'Liking is flat across markets.\n\n| a | b |\n| --- | --- |')).toBe(
       'Liking is flat across markets.'

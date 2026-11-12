@@ -792,4 +792,13 @@ describe('answer tables', () => {
     );
     expect(tables[0].rows[0][1]).toBe('4.256');
   });
+
+  it('shows a p below .001 as < .001', () => {
+    const view = resultViewFromToolResults([
+      { result: { statistic: 18.2, df: 4, p_value: 9.56e-7, effect_size: 0.31 } },
+    ]);
+    const test = view.tables.find(table => table.title === 'Test');
+    expect(test?.rows[0].join(' ')).toContain('< .001');
+    expect(JSON.stringify(test)).not.toContain('9.56e');
+  });
 });

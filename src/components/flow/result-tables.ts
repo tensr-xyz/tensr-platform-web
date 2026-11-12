@@ -84,6 +84,29 @@ export function formatDecimalText(value: string, places: number, header = ''): s
   return `${shown}${match[3] || ''}`;
 }
 
+function isPHeader(header: string): boolean {
+  const name = header.trim().toLowerCase().replace(/[_-]+/g, ' ');
+  return (
+    name === 'p' ||
+    name === 'p value' ||
+    name === 'p adj' ||
+    name === 'adjusted p' ||
+    name.endsWith(' p')
+  );
+}
+
+/** A p below .001 is shown as < .001, including a value that arrived in scientific notation. */
+function shownP(value: unknown): string {
+  const number =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && /e-/i.test(value.trim())
+        ? Number(value)
+        : Number.NaN;
+  if (Number.isFinite(number) && number >= 0 && number < 0.001) return '< .001';
+  return cell(value);
+}
+
 function cell(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'number') {
@@ -306,7 +329,9 @@ function shareTable(
     const cells = fields.map(field => {
       for (const key of field.keys) {
         const value = record[key];
-        if (value != null && String(value).trim()) return cell(value);
+        if (value != null && String(value).trim()) {
+          return isPHeader(field.header) ? shownP(value) : cell(value);
+        }
       }
       return '';
     });
@@ -367,7 +392,7 @@ function statRow(record: Record<string, unknown>, title: string, keys: string[])
   return {
     title,
     columns: present.map(key => key.replaceAll('_', ' ')),
-    rows: [present.map(key => cell(record[key]))],
+    rows: [present.map(key => (isPHeader(key) ? shownP(record[key]) : cell(record[key])))],
   };
 }
 
@@ -501,7 +526,7 @@ function anovaSourceTable(record: Record<string, unknown>): RunTable | null {
     cell(source.df_between ?? source.df),
     cell(source.ms_between ?? source.ms),
     cell(record.f_statistic ?? source.F ?? source.f),
-    cell(record.p_value ?? source.p_value ?? source.p),
+    shownP(record.p_value ?? source.p_value ?? source.p),
     cell(record.eta_squared ?? record.effect_size ?? source.eta_squared),
   ];
   if (!between.slice(1).some(Boolean)) return null;
@@ -545,7 +570,7 @@ function postHocTable(value: unknown, labels: Map<string, string> = new Map()): 
         left,
         right,
         cell(record.meandiff ?? record.mean_diff ?? record.diff),
-        cell(record['p-adj'] ?? record.p_adj ?? record.p_value),
+        shownP(record['p-adj'] ?? record.p_adj ?? record.p_value),
       ];
     })
     .filter((row): row is string[] => Boolean(row));
@@ -796,8 +821,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     add(postHocTable(record.post_hoc, groupLabels(record.group_descriptives)));
     const levene = record.levene_test;
     if (levene && typeof levene === 'object') {
-      const p = cell((levene as { p_value?: unknown }).p_value);
-      if (p) notes([`Levene p = ${p}`]);
+      const p = shownP((levene as { p_value?: unknown }).p_value);
+      if (p) notes([p.startsWith('<') ? `Levene p ${p}` : `Levene p = ${p}`]);
     }
     if (typeof record.exclusion_note === 'string' && record.exclusion_note.trim()) {
       notes([record.exclusion_note.trim()]);
