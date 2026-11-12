@@ -14,6 +14,7 @@ import {
   pinsFromRuns,
   savePin,
   setProjectPins,
+  shareRequest,
   useProjectPins,
   type RunSummary,
 } from '@/components/flow/report-pins';
@@ -159,11 +160,10 @@ export function ReportOutputs({
         applyRuns(sorted, rawRuns);
       });
     };
-    void flowJson<{ ok?: boolean; runs?: unknown[] }>(
-      `/api/projects/${projectId}/overview${
-        fileIds.length ? `?dataset_ids=${encodeURIComponent(fileIds.join(','))}` : ''
-      }`
-    )
+    const overviewUrl = `/api/projects/${projectId}/overview${
+      fileIds.length ? `?dataset_ids=${encodeURIComponent(fileIds.join(','))}` : ''
+    }`;
+    void shareRequest(overviewUrl, () => flowJson<{ ok?: boolean; runs?: unknown[] }>(overviewUrl))
       .then(overview => {
         if (!live) return;
         if (overview?.ok && Array.isArray(overview.runs) && overview.runs.length) {
