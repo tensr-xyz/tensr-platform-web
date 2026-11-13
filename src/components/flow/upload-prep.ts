@@ -29,10 +29,12 @@ export function prepParts(proposal: PrepProposal | null | undefined): PrepPart[]
   const weight = (proposal.weight_label || '').trim();
   if (weight) parts.push({ id: 'weight', label: `Weight: ${weight}` });
   const nps = proposal.nps?.label || proposal.nps?.column;
-  if (nps) parts.push({ id: 'nps', label: `NPS groups for ${nps}` });
+  parts.push({ id: 'nps', label: nps ? `NPS groups for ${nps}` : 'No NPS scale found' });
   const flagged = proposal.quality?.flagged;
   if (typeof flagged === 'number' && flagged > 0) {
     parts.push({ id: 'flags', label: `${flagged} quality flags` });
+  } else if (proposal.quality) {
+    parts.push({ id: 'flags', label: 'No quality flags' });
   }
   return parts;
 }

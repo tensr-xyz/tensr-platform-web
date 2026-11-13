@@ -6,6 +6,7 @@ import { Table } from '@/components/ui/table';
 import type { RunTable } from '@/components/flow/run-document';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { formatDecimalText } from '@/components/flow/result-tables';
+import { guardUserText } from '@/components/flow/chat-output';
 import { fetchAnalysisRun, R_CHECK_POLL_MS, rCheckPhase } from '@/lib/analysis-runs';
 import { loadOutputPreferences, OUTPUT_PREFERENCES_EVENT } from '@/lib/output-preferences';
 
@@ -80,7 +81,10 @@ export function AnalysisResult({
     };
   }, [rCheck, runId]);
   const shownCheck = mark.kind || rCheck;
-  const shownStatement = mark.statement || rStatement;
+  const rawStatement = mark.statement || rStatement;
+  const shownStatement =
+    guardUserText(rawStatement || '') ||
+    (shownCheck === 'mismatch' || shownCheck === 'not_verified' ? 'The check did not match.' : '');
   const checkLabel =
     shownCheck === 'pending'
       ? 'R check running'

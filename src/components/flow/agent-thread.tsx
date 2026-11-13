@@ -38,6 +38,7 @@ import {
   outputTakeaway,
   outputTitle,
   resultLead,
+  guardUserText,
   titledWithQuestion,
 } from '@/components/flow/chat-output';
 import { ThreadResult, useEnrichedToolResults } from '@/components/flow/use-enriched-results';
@@ -759,7 +760,7 @@ export function useAgentThread({
   const prose = answerWithoutBase(
     withoutResultTokens(structuredTables.length ? answerWithoutTables(answer) : answer)
   );
-  const lead = resultLead(answer);
+  const lead = resultLead(answer, toolResults);
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
     baseNote,
@@ -835,7 +836,7 @@ function planCopy(answer: string): string {
   const waiting = 'Waiting for approval:';
   if (text.startsWith(waiting)) text = text.slice(waiting.length).trim();
   if (text === 'Plan' || text.startsWith('Plan\n')) text = text.slice(4).trim();
-  return text;
+  return guardUserText(text);
 }
 
 export function AgentThreadColumn({

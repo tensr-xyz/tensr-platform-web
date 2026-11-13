@@ -284,10 +284,67 @@ export function keptModelAnswer(streamed: string, finalText: string): string {
   return done;
 }
 
-/** The model's sentences. Tables and the base line stay on the card. */
-export function resultLead(answer: string): string {
+const STDERR_MARKS = [
+  'traceback',
+  'execution halted',
+  'loading required package',
+  'error in ',
+  'lengths of prob',
+  'modulenotfounderror',
+  'syntaxerror',
+  'r script failed',
+];
+const PROMISE_MARKS = ['check', 'look', 'verify', 'confirm', 'retry', 'rerun', 'investigate'];
+const CORRECTION_MARKS = [
+  'earlier reply',
+  'previous reply',
+  'i was wrong',
+  'wrong way round',
+  'i misspoke',
+  'that was incorrect',
+  'in my last reply',
+  'correction:',
+];
+
+/** One pass for every sentence a person reads. Drops a promise, a retry, and raw stderr. */
+export function guardUserText(text: string): string {
+  const source = String(text || '');
+  if (!source.trim()) return '';
+  const kept = source
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(part => part.trim())
+    .filter(part => part && !dropUserSentence(part));
+  return kept.join(' ').trim();
+}
+
+function dropUserSentence(part: string): boolean {
+  const folded = part.toLowerCase();
+  if (STDERR_MARKS.some(mark => folded.includes(mark))) return true;
+  if (CORRECTION_MARKS.some(mark => folded.includes(mark))) return true;
+  const opening =
+    folded.startsWith("i'll ") || folded.startsWith('i will ') || folded.startsWith('let me ');
+  return opening && PROMISE_MARKS.some(mark => folded.includes(mark));
+}
+
+/** The model's sentences, or the result's own line when the chat has none. */
+export function resultLead(
+  answer: string,
+  results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
+): string {
   const prose = answerWithoutBase(withoutResultTokens(answerWithoutTables(answer))).trim();
-  return prose || outputTakeaway(answer);
+  const text = prose || summaryLine(results) || outputTakeaway(answer);
+  return guardUserText(text);
+}
+
+function summaryLine(
+  results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
+): string {
+  for (const item of results || []) {
+    const summary = item?.summary;
+    const line = typeof summary?.line === 'string' ? summary.line.trim() : '';
+    if (line && /[A-Za-z]/.test(line) && /\d/.test(line)) return line;
+  }
+  return '';
 }
 
 /** The table title the API put on the result, or the first prose line that is not the base. */
