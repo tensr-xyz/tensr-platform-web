@@ -13,6 +13,8 @@ import {
   outputTakeaway,
   outputTitle,
   titledWithQuestion,
+  guardUserText,
+  resultLead,
 } from './chat-output';
 
 const answer = [
@@ -257,5 +259,21 @@ describe('chat output panel', () => {
   it('splits a saved lead so one bullet does not run into the next', () => {
     const text = restoreListBreaks('35.3% convert. - By region, North is 20%. - South is 40%.');
     expect(text).toBe('35.3% convert.\n- By region, North is 20%.\n- South is 40%.');
+  });
+
+  it('drops a promise, a retry, and raw check output from a lead', () => {
+    const text = guardUserText(
+      "Reach is 40.0%. I'll check the filter. I had it the wrong way round in my earlier reply. Execution halted"
+    );
+    expect(text).toContain('40.0%');
+    expect(text).not.toContain("I'll check");
+    expect(text).not.toContain('earlier reply');
+    expect(text).not.toContain('Execution halted');
+  });
+
+  it('uses the result line when the chat answer has no sentence', () => {
+    const lead = resultLead('', [{ summary: { line: 'Heard 75.0%, Bought 12.0%.' } }]);
+    expect(lead).toContain('75.0%');
+    expect(lead).toContain('12.0%');
   });
 });

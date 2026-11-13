@@ -336,7 +336,7 @@ describe('result tables', () => {
       },
     });
     const grouped = view.tables.find(table => table.title === 'Funnel by group');
-    expect(grouped?.rows[0]).toEqual(['Heard of it', 'North', '2', '100', '100']);
+    expect(grouped?.rows[0]).toEqual(['Heard of it', 'North', '2', '100.0', '100.0']);
   });
 
   it('says the footnote weight is the one named in the study brief', () => {

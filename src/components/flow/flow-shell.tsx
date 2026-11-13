@@ -804,7 +804,9 @@ export function NewProjectDialog({
       await onCreated();
       onOpenChange(false);
       reset();
-      router.push(`/flow/p/${id}/${datasetId ? 'responses' : 'sources'}`);
+      const land =
+        choice === 'upload' && datasetId ? 'sources' : datasetId ? 'responses' : 'sources';
+      router.push(`/flow/p/${id}/${land}`);
     } catch (err) {
       setError(formatApiErrorMessage(err));
     } finally {

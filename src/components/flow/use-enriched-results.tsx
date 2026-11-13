@@ -78,7 +78,7 @@ export function ThreadResult({
   }
   return (
     <AnalysisResult
-      lead={resultLead(answer)}
+      lead={resultLead(answer, enriched)}
       tables={tables}
       footnote={resultFootnote(
         view,

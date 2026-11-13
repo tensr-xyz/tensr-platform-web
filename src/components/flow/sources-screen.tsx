@@ -21,7 +21,12 @@ import { StackWaves } from '@/components/flow/stack-waves';
 import { DatasetMenu } from '@/components/flow/dataset-actions';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
-import { applyUploadPrep, uploadDatasetFile } from '@/lib/upload-dataset';
+import {
+  applyUploadPrep,
+  pendingUploadPrep,
+  skipUploadPrep,
+  uploadDatasetFile,
+} from '@/lib/upload-dataset';
 import { UploadPrepCard } from '@/components/flow/upload-prep-card';
 import type { PrepProposal } from '@/components/flow/upload-prep';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
@@ -183,6 +188,21 @@ export function SourcesScreen({
   const [olderOpen, setOlderOpen] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<{ id: string; prep: PrepProposal } | null>(null);
+  const activeId = project?.active_dataset_id || '';
+  const skippedPrep = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (!activeId || proposal || skippedPrep.current.has(activeId)) return;
+    const bearer = getStytchBearerForTensrApi();
+    if (!bearer) return;
+    let cancelled = false;
+    void pendingUploadPrep(activeId, bearer).then(prep => {
+      if (!cancelled && prep) setProposal({ id: activeId, prep: prep as PrepProposal });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId, proposal]);
 
   useEffect(() => {
     if (!projectId) return;
@@ -361,7 +381,12 @@ export function SourcesScreen({
                   setError(err instanceof Error ? err.message : 'The file was not prepared.')
                 );
             }}
-            onSkip={() => setProposal(null)}
+            onSkip={() => {
+              skippedPrep.current.add(proposal.id);
+              const bearer = getStytchBearerForTensrApi();
+              if (bearer) void skipUploadPrep(proposal.id, bearer);
+              setProposal(null);
+            }}
           />
         ) : null}
 

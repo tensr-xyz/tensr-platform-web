@@ -15,6 +15,7 @@ export type ResultView = {
   baseDetail?: string;
   /** study_brief when the table used the weight named in the brief. */
   weightSource?: string;
+  universeThousands?: number;
 };
 
 /** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
@@ -116,6 +117,12 @@ function shownP(value: unknown): string {
         : Number.NaN;
   if (Number.isFinite(number) && number >= 0 && number < 0.001) return '< .001';
   return cell(value);
+}
+
+function oneDecimal(value: unknown): string {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number)) return '';
+  return (Math.round(number * 10) / 10).toFixed(1);
 }
 
 function cell(value: unknown): string {
@@ -480,8 +487,8 @@ function groupFunnelFrom(value: unknown, depth = 0): RunTable | null {
           cell(row.label ?? row.stage),
           group,
           cell(row.count),
-          cell(row.percent_of_base),
-          cell(row.conversion_from_previous),
+          oneDecimal(row.percent_of_base),
+          oneDecimal(row.conversion_from_previous),
         ]);
       }
     }
@@ -1217,6 +1224,11 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       if (counted > answered) answered = counted;
     }
     if (!view.weight) view.weight = weightName(record);
+    if (view.universeThousands == null && record.weight && typeof record.weight === 'object') {
+      const universe = (record.weight as { universe_thousands?: unknown }).universe_thousands;
+      if (typeof universe === 'number' && Number.isFinite(universe))
+        view.universeThousands = universe;
+    }
     if (
       !view.weightSource &&
       (record.weight_source === 'study_brief' || record.weight_from_brief === true)
@@ -1430,10 +1442,15 @@ export function resultFootnote(
       : view.weightSource === 'study_brief' && view.weight
         ? `${namedWeight}, the weight named in the study brief`
         : namedWeight;
+  const universe =
+    typeof view.universeThousands === 'number'
+      ? `Universe ${view.universeThousands.toFixed(1)} thousand`
+      : '';
   const parts = [
     detail ? '' : base.trim() || view.base,
     filter ? `Filter: ${filter}` : '',
     weight,
+    universe,
     test && test !== 'Output' ? test : '',
     view.letterNote,
     detail,

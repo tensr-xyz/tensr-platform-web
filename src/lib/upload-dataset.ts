@@ -22,6 +22,26 @@ function activeOrgIdFromStorage(): string | null {
   return localStorage.getItem('activeOrganizationId');
 }
 
+export async function pendingUploadPrep(
+  datasetId: string,
+  token: string
+): Promise<Record<string, unknown> | null> {
+  const orgId = activeOrgIdFromStorage();
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (orgId && orgId !== PERSONAL_ACCOUNT_KEY) headers['X-Organization-Id'] = orgId;
+  const response = await fetch(tensrApiUrl(`/datasets/${datasetId}/upload-status`), { headers });
+  if (!response.ok) return null;
+  const body = (await response.json()) as { prep?: Record<string, unknown> };
+  return body.prep && typeof body.prep === 'object' ? body.prep : null;
+}
+
+export async function skipUploadPrep(datasetId: string, token: string): Promise<void> {
+  const orgId = activeOrgIdFromStorage();
+  const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+  if (orgId && orgId !== PERSONAL_ACCOUNT_KEY) headers['X-Organization-Id'] = orgId;
+  await fetch(tensrApiUrl(`/datasets/${datasetId}/prep/skip`), { method: 'POST', headers });
+}
+
 export async function applyUploadPrep(
   datasetId: string,
   token: string,
