@@ -31,6 +31,7 @@ import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
 import { baseCount } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
+import { StudyBrief } from '@/components/flow/study-brief';
 import { fetchAnalysisRun } from '@/lib/analysis-runs';
 import { resultViewFromToolResults, weightChipName } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
@@ -5113,6 +5114,7 @@ function ReportScreen({
             </span>
           </p>
         </div>
+        <StudyBrief key={projectId} projectId={projectId} />
         <div className="report-block">
           <div className="report-head">
             <div>

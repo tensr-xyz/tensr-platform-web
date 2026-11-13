@@ -29,6 +29,7 @@ import {
   outputBaseClause,
   outputCardReady,
   outputChecks,
+  isProcedurePlaceholder,
   keptModelAnswer,
   outputKind,
   outputRunIds,
@@ -370,6 +371,7 @@ export function useAgentThread({
             if (turnToken !== turnTokenRef.current) return;
             draft += chunk;
             streamedRef.current = draft;
+            if (isProcedurePlaceholder(draft)) return;
             shown(() => {
               setAnswer(draft);
               setStatus(null);
@@ -380,6 +382,7 @@ export function useAgentThread({
             if (turnToken !== turnTokenRef.current) return;
             draft = next;
             streamedRef.current = next;
+            if (isProcedurePlaceholder(next)) return;
             shown(() => {
               setAnswer(next);
               setStatus(null);
@@ -391,20 +394,14 @@ export function useAgentThread({
             publish({ sessionId });
           },
           onPreview: preview => {
+            if (turnToken !== turnTokenRef.current) return;
             const previewText = preview.text || draft;
-            if (previewText) draft = previewText;
+            if (!previewText || isProcedurePlaceholder(previewText)) return;
+            draft = previewText;
+            streamedRef.current = previewText;
             shown(() => {
-              if (previewText) setAnswer(previewText);
+              setAnswer(previewText);
               setStatus(null);
-              if (preview.tool_results?.length) {
-                setTurn({
-                  status: 'ok',
-                  mode: nextMode,
-                  answer_markdown: previewText,
-                  session_id: sessionRef.current || undefined,
-                  tool_results: preview.tool_results,
-                });
-              }
             });
             publish({ answer: previewText, status: null });
           },
@@ -498,6 +495,7 @@ export function useAgentThread({
     const writeStream = (next: string) => {
       if (turnToken !== turnTokenRef.current) return;
       streamedRef.current = next;
+      if (isProcedurePlaceholder(next)) return;
       shown(() => {
         setAnswer(next);
         setStatus(null);
@@ -518,18 +516,9 @@ export function useAgentThread({
       onReplace: next => writeStream(next),
       onPreview: preview => {
         if (turnToken !== turnTokenRef.current) return;
+        if (turnToken !== turnTokenRef.current) return;
         const previewText = preview.text || streamedRef.current;
         if (previewText) writeStream(previewText);
-        if (!preview.tool_results?.length) return;
-        shown(() =>
-          setTurn({
-            status: 'ok',
-            mode,
-            answer_markdown: previewText,
-            session_id: approvedSession || undefined,
-            tool_results: preview.tool_results,
-          })
-        );
       },
     })
       .then(result => {
