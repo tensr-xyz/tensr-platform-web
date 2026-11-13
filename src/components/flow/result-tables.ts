@@ -13,6 +13,8 @@ export type ResultView = {
   letterNote: string;
   /** Weight, sample size, missing, effective n, and the confidence level. */
   baseDetail?: string;
+  /** study_brief when the table used the weight named in the brief. */
+  weightSource?: string;
 };
 
 /** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
@@ -451,6 +453,53 @@ function isStageFunnel(table: RunTable): boolean {
     headers.includes('stage') &&
     headers.some(column => column.includes('conversion'))
   );
+}
+
+function groupFunnelFrom(value: unknown, depth = 0): RunTable | null {
+  if (!value || typeof value !== 'object' || depth > 6) return null;
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = groupFunnelFrom(item, depth + 1);
+      if (found) return found;
+    }
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const grouped = record.by_group;
+  if (Array.isArray(grouped) && grouped.length) {
+    const rows: string[][] = [];
+    for (const item of grouped) {
+      if (!item || typeof item !== 'object') continue;
+      const group = cell((item as { group?: unknown }).group);
+      const stages = (item as { stages?: unknown }).stages;
+      if (!group || !Array.isArray(stages)) continue;
+      for (const stage of stages) {
+        if (!stage || typeof stage !== 'object') continue;
+        const row = stage as Record<string, unknown>;
+        rows.push([
+          cell(row.label ?? row.stage),
+          group,
+          cell(row.count),
+          cell(row.percent_of_base),
+          cell(row.conversion_from_previous),
+        ]);
+      }
+    }
+    if (rows.some(row => row.some(Boolean))) {
+      return {
+        title: 'Funnel by group',
+        columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+        rows,
+      };
+    }
+  }
+  for (const nested of Object.values(record)) {
+    if (nested && typeof nested === 'object') {
+      const found = groupFunnelFrom(nested, depth + 1);
+      if (found) return found;
+    }
+  }
+  return null;
 }
 
 /** One stage funnel. A shorter table of the same stages is the earlier question-label copy. */
@@ -993,6 +1042,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     rStatement: '',
     base: '',
     letterNote: '',
+    weightSource: '',
   };
   const seen = new Set<string>();
   let usedSummary = false;
@@ -1167,6 +1217,12 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       if (counted > answered) answered = counted;
     }
     if (!view.weight) view.weight = weightName(record);
+    if (
+      !view.weightSource &&
+      (record.weight_source === 'study_brief' || record.weight_from_brief === true)
+    ) {
+      view.weightSource = 'study_brief';
+    }
     if (!view.filter) {
       const named = filterText(
         record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters
@@ -1201,6 +1257,14 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     );
   }
   view.tables = view.tables.filter(table => !/assignments \(quote spans\)/i.test(table.title));
+  const hasGroupFunnel = view.tables.some(table => {
+    const headers = table.columns.map(column => column.trim().toLowerCase());
+    return headers.includes('stage') && headers.includes('group');
+  });
+  if (!hasGroupFunnel) {
+    const grouped = groupFunnelFrom(results);
+    if (grouped) view.tables.push(grouped);
+  }
   view.tables = oneFunnel(oneNpsBreakdown(view.tables));
   const total = largestFrequencyTotal(view);
   const used = Number(view.base.replace(/[^\d.]/g, ''));
@@ -1359,14 +1423,17 @@ export function resultFootnote(
 ): string {
   const filter = labelFilter(view.filter, columns);
   const detail = view.baseDetail || '';
+  const namedWeight = view.weight ? weightNote(view.weight, columns) : 'Unweighted';
+  const weight =
+    detail && /weight:/i.test(detail)
+      ? ''
+      : view.weightSource === 'study_brief' && view.weight
+        ? `${namedWeight}, the weight named in the study brief`
+        : namedWeight;
   const parts = [
     detail ? '' : base.trim() || view.base,
     filter ? `Filter: ${filter}` : '',
-    detail && /weight:/i.test(detail)
-      ? ''
-      : view.weight
-        ? weightNote(view.weight, columns)
-        : 'Unweighted',
+    weight,
     test && test !== 'Output' ? test : '',
     view.letterNote,
     detail,

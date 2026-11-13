@@ -21,7 +21,9 @@ import { StackWaves } from '@/components/flow/stack-waves';
 import { DatasetMenu } from '@/components/flow/dataset-actions';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
-import { uploadDatasetFile } from '@/lib/upload-dataset';
+import { applyUploadPrep, uploadDatasetFile } from '@/lib/upload-dataset';
+import { UploadPrepCard } from '@/components/flow/upload-prep-card';
+import type { PrepProposal } from '@/components/flow/upload-prep';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 
 export type SourceFile = {
@@ -180,6 +182,7 @@ export function SourcesScreen({
   const [uploading, setUploading] = useState(false);
   const [olderOpen, setOlderOpen] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
+  const [proposal, setProposal] = useState<{ id: string; prep: PrepProposal } | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -224,7 +227,13 @@ export function SourcesScreen({
     setUploading(true);
     setError(null);
     void uploadDatasetFile(file, token, 'workspace')
-      .then(result => moveDatasetToProject(projectId, result.dataset_id))
+      .then(result => {
+        const prep = result.prep;
+        if (prep && typeof prep === 'object') {
+          setProposal({ id: result.dataset_id, prep: prep as PrepProposal });
+        }
+        return moveDatasetToProject(projectId, result.dataset_id);
+      })
       .then(() => onChanged())
       .catch(err => setError(err instanceof Error ? err.message : 'The file did not upload.'))
       .finally(() => setUploading(false));
@@ -333,6 +342,28 @@ export function SourcesScreen({
             {uploading ? 'Uploading…' : '+ Upload file'}
           </Button>
         </div>
+        {proposal ? (
+          <UploadPrepCard
+            proposal={proposal.prep}
+            onApply={kept => {
+              const bearer = getStytchBearerForTensrApi();
+              if (!bearer) {
+                setError('Sign in again to prepare the file.');
+                return;
+              }
+              void applyUploadPrep(proposal.id, bearer, kept)
+                .then(saved => moveDatasetToProject(projectId, saved.dataset_id))
+                .then(() => {
+                  setProposal(null);
+                  onChanged();
+                })
+                .catch(err =>
+                  setError(err instanceof Error ? err.message : 'The file was not prepared.')
+                );
+            }}
+            onSkip={() => setProposal(null)}
+          />
+        ) : null}
 
         <div className="sources-block">
           <div className="sources-block-head">

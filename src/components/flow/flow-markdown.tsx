@@ -3,7 +3,7 @@
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { liftInlineTables } from '@/lib/lift-inline-tables';
-import { keepLineBreaks } from '@/components/flow/chat-output';
+import { keepLineBreaks, restoreListBreaks } from '@/components/flow/chat-output';
 import {
   Table,
   TableBody,
@@ -44,7 +44,7 @@ export function FlowMarkdown({ children, className }: { children: string; classN
   return (
     <div className={cn('flow-md', className)}>
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
-        {keepLineBreaks(liftInlineTables(children))}
+        {keepLineBreaks(liftInlineTables(restoreListBreaks(children)))}
       </ReactMarkdown>
     </div>
   );

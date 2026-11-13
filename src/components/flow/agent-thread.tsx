@@ -29,6 +29,7 @@ import {
   outputBaseClause,
   outputCardReady,
   outputChecks,
+  hasSummaryTable,
   isProcedurePlaceholder,
   keptModelAnswer,
   outputKind,
@@ -396,14 +397,27 @@ export function useAgentThread({
           onPreview: preview => {
             if (turnToken !== turnTokenRef.current) return;
             const previewText = preview.text || draft;
-            if (!previewText || isProcedurePlaceholder(previewText)) return;
-            draft = previewText;
-            streamedRef.current = previewText;
-            shown(() => {
-              setAnswer(previewText);
-              setStatus(null);
-            });
-            publish({ answer: previewText, status: null });
+            const tables = hasSummaryTable(preview.tool_results);
+            if ((!previewText || isProcedurePlaceholder(previewText)) && !tables) return;
+            if (previewText && !isProcedurePlaceholder(previewText)) {
+              draft = previewText;
+              streamedRef.current = previewText;
+              shown(() => {
+                setAnswer(previewText);
+                setStatus(null);
+              });
+              publish({ answer: previewText, status: null });
+            }
+            if (tables) {
+              shown(() => {
+                setTurn({
+                  status: 'ok',
+                  mode,
+                  answer_markdown: previewText,
+                  tool_results: preview.tool_results,
+                });
+              });
+            }
           },
         });
         if (turnToken !== turnTokenRef.current) return true;
@@ -516,9 +530,18 @@ export function useAgentThread({
       onReplace: next => writeStream(next),
       onPreview: preview => {
         if (turnToken !== turnTokenRef.current) return;
-        if (turnToken !== turnTokenRef.current) return;
         const previewText = preview.text || streamedRef.current;
-        if (previewText) writeStream(previewText);
+        if (previewText && !isProcedurePlaceholder(previewText)) writeStream(previewText);
+        if (hasSummaryTable(preview.tool_results)) {
+          shown(() => {
+            setTurn({
+              status: 'ok',
+              mode,
+              answer_markdown: previewText,
+              tool_results: preview.tool_results,
+            });
+          });
+        }
       },
     })
       .then(result => {

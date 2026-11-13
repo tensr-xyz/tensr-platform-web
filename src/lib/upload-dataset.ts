@@ -22,6 +22,32 @@ function activeOrgIdFromStorage(): string | null {
   return localStorage.getItem('activeOrganizationId');
 }
 
+export async function applyUploadPrep(
+  datasetId: string,
+  token: string,
+  body: Record<string, boolean>
+): Promise<{ dataset_id: string }> {
+  const orgId = activeOrgIdFromStorage();
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+  };
+  if (orgId && orgId !== PERSONAL_ACCOUNT_KEY) headers['X-Organization-Id'] = orgId;
+  const response = await fetch(tensrApiUrl(`/datasets/${datasetId}/prep/apply`), {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    throw new Error(
+      formatApiErrorMessage(new ApiRequestError(response.status, await response.text()))
+    );
+  }
+  const saved = (await response.json()) as { dataset_id?: string };
+  if (!saved.dataset_id) throw new Error('The prepared file was not saved.');
+  return { dataset_id: saved.dataset_id };
+}
+
 export type DatasetUploadResult = {
   dataset_id: string;
   [key: string]: unknown;
@@ -77,13 +103,14 @@ export async function waitForFinishedUpload(
     const job = (await statusRes.json().catch(() => null)) as {
       status?: string;
       message?: string;
+      prep?: Record<string, unknown>;
     } | null;
     if (job?.status === 'failed') {
       throw new Error(job.message || 'The file could not be prepared.');
     }
     if (job?.status === 'ready') {
       onProgress?.(100);
-      return { dataset_id: datasetId };
+      return job.prep ? { dataset_id: datasetId, prep: job.prep } : { dataset_id: datasetId };
     }
   }
   return null;
