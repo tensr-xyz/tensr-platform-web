@@ -83,10 +83,23 @@ function isFrequencyResult(item: ToolResult): boolean {
 /** The analysis kind for the badge: ANOVA, Crosstab, and so on. */
 export function outputKind(results: ToolResult[] | undefined): string {
   const items = analysisItems(results);
+  const names = items.map(procedureOf);
+  const preferred = preferredProcedure(items);
+  const labeled = [preferred, ...names].find(name => name && KIND_LABELS[name]);
+  if (labeled) return KIND_LABELS[labeled];
   if (items.some(isFrequencyResult)) return 'Frequencies';
   const procedure = procedureOf(items[0] || {});
   if (!procedure) return 'Output';
   return KIND_LABELS[procedure] || analysisDisplayName(procedure);
+}
+
+/** Tool progress such as "compute" is not the answer. */
+export function isProcedurePlaceholder(text: string): boolean {
+  const lines = text
+    .split(/\n+/)
+    .map(line => line.trim())
+    .filter(Boolean);
+  return lines.length > 0 && lines.every(line => /^compute(?:\s*;\s*n=\d+)?\.?$/i.test(line));
 }
 
 /** The statistic line from the result, else the one sentence of the answer that carries it. */
