@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
 import type { RunTable } from '@/components/flow/run-document';
+import { FlowMarkdown } from '@/components/flow/flow-markdown';
 import { formatDecimalText } from '@/components/flow/result-tables';
 import { fetchAnalysisRun, R_CHECK_POLL_MS, rCheckPhase } from '@/lib/analysis-runs';
 import { loadOutputPreferences, OUTPUT_PREFERENCES_EVENT } from '@/lib/output-preferences';
@@ -95,13 +96,21 @@ export function AnalysisResult({
   const checkNote = checkLabel ? `${checkLabel}${checkDetail}` : '';
   const leadText =
     lead && shownStatement && lead.includes(shownStatement)
-      ? lead.replace(shownStatement, '').replace(/\s+/g, ' ').trim()
+      ? lead
+          .split('\n')
+          .map(line => line.replace(shownStatement, '').trim())
+          .filter(Boolean)
+          .join('\n')
       : lead;
   const foot = [footnote, checkNote].filter(Boolean).join(' · ');
   if (!leadText && !tables.length && !foot) return null;
   return (
     <div className="analysis-result">
-      {leadText ? <p className="analysis-lead">{leadText}</p> : null}
+      {leadText ? (
+        <div className="analysis-lead">
+          <FlowMarkdown>{leadText}</FlowMarkdown>
+        </div>
+      ) : null}
       {tables.map((table, index) => {
         const columns = Array.isArray(table.columns) ? table.columns : [];
         const rows = Array.isArray(table.rows) ? table.rows : [];

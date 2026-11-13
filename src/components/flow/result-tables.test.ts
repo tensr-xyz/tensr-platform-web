@@ -310,6 +310,45 @@ describe('result tables', () => {
     expect(view.tables.some(table => table.title === 'Funnel by group')).toBe(true);
   });
 
+  it('builds the by-group funnel from the result when the summary table was only the overall one', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Funnel',
+            columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+            rows: [['Heard', '3', '75.0', '75.0']],
+          },
+        ],
+        by_group: [
+          {
+            group: 'North',
+            stages: [
+              {
+                label: 'Heard of it',
+                count: 2,
+                percent_of_base: 100,
+                conversion_from_previous: 100,
+              },
+            ],
+          },
+        ],
+      },
+    });
+    const grouped = view.tables.find(table => table.title === 'Funnel by group');
+    expect(grouped?.rows[0]).toEqual(['Heard of it', 'North', '2', '100', '100']);
+  });
+
+  it('says the footnote weight is the one named in the study brief', () => {
+    const view = resultViewFromToolResults({
+      summary: { weight_source: 'study_brief' },
+      weight: { column: 'design_weight' },
+    });
+    expect(
+      resultFootnote(view, '', 'Funnel', [{ name: 'design_weight', label: 'Design weight' }])
+    ).toContain('the weight named in the study brief');
+  });
+
   it('puts the funnel base on the footnote', () => {
     const view = resultViewFromToolResults({
       procedure: 'funnel',

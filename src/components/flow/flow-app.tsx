@@ -2492,6 +2492,7 @@ function ChatScreen({
     tables,
     kind,
     structuredTables,
+    lead,
     footnote,
     resultChecks,
     takeaway,
@@ -2532,7 +2533,7 @@ function ChatScreen({
     const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
     void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
       method: 'POST',
-      body: JSON.stringify({ run_ids: runIds }),
+      body: JSON.stringify({ run_ids: runIds, project_id: chatProjectId || '' }),
     }).catch(() => setStatus(`The ${label} export did not finish. Try again.`));
   };
 
@@ -2840,6 +2841,7 @@ function ChatScreen({
                 <div className="output-body">
                   {structuredTables.length ? (
                     <AnalysisResult
+                      lead={lead}
                       tables={structuredTables}
                       footnote={footnote}
                       checks={resultChecks}

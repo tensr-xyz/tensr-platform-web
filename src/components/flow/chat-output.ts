@@ -426,6 +426,13 @@ export function answerWithoutBase(answer: string): string {
 }
 
 /** Plain lines written one under another stay on separate lines when rendered. */
+/** A lead saved as one line still starts a list at each " - ". */
+export function restoreListBreaks(text: string): string {
+  return text
+    .replace(/([.!?])\s+-\s+/g, '$1\n- ')
+    .replace(/(?<=[a-z0-9%])\s+-\s+(?=[A-Z])/g, '\n- ');
+}
+
 export function keepLineBreaks(text: string): string {
   const lines = text.split('\n');
   const out: string[] = [];
@@ -461,13 +468,26 @@ export function outputRunIds(results: ToolResult[] | undefined): string[] {
     .filter(Boolean);
 }
 
+/** A real table is already in the stream. A compute step is not one. */
+export function hasSummaryTable(results: ToolResult[] | undefined): boolean {
+  return analysisItems(results).some(item => {
+    if (!succeeded(item) || procedureOf(item) === 'compute') return false;
+    const summary = summaryOf(item);
+    if (Array.isArray(summary.table) && summary.table.length > 0) return true;
+    if (Array.isArray(summary.by_group) && summary.by_group.length > 0) return true;
+    return false;
+  });
+}
+
 /** The output card is a successful result. A failed turn stays in the thread. */
 export function outputCardReady(
   turn: { status?: string; tool_results?: ToolResult[] } | null | undefined,
   plan: boolean
 ): boolean {
-  if (!turn || turn.status !== 'ok' || plan) return false;
-  return outputRunIds(turn.tool_results).length > 0;
+  if (!turn || turn.status !== 'ok') return false;
+  // A plan with no table yet is still the approval card. A table in the stream opens the panel.
+  if (plan) return hasSummaryTable(turn.tool_results);
+  return outputRunIds(turn.tool_results).length > 0 || hasSummaryTable(turn.tool_results);
 }
 
 /** Method checks the engine ran, as short chips. A failed check is a warning. */

@@ -4,7 +4,10 @@ import {
   withoutResultTokens,
   outputChecks,
   isProcedurePlaceholder,
+  hasSummaryTable,
+  outputCardReady,
   outputKind,
+  restoreListBreaks,
   outputBaseNote,
   keptModelAnswer,
   outputTakeaway,
@@ -225,5 +228,34 @@ describe('chat output panel', () => {
     const text = keepLineBreaks('Excel workbook: banner.xlsx\nSPSS syntax: tracker.sps');
     expect(text).toBe('Excel workbook: banner.xlsx\n\nSPSS syntax: tracker.sps');
     expect(keepLineBreaks('| a |\n| --- |\n- one\n- two')).toBe('| a |\n| --- |\n- one\n- two');
+  });
+
+  it('opens the panel for a table that is still streaming, and keeps a plan without one closed', () => {
+    const streaming = {
+      status: 'ok',
+      tool_results: [
+        {
+          ok: true,
+          procedure: 'funnel',
+          summary: { table: [{ title: 'Funnel', columns: ['Stage'], rows: [['Heard']] }] },
+        },
+      ],
+    };
+    expect(hasSummaryTable(streaming.tool_results)).toBe(true);
+    expect(outputCardReady(streaming, true)).toBe(true);
+    expect(
+      outputCardReady(
+        {
+          status: 'ok',
+          tool_results: [{ ok: true, procedure: 'rake', run_id: 'run-1', result: { ok: true } }],
+        },
+        true
+      )
+    ).toBe(false);
+  });
+
+  it('splits a saved lead so one bullet does not run into the next', () => {
+    const text = restoreListBreaks('35.3% convert. - By region, North is 20%. - South is 40%.');
+    expect(text).toBe('35.3% convert.\n- By region, North is 20%.\n- South is 40%.');
   });
 });
