@@ -666,12 +666,99 @@ type SampleBits = {
   sawEss: boolean;
   small: string[];
   note: string;
+  tableUnweighted: number;
+  tableWeighted: number | null;
+  sawTableBase: boolean;
+  sawTotalColumn: boolean;
+  tableEss: boolean;
 };
 
 function wholeNumber(value: unknown): number | null {
   const number = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(number)) return null;
   return Math.round(number);
+}
+
+function columnBase(
+  record: Record<string, unknown>
+): { unweighted_n?: unknown; weighted_n?: unknown } | null {
+  const bases = record.bases;
+  if (!bases || typeof bases !== 'object' || Array.isArray(bases)) return null;
+  const column = (bases as { column?: unknown }).column;
+  if (!column || typeof column !== 'object' || Array.isArray(column)) return null;
+  return column as { unweighted_n?: unknown; weighted_n?: unknown };
+}
+
+function bannerRecord(record: Record<string, unknown>): boolean {
+  return (
+    typeof record.answered_n === 'number' ||
+    record.cells != null ||
+    record.banner_columns != null ||
+    record.base_label != null
+  );
+}
+
+function rememberTableBase(record: Record<string, unknown>, sample: SampleBits): void {
+  const weight = record.weight;
+  if (
+    !sample.sawTotalColumn &&
+    bannerRecord(record) &&
+    weight &&
+    typeof weight === 'object' &&
+    !Array.isArray(weight)
+  ) {
+    const block = weight as { unweighted_n?: unknown; weighted_n?: unknown; kish_ess?: unknown };
+    const unweighted = wholeNumber(block.unweighted_n);
+    const weighted = wholeNumber(block.weighted_n);
+    if (unweighted != null) {
+      sample.tableUnweighted = unweighted;
+      sample.tableWeighted = weighted;
+      sample.sawTableBase = true;
+      sample.sawTotalColumn = true;
+      const ess = Number(block.kish_ess);
+      if (Number.isFinite(ess)) {
+        sample.ess = ess;
+        sample.sawEss = true;
+        sample.tableEss = true;
+      }
+    }
+  }
+  const answered = typeof record.answered_n === 'number' ? wholeNumber(record.answered_n) : null;
+  if (answered != null && !sample.sawTotalColumn) {
+    sample.tableUnweighted = answered;
+    sample.tableWeighted = null;
+    sample.sawTableBase = true;
+  }
+  const listed = record.bases;
+  if (!sample.sawTotalColumn && Array.isArray(listed) && listed.length) {
+    const total = listed.find(row => {
+      if (!row || typeof row !== 'object') return false;
+      const named = row as { label?: unknown; column?: unknown };
+      return cell(named.label || named.column).toLowerCase() === 'total';
+    });
+    const row = total || (listed.length === 1 ? listed[0] : null);
+    if (row && typeof row === 'object') {
+      const unweighted = wholeNumber((row as { unweighted?: unknown }).unweighted);
+      const weighted = wholeNumber((row as { weighted?: unknown }).weighted);
+      if (unweighted != null) {
+        sample.tableUnweighted = unweighted;
+        sample.tableWeighted = weighted;
+        sample.sawTableBase = true;
+      }
+    }
+  }
+  const column = columnBase(record);
+  if (!column || sample.sawTotalColumn) return;
+  const banner = cell(record.banner_id || record.id).toLowerCase();
+  const label = cell(record.label).toLowerCase();
+  if (banner !== 'total' && label !== 'total') return;
+  const unweighted = wholeNumber(column.unweighted_n);
+  const weighted = wholeNumber(column.weighted_n);
+  if (unweighted == null) return;
+  sample.tableUnweighted = unweighted;
+  sample.tableWeighted = weighted;
+  sample.sawTableBase = true;
+  sample.sawTotalColumn = true;
 }
 
 function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
@@ -686,7 +773,10 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
     record.base_note != null ||
     record.kish_ess != null ||
     Array.isArray(record.groups) ||
-    Array.isArray(record.stages);
+    Array.isArray(record.stages) ||
+    Array.isArray(record.bases) ||
+    record.answered_n != null ||
+    (record.bases != null && typeof record.bases === 'object');
   if (!looks && !Array.isArray(record.notes)) return;
   if (weight && typeof weight === 'object' && !Array.isArray(weight) && !sample.weight) {
     const block = weight as {
@@ -751,6 +841,7 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
       sample.sawMissing = true;
     }
   }
+  rememberTableBase(record, sample);
   const note = cell(record.base_note);
   if (note && /base =|sample size/i.test(note) && !sample.note) sample.note = note;
   if (Array.isArray(record.notes)) {
@@ -777,14 +868,25 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
 function sampleLine(sample: SampleBits): string {
   const weight = sample.weight ? `Weight: ${sample.weight}` : 'Weight: none';
   const parts = [weight];
-  if (sample.sawN && sample.sawTotal && sample.sawMissing) {
+  if (sample.sawTableBase) {
+    const weighted = sample.tableWeighted;
+    parts.push(
+      weighted != null && weighted !== sample.tableUnweighted
+        ? `base = ${sample.tableUnweighted} (${weighted} weighted)`
+        : `base = ${sample.tableUnweighted}`
+    );
+  } else if (sample.sawN && sample.sawTotal && sample.sawMissing) {
     parts.push(`base = ${sample.n} (of ${sample.total}, ${sample.missing} missing)`);
   } else if (sample.sawN && sample.sawMissing && !sample.sawTotal) {
     parts.push(`base = ${sample.n} (of ${sample.n + sample.missing}, ${sample.missing} missing)`);
   } else if (sample.sawN) parts.push(`base = ${sample.n}`);
   else if (sample.sawTotal) parts.push(`base = ${sample.total}`);
-  const denom = sample.sawN ? sample.n : sample.total;
-  if (sample.sawEss && denom) {
+  const denom = sample.sawTableBase
+    ? sample.tableUnweighted
+    : sample.sawN
+      ? sample.n
+      : sample.total;
+  if ((sample.tableEss || !sample.sawTableBase) && sample.sawEss && denom) {
     const percent = Math.round((100 * sample.ess) / denom);
     const shown =
       Math.abs(sample.ess - Math.round(sample.ess)) < 0.05
@@ -875,6 +977,11 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     sawEss: false,
     small: [],
     note: '',
+    tableUnweighted: 0,
+    tableWeighted: null,
+    sawTableBase: false,
+    sawTotalColumn: false,
+    tableEss: false,
   };
   const view: ResultView = {
     tables: [],
@@ -1106,7 +1213,8 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   const detail =
     view.tables.find(table => table.note && /sample size|base =/i.test(table.note))?.note ||
     sample.note;
-  if (detail) view.baseDetail = detail;
+  if (sample.sawTableBase) view.baseDetail = sampleLine(sample);
+  else if (detail) view.baseDetail = detail;
   else if (sample.sawN || sample.sawTotal) view.baseDetail = sampleLine(sample);
   return view;
 }

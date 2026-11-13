@@ -859,6 +859,35 @@ describe('answer tables', () => {
     expect(tables[0].rows[0][1]).toBe('4.256');
   });
 
+  it('uses the table base under a weight that was built on a larger file', () => {
+    const view = resultViewFromToolResults([
+      {
+        procedure: 'rake',
+        result: { n: 800, weight: { label: 'Raked weight', unweighted_n: 800 } },
+      },
+      {
+        procedure: 'banner_table',
+        result: {
+          answered_n: 500,
+          cells: [
+            {
+              banner_id: 'total',
+              bases: { column: { unweighted_n: 500, weighted_n: 482 } },
+            },
+            {
+              banner_id: 'east',
+              bases: { column: { unweighted_n: 120, weighted_n: 110 } },
+            },
+          ],
+        },
+      },
+    ]);
+    expect(view.baseDetail).toContain('500');
+    expect(view.baseDetail).toContain('482');
+    expect(view.baseDetail).not.toContain('base = 800');
+    expect(resultFootnote(view)).toContain('500');
+  });
+
   it('shows a p below .001 as < .001', () => {
     const view = resultViewFromToolResults([
       { result: { statistic: 18.2, df: 4, p_value: 9.56e-7, effect_size: 0.31 } },

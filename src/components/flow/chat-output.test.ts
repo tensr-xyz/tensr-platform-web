@@ -3,6 +3,7 @@ import {
   keepLineBreaks,
   withoutResultTokens,
   outputChecks,
+  isProcedurePlaceholder,
   outputKind,
   outputBaseNote,
   keptModelAnswer,
@@ -205,6 +206,19 @@ describe('chat output panel', () => {
   it('drops an unfilled table citation', () => {
     expect(withoutResultTokens('The subset is below.\n\n{table:r1}')).toBe('The subset is below.');
     expect(withoutResultTokens('See {{table:r2}}.')).toBe('See .');
+  });
+
+  it('names a funnel that follows a saved column as Funnel', () => {
+    const results = [
+      { procedure: 'compute', summary: { line: 'compute; n=800' } },
+      { procedure: 'funnel', summary: { title: 'Funnel' } },
+    ];
+    expect(outputKind(results)).toBe('Funnel');
+  });
+
+  it('treats compute progress as a placeholder', () => {
+    expect(isProcedurePlaceholder('compute\n\ncompute; n=800')).toBe(true);
+    expect(isProcedurePlaceholder('The score is 88.4%.')).toBe(false);
   });
 
   it('puts each download on its own line', () => {
