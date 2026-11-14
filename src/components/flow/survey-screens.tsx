@@ -250,7 +250,13 @@ function cellFigure(
       : figure === 'total_percent'
         ? cell.total_percent
         : cell.percent;
-  return value != null ? `${value.toFixed(digits)}%` : '—';
+  let shown = value != null ? `${value.toFixed(digits)}%` : '—';
+  const projected = cell.projected_thousands;
+  if (typeof projected === 'number' && Number.isFinite(projected) && figure === 'percent') {
+    const count = projected.toFixed(1).replace(/\.0$/, '');
+    shown = shown === '—' ? count : `${shown} · ${count}`;
+  }
+  return shown;
 }
 
 function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[] {

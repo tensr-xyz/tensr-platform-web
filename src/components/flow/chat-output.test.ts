@@ -256,6 +256,12 @@ describe('chat output panel', () => {
     ).toBe(false);
   });
 
+  it('keeps a finding and drops a card that is only the base line', () => {
+    expect(resultLead('High is 62.5% (12.4 thousand) on East.')).toContain('62.5%');
+    expect(resultLead('The weighted base for this table is 80 (unweighted 70).')).toBe('');
+    expect(titledWithQuestion('area', [{ name: 'area', label: 'Area' }])).toBe('Area');
+  });
+
   it('splits a saved lead so one bullet does not run into the next', () => {
     const text = restoreListBreaks('35.3% convert. - By region, North is 20%. - South is 40%.');
     expect(text).toBe('35.3% convert.\n- By region, North is 20%.\n- South is 40%.');

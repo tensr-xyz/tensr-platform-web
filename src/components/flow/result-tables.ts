@@ -6,6 +6,9 @@ export type ResultView = {
   checks: string[];
   weight: string;
   filter: string;
+  audience: string;
+  wave: string;
+  source: string;
   /** match, mismatch, pending, or empty when this result has no R reproduction. */
   rCheck: string;
   rStatement: string;
@@ -1045,6 +1048,9 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     checks: [],
     weight: '',
     filter: '',
+    audience: '',
+    wave: '',
+    source: '',
     rCheck: '',
     rStatement: '',
     base: '',
@@ -1236,10 +1242,23 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       view.weightSource = 'study_brief';
     }
     if (!view.filter) {
-      const named = filterText(
-        record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters
-      );
+      const labelled = cell(record.filter_text);
+      const named =
+        labelled ||
+        filterText(record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters);
       if (named) view.filter = named;
+    }
+    if (!view.audience) {
+      const audience = cell(record.audience_label);
+      if (audience) view.audience = audience;
+    }
+    if (!view.wave) {
+      const wave = cell(record.wave_label);
+      if (wave) view.wave = wave;
+    }
+    if (!view.source) {
+      const source = cell(record.source_label);
+      if (source) view.source = source;
     }
     for (const [key, nested] of Object.entries(record)) {
       if (key === 'rows' || key === 'columns' || key === 'code_counts' || key === 'preview')
@@ -1448,6 +1467,9 @@ export function resultFootnote(
       : '';
   const parts = [
     detail ? '' : base.trim() || view.base,
+    view.audience ? `Audience: ${view.audience}` : '',
+    view.wave ? `Wave: ${view.wave}` : '',
+    view.source ? `Source: ${view.source}` : '',
     filter ? `Filter: ${filter}` : '',
     weight,
     universe,

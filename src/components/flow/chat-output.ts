@@ -249,7 +249,7 @@ export function titledWithQuestion(title: string, columns: QuestionLabel[] = [])
   const key = stripped.replace(/\.\s*$/, '').toLowerCase();
   const meta = columns.find(column => column.name.trim().toLowerCase() === key);
   const label = (meta?.label || '').trim();
-  if (label && label.toLowerCase() !== key) return label;
+  if (label && label !== stripped) return label;
   return stripped || title;
 }
 
