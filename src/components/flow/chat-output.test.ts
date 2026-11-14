@@ -282,4 +282,12 @@ describe('chat output panel', () => {
     expect(lead).toContain('75.0%');
     expect(lead).toContain('12.0%');
   });
+
+  it('uses the result line when the chat answer has no figure', () => {
+    const lead = resultLead('Here is the table.', [
+      { summary: { line: 'Ledger 50.0% (4 thousand).' } },
+    ]);
+    expect(lead).toContain('50.0%');
+    expect(lead).toContain('thousand');
+  });
 });
