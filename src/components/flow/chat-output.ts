@@ -332,7 +332,9 @@ export function resultLead(
   results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
 ): string {
   const prose = answerWithoutBase(withoutResultTokens(answerWithoutTables(answer))).trim();
-  const text = prose || summaryLine(results) || outputTakeaway(answer);
+  const finding = summaryLine(results);
+  const text =
+    (prose && /\d/.test(prose) ? prose : '') || finding || prose || outputTakeaway(answer);
   return guardUserText(text);
 }
 
