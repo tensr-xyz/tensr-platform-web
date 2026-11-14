@@ -9,6 +9,7 @@ export type BannerColumn = {
 export type BannerCell = {
   banner_id: string;
   percent?: number | null;
+  projected_thousands?: number | null;
   row_percent?: number | null;
   total_percent?: number | null;
   count?: number | null;
@@ -47,7 +48,21 @@ export type SurveyCell = {
 };
 
 export function bannerHeading(column: BannerColumn): string {
-  const label = column.label || column.id;
+  const raw = column.label || column.id;
+  const splitAt = raw.indexOf('=');
+  const value = raw && raw !== column.id && splitAt >= 0 ? raw.slice(splitAt + 1) : raw;
+  const generic = value.trim().toLowerCase();
+  const variable = (column.column_label || '').trim();
+  if (
+    (generic === 'selected' || generic === 'not selected') &&
+    variable &&
+    variable.toLowerCase() !== 'selected' &&
+    variable.toLowerCase() !== 'not selected'
+  ) {
+    const item = variable.includes(':') ? variable.split(':').slice(1).join(':').trim() : variable;
+    return generic === 'not selected' ? `Not ${item || variable}` : item || variable;
+  }
+  const label = value;
   if (label && label !== column.id) {
     const split = label.indexOf('=');
     return split >= 0 ? label.slice(split + 1) : label;

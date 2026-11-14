@@ -80,6 +80,17 @@ describe('flow survey grid', () => {
     expect(selected?.n).toBe('2');
   });
 
+  it('names a selected banner column by the variable label', () => {
+    expect(
+      bannerHeading({
+        id: 'member=1',
+        label: 'Selected',
+        column_label: 'Member role',
+        letter_slot: 'b',
+      })
+    ).toBe('Member role');
+  });
+
   it('shows rake efficiency as a percent', () => {
     expect(efficiencyPercent(0.82)).toBe('82.0%');
   });

@@ -927,6 +927,43 @@ describe('answer tables', () => {
     expect(resultFootnote(view)).toContain('500');
   });
 
+  it('shows a duplication table and names the audience on the footnote', () => {
+    const view = resultViewFromToolResults([
+      {
+        analysis_type: 'brand_duplication',
+        result: {
+          title: 'Duplication',
+          columns: ['Item', 'Reed', 'Exclusive (000s)'],
+          rows: [
+            ['Quill', '40.0%', '3.1'],
+            ['Net reach', '', '12.4'],
+          ],
+          audience_label: 'Regular readers',
+        },
+      },
+    ]);
+    const table = view.tables.find(item => item.title === 'Duplication');
+    expect(table?.rows.some(row => row.includes('Quill'))).toBe(true);
+    expect(table?.rows.some(row => row.includes('12.4'))).toBe(true);
+    expect(view.audience).toBe('Regular readers');
+    expect(resultFootnote(view, '', '')).toContain('Audience: Regular readers');
+    const stated = resultViewFromToolResults([
+      {
+        result: {
+          audience_label: 'Regular readers',
+          wave_label: 'Spring',
+          source_label: 'Panel',
+          weight: { label: 'People weight' },
+          base_label: 'Base 80',
+        },
+      },
+    ]);
+    const note = resultFootnote(stated, stated.base, '');
+    expect(note).toContain('Audience: Regular readers');
+    expect(note).toContain('Wave: Spring');
+    expect(note).toContain('Source: Panel');
+  });
+
   it('shows a p below .001 as < .001', () => {
     const view = resultViewFromToolResults([
       { result: { statistic: 18.2, df: 4, p_value: 9.56e-7, effect_size: 0.31 } },
