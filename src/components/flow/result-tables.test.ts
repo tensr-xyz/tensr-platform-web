@@ -202,6 +202,17 @@ describe('result tables', () => {
     );
   });
 
+  it('prefers a labelled filter over an earlier column code', () => {
+    const view = resultViewFromToolResults({
+      row_filters: [
+        { column: 'market', op: '=', value: 'United States' },
+        { column: 'inv_institutional', op: '=', value: 1 },
+      ],
+      result: { filter_text: 'Market = United States, Institutional investors = Yes' },
+    });
+    expect(view.filter).toBe('Market = United States, Institutional investors = Yes');
+  });
+
   it('writes the filter and the weight with their labels', () => {
     const view = resultViewFromToolResults({
       filters: [{ column: 'region', op: '=', value: '4' }],

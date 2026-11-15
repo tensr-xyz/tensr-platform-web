@@ -1247,11 +1247,12 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     ) {
       view.weightSource = 'study_brief';
     }
-    if (!view.filter) {
-      const labelled = cell(record.filter_text);
-      const named =
-        labelled ||
-        filterText(record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters);
+    const labelled = cell(record.filter_text);
+    if (labelled) view.filter = labelled;
+    else if (!view.filter) {
+      const named = filterText(
+        record.filter_ref ?? record.filter ?? record.filters ?? record.row_filters
+      );
       if (named) view.filter = named;
     }
     if (!view.audience) {

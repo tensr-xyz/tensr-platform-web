@@ -355,8 +355,14 @@ export function resultLead(
 ): string {
   const prose = answerWithoutBase(withoutResultTokens(answerWithoutTables(answer))).trim();
   const finding = answerWithoutBase(summaryLine(results)).trim();
+  const hasFigure = (text: string) => /%/.test(text) || /thousand/i.test(text);
   const text =
-    (prose && /\d/.test(prose) ? prose : '') || finding || prose || outputTakeaway(answer);
+    (hasFigure(prose) ? prose : '') ||
+    (hasFigure(finding) ? finding : '') ||
+    (prose && /\d/.test(prose) ? prose : '') ||
+    finding ||
+    prose ||
+    outputTakeaway(answer);
   return guardUserText(text);
 }
 

@@ -5,15 +5,16 @@ describe('project tabs', () => {
     expect(PROJECT_TABS.map(([, label]) => label)).toEqual([
       'Chat',
       'Sources',
+      'Details',
       'Responses',
       'Tables',
       'Report',
     ]);
   });
 
-  it('opens an old Details link on Chat', () => {
-    expect(visibleProjectSection('details')).toBe('chat');
-    expect(projectSectionPath('study-1', 'details')).toBe('/flow/p/study-1/chat');
+  it('opens Details on the details page', () => {
+    expect(visibleProjectSection('details')).toBe('details');
+    expect(projectSectionPath('study-1', 'details')).toBe('/flow/p/study-1/details');
     expect(projectSectionPath('study-1', 'tables')).toBe('/flow/p/study-1/tables');
   });
 });
