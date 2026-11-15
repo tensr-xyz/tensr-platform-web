@@ -32,6 +32,7 @@ type DetailFile = {
 };
 
 type Member = { user_id: string; role?: string };
+type AskerTurn = { turn_id: string; question: string; answer: string; checked?: boolean };
 
 function labelledMeasure(labels: Record<string, string>): 'ordinal' | 'nominal' {
   const codes = Object.keys(labels)
@@ -154,6 +155,7 @@ function memberMark(id: string): string {
 function roleLabel(role?: string): string {
   if (role === 'owner') return 'Owner';
   if (role === 'viewer') return 'Viewer';
+  if (role === 'asker') return 'Asker';
   return 'Editor';
 }
 
@@ -216,6 +218,8 @@ export function DetailsScreen({
   const [inviteEmail, setInviteEmail] = useState('');
   const [memberError, setMemberError] = useState<string | null>(null);
   const [inviteNote, setInviteNote] = useState<string | null>(null);
+  const [userId, setUserId] = useState('');
+  const [turns, setTurns] = useState<AskerTurn[] | null>(null);
 
   useEffect(() => {
     if (!projectId) return;
@@ -242,9 +246,25 @@ export function DetailsScreen({
   }, [projectId]);
 
   useEffect(() => {
+    if (!projectId) return;
     let cancelled = false;
-    void flowJson<{ active_organization?: { id?: string } }>('/me')
+    void flowJson<{ turns?: AskerTurn[] }>(`/api/projects/${projectId}/asker-log`)
       .then(page => {
+        if (!cancelled) setTurns(page.turns || []);
+      })
+      .catch(() => {
+        if (!cancelled) setTurns([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void flowJson<{ user?: { id?: string }; active_organization?: { id?: string } }>('/me')
+      .then(page => {
+        if (!cancelled) setUserId(page.user?.id || '');
         const id = page.active_organization?.id || '';
         if (cancelled) return;
         setOrgId(id || null);
@@ -426,6 +446,22 @@ export function DetailsScreen({
     );
   }
 
+  const mine = (members || []).find(member => member.user_id === userId);
+  const asker = mine?.role === 'asker';
+  const markChecked = (turnId: string) => {
+    void flowJson<{ turn?: AskerTurn }>(`/api/projects/${projectId}/asker-log/${turnId}`, {
+      method: 'POST',
+      body: JSON.stringify({ checked: true }),
+    })
+      .then(page => {
+        const saved = page.turn;
+        if (!saved) return;
+        setTurns(current =>
+          (current || []).map(turn => (turn.turn_id === saved.turn_id ? saved : turn))
+        );
+      })
+      .catch(() => setMemberError('Could not mark that answer checked.'));
+  };
   const lines = objectiveLines(parts.objectives);
   const startEdit = () => {
     setObjectives(parts.objectives);
@@ -695,9 +731,11 @@ export function DetailsScreen({
           <div>
             <div className="details-q-head">
               <div className="flow-muted details-label">Team</div>
-              <Button className="details-invite" type="button" onClick={() => setAddOpen(true)}>
-                + Invite
-              </Button>
+              {asker ? null : (
+                <Button className="details-invite" type="button" onClick={() => setAddOpen(true)}>
+                  + Invite
+                </Button>
+              )}
             </div>
             {members.length ? (
               members.map(member => {
@@ -717,6 +755,26 @@ export function DetailsScreen({
               })
             ) : (
               <p className="flow-muted">No members yet.</p>
+            )}
+            {asker || !turns?.length ? null : (
+              <div className="details-questions">
+                <div className="flow-muted details-label">Asker questions</div>
+                {turns.map(turn => (
+                  <div key={turn.turn_id} className="details-member">
+                    <span className="details-member-id">
+                      <strong>{turn.question}</strong>
+                      <span className="flow-muted">{turn.answer}</span>
+                    </span>
+                    {turn.checked ? (
+                      <span className="flow-muted">Checked</span>
+                    ) : (
+                      <Button type="button" onClick={() => markChecked(turn.turn_id)}>
+                        Mark checked
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         </SidePanel>
@@ -753,6 +811,7 @@ export function DetailsScreen({
             onValueChange={setRole}
             options={[
               { value: 'editor', label: 'Editor' },
+              { value: 'asker', label: 'Asker' },
               { value: 'viewer', label: 'Viewer' },
             ]}
           />

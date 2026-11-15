@@ -7,6 +7,7 @@ export type ResultView = {
   weight: string;
   filter: string;
   audience: string;
+  audienceDefinition: string;
   wave: string;
   source: string;
   /** match, mismatch, pending, or empty when this result has no R reproduction. */
@@ -1055,6 +1056,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     weight: '',
     filter: '',
     audience: '',
+    audienceDefinition: '',
     wave: '',
     source: '',
     rCheck: '',
@@ -1258,6 +1260,10 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     if (!view.audience) {
       const audience = cell(record.audience_label);
       if (audience) view.audience = audience;
+    }
+    if (!view.audienceDefinition) {
+      const definition = cell(record.audience_definition);
+      if (definition) view.audienceDefinition = definition;
     }
     if (!view.wave) {
       const wave = cell(record.wave_label);
@@ -1474,7 +1480,9 @@ export function resultFootnote(
       : '';
   const parts = [
     detail ? '' : base.trim() || view.base,
-    view.audience ? `Audience: ${view.audience}` : '',
+    view.audience
+      ? `Audience: ${view.audience}${view.audienceDefinition ? ` — ${view.audienceDefinition}` : ''}`
+      : '',
     view.wave ? `Wave: ${view.wave}` : '',
     view.source ? `Source: ${view.source}` : '',
     filter ? `Filter: ${filter}` : '',

@@ -162,6 +162,7 @@ export function ShareDialog({
                 onValueChange={setRole}
                 options={[
                   { value: 'viewer', label: 'Viewer' },
+                  { value: 'asker', label: 'Asker' },
                   { value: 'editor', label: 'Editor' },
                 ]}
               />
@@ -172,6 +173,7 @@ export function ShareDialog({
           </div>
           <p className="share-roles">
             <span>Viewer · reads tables, outputs and rows</span>
+            <span>Asker · asks questions and sees the answers</span>
             <span>Editor · runs analyses and edits</span>
           </p>
           <span className="share-label">People with access · {count}</span>
