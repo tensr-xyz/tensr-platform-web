@@ -92,6 +92,7 @@ export function ExportDialog({
   runIds,
   onClose,
   datasetId,
+  projectId,
 }: {
   kind: ExportKind;
   title: string;
@@ -100,6 +101,7 @@ export function ExportDialog({
   runIds: string[];
   onClose: () => void;
   datasetId?: string;
+  projectId?: string;
 }) {
   const [error, setError] = useState('');
   const [note, setNote] = useState(document.summary);
@@ -143,6 +145,7 @@ export function ExportDialog({
       style,
       include_methods: methodsOn,
       live_link: link,
+      project_id: projectId || '',
     });
   };
 

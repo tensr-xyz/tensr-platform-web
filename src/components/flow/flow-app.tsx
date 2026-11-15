@@ -847,6 +847,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
             })}
             runIds={exportPins.map(pin => pin.runId)}
             datasetId={openDatasetId}
+            projectId={projectId}
             onClose={() => setExportOpen(false)}
           />
         ) : null}

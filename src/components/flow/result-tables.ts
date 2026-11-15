@@ -964,7 +964,13 @@ function sampleLine(sample: SampleBits): string {
 
 function weightName(record: Record<string, unknown>): string {
   if (record.weight && typeof record.weight === 'object') {
-    return cell((record.weight as { column?: unknown }).column);
+    const weight = record.weight as { column?: unknown; label?: unknown };
+    const column = cell(weight.column);
+    const label = cell(weight.label);
+    if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== column.toLowerCase()) {
+      return label;
+    }
+    return column;
   }
   const named =
     typeof record.weight === 'string'

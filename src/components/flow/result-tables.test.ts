@@ -349,6 +349,17 @@ describe('result tables', () => {
     ).toContain('the weight named in the study brief');
   });
 
+  it('uses the weight label from the result when the brief named it', () => {
+    const view = resultViewFromToolResults({
+      summary: { weight_source: 'study_brief' },
+      weight: { column: 'wgt_col', label: 'Design weight' },
+    });
+    expect(view.weight).toBe('Design weight');
+    expect(resultFootnote(view, '', 'Funnel')).toBe(
+      'Weight: Design weight, the weight named in the study brief · Funnel'
+    );
+  });
+
   it('puts the funnel base on the footnote', () => {
     const view = resultViewFromToolResults({
       procedure: 'funnel',
