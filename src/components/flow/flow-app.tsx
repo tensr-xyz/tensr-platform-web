@@ -29,7 +29,7 @@ import { runAgentLoop, type AgentLoopAttachment } from '@/lib/run-agent-loop';
 import { FlowComposer } from '@/components/flow/chat-composer';
 import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
-import { baseCount } from '@/components/flow/chat-output';
+import { baseCount, outputOpenHref } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { StudyBrief } from '@/components/flow/study-brief';
@@ -2811,7 +2811,9 @@ function ChatScreen({
                       : 'Traced to the open file'}
                     {file?.original_filename ? ` in ${file.original_filename}` : ''}
                   </span>
-                  <Link href={`${projectHref}/tables`}>Open in Tables</Link>
+                  <Link href={outputOpenHref(projectHref, kind, runIds[0] || '')}>
+                    {kind === 'Funnel' ? 'Open' : 'Open in Tables'}
+                  </Link>
                 </div>
               </>
             ) : outputReady ? (
@@ -2967,7 +2969,10 @@ function ChatScreen({
                   >
                     {inReport ? 'In report' : 'Add to report'}
                   </Button>
-                  <Link className="flow-btn primary output-open" href={`${projectHref}/tables`}>
+                  <Link
+                    className="flow-btn primary output-open"
+                    href={outputOpenHref(projectHref, kind, runIds[0] || '')}
+                  >
                     Open
                   </Link>
                 </div>

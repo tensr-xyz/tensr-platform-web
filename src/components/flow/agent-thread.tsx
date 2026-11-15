@@ -760,7 +760,7 @@ export function useAgentThread({
   const prose = answerWithoutBase(
     withoutResultTokens(structuredTables.length ? answerWithoutTables(answer) : answer)
   );
-  const lead = resultLead(answer, toolResults);
+  const lead = resultLead(answer, toolResults, resultTables);
   const footnote = resultFootnote(
     { ...resultView, weight: resultView.weight || String(ledger.weight || '') },
     baseNote,

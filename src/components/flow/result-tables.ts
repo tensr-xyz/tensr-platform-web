@@ -73,8 +73,26 @@ function decimalKind(
   return 'plain';
 }
 
+function plainNumber(value: number): string {
+  if (!Number.isFinite(value)) return '';
+  if (Math.abs(value) >= 1000) {
+    return new Intl.NumberFormat('en-GB', { maximumFractionDigits: 1 }).format(value);
+  }
+  const rounded = Math.round(value * 1000) / 1000;
+  return String(rounded);
+}
+
+/** A count that arrived as 2.67896e+06 is shown as a normal number. */
+export function shownCount(value: string): string {
+  const text = value.trim();
+  if (!/^-?\d+(?:\.\d+)?e[+-]?\d+$/i.test(text)) return value;
+  const number = Number(text);
+  return Number.isFinite(number) ? plainNumber(number) : value;
+}
+
 /** Percents use the project decimals. Counts and weighted n are whole. Means and SDs are 2 dp. */
 export function formatDecimalText(value: string, places: number, header = ''): string {
+  value = shownCount(value);
   const match = value.trim().match(/^(-?\d[\d,]*)(\.\d+)?(%?)$/);
   if (!match?.[2]) return value;
   const number = Number(`${match[1].replace(/,/g, '')}${match[2]}`);
@@ -133,6 +151,7 @@ function cell(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return '';
+    if (Math.abs(value) >= 1e6) return plainNumber(value);
     const rounded = Math.round(value * 1000) / 1000;
     return String(rounded);
   }
@@ -142,7 +161,7 @@ function cell(value: unknown): string {
     if (label != null && typeof label !== 'object') return cell(label);
     return '';
   }
-  return String(value).trim();
+  return shownCount(String(value).trim());
 }
 
 function questionTitle(title: string): string {
@@ -402,7 +421,10 @@ function recordTable(rows: unknown, title: string, keys: string[]): RunTable | n
     list,
     title,
     keys.map(key => ({
-      header: key.replaceAll('_', ' '),
+      header:
+        key === 'projected_thousands' || key === 'projected'
+          ? 'Projected (000s)'
+          : key.replaceAll('_', ' '),
       keys: [key, key === 'term' ? 'name' : key],
     }))
   );
@@ -552,7 +574,47 @@ function onlyTheFunnel(tables: RunTable[]): RunTable[] {
     return gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
   };
   const kept = groups.reduce((best, table) => (distance(table) < distance(best) ? table : best));
+  const gap = distance(kept);
+  if (Number.isFinite(gap) && gap > 5) return [stage];
   return [stage, kept];
+}
+
+/** Whole-base stage shares, then the highest and lowest group at the last stage. */
+export function funnelHeadline(tables: RunTable[]): string {
+  const stage = tables.find(isStageFunnel);
+  if (!stage) return '';
+  const shareColumn = stage.columns.findIndex(column => column.toLowerCase().includes('% of base'));
+  if (shareColumn < 0) return '';
+  const parts = stage.rows
+    .map(row => {
+      const name = (row[0] || '').trim();
+      const share = (row[shareColumn] || '').trim();
+      if (!name || !share) return '';
+      return `${name} ${share.includes('%') ? share : `${share}%`}`;
+    })
+    .filter(Boolean)
+    .slice(0, 6);
+  if (!parts.length) return '';
+  let text = `Of the base, ${parts.join(', ')}.`;
+  const group = tables.find(isGroupFunnel);
+  if (!group) return text;
+  const headers = group.columns.map(column => column.toLowerCase());
+  const stageColumn = headers.indexOf('stage');
+  const groupColumn = headers.findIndex(column => column === 'group' || column.startsWith('group'));
+  const groupedShare = headers.findIndex(column => column.includes('% of base'));
+  const last = (stage.rows[stage.rows.length - 1]?.[0] || '').trim().toLowerCase();
+  const scored = group.rows
+    .filter(row => (row[stageColumn] || '').trim().toLowerCase() === last)
+    .map(row => ({
+      name: (row[groupColumn] || '').trim(),
+      share: Number(String(row[groupedShare] || '').replace('%', '')),
+    }))
+    .filter(item => item.name && Number.isFinite(item.share));
+  if (scored.length < 2) return text;
+  const high = scored.reduce((best, item) => (item.share > best.share ? item : best));
+  const low = scored.reduce((best, item) => (item.share < best.share ? item : best));
+  if (high.name === low.name) return text;
+  return `${text} At the last stage, ${high.name} is highest and ${low.name} is lowest.`;
 }
 
 /** One stage funnel. A shorter table of the same stages is the earlier question-label copy. */
@@ -1094,7 +1156,31 @@ function summaryGrids(value: unknown, depth = 0): RunTable[] {
 }
 
 /** Tables, the R script, checks, the weight and the filter carried on a finished turn. */
+function procedureOfRecord(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const record = value as Record<string, unknown>;
+  const args = record.args as Record<string, unknown> | undefined;
+  const nested = record.result as Record<string, unknown> | undefined;
+  const name =
+    record.procedure || record.analysis_type || args?.analysis_type || nested?.analysis_type;
+  return typeof name === 'string' ? name : '';
+}
+
+/** A funnel or crosstab card does not keep the frequency tables that ran beside it. */
+function focusRun(results: unknown): unknown {
+  if (!Array.isArray(results)) return results;
+  const names = results.map(procedureOfRecord);
+  const drop = names.includes('funnel')
+    ? new Set(['frequencies', 'descriptives', 'compute', 'banner_table'])
+    : names.includes('banner_table')
+      ? new Set(['frequencies', 'descriptives', 'compute'])
+      : null;
+  if (!drop) return results;
+  return results.filter(item => !drop.has(procedureOfRecord(item)));
+}
+
 export function resultViewFromToolResults(results: unknown): ResultView {
+  results = focusRun(results);
   let answered = 0;
   const sample: SampleBits = {
     weight: '',
@@ -1521,6 +1607,7 @@ export function weightNote(column: string, columns: ColumnLabels[] = []): string
     return `Weight: ${label}`;
   }
   if (name.toLowerCase() === 'weight') return 'Weighted';
+  if (/[a-z]_[a-z0-9]/i.test(name)) return 'Weighted';
   return `Weight: ${name}`;
 }
 

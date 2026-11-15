@@ -10832,11 +10832,16 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   gap: 6px;
 }
 
-.audience-choice {
+.audience-scale .audience-choice,
+.audience-pills .audience-choice {
+  padding: 6px 12px;
+  min-height: 32px;
+  font-size: 13px;
+  line-height: 18px;
   border: 1px solid var(--color-line);
   border-radius: var(--radius-sm);
   background: var(--color-canvas);
-  color: var(--color-muted);
+  color: var(--color-ink);
 }
 
 .audience-scale .audience-choice.on {

@@ -1,6 +1,8 @@
 /** Output panel text for a finished chat turn: title, takeaway, and the base note. */
 
 import { analysisDisplayName } from '@/lib/analysis-definitions';
+import type { RunTable } from '@/components/flow/run-document';
+import { funnelHeadline } from '@/components/flow/result-tables';
 
 type ToolResult = {
   name?: string;
@@ -348,13 +350,31 @@ function dropUserSentence(part: string): boolean {
   return opening && PROMISE_MARKS.some(mark => folded.includes(mark));
 }
 
+function withoutOtherRuns(text: string): string {
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  const kept = sentences.filter(sentence => {
+    if (/can.?t show inline|cannot show inline/i.test(sentence)) return false;
+    if (
+      /other chat|another chat|earlier chat|previous chat|earlier run|previous run|earlier funnel/i.test(
+        sentence
+      )
+    )
+      return false;
+    return true;
+  });
+  return kept.join(' ').trim();
+}
+
 /** The model's sentences, or the result's own line when the chat has none. */
 export function resultLead(
   answer: string,
-  results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
+  results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[],
+  tables?: RunTable[]
 ): string {
-  const prose = answerWithoutBase(withoutResultTokens(answerWithoutTables(answer))).trim();
-  const finding = answerWithoutBase(summaryLine(results)).trim();
+  const prose = withoutOtherRuns(
+    answerWithoutBase(withoutResultTokens(answerWithoutTables(answer)))
+  ).trim();
+  const finding = withoutOtherRuns(answerWithoutBase(summaryLine(results))).trim();
   const hasFigure = (text: string) => /%/.test(text) || /thousand/i.test(text);
   const text =
     (hasFigure(prose) ? prose : '') ||
@@ -363,7 +383,19 @@ export function resultLead(
     finding ||
     prose ||
     outputTakeaway(answer);
-  return guardUserText(withoutStrayEnding(text));
+  const cleaned = guardUserText(withoutStrayEnding(text));
+  const headline = tables ? funnelHeadline(tables) : '';
+  const figures = cleaned.match(/%/g)?.length ?? 0;
+  if (headline && (!cleaned || figures > 4)) return headline;
+  return cleaned;
+}
+
+/** A funnel output opens that output. Other outputs open the table builder. */
+export function outputOpenHref(projectHref: string, kind: string, runId: string): string {
+  if (kind === 'Funnel' && runId) {
+    return `${projectHref}/report?pane=outputs&run=${encodeURIComponent(runId)}`;
+  }
+  return `${projectHref}/tables`;
 }
 
 /** A weight column code and an empty cautions bullet are not part of the finding. */
@@ -566,8 +598,15 @@ function succeeded(item: ToolResult): boolean {
 
 /** Saved run ids on this turn, for the server exports. A failed step is not an output. */
 export function outputRunIds(results: ToolResult[] | undefined): string[] {
-  return analysisItems(results)
-    .filter(succeeded)
+  const items = analysisItems(results).filter(succeeded);
+  const preferred = preferredProcedure(items);
+  const ordered = preferred
+    ? [
+        ...items.filter(item => procedureOf(item) === preferred),
+        ...items.filter(item => procedureOf(item) !== preferred),
+      ]
+    : items;
+  return ordered
     .map(item => {
       const nested = item.result || {};
       const value = (item as { run_id?: unknown }).run_id ?? nested.run_id;

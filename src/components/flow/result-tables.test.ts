@@ -1,8 +1,11 @@
+import { attachStoredRuns, type StoredAnalysisRun } from '@/lib/analysis-runs';
 import {
   answerResultTables,
   formatDecimalText,
+  funnelHeadline,
   resultFootnote,
   resultViewFromToolResults,
+  shownCount,
   weightChipName,
   weightNote,
 } from './result-tables';
@@ -123,7 +126,7 @@ describe('result tables', () => {
     expect(views[7].weight).toBe('design_w');
     expect(views[8].filter).toBe('city = Leeds');
     expect(resultFootnote(views[7], 'n = 40', 't-test')).toBe(
-      'n = 40 · Filter: region = North · Weight: design_w · t-test'
+      'n = 40 · Filter: region = North · Weighted · t-test'
     );
   });
 
@@ -843,7 +846,8 @@ describe('result tables', () => {
     expect(view.weight).toBe('design_weight');
     expect(view.checks).toContain('Expected counts under 5: 1 cell.');
     expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Filter: city = London');
-    expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Weight: design_weight');
+    expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Weighted');
+    expect(resultFootnote(view, 'Base 24', 'Chi-square')).not.toContain('design_weight');
   });
 });
 
@@ -1083,5 +1087,113 @@ describe('answer tables', () => {
     const test = view.tables.find(table => table.title === 'Test');
     expect(test?.rows[0].join(' ')).toContain('< .001');
     expect(JSON.stringify(test)).not.toContain('9.56e');
+  });
+
+  it('drops a by-group funnel that does not match the overall funnel', () => {
+    const view = resultViewFromToolResults({
+      procedure: 'funnel',
+      summary: {
+        table: [
+          {
+            title: 'Funnel',
+            columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+            rows: [['Heard', '8', '40.0', '40.0']],
+          },
+          {
+            title: 'Funnel by group',
+            columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+            rows: [['Heard', 'East', '7', '74.0', '98.0']],
+          },
+          {
+            title: 'Heard of the item',
+            columns: ['Value', 'Frequency', 'Percent'],
+            rows: [['Yes', '10', '40.0']],
+          },
+        ],
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Funnel']);
+  });
+
+  it('rebuilds a saved funnel the same way as the live card', () => {
+    const stage = {
+      title: 'Funnel',
+      columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+      rows: [
+        ['Heard', '8', '40.0', '40.0'],
+        ['Visited', '4', '20.0', '50.0'],
+      ],
+    };
+    const stray = {
+      title: 'Funnel by group',
+      columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+      rows: [['Heard', 'East', '7', '74.0', '98.0']],
+    };
+    const frequency = {
+      title: 'Heard of the item',
+      columns: ['Value', 'Frequency', 'Percent'],
+      rows: [['Yes', '10', '40.0']],
+    };
+    const streamed = [
+      {
+        procedure: 'frequencies',
+        run_id: 'freq-1',
+        result: { run_id: 'freq-1' },
+      },
+      {
+        procedure: 'funnel',
+        run_id: 'funnel-1',
+        result: { run_id: 'funnel-1' },
+      },
+    ];
+    const runs = [
+      {
+        id: 'freq-1',
+        dataset_id: 'file',
+        op: 'frequencies',
+        created_at: '',
+        report: {},
+        result: {
+          summary: { table: [frequency] },
+          weight: { column: 'design_weight' },
+          r_syntax_verification: {
+            kind: 'verified',
+            statement: 'R syntax reproduced frequencies',
+          },
+        },
+      },
+      {
+        id: 'funnel-1',
+        dataset_id: 'file',
+        op: 'funnel',
+        created_at: '',
+        report: {},
+        result: {
+          summary: { table: [stage, stray, frequency] },
+          weight: { column: 'design_weight', label: 'Design weight' },
+          r_syntax_verification: {
+            kind: 'verified',
+            statement: 'R syntax reproduced the funnel',
+          },
+        },
+      },
+    ] as StoredAnalysisRun[];
+    const view = resultViewFromToolResults(attachStoredRuns(streamed, runs));
+    expect(view.tables.map(table => table.title)).toEqual(['Funnel']);
+    expect(view.rStatement).toContain('funnel');
+    expect(view.rStatement.toLowerCase()).not.toContain('frequencies');
+    expect(resultFootnote(view, '', 'Funnel')).not.toContain('design_weight');
+    const lead = funnelHeadline(view.tables);
+    expect(lead).toContain('40.0%');
+    expect(lead).toContain('20.0%');
+    expect((lead.match(/%/g) || []).length).toBeLessThan(5);
+  });
+});
+
+describe('counts', () => {
+  it('writes a scientific count as a normal number', () => {
+    expect(shownCount('2.67896e+06')).toBe('2,678,960');
+    expect(shownCount('2.67896e+06')).not.toContain('e');
+    expect(formatDecimalText('2.67896e+06', 1, 'Count')).not.toContain('e');
   });
 });
