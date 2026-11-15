@@ -33,7 +33,7 @@ export function prepParts(proposal: PrepProposal | null | undefined): PrepPart[]
   const flagged = proposal.quality?.flagged;
   if (typeof flagged === 'number' && flagged > 0) {
     parts.push({ id: 'flags', label: `${flagged} quality flags` });
-  } else if (proposal.quality) {
+  } else {
     parts.push({ id: 'flags', label: 'No quality flags' });
   }
   return parts;
