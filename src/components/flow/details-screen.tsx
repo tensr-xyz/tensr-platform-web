@@ -509,9 +509,6 @@ export function DetailsScreen({
         The agent reads this brief before every answer, so objectives, audience and notes shape what
         it runs and how it writes up results.
       </p>
-      {active ? (
-        <AudiencePanel datasetId={datasetRowId(active)} columns={columns || []} canEdit={!asker} />
-      ) : null}
       <div className="details-body">
         <div className="details-main">
           <div className="details-split">
@@ -580,6 +577,13 @@ export function DetailsScreen({
               )}
             </div>
           </div>
+          {active ? (
+            <AudiencePanel
+              datasetId={datasetRowId(active)}
+              columns={columns || []}
+              canEdit={!asker}
+            />
+          ) : null}
           <div>
             <div className="flow-muted details-label">Notes</div>
             {editing ? (
@@ -604,17 +608,6 @@ export function DetailsScreen({
             )}
           </div>
           {error ? <p className="flow-error">{error}</p> : null}
-          <div>
-            <div className="flow-muted details-label">Fieldwork · coming soon</div>
-            <div className="details-fieldwork" data-soon>
-              {['Panel', 'Target', 'Dates', 'Progress'].map(label => (
-                <div key={label}>
-                  <span>{label}</span>
-                  <strong>{label === 'Panel' ? 'Panel fielding is coming soon' : '—'}</strong>
-                </div>
-              ))}
-            </div>
-          </div>
           <div>
             <div className="details-q-head">
               <div className="flow-muted details-label">

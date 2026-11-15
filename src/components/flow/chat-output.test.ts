@@ -15,6 +15,8 @@ import {
   titledWithQuestion,
   guardUserText,
   resultLead,
+  outputOpenHref,
+  outputRunIds,
 } from './chat-output';
 
 const answer = [
@@ -375,5 +377,27 @@ describe('chat output panel', () => {
         { name: 'seat', label: 'Role' },
       ])
     ).toBe('First brand, Second brand × Role');
+  });
+
+  it('drops a lead that says the table cannot be shown or cites another chat', () => {
+    const lead = resultLead(
+      "The table can't show inline. An earlier chat had a different funnel. Heard is 40.0% of the base."
+    );
+    expect(lead.toLowerCase()).not.toContain("can't show inline");
+    expect(lead.toLowerCase()).not.toContain('earlier chat');
+    expect(lead).toContain('40.0%');
+  });
+
+  it('opens a funnel output on that output', () => {
+    expect(outputOpenHref('/flow/p/1', 'Funnel', 'run-1')).toBe(
+      '/flow/p/1/report?pane=outputs&run=run-1'
+    );
+    expect(outputOpenHref('/flow/p/1', 'Crosstab', 'run-1')).toBe('/flow/p/1/tables');
+    expect(
+      outputRunIds([
+        { procedure: 'frequencies', ok: true, result: { run_id: 'freq' } },
+        { procedure: 'funnel', ok: true, result: { run_id: 'funnel' } },
+      ])[0]
+    ).toBe('funnel');
   });
 });

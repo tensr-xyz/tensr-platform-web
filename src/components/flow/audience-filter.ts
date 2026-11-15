@@ -108,7 +108,8 @@ function valuePhrase(column: FlowColumn, value: unknown): string {
   if (!clean.length || !options.length) return '';
   const byCode = new Map(options.map(option => [option.code, option.label]));
   if (!clean.every(code => byCode.has(code))) return '';
-  if (isScale(options)) {
+  const numericScale = isScale(options) && options.every(option => option.label === option.code);
+  if (numericScale) {
     const numbers = clean.map(Number).sort((a, b) => a - b);
     const run = numbers.every((item, index) => index === 0 || item === numbers[index - 1]! + 1);
     if (run)
@@ -136,16 +137,40 @@ function clauseText(item: StoredFilter, columns: FlowColumn[]): string {
   return shown ? `${head} is ${shown}` : head;
 }
 
+function described(item: StoredFilter, columns: FlowColumn[]) {
+  if (Array.isArray(item.filters) && !item.column) {
+    return { key: '', head: '', value: '', text: clauseText(item, columns) };
+  }
+  const column = columnByName(columns, item.column);
+  const label = column ? questionLabel(column) : '';
+  if (!column || !label || label === column.name) {
+    return { key: '', head: '', value: '', text: '' };
+  }
+  const shown = valuePhrase(column, item.value);
+  const head = [questionCode(column), questionLabel(column)].filter(Boolean).join(' ');
+  return {
+    key: column.name,
+    head,
+    value: shown,
+    text: shown ? `${head} is ${shown}` : head,
+  };
+}
+
 function joinClauses(
   filters: StoredFilter[],
   combine: 'and' | 'or',
   columns: FlowColumn[]
 ): string {
+  const bits = filters.map(item => described(item, columns)).filter(bit => bit.text);
+  if (
+    combine === 'or' &&
+    bits.length > 1 &&
+    bits.every(bit => bit.key && bit.value && bit.key === bits[0]?.key)
+  ) {
+    return `${bits[0]?.head} is ${bits.map(bit => bit.value).join(' or ')}`;
+  }
   const word = combine === 'or' ? ' or ' : ' and ';
-  return filters
-    .map(item => clauseText(item, columns))
-    .filter(Boolean)
-    .join(word);
+  return bits.map(bit => bit.text).join(word);
 }
 
 /** The definition in the question's own words. A column code is left out. */

@@ -254,7 +254,8 @@ function cellFigure(
   const projected = cell.projected_thousands;
   if (typeof projected === 'number' && Number.isFinite(projected) && figure === 'percent') {
     const count = projected.toFixed(1).replace(/\.0$/, '');
-    shown = shown === '—' ? count : `${shown} · ${count}`;
+    const labelled = `${count} (000s)`;
+    shown = shown === '—' ? labelled : `${shown} · ${labelled}`;
   }
   return shown;
 }

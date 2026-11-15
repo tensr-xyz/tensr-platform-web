@@ -29,6 +29,7 @@ export type SavedAudience = {
   n_total?: number;
   share?: number;
   weighted_share?: number | null;
+  projected_people?: number | null;
 };
 
 type Size = {
@@ -36,6 +37,7 @@ type Size = {
   n_total: number;
   share: number;
   weighted_share?: number | null;
+  projected_people?: number | null;
 };
 
 type Props = {
@@ -49,6 +51,16 @@ const LOW_BASE = 50;
 
 function percent(value: number): string {
   return `${(value * 100).toFixed(1)}%`;
+}
+
+function counted(value: unknown): number | null {
+  const number =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value) : NaN;
+  return Number.isFinite(number) ? number : null;
+}
+
+function peopleCount(value: number): string {
+  return new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 }).format(Math.round(value));
 }
 
 function shareOf(size: { share?: number; weighted_share?: number | null }): number | null {
@@ -127,9 +139,9 @@ function ValueChoices({
   onToggle: (code: string) => void;
 }) {
   const options = answerOptions(column);
-  const scale = isScale(options);
+  const numbers = isScale(options) && options.every(option => option.label === option.code);
   return (
-    <div className={scale ? 'audience-scale' : 'audience-pills'}>
+    <div className={numbers ? 'audience-scale' : 'audience-pills'}>
       {options.map(option => {
         const on = selected.includes(option.code);
         return (
@@ -140,7 +152,7 @@ function ValueChoices({
             className={on ? 'audience-choice on' : 'audience-choice'}
             onClick={() => onToggle(option.code)}
           >
-            {scale ? option.code : on ? `✓ ${option.label}` : option.label}
+            {numbers ? option.label : on ? `✓ ${option.label}` : option.label}
           </Button>
         );
       })}
@@ -438,8 +450,10 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
       {audiences && audiences.length > 0 ? (
         <ul className="audience-list">
           {audiences.map(audience => {
-            const low = typeof audience.n === 'number' && audience.n < LOW_BASE;
+            const n = counted(audience.n);
+            const low = n != null && n < LOW_BASE;
             const share = shareOf(audience);
+            const people = counted(audience.projected_people);
             const definition = audienceDefinitionText(audience.filter, columns);
             return (
               <li key={audience.name} className="audience-row">
@@ -449,12 +463,15 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
                   {definition ? <Definition text={definition} /> : null}
                 </div>
                 <div className={low ? 'audience-stat low' : 'audience-stat'}>
-                  {typeof audience.n === 'number' ? <div>n = {audience.n}</div> : null}
+                  {n != null ? <div>n = {n}</div> : null}
                   {share !== null ? (
                     <div className="flow-muted">
                       {percent(share)}
                       {typeof audience.weighted_share === 'number' ? ' weighted' : ''}
                     </div>
+                  ) : null}
+                  {people != null ? (
+                    <div className="flow-muted">{peopleCount(people)} people</div>
                   ) : null}
                 </div>
                 {canEdit ? (
@@ -584,7 +601,11 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
               </div>
               <div className="flow-muted">
                 {liveShare !== null
-                  ? `${percent(liveShare)}${typeof size?.weighted_share === 'number' ? ' weighted' : ' of the file'}`
+                  ? `${percent(liveShare)}${typeof size?.weighted_share === 'number' ? ' weighted' : ' of the file'}${
+                      typeof size?.projected_people === 'number'
+                        ? ` · ${peopleCount(size.projected_people)} people`
+                        : ''
+                    }`
                   : sizeFailed
                     ? 'The base could not be counted.'
                     : 'The base appears once a question is chosen.'}
@@ -593,8 +614,10 @@ export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
                 <span style={{ width: `${Math.min(100, (liveShare || 0) * 100)}%` }} />
               </div>
               <p>
-                Every answer that uses this audience states this definition and its base. Bases
-                under 50 are flagged, under 30 are hidden.
+                Every answer that uses this audience states this definition and its base.
+                {size && size.n < LOW_BASE
+                  ? ' Bases under 50 are flagged, under 30 are hidden.'
+                  : ''}
               </p>
             </div>
             <footer className="audience-footer">

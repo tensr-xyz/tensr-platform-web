@@ -49,6 +49,28 @@ describe('audience filter', () => {
       )
     ).toBe('Q20 Likelihood to switch is 7–10');
   });
+
+  it('joins answers on the same question instead of repeating the question', () => {
+    const columns = [
+      {
+        name: 'role',
+        label: 'Role',
+        value_labels: { '1': 'Director', '2': 'Board', '3': 'Manager', '4': 'Lead' },
+      },
+    ];
+    expect(
+      audienceDefinitionText(
+        {
+          combine: 'or',
+          filters: [
+            { column: 'role', op: '=', value: '1' },
+            { column: 'role', op: '=', value: '2' },
+          ],
+        },
+        columns
+      )
+    ).toBe('Role is Director or Board');
+  });
 });
 
 describe('audience panel', () => {
@@ -156,5 +178,83 @@ describe('audience panel', () => {
     expect(post).toBeTruthy();
     const body = JSON.parse(String(post?.[1].body));
     expect(body.filter.filters).toEqual([{ column: 'q20_switch', op: '=', value: '1' }]);
+  });
+
+  it('shows value labels on a short code list and does not flag a large base', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        audiences: [
+          {
+            name: 'Leads',
+            label: 'Leads',
+            description: 'People in the first two roles',
+            filter: {
+              combine: 'or',
+              filters: [
+                { column: 'role', op: '=', value: '1' },
+                { column: 'role', op: '=', value: '2' },
+              ],
+            },
+            n: 1211,
+            share: 0.4,
+            weighted_share: 0.42,
+            projected_people: 1500,
+          },
+        ],
+      }),
+    });
+    render(
+      <AudiencePanel
+        datasetId="file-1"
+        columns={[
+          {
+            name: 'role',
+            label: 'Role',
+            value_labels: { '1': 'Director', '2': 'Board', '3': 'Manager', '4': 'Lead' },
+          },
+        ]}
+      />
+    );
+    expect(
+      (await screen.findByText('Leads')).closest('li')?.querySelector('.audience-definition')
+        ?.textContent
+    ).toBe('Role is Director or Board');
+    expect(screen.getByText('n = 1211')).toBeTruthy();
+    expect(screen.getByText('1,500 people')).toBeTruthy();
+    expect(screen.queryByText(/Low base/)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '+ New audience' }));
+    fireEvent.change(screen.getByLabelText('Add a question, search by label'), {
+      target: { value: 'Role' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Role' }));
+    expect(screen.getByRole('button', { name: 'Director' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '1' })).toBeNull();
+  });
+
+  it('flags a base under 50', async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        audiences: [
+          {
+            name: 'Small',
+            label: 'Small',
+            description: 'A small group',
+            filter: { combine: 'and', filters: [{ column: 'role', op: '=', value: '1' }] },
+            n: 12,
+            share: 0.01,
+          },
+        ],
+      }),
+    });
+    render(
+      <AudiencePanel
+        datasetId="file-1"
+        columns={[{ name: 'role', label: 'Role', value_labels: { '1': 'Director' } }]}
+      />
+    );
+    expect(await screen.findByText(/Low base/)).toBeTruthy();
   });
 });
