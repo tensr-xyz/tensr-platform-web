@@ -31,15 +31,12 @@ import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
 import { baseCount } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
+import { DetailsScreen } from '@/components/flow/details-screen';
 import { StudyBrief } from '@/components/flow/study-brief';
 import { fetchAnalysisRun } from '@/lib/analysis-runs';
 import { resultViewFromToolResults, weightChipName } from '@/components/flow/result-tables';
 import { FlowMarkdown } from '@/components/flow/flow-markdown';
-import {
-  PROJECT_TABS,
-  projectSectionPath,
-  visibleProjectSection,
-} from '@/components/flow/project-tabs';
+import { PROJECT_TABS, visibleProjectSection } from '@/components/flow/project-tabs';
 import {
   rememberedFileName,
   sourceVersionTitle,
@@ -562,10 +559,6 @@ export function FlowApp({ slug }: { slug: string[] }) {
       );
     }
   }, [finishedRun, projectId, section, router]);
-  useEffect(() => {
-    if (section !== 'details' || !projectId) return;
-    router.replace(projectSectionPath(projectId, section));
-  }, [section, projectId, router]);
   const page = visibleProjectSection(section);
   const [cachedName, setCachedName] = useState('');
   useEffect(() => {
@@ -757,6 +750,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 onLoadMore={loadMoreProjects}
                 onCreate={() => setNewOpen(true)}
               />
+            ) : section === 'details' ? (
+              <DetailsScreen project={project} datasets={datasets} />
             ) : section === 'sources' ? (
               <SourcesScreen
                 project={project}
@@ -2504,7 +2499,7 @@ function ChatScreen({
   const inReport =
     Boolean(runIds[0] && reportPins.some(pin => pin.runId === runIds[0])) ||
     reportedRun === runIds[0];
-  const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
+  const lettered = ((tables.split('\n')[0] || '').match(/\([A-Z]\)/g) || []).length >= 2;
   const respondents = baseCount(baseNote);
   const addOutputToReport = () => {
     const runId = runIds[0];

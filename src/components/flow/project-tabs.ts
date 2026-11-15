@@ -1,14 +1,15 @@
-/** Project tabs. Details is not one of them; an old /details link opens Chat. */
+/** Project tabs. Details is where the study brief and saved audiences live. */
 export const PROJECT_TABS = [
   ['chat', 'Chat'],
   ['sources', 'Sources'],
+  ['details', 'Details'],
   ['responses', 'Responses'],
   ['tables', 'Tables'],
   ['report', 'Report'],
 ] as const;
 
 export function visibleProjectSection(section: string): string {
-  return section === 'details' ? 'chat' : section;
+  return section;
 }
 
 export function projectSectionPath(projectId: string, section: string): string {

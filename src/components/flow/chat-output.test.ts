@@ -302,6 +302,21 @@ describe('chat output panel', () => {
     expect(lead).toContain('thousand');
   });
 
+  it('keeps the table figures when the chat answer is only a base and a count', () => {
+    const lead = resultLead(
+      'The weighted base for this table is 168 (unweighted 40). I used 1 filter.',
+      [
+        {
+          summary: {
+            line: 'Brand 39.4% (12.4 thousand). The weighted base for this table is 168 (unweighted 40).',
+          },
+        },
+      ]
+    );
+    expect(lead).toContain('39.4%');
+    expect(lead).not.toContain('weighted base');
+  });
+
   it('reads the lead stored on a reopened banner card', () => {
     const lead = resultLead('', [
       {
