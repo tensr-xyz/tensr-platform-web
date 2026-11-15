@@ -737,6 +737,29 @@ function isFrequencyRecord(record: Record<string, unknown>): boolean {
   );
 }
 
+function filterColumns(value: unknown, found = new Set<string>()): Set<string> {
+  if (Array.isArray(value)) {
+    for (const item of value) filterColumns(item, found);
+    return found;
+  }
+  if (!value || typeof value !== 'object') return found;
+  const record = value as Record<string, unknown>;
+  const column = cell(record.column ?? record.columnId);
+  if (column && ('value' in record || 'op' in record || 'operator' in record)) found.add(column);
+  for (const nested of Object.values(record)) filterColumns(nested, found);
+  return found;
+}
+
+/** A banner of the audience column is not the audience. The rows have to be filtered to it. */
+function audienceWasUsed(record: Record<string, unknown>): boolean {
+  const columns = record.audience_columns;
+  if (!Array.isArray(columns) || !columns.length) return true;
+  const used = filterColumns(
+    record.row_filters ?? record.filters ?? record.filter ?? record.audience_filter
+  );
+  return columns.every(column => used.has(cell(column)));
+}
+
 function filterText(named: unknown): string {
   if (typeof named === 'string') return named.trim();
   if (named && typeof named === 'object' && !Array.isArray(named)) {
@@ -1299,7 +1322,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
       );
       if (named) view.filter = named;
     }
-    if (!view.audience) {
+    if (!view.audience && audienceWasUsed(record)) {
       const audience = cell(record.audience_label);
       if (audience) view.audience = audience;
     }

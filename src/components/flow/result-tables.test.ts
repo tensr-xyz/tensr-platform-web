@@ -220,6 +220,32 @@ describe('result tables', () => {
     expect(foot).toContain('Unweighted base 40.');
   });
 
+  it('does not name an audience the table did not filter to', () => {
+    const unused = resultViewFromToolResults({
+      audience_label: 'Decision makers',
+      audience_columns: ['role'],
+      banner_column: 'role',
+    });
+    expect(resultFootnote(unused, '', 'Crosstab')).not.toContain('Audience:');
+    const used = resultViewFromToolResults({
+      audience_label: 'Decision makers',
+      audience_definition: 'Either of two roles',
+      audience_columns: ['role'],
+      row_filters: [
+        {
+          combine: 'or',
+          filters: [
+            { column: 'role', op: '=', value: '1' },
+            { column: 'role', op: '=', value: '2' },
+          ],
+        },
+      ],
+    });
+    expect(resultFootnote(used, '', 'Crosstab')).toContain(
+      'Audience: Decision makers — Either of two roles'
+    );
+  });
+
   it('prefers a labelled filter over an earlier column code', () => {
     const view = resultViewFromToolResults({
       row_filters: [
