@@ -301,4 +301,38 @@ describe('chat output panel', () => {
     expect(lead).toContain('50.0%');
     expect(lead).toContain('thousand');
   });
+
+  it('reads the lead stored on a reopened banner card', () => {
+    const lead = resultLead('', [
+      {
+        result: {
+          summary: {
+            line: 'Ledger 50.0% (12.5 thousand). The weighted base for this table is 80.',
+          },
+        },
+      },
+    ]);
+    expect(lead).toContain('50.0%');
+    expect(lead.toLowerCase()).not.toContain('weighted base');
+  });
+
+  it('drops raw R from a footnote sentence', () => {
+    const text = guardUserText(
+      'Ledger is 50.0%. Attaching package: survey. Calls: svydesign.default. masked from package:graphics.'
+    );
+    expect(text).toContain('50.0%');
+    expect(text.toLowerCase()).not.toContain('svydesign');
+    expect(text.toLowerCase()).not.toContain('attaching package');
+    expect(text.toLowerCase()).not.toContain('masked from');
+  });
+
+  it('rewrites a column code that is followed by a comma', () => {
+    expect(
+      titledWithQuestion('item_a, item_b × seat', [
+        { name: 'item_a', label: 'First brand' },
+        { name: 'item_b', label: 'Second brand' },
+        { name: 'seat', label: 'Role' },
+      ])
+    ).toBe('First brand, Second brand × Role');
+  });
 });

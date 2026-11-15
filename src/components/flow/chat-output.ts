@@ -255,7 +255,7 @@ function replaceColumnCodes(title: string, columns: QuestionLabel[]): string {
   }
   if (!byName.size) return title;
   return title
-    .split(/(\s+|×)/)
+    .split(/(\s+|×|,)/)
     .map(part => byName.get(part.toLowerCase()) || part)
     .join('');
 }
@@ -304,10 +304,16 @@ const STDERR_MARKS = [
   'traceback',
   'execution halted',
   'loading required package',
+  'attaching package',
+  'masked from package',
+  'svydesign',
   'error in ',
   'lengths of prob',
   'modulenotfounderror',
   'syntaxerror',
+  'nameerror',
+  'typeerror:',
+  'valueerror:',
   'r script failed',
 ];
 const PROMISE_MARKS = ['check', 'look', 'verify', 'confirm', 'retry', 'rerun', 'investigate'];
@@ -348,7 +354,7 @@ export function resultLead(
   results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
 ): string {
   const prose = answerWithoutBase(withoutResultTokens(answerWithoutTables(answer))).trim();
-  const finding = summaryLine(results);
+  const finding = answerWithoutBase(summaryLine(results)).trim();
   const text =
     (prose && /\d/.test(prose) ? prose : '') || finding || prose || outputTakeaway(answer);
   return guardUserText(text);
@@ -358,7 +364,11 @@ function summaryLine(
   results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
 ): string {
   for (const item of results || []) {
-    const summary = item?.summary;
+    const nested =
+      item?.result && typeof item.result === 'object' && !Array.isArray(item.result)
+        ? (item.result.summary as Record<string, unknown> | undefined)
+        : undefined;
+    const summary = item?.summary || nested;
     const line = typeof summary?.line === 'string' ? summary.line.trim() : '';
     if (line && /[A-Za-z]/.test(line) && /\d/.test(line)) return line;
   }
