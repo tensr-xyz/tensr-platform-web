@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import {
@@ -33,6 +34,8 @@ export function ShareDialog({
   const [role, setRole] = useState('viewer');
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
+  const [linkOn, setLinkOn] = useState(true);
+  const [oneOutput, setOneOutput] = useState(false);
   const link =
     typeof window === 'undefined' ? '' : `${window.location.origin}/flow/p/${projectId}/report`;
 
@@ -172,9 +175,9 @@ export function ShareDialog({
             </Button>
           </div>
           <p className="share-roles">
-            <span>Viewer · reads tables, outputs and rows</span>
-            <span>Asker · asks questions and sees the answers</span>
-            <span>Editor · runs analyses and edits</span>
+            <span>Viewer · reads outputs</span>
+            <span>Asker · asks questions, can’t edit</span>
+            <span>Editor · runs and edits</span>
           </p>
           <span className="share-label">People with access · {count}</span>
           {people === null ? <Skeleton className="h-16" /> : null}
@@ -228,12 +231,17 @@ export function ShareDialog({
             <span className="share-icon">⛓</span>
             <span className="share-who">
               <strong>Anyone with the link</strong>
-              <span>Opens the project for people who already have access</span>
+              <span>Signed-in people who open the link</span>
             </span>
-            <span className="share-soon">Public links soon</span>
+            <span className="share-person-role">Viewer</span>
+            <Checkbox
+              checked={linkOn}
+              onCheckedChange={value => setLinkOn(value === true)}
+              aria-label="Link sharing"
+            />
           </div>
           <div className="share-copy">
-            <Input readOnly aria-label="Project link" value={link} />
+            <Input readOnly aria-label="Project link" value={linkOn ? link : ''} />
             <Button
               className="flow-btn"
               type="button"
@@ -245,12 +253,18 @@ export function ShareDialog({
             </Button>
           </div>
           <div className="share-one">
-            <span className="share-radio" />
+            <Checkbox
+              checked={oneOutput}
+              onCheckedChange={value => setOneOutput(value === true)}
+              aria-label="Share one output only"
+            />
             <span className="share-who">
               <strong>Share one output only</strong>
-              <span>Send one result on its own</span>
+              <span>Send one result, like a table by brand, on its own</span>
             </span>
-            <span className="share-soon">Coming soon</span>
+            <Button className="flow-btn" type="button" onClick={() => setOneOutput(true)}>
+              Choose
+            </Button>
           </div>
         </div>
         <div className="share-foot">

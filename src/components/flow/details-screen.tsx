@@ -32,7 +32,13 @@ type DetailFile = {
 };
 
 type Member = { user_id: string; role?: string };
-type AskerTurn = { turn_id: string; question: string; answer: string; checked?: boolean };
+type AskerTurn = {
+  turn_id: string;
+  question: string;
+  answer: string;
+  checked?: boolean;
+  status?: string;
+};
 
 function labelledMeasure(labels: Record<string, string>): 'ordinal' | 'nominal' {
   const codes = Object.keys(labels)
@@ -185,6 +191,73 @@ function objectiveLines(text: string): string[] {
     .split('\n')
     .map(line => line.trim())
     .filter(Boolean);
+}
+
+function askerBucket(turn: AskerTurn): 'to_check' | 'checked' | 'not_in_data' {
+  if (
+    turn.status === 'not_in_data' ||
+    turn.answer.trim().toLowerCase().startsWith('not in this data')
+  ) {
+    return 'not_in_data';
+  }
+  if (turn.status === 'checked' || turn.checked) return 'checked';
+  return 'to_check';
+}
+
+function AskerLog({
+  turns,
+  onMark,
+}: {
+  turns: AskerTurn[];
+  onMark: (turnId: string, status?: 'checked' | 'flagged') => void;
+}) {
+  const [filter, setFilter] = useState<'to_check' | 'checked' | 'not_in_data'>('to_check');
+  const shown = turns.filter(turn => askerBucket(turn) === filter);
+  return (
+    <div className="details-questions">
+      <div className="flow-muted details-label">Asker questions</div>
+      <div className="flow-row">
+        {(
+          [
+            ['to_check', 'To check'],
+            ['checked', 'Checked'],
+            ['not_in_data', 'Not in data'],
+          ] as const
+        ).map(([id, label]) => (
+          <Button
+            key={id}
+            type="button"
+            className="flow-btn"
+            aria-pressed={filter === id}
+            onClick={() => setFilter(id)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+      {shown.map(turn => (
+        <div key={turn.turn_id} className="details-member">
+          <span className="details-member-id">
+            <strong>{turn.question}</strong>
+            <span className="flow-muted">{turn.answer}</span>
+          </span>
+          {askerBucket(turn) === 'checked' ? (
+            <span className="flow-muted">Checked</span>
+          ) : (
+            <span className="flow-row">
+              <Button type="button" onClick={() => onMark(turn.turn_id, 'checked')}>
+                Mark as checked
+              </Button>
+              <Button type="button" onClick={() => onMark(turn.turn_id, 'flagged')}>
+                Flag a problem
+              </Button>
+            </span>
+          )}
+        </div>
+      ))}
+      {shown.length ? null : <p className="flow-muted">Nothing in this list.</p>}
+    </div>
+  );
 }
 
 export function DetailsScreen({
@@ -448,10 +521,10 @@ export function DetailsScreen({
 
   const mine = (members || []).find(member => member.user_id === userId);
   const asker = mine?.role === 'asker';
-  const markChecked = (turnId: string) => {
+  const markChecked = (turnId: string, status: 'checked' | 'flagged' = 'checked') => {
     void flowJson<{ turn?: AskerTurn }>(`/api/projects/${projectId}/asker-log/${turnId}`, {
       method: 'POST',
-      body: JSON.stringify({ checked: true }),
+      body: JSON.stringify({ checked: status === 'checked', status }),
     })
       .then(page => {
         const saved = page.turn;
@@ -751,26 +824,7 @@ export function DetailsScreen({
             ) : (
               <p className="flow-muted">No members yet.</p>
             )}
-            {asker || !turns?.length ? null : (
-              <div className="details-questions">
-                <div className="flow-muted details-label">Asker questions</div>
-                {turns.map(turn => (
-                  <div key={turn.turn_id} className="details-member">
-                    <span className="details-member-id">
-                      <strong>{turn.question}</strong>
-                      <span className="flow-muted">{turn.answer}</span>
-                    </span>
-                    {turn.checked ? (
-                      <span className="flow-muted">Checked</span>
-                    ) : (
-                      <Button type="button" onClick={() => markChecked(turn.turn_id)}>
-                        Mark checked
-                      </Button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+            {asker || !turns?.length ? null : <AskerLog turns={turns} onMark={markChecked} />}
           </div>
         </SidePanel>
       </div>

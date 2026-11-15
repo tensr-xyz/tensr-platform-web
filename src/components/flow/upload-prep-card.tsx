@@ -21,6 +21,10 @@ export function UploadPrepCard({
     <section className="sources-block" aria-label="Prepare this file">
       <div className="sources-block-head">
         <h2>Prepare this file</h2>
+        <p className="flow-muted">
+          Keep or skip each change. Respondents are flagged and stay in the file. Apply writes a ·
+          prepared copy.
+        </p>
       </div>
       <ul>
         {parts.map(part => {

@@ -101,26 +101,33 @@ function columnByName(columns: FlowColumn[], name: string | undefined): FlowColu
   );
 }
 
+function codeKey(value: string): string {
+  const text = value.trim();
+  if (/^-?\d+(?:\.0+)?$/.test(text)) return String(Number(text));
+  return text;
+}
+
 function valuePhrase(column: FlowColumn, value: unknown): string {
   const options = answerOptions(column);
   const codes = (Array.isArray(value) ? value : [value]).map(item => String(item ?? '').trim());
   const clean = codes.filter(Boolean);
   if (!clean.length || !options.length) return '';
-  const byCode = new Map(options.map(option => [option.code, option.label]));
-  if (!clean.every(code => byCode.has(code))) return '';
+  const byCode = new Map(options.map(option => [codeKey(option.code), option.label]));
+  const byLabel = new Map(options.map(option => [option.label.trim().toLowerCase(), option.label]));
+  const resolved = clean.map(
+    code => byCode.get(codeKey(code)) || byLabel.get(code.toLowerCase()) || ''
+  );
+  if (resolved.some(label => !label)) return '';
   const numericScale = isScale(options) && options.every(option => option.label === option.code);
   if (numericScale) {
-    const numbers = clean.map(Number).sort((a, b) => a - b);
+    const numbers = clean.map(code => Number(codeKey(code))).sort((a, b) => a - b);
     const run = numbers.every((item, index) => index === 0 || item === numbers[index - 1]! + 1);
-    if (run)
+    if (run && numbers.every(item => Number.isFinite(item)))
       return numbers.length === 1
         ? String(numbers[0])
         : `${numbers[0]}–${numbers[numbers.length - 1]}`;
   }
-  return clean
-    .map(code => byCode.get(code) || '')
-    .filter(Boolean)
-    .join(', ');
+  return resolved.join(', ');
 }
 
 function clauseText(item: StoredFilter, columns: FlowColumn[]): string {

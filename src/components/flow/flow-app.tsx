@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { AgentThread, AgentThreadColumn, useAgentThread } from '@/components/flow/agent-thread';
+import { OverviewDeck, WaveRefresh } from '@/components/flow/overview-deck';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import {
   loadProjectTables,
@@ -2525,7 +2526,7 @@ function ChatScreen({
       })
       .catch(() => setStatus('That result could not be added to the report.'));
   };
-  const exportRun = (format: 'pdf' | 'docx' | 'html', label: string) => {
+  const exportRun = (format: 'pdf' | 'docx' | 'html' | 'pptx', label: string) => {
     const stem = title.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
     void downloadExport(`/datasets/reports/pipeline/export?format=${format}`, `${stem}.${format}`, {
       method: 'POST',
@@ -2923,6 +2924,7 @@ function ChatScreen({
                         {runIds.length
                           ? (
                               [
+                                ['pptx', 'PowerPoint'],
                                 ['pdf', 'PDF'],
                                 ['docx', 'Word'],
                                 ['html', 'HTML'],
@@ -4569,6 +4571,8 @@ function ReportScreen({
   const [filterDraft, setFilterDraft] = useState<RowCut[]>([]);
   const [template, setTemplate] = useState('');
   const [templateName, setTemplateName] = useState('');
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [waveOpen, setWaveOpen] = useState(false);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
@@ -5118,6 +5122,10 @@ function ReportScreen({
           </p>
         </div>
         <StudyBrief key={projectId} projectId={projectId} />
+        {overviewOpen ? <OverviewDeck audience="" onClose={() => setOverviewOpen(false)} /> : null}
+        {waveOpen ? (
+          <WaveRefresh previous={[]} next={[]} onClose={() => setWaveOpen(false)} />
+        ) : null}
         <div className="report-block">
           <div className="report-head">
             <div>
@@ -5155,6 +5163,12 @@ function ReportScreen({
               </div>
               <Button type="button" disabled={busy !== ''} onClick={() => run('deck', deck)}>
                 Download
+              </Button>
+              <Button type="button" className="flow-btn" onClick={() => setOverviewOpen(true)}>
+                Audience overview
+              </Button>
+              <Button type="button" className="flow-btn" onClick={() => setWaveOpen(true)}>
+                Refresh wave
               </Button>
             </Card>
             <Card>
