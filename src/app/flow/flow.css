@@ -8274,6 +8274,16 @@ select.flow-input {
   text-align: right;
 }
 
+.output-cell {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+}
+
 .output-page .output-plot {
   padding: 12px;
   border: 1px solid var(--color-line);

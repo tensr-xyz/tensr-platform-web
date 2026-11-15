@@ -180,6 +180,32 @@ describe('chat output panel', () => {
     expect(outputTitle(results, 'Aware is the largest stage.')).toBe('Funnel');
   });
 
+  it('titles a funnel even when frequency tables sit beside it', () => {
+    const results = [
+      {
+        procedure: 'frequencies',
+        summary: {
+          table: [
+            { title: 'Have you heard of the item?' },
+            { title: 'Have you been to the place?' },
+          ],
+        },
+      },
+      { procedure: 'funnel', summary: { title: 'Funnel by group' } },
+    ];
+    expect(outputTitle(results, 'Heard is 40%.')).toBe('Funnel');
+  });
+
+  it('drops a weight code and an empty cautions bullet from the lead', () => {
+    const lead = resultLead(
+      'Heard is 40% and the last stage is 12%.\nweighted by design_weight\n\nCautions:\n-'
+    );
+    expect(lead).toContain('40%');
+    expect(lead).not.toMatch(/design_weight/);
+    expect(lead).not.toMatch(/Cautions/);
+    expect(lead.trim().endsWith('-')).toBe(false);
+  });
+
   it('titles a funnel with the short name, not the lead', () => {
     const lead =
       'Aware is the largest stage and the last stage converts from the one before it across the whole base.';
