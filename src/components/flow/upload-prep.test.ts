@@ -30,5 +30,9 @@ describe('upload prep', () => {
   it('says when no NPS scale and no quality flags were found', () => {
     const parts = prepParts({ quality: { flagged: 0, checked: 3 } });
     expect(parts.map(part => part.label)).toEqual(['No NPS scale found', 'No quality flags']);
+    expect(prepParts({}).map(part => part.label)).toEqual([
+      'No NPS scale found',
+      'No quality flags',
+    ]);
   });
 });

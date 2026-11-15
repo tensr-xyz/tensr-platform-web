@@ -29,10 +29,14 @@ import {
   TooltipTrigger,
 } from '@/components/atoms/tooltip';
 import { moveDatasetToProject } from '@/components/flow/move-dataset';
+import { UploadPrepCard } from '@/components/flow/upload-prep-card';
+import type { PrepProposal } from '@/components/flow/upload-prep';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import {
+  applyUploadPrep,
   rememberedDatasetId,
+  skipUploadPrep,
   uploadDatasetFile,
   type RememberedUpload,
 } from '@/lib/upload-dataset';
@@ -727,6 +731,7 @@ export function NewProjectDialog({
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const [proposal, setProposal] = useState<{ id: string; prep: PrepProposal } | null>(null);
   const createdProjectId = useRef<string | null>(null);
   const uploadedDataset = useRef<RememberedUpload | null>(null);
   const pickable = useMemo(
@@ -749,6 +754,7 @@ export function NewProjectDialog({
     setExisting('');
     setError('');
     setProgress(null);
+    setProposal(null);
     createdProjectId.current = null;
     uploadedDataset.current = null;
   };
@@ -758,6 +764,7 @@ export function NewProjectDialog({
     setError('');
     try {
       let datasetId = '';
+      let uploadedPrep: PrepProposal | null = null;
       if (choice === 'upload') {
         if (!file) throw new Error('Choose a file to upload, or skip for now.');
         if (!isAcceptedUploadExtension(file.name)) {
@@ -784,6 +791,9 @@ export function NewProjectDialog({
           if (!token) throw new Error('Sign in again to upload a file.');
           const uploaded = await uploadDatasetFile(file, token, 'workspace', setProgress);
           datasetId = uploaded.dataset_id;
+          if (uploaded.prep && typeof uploaded.prep === 'object') {
+            uploadedPrep = uploaded.prep as PrepProposal;
+          }
           uploadedDataset.current = {
             name: file.name,
             size: file.size,
@@ -802,6 +812,10 @@ export function NewProjectDialog({
         });
       }
       await onCreated();
+      if (uploadedPrep && datasetId) {
+        setProposal({ id: datasetId, prep: uploadedPrep });
+        return;
+      }
       onOpenChange(false);
       reset();
       const land =
@@ -859,6 +873,43 @@ export function NewProjectDialog({
               />
             </label>
           </div>
+        ) : proposal ? (
+          <UploadPrepCard
+            proposal={proposal.prep}
+            onApply={kept => {
+              const bearer = getStytchBearerForTensrApi();
+              const projectId = createdProjectId.current;
+              if (!bearer || !projectId) {
+                setError('Sign in again to prepare the file.');
+                return;
+              }
+              setBusy(true);
+              void applyUploadPrep(proposal.id, bearer, kept)
+                .then(saved =>
+                  moveDatasetToProject(projectId, saved.dataset_id).then(() => saved.dataset_id)
+                )
+                .then(async datasetId => {
+                  await flowJson(`/api/projects/${projectId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ active_dataset_id: datasetId }),
+                  });
+                  await onCreated();
+                  onOpenChange(false);
+                  reset();
+                  router.push(`/flow/p/${projectId}/sources`);
+                })
+                .catch(err => setError(formatApiErrorMessage(err)))
+                .finally(() => setBusy(false));
+            }}
+            onSkip={() => {
+              const bearer = getStytchBearerForTensrApi();
+              const projectId = createdProjectId.current;
+              if (bearer) void skipUploadPrep(proposal.id, bearer);
+              onOpenChange(false);
+              reset();
+              if (projectId) router.push(`/flow/p/${projectId}/sources`);
+            }}
+          />
         ) : (
           <div className="new-project-data">
             {(
@@ -928,7 +979,7 @@ export function NewProjectDialog({
               Cancel
             </Button>
           )}
-          {step === 1 ? (
+          {proposal ? null : step === 1 ? (
             <Button
               className="flow-btn primary"
               type="button"
