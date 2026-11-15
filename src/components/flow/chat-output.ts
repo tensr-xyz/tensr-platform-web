@@ -244,13 +244,29 @@ function frequencyQuestions(results: ToolResult[] | undefined): string[] {
 export type QuestionLabel = { name: string; label?: string | null };
 
 /** A column code becomes its question when the file has a label for it. */
+function replaceColumnCodes(title: string, columns: QuestionLabel[]): string {
+  const byName = new Map<string, string>();
+  for (const column of columns) {
+    const name = (column.name || '').trim();
+    const label = (column.label || '').trim();
+    if (name && label && label !== name) {
+      byName.set(name.toLowerCase(), label);
+    }
+  }
+  if (!byName.size) return title;
+  return title
+    .split(/(\s+|×)/)
+    .map(part => byName.get(part.toLowerCase()) || part)
+    .join('');
+}
+
 export function titledWithQuestion(title: string, columns: QuestionLabel[] = []): string {
   const stripped = title.replace(/^frequency table:\s*/i, '').trim();
   const key = stripped.replace(/\.\s*$/, '').toLowerCase();
   const meta = columns.find(column => column.name.trim().toLowerCase() === key);
   const label = (meta?.label || '').trim();
   if (label && label !== stripped) return label;
-  return stripped || title;
+  return replaceColumnCodes(stripped || title, columns);
 }
 
 const PROCEDURE_TITLE = /^(compute|computed|run analysis|run_analysis)$/i;
