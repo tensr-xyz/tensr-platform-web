@@ -509,7 +509,9 @@ export function DetailsScreen({
         The agent reads this brief before every answer, so objectives, audience and notes shape what
         it runs and how it writes up results.
       </p>
-      {active ? <AudiencePanel datasetId={datasetRowId(active)} columns={columns || []} /> : null}
+      {active ? (
+        <AudiencePanel datasetId={datasetRowId(active)} columns={columns || []} canEdit={!asker} />
+      ) : null}
       <div className="details-body">
         <div className="details-main">
           <div className="details-split">
