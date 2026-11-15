@@ -202,6 +202,24 @@ describe('result tables', () => {
     );
   });
 
+  it('states the audience definition, the wave, and the source', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        audience_label: 'Regular readers',
+        audience_definition: 'People who read weekly',
+        wave_label: 'Wave 2',
+        source_label: 'readers.sav',
+      },
+    });
+    expect(view.audience).toBe('Regular readers');
+    expect(view.audienceDefinition).toBe('People who read weekly');
+    const foot = resultFootnote(view, 'Unweighted base 40.', 'Frequencies');
+    expect(foot).toContain('Audience: Regular readers — People who read weekly');
+    expect(foot).toContain('Wave: Wave 2');
+    expect(foot).toContain('Source: readers.sav');
+    expect(foot).toContain('Unweighted base 40.');
+  });
+
   it('prefers a labelled filter over an earlier column code', () => {
     const view = resultViewFromToolResults({
       row_filters: [
