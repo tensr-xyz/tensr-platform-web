@@ -4,34 +4,154 @@ import { useEffect, useState } from 'react';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getTensrApiHeaders } from '@/utils/auth';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ChoiceSelect } from '@/components/ui/select';
 import type { FlowColumn } from '@/lib/flow-columns';
-import { audienceFilter, type AudienceCombine, type AudienceCondition } from './audience-filter';
+import {
+  answerOptions,
+  audienceDefinitionText,
+  audienceFilter,
+  audienceQuestions,
+  conditionsFromFilter,
+  isScale,
+  questionCode,
+  questionLabel,
+  type AudienceCombine,
+  type AudienceCondition,
+} from './audience-filter';
 
 export type SavedAudience = {
   name: string;
   label: string;
   description?: string;
   filter?: { combine?: string; filters?: unknown[] };
+  n?: number;
+  n_total?: number;
+  share?: number;
+  weighted_share?: number | null;
+};
+
+type Size = {
+  n: number;
+  n_total: number;
+  share: number;
+  weighted_share?: number | null;
 };
 
 type Props = {
   datasetId: string;
   columns: FlowColumn[];
+  canEdit?: boolean;
 };
 
 const BLANK: AudienceCondition = { column: '', op: '=', value: '', exclude: false };
+const LOW_BASE = 50;
 
-function columnText(column: FlowColumn): string {
-  const label = String(column.label || '').trim();
-  return label && label !== column.name ? label : column.name;
+function percent(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
 }
 
-export function AudiencePanel({ datasetId, columns }: Props) {
+function shareOf(size: { share?: number; weighted_share?: number | null }): number | null {
+  if (typeof size.weighted_share === 'number') return size.weighted_share;
+  if (typeof size.share === 'number') return size.share;
+  return null;
+}
+
+function Definition({ text }: { text: string }) {
+  const parts = text.split(/( and | or )/g);
+  return (
+    <span className="audience-definition">
+      {parts.map((part, index) =>
+        part === ' and ' || part === ' or ' ? (
+          <span key={index}>
+            {' '}
+            <span className="audience-join">{part.trim()}</span>{' '}
+          </span>
+        ) : (
+          <span key={index}>{part}</span>
+        )
+      )}
+    </span>
+  );
+}
+
+function QuestionSearch({
+  columns,
+  onPick,
+}: {
+  columns: FlowColumn[];
+  onPick: (name: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
+  const matches = needle
+    ? columns.filter(column => questionLabel(column).toLowerCase().includes(needle))
+    : [];
+  return (
+    <div className="audience-search">
+      <Input
+        aria-label="Add a question, search by label"
+        placeholder="+ Add a question · search by label"
+        value={query}
+        onChange={event => setQuery(event.target.value)}
+      />
+      {needle ? (
+        <div className="audience-search-list">
+          {matches.map(column => (
+            <Button
+              key={column.name}
+              type="button"
+              className="flow-btn audience-search-hit"
+              onClick={() => {
+                onPick(column.name);
+                setQuery('');
+              }}
+            >
+              {[questionCode(column), questionLabel(column)].filter(Boolean).join(' ')}
+            </Button>
+          ))}
+          {matches.length === 0 ? <p className="flow-muted">No question with that label.</p> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ValueChoices({
+  column,
+  selected,
+  onToggle,
+}: {
+  column: FlowColumn;
+  selected: string[];
+  onToggle: (code: string) => void;
+}) {
+  const options = answerOptions(column);
+  const scale = isScale(options);
+  return (
+    <div className={scale ? 'audience-scale' : 'audience-pills'}>
+      {options.map(option => {
+        const on = selected.includes(option.code);
+        return (
+          <Button
+            key={option.code}
+            type="button"
+            aria-pressed={on}
+            className={on ? 'audience-choice on' : 'audience-choice'}
+            onClick={() => onToggle(option.code)}
+          >
+            {scale ? option.code : on ? `✓ ${option.label}` : option.label}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function AudiencePanel({ datasetId, columns, canEdit = true }: Props) {
+  const questions = audienceQuestions(columns);
   const [audiences, setAudiences] = useState<SavedAudience[] | null>(null);
+  const [open, setOpen] = useState(false);
   const [label, setLabel] = useState('');
   const [description, setDescription] = useState('');
   const [combine, setCombine] = useState<AudienceCombine>('and');
@@ -39,6 +159,8 @@ export function AudiencePanel({ datasetId, columns }: Props) {
   const [editing, setEditing] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [size, setSize] = useState<Size | null>(null);
+  const [sizeFailed, setSizeFailed] = useState(false);
 
   useEffect(() => {
     if (!datasetId) return;
@@ -65,16 +187,57 @@ export function AudiencePanel({ datasetId, columns }: Props) {
     };
   }, [datasetId]);
 
+  const filter = audienceFilter(combine, conditions);
+  const filterKey = JSON.stringify(filter);
+
+  useEffect(() => {
+    const body = JSON.parse(filterKey) as { filters?: unknown[] };
+    if (!open || !datasetId || !body.filters?.length) {
+      setSize(null);
+      setSizeFailed(false);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      void fetch(tensrApiUrl(`/datasets/${datasetId}/audiences/preview`), {
+        method: 'POST',
+        headers: getTensrApiHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ filter: body }),
+      })
+        .then(async response => {
+          if (!response.ok) throw new Error('The size could not be counted.');
+          return response.json() as Promise<Size>;
+        })
+        .then(page => {
+          if (!cancelled) {
+            setSize(page);
+            setSizeFailed(false);
+          }
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setSize(null);
+            setSizeFailed(true);
+          }
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [open, datasetId, filterKey]);
+
   const reset = () => {
     setLabel('');
     setDescription('');
     setCombine('and');
     setConditions([{ ...BLANK }]);
     setEditing('');
+    setOpen(false);
+    setSize(null);
   };
 
   const save = () => {
-    const filter = audienceFilter(combine, conditions);
     if (!label.trim() || !description.trim() || !filter.filters.length) {
       setError('An audience needs a name, a description, and at least one condition.');
       return;
@@ -102,7 +265,17 @@ export function AudiencePanel({ datasetId, columns }: Props) {
           const rest = (current || []).filter(
             item => item.name !== saved.name && item.name !== editing
           );
-          return [...rest, { ...saved, description: saved.description || description.trim() }];
+          return [
+            ...rest,
+            {
+              ...saved,
+              description: saved.description || description.trim(),
+              n: size?.n,
+              n_total: size?.n_total,
+              share: size?.share,
+              weighted_share: size?.weighted_share,
+            },
+          ];
         });
         reset();
       })
@@ -120,185 +293,336 @@ export function AudiencePanel({ datasetId, columns }: Props) {
       .then(response => {
         if (!response.ok) throw new Error('The audience was not deleted.');
         setAudiences(current => (current || []).filter(item => item.name !== name));
-        if (editing === name) reset();
+        reset();
       })
       .catch(() => setError('The audience was not deleted.'))
       .finally(() => setBusy(false));
   };
 
   const edit = (audience: SavedAudience) => {
+    const stored = conditionsFromFilter(audience.filter);
     setEditing(audience.name);
     setLabel(audience.label || audience.name);
     setDescription(audience.description || '');
-    const stored = audience.filter?.combine === 'or' ? 'or' : 'and';
-    setCombine(stored);
-    const filters = Array.isArray(audience.filter?.filters) ? audience.filter?.filters : [];
-    const next = filters.flatMap(item => {
-      if (!item || typeof item !== 'object') return [];
-      const group = item as {
-        op?: string;
-        filters?: { column?: string; op?: string; value?: unknown }[];
-      };
-      const excluded = group.op === 'not';
-      const clause = excluded
-        ? group.filters?.[0]
-        : (item as { column?: string; op?: string; value?: unknown });
-      if (!clause?.column) return [];
-      return [
-        {
-          column: String(clause.column),
-          op: String(clause.op || '='),
-          value: String(clause.value ?? ''),
-          exclude: excluded,
-        },
-      ];
-    });
-    setConditions(next.length ? next : [{ ...BLANK }]);
+    setCombine(stored.combine);
+    const labelled = new Set(questions.map(column => column.name));
+    setConditions(
+      stored.conditions.flatMap(condition => {
+        if (condition.group) {
+          const group = condition.group.filter(item => labelled.has(item.column));
+          return group.length ? [{ ...condition, group }] : [];
+        }
+        return labelled.has(condition.column) ? [condition] : [];
+      })
+    );
+    setError(null);
+    setOpen(true);
   };
 
-  const options = columns
-    .filter(column => column.name)
-    .map(column => ({ value: column.name, label: columnText(column) }));
+  const used = new Set(
+    conditions.flatMap(condition =>
+      condition.group ? condition.group.map(item => item.column) : [condition.column]
+    )
+  );
+  const remaining = questions.filter(column => !used.has(column.name));
+
+  const setValues = (index: number, groupIndex: number | null, code: string) => {
+    setConditions(current =>
+      current.map((item, itemIndex) => {
+        if (itemIndex !== index) return item;
+        const target = groupIndex === null ? item : item.group?.[groupIndex];
+        if (!target) return item;
+        const values = target.values?.length
+          ? [...target.values]
+          : target.value
+            ? [target.value]
+            : [];
+        const nextValues = values.includes(code)
+          ? values.filter(value => value !== code)
+          : [...values, code];
+        const next = { ...target, value: nextValues[0] || '', values: nextValues };
+        if (groupIndex === null) return next;
+        return {
+          ...item,
+          group: item.group?.map((child, childIndex) => (childIndex === groupIndex ? next : child)),
+        };
+      })
+    );
+  };
+
+  const renderCondition = (
+    condition: AudienceCondition,
+    index: number,
+    groupIndex: number | null
+  ) => {
+    const column = questions.find(item => item.name === condition.column);
+    if (!column) return null;
+    const values = condition.values?.length
+      ? condition.values
+      : condition.value
+        ? [condition.value]
+        : [];
+    const operator = values.length > 1 ? 'includes any' : 'is';
+    return (
+      <div
+        key={`${index}-${groupIndex ?? 'top'}-${condition.column}`}
+        className="audience-condition"
+      >
+        <div className="audience-condition-head">
+          <span className="audience-q">{questionCode(column)}</span>
+          <span className="audience-q-label">{questionLabel(column)}</span>
+          <span className="audience-op">{operator}</span>
+          <Button
+            type="button"
+            className="flow-btn audience-remove"
+            aria-label={`Remove ${questionLabel(column)}`}
+            onClick={() => {
+              if (groupIndex === null) {
+                setConditions(current => current.filter((_, itemIndex) => itemIndex !== index));
+                return;
+              }
+              setConditions(current =>
+                current.map((item, itemIndex) =>
+                  itemIndex === index
+                    ? {
+                        ...item,
+                        group: item.group?.filter((_, childIndex) => childIndex !== groupIndex),
+                      }
+                    : item
+                )
+              );
+            }}
+          >
+            ×
+          </Button>
+        </div>
+        <ValueChoices
+          column={column}
+          selected={values}
+          onToggle={code => setValues(index, groupIndex, code)}
+        />
+      </div>
+    );
+  };
+
+  const liveShare = size ? shareOf(size) : null;
+  const typed = label.trim();
 
   return (
     <section className="details-audiences" aria-label="Audiences">
-      <h2>Audiences</h2>
-      <p className="details-explainer">
-        A named audience is a set of conditions. Ask for it by name and the answer uses this
-        definition.
-      </p>
-      {audiences === null ? <p className="flow-muted">Loading audiences.</p> : null}
-      {audiences && audiences.length === 0 ? <p className="flow-muted">No audiences yet.</p> : null}
-      {audiences && audiences.length > 0 ? (
-        <ul>
-          {audiences.map(audience => (
-            <li key={audience.name}>
-              <strong>{audience.label || audience.name}</strong>
-              {audience.description ? <span> {audience.description}</span> : null}
-              <Button type="button" className="flow-btn" onClick={() => edit(audience)}>
-                Edit {audience.label || audience.name}
-              </Button>
-              <Button
-                type="button"
-                className="flow-btn"
-                disabled={busy}
-                onClick={() => remove(audience.name)}
-              >
-                Delete {audience.label || audience.name}
-              </Button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      <form
-        onSubmit={event => {
-          event.preventDefault();
-          save();
-        }}
-      >
-        <label>
-          Name
-          <Input
-            aria-label="Audience name"
-            value={label}
-            onChange={event => setLabel(event.target.value)}
-          />
-        </label>
-        <label>
-          Description
-          <Textarea
-            aria-label="Audience description"
-            value={description}
-            onChange={event => setDescription(event.target.value)}
-          />
-        </label>
-        <ChoiceSelect
-          aria-label="How the conditions combine"
-          value={combine}
-          onValueChange={value => setCombine(value === 'or' ? 'or' : 'and')}
-          options={[
-            { value: 'and', label: 'All of these' },
-            { value: 'or', label: 'Any of these' },
-          ]}
-        />
-        <fieldset>
-          <legend>Conditions</legend>
-          {conditions.map((condition, index) => (
-            <div key={`${index}-${condition.column}`} className="flow-row">
-              <ChoiceSelect
-                aria-label={`Condition ${index + 1} question`}
-                value={condition.column}
-                onValueChange={value =>
-                  setConditions(current =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, column: value } : item
-                    )
-                  )
-                }
-                options={[{ value: '', label: 'Question' }, ...options]}
-              />
-              <ChoiceSelect
-                aria-label={`Condition ${index + 1} operator`}
-                value={condition.op}
-                onValueChange={value =>
-                  setConditions(current =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, op: value } : item
-                    )
-                  )
-                }
-                options={[
-                  { value: '=', label: 'equals' },
-                  { value: '!=', label: 'does not equal' },
-                ]}
-              />
-              <Input
-                aria-label={`Condition ${index + 1} value`}
-                value={condition.value}
-                onChange={event =>
-                  setConditions(current =>
-                    current.map((item, itemIndex) =>
-                      itemIndex === index ? { ...item, value: event.target.value } : item
-                    )
-                  )
-                }
-              />
-              <label>
-                <Checkbox
-                  checked={condition.exclude}
-                  aria-label={`Exclude condition ${index + 1}`}
-                  onCheckedChange={value =>
-                    setConditions(current =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, exclude: value === true } : item
-                      )
-                    )
-                  }
-                />
-                Exclude
-              </label>
-            </div>
-          ))}
-        </fieldset>
-        <div className="flow-row">
+      <header className="audience-head">
+        <div>
+          <div className="audience-count">Audiences · {audiences ? audiences.length : '…'}</div>
+          <p>Ask for an audience by name in chat and every answer uses this exact definition.</p>
+        </div>
+        {canEdit ? (
           <Button
             type="button"
             className="flow-btn"
-            onClick={() => setConditions(current => [...current, { ...BLANK }])}
+            onClick={() => {
+              setEditing('');
+              setLabel('');
+              setDescription('');
+              setCombine('and');
+              setConditions([]);
+              setError(null);
+              setOpen(true);
+            }}
           >
-            Add condition
+            + New audience
           </Button>
-          <Button className="flow-btn primary" type="submit" disabled={busy}>
-            {busy ? 'Saving…' : editing ? 'Save changes' : 'Save audience'}
-          </Button>
-          {editing ? (
-            <Button type="button" className="flow-btn" onClick={reset}>
-              Cancel
-            </Button>
-          ) : null}
+        ) : null}
+      </header>
+      {audiences === null ? <p className="flow-muted">Loading audiences.</p> : null}
+      {audiences && audiences.length === 0 ? <p className="flow-muted">No audiences yet.</p> : null}
+      {audiences && audiences.length > 0 ? (
+        <ul className="audience-list">
+          {audiences.map(audience => {
+            const low = typeof audience.n === 'number' && audience.n < LOW_BASE;
+            const share = shareOf(audience);
+            const definition = audienceDefinitionText(audience.filter, columns);
+            return (
+              <li key={audience.name} className="audience-row">
+                <strong>{audience.label || audience.name}</strong>
+                <div className="audience-row-copy">
+                  {low ? <div className="audience-low">Low base · flagged in answers</div> : null}
+                  {definition ? <Definition text={definition} /> : null}
+                </div>
+                <div className={low ? 'audience-stat low' : 'audience-stat'}>
+                  {typeof audience.n === 'number' ? <div>n = {audience.n}</div> : null}
+                  {share !== null ? (
+                    <div className="flow-muted">
+                      {percent(share)}
+                      {typeof audience.weighted_share === 'number' ? ' weighted' : ''}
+                    </div>
+                  ) : null}
+                </div>
+                {canEdit ? (
+                  <Button
+                    type="button"
+                    className="flow-btn audience-edit"
+                    onClick={() => edit(audience)}
+                  >
+                    Edit
+                  </Button>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      {open ? (
+        <div className="audience-scrim">
+          <form
+            className="audience-drawer"
+            role="dialog"
+            aria-label={editing ? 'Edit audience' : 'New audience'}
+            onSubmit={event => {
+              event.preventDefault();
+              save();
+            }}
+          >
+            <header className="audience-drawer-head">
+              <div>
+                <h2>{editing ? 'Edit audience' : 'New audience'}</h2>
+                <p>Saved to this project. Carries to new waves when the questions match.</p>
+              </div>
+              <Button
+                type="button"
+                className="flow-btn audience-close"
+                aria-label="Close"
+                onClick={reset}
+              >
+                ×
+              </Button>
+            </header>
+            <label className="audience-field">
+              Name · what people will type in chat
+              <Input
+                aria-label="Name · what people will type in chat"
+                value={label}
+                onChange={event => setLabel(event.target.value)}
+              />
+            </label>
+            <label className="audience-field">
+              Plain description · shown in answers and footnotes
+              <Textarea
+                aria-label="Plain description · shown in answers and footnotes"
+                value={description}
+                onChange={event => setDescription(event.target.value)}
+              />
+            </label>
+            <div className="audience-match">
+              <span>Respondents who match</span>
+              <div
+                className="audience-segment"
+                role="group"
+                aria-label="How the conditions combine"
+              >
+                <Button
+                  type="button"
+                  aria-pressed={combine === 'and'}
+                  className={combine === 'and' ? 'audience-segment-btn on' : 'audience-segment-btn'}
+                  onClick={() => setCombine('and')}
+                >
+                  all
+                </Button>
+                <Button
+                  type="button"
+                  aria-pressed={combine === 'or'}
+                  className={combine === 'or' ? 'audience-segment-btn on' : 'audience-segment-btn'}
+                  onClick={() => setCombine('or')}
+                >
+                  any
+                </Button>
+              </div>
+              <span>of these</span>
+            </div>
+            <div className="audience-conditions">
+              {conditions.map((condition, index) =>
+                condition.group ? (
+                  <div key={`group-${index}`} className="audience-group">
+                    <div className="audience-group-label">any of</div>
+                    {condition.group.map((child, childIndex) =>
+                      renderCondition(child, index, childIndex)
+                    )}
+                    <QuestionSearch
+                      columns={remaining}
+                      onPick={name =>
+                        setConditions(current =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  group: [...(item.group || []), { ...BLANK, column: name }],
+                                }
+                              : item
+                          )
+                        )
+                      }
+                    />
+                  </div>
+                ) : (
+                  renderCondition(condition, index, null)
+                )
+              )}
+              <QuestionSearch
+                columns={remaining}
+                onPick={name => setConditions(current => [...current, { ...BLANK, column: name }])}
+              />
+              <Button
+                type="button"
+                className="flow-btn audience-dashed"
+                onClick={() => setConditions(current => [...current, { ...BLANK, group: [] }])}
+              >
+                + Group (any of)
+              </Button>
+            </div>
+            <div className="audience-size">
+              <div className={size && size.n < LOW_BASE ? 'audience-n low' : 'audience-n'}>
+                n = {size ? size.n : '…'}
+              </div>
+              <div className="flow-muted">
+                {liveShare !== null
+                  ? `${percent(liveShare)}${typeof size?.weighted_share === 'number' ? ' weighted' : ' of the file'}`
+                  : sizeFailed
+                    ? 'The base could not be counted.'
+                    : 'The base appears once a question is chosen.'}
+              </div>
+              <div className="audience-bar" aria-hidden="true">
+                <span style={{ width: `${Math.min(100, (liveShare || 0) * 100)}%` }} />
+              </div>
+              <p>
+                Every answer that uses this audience states this definition and its base. Bases
+                under 50 are flagged, under 30 are hidden.
+              </p>
+            </div>
+            <footer className="audience-footer">
+              <p className="audience-try">Test it: “How many {typed || '…'}?”</p>
+              <div className="audience-footer-actions">
+                {editing ? (
+                  <Button
+                    type="button"
+                    className="flow-btn"
+                    disabled={busy}
+                    onClick={() => remove(editing)}
+                  >
+                    Delete
+                  </Button>
+                ) : null}
+                <Button type="button" className="flow-btn" onClick={reset}>
+                  Cancel
+                </Button>
+                <Button className="flow-btn primary" type="submit" disabled={busy}>
+                  {busy ? 'Saving…' : 'Save audience'}
+                </Button>
+              </div>
+            </footer>
+            {error ? <p role="alert">{error}</p> : null}
+          </form>
         </div>
-      </form>
-      {error ? <p role="alert">{error}</p> : null}
+      ) : null}
+      {!open && error ? <p role="alert">{error}</p> : null}
     </section>
   );
 }
