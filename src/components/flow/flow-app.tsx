@@ -2499,7 +2499,7 @@ function ChatScreen({
   const inReport =
     Boolean(runIds[0] && reportPins.some(pin => pin.runId === runIds[0])) ||
     reportedRun === runIds[0];
-  const lettered = /\(([A-Z])\)/.test(tables.split('\n')[0] || '');
+  const lettered = ((tables.split('\n')[0] || '').match(/\([A-Z]\)/g) || []).length >= 2;
   const respondents = baseCount(baseNote);
   const addOutputToReport = () => {
     const runId = runIds[0];
