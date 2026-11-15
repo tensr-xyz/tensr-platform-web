@@ -513,6 +513,48 @@ function groupFunnelFrom(value: unknown, depth = 0): RunTable | null {
   return null;
 }
 
+function isGroupFunnel(table: RunTable): boolean {
+  const headers = table.columns.map(column => column.trim().toLowerCase());
+  return headers.includes('stage') && headers.includes('group');
+}
+
+function stageShare(table: RunTable, stage: string): number | null {
+  const headers = table.columns.map(column => column.trim().toLowerCase());
+  const stageColumn = headers.indexOf('stage');
+  const shareColumn = headers.findIndex(column => column.includes('% of base'));
+  if (stageColumn < 0 || shareColumn < 0) return null;
+  const wanted = stage.trim().toLowerCase();
+  const values = table.rows
+    .filter(row => (row[stageColumn] || '').trim().toLowerCase() === wanted)
+    .map(row => Number(row[shareColumn]))
+    .filter(value => Number.isFinite(value));
+  if (!values.length) return null;
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+/** The stage funnel and the by-group table that matches it. Frequency tables stay off this card. */
+function onlyTheFunnel(tables: RunTable[]): RunTable[] {
+  const stage = tables.find(isStageFunnel);
+  if (!stage) return tables;
+  const groups = tables.filter(isGroupFunnel);
+  if (!groups.length) return [stage];
+  const names = stage.rows.map(row => (row[0] || '').trim()).filter(Boolean);
+  const distance = (table: RunTable) => {
+    const gaps = names
+      .map(name => {
+        const overall = stageShare(stage, name);
+        const grouped = stageShare(table, name);
+        if (overall == null || grouped == null) return null;
+        return Math.abs(overall - grouped);
+      })
+      .filter((gap): gap is number => gap != null);
+    if (!gaps.length) return Number.POSITIVE_INFINITY;
+    return gaps.reduce((sum, gap) => sum + gap, 0) / gaps.length;
+  };
+  const kept = groups.reduce((best, table) => (distance(table) < distance(best) ? table : best));
+  return [stage, kept];
+}
+
 /** One stage funnel. A shorter table of the same stages is the earlier question-label copy. */
 function oneFunnel(tables: RunTable[]): RunTable[] {
   const funnels = tables.filter(isStageFunnel);
@@ -1309,7 +1351,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     const grouped = groupFunnelFrom(results);
     if (grouped) view.tables.push(grouped);
   }
-  view.tables = oneFunnel(oneNpsBreakdown(view.tables));
+  view.tables = onlyTheFunnel(oneFunnel(oneNpsBreakdown(view.tables)));
   const total = largestFrequencyTotal(view);
   const used = Number(view.base.replace(/[^\d.]/g, ''));
   if (total && used && used < total / 2) view.base = '';

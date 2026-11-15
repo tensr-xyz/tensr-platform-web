@@ -368,6 +368,52 @@ describe('result tables', () => {
     expect(grouped?.rows[0]).toEqual(['Heard of it', 'North', '2', '100.0', '100.0']);
   });
 
+  it('returns the funnel and the by-group table that matches it', () => {
+    const view = resultViewFromToolResults([
+      {
+        args: { analysis_type: 'frequencies' },
+        summary: {
+          table: [
+            {
+              title: 'Heard of the item',
+              columns: ['Value', 'Frequency', 'Percent'],
+              rows: [['Yes', '10', '40.0']],
+            },
+          ],
+        },
+      },
+      {
+        args: { analysis_type: 'funnel' },
+        summary: {
+          table: [
+            {
+              title: 'Funnel',
+              columns: ['Stage', 'Count', '% of base', 'Conversion from previous'],
+              rows: [['Heard', '8', '40.0', '40.0']],
+            },
+            {
+              title: 'Funnel by group',
+              columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+              rows: [
+                ['Heard', 'East', '5', '50.0', '50.0'],
+                ['Heard', 'West', '3', '30.0', '30.0'],
+              ],
+            },
+            {
+              title: 'Funnel by group',
+              columns: ['Stage', 'Group', 'Count', '% of base', 'Conversion from previous'],
+              rows: [['Heard', 'East', '7', '74.0', '98.0']],
+            },
+          ],
+        },
+      },
+    ]);
+    expect(view.tables.map(table => table.title)).toEqual(['Funnel', 'Funnel by group']);
+    const grouped = view.tables[1];
+    expect(grouped.rows).toHaveLength(2);
+    expect(grouped.rows.some(row => row.includes('74.0'))).toBe(false);
+  });
+
   it('says the footnote weight is the one named in the study brief', () => {
     const view = resultViewFromToolResults({
       summary: { weight_source: 'study_brief' },

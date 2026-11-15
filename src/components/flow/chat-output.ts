@@ -363,7 +363,23 @@ export function resultLead(
     finding ||
     prose ||
     outputTakeaway(answer);
-  return guardUserText(text);
+  return guardUserText(withoutStrayEnding(text));
+}
+
+/** A weight column code and an empty cautions bullet are not part of the finding. */
+function withoutStrayEnding(text: string): string {
+  const lines = text.split('\n').filter(line => {
+    const trimmed = line.trim();
+    if (/^cautions:?$/i.test(trimmed)) return false;
+    if (/^[-*•]\s*$/.test(trimmed)) return false;
+    return true;
+  });
+  return lines
+    .join('\n')
+    .replace(/\s+weighted by [A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?/gi, '')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 function summaryLine(
@@ -387,11 +403,12 @@ export function outputTitle(
   answer: string,
   columns: QuestionLabel[] = []
 ): string {
+  const items = analysisItems(results);
+  if (preferredProcedure(items) === 'funnel') return 'Funnel';
   const questions = frequencyQuestions(results).map(question =>
     titledWithQuestion(question, columns)
   );
   if (questions.length) return questions.join(', ');
-  const items = analysisItems(results);
   const preferred = preferredProcedure(items);
   for (const item of items) {
     if (procedureOf(item) === 'compute' && preferred && preferred !== 'compute') continue;
