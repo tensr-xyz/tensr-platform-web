@@ -101,6 +101,17 @@ describe('chat output panel', () => {
     expect(titledWithQuestion('sat_brewco', columns)).toBe('How satisfied are you with Brew & Co?');
   });
 
+  it('rewrites a subtitle of column codes into labels', () => {
+    const columns = [
+      { name: 'item_a', label: 'Ledger' },
+      { name: 'item_b', label: 'Northwind' },
+      { name: 'place', label: 'Area' },
+    ];
+    expect(titledWithQuestion('item_a × item_b × place', columns)).toBe(
+      'Ledger × Northwind × Area'
+    );
+  });
+
   it('titles a yes or no card with the question', () => {
     const results = [
       {
