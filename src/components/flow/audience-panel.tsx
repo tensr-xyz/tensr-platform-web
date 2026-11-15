@@ -4,8 +4,10 @@ import { useEffect, useState } from 'react';
 import { tensrApiUrl } from '@/lib/tensr-api-url';
 import { getTensrApiHeaders } from '@/utils/auth';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { ChoiceSelect } from '@/components/ui/select';
 import type { FlowColumn } from '@/lib/flow-columns';
 import { audienceFilter, type AudienceCombine, type AudienceCondition } from './audience-filter';
 
@@ -210,59 +212,46 @@ export function AudiencePanel({ datasetId, columns }: Props) {
             onChange={event => setDescription(event.target.value)}
           />
         </label>
-        <label>
-          How the conditions combine
-          <select
-            aria-label="How the conditions combine"
-            value={combine}
-            onChange={event => setCombine(event.target.value === 'or' ? 'or' : 'and')}
-          >
-            <option value="and">All of these</option>
-            <option value="or">Any of these</option>
-          </select>
-        </label>
+        <ChoiceSelect
+          aria-label="How the conditions combine"
+          value={combine}
+          onValueChange={value => setCombine(value === 'or' ? 'or' : 'and')}
+          options={[
+            { value: 'and', label: 'All of these' },
+            { value: 'or', label: 'Any of these' },
+          ]}
+        />
         <fieldset>
           <legend>Conditions</legend>
           {conditions.map((condition, index) => (
             <div key={`${index}-${condition.column}`} className="flow-row">
-              <label>
-                Question
-                <select
-                  aria-label={`Condition ${index + 1} question`}
-                  value={condition.column}
-                  onChange={event =>
-                    setConditions(current =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, column: event.target.value } : item
-                      )
+              <ChoiceSelect
+                aria-label={`Condition ${index + 1} question`}
+                value={condition.column}
+                onValueChange={value =>
+                  setConditions(current =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, column: value } : item
                     )
-                  }
-                >
-                  <option value="">Question</option>
-                  {options.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Operator
-                <select
-                  aria-label={`Condition ${index + 1} operator`}
-                  value={condition.op}
-                  onChange={event =>
-                    setConditions(current =>
-                      current.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, op: event.target.value } : item
-                      )
+                  )
+                }
+                options={[{ value: '', label: 'Question' }, ...options]}
+              />
+              <ChoiceSelect
+                aria-label={`Condition ${index + 1} operator`}
+                value={condition.op}
+                onValueChange={value =>
+                  setConditions(current =>
+                    current.map((item, itemIndex) =>
+                      itemIndex === index ? { ...item, op: value } : item
                     )
-                  }
-                >
-                  <option value="=">equals</option>
-                  <option value="!=">does not equal</option>
-                </select>
-              </label>
+                  )
+                }
+                options={[
+                  { value: '=', label: 'equals' },
+                  { value: '!=', label: 'does not equal' },
+                ]}
+              />
               <Input
                 aria-label={`Condition ${index + 1} value`}
                 value={condition.value}
@@ -275,14 +264,13 @@ export function AudiencePanel({ datasetId, columns }: Props) {
                 }
               />
               <label>
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={condition.exclude}
                   aria-label={`Exclude condition ${index + 1}`}
-                  onChange={event =>
+                  onCheckedChange={value =>
                     setConditions(current =>
                       current.map((item, itemIndex) =>
-                        itemIndex === index ? { ...item, exclude: event.target.checked } : item
+                        itemIndex === index ? { ...item, exclude: value === true } : item
                       )
                     )
                   }
