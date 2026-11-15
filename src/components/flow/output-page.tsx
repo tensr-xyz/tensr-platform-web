@@ -271,7 +271,7 @@ export function OutputPage({
                             <tr key={row.join('|')}>
                               {row.map((cell, cellIndex) => (
                                 <td key={`${cell}-${cellIndex}`}>
-                                  <button
+                                  <Button
                                     type="button"
                                     className="output-cell"
                                     onClick={() => {
@@ -284,7 +284,7 @@ export function OutputPage({
                                     }}
                                   >
                                     {cell}
-                                  </button>
+                                  </Button>
                                 </td>
                               ))}
                             </tr>
