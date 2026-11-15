@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/rest';
 import { Textarea } from '@/components/ui/textarea';
+import { AudiencePanel } from '@/components/flow/audience-panel';
 
 type DetailFile = {
   dataset_id?: string;
@@ -472,6 +473,7 @@ export function DetailsScreen({
         The agent reads this brief before every answer, so objectives, audience and notes shape what
         it runs and how it writes up results.
       </p>
+      {active ? <AudiencePanel datasetId={datasetRowId(active)} columns={columns || []} /> : null}
       <div className="details-body">
         <div className="details-main">
           <div className="details-split">
