@@ -38,6 +38,7 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
   );
   return tables.filter(table => {
     const title = (table.title || '').trim().toLowerCase();
+    const columns = (table.columns || []).map(column => column.trim().toLowerCase());
     if (
       has('correlations') &&
       (title.includes('correlation matrix') || title.includes('correlation p-value'))
@@ -45,6 +46,13 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
       return false;
     }
     if (has('groups') && (title === 'group statistics' || title === 'group means')) return false;
+    if (
+      has('groups') &&
+      columns.includes('status') &&
+      (columns.includes('median') || columns.includes('mean rank'))
+    ) {
+      return false;
+    }
     if (
       labelledCoefficients &&
       title === 'coefficients' &&
@@ -59,12 +67,13 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
 function decimalKind(
   header: string,
   percentSign: boolean
-): 'percent' | 'mean' | 'whole' | 'tenth' | 'plain' {
+): 'percent' | 'mean' | 'median' | 'whole' | 'tenth' | 'plain' {
   if (percentSign) return 'percent';
   const name = header.trim().toLowerCase().replace(/[_-]+/g, ' ');
   if (/%|percent|share/.test(name)) return 'percent';
   if (/weighted\s*n|weighted base/.test(name)) return 'whole';
   if (name === 'nps' || name.endsWith(' nps')) return 'tenth';
+  if (/\bmedian\b/.test(name)) return 'median';
   if (/\b(mean|sd|std\.?|s\.d\.?|standard deviation)\b/.test(name)) return 'mean';
   if (
     /^(n|count|frequency|cases|df)$/.test(name) ||
@@ -116,11 +125,12 @@ export function formatDecimalText(value: string, places: number, header = ''): s
       ? 2
       : kind === 'tenth'
         ? 1
-        : kind === 'percent'
+        : kind === 'percent' || kind === 'median'
           ? Math.max(0, Math.min(6, Math.trunc(places)))
           : 0;
   let shown = number.toFixed(digits);
-  if (kind === 'percent') shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  if (kind === 'percent' || kind === 'median')
+    shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
   return `${shown}${match[3] || ''}`;
 }
 
@@ -735,6 +745,10 @@ function npsTable(groups: unknown): RunTable | null {
 function groupTable(groups: unknown): RunTable | null {
   if (!Array.isArray(groups) || !groups.length) return null;
   const records = groups.filter(row => row && typeof row === 'object') as Record<string, unknown>[];
+  // Rank and normality results store medians, not means. Groups comes from the builder.
+  if (!records.some(record => record.mean != null && Number.isFinite(Number(record.mean)))) {
+    return null;
+  }
   const weighted = records.some(record => record.weighted_n != null);
   const rows = records
     .map(record => {

@@ -91,6 +91,8 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         "Cochran's Q",
         'Sign Test',
         'Median Test',
+        'Runs Test',
+        'Jonckheere-Terpstra',
         'McNemar Test',
       ],
       Reliability: ['Reliability'],
@@ -129,7 +131,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Stepwise Regression',
       ],
       Agreement: ["Cohen's Kappa", "Fleiss' Kappa", 'Weighted Kappa'],
-      'Normality & related': ['Shapiro–Wilk Test'],
+      'Normality & related': ['Shapiro–Wilk Test', 'Lilliefors (K-S)'],
       'Descriptive Statistics (tables)': ["Fisher's Exact Test", 'Odds Ratio', 'Relative Risk'],
       'Choice modelling': [
         'MaxDiff',

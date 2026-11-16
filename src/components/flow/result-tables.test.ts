@@ -8,6 +8,7 @@ import {
   shownCount,
   weightChipName,
   weightNote,
+  withoutEngineCopies,
 } from './result-tables';
 
 const payloads = [
@@ -104,6 +105,10 @@ describe('decimal display', () => {
     expect(formatDecimalText('251.200', 1, 'Weighted n')).toBe('251');
     expect(formatDecimalText('-43.979', 1, 'NPS')).toBe('-44.0');
     expect(formatDecimalText('0.420', 1, 'B')).toBe('0.42');
+    expect(formatDecimalText('4.000', 1, 'Median')).toBe('4');
+    expect(formatDecimalText('4.500', 1, 'Median')).toBe('4.5');
+    expect(formatDecimalText('4.000', 0, 'Median')).toBe('4');
+    expect(formatDecimalText('4.250', 2, 'Median')).toBe('4.25');
   });
 
   it('rewrites a blank-first frequency header so counts stay under Count', () => {
@@ -904,6 +909,74 @@ describe('result tables', () => {
     expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Filter: city = London');
     expect(resultFootnote(view, 'Base 24', 'Chi-square')).toContain('Weighted');
     expect(resultFootnote(view, 'Base 24', 'Chi-square')).not.toContain('design_weight');
+  });
+});
+
+describe('rank comparison tables', () => {
+  it('does not invent Group means when the result only has medians', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        u_statistic: 12,
+        p_value: 0.04,
+        group_descriptives: [
+          { group: '2.0', label: 'Female', n: 10, median: 4 },
+          { group: '1.0', label: 'Male', n: 8, median: 4 },
+        ],
+      },
+      report: {
+        tables: [
+          {
+            title: 'Groups',
+            columns: ['Group', 'n', 'Median'],
+            rows: [
+              ['Female', '10', '4'],
+              ['Male', '8', '4'],
+            ],
+          },
+          {
+            title: 'Test',
+            columns: ['Statistic', 'Value'],
+            rows: [
+              ['U', '12'],
+              ['p', '0.04'],
+              ['r', '0.76'],
+            ],
+          },
+          {
+            title: 'Score by Gender',
+            columns: ['Group', 'n', 'Median', 'Mean rank', 'Status'],
+            rows: [['Female', '10', '4', '9.5', 'included']],
+          },
+        ],
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Groups', 'Test']);
+  });
+
+  it('drops the status group copy when Groups is already present', () => {
+    const tables = withoutEngineCopies([
+      {
+        title: 'Groups',
+        columns: ['Group', 'n', 'Median'],
+        rows: [['A', '10', '4']],
+      },
+      {
+        title: 'Group means',
+        columns: ['Group', 'n', 'Mean', 'SD'],
+        rows: [['A', '10', '', '']],
+      },
+      {
+        title: 'Rating by Arm',
+        columns: ['Group', 'n', 'Median', 'Mean rank', 'Status'],
+        rows: [['A', '10', '4', '5', 'included']],
+      },
+      {
+        title: 'Test',
+        columns: ['Statistic', 'Value'],
+        rows: [['U', '12']],
+      },
+    ]);
+    expect(tables.map(table => table.title)).toEqual(['Groups', 'Test']);
   });
 });
 
