@@ -4257,6 +4257,17 @@ select.flow-input {
 .output-table .flow-md-table {
   border: 0;
   border-radius: 0;
+  /* Wide agent crosstabs must scroll in the side panel, not clip trailing columns. */
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.output-table .flow-md-table .flow-table {
+  /* Beat the shared Table `w-full` so columns keep their width and the wrapper scrolls. */
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
 }
 
 .output-table .flow-table th,

@@ -37,7 +37,7 @@ import { runAgentLoop, type AgentLoopAttachment } from '@/lib/run-agent-loop';
 import { FlowComposer } from '@/components/flow/chat-composer';
 import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
-import { baseCount, outputOpenHref } from '@/components/flow/chat-output';
+import { baseCount, outputOpenHref, outputTableTabLabel } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { StudyBrief } from '@/components/flow/study-brief';
@@ -2775,7 +2775,7 @@ function ChatScreen({
             {outputReady && tableMode ? (
               <>
                 <div className="output-tabs">
-                  <span className="output-tab">T1 {title}</span>
+                  <span className="output-tab">{outputTableTabLabel(title)}</span>
                   {runIds.length ? (
                     <Button
                       className="flow-btn output-tab-export"

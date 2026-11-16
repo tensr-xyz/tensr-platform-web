@@ -771,6 +771,17 @@ function exclusionLabels(item: ToolResult): string[] {
   return lines;
 }
 
+/**
+ * Side-panel tab for an agent table. Unsaved previews have no T number so they
+ * cannot collide with a saved T1; a saved number is shown only after save.
+ */
+export function outputTableTabLabel(title: string, number?: number | null): string {
+  const label = title.trim() || 'Table';
+  const saved = Number(number);
+  if (Number.isFinite(saved) && saved > 0) return `T${saved} ${label}`;
+  return label;
+}
+
 /** Markdown table blocks in the answer, in order. The panel shows them; the thread keeps the prose. */
 export function answerTables(answer: string): string {
   const blocks: string[] = [];

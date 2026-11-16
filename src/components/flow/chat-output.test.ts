@@ -12,6 +12,7 @@ import {
   keptModelAnswer,
   outputTakeaway,
   outputTitle,
+  outputTableTabLabel,
   titledWithQuestion,
   guardUserText,
   resultLead,
@@ -35,6 +36,14 @@ const answer = [
 ].join('\n');
 
 describe('chat output panel', () => {
+  it('labels an unsaved agent table without a T number, and keeps a saved one', () => {
+    expect(outputTableTabLabel('Region by gender')).toBe('Region by gender');
+    expect(outputTableTabLabel('Region by gender', 0)).toBe('Region by gender');
+    expect(outputTableTabLabel('Region by gender', null)).toBe('Region by gender');
+    expect(outputTableTabLabel('Region by gender', 3)).toBe('T3 Region by gender');
+    expect(outputTableTabLabel('  ')).toBe('Table');
+  });
+
   it('titles the panel from the table result, not the base sentence', () => {
     const results = [
       {
