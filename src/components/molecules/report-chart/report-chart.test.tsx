@@ -235,4 +235,52 @@ describe('ReportChart palette kinds', () => {
     );
     expect(container.querySelector('[data-chart-kind="scatter"]')).toBeTruthy();
   });
+
+  it('draws column letters on grouped bars and the letter-test footnote', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'bar_grouped',
+          title: 'Aware by region',
+          x_label: '',
+          y_label: 'Percent',
+          categories: ['East', 'North'],
+          series: [
+            { name: 'Yes', values: [60, 40], letters: ['B', ''] },
+            { name: 'No', values: [40, 60] },
+          ],
+          significance_note: 'Column proportions test at 95%',
+        }}
+        density="comfortable"
+      />
+    );
+    const svg = container.querySelector('[data-chart-kind="bar_grouped"]');
+    expect(svg?.getAttribute('data-significance')).toBe('on');
+    expect(
+      Array.from(container.querySelectorAll('[data-chart-letter]')).map(node => node.textContent)
+    ).toEqual(['B']);
+    expect(container.querySelector('[data-chart-footnote]')?.textContent).toBe(
+      'Column proportions test at 95%'
+    );
+  });
+
+  it('draws column letters outside pie slices', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'pie',
+          title: 'Aware',
+          categories: ['East', 'North'],
+          values: [60, 40],
+          letters: ['B', ''],
+          significance_note: 'Column proportions test at 95%',
+        }}
+        density="comfortable"
+      />
+    );
+    expect(
+      container.querySelector('[data-chart-kind="pie"]')?.getAttribute('data-significance')
+    ).toBe('on');
+    expect(container.querySelector('[data-chart-letter]')?.textContent).toBe('B');
+  });
 });

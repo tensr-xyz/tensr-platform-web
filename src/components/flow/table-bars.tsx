@@ -3,7 +3,12 @@
 import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ReportChart } from '@/components/molecules/report-chart';
-import { BANNER_CHART_KINDS, type BannerChartKind, chartFromBannerSeries } from '@/lib/flow-survey';
+import {
+  BANNER_CHART_KINDS,
+  type BannerChartKind,
+  type BannerChartSeries,
+  chartFromBannerSeries,
+} from '@/lib/flow-survey';
 
 const KIND_PATH: Record<BannerChartKind, string> = {
   bar: 'M3 12V7M7 12V3M11 12V5',
@@ -16,17 +21,20 @@ const KIND_PATH: Record<BannerChartKind, string> = {
 export function TableBars({
   series,
   title = '',
+  significanceNote,
   onAddToReport,
 }: {
-  series: { label: string; values: { name: string; value: number }[] }[];
+  series: BannerChartSeries[];
   title?: string;
+  /** Same column-letter test footnote as the table. */
+  significanceNote?: string;
   onAddToReport?: () => void;
 }) {
   const [kind, setKind] = useState<BannerChartKind>('bar');
   const [added, setAdded] = useState(false);
   const chart = useMemo(
-    () => chartFromBannerSeries(series, kind, { title }),
-    [series, kind, title]
+    () => chartFromBannerSeries(series, kind, { title, significanceNote }),
+    [series, kind, title, significanceNote]
   );
 
   return (

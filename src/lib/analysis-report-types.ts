@@ -66,6 +66,18 @@ type ChartAxisHints = {
   weighting?: 'weighted' | 'unweighted' | 'none';
   weighted_n?: number;
   unweighted_n?: number;
+  /** Same column-letter test as the table; drawn on the chart when letters are present. */
+  significance_note?: string;
+};
+
+/** Category series used by bar / line / area charts (optional errors and column letters). */
+export type AnalysisReportCategorySeries = {
+  name: string;
+  values: number[];
+  errors?: number[];
+  error_kind?: 'se' | 'ci';
+  /** Per-category column letters from the same test as the table (e.g. "AB"). */
+  letters?: string[];
 };
 
 export type AnalysisReportChart =
@@ -119,7 +131,7 @@ export type AnalysisReportChart =
       x_label: string;
       y_label: string;
       categories: string[];
-      series: { name: string; values: number[]; errors?: number[]; error_kind?: 'se' | 'ci' }[];
+      series: AnalysisReportCategorySeries[];
     } & ChartAxisHints)
   | ({
       kind: 'line' | 'bar' | 'area';
@@ -127,7 +139,7 @@ export type AnalysisReportChart =
       x_label: string;
       y_label: string;
       categories: string[];
-      series: { name: string; values: number[]; errors?: number[]; error_kind?: 'se' | 'ci' }[];
+      series: AnalysisReportCategorySeries[];
     } & ChartAxisHints)
   | ({
       kind: 'roc' | 'qq' | 'pp';
@@ -164,6 +176,8 @@ export type AnalysisReportChart =
       title: string;
       categories: string[];
       values: number[];
+      /** Per-slice column letters from the same test as the table. */
+      letters?: string[];
     } & ChartAxisHints)
   | {
       kind: 'path_diagram';

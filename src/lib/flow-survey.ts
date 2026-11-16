@@ -263,16 +263,34 @@ export function bannerFootnote(book: Record<string, unknown>): string {
   return parts.join(' · ');
 }
 
-/** The same cells the table shows, as one series per row. */
-export function chartSeriesFromBook(
-  book: Record<string, unknown> | null
-): { label: string; values: { name: string; value: number }[] }[] {
+export type BannerChartValue = { name: string; value: number; letter?: string };
+export type BannerChartSeries = { label: string; values: BannerChartValue[] };
+
+/** Footnote for charts that draw the same column letters as the table. */
+export function chartSignificanceNote(book: Record<string, unknown> | null): string | undefined {
+  if (!book) return undefined;
+  const letters = book.letters as unknown[] | undefined;
+  if (String(book.significance_display || '') === 'none' || !letters?.length) return undefined;
+  const named = String(book.letter_test || '').trim();
+  if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
+    return named || 'Paired McNemar test at 95%. Letters mark significant differences.';
+  }
+  return (
+    named || 'Column proportions test at 95%. Letters mark columns that are significantly higher.'
+  );
+}
+
+/** The same cells the table shows, as one series per row (with column letters when tested). */
+export function chartSeriesFromBook(book: Record<string, unknown> | null): BannerChartSeries[] {
   if (!book) return [];
   const rows = ((book.rows as BannerRow[]) || []).filter(
     row => row.label && row.kind !== 'net' && row.kind !== 'base' && row.kind !== 'mean'
   );
   const hosts = bannerColumns(book).filter(column => column.id !== 'total');
   const columns = hosts.length ? hosts : bannerColumns(book);
+  const letters = (book.letters as SigLetter[]) || [];
+  const showLetters =
+    String(book.significance_display || '') !== 'none' && letters.some(item => item.letter);
   return rows
     .map(row => ({
       label: String(row.label),
@@ -280,7 +298,12 @@ export function chartSeriesFromBook(
         const found = (row.cells || []).find(item => item.banner_id === column.id);
         const raw =
           typeof found?.percent === 'number' ? found.percent : Number(found?.unweighted_n ?? 0);
-        return { name: column.label || column.id, value: Number.isFinite(raw) ? raw : 0 };
+        const letter = showLetters ? lettersFor(letters, row.id, column.id) : '';
+        return {
+          name: bannerHeading(column),
+          value: Number.isFinite(raw) ? raw : 0,
+          ...(letter ? { letter } : {}),
+        };
       }),
     }))
     .filter(row => row.values.some(item => item.value));
@@ -296,30 +319,49 @@ export const BANNER_CHART_KINDS: { value: BannerChartKind; label: string }[] = [
   { value: 'pie', label: 'Pie' },
 ];
 
+function seriesLetters(values: BannerChartValue[], categories: string[]): string[] | undefined {
+  const letters = categories.map(
+    name => values.find(item => item.name === name)?.letter?.trim() || ''
+  );
+  return letters.some(Boolean) ? letters : undefined;
+}
+
 /**
  * Same table cells as a report chart. Pie uses one series across categories:
  * a single stub row → pie of banner columns; several rows → pie of the first column.
+ * Column letters (and significance_note) match the table when the book was tested.
  */
 export function chartFromBannerSeries(
-  series: { label: string; values: { name: string; value: number }[] }[],
+  series: BannerChartSeries[],
   kind: BannerChartKind,
-  opts?: { title?: string; yLabel?: string }
+  opts?: { title?: string; yLabel?: string; significanceNote?: string }
 ): AnalysisReportChart | null {
   if (!series.length) return null;
   const title = opts?.title || '';
   const y_label = opts?.yLabel || 'Percent';
+  const significance_note = opts?.significanceNote?.trim() || undefined;
 
   if (kind === 'pie') {
     if (series.length === 1) {
       const row = series[0]!;
+      const letters = seriesLetters(
+        row.values,
+        row.values.map(item => item.name)
+      );
       return {
         kind: 'pie',
         title,
         categories: row.values.map(item => item.name),
         values: row.values.map(item => item.value),
+        ...(letters ? { letters } : {}),
+        ...(significance_note ? { significance_note } : {}),
       };
     }
     const column = series[0]?.values[0]?.name;
+    const letters = series.map(row => {
+      const cell = row.values.find(item => item.name === column) ?? row.values[0];
+      return cell?.letter?.trim() || '';
+    });
     return {
       kind: 'pie',
       title,
@@ -327,14 +369,21 @@ export function chartFromBannerSeries(
       values: series.map(
         row => row.values.find(item => item.name === column)?.value ?? row.values[0]?.value ?? 0
       ),
+      ...(letters.some(Boolean) ? { letters } : {}),
+      ...(significance_note ? { significance_note } : {}),
     };
   }
 
   const categories = series[0]!.values.map(item => item.name);
-  const chartSeries = series.map(row => ({
-    name: row.label,
-    values: categories.map(name => row.values.find(item => item.name === name)?.value ?? 0),
-  }));
+  const chartSeries = series.map(row => {
+    const values = categories.map(name => row.values.find(item => item.name === name)?.value ?? 0);
+    const letters = seriesLetters(row.values, categories);
+    return {
+      name: row.label,
+      values,
+      ...(letters ? { letters } : {}),
+    };
+  });
 
   if (kind === 'bar') {
     return {
@@ -344,6 +393,7 @@ export function chartFromBannerSeries(
       y_label,
       categories,
       series: chartSeries,
+      ...(significance_note ? { significance_note } : {}),
     };
   }
 
@@ -354,5 +404,6 @@ export function chartFromBannerSeries(
     y_label,
     categories,
     series: chartSeries,
+    ...(significance_note ? { significance_note } : {}),
   };
 }
