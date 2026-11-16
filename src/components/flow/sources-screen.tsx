@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ChoiceSelect } from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/rest';
+import { DropdownMenuItem, Skeleton } from '@/components/ui/rest';
 import { Textarea } from '@/components/ui/textarea';
 import { datasetRowId } from '@/components/flow/survey-screens';
 import { moveDatasetToProject } from '@/components/flow/move-dataset';
@@ -21,6 +21,7 @@ import { StackWaves } from '@/components/flow/stack-waves';
 import { JoinFiles } from '@/components/flow/join-files';
 import { DatasetMenu } from '@/components/flow/dataset-actions';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
+import { exportDatasetFormat, exportDatasetSavAndSps, exportStem } from '@/lib/dataset-data-export';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import {
   applyUploadPrep,
@@ -438,9 +439,17 @@ export function SourcesScreen({
     const parent = datasets.find(row => datasetRowId(row) === file.parent_dataset_id);
     return parent ? `${made} from ${sourceFileName(parent)}` : made;
   };
+  const exportFile = (file: SourceFile, action: () => Promise<void>) => {
+    setError('');
+    void action().catch(err =>
+      setError(err instanceof Error ? err.message : 'The download did not start.')
+    );
+  };
+
   const fileRow = (file: SourceFile, note: string, action: ReactNode) => {
     const id = datasetRowId(file);
     const inUse = id === project?.active_dataset_id;
+    const stem = exportStem(sourceFileName(file));
     return (
       <div key={id} className="sources-dataset" data-active={inUse}>
         <span className="sources-kind">{fileMark(sourceFileName(file))}</span>
@@ -451,12 +460,23 @@ export function SourcesScreen({
         <span className="flow-muted sources-rows">{sourceRowCount(file)}</span>
         {inUse ? <span className="sources-in-use">In use</span> : null}
         {action}
-        <DatasetMenu
-          datasetId={id}
-          name={sourceFileName(file)}
-          inUse={inUse}
-          onChanged={onChanged}
-        />
+        <DatasetMenu datasetId={id} name={sourceFileName(file)} inUse={inUse} onChanged={onChanged}>
+          <DropdownMenuItem
+            onSelect={() => exportFile(file, () => exportDatasetSavAndSps(id, stem))}
+          >
+            Export as SPSS (.sav + .sps)
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => exportFile(file, () => exportDatasetFormat(id, stem, 'csv'))}
+          >
+            Export as CSV
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => exportFile(file, () => exportDatasetFormat(id, stem, 'dta'))}
+          >
+            Export as Stata (.dta)
+          </DropdownMenuItem>
+        </DatasetMenu>
       </div>
     );
   };
@@ -594,7 +614,8 @@ export function SourcesScreen({
           <div className="sources-block-head">
             <h2>Working versions</h2>
             <p className="flow-muted">
-              Stacked, weighted or coded copies Tensr made. Your uploads stay unchanged.
+              Stacked, weighted or coded copies Tensr made. Export any as .sav with an .sps weight
+              file. Your uploads stay unchanged.
             </p>
             {files.length >= 2 ? (
               <span className="sources-actions">

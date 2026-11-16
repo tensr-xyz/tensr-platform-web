@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { downloadExport } from '@/components/flow/survey-screens';
+import { exportDatasetSavAndSps } from '@/lib/dataset-data-export';
 import { flowJson } from '@/lib/flow-api';
 import {
   documentApa,
@@ -80,9 +81,7 @@ function downloadSvg(svg: string, filename: string, scale: number) {
 
 /** The open file as SPSS, plus the syntax that reads it. */
 export async function savAndSyntax(datasetId: string, stem: string) {
-  if (!datasetId) throw new Error('Open a file first.');
-  await downloadExport(`/datasets/${datasetId}/export?format=sav`, `${stem}.sav`);
-  await downloadExport(`/datasets/${datasetId}/export?format=sps`, `${stem}.sps`);
+  await exportDatasetSavAndSps(datasetId, stem);
 }
 
 /** The same deck Report builds: every saved table on the file, one slide each. */
@@ -99,6 +98,32 @@ export async function deckFromTables(datasetId: string, stem: string) {
   );
   if (!created.export_id) throw new Error('The deck did not build. Try again.');
   await downloadExport(`/exports/${created.export_id}`, created.filename || `${stem}.pptx`);
+}
+
+/** Every saved table on the file as an Excel banner book. */
+export async function bannerBookFromTables(datasetId: string, stem: string) {
+  if (!datasetId) throw new Error('Open a file first.');
+  const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
+    `/datasets/${datasetId}/tables`
+  );
+  const specIds = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
+  if (!specIds.length) {
+    throw new Error('Save a table in Tables first. The banner book has one sheet per saved table.');
+  }
+  const saved = await flowJson<{ book?: { id?: string } }>(`/datasets/${datasetId}/banner-books`, {
+    method: 'POST',
+    body: JSON.stringify({ name: 'Banner book', spec_ids: specIds }),
+  });
+  const bookId = saved.book?.id;
+  if (!bookId) throw new Error('The banner book did not build. Try again.');
+  await downloadExport(
+    `/datasets/${datasetId}/banner-books/${bookId}/export.xlsx`,
+    `${stem}-banner-book.xlsx`,
+    {
+      method: 'POST',
+      body: JSON.stringify({ target_dataset_id: datasetId, mapping: {} }),
+    }
+  );
 }
 
 export function ExportDialog({
@@ -213,8 +238,11 @@ export function ExportDialog({
         id: 'xlsx',
         ext: '.XLSX',
         label: 'Excel banner book',
-        note: 'From Tables · Banner book',
-        soon: true,
+        note: datasetId
+          ? 'Every table, sig letters, real numbers'
+          : 'Open a file to build a banner book',
+        soon: !datasetId,
+        run: () => bannerBookFromTables(datasetId || '', stem),
       },
       {
         id: 'pdf',
@@ -234,7 +262,7 @@ export function ExportDialog({
         id: 'sav',
         ext: '.SAV + .SPS',
         label: 'Data for SPSS',
-        note: datasetId ? 'The file and its syntax' : 'Open a file first',
+        note: datasetId ? 'Dataset with an .sps weight file' : 'Open a file first',
         soon: !datasetId,
         run: () => savAndSyntax(datasetId || '', stem),
       },
@@ -377,7 +405,10 @@ export function ExportDialog({
               disabled={
                 busy !== '' ||
                 !format.run ||
-                (!chosen.length && format.id !== 'pptx' && format.id !== 'sav')
+                (!chosen.length &&
+                  format.id !== 'pptx' &&
+                  format.id !== 'sav' &&
+                  format.id !== 'xlsx')
               }
               onClick={() => format.run && save(format.label, format.run)}
             >
