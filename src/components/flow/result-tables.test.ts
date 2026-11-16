@@ -824,6 +824,25 @@ describe('result tables', () => {
     expect(
       weightChipName('design_weight', 'none', [{ name: 'design_weight', label: 'Design weight' }])
     ).toBe('Design weight');
+    expect(weightNote('weight_5', [{ name: 'weight_5', label: 'Raked weight [weight_5]' }])).toBe(
+      'Weight: Raked weight'
+    );
+    expect(
+      resultViewFromToolResults({
+        result: {
+          n: 40,
+          weight: { column: 'weight_5', label: 'Raked weight [weight_5]', unweighted_n: 40 },
+        },
+      }).baseDetail
+    ).toMatch(/Weight: Raked weight;/);
+    expect(
+      resultViewFromToolResults({
+        result: {
+          n: 40,
+          weight: { column: 'weight_5', label: 'Raked weight [weight_5]', unweighted_n: 40 },
+        },
+      }).baseDetail
+    ).not.toContain('weight_5');
   });
 
   it('shows an association table, the filter, and the weight column', () => {

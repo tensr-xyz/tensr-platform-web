@@ -61,6 +61,21 @@ describe('chat output panel', () => {
         [
           {
             procedure: 'anova_oneway',
+            request_body: { value_column: 'likes_A', group_column: 'region' },
+          },
+        ],
+        answer,
+        [
+          { name: 'likes_A', label: 'How much do you like brand A?' },
+          { name: 'region', label: 'Region' },
+        ]
+      )
+    ).toBe('How much do you like brand A? by Region');
+    expect(
+      outputTitle(
+        [
+          {
+            procedure: 'anova_oneway',
             request_body: { value_column: 'likes_C', group_column: 'age' },
             result: {
               report: {

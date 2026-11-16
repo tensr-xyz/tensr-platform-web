@@ -995,8 +995,8 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
       kish_ess?: unknown;
       unweighted_n?: unknown;
     };
-    const label = cell(block.label);
     const column = realWeightToken(block.column);
+    const label = stripCodeBrackets(cell(block.label), column);
     if (label && label.toLowerCase() !== column.toLowerCase() && label.toLowerCase() !== 'weight') {
       sample.weight = label;
     } else if (column) sample.weight = column;
@@ -1135,11 +1135,24 @@ function realWeightToken(value: unknown): string {
   return text;
 }
 
+/** Drop a trailing "[column_name]" from a weight label a person reads. */
+function stripCodeBrackets(label: string, code = ''): string {
+  const text = label.trim();
+  const match = /^(.*)\s*[\[(]\s*([A-Za-z_][\w.]*)\s*[\])]?\s*$/.exec(text);
+  if (!match) return text;
+  const left = match[1].trim();
+  const right = match[2].trim();
+  if (!left) return text;
+  if (code && right.toLowerCase() === code.toLowerCase()) return left;
+  if (right.includes('_') || right.toLowerCase() === 'label') return left;
+  return text;
+}
+
 function weightName(record: Record<string, unknown>): string {
   if (record.weight && typeof record.weight === 'object' && !Array.isArray(record.weight)) {
     const weight = record.weight as { column?: unknown; label?: unknown };
     const column = realWeightToken(weight.column);
-    const label = cell(weight.label).trim();
+    const label = stripCodeBrackets(cell(weight.label).trim(), column);
     if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== column.toLowerCase()) {
       return label;
     }
@@ -1663,13 +1676,13 @@ export function weightNote(column: string, columns: ColumnLabels[] = []): string
   if (!name || name.toLowerCase() === 'none' || name.toLowerCase() === 'unweighted')
     return 'Unweighted';
   const meta = columnMeta(columns, name);
-  const label = (meta?.label || '').trim();
+  const label = stripCodeBrackets((meta?.label || '').trim(), name);
   if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== name.toLowerCase()) {
     return `Weight: ${label}`;
   }
   if (name.toLowerCase() === 'weight') return 'Weighted';
   if (/[a-z]_[a-z0-9]/i.test(name)) return 'Weighted';
-  return `Weight: ${name}`;
+  return `Weight: ${stripCodeBrackets(name)}`;
 }
 
 export function resultFootnote(
