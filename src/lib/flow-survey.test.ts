@@ -1,4 +1,10 @@
-import { bannerHeading, codedStub, efficiencyPercent, selectionFromCell } from './flow-survey';
+import {
+  bannerFootnote,
+  bannerHeading,
+  codedStub,
+  efficiencyPercent,
+  selectionFromCell,
+} from './flow-survey';
 
 describe('flow survey grid', () => {
   it('prefers the value label over a stored banner code', () => {
@@ -93,6 +99,17 @@ describe('flow survey grid', () => {
 
   it('shows rake efficiency as a percent', () => {
     expect(efficiencyPercent(0.82)).toBe('82.0%');
+  });
+
+  it('names the paired McNemar test when brands are compared inside a column', () => {
+    expect(
+      bannerFootnote({
+        paired_within_items: true,
+        letter_test: 'Paired McNemar test at 95%.',
+        significance_display: 'column_letters',
+        letters: [{ stub_row_id: 'a:1', banner_id: 'total', letter: 'B' }],
+      })
+    ).toContain('Paired McNemar test at 95%');
   });
 });
 

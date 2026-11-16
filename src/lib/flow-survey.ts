@@ -220,7 +220,12 @@ export function bannerFootnote(book: Record<string, unknown>): string {
   if (typeof ess === 'number') parts.push(`Effective base: ${Math.round(ess)}`);
   const letters = book.letters as unknown[] | undefined;
   if (String(book.significance_display || '') !== 'none' && letters?.length) {
-    parts.push('Column proportions test at 95%');
+    const named = String(book.letter_test || '').trim();
+    if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
+      parts.push(named || 'Paired McNemar test at 95%');
+    } else {
+      parts.push(named || 'Column proportions test at 95%');
+    }
   }
   return parts.join(' · ');
 }
