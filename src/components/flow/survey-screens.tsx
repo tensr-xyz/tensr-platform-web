@@ -372,7 +372,11 @@ export function BannerGrid({
   const lettersShown = String(book.significance_display || 'column_letters') !== 'none';
   const notCoded = ((book.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
     ?.not_coded;
-  const listed = ((book.rows as BannerRow[]) || []).filter(row => showNets || row.kind !== 'net');
+  // Mean and SD stay with the scale for every cell measure, including Counts.
+  // Nets hide only when the user has not asked for them on this table.
+  const listed = ((book.rows as BannerRow[]) || []).filter(
+    row => row.kind === 'mean' || row.kind === 'sd' || showNets || row.kind !== 'net'
+  );
   // A coded open end always ends on its "Not yet coded" row, in Themes and in Tables.
   const rows = themeRows(listed, notCoded?.unweighted_n, showQuotes);
   if (!columns.length) return <p className="flow-muted">This table has no banner columns yet.</p>;
@@ -475,7 +479,11 @@ export function BannerGrid({
                         >
                           {cellFigures(
                             cell,
-                            row.kind === 'mean' || row.kind === 'sd' ? ['mean'] : shownFigures,
+                            row.kind === 'mean' ||
+                              row.kind === 'sd' ||
+                              /^mean$/i.test(String(row.label || ''))
+                              ? ['mean']
+                              : shownFigures,
                             digits,
                             weighted
                           )}

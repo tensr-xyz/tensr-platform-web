@@ -93,5 +93,7 @@ describe('round 13', () => {
     expect(shownDecimals('row_proportion', 2, false)).toEqual({ row_proportion: 2 });
     expect(shownDecimals('total_proportion', 1, true).column_mean).toBe(1);
     expect(figuresForStatistics(['column_proportion', 'count'])).toEqual(['percent', 'count']);
+    expect(figuresForStatistics(['count', 'column_mean'])).toEqual(['count', 'mean']);
+    expect(shownStatistics('count', true)).toEqual(['count', 'column_mean']);
   });
 });
