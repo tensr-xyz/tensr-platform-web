@@ -259,8 +259,11 @@ function replaceColumnCodes(title: string, columns: QuestionLabel[]): string {
   }
   if (!byName.size) return title;
   return title
-    .split(/(\s+|×|,)/)
-    .map(part => byName.get(part.toLowerCase()) || part)
+    .split(/(\s+|×|x|,)/i)
+    .map(part => {
+      if (/^(×|x|,|\s+)$/i.test(part)) return part === 'x' || part === 'X' ? '×' : part;
+      return byName.get(part.toLowerCase()) || part;
+    })
     .join('');
 }
 
@@ -440,6 +443,7 @@ function withoutStrayEnding(text: string): string {
 function summaryLine(
   results?: { summary?: Record<string, unknown> | null; result?: Record<string, unknown> }[]
 ): string {
+  const lines: string[] = [];
   for (const item of results || []) {
     const nested =
       item?.result && typeof item.result === 'object' && !Array.isArray(item.result)
@@ -447,9 +451,15 @@ function summaryLine(
         : undefined;
     const summary = item?.summary || nested;
     const line = typeof summary?.line === 'string' ? summary.line.trim() : '';
-    if (line && /[A-Za-z]/.test(line) && /\d/.test(line)) return line;
+    if (!line || !/[A-Za-z]/.test(line) || !/\d/.test(line)) continue;
+    // The default summarize stub is the procedure name; it is not a lead.
+    if (/^(banner_table|rake|frequencies|funnel|nps)\b/i.test(line)) continue;
+    lines.push(line);
   }
-  return '';
+  if (!lines.length) return '';
+  // Prefer a line that quotes a share or count over a weight-only sentence.
+  const withFigure = lines.find(line => /%|thousand|target|met|missed/i.test(line));
+  return withFigure || lines[0];
 }
 
 /** The table title the API put on the result, or the first prose line that is not the base. */
