@@ -4571,6 +4571,7 @@ function ReportScreen({
   const [filterDraft, setFilterDraft] = useState<RowCut[]>([]);
   const [template, setTemplate] = useState('');
   const [templateName, setTemplateName] = useState('');
+  const [templateSummary, setTemplateSummary] = useState('');
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [waveOpen, setWaveOpen] = useState(false);
   const [error, setError] = useState('');
@@ -5122,7 +5123,14 @@ function ReportScreen({
           </p>
         </div>
         <StudyBrief key={projectId} projectId={projectId} />
-        {overviewOpen ? <OverviewDeck audience="" onClose={() => setOverviewOpen(false)} /> : null}
+        {overviewOpen ? (
+          <OverviewDeck
+            audience=""
+            templateName={templateName || undefined}
+            templateSummary={templateSummary || undefined}
+            onClose={() => setOverviewOpen(false)}
+          />
+        ) : null}
         {waveOpen ? (
           <WaveRefresh previous={[]} next={[]} onClose={() => setWaveOpen(false)} />
         ) : null}
@@ -5160,6 +5168,7 @@ function ReportScreen({
                     {templateName ? 'Change' : 'Use a template'}
                   </Button>
                 </p>
+                {templateSummary ? <p className="flow-muted">{templateSummary}</p> : null}
               </div>
               <Button type="button" disabled={busy !== ''} onClick={() => run('deck', deck)}>
                 Download
@@ -5215,10 +5224,20 @@ function ReportScreen({
               if (!file) {
                 setTemplate('');
                 setTemplateName('');
+                setTemplateSummary('');
                 return;
               }
               setTemplateName(file.name);
               void fileToBase64(file).then(setTemplate);
+              void file.arrayBuffer().then(async buffer => {
+                try {
+                  const { inspectPptxTemplate } = await import('@/lib/report-theme');
+                  const inspected = await inspectPptxTemplate(buffer);
+                  setTemplateSummary(inspected.summary);
+                } catch {
+                  setTemplateSummary('');
+                }
+              });
             }}
           />
         </div>

@@ -42,10 +42,13 @@ export const OVERVIEW_SLIDES = [
 export function OverviewDeck({
   audience,
   templateName,
+  templateSummary,
   onClose,
 }: {
   audience: string;
   templateName?: string;
+  /** e.g. "9 layouts · theme colours found" from the uploaded PPTX. */
+  templateSummary?: string;
   onClose: () => void;
 }) {
   const [order, setOrder] = useState(OVERVIEW_SLIDES);
@@ -77,6 +80,7 @@ export function OverviewDeck({
             <p className="flow-muted">Compared with: Total sample</p>
             <p>PowerPoint template</p>
             <p>{templateName || 'The template chosen on Deliverables'}</p>
+            {templateSummary ? <p className="flow-muted">{templateSummary}</p> : null}
             <p className="flow-muted">
               Each slide uses the template&apos;s own layout and placeholders. Charts and tables
               stay editable in PowerPoint.

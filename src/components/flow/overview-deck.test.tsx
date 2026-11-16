@@ -8,11 +8,13 @@ describe('the deck and refresh screens', () => {
       <OverviewDeck
         audience="Weekday readers"
         templateName="Client.potx"
+        templateSummary="9 layouts · theme colours found"
         onClose={() => undefined}
       />
     );
     expect(screen.getByText('New audience overview deck')).toBeTruthy();
     expect(screen.getByText('Client.potx')).toBeTruthy();
+    expect(screen.getByText('9 layouts · theme colours found')).toBeTruthy();
     expect(screen.getByText('Saved as a recipe')).toBeTruthy();
     expect(screen.getByText('Reach by market')).toBeTruthy();
     expect(OVERVIEW_SLIDES.some(slide => slide.lowBase)).toBe(true);
