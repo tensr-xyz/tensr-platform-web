@@ -10,8 +10,43 @@ export type ReportObjectKind = 'text' | 'table' | 'chart' | 'image' | 'shape';
 export type ReportShapeType = 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'callout';
 export type AlignEdge = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
 export type DistributeAxis = 'horizontal' | 'vertical';
+export type TextAlign = 'left' | 'center' | 'right';
+export type VerticalAlign = 'top' | 'middle' | 'bottom';
+export type ListStyle = 'none' | 'bullet' | 'number';
 
 export type ReportFrame = { x: number; y: number; w: number; h: number };
+
+export type TextBoxStyle = {
+  fontFamily: string;
+  fontSizePt: number;
+  color: string;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strikethrough: boolean;
+  align: TextAlign;
+  verticalAlign: VerticalAlign;
+  lineSpacing: number;
+  listStyle: ListStyle;
+  listIndent: number;
+};
+
+export type TextRun = {
+  text: string;
+  bold: boolean;
+  italic: boolean;
+  underline: boolean;
+  strikethrough: boolean;
+  color: string | null;
+  fontFamily: string | null;
+  fontSizePt: number | null;
+  href: string | null;
+};
+
+export type DefaultLabels = {
+  net: string;
+  total: string;
+};
 
 export type ReportObject = {
   id: string;
@@ -21,6 +56,8 @@ export type ReportObject = {
   hidden: boolean;
   slotId: string | null;
   text: string;
+  textStyle: TextBoxStyle;
+  runs: TextRun[];
   shapeType: ReportShapeType | null;
   imageUrl: string | null;
   runId: string | null;
@@ -43,6 +80,7 @@ export type ReportDocument = {
   pageWidthIn: number;
   pageHeightIn: number;
   aspect: typeof PAGE_ASPECT;
+  defaultLabels: DefaultLabels;
   pages: ReportPage[];
 };
 
@@ -51,6 +89,34 @@ const SHAPE_TYPES = new Set<ReportShapeType>(['rectangle', 'ellipse', 'line', 'a
 export const DEFAULT_GRID_STEP = 0.02;
 const ALIGN_EDGES = new Set<AlignEdge>(['left', 'center', 'right', 'top', 'middle', 'bottom']);
 const DISTRIBUTE_AXES = new Set<DistributeAxis>(['horizontal', 'vertical']);
+const TEXT_ALIGNS = new Set<TextAlign>(['left', 'center', 'right']);
+const VERTICAL_ALIGNS = new Set<VerticalAlign>(['top', 'middle', 'bottom']);
+const LIST_STYLES = new Set<ListStyle>(['none', 'bullet', 'number']);
+const MAX_LIST_INDENT = 8;
+export const PAGE_HREF_PREFIX = 'page:';
+
+export const DEFAULT_TEXT_STYLE: TextBoxStyle = {
+  fontFamily: 'Inter',
+  fontSizePt: 18,
+  color: '#1B1C1A',
+  bold: false,
+  italic: false,
+  underline: false,
+  strikethrough: false,
+  align: 'left',
+  verticalAlign: 'top',
+  lineSpacing: 1.15,
+  listStyle: 'none',
+  listIndent: 0,
+};
+
+export const DEFAULT_LABELS: DefaultLabels = {
+  net: 'NET',
+  total: 'Total',
+};
+
+const HEX6 = /^[0-9A-Fa-f]{6}$/;
+const HEX3 = /^[0-9A-Fa-f]{3}$/;
 
 const SLOT_FRAMES: Record<string, Record<string, ReportFrame>> = {
   title_only: {
@@ -157,6 +223,171 @@ export function inchesFrame(frame: ReportFrame): ReportFrame {
   };
 }
 
+function coerceHexColor(value: unknown, fallback: string): string {
+  if (value == null) return fallback;
+  let text = String(value).trim();
+  if (text.startsWith('#')) text = text.slice(1);
+  if (HEX3.test(text)) text = text.replace(/(.)/g, '$1$1');
+  if (!HEX6.test(text)) return fallback;
+  return `#${text.toUpperCase()}`;
+}
+
+function coercePositiveNumber(value: unknown, fallback: number, minimum = 0.01): number {
+  const number = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(number) || number < minimum) return fallback;
+  return number;
+}
+
+export function normalizeTextStyle(raw: unknown): TextBoxStyle {
+  const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  let align = String(source.align || source.text_align || source.textAlign || '')
+    .trim()
+    .toLowerCase() as TextAlign;
+  if (!TEXT_ALIGNS.has(align)) align = DEFAULT_TEXT_STYLE.align;
+  let verticalAlign = String(source.vertical_align || source.verticalAlign || source.valign || '')
+    .trim()
+    .toLowerCase() as VerticalAlign;
+  if (!VERTICAL_ALIGNS.has(verticalAlign)) verticalAlign = DEFAULT_TEXT_STYLE.verticalAlign;
+  let listStyle = String(source.list_style || source.listStyle || source.list || '')
+    .trim()
+    .toLowerCase();
+  if (listStyle === 'bullets' || listStyle === 'ul' || listStyle === 'unordered') {
+    listStyle = 'bullet';
+  }
+  if (
+    listStyle === 'numbers' ||
+    listStyle === 'ol' ||
+    listStyle === 'ordered' ||
+    listStyle === 'numbered'
+  ) {
+    listStyle = 'number';
+  }
+  if (!LIST_STYLES.has(listStyle as ListStyle)) listStyle = DEFAULT_TEXT_STYLE.listStyle;
+  const indentRaw = source.list_indent ?? source.listIndent ?? 0;
+  const indent = Math.max(
+    0,
+    Math.min(MAX_LIST_INDENT, Number.isFinite(Number(indentRaw)) ? Number(indentRaw) : 0)
+  );
+  const font =
+    String(source.font_family ?? source.fontFamily ?? DEFAULT_TEXT_STYLE.fontFamily).trim() ||
+    DEFAULT_TEXT_STYLE.fontFamily;
+  return {
+    fontFamily: font,
+    fontSizePt: coercePositiveNumber(
+      source.font_size_pt ?? source.fontSizePt ?? source.font_size ?? source.fontSize,
+      DEFAULT_TEXT_STYLE.fontSizePt,
+      1
+    ),
+    color: coerceHexColor(source.color ?? source.colour, DEFAULT_TEXT_STYLE.color),
+    bold: Boolean(source.bold),
+    italic: Boolean(source.italic),
+    underline: Boolean(source.underline),
+    strikethrough: Boolean(
+      source.strikethrough !== undefined ? source.strikethrough : source.strike
+    ),
+    align,
+    verticalAlign,
+    lineSpacing: coercePositiveNumber(
+      source.line_spacing ?? source.lineSpacing,
+      DEFAULT_TEXT_STYLE.lineSpacing,
+      0.5
+    ),
+    listStyle: listStyle as ListStyle,
+    listIndent: indent,
+  };
+}
+
+export function pageHref(pageId: string): string {
+  return `${PAGE_HREF_PREFIX}${String(pageId || '').trim()}`;
+}
+
+export function resolveTextHref(
+  href: unknown
+): { kind: 'page'; pageId: string } | { kind: 'url'; url: string } | null {
+  const text = String(href || '').trim();
+  if (!text) return null;
+  if (text.toLowerCase().startsWith(PAGE_HREF_PREFIX)) {
+    const pageId = text.slice(PAGE_HREF_PREFIX.length).trim();
+    return pageId ? { kind: 'page', pageId } : null;
+  }
+  return { kind: 'url', url: text };
+}
+
+export function normalizeTextRun(raw: unknown): TextRun | null {
+  if (raw == null) return null;
+  if (typeof raw !== 'object') {
+    const text = String(raw);
+    return text
+      ? {
+          text,
+          bold: false,
+          italic: false,
+          underline: false,
+          strikethrough: false,
+          color: null,
+          fontFamily: null,
+          fontSizePt: null,
+          href: null,
+        }
+      : null;
+  }
+  const source = raw as Record<string, unknown>;
+  const text = String(source.text || '');
+  if (!text) return null;
+  const hrefRaw = source.href ?? source.link ?? source.url;
+  const href = hrefRaw ? String(hrefRaw).trim() || null : null;
+  const sizeRaw = source.font_size_pt ?? source.fontSizePt ?? source.font_size ?? source.fontSize;
+  let fontSizePt: number | null = null;
+  if (sizeRaw != null) {
+    const size = coercePositiveNumber(sizeRaw, 0, 0);
+    fontSizePt = size > 0 ? size : null;
+  }
+  const fontRaw = source.font_family ?? source.fontFamily;
+  const colorRaw = source.color ?? source.colour;
+  return {
+    text,
+    bold: Boolean(source.bold),
+    italic: Boolean(source.italic),
+    underline: Boolean(source.underline),
+    strikethrough: Boolean(
+      source.strikethrough !== undefined ? source.strikethrough : source.strike
+    ),
+    color: colorRaw ? coerceHexColor(colorRaw, '') || null : null,
+    fontFamily: fontRaw ? String(fontRaw).trim() || null : null,
+    fontSizePt,
+    href,
+  };
+}
+
+export function normalizeTextRuns(raw: unknown): TextRun[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map(normalizeTextRun).filter((run): run is TextRun => Boolean(run));
+}
+
+export function textFromRuns(runs: TextRun[]): string {
+  return runs.map(run => run.text).join('');
+}
+
+export function normalizeDefaultLabels(raw: unknown): DefaultLabels {
+  const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const net = String(source.net ?? source.NET ?? DEFAULT_LABELS.net).trim() || DEFAULT_LABELS.net;
+  const total =
+    String(source.total ?? source.Total ?? DEFAULT_LABELS.total).trim() || DEFAULT_LABELS.total;
+  return { net, total };
+}
+
+export function applyDefaultLabels(label: unknown, defaults: unknown): string {
+  const text = String(label || '');
+  const labels = normalizeDefaultLabels(defaults);
+  const stripped = text.trim();
+  if (stripped.toUpperCase() === 'NET') return labels.net;
+  if (stripped === 'Total') return labels.total;
+  if (stripped.toUpperCase().startsWith('NET ') && labels.net !== 'NET') {
+    return `${labels.net} ${stripped.slice(4)}`;
+  }
+  return text;
+}
+
 function normalizeObject(raw: unknown, layoutId: string): ReportObject | null {
   if (!raw || typeof raw !== 'object') return null;
   const source = raw as Record<string, unknown>;
@@ -188,6 +419,9 @@ function normalizeObject(raw: unknown, layoutId: string): ReportObject | null {
       : null;
   const imageUrl =
     kind === 'image' ? String(source.image_url || source.imageUrl || '').trim() || null : null;
+  const runs = normalizeTextRuns(source.runs || source.text_runs || source.textRuns);
+  let text = String(source.text || '').trim();
+  if (runs.length && !text) text = textFromRuns(runs).trim();
   return {
     id: String(source.id || '').trim() || newId('obj'),
     kind,
@@ -197,7 +431,9 @@ function normalizeObject(raw: unknown, layoutId: string): ReportObject | null {
       : 0,
     hidden: Boolean(source.hidden),
     slotId,
-    text: String(source.text || '').trim(),
+    text,
+    textStyle: normalizeTextStyle(source.text_style || source.textStyle || source.style),
+    runs,
     shapeType,
     imageUrl,
     runId,
@@ -243,6 +479,7 @@ export function normalizeReportDocument(raw: unknown): ReportDocument {
     pageWidthIn: PAGE_WIDTH_IN,
     pageHeightIn: PAGE_HEIGHT_IN,
     aspect: PAGE_ASPECT,
+    defaultLabels: normalizeDefaultLabels(source.default_labels || source.defaultLabels),
     pages,
   };
 }
@@ -289,6 +526,8 @@ export function documentFromPins(pins: PinLike[]): ReportDocument {
           zIndex: 1,
           hidden: false,
           text: headline,
+          textStyle: { ...DEFAULT_TEXT_STYLE },
+          runs: [],
           shapeType: null,
           imageUrl: null,
           runId,
@@ -304,6 +543,8 @@ export function documentFromPins(pins: PinLike[]): ReportDocument {
           zIndex: 2,
           hidden: false,
           text: hasChart ? '' : support,
+          textStyle: { ...DEFAULT_TEXT_STYLE },
+          runs: [],
           shapeType: null,
           imageUrl: null,
           runId,
@@ -801,6 +1042,132 @@ export function insertImage(
   });
 }
 
+export function insertTextBox(
+  document: ReportDocument | unknown,
+  pageId: string,
+  options?: {
+    text?: string;
+    frame?: Partial<ReportFrame>;
+    textStyle?: Partial<TextBoxStyle> | Record<string, unknown>;
+    runs?: unknown[];
+  }
+): ReportDocument {
+  const payload: Record<string, unknown> = {
+    kind: 'text',
+    text: options?.text || '',
+    frame: options?.frame || { x: 0.2, y: 0.2, w: 0.4, h: 0.2 },
+    text_style: options?.textStyle || {},
+  };
+  if (options?.runs !== undefined) payload.runs = options.runs;
+  return insertObject(document, pageId, payload);
+}
+
+export function setObjectText(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  options: { text?: string; runs?: unknown[] }
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      return {
+        ...page,
+        objects: page.objects.map(obj => {
+          if (obj.id !== String(objectId)) return obj;
+          let runs = options.runs !== undefined ? normalizeTextRuns(options.runs) : [...obj.runs];
+          let text = obj.text;
+          if (options.text !== undefined) {
+            text = String(options.text).trim();
+            if (options.runs === undefined) runs = [];
+          } else if (runs.length) {
+            text = textFromRuns(runs).trim();
+          }
+          if (runs.length && !text) text = textFromRuns(runs).trim();
+          return { ...obj, text, runs };
+        }),
+      };
+    }),
+  };
+}
+
+export function setObjectTextStyle(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  style: Partial<TextBoxStyle> | Record<string, unknown> | null | undefined
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  const patch = style && typeof style === 'object' ? style : {};
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      return {
+        ...page,
+        objects: page.objects.map(obj => {
+          if (obj.id !== String(objectId)) return obj;
+          return {
+            ...obj,
+            textStyle: normalizeTextStyle({ ...obj.textStyle, ...patch }),
+          };
+        }),
+      };
+    }),
+  };
+}
+
+export function copyStyles(
+  document: ReportDocument | unknown,
+  pageId: string,
+  sourceObjectId: string,
+  targetObjectIds: string[]
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  const page = doc.pages.find(item => item.id === String(pageId));
+  if (!page) return doc;
+  const source = page.objects.find(obj => obj.id === String(sourceObjectId));
+  if (!source) return doc;
+  const wanted = new Set(targetObjectIds.map(String));
+  wanted.delete(String(sourceObjectId));
+  return {
+    ...doc,
+    pages: doc.pages.map(item => {
+      if (item.id !== String(pageId)) return item;
+      return {
+        ...item,
+        objects: item.objects.map(obj => {
+          if (!wanted.has(obj.id)) return obj;
+          let runs = obj.runs;
+          if (source.runs.length && obj.runs.length && source.runs.length === obj.runs.length) {
+            runs = normalizeTextRuns(
+              source.runs.map((src, index) => ({
+                ...src,
+                text: obj.runs[index]?.text || '',
+              }))
+            );
+          }
+          return {
+            ...obj,
+            textStyle: { ...source.textStyle },
+            runs,
+          };
+        }),
+      };
+    }),
+  };
+}
+
+export function setDefaultLabels(
+  document: ReportDocument | unknown,
+  labels: Partial<DefaultLabels> | Record<string, unknown> | null | undefined
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return { ...doc, defaultLabels: normalizeDefaultLabels(labels) };
+}
+
 export function copyObjects(
   document: ReportDocument | unknown,
   pageId: string,
@@ -1005,6 +1372,10 @@ export function reportDocumentForApi(document: ReportDocument | unknown): Record
     page_width_in: doc.pageWidthIn,
     page_height_in: doc.pageHeightIn,
     aspect: doc.aspect,
+    default_labels: {
+      net: doc.defaultLabels.net,
+      total: doc.defaultLabels.total,
+    },
     pages: doc.pages.map(page => ({
       id: page.id,
       title: page.title,
@@ -1020,6 +1391,31 @@ export function reportDocumentForApi(document: ReportDocument | unknown): Record
         hidden: obj.hidden,
         slot_id: obj.slotId,
         text: obj.text,
+        text_style: {
+          font_family: obj.textStyle.fontFamily,
+          font_size_pt: obj.textStyle.fontSizePt,
+          color: obj.textStyle.color,
+          bold: obj.textStyle.bold,
+          italic: obj.textStyle.italic,
+          underline: obj.textStyle.underline,
+          strikethrough: obj.textStyle.strikethrough,
+          align: obj.textStyle.align,
+          vertical_align: obj.textStyle.verticalAlign,
+          line_spacing: obj.textStyle.lineSpacing,
+          list_style: obj.textStyle.listStyle,
+          list_indent: obj.textStyle.listIndent,
+        },
+        runs: obj.runs.map(run => ({
+          text: run.text,
+          bold: run.bold,
+          italic: run.italic,
+          underline: run.underline,
+          strikethrough: run.strikethrough,
+          color: run.color,
+          font_family: run.fontFamily,
+          font_size_pt: run.fontSizePt,
+          href: run.href,
+        })),
         shape_type: obj.shapeType,
         image_url: obj.imageUrl,
         run_id: obj.runId,

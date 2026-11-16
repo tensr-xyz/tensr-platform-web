@@ -5,9 +5,11 @@ import {
   addPage,
   alignObjects,
   alignmentGuides,
+  applyDefaultLabels,
   bringObjectForward,
   bringToFront,
   copyObjects,
+  copyStyles,
   deleteObject,
   deletePage,
   distributeObjects,
@@ -19,16 +21,22 @@ import {
   inchesFrame,
   insertImage,
   insertShape,
+  insertTextBox,
   moveObject,
   normalizeReportDocument,
+  pageHref,
   pagesForExport,
   pasteObjects,
   placeObjectInSlot,
   reorderPages,
   reportDocumentForApi,
   resizeObject,
+  resolveTextHref,
   searchPages,
+  setDefaultLabels,
   setObjectHidden,
+  setObjectText,
+  setObjectTextStyle,
   setPageHidden,
   snapFrameToGrid,
   sortPages,
@@ -243,5 +251,91 @@ describe('report document page model', () => {
       'Alpha finding',
       'Beta finding',
     ]);
+  });
+
+  it('formats text boxes, paints styles, and renames default labels', () => {
+    const doc = documentFromPins(pins.slice(0, 1));
+    const pageId = doc.pages[0]!.id;
+    expect(doc.defaultLabels).toEqual({ net: 'NET', total: 'Total' });
+
+    const withBox = insertTextBox(doc, pageId, {
+      text: 'Headline',
+      frame: { x: 0.15, y: 0.15, w: 0.5, h: 0.2 },
+      textStyle: {
+        fontFamily: 'Georgia',
+        fontSizePt: 24,
+        bold: true,
+        align: 'center',
+        verticalAlign: 'middle',
+        lineSpacing: 1.5,
+        listStyle: 'bullet',
+        listIndent: 1,
+        color: '#1e6b58',
+      },
+    });
+    const box = withBox.pages[0]!.objects.find(obj => obj.text === 'Headline')!;
+    expect(box.kind).toBe('text');
+    expect(box.textStyle.fontFamily).toBe('Georgia');
+    expect(box.textStyle.fontSizePt).toBe(24);
+    expect(box.textStyle.bold).toBe(true);
+    expect(box.textStyle.align).toBe('center');
+    expect(box.textStyle.verticalAlign).toBe('middle');
+    expect(box.textStyle.listStyle).toBe('bullet');
+    expect(box.textStyle.listIndent).toBe(1);
+    expect(box.textStyle.color).toBe('#1E6B58');
+
+    const linked = setObjectText(withBox, pageId, box.id, {
+      runs: [
+        { text: 'See ', bold: false },
+        { text: 'methods', underline: true, href: pageHref(pageId), color: '#0000EE' },
+        { text: ' page', italic: true },
+      ],
+    });
+    const linkedBox = linked.pages[0]!.objects.find(obj => obj.id === box.id)!;
+    expect(linkedBox.text).toBe('See methods page');
+    expect(linkedBox.runs).toHaveLength(3);
+    expect(resolveTextHref(linkedBox.runs[1]!.href)).toEqual({ kind: 'page', pageId });
+    expect(resolveTextHref('https://example.com')).toEqual({
+      kind: 'url',
+      url: 'https://example.com',
+    });
+
+    const styled = setObjectTextStyle(linked, pageId, box.id, {
+      underline: true,
+      strikethrough: true,
+      listStyle: 'number',
+    });
+    const styledBox = styled.pages[0]!.objects.find(obj => obj.id === box.id)!;
+    expect(styledBox.textStyle.underline).toBe(true);
+    expect(styledBox.textStyle.strikethrough).toBe(true);
+    expect(styledBox.textStyle.listStyle).toBe('number');
+    expect(styledBox.textStyle.fontFamily).toBe('Georgia');
+
+    const other = insertTextBox(styled, pageId, {
+      text: 'Body copy',
+      frame: { x: 0.2, y: 0.5, w: 0.4, h: 0.2 },
+    });
+    const otherId = other.pages[0]!.objects.find(obj => obj.text === 'Body copy')!.id;
+    const painted = copyStyles(other, pageId, box.id, [otherId]);
+    const paintedBox = painted.pages[0]!.objects.find(obj => obj.id === otherId)!;
+    expect(paintedBox.textStyle.fontFamily).toBe('Georgia');
+    expect(paintedBox.textStyle.bold).toBe(true);
+    expect(paintedBox.textStyle.listStyle).toBe('number');
+    expect(paintedBox.text).toBe('Body copy');
+
+    const renamed = setDefaultLabels(painted, { net: 'Combined', total: 'All respondents' });
+    expect(renamed.defaultLabels).toEqual({ net: 'Combined', total: 'All respondents' });
+    expect(applyDefaultLabels('NET', renamed.defaultLabels)).toBe('Combined');
+    expect(applyDefaultLabels('Total', renamed.defaultLabels)).toBe('All respondents');
+    expect(applyDefaultLabels('NET Agree', renamed.defaultLabels)).toBe('Combined Agree');
+    expect(applyDefaultLabels('Brand A', renamed.defaultLabels)).toBe('Brand A');
+
+    const payload = reportDocumentForApi(renamed);
+    expect(payload.default_labels).toEqual({ net: 'Combined', total: 'All respondents' });
+    const apiBox = (
+      (payload.pages as Record<string, unknown>[])[0]!.objects as Record<string, unknown>[]
+    ).find(obj => obj.id === box.id)!;
+    expect((apiBox.text_style as Record<string, unknown>).font_family).toBe('Georgia');
+    expect(Array.isArray(apiBox.runs)).toBe(true);
   });
 });
