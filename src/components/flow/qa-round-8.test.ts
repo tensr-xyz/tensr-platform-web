@@ -92,6 +92,36 @@ describe('QA round 8: tables load', () => {
     expect(first).toEqual(second);
   });
 
+  test('7: concurrent project table loads share one request', async () => {
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    global.fetch = jest.fn(async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      await gate;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ specs: [{ spec_id: 't1', dataset_id: 'a' }] }),
+        text: async () => '',
+      } as Response;
+    }) as typeof fetch;
+    const first = loadProjectTables('p', 'a', {
+      fileIds: ['a'],
+      filePage: Promise.resolve({ specs: [] }),
+    });
+    const second = loadProjectTables('p', 'a', {
+      fileIds: ['a'],
+      filePage: Promise.resolve({ specs: [] }),
+    });
+    release?.();
+    const [left, right] = await Promise.all([first, second]);
+    expect(calls.filter(url => url.includes('/api/projects/p/tables'))).toHaveLength(1);
+    expect(left.map(row => row.id)).toEqual(['t1']);
+    expect(right.map(row => row.id)).toEqual(['t1']);
+  });
+
   test('7: without file ids it falls back to the plain project list', () => {
     expect(projectTablesPath('p')).toBe('/api/projects/p/tables');
   });

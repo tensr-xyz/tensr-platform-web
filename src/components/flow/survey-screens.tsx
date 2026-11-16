@@ -1819,6 +1819,14 @@ export function TablesBuilder({
           specs: [] as SavedSpec[],
           first: null as Record<string, unknown> | null,
         }));
+    // Banner books are not needed to paint the rail or open the first table.
+    void flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`)
+      .then(bookPage => {
+        if (live) setBooks(bookPage.books || []);
+      })
+      .catch(() => {
+        if (live) setBooks([]);
+      });
     void Promise.all([
       firstPage,
       // The open file's list comes from the open_first call; the project list reads only this project's files.
@@ -1826,10 +1834,7 @@ export function TablesBuilder({
         fileIds: fileIdsRef.current,
         filePage: pendingOpen ? undefined : firstPage,
       }),
-      flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`).catch(() => ({
-        books: [] as SavedBook[],
-      })),
-    ]).then(async ([specPage, projectTables, bookPage]) => {
+    ]).then(async ([specPage, projectTables]) => {
       if (!live) return;
       const saved: SavedSpec[] = projectTables.map(table => ({
         spec_id: table.id,
@@ -1841,7 +1846,6 @@ export function TablesBuilder({
         detail: table.detail,
       }));
       setSpecs(saved);
-      setBooks(bookPage.books || []);
       const liveHere = saved.filter(
         item => !item.stale && (!item.dataset_id || item.dataset_id === datasetId)
       );
@@ -1917,7 +1921,9 @@ export function TablesBuilder({
     return () => {
       live = false;
     };
-  }, [datasetId, ready]);
+    // ready only gates the empty-state path above; refetching on ready flip duplicated /tables.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId]);
 
   const labelFor = (name: string) => {
     const column = columns.find(item => item.name === name);

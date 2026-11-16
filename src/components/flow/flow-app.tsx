@@ -381,14 +381,12 @@ export function FlowApp({ slug }: { slug: string[] }) {
 
   const reload = useCallback(async () => {
     try {
-      const [projectPage, folderPage, filePage] = await Promise.all([
+      // Projects and folders paint first; the workspace file list can arrive after.
+      const [projectPage, folderPage] = await Promise.all([
         flowJson<{ projects?: FlowProject[]; next_cursor?: string | null }>(
           `/api/projects?limit=${PROJECT_PAGE}`
         ),
         flowJson<{ folders?: { id: string; name: string }[] }>('/api/project-folders'),
-        flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>(
-          '/datasets/?scope=all&include=versions'
-        ),
       ]);
       const listed = projectPage.projects || [];
       void membersFor(listed).then(memberMap => {
@@ -401,16 +399,22 @@ export function FlowApp({ slug }: { slug: string[] }) {
       ]);
       setProjectCursor(projectPage.next_cursor || null);
       setFolders(folderPage.folders || []);
-      const incoming = Array.isArray(filePage) ? filePage : filePage.datasets || [];
-      // A project page may already have loaded every version. The workspace list
-      // keeps one file per origin, so a refresh must not drop the rest.
-      setDatasets(current => {
-        const incomingIds = new Set(incoming.map(row => datasetRowId(row)));
-        const kept = current.filter(row => !incomingIds.has(datasetRowId(row)));
-        return [...incoming, ...kept];
-      });
       setError(null);
       setWorkspacePhase('ready');
+      void flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>(
+        '/datasets/?scope=all&include=versions'
+      )
+        .then(filePage => {
+          const incoming = Array.isArray(filePage) ? filePage : filePage.datasets || [];
+          // A project page may already have loaded every version. The workspace list
+          // keeps one file per origin, so a refresh must not drop the rest.
+          setDatasets(current => {
+            const incomingIds = new Set(incoming.map(row => datasetRowId(row)));
+            const kept = current.filter(row => !incomingIds.has(datasetRowId(row)));
+            return [...incoming, ...kept];
+          });
+        })
+        .catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load the workspace');
       setWorkspacePhase('error');
@@ -3258,12 +3262,16 @@ function ResponsesScreen({
       .then(page => setSessions(page.sessions || []))
       .catch(() => setSessions([]));
   }, [project]);
+  const projectFileIds = datasets
+    .filter(row => row.project_id === project?.id)
+    .map(row => datasetRowId(row))
+    .filter(Boolean)
+    .join(',');
   useEffect(() => {
     if (!datasetId || !project?.id) return;
-    const fileIds = datasets
-      .filter(row => row.project_id === project.id)
-      .map(row => datasetRowId(row))
-      .filter(Boolean);
+    // Prefer the named-file path; skip the owner scan while files are still loading.
+    if (!projectFileIds && !ready) return;
+    const fileIds = projectFileIds ? projectFileIds.split(',') : [];
     void loadProjectTables(project.id, datasetId, { fileIds })
       .then(rows =>
         setSpecs(
@@ -3276,7 +3284,7 @@ function ResponsesScreen({
         )
       )
       .catch(() => setSpecs([]));
-  }, [datasetId, datasets, project?.id]);
+  }, [datasetId, projectFileIds, project?.id, ready]);
 
   const names = headers.length ? headers : columns.map(column => column.label || column.name);
   const needle = query.trim().toLowerCase();
@@ -4499,6 +4507,14 @@ function TablesScreen({
   const files = datasets.filter(row => row.project_id === project?.id && datasetRowId(row));
   const datasetId =
     chosen || project?.active_dataset_id || (files[0] ? datasetRowId(files[0]) : undefined);
+  // Wait for the project's files so the first /tables call can name them (no owner scan).
+  if (!files.length && !ready) {
+    return (
+      <section className="flow-panel" aria-busy="true">
+        <Skeleton className="h-40 w-full" />
+      </section>
+    );
+  }
   return (
     <TablesBuilder
       key={datasetId}

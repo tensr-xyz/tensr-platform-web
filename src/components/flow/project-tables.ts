@@ -1,4 +1,5 @@
 import { flowJson } from '@/lib/flow-api';
+import { shareRequest } from '@/components/flow/report-pins';
 
 /** A saved table, with the file it was built on. */
 export type ProjectTable = {
@@ -88,11 +89,11 @@ export async function loadProjectTables(
     (datasetId
       ? flowJson<{ specs?: RawRow[] }>(`/datasets/${datasetId}/tables`).catch(() => null)
       : Promise.resolve(null));
-  let projectPage: { specs?: RawRow[]; stamps_pending?: boolean } | null = null;
-  projectPage = projectId
-    ? await flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(
-        projectTablesPath(projectId, fileIds)
-      ).catch(() => null)
+  const tablesPath = projectId ? projectTablesPath(projectId, fileIds) : '';
+  const projectPage = tablesPath
+    ? await shareRequest(tablesPath, () =>
+        flowJson<{ specs?: RawRow[]; stamps_pending?: boolean }>(tablesPath).catch(() => null)
+      )
     : null;
   const filePage = await filePagePromise;
   return numberTables(
