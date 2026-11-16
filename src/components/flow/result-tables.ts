@@ -263,6 +263,41 @@ export function answerResultTables(answer: string): RunTable[] {
   return tables;
 }
 
+/** Shared frequency headers. A blank first cell used to shift counts under Percent. */
+const FREQUENCY_HEADERS = ['Label', 'Count', '%', 'Valid %', 'Cumulative %'];
+
+function looksLikeFrequencyHeaders(columns: string[]): boolean {
+  if (columns.length < 2) return false;
+  const folded = columns.map(column => column.trim().toLowerCase());
+  const first = folded[0];
+  const hasCount = folded.some(
+    column => column === 'frequency' || column === 'count' || column === 'n'
+  );
+  const hasPercent = folded.some(column => /%|percent/.test(column));
+  if (first === '' && hasCount) return true;
+  if (
+    (first === '' || first === 'label' || first === 'answer' || first === 'value') &&
+    hasCount &&
+    hasPercent
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeFrequencyColumns(columns: string[]): string[] {
+  if (!looksLikeFrequencyHeaders(columns)) return columns;
+  if (columns.length >= FREQUENCY_HEADERS.length) return [...FREQUENCY_HEADERS];
+  return FREQUENCY_HEADERS.slice(0, Math.max(columns.length, 2));
+}
+
+/** Frequency % / Valid % / Cumulative %, or a header that names percent/share. Not "% of base". */
+function isPercentHeader(column: string): boolean {
+  const name = column.trim().toLowerCase();
+  if (name.includes('percent') || name.includes('share')) return true;
+  return name === '%' || name === 'valid %' || name === 'cumulative %' || /(?:^|\s)%$/.test(name);
+}
+
 function asTable(value: unknown): RunTable | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as {
@@ -274,8 +309,13 @@ function asTable(value: unknown): RunTable | null {
     note?: unknown;
   };
   if (Array.isArray(record.headers) && Array.isArray(record.variable_names)) return null;
-  const columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
-  const percentAt = columns.map(column => column.toLowerCase().includes('percent'));
+  let columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
+  const titleText = cell(record.title);
+  const title = questionTitle(titleText);
+  if (looksLikeFrequencyHeaders(columns) || /^frequency table:/i.test(titleText)) {
+    columns = normalizeFrequencyColumns(columns);
+  }
+  const percentAt = columns.map(isPercentHeader);
   const rows = Array.isArray(record.rows)
     ? record.rows
         .filter(row => Array.isArray(row))
@@ -288,7 +328,7 @@ function asTable(value: unknown): RunTable | null {
     : [];
   if (columns.filter(Boolean).length < 2 || !rows.length) return null;
   const note = cell(record.note);
-  return { title: questionTitle(cell(record.title)), columns, rows, ...(note ? { note } : {}) };
+  return { title, columns, rows, ...(note ? { note } : {}) };
 }
 
 /** summary["table"]: one titled block per question, or a flat list of value rows. */
@@ -1564,12 +1604,19 @@ function answeredCount(record: Record<string, unknown>): number {
   return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
+function frequencyCountIndex(columns: string[]): number {
+  return columns.findIndex(column => {
+    const name = column.trim().toLowerCase();
+    return name === 'frequency' || name === 'count' || name === 'n';
+  });
+}
+
 /** Valid answers on a frequency table. A partial table that does not add up to its total is left out. */
 function frequencyAnswered(view: ResultView): number {
   let reconciled = 0;
   let open = 0;
   for (const table of view.tables) {
-    const frequencyAt = table.columns.findIndex(column => column.toLowerCase() === 'frequency');
+    const frequencyAt = frequencyCountIndex(table.columns);
     if (frequencyAt < 0) continue;
     let categories = 0;
     let missing = 0;
@@ -1598,7 +1645,7 @@ function frequencyAnswered(view: ResultView): number {
 function largestFrequencyTotal(view: ResultView): number {
   let largest = 0;
   for (const table of view.tables) {
-    const frequencyAt = table.columns.findIndex(column => column.toLowerCase() === 'frequency');
+    const frequencyAt = frequencyCountIndex(table.columns);
     if (frequencyAt < 0) continue;
     for (const row of table.rows) {
       if ((row[0] || '').toLowerCase() !== 'total') continue;

@@ -72,11 +72,12 @@ describe('flow result charts', () => {
         frequency_tables: [
           {
             title: 'Frequency Table: Region',
-            columns: ['', 'Frequency', 'Percent', 'Valid Percent', 'Cumulative Percent'],
+            columns: ['Label', 'Count', '%', 'Valid %', 'Cumulative %'],
             rows: [
               ['North', '2', '40', '40', '40'],
               ['South', '3', '60', '60', '100'],
-              ['Total', '5', '100', '100', ''],
+              ['Missing', '1', '20', '', ''],
+              ['Total', '6', '100', '', ''],
             ],
           },
         ],
@@ -88,5 +89,7 @@ describe('flow result charts', () => {
       categories: ['North', 'South'],
       series: [{ values: [40, 60] }],
     });
+    expect(charts[0].categories).not.toContain('Total');
+    expect(charts[0].categories).not.toContain('Missing');
   });
 });

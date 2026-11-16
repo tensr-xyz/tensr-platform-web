@@ -93,14 +93,40 @@ const payloads = [
 describe('decimal display', () => {
   it('uses the project decimals for percents, and whole numbers for counts, means at 2 dp, weighted n at 0', () => {
     expect(formatDecimalText('31.400%', 1, 'Valid Percent')).toBe('31.4%');
+    expect(formatDecimalText('31.400', 1, 'Valid %')).toBe('31.4');
     expect(formatDecimalText('12.000', 1, 'Percent')).toBe('12');
+    expect(formatDecimalText('12.000', 1, '%')).toBe('12');
     expect(formatDecimalText('28.200', 1, '% promoters')).toBe('28.2');
     expect(formatDecimalText('57.000', 1, 'Frequency')).toBe('57');
+    expect(formatDecimalText('57.000', 1, 'Count')).toBe('57');
     expect(formatDecimalText('3.534', 1, 'Mean')).toBe('3.53');
     expect(formatDecimalText('1.100', 1, 'SD')).toBe('1.10');
     expect(formatDecimalText('251.200', 1, 'Weighted n')).toBe('251');
     expect(formatDecimalText('-43.979', 1, 'NPS')).toBe('-44.0');
     expect(formatDecimalText('0.420', 1, 'B')).toBe('0.42');
+  });
+
+  it('rewrites a blank-first frequency header so counts stay under Count', () => {
+    const view = resultViewFromToolResults({
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Region',
+          columns: [
+            '',
+            'Frequency',
+            'Percent (incl. missing)',
+            'Valid Percent',
+            'Cumulative Percent',
+          ],
+          rows: [
+            ['North', '120', '13.3', '14.2', '14.2'],
+            ['Total', '900', '100', '', ''],
+          ],
+        },
+      ],
+    });
+    expect(view.tables[0].columns).toEqual(['Label', 'Count', '%', 'Valid %', 'Cumulative %']);
+    expect(view.tables[0].rows[0]).toEqual(['North', '120', '13.3', '14.2', '14.2']);
   });
 });
 
@@ -109,8 +135,8 @@ describe('result tables', () => {
     const views = payloads.map(payload => resultViewFromToolResults(payload));
     expect(views.filter(view => view.tables.length || view.filter || view.weight)).toHaveLength(12);
     expect(views[0].tables[0].rows[0][0]).toBe('North');
-    expect(views[0].tables[0].columns[0]).toBe('');
-    expect(views[0].tables[0].columns[1]).toBe('Frequency');
+    expect(views[0].tables[0].columns).toEqual(['Label', 'Count', '%', 'Valid %', 'Cumulative %']);
+    expect(views[0].tables[0].rows[0][1]).toBe('12');
     expect(views[1].tables[0].columns).toEqual([
       'Theme',
       'Count',

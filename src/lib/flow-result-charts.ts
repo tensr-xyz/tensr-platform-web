@@ -37,7 +37,9 @@ function questionLabel(title: unknown): string {
 
 function categoryShares(table: Record<string, unknown>): Array<{ label: string; percent: number }> {
   const headers = Array.isArray(table.columns) ? table.columns.map(String) : [];
-  const validAt = headers.findIndex(header => /valid/i.test(header) && /percent/i.test(header));
+  const validAt = headers.findIndex(
+    header => /valid/i.test(header) && (/%|percent/i.test(header) || header.trim() === 'Valid %')
+  );
   const rows = Array.isArray(table.rows) ? table.rows : [];
   const shares: Array<{ label: string; percent: number }> = [];
   for (const row of rows) {
