@@ -7,6 +7,9 @@ export const PAGE_HEIGHT_IN = 7.5;
 export const PAGE_ASPECT = '16:9' as const;
 
 export type ReportObjectKind = 'text' | 'table' | 'chart' | 'image' | 'shape';
+export type ReportShapeType = 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'callout';
+export type AlignEdge = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
+export type DistributeAxis = 'horizontal' | 'vertical';
 
 export type ReportFrame = { x: number; y: number; w: number; h: number };
 
@@ -18,6 +21,8 @@ export type ReportObject = {
   hidden: boolean;
   slotId: string | null;
   text: string;
+  shapeType: ReportShapeType | null;
+  imageUrl: string | null;
   runId: string | null;
   pinId: string | null;
   tableSpecId: string | null;
@@ -42,6 +47,10 @@ export type ReportDocument = {
 };
 
 const OBJECT_KINDS = new Set<ReportObjectKind>(['text', 'table', 'chart', 'image', 'shape']);
+const SHAPE_TYPES = new Set<ReportShapeType>(['rectangle', 'ellipse', 'line', 'arrow', 'callout']);
+export const DEFAULT_GRID_STEP = 0.02;
+const ALIGN_EDGES = new Set<AlignEdge>(['left', 'center', 'right', 'top', 'middle', 'bottom']);
+const DISTRIBUTE_AXES = new Set<DistributeAxis>(['horizontal', 'vertical']);
 
 const SLOT_FRAMES: Record<string, Record<string, ReportFrame>> = {
   title_only: {
@@ -87,6 +96,49 @@ export function normalizeFrame(raw: unknown): ReportFrame {
   };
 }
 
+function snapValue(value: number, step: number): number {
+  if (step <= 0) return value;
+  return Math.round(Math.round(value / step) * step * 1e6) / 1e6;
+}
+
+export function snapFrameToGrid(
+  frame: unknown,
+  options?: { step?: number; enabled?: boolean }
+): ReportFrame {
+  const box = normalizeFrame(frame);
+  if (options?.enabled === false) return box;
+  const grid =
+    typeof options?.step === 'number' && Number.isFinite(options.step) && options.step > 0
+      ? options.step
+      : DEFAULT_GRID_STEP;
+  return {
+    x: clamp01(snapValue(box.x, grid), box.x),
+    y: clamp01(snapValue(box.y, grid), box.y),
+    w: Math.max(grid, clamp01(snapValue(box.w, grid), box.w)),
+    h: Math.max(grid, clamp01(snapValue(box.h, grid), box.h)),
+  };
+}
+
+export function normalizeShapeType(raw: unknown): ReportShapeType | null {
+  let label = String(raw || '')
+    .trim()
+    .toLowerCase()
+    .replace(/-/g, '_')
+    .replace(/ /g, '_');
+  const aliases: Record<string, ReportShapeType> = {
+    rect: 'rectangle',
+    box: 'rectangle',
+    circle: 'ellipse',
+    oval: 'ellipse',
+    hline: 'line',
+    vline: 'line',
+    speech: 'callout',
+    speech_bubble: 'callout',
+  };
+  label = aliases[label] || label;
+  return SHAPE_TYPES.has(label as ReportShapeType) ? (label as ReportShapeType) : null;
+}
+
 export function frameForSlot(layoutId: string, slotId: string): ReportFrame | null {
   const layout = String(layoutId || '').trim() || 'blank';
   const slot = String(slotId || '').trim();
@@ -130,6 +182,12 @@ function normalizeObject(raw: unknown, layoutId: string): ReportObject | null {
     String(
       source.table_spec_id || source.tableSpecId || nested.table_spec_id || nested.tableSpecId || ''
     ).trim() || null;
+  const shapeType =
+    kind === 'shape'
+      ? normalizeShapeType(source.shape_type || source.shapeType || source.shape) || 'rectangle'
+      : null;
+  const imageUrl =
+    kind === 'image' ? String(source.image_url || source.imageUrl || '').trim() || null : null;
   return {
     id: String(source.id || '').trim() || newId('obj'),
     kind,
@@ -140,6 +198,8 @@ function normalizeObject(raw: unknown, layoutId: string): ReportObject | null {
     hidden: Boolean(source.hidden),
     slotId,
     text: String(source.text || '').trim(),
+    shapeType,
+    imageUrl,
     runId,
     pinId,
     tableSpecId,
@@ -229,6 +289,8 @@ export function documentFromPins(pins: PinLike[]): ReportDocument {
           zIndex: 1,
           hidden: false,
           text: headline,
+          shapeType: null,
+          imageUrl: null,
           runId,
           pinId,
           tableSpecId: null,
@@ -242,6 +304,8 @@ export function documentFromPins(pins: PinLike[]): ReportDocument {
           zIndex: 2,
           hidden: false,
           text: hasChart ? '' : support,
+          shapeType: null,
+          imageUrl: null,
           runId,
           pinId,
           tableSpecId: null,
@@ -339,7 +403,8 @@ export function moveObject(
   document: ReportDocument | unknown,
   pageId: string,
   objectId: string,
-  frame: Partial<ReportFrame>
+  frame: Partial<ReportFrame>,
+  options?: { snap?: boolean; gridStep?: number }
 ): ReportDocument {
   const doc = normalizeReportDocument(document);
   return {
@@ -348,9 +413,44 @@ export function moveObject(
       if (page.id !== String(pageId)) return page;
       return {
         ...page,
-        objects: page.objects.map(obj =>
-          obj.id === String(objectId) ? { ...obj, frame: normalizeFrame(frame), slotId: null } : obj
-        ),
+        objects: page.objects.map(obj => {
+          if (obj.id !== String(objectId)) return obj;
+          let box = normalizeFrame(frame);
+          if (options?.snap) {
+            box = snapFrameToGrid(box, { step: options.gridStep, enabled: true });
+          }
+          return { ...obj, frame: box, slotId: null };
+        }),
+      };
+    }),
+  };
+}
+
+export function resizeObject(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  size: { width?: number; height?: number },
+  options?: { snap?: boolean; gridStep?: number }
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      return {
+        ...page,
+        objects: page.objects.map(obj => {
+          if (obj.id !== String(objectId)) return obj;
+          const next = { ...obj.frame };
+          if (size.width !== undefined) next.w = size.width;
+          if (size.height !== undefined) next.h = size.height;
+          let box = normalizeFrame(next);
+          if (options?.snap) {
+            box = snapFrameToGrid(box, { step: options.gridStep, enabled: true });
+          }
+          return { ...obj, frame: box, slotId: null };
+        }),
       };
     }),
   };
@@ -397,6 +497,44 @@ export function sendObjectBackward(
   return nudgeZ(document, pageId, objectId, -1);
 }
 
+export function bringToFront(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      const top = page.objects.reduce((max, obj) => Math.max(max, obj.zIndex), 0);
+      const objects = page.objects
+        .map(obj => (obj.id === String(objectId) ? { ...obj, zIndex: top + 1 } : obj))
+        .sort((a, b) => a.zIndex - b.zIndex || a.id.localeCompare(b.id));
+      return { ...page, objects };
+    }),
+  };
+}
+
+export function sendToBack(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      const bottom = page.objects.reduce((min, obj) => Math.min(min, obj.zIndex), 0);
+      const objects = page.objects
+        .map(obj => (obj.id === String(objectId) ? { ...obj, zIndex: bottom - 1 } : obj))
+        .sort((a, b) => a.zIndex - b.zIndex || a.id.localeCompare(b.id));
+      return { ...page, objects };
+    }),
+  };
+}
+
 function nudgeZ(
   document: ReportDocument | unknown,
   pageId: string,
@@ -416,9 +554,422 @@ function nudgeZ(
   };
 }
 
+function pageObjectsById(page: ReportPage, objectIds: string[]): ReportObject[] {
+  const byId = new Map(page.objects.map(obj => [obj.id, obj]));
+  return objectIds.map(String).flatMap(id => {
+    const found = byId.get(id);
+    return found ? [found] : [];
+  });
+}
+
+export function alignObjects(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectIds: string[],
+  edge: AlignEdge
+): ReportDocument {
+  if (!ALIGN_EDGES.has(edge)) {
+    throw new Error(`Unknown align edge ${edge}.`);
+  }
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      const selected = pageObjectsById(page, objectIds);
+      if (selected.length < 2) return page;
+      const frames = selected.map(obj => obj.frame);
+      const nextById = new Map<string, ReportFrame>();
+      if (edge === 'left') {
+        const target = Math.min(...frames.map(frame => frame.x));
+        for (const obj of selected) nextById.set(obj.id, { ...obj.frame, x: target });
+      } else if (edge === 'right') {
+        const target = Math.max(...frames.map(frame => frame.x + frame.w));
+        for (const obj of selected) {
+          nextById.set(obj.id, { ...obj.frame, x: clamp01(target - obj.frame.w, 0) });
+        }
+      } else if (edge === 'center') {
+        const left = Math.min(...frames.map(frame => frame.x));
+        const right = Math.max(...frames.map(frame => frame.x + frame.w));
+        const mid = (left + right) / 2;
+        for (const obj of selected) {
+          nextById.set(obj.id, { ...obj.frame, x: clamp01(mid - obj.frame.w / 2, 0) });
+        }
+      } else if (edge === 'top') {
+        const target = Math.min(...frames.map(frame => frame.y));
+        for (const obj of selected) nextById.set(obj.id, { ...obj.frame, y: target });
+      } else if (edge === 'bottom') {
+        const target = Math.max(...frames.map(frame => frame.y + frame.h));
+        for (const obj of selected) {
+          nextById.set(obj.id, { ...obj.frame, y: clamp01(target - obj.frame.h, 0) });
+        }
+      } else {
+        const top = Math.min(...frames.map(frame => frame.y));
+        const bottom = Math.max(...frames.map(frame => frame.y + frame.h));
+        const mid = (top + bottom) / 2;
+        for (const obj of selected) {
+          nextById.set(obj.id, { ...obj.frame, y: clamp01(mid - obj.frame.h / 2, 0) });
+        }
+      }
+      return {
+        ...page,
+        objects: page.objects.map(obj => {
+          const frame = nextById.get(obj.id);
+          return frame ? { ...obj, frame, slotId: null } : obj;
+        }),
+      };
+    }),
+  };
+}
+
+export function distributeObjects(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectIds: string[],
+  axis: DistributeAxis
+): ReportDocument {
+  if (!DISTRIBUTE_AXES.has(axis)) {
+    throw new Error(`Unknown distribute axis ${axis}.`);
+  }
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      const selected = pageObjectsById(page, objectIds);
+      if (selected.length < 3) return page;
+      const nextById = new Map<string, ReportFrame>();
+      if (axis === 'horizontal') {
+        const ordered = [...selected].sort((a, b) => a.frame.x - b.frame.x);
+        const first = ordered[0]!.frame;
+        const last = ordered[ordered.length - 1]!.frame;
+        const span = last.x + last.w - first.x;
+        const totalW = ordered.reduce((sum, obj) => sum + obj.frame.w, 0);
+        const gap = (span - totalW) / (ordered.length - 1);
+        let cursor = first.x;
+        for (const obj of ordered) {
+          nextById.set(obj.id, { ...obj.frame, x: clamp01(cursor, 0) });
+          cursor += obj.frame.w + gap;
+        }
+      } else {
+        const ordered = [...selected].sort((a, b) => a.frame.y - b.frame.y);
+        const first = ordered[0]!.frame;
+        const last = ordered[ordered.length - 1]!.frame;
+        const span = last.y + last.h - first.y;
+        const totalH = ordered.reduce((sum, obj) => sum + obj.frame.h, 0);
+        const gap = (span - totalH) / (ordered.length - 1);
+        let cursor = first.y;
+        for (const obj of ordered) {
+          nextById.set(obj.id, { ...obj.frame, y: clamp01(cursor, 0) });
+          cursor += obj.frame.h + gap;
+        }
+      }
+      return {
+        ...page,
+        objects: page.objects.map(obj => {
+          const frame = nextById.get(obj.id);
+          return frame ? { ...obj, frame, slotId: null } : obj;
+        }),
+      };
+    }),
+  };
+}
+
+export function duplicateObject(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  offset = 0.02
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  const shift = Number.isFinite(offset) ? offset : 0.02;
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      const index = page.objects.findIndex(obj => obj.id === String(objectId));
+      if (index < 0) return page;
+      const obj = page.objects[index]!;
+      const clone: ReportObject = {
+        ...obj,
+        id: newId('obj'),
+        slotId: null,
+        frame: normalizeFrame({
+          x: obj.frame.x + shift,
+          y: obj.frame.y + shift,
+          w: obj.frame.w,
+          h: obj.frame.h,
+        }),
+        zIndex: obj.zIndex + 1,
+      };
+      const objects = [...page.objects];
+      objects.splice(index + 1, 0, clone);
+      objects.sort((a, b) => a.zIndex - b.zIndex || a.id.localeCompare(b.id));
+      return { ...page, objects };
+    }),
+  };
+}
+
+export function deleteObject(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      return {
+        ...page,
+        objects: page.objects.filter(obj => obj.id !== String(objectId)),
+      };
+    }),
+  };
+}
+
+export function setObjectHidden(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  hidden: boolean
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      return {
+        ...page,
+        objects: page.objects.map(obj =>
+          obj.id === String(objectId) ? { ...obj, hidden: Boolean(hidden) } : obj
+        ),
+      };
+    }),
+  };
+}
+
+export function insertObject(
+  document: ReportDocument | unknown,
+  pageId: string,
+  rawObject: Record<string, unknown>
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      const obj = normalizeObject(rawObject, page.layoutId);
+      if (!obj) throw new Error('Unsupported object for insert.');
+      const top = page.objects.reduce((max, item) => Math.max(max, item.zIndex), 0);
+      if (rawObject.z_index === undefined && rawObject.zIndex === undefined) {
+        obj.zIndex = top + 1;
+      }
+      const objects = [...page.objects, obj].sort(
+        (a, b) => a.zIndex - b.zIndex || a.id.localeCompare(b.id)
+      );
+      return { ...page, objects };
+    }),
+  };
+}
+
+export function insertShape(
+  document: ReportDocument | unknown,
+  pageId: string,
+  options?: { shapeType?: string; frame?: Partial<ReportFrame>; text?: string }
+): ReportDocument {
+  const shapeType = normalizeShapeType(options?.shapeType) || 'rectangle';
+  return insertObject(document, pageId, {
+    kind: 'shape',
+    shape_type: shapeType,
+    frame: options?.frame || { x: 0.35, y: 0.35, w: 0.3, h: 0.2 },
+    text: options?.text || '',
+  });
+}
+
+export function insertImage(
+  document: ReportDocument | unknown,
+  pageId: string,
+  options: { imageUrl: string; frame?: Partial<ReportFrame> }
+): ReportDocument {
+  const imageUrl = String(options.imageUrl || '').trim();
+  if (!imageUrl) throw new Error('imageUrl is required.');
+  return insertObject(document, pageId, {
+    kind: 'image',
+    image_url: imageUrl,
+    frame: options.frame || { x: 0.25, y: 0.25, w: 0.5, h: 0.4 },
+  });
+}
+
+export function copyObjects(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectIds: string[]
+): ReportObject[] {
+  const doc = normalizeReportDocument(document);
+  const page = doc.pages.find(item => item.id === String(pageId));
+  if (!page) return [];
+  return pageObjectsById(page, objectIds).map(obj => ({
+    ...obj,
+    frame: { ...obj.frame },
+  }));
+}
+
+export function pasteObjects(
+  document: ReportDocument | unknown,
+  pageId: string,
+  clipboard: ReportObject[],
+  offset = 0.02
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  const shift = Number.isFinite(offset) ? offset : 0.02;
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      const top = page.objects.reduce((max, item) => Math.max(max, item.zIndex), 0);
+      const pasted: ReportObject[] = [];
+      clipboard.forEach((raw, index) => {
+        const frame = normalizeFrame(raw.frame);
+        const { id: _ignoredId, ...rest } = raw;
+        const obj = normalizeObject(
+          {
+            ...rest,
+            slotId: null,
+            slot_id: null,
+            frame: {
+              x: clamp01(frame.x + shift, frame.x),
+              y: clamp01(frame.y + shift, frame.y),
+              w: frame.w,
+              h: frame.h,
+            },
+            zIndex: top + index + 1,
+          },
+          page.layoutId
+        );
+        if (obj) pasted.push(obj);
+      });
+      const objects = [...page.objects, ...pasted].sort(
+        (a, b) => a.zIndex - b.zIndex || a.id.localeCompare(b.id)
+      );
+      return { ...page, objects };
+    }),
+  };
+}
+
+export function addPage(
+  document: ReportDocument | unknown,
+  options?: {
+    title?: string;
+    layoutId?: string;
+    section?: string | null;
+    afterPageId?: string;
+  }
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  let layoutId = String(options?.layoutId || 'blank').trim() || 'blank';
+  if (!getPageLayout(layoutId)) layoutId = 'title_and_content';
+  const page: ReportPage = {
+    id: newId('page'),
+    title: String(options?.title || '').trim() || 'Untitled page',
+    layoutId,
+    section: options?.section ? String(options.section).trim() || null : null,
+    objects: [],
+    hideFromExport: false,
+    hideFromPublish: false,
+  };
+  const pages = [...doc.pages];
+  if (options?.afterPageId) {
+    const index = pages.findIndex(item => item.id === String(options.afterPageId));
+    if (index >= 0) {
+      pages.splice(index + 1, 0, page);
+      return { ...doc, pages };
+    }
+  }
+  pages.push(page);
+  return { ...doc, pages };
+}
+
+export function deletePage(document: ReportDocument | unknown, pageId: string): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return { ...doc, pages: doc.pages.filter(page => page.id !== String(pageId)) };
+}
+
+export function searchPages(document: ReportDocument | unknown, query: string): ReportPage[] {
+  const doc = normalizeReportDocument(document);
+  const needle = String(query || '')
+    .trim()
+    .toLowerCase();
+  if (!needle) return [...doc.pages];
+  return doc.pages.filter(page => {
+    const title = page.title.toLowerCase();
+    const section = (page.section || '').toLowerCase();
+    return title.includes(needle) || section.includes(needle);
+  });
+}
+
+export type AlignmentGuide = {
+  axis: 'x' | 'y';
+  position: number;
+  edge: string;
+  sourceObjectId: string;
+};
+
+export function alignmentGuides(
+  document: ReportDocument | unknown,
+  pageId: string,
+  movingFrame: Partial<ReportFrame>,
+  options?: { threshold?: number; excludeObjectIds?: string[] }
+): AlignmentGuide[] {
+  const doc = normalizeReportDocument(document);
+  const tol =
+    typeof options?.threshold === 'number' && Number.isFinite(options.threshold)
+      ? Math.abs(options.threshold)
+      : 0.015;
+  const excluded = new Set((options?.excludeObjectIds || []).map(String));
+  const moving = normalizeFrame(movingFrame);
+  const movingEdges: Record<string, number> = {
+    left: moving.x,
+    center_x: moving.x + moving.w / 2,
+    right: moving.x + moving.w,
+    top: moving.y,
+    middle_y: moving.y + moving.h / 2,
+    bottom: moving.y + moving.h,
+  };
+  const page = doc.pages.find(item => item.id === String(pageId));
+  if (!page) return [];
+  const guides: AlignmentGuide[] = [];
+  for (const obj of page.objects) {
+    if (excluded.has(obj.id) || obj.hidden) continue;
+    const other: Record<string, number> = {
+      left: obj.frame.x,
+      center_x: obj.frame.x + obj.frame.w / 2,
+      right: obj.frame.x + obj.frame.w,
+      top: obj.frame.y,
+      middle_y: obj.frame.y + obj.frame.h / 2,
+      bottom: obj.frame.y + obj.frame.h,
+    };
+    for (const [name, value] of Object.entries(movingEdges)) {
+      const axis = name === 'left' || name === 'center_x' || name === 'right' ? 'x' : 'y';
+      const peer = other[name];
+      if (peer === undefined) continue;
+      if (Math.abs(value - peer) <= tol) {
+        guides.push({
+          axis,
+          position: peer,
+          edge: name,
+          sourceObjectId: obj.id,
+        });
+      }
+    }
+  }
+  return guides;
+}
+
 export function sortPages(
   document: ReportDocument | unknown,
-  by: 'title' | 'alphabetically' | 'alpha' = 'title'
+  by: 'title' | 'alphabetically' | 'alpha' | 'significance' | 'sig' | 'score' = 'title',
+  scores?: Record<string, number>
 ): ReportDocument {
   const doc = normalizeReportDocument(document);
   if (by === 'title' || by === 'alphabetically' || by === 'alpha') {
@@ -427,6 +978,21 @@ export function sortPages(
       pages: [...doc.pages].sort((a, b) =>
         a.title.localeCompare(b.title, undefined, { sensitivity: 'base' })
       ),
+    };
+  }
+  if (by === 'significance' || by === 'sig' || by === 'score') {
+    const scoreMap = scores || {};
+    const scoreFor = (page: ReportPage): number => {
+      const raw = scoreMap[page.id] ?? scoreMap[page.title];
+      return typeof raw === 'number' && Number.isFinite(raw) ? raw : Number.NEGATIVE_INFINITY;
+    };
+    return {
+      ...doc,
+      pages: [...doc.pages].sort((a, b) => {
+        const delta = scoreFor(b) - scoreFor(a);
+        if (delta !== 0) return delta;
+        return a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+      }),
     };
   }
   return doc;
@@ -454,6 +1020,8 @@ export function reportDocumentForApi(document: ReportDocument | unknown): Record
         hidden: obj.hidden,
         slot_id: obj.slotId,
         text: obj.text,
+        shape_type: obj.shapeType,
+        image_url: obj.imageUrl,
         run_id: obj.runId,
         pin_id: obj.pinId,
         table_spec_id: obj.tableSpecId,

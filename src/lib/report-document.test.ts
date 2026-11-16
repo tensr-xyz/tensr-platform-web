@@ -2,19 +2,35 @@ import {
   PAGE_ASPECT,
   PAGE_HEIGHT_IN,
   PAGE_WIDTH_IN,
+  addPage,
+  alignObjects,
+  alignmentGuides,
   bringObjectForward,
+  bringToFront,
+  copyObjects,
+  deleteObject,
+  deletePage,
+  distributeObjects,
   documentFromPins,
+  duplicateObject,
   duplicatePage,
   frameForSlot,
   groupPagesIntoSection,
   inchesFrame,
+  insertImage,
+  insertShape,
   moveObject,
   normalizeReportDocument,
   pagesForExport,
+  pasteObjects,
   placeObjectInSlot,
   reorderPages,
   reportDocumentForApi,
+  resizeObject,
+  searchPages,
+  setObjectHidden,
   setPageHidden,
+  snapFrameToGrid,
   sortPages,
 } from './report-document';
 
@@ -117,5 +133,115 @@ describe('report document page model', () => {
         ],
       }).pages[0]?.objects[0]?.frame
     ).toEqual(frameForSlot('two_content', 'content_left'));
+  });
+
+  it('snaps, aligns, distributes, and edits objects', () => {
+    expect(snapFrameToGrid({ x: 0.113, y: 0.247, w: 0.33, h: 0.19 }, { step: 0.05 })).toEqual({
+      x: 0.1,
+      y: 0.25,
+      w: 0.35,
+      h: 0.2,
+    });
+
+    const doc = documentFromPins(pins.slice(0, 1));
+    const pageId = doc.pages[0]!.id;
+    const withShapes = insertShape(
+      insertShape(doc, pageId, {
+        shapeType: 'arrow',
+        frame: { x: 0.1, y: 0.2, w: 0.2, h: 0.1 },
+      }),
+      pageId,
+      { shapeType: 'callout', frame: { x: 0.4, y: 0.5, w: 0.2, h: 0.1 } }
+    );
+    const withImage = insertImage(withShapes, pageId, {
+      imageUrl: 'https://example.com/chart.png',
+      frame: { x: 0.7, y: 0.2, w: 0.2, h: 0.2 },
+    });
+    const objects = withImage.pages[0]!.objects.filter(
+      obj => obj.kind === 'shape' || obj.kind === 'image'
+    );
+    expect(objects).toHaveLength(3);
+    expect(objects[0]?.shapeType).toBe('arrow');
+    expect(objects[2]?.imageUrl).toBe('https://example.com/chart.png');
+
+    const ids = objects.map(obj => obj.id);
+    const aligned = alignObjects(withImage, pageId, ids, 'left');
+    const xs = aligned.pages[0]!.objects.filter(obj => ids.includes(obj.id)).map(
+      obj => obj.frame.x
+    );
+    expect(new Set(xs.map(value => Number(value.toFixed(6)))).size).toBe(1);
+
+    const distributed = distributeObjects(aligned, pageId, ids, 'vertical');
+    const ys = distributed.pages[0]!.objects.filter(obj => ids.includes(obj.id))
+      .map(obj => obj.frame.y)
+      .sort((a, b) => a - b);
+    expect(ys[0]!).toBeLessThan(ys[1]!);
+    expect(ys[1]!).toBeLessThan(ys[2]!);
+
+    const moved = moveObject(
+      distributed,
+      pageId,
+      ids[0]!,
+      { x: 0.113, y: 0.2, w: 0.2, h: 0.1 },
+      { snap: true, gridStep: 0.05 }
+    );
+    expect(moved.pages[0]!.objects.find(obj => obj.id === ids[0])?.frame.x).toBe(0.1);
+
+    const resized = resizeObject(moved, pageId, ids[0]!, { width: 0.4, height: 0.25 });
+    expect(resized.pages[0]!.objects.find(obj => obj.id === ids[0])?.frame).toMatchObject({
+      w: 0.4,
+      h: 0.25,
+    });
+
+    const duped = duplicateObject(resized, pageId, ids[0]!);
+    expect(duped.pages[0]!.objects.length).toBe(resized.pages[0]!.objects.length + 1);
+    const hidden = setObjectHidden(duped, pageId, ids[1]!, true);
+    expect(hidden.pages[0]!.objects.find(obj => obj.id === ids[1])?.hidden).toBe(true);
+    const clipped = copyObjects(hidden, pageId, [ids[0]!]);
+    const beforeIds = new Set(hidden.pages[0]!.objects.map(obj => obj.id));
+    const pasted = pasteObjects(hidden, pageId, clipped);
+    expect(pasted.pages[0]!.objects.length).toBe(hidden.pages[0]!.objects.length + 1);
+    expect(pasted.pages[0]!.objects.some(obj => !beforeIds.has(obj.id))).toBe(true);
+    const front = bringToFront(pasted, pageId, ids[0]!);
+    const frontZ = front.pages[0]!.objects.find(obj => obj.id === ids[0])!.zIndex;
+    expect(frontZ).toBe(Math.max(...front.pages[0]!.objects.map(obj => obj.zIndex)));
+    const deleted = deleteObject(front, pageId, ids[2]!);
+    expect(deleted.pages[0]!.objects.some(obj => obj.id === ids[2])).toBe(false);
+    const title = deleted.pages[0]!.objects.find(obj => obj.slotId === 'title')!;
+    expect(
+      alignmentGuides(
+        deleted,
+        pageId,
+        { x: title.frame.x + 0.01, y: title.frame.y, w: 0.2, h: 0.1 },
+        { excludeObjectIds: [ids[0]!] }
+      ).some(guide => guide.axis === 'x' && guide.sourceObjectId === title.id)
+    ).toBe(true);
+  });
+
+  it('searches the page tree, adds and deletes pages, and sorts by significance', () => {
+    const doc = documentFromPins(pins);
+    const grouped = groupPagesIntoSection(doc, [doc.pages[0]!.id], 'Insights');
+    expect(searchPages(grouped, 'beta').map(page => page.title)).toEqual(['Beta finding']);
+    expect(searchPages(grouped, 'insight').map(page => page.title)).toEqual(['Alpha finding']);
+
+    const withPage = addPage(grouped, {
+      title: 'Methods',
+      layoutId: 'blank',
+      afterPageId: doc.pages[0]!.id,
+    });
+    expect(withPage.pages[1]?.title).toBe('Methods');
+    expect(withPage.pages[1]?.layoutId).toBe('blank');
+    const trimmed = deletePage(withPage, withPage.pages[1]!.id);
+    expect(trimmed.pages.every(page => page.title !== 'Methods')).toBe(true);
+
+    const scored = sortPages(doc, 'significance', {
+      [doc.pages[2]!.id]: 9,
+      [doc.pages[0]!.id]: 3,
+    });
+    expect(scored.pages.map(page => page.title)).toEqual([
+      'Gamma finding',
+      'Alpha finding',
+      'Beta finding',
+    ]);
   });
 });
