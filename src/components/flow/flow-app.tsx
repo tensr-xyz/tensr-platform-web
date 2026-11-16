@@ -2673,7 +2673,11 @@ function ChatScreen({
   return (
     <div
       className={
-        showThread ? (panelOpen ? 'flow-split' : 'flow-split no-output') : 'flow-split chat-empty'
+        showThread
+          ? panelOpen && outputReady
+            ? 'flow-split'
+            : 'flow-split no-output'
+          : 'flow-split chat-empty'
       }
     >
       <aside className="flow-rail">
@@ -2774,7 +2778,7 @@ function ChatScreen({
             id="chat-output"
             defaultWidth={440}
             className="flow-output"
-            hidden={!panelOpen}
+            hidden={!panelOpen || !outputReady}
           >
             {outputReady && tableMode ? (
               <>
@@ -3004,9 +3008,7 @@ function ChatScreen({
                   </Link>
                 </div>
               </>
-            ) : (
-              <p className="flow-muted output-empty">An output from this chat lands here.</p>
-            )}
+            ) : null}
           </FlowSidePanel>
         </>
       ) : (

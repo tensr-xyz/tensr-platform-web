@@ -2417,6 +2417,18 @@ select.flow-input {
   gap: 8px;
 }
 
+button.chat-result-top {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .chat-viewing {
   margin-left: auto;
   color: var(--color-accent);

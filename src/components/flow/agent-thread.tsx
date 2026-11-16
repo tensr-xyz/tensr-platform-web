@@ -670,7 +670,18 @@ export function useAgentThread({
             setAttachments([]);
             setAttachError(null);
             setStatus(null);
-            setPanelOpen(Boolean(last?.toolResults?.length));
+            // Failed tool steps still leave tool_results; only a ready output opens the column.
+            setPanelOpen(
+              outputCardReady(
+                last
+                  ? {
+                      status: 'ok',
+                      tool_results: last.toolResults,
+                    }
+                  : null,
+                false
+              )
+            );
           });
         })
         .catch(err => {
@@ -745,7 +756,8 @@ export function useAgentThread({
   const runIds = outputRunIds(toolResults);
   const outputReady = outputCardReady(turn, Boolean(plan));
   useEffect(() => {
-    if (outputReady) setPanelOpen(true);
+    // Open on the first real output; close again if the latest turn has none (e.g. a failed run).
+    setPanelOpen(outputReady);
   }, [outputReady]);
   const checks = outputChecks(toolResults);
   const tables = answerTables(answer);
@@ -1029,7 +1041,15 @@ export function AgentThreadColumn({
         ) : null}
         {thread.outputReady ? (
           <div className="chat-result">
-            <div className="chat-result-top">
+            <button
+              type="button"
+              className="chat-result-top"
+              aria-pressed={thread.panelOpen}
+              aria-label={
+                thread.panelOpen ? `${thread.title}, output open` : `Show output: ${thread.title}`
+              }
+              onClick={() => thread.setPanelOpen(true)}
+            >
               <span className="chat-result-icon" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 14 14">
                   <path
@@ -1045,8 +1065,8 @@ export function AgentThreadColumn({
                 <strong>{thread.title}</strong>
                 <div className="flow-muted">{thread.kind} · Output</div>
               </div>
-              <span className="chat-viewing">Viewing</span>
-            </div>
+              {thread.panelOpen ? <span className="chat-viewing">Viewing</span> : null}
+            </button>
             <div className="chat-result-actions">
               {asker ? (
                 <>
