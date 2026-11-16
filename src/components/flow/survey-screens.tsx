@@ -1780,6 +1780,7 @@ export function TablesBuilder({
   const [view, setView] = useState<'table' | 'chart'>('table');
   const loadingSaved = useRef(false);
   const weightFromTable = useRef(false);
+  const bookRef = useRef<Record<string, unknown> | null>(null);
   const fileIdsRef = useRef<string[]>([]);
   fileIdsRef.current = (files || []).map(file => file.id);
 
@@ -1871,12 +1872,26 @@ export function TablesBuilder({
     }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         const choices = tableWeightChoices(meta.weight_columns, meta.active_weight_column || '');
-        activeWeightName.current = meta.active_weight_column || '';
+        const active = meta.active_weight_column || '';
+        activeWeightName.current = active;
         setWeightColumns(choices);
         // A saved table's weight wins. The file weight is only the default before one is open.
-        const active = meta.active_weight_column || '';
+        // When the table opened before metadata arrived, resolve _weight / active again.
         const chosen = defaultTableWeight(active, choices);
-        if (!weightFromTable.current && chosen) setWeight(current => current || chosen);
+        setWeight(current => {
+          if (weightFromTable.current) {
+            const opened = bookRef.current;
+            const bookWeight = opened?.weight as
+              | { column?: string | null; weight_aware?: boolean }
+              | null
+              | undefined;
+            const saved = (opened?.spec as { weight?: unknown } | undefined)?.weight;
+            const fromBook = selectedTableWeight(saved, bookWeight, active);
+            if (fromBook) return fromBook;
+            return current;
+          }
+          return current || chosen;
+        });
         setWeightNeedsRefresh(Boolean(meta.weight_vector?.needs_refresh));
         setColumns(
           (meta.columns || [])
@@ -1923,6 +1938,7 @@ export function TablesBuilder({
 
   function remember(body: Record<string, unknown>) {
     loadingSaved.current = true;
+    bookRef.current = body;
     setBook(body);
     const spec = body.spec as
       | {

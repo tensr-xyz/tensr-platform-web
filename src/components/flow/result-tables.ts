@@ -996,7 +996,7 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
       unweighted_n?: unknown;
     };
     const label = cell(block.label);
-    const column = cell(block.column);
+    const column = realWeightToken(block.column);
     if (label && label.toLowerCase() !== column.toLowerCase() && label.toLowerCase() !== 'weight') {
       sample.weight = label;
     } else if (column) sample.weight = column;
@@ -1014,6 +1014,10 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
         sample.sawN = true;
       }
     }
+  }
+  if (!sample.weight) {
+    const named = weightName(record);
+    if (named) sample.weight = named;
   }
   if (!sample.sawN && Array.isArray(record.stages) && record.stages.length) {
     const first = record.stages[0];
@@ -1075,8 +1079,20 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
   }
 }
 
+function sampleWeightPhrase(sample: SampleBits): string {
+  const named = (sample.weight || '').trim();
+  if (named && !/^(none|unweighted|null)$/i.test(named)) {
+    return named.toLowerCase() === 'weighted' ? 'Weight: Weighted' : `Weight: ${named}`;
+  }
+  const weighted = sample.tableWeighted;
+  if (sample.sawTableBase && weighted != null && weighted !== sample.tableUnweighted) {
+    return 'Weight: Weighted';
+  }
+  return 'Weight: Unweighted';
+}
+
 function sampleLine(sample: SampleBits): string {
-  const weight = sample.weight ? `Weight: ${sample.weight}` : 'Weight: none';
+  const weight = sampleWeightPhrase(sample);
   const parts = [weight];
   if (sample.sawTableBase) {
     const weighted = sample.tableWeighted;
@@ -1113,27 +1129,33 @@ function sampleLine(sample: SampleBits): string {
     : line;
 }
 
+function realWeightToken(value: unknown): string {
+  const text = cell(value).trim();
+  if (!text || /^(none|unweighted|null)$/i.test(text)) return '';
+  return text;
+}
+
 function weightName(record: Record<string, unknown>): string {
-  if (record.weight && typeof record.weight === 'object') {
+  if (record.weight && typeof record.weight === 'object' && !Array.isArray(record.weight)) {
     const weight = record.weight as { column?: unknown; label?: unknown };
-    const column = cell(weight.column);
-    const label = cell(weight.label);
+    const column = realWeightToken(weight.column);
+    const label = cell(weight.label).trim();
     if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== column.toLowerCase()) {
       return label;
     }
-    return column;
+    if (column) return column;
   }
   const named =
     typeof record.weight === 'string'
       ? record.weight
-      : typeof record.weight_column === 'string'
-        ? record.weight_column
-        : typeof record.resolved_weight === 'string'
-          ? record.resolved_weight
-          : '';
-  const text = named.trim();
-  if (!text || text.toLowerCase() === 'none' || text.toLowerCase() === 'unweighted') return '';
-  return text;
+      : typeof record.resolved_weight === 'string'
+        ? record.resolved_weight
+        : typeof record.weight_column === 'string'
+          ? record.weight_column
+          : typeof record.active_weight_column === 'string'
+            ? record.active_weight_column
+            : '';
+  return realWeightToken(named);
 }
 
 function isGroupMeanTable(table: RunTable): boolean {
@@ -1503,6 +1525,16 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   if (sample.sawTableBase) view.baseDetail = sampleLine(sample);
   else if (detail) view.baseDetail = detail;
   else if (sample.sawN || sample.sawTotal) view.baseDetail = sampleLine(sample);
+  if (!view.weight && sample.weight) view.weight = sample.weight;
+  if (
+    !view.weight &&
+    sample.sawTableBase &&
+    sample.tableWeighted != null &&
+    sample.tableWeighted !== sample.tableUnweighted
+  ) {
+    // Bases are weighted but the book never named the column. Chip, footnote and base stay aligned.
+    view.weight = 'Weighted';
+  }
   view.charts = chartsFromToolPayloads(results);
   return view;
 }

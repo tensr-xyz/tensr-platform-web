@@ -1051,7 +1051,46 @@ describe('answer tables', () => {
     expect(view.baseDetail).toContain('500');
     expect(view.baseDetail).toContain('482');
     expect(view.baseDetail).not.toContain('base = 800');
+    expect(view.baseDetail).not.toContain('Weight: none');
+    expect(view.baseDetail).toMatch(/Weight:/i);
     expect(resultFootnote(view)).toContain('500');
+  });
+
+  it('names the same weight on the chip, the base, and the footnote', () => {
+    const columns = [{ name: 'design_weight', label: 'Design weight' }];
+    const view = resultViewFromToolResults({
+      resolved_weight: 'design_weight',
+      weight: {
+        column: 'design_weight',
+        label: 'Design weight',
+        weight_aware: true,
+        unweighted_n: 500,
+        weighted_n: 470,
+      },
+      cells: [
+        {
+          banner_id: 'total',
+          bases: { column: { unweighted_n: 500, weighted_n: 470 } },
+        },
+      ],
+    });
+    expect(view.weight).toBe('Design weight');
+    expect(weightChipName(view.weight, 'none', columns)).toBe('Design weight');
+    expect(view.baseDetail).toContain('Weight: Design weight');
+    expect(view.baseDetail).toContain('500');
+    expect(view.baseDetail).toContain('470');
+    expect(view.baseDetail).not.toContain('Weight: none');
+    expect(resultFootnote(view, '', 'Crosstab', columns)).toContain('Weight: Design weight');
+  });
+
+  it('falls through an empty weight object to resolved_weight', () => {
+    const view = resultViewFromToolResults({
+      weight: { column: null, weight_aware: true, unweighted_n: 100, weighted_n: 90 },
+      resolved_weight: 'design_weight',
+    });
+    expect(view.weight).toBe('design_weight');
+    expect(view.baseDetail).toContain('Weight: design_weight');
+    expect(view.baseDetail).not.toContain('Weight: none');
   });
 
   it('shows a duplication table and names the audience on the footnote', () => {
