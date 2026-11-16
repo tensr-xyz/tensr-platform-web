@@ -2,9 +2,23 @@
 
 export type PrepProposal = {
   label_changes?: { column?: string; from?: string; to?: string }[];
-  variable_sets?: { label?: string; name?: string; columns?: string[] }[];
+  variable_sets?: {
+    label?: string;
+    name?: string;
+    columns?: string[];
+    items?: { column?: string; label?: string }[];
+    summary?: string;
+    binary?: boolean;
+  }[];
   weight?: string | null;
   weight_label?: string | null;
+  weight_summary?: {
+    mean?: number;
+    min?: number;
+    max?: number;
+    effective_base?: number;
+  } | null;
+  questions?: number;
   nps?: { column?: string; label?: string } | null;
   quality?: {
     flagged?: number;
@@ -12,6 +26,8 @@ export type PrepProposal = {
     respondents?: number;
     outlier_rows?: number;
     poor_text_rows?: number;
+    speeder_rows?: number;
+    straightline_rows?: number;
   };
 };
 
@@ -45,6 +61,60 @@ function row(
   return { id, label, title, hint, before, after, rest };
 }
 
+function formatWeightSummary(label: string, summary: PrepProposal['weight_summary']): string {
+  if (!summary) return label;
+  const bits = [label];
+  if (typeof summary.mean === 'number') bits.push(`mean ${summary.mean.toFixed(2)}`);
+  if (typeof summary.min === 'number' && typeof summary.max === 'number') {
+    bits.push(`range ${summary.min.toFixed(2)}–${summary.max.toFixed(2)}`);
+  }
+  if (typeof summary.effective_base === 'number') {
+    bits.push(`effective base ${summary.effective_base.toLocaleString('en-GB')}`);
+  }
+  return bits.join(' · ');
+}
+
+function setBefore(set: NonNullable<PrepProposal['variable_sets']>[number]): string {
+  const items = (set.items || []).map(item => (item.label || '').trim()).filter(Boolean);
+  const count = (set.columns || []).length || items.length;
+  const kind = set.binary
+    ? 'yes/no columns that share one question'
+    : 'columns that share one question';
+  if (items.length) {
+    const shown = items.slice(0, 6).join(' · ');
+    return `${shown} · ${count} ${kind}`;
+  }
+  return `${count} ${kind}`;
+}
+
+function setAfter(set: NonNullable<PrepProposal['variable_sets']>[number]): string {
+  const name = set.label || set.name || 'Set';
+  const summary = (set.summary || '').trim();
+  return summary ? `→ ${name} · ${summary}` : `→ ${name}`;
+}
+
+function qualityBefore(quality: NonNullable<PrepProposal['quality']>): string {
+  const speeder = quality.speeder_rows;
+  const straight = quality.straightline_rows;
+  const outlier = quality.outlier_rows;
+  const poor = quality.poor_text_rows;
+  const bits = [
+    typeof speeder === 'number' && speeder > 0
+      ? `${speeder} finished in under a third of the median time`
+      : '',
+    typeof straight === 'number' && straight > 0
+      ? `${straight} gave the same answer down a grid`
+      : '',
+    typeof outlier === 'number' && outlier > 0 && !(typeof speeder === 'number' && speeder > 0)
+      ? `${outlier} numeric outliers`
+      : '',
+    typeof poor === 'number' && poor > 0 && !(typeof straight === 'number' && straight > 0)
+      ? `${poor} short open answers`
+      : '',
+  ].filter(Boolean);
+  return bits.join(' · ');
+}
+
 export function prepParts(proposal: PrepProposal | null | undefined): PrepPart[] {
   if (!proposal) return [];
   const parts: PrepPart[] = [];
@@ -73,19 +143,19 @@ export function prepParts(proposal: PrepProposal | null | undefined): PrepPart[]
   if (sets.length) {
     const names = sets.map(set => set.label || set.name || 'Set').filter(Boolean);
     const first = sets[0];
-    const columns = (first?.columns || []).filter(Boolean);
-    const setLabel = first?.label || first?.name || 'Set';
     parts.push(
       row(
         'sets',
         names.join(', '),
         `Group ${sets.length} question ${sets.length === 1 ? 'set' : 'sets'}`,
         'Answered as one question',
-        columns.length
-          ? `${columns.join(', ')} · ${columns.length} columns that share one question`
-          : setLabel,
-        `→ ${setLabel}`,
-        sets.slice(1).map(set => set.label || set.name || 'Set')
+        first ? setBefore(first) : '',
+        first ? setAfter(first) : '',
+        sets.slice(1).map(set => {
+          const name = set.label || set.name || 'Set';
+          const summary = (set.summary || '').trim();
+          return summary ? `${name} · ${summary}` : name;
+        })
       )
     );
   }
@@ -97,7 +167,7 @@ export function prepParts(proposal: PrepProposal | null | undefined): PrepPart[]
         `Weight: ${weight}`,
         'Use a weight',
         'Applied to every result',
-        weight,
+        formatWeightSummary(weight, proposal.weight_summary),
         "→ Default weight for this file. Answers say when it's used."
       )
     );
@@ -118,19 +188,13 @@ export function prepParts(proposal: PrepProposal | null | undefined): PrepPart[]
   );
   const flagged = proposal.quality?.flagged;
   if (typeof flagged === 'number' && flagged > 0) {
-    const fast = proposal.quality?.outlier_rows;
-    const same = proposal.quality?.poor_text_rows;
-    const bits = [
-      typeof fast === 'number' && fast > 0 ? `${fast} finished far faster than the median` : '',
-      typeof same === 'number' && same > 0 ? `${same} gave the same answer down a grid` : '',
-    ].filter(Boolean);
     parts.push(
       row(
         'flags',
         `${flagged} quality flags`,
         `Flag ${flagged} ${flagged === 1 ? 'respondent' : 'respondents'}`,
         'Flagged, never removed',
-        bits.join(' · '),
+        qualityBefore(proposal.quality || {}),
         '→ Adds a Quality flag column you can filter on'
       )
     );
