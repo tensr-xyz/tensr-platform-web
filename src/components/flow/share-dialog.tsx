@@ -14,9 +14,23 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { outputKindLabel, outputRuns, type OutputRun } from '@/components/flow/report-output-runs';
 
 type Person = { user_id: string; role: string; email: string; name: string };
 type Invite = { email?: string; status?: string; token?: string; created_at?: string };
+type Share = {
+  id: string;
+  token: string;
+  kind: 'project_link' | 'output';
+  role?: string;
+  run_id?: string | null;
+  title?: string | null;
+};
+
+function shareUrl(token: string): string {
+  if (typeof window === 'undefined') return '';
+  return `${window.location.origin}/s/${token}`;
+}
 
 export function ShareDialog({
   projectId,
@@ -34,10 +48,23 @@ export function ShareDialog({
   const [role, setRole] = useState('viewer');
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
-  const [linkOn, setLinkOn] = useState(true);
-  const [oneOutput, setOneOutput] = useState(false);
-  const link =
-    typeof window === 'undefined' ? '' : `${window.location.origin}/flow/p/${projectId}/report`;
+  const [shares, setShares] = useState<Share[]>([]);
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [outputs, setOutputs] = useState<OutputRun[] | null>(null);
+  const [pickerError, setPickerError] = useState('');
+
+  const projectShare = shares.find(share => share.kind === 'project_link');
+  const outputShare = shares.find(share => share.kind === 'output');
+  const linkOn = Boolean(projectShare);
+  const oneOutput = Boolean(outputShare);
+  const link = projectShare ? shareUrl(projectShare.token) : '';
+  const outputLink = outputShare ? shareUrl(outputShare.token) : '';
+
+  const loadShares = () =>
+    flowJson<{ shares?: Share[] }>(`/api/projects/${projectId}/shares`)
+      .then(page => setShares(page.shares || []))
+      .catch(() => setShares([]));
 
   const load = () => {
     void flowJson<{ active_organization?: { id?: string } }>('/me')
@@ -60,6 +87,7 @@ export function ShareDialog({
                 })
               )
             : Promise.resolve({ invitations: [] }),
+          loadShares(),
         ]);
         const byId = new Map(
           (workspace.members || []).map(person => [person.user_id || '', person])
@@ -131,6 +159,76 @@ export function ShareDialog({
       .catch(err => setError(err instanceof Error ? err.message : 'Could not invite'));
   };
 
+  const setProjectLink = (on: boolean) => {
+    setError('');
+    setLinkBusy(true);
+    const work = on
+      ? flowJson<{ share: Share }>(`/api/projects/${projectId}/shares`, {
+          method: 'POST',
+          body: JSON.stringify({ kind: 'project_link', role: 'viewer' }),
+        }).then(async body => {
+          await loadShares();
+          const url = shareUrl(body.share.token);
+          await navigator.clipboard.writeText(url).catch(() => undefined);
+          setNote('Link copied.');
+        })
+      : flowJson(`/api/projects/${projectId}/shares/revoke-kind`, {
+          method: 'POST',
+          body: JSON.stringify({ kind: 'project_link' }),
+        }).then(() => {
+          setNote('Link sharing turned off.');
+          return loadShares();
+        });
+    void work
+      .catch(err => setError(err instanceof Error ? err.message : 'Could not update the link'))
+      .finally(() => setLinkBusy(false));
+  };
+
+  const openPicker = () => {
+    setPickerOpen(true);
+    setPickerError('');
+    setOutputs(null);
+    void flowJson<{ runs?: unknown[] }>(`/api/projects/${projectId}/overview`)
+      .then(page => setOutputs(outputRuns(page.runs || [])))
+      .catch(err => {
+        setOutputs([]);
+        setPickerError(err instanceof Error ? err.message : 'Could not load outputs');
+      });
+  };
+
+  const chooseOutput = (run: OutputRun) => {
+    setError('');
+    setPickerOpen(false);
+    void flowJson<{ share: Share }>(`/api/projects/${projectId}/shares`, {
+      method: 'POST',
+      body: JSON.stringify({
+        kind: 'output',
+        run_id: run.id,
+        title: run.title,
+      }),
+    })
+      .then(async body => {
+        await loadShares();
+        const url = shareUrl(body.share.token);
+        await navigator.clipboard.writeText(url).catch(() => undefined);
+        setNote(`Link for “${run.title}” copied.`);
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'Could not share that output'));
+  };
+
+  const clearOutputShare = () => {
+    setError('');
+    void flowJson(`/api/projects/${projectId}/shares/revoke-kind`, {
+      method: 'POST',
+      body: JSON.stringify({ kind: 'output', run_id: outputShare?.run_id || undefined }),
+    })
+      .then(() => {
+        setNote('Output link removed.');
+        return loadShares();
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'Could not remove the link'));
+  };
+
   const mark = (value?: string) => {
     const text = (value || '?').split('@')[0];
     const parts = text.split(/[^A-Za-z0-9]+/).filter(Boolean);
@@ -141,151 +239,217 @@ export function ShareDialog({
   const count = (people || []).length + invites.length;
 
   return (
-    <Dialog open onOpenChange={open => !open && onClose()}>
-      <DialogContent className="share-dialog">
-        <DialogHeader className="share-head">
-          <DialogTitle>Share {projectName}</DialogTitle>
-          <DialogDescription>
-            Project, with its sources, tables, outputs and report.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="share-body">
-          <div className="share-invite">
-            <div className="share-field">
-              <Input
-                aria-label="Email"
-                value={email}
-                placeholder="Add people by email"
-                onChange={event => setEmail(event.target.value)}
-              />
-              <ChoiceSelect
-                className="share-role"
-                aria-label="Role"
-                value={role}
-                onValueChange={setRole}
-                options={[
-                  { value: 'viewer', label: 'Viewer' },
-                  { value: 'asker', label: 'Asker' },
-                  { value: 'editor', label: 'Editor' },
-                ]}
-              />
+    <>
+      <Dialog open onOpenChange={open => !open && onClose()}>
+        <DialogContent className="share-dialog">
+          <DialogHeader className="share-head">
+            <DialogTitle>Share {projectName}</DialogTitle>
+            <DialogDescription>
+              Project, with its sources, tables, outputs and report.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="share-body">
+            <div className="share-invite">
+              <div className="share-field">
+                <Input
+                  aria-label="Email"
+                  value={email}
+                  placeholder="Add people by email"
+                  onChange={event => setEmail(event.target.value)}
+                />
+                <ChoiceSelect
+                  className="share-role"
+                  aria-label="Role"
+                  value={role}
+                  onValueChange={setRole}
+                  options={[
+                    { value: 'viewer', label: 'Viewer' },
+                    { value: 'asker', label: 'Asker' },
+                    { value: 'editor', label: 'Editor' },
+                  ]}
+                />
+              </div>
+              <Button className="flow-btn primary" type="button" onClick={invite}>
+                Invite
+              </Button>
             </div>
-            <Button className="flow-btn primary" type="button" onClick={invite}>
-              Invite
-            </Button>
-          </div>
-          <p className="share-roles">
-            <span>Viewer · reads outputs</span>
-            <span>Asker · asks questions, can’t edit</span>
-            <span>Editor · runs and edits</span>
-          </p>
-          <span className="share-label">People with access · {count}</span>
-          {people === null ? <Skeleton className="h-16" /> : null}
-          {(people || []).map(person => (
-            <div key={person.user_id} className="share-person">
-              <span className="share-mark">{mark(person.name || person.email)}</span>
-              <span className="share-who">
-                <strong>{person.name}</strong>
-                <span>{person.email}</span>
-              </span>
-              <span className="share-person-role">{roleName(person.role)}</span>
-            </div>
-          ))}
-          {invites.map(inviteRow => (
-            <div key={inviteRow.token || inviteRow.email} className="share-person">
-              <span className="share-mark pending">{mark(inviteRow.email)}</span>
-              <span className="share-who">
-                <strong>
-                  {inviteRow.email} <span className="share-pending">Pending</span>
-                </strong>
-                <span>
-                  Invited
-                  {inviteRow.token ? (
-                    <>
-                      {' · '}
-                      <Button
-                        className="share-link-btn"
-                        type="button"
-                        onClick={() => {
-                          if (!orgId || !inviteRow.token) return;
-                          void flowJson(
-                            `/api/organizations/${orgId}/invitations/${inviteRow.token}/resend`,
-                            { method: 'POST' }
-                          )
-                            .then(() => setNote('Invitation resent.'))
-                            .catch(() => setError('Could not resend.'));
-                        }}
-                      >
-                        Resend
-                      </Button>
-                    </>
-                  ) : null}
+            <p className="share-roles">
+              <span>Viewer · reads outputs</span>
+              <span>Asker · asks questions, can’t edit</span>
+              <span>Editor · runs and edits</span>
+            </p>
+            <span className="share-label">People with access · {count}</span>
+            {people === null ? <Skeleton className="h-16" /> : null}
+            {(people || []).map(person => (
+              <div key={person.user_id} className="share-person">
+                <span className="share-mark">{mark(person.name || person.email)}</span>
+                <span className="share-who">
+                  <strong>{person.name}</strong>
+                  <span>{person.email}</span>
                 </span>
+                <span className="share-person-role">{roleName(person.role)}</span>
+              </div>
+            ))}
+            {invites.map(inviteRow => (
+              <div key={inviteRow.token || inviteRow.email} className="share-person">
+                <span className="share-mark pending">{mark(inviteRow.email)}</span>
+                <span className="share-who">
+                  <strong>
+                    {inviteRow.email} <span className="share-pending">Pending</span>
+                  </strong>
+                  <span>
+                    Invited
+                    {inviteRow.token ? (
+                      <>
+                        {' · '}
+                        <Button
+                          className="share-link-btn"
+                          type="button"
+                          onClick={() => {
+                            if (!orgId || !inviteRow.token) return;
+                            void flowJson(
+                              `/api/organizations/${orgId}/invitations/${inviteRow.token}/resend`,
+                              { method: 'POST' }
+                            )
+                              .then(() => setNote('Invitation resent.'))
+                              .catch(() => setError('Could not resend.'));
+                          }}
+                        >
+                          Resend
+                        </Button>
+                      </>
+                    ) : null}
+                  </span>
+                </span>
+                <span className="share-person-role">Viewer</span>
+              </div>
+            ))}
+          </div>
+          <div className="share-section">
+            <div className="share-anyone">
+              <span className="share-icon">⛓</span>
+              <span className="share-who">
+                <strong>Anyone with the link</strong>
+                <span>Signed-in people who open the link</span>
               </span>
               <span className="share-person-role">Viewer</span>
+              <Checkbox
+                checked={linkOn}
+                disabled={linkBusy}
+                onCheckedChange={value => setProjectLink(value === true)}
+                aria-label="Link sharing"
+              />
             </div>
-          ))}
-        </div>
-        <div className="share-section">
-          <div className="share-anyone">
-            <span className="share-icon">⛓</span>
-            <span className="share-who">
-              <strong>Anyone with the link</strong>
-              <span>Signed-in people who open the link</span>
-            </span>
-            <span className="share-person-role">Viewer</span>
-            <Checkbox
-              checked={linkOn}
-              onCheckedChange={value => setLinkOn(value === true)}
-              aria-label="Link sharing"
-            />
+            <div className="share-copy">
+              <Input readOnly aria-label="Project link" value={linkOn ? link : ''} />
+              <Button
+                className="flow-btn"
+                type="button"
+                disabled={!linkOn || !link}
+                onClick={() =>
+                  void navigator.clipboard.writeText(link).then(() => setNote('Link copied.'))
+                }
+              >
+                Copy link
+              </Button>
+            </div>
+            <div className="share-one">
+              <Checkbox
+                checked={oneOutput}
+                onCheckedChange={value => {
+                  if (value === true) openPicker();
+                  else clearOutputShare();
+                }}
+                aria-label="Share one output only"
+              />
+              <span className="share-who">
+                <strong>Share one output only</strong>
+                <span>
+                  {outputShare?.title
+                    ? `Link for “${outputShare.title}”`
+                    : 'Send one result, like a table by brand, on its own'}
+                </span>
+              </span>
+              <Button className="flow-btn" type="button" onClick={openPicker}>
+                Choose
+              </Button>
+            </div>
+            {outputLink ? (
+              <div className="share-copy">
+                <Input readOnly aria-label="Output link" value={outputLink} />
+                <Button
+                  className="flow-btn"
+                  type="button"
+                  onClick={() =>
+                    void navigator.clipboard
+                      .writeText(outputLink)
+                      .then(() => setNote('Output link copied.'))
+                  }
+                >
+                  Copy link
+                </Button>
+              </div>
+            ) : null}
           </div>
-          <div className="share-copy">
-            <Input readOnly aria-label="Project link" value={linkOn ? link : ''} />
-            <Button
-              className="flow-btn"
-              type="button"
-              onClick={() =>
-                void navigator.clipboard.writeText(link).then(() => setNote('Link copied.'))
-              }
-            >
-              Copy link
+          <div className="share-foot">
+            <span className="share-foot-note">
+              {error ? (
+                <span className="flow-error">{error}</span>
+              ) : note ? (
+                note
+              ) : (
+                <>
+                  ⓘ Shared people see the data behind every number.
+                  <br />
+                  Remove access any time.
+                </>
+              )}
+            </span>
+            <Button className="flow-btn" type="button" onClick={onClose}>
+              Done
             </Button>
           </div>
-          <div className="share-one">
-            <Checkbox
-              checked={oneOutput}
-              onCheckedChange={value => setOneOutput(value === true)}
-              aria-label="Share one output only"
-            />
-            <span className="share-who">
-              <strong>Share one output only</strong>
-              <span>Send one result, like a table by brand, on its own</span>
-            </span>
-            <Button className="flow-btn" type="button" onClick={() => setOneOutput(true)}>
-              Choose
-            </Button>
-          </div>
-        </div>
-        <div className="share-foot">
-          <span className="share-foot-note">
-            {error ? (
-              <span className="flow-error">{error}</span>
-            ) : note ? (
-              note
-            ) : (
-              <>
-                ⓘ Shared people see the data behind every number.
-                <br />
-                Remove access any time.
-              </>
-            )}
-          </span>
-          <Button className="flow-btn" type="button" onClick={onClose}>
-            Done
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      {pickerOpen ? (
+        <Dialog open onOpenChange={open => !open && setPickerOpen(false)}>
+          <DialogContent className="share-dialog share-picker">
+            <DialogHeader className="share-head">
+              <DialogTitle>Choose an output</DialogTitle>
+              <DialogDescription>The link shows this result only.</DialogDescription>
+            </DialogHeader>
+            <div className="share-body">
+              {outputs === null ? <Skeleton className="h-24" /> : null}
+              {pickerError ? <p className="flow-error">{pickerError}</p> : null}
+              {outputs && !outputs.length && !pickerError ? (
+                <p className="flow-muted">No outputs in this project yet.</p>
+              ) : null}
+              {(outputs || []).map(run => (
+                <Button
+                  key={run.id}
+                  type="button"
+                  className="share-pick-row"
+                  onClick={() => chooseOutput(run)}
+                >
+                  <span className="share-who">
+                    <strong>{run.title}</strong>
+                    <span>
+                      {outputKindLabel(run.op)}
+                      {run.file ? ` · ${run.file}` : ''}
+                    </span>
+                  </span>
+                </Button>
+              ))}
+            </div>
+            <div className="share-foot">
+              <span />
+              <Button className="flow-btn" type="button" onClick={() => setPickerOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      ) : null}
+    </>
   );
 }

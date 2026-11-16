@@ -36,6 +36,24 @@
   box-shadow: 0 8px 24px #1b1c1a0f;
 }
 
+.share-public .share-public-card {
+  align-items: stretch;
+  max-width: min(880px, 100%);
+}
+
+.share-public .iv-title {
+  text-align: left;
+}
+
+.share-public .output-section {
+  margin-top: 16px;
+}
+
+.share-public .output-grid {
+  width: 100%;
+  font-size: 13px;
+}
+
 .iv-brand {
   display: flex;
   align-items: center;

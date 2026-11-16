@@ -9527,6 +9527,32 @@ select.flow-input {
   border-radius: 10px;
 }
 
+.share-picker .share-body {
+  max-height: min(420px, 60vh);
+  overflow: auto;
+}
+
+.share-pick-row {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-height: 48px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-canvas);
+  text-align: left;
+}
+
+.share-pick-row:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.share-pick-row .share-who strong {
+  white-space: normal;
+}
+
 .share-radio {
   width: 14px;
   height: 14px;
