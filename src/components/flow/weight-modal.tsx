@@ -18,9 +18,9 @@ import { RAKE_COPY } from '@/lib/rake-weights';
 import {
   achievedShare,
   categoryMeanWeight,
-  countsFromPercents,
   marginFor,
   shareLabel,
+  targetPercents,
   type WeightCode,
   type WeightMargin,
 } from '@/components/flow/weight-targets';
@@ -283,26 +283,23 @@ export function WeightPanel({
   const requestBody = (previewOnly: boolean) => {
     const categorical: Record<string, Record<string, number>> = {};
     for (const group of groups) {
-      const counts = countsFromPercents(
+      const targets = targetPercents(
         group.codes.map(code => ({
           code: code.code,
           percent: percents[group.column]?.[code.code] || '',
-        })),
-        group.total
+        }))
       );
-      if (Object.keys(counts).length) categorical[group.column] = counts;
+      if (Object.keys(targets).length) categorical[group.column] = targets;
     }
     if (!Object.keys(categorical).length) return null;
     const upper = Number(cap);
+    // Percents, same as categorical_targets — the API scales both to the weight sum.
     const missingTargets = Object.fromEntries(
       Object.entries(missingPct)
         .filter(
           ([column, value]) => categorical[column] && Number.isFinite(Number(value)) && value.trim()
         )
-        .map(([column, value]) => {
-          const total = groups.find(group => group.column === column)?.total || 0;
-          return [column, (Number(value) / 100) * total];
-        })
+        .map(([column, value]) => [column, Number(value)])
     );
     return {
       categorical_targets: categorical,
@@ -399,7 +396,7 @@ export function WeightPanel({
           </DialogHeader>
           <div className="weight-versions-head">
             <span>Weight variable · {outputColumn}</span>
-            <span>Targets are a percent of each column&apos;s rows, sent as counts</span>
+            <span>Targets are a percent of each column&apos;s rows</span>
           </div>
           <div className="weight-versions">
             <div className="weight-version">
