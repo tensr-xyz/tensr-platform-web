@@ -11099,6 +11099,33 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   flex: 1;
 }
 
+.deck-slides ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deck-slides li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+}
+
+.deck-slides li.deck-slide-low {
+  border-left: 3px solid var(--color-warn);
+}
+
+.deck-low-note {
+  color: var(--color-warn);
+}
+
 .analysis-export-menu {
   display: flex;
   flex-direction: column;

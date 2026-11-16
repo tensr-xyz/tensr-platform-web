@@ -10,6 +10,7 @@ import { guardUserText } from '@/components/flow/chat-output';
 import { fetchAnalysisRun, R_CHECK_POLL_MS, rCheckPhase } from '@/lib/analysis-runs';
 import { loadOutputPreferences, OUTPUT_PREFERENCES_EVENT } from '@/lib/output-preferences';
 import { exportTableAsCSV, exportTableAsImage } from '@/utils/table-export';
+import { appendResultToDeck, exportResultAsPptx } from '@/lib/output-pptx';
 
 /** Column role for a theme table so the count, share, and quote each keep their own space. */
 export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'label' {
@@ -30,6 +31,10 @@ export function AnalysisResult({
   rCheck,
   rStatement,
   runId,
+  datasetId,
+  projectId,
+  templateName,
+  templateBase64,
 }: {
   lead?: string;
   tables: RunTable[];
@@ -39,12 +44,18 @@ export function AnalysisResult({
   rCheck?: string;
   rStatement?: string;
   runId?: string;
+  datasetId?: string;
+  projectId?: string;
+  templateName?: string;
+  templateBase64?: string;
 }) {
   const [places, setPlaces] = useState(() =>
     typeof window === 'undefined' ? 1 : loadOutputPreferences().decimalPlaces
   );
   const [checksOpen, setChecksOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportNote, setExportNote] = useState('');
+  const [exportBusy, setExportBusy] = useState('');
   const card = useRef<HTMLDivElement>(null);
   const download = (kind: 'xlsx' | 'png') => {
     const table = card.current?.querySelector('table');
@@ -54,6 +65,18 @@ export function AnalysisResult({
       return;
     }
     void exportTableAsImage(table, { filename: 'table' });
+  };
+  const runExport = (name: string, action: () => Promise<void>) => {
+    setExportBusy(name);
+    setExportNote('');
+    void action()
+      .then(() =>
+        setExportNote(name === 'pptx' ? 'PowerPoint slide downloaded.' : 'Added to the deck.')
+      )
+      .catch(err =>
+        setExportNote(err instanceof Error ? err.message : 'The export did not finish.')
+      )
+      .finally(() => setExportBusy(''));
   };
   const [scriptOpen, setScriptOpen] = useState(false);
   const [mark, setMark] = useState({ kind: rCheck || '', statement: rStatement || '' });
@@ -129,11 +152,50 @@ export function AnalysisResult({
           </Button>
           {exportOpen ? (
             <div className="analysis-export-menu" role="menu">
-              <Button type="button" className="flow-btn" role="menuitem">
+              <Button
+                type="button"
+                className="flow-btn"
+                role="menuitem"
+                disabled={Boolean(exportBusy)}
+                onClick={() =>
+                  runExport('pptx', () =>
+                    exportResultAsPptx({
+                      runId,
+                      lead: leadText,
+                      tables,
+                      footnote,
+                      projectId,
+                      templateBase64,
+                      templateName,
+                    })
+                  )
+                }
+              >
                 PowerPoint slide
               </Button>
-              <p className="flow-muted">On the template chosen for this project · editable chart</p>
-              <Button type="button" className="flow-btn" role="menuitem">
+              <p className="flow-muted">
+                {templateName
+                  ? `On ${templateName.replace(/\.(pptx|potx)$/i, '')} · editable chart`
+                  : 'On the template chosen for this project · editable chart'}
+              </p>
+              <Button
+                type="button"
+                className="flow-btn"
+                role="menuitem"
+                disabled={Boolean(exportBusy) || !datasetId}
+                onClick={() =>
+                  runExport('deck', () =>
+                    appendResultToDeck({
+                      datasetId: datasetId || '',
+                      lead: leadText,
+                      tables,
+                      footnote,
+                      templateBase64,
+                      templateName,
+                    })
+                  )
+                }
+              >
                 Add to a deck…
               </Button>
               <p className="flow-muted">Append to a saved deck in Report</p>
@@ -153,6 +215,7 @@ export function AnalysisResult({
               >
                 Image (PNG)
               </Button>
+              {exportNote ? <p className="flow-muted">{exportNote}</p> : null}
             </div>
           ) : null}
         </div>

@@ -14,7 +14,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { AgentThread, AgentThreadColumn, useAgentThread } from '@/components/flow/agent-thread';
-import { OverviewDeck, WaveRefresh } from '@/components/flow/overview-deck';
+import {
+  OverviewDeck,
+  OVERVIEW_SLIDES,
+  WaveRefresh,
+  type OverviewBuildRequest,
+  type OverviewSlide,
+} from '@/components/flow/overview-deck';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import {
   loadProjectTables,
@@ -2848,6 +2854,8 @@ function ChatScreen({
                       rCheck={resultView.rCheck}
                       rStatement={resultView.rStatement}
                       runId={runIds[0]}
+                      datasetId={datasetId || undefined}
+                      projectId={chatProjectId || undefined}
                     />
                   ) : (
                     <>
@@ -4574,6 +4582,8 @@ function ReportScreen({
   const [templateSummary, setTemplateSummary] = useState('');
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [waveOpen, setWaveOpen] = useState(false);
+  const [audienceNames, setAudienceNames] = useState<string[]>([]);
+  const [overviewSlides, setOverviewSlides] = useState<OverviewSlide[]>(OVERVIEW_SLIDES);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
@@ -4843,7 +4853,7 @@ function ReportScreen({
   const exportFileId =
     selected[0]?.datasetId || reportPins.find(pin => pin.datasetId)?.datasetId || datasetId;
 
-  const deck = async () => {
+  const deck = async (recipe?: OverviewBuildRequest) => {
     const outputs = deliverableOutputs(reportPins, 'deck');
     if (!exportFileId || (!selected.length && !outputs.length)) {
       setError(
@@ -4854,23 +4864,71 @@ function ReportScreen({
       return;
     }
     setError('');
-    const created = await flowJson<{ export_id?: string; filename?: string }>(
-      `/datasets/${exportFileId}/export/deck`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          spec_ids: selected.map(row => row.id),
-          outputs,
-          headlines: findings
-            .filter(finding => finding.headline)
-            .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
-          ...(template ? { template_base64: template } : {}),
-        }),
-      }
-    );
+    const created = await flowJson<{
+      export_id?: string;
+      filename?: string;
+      low_bases?: { title?: string; note?: string; base?: number; group?: string }[];
+      recipe?: { id?: string };
+    }>(`/datasets/${exportFileId}/export/deck`, {
+      method: 'POST',
+      body: JSON.stringify({
+        spec_ids: selected.map(row => row.id),
+        outputs,
+        headlines: findings
+          .filter(finding => finding.headline)
+          .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
+        ...(template ? { template_base64: template } : {}),
+        ...(templateName ? { template_name: templateName } : {}),
+        ...(recipe
+          ? {
+              name: recipe.audience
+                ? `Audience overview · ${recipe.audience}`
+                : 'Audience overview',
+              audience: recipe.audience,
+              slides: recipe.slides,
+              options: {
+                headline: recipe.headline,
+                footnote: recipe.footnote,
+                hide_low: recipe.hideLow,
+                low_base_threshold: recipe.lowBaseThreshold,
+              },
+            }
+          : {}),
+      }),
+    });
     if (!created.export_id) throw new Error('The deck export did not return a file.');
+    const low = created.low_bases || [];
+    if (low.length) {
+      setOverviewSlides(current =>
+        current.map(slide => {
+          const hit = low.find(
+            note =>
+              String(note.title || '')
+                .toLowerCase()
+                .includes(slide.title.toLowerCase().slice(0, 12)) ||
+              slide.title.toLowerCase().includes(
+                String(note.title || '')
+                  .toLowerCase()
+                  .slice(0, 12)
+              )
+          );
+          if (!hit) return slide;
+          return {
+            ...slide,
+            lowBase: true,
+            lowBaseNote: String(
+              hit.note || `One group has a base of ${hit.base} · shown with a low-base note`
+            ),
+          };
+        })
+      );
+    }
     await downloadExport(`/exports/${created.export_id}`, created.filename || 'deck.pptx');
-    setNote('Deck downloaded.');
+    setNote(
+      recipe
+        ? `Overview deck downloaded${created.recipe?.id ? ' and saved as a recipe' : ''}.`
+        : 'Deck downloaded.'
+    );
   };
 
   const run = (name: string, action: () => Promise<void>) => {
@@ -5125,9 +5183,15 @@ function ReportScreen({
         <StudyBrief key={projectId} projectId={projectId} />
         {overviewOpen ? (
           <OverviewDeck
-            audience=""
+            audience={audienceNames[0] || ''}
+            audiences={audienceNames}
+            slides={overviewSlides}
             templateName={templateName || undefined}
             templateSummary={templateSummary || undefined}
+            onReplaceTemplate={() => templateInput.current?.click()}
+            onBuild={async request => {
+              await deck(request);
+            }}
             onClose={() => setOverviewOpen(false)}
           />
         ) : null}
@@ -5173,7 +5237,40 @@ function ReportScreen({
               <Button type="button" disabled={busy !== ''} onClick={() => run('deck', deck)}>
                 Download
               </Button>
-              <Button type="button" className="flow-btn" onClick={() => setOverviewOpen(true)}>
+              <Button
+                type="button"
+                className="flow-btn"
+                onClick={() => {
+                  const fromFindings = findings
+                    .filter(finding => finding.lowBase)
+                    .map(finding => ({
+                      title: finding.eyebrow || finding.headline || '',
+                      note: 'shown with a low-base note',
+                    }));
+                  setOverviewSlides(
+                    OVERVIEW_SLIDES.map(slide => {
+                      const hit = fromFindings.find(item =>
+                        item.title.toLowerCase().includes(slide.title.toLowerCase().slice(0, 10))
+                      );
+                      return hit ? { ...slide, lowBase: true, lowBaseNote: hit.note } : slide;
+                    })
+                  );
+                  if (exportFileId) {
+                    void flowJson<{ audiences?: { name?: string; label?: string }[] }>(
+                      `/datasets/${exportFileId}/audiences`
+                    )
+                      .then(page =>
+                        setAudienceNames(
+                          (page.audiences || [])
+                            .map(row => String(row.label || row.name || '').trim())
+                            .filter(Boolean)
+                        )
+                      )
+                      .catch(() => setAudienceNames([]));
+                  }
+                  setOverviewOpen(true);
+                }}
+              >
                 Audience overview
               </Button>
               <Button type="button" className="flow-btn" onClick={() => setWaveOpen(true)}>

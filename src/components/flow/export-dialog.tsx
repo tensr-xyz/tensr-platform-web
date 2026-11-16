@@ -429,7 +429,21 @@ export function ExportDialog({
   ];
   const downloads: Choice[] = [
     { id: 'docx', label: 'Word', ext: '.docx', run: () => server('docx', `${stem}.docx`) },
-    { id: 'pptx', label: 'PowerPoint', ext: '.pptx', note: 'Coming soon', soon: true },
+    {
+      id: 'pptx',
+      label: 'PowerPoint',
+      ext: '.pptx',
+      note: runIds.length ? 'One slide · editable chart' : 'Save the analysis first',
+      soon: !runIds.length,
+      run: () =>
+        downloadExport(`/datasets/reports/pipeline/export?format=pptx`, `${stem}.pptx`, {
+          method: 'POST',
+          body: JSON.stringify({
+            ...JSON.parse(exportBody(runIds)),
+            single_slide: true,
+          }),
+        }),
+    },
     { id: 'xlsx', label: 'Excel', ext: '.xlsx', note: 'Coming soon', soon: true },
     { id: 'pdf', label: 'PDF', ext: '.pdf', run: () => server('pdf', `${stem}.pdf`) },
     { id: 'html', label: 'HTML', ext: '.html', run: () => server('html', `${stem}.html`) },

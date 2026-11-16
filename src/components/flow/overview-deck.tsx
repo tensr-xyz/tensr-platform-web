@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -11,7 +11,15 @@ import {
 } from '@/components/ui/dialog';
 import { matchWave, type WaveColumn } from '@/lib/wave-match';
 
-export const OVERVIEW_SLIDES = [
+export type OverviewSlide = {
+  id: string;
+  title: string;
+  note: string;
+  lowBase?: boolean;
+  lowBaseNote?: string;
+};
+
+export const OVERVIEW_SLIDES: OverviewSlide[] = [
   { id: 'title', title: 'Title', note: 'Title layout · audience definition as subtitle' },
   { id: 'size', title: 'Size and market split', note: 'People (000s)' },
   {
@@ -34,25 +42,46 @@ export const OVERVIEW_SLIDES = [
     id: 'market',
     title: 'Reach by market',
     note: 'A group under the base is shown with a low-base note',
-    lowBase: true,
   },
 ];
+
+export type OverviewBuildRequest = {
+  audience: string;
+  slides: OverviewSlide[];
+  headline: boolean;
+  footnote: boolean;
+  hideLow: boolean;
+  lowBaseThreshold: number;
+};
 
 /** The audience overview deck: template, slide list, low-base flags, saved as a recipe. */
 export function OverviewDeck({
   audience,
+  audiences,
+  slides,
   templateName,
   templateSummary,
+  onReplaceTemplate,
+  onBuild,
   onClose,
 }: {
   audience: string;
+  audiences?: string[];
+  /** When set, replaces the default slide list (e.g. after a low-base scan). */
+  slides?: OverviewSlide[];
   templateName?: string;
   /** e.g. "9 layouts · theme colours found" from the uploaded PPTX. */
   templateSummary?: string;
+  onReplaceTemplate?: () => void;
+  onBuild?: (request: OverviewBuildRequest) => Promise<void> | void;
   onClose: () => void;
 }) {
-  const [order, setOrder] = useState(OVERVIEW_SLIDES);
+  const initial = useMemo(() => slides || OVERVIEW_SLIDES, [slides]);
+  const [order, setOrder] = useState(initial);
+  const [chosenAudience, setChosenAudience] = useState(audience || '');
   const [saved, setSaved] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const [headline, setHeadline] = useState(true);
   const [footnote, setFootnote] = useState(true);
   const [hideLow, setHideLow] = useState(false);
@@ -66,6 +95,27 @@ export function OverviewDeck({
     setOrder(copy);
     setSaved(false);
   };
+  const build = () => {
+    if (!onBuild) {
+      setSaved(true);
+      return;
+    }
+    setBusy(true);
+    setError('');
+    void Promise.resolve(
+      onBuild({
+        audience: chosenAudience || audience || 'Total sample',
+        slides: order,
+        headline,
+        footnote,
+        hideLow,
+        lowBaseThreshold: 50,
+      })
+    )
+      .then(() => setSaved(true))
+      .catch(err => setError(err instanceof Error ? err.message : 'The deck did not build.'))
+      .finally(() => setBusy(false));
+  };
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
       <DialogContent className="share-dialog deck-builder">
@@ -76,11 +126,35 @@ export function OverviewDeck({
         <div className="deck-columns">
           <div className="deck-setup">
             <p>Audience</p>
-            <p>{audience || 'Total sample'}</p>
+            {audiences && audiences.length ? (
+              <select
+                aria-label="Audience"
+                className="flow-input"
+                value={chosenAudience}
+                onChange={event => {
+                  setChosenAudience(event.target.value);
+                  setSaved(false);
+                }}
+              >
+                <option value="">Total sample</option>
+                {audiences.map(name => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <p>{chosenAudience || audience || 'Total sample'}</p>
+            )}
             <p className="flow-muted">Compared with: Total sample</p>
             <p>PowerPoint template</p>
             <p>{templateName || 'The template chosen on Deliverables'}</p>
             {templateSummary ? <p className="flow-muted">{templateSummary}</p> : null}
+            {onReplaceTemplate ? (
+              <Button type="button" className="flow-btn" onClick={onReplaceTemplate}>
+                Replace
+              </Button>
+            ) : null}
             <p className="flow-muted">
               Each slide uses the template&apos;s own layout and placeholders. Charts and tables
               stay editable in PowerPoint.
@@ -120,32 +194,42 @@ export function OverviewDeck({
           <div className="deck-slides">
             <p>Slides · drag to reorder</p>
             <ol>
-              {order.map((slide, index) => (
-                <li key={slide.id}>
-                  <span>{index + 1}</span>
-                  <span>
-                    {slide.title}
-                    <span className="flow-muted">
-                      {slide.lowBase && !hideLow ? ' · low-base note' : ''} {slide.note}
+              {order.map((slide, index) => {
+                const showLow = Boolean(slide.lowBase || slide.lowBaseNote) && !hideLow;
+                return (
+                  <li key={slide.id} className={showLow ? 'deck-slide-low' : undefined}>
+                    <span>{index + 1}</span>
+                    <span>
+                      {slide.title}
+                      <span className={showLow ? 'deck-low-note' : 'flow-muted'}>
+                        {showLow ? ` · ${slide.lowBaseNote || 'shown with a low-base note'}` : ''}{' '}
+                        {slide.note}
+                      </span>
                     </span>
-                  </span>
-                  <Button type="button" className="flow-btn" onClick={() => move(index, -1)}>
-                    Up
-                  </Button>
-                  <Button type="button" className="flow-btn" onClick={() => move(index, 1)}>
-                    Down
-                  </Button>
-                </li>
-              ))}
+                    <Button type="button" className="flow-btn" onClick={() => move(index, -1)}>
+                      Up
+                    </Button>
+                    <Button type="button" className="flow-btn" onClick={() => move(index, 1)}>
+                      Down
+                    </Button>
+                  </li>
+                );
+              })}
             </ol>
           </div>
         </div>
+        {error ? <p className="flow-error">{error}</p> : null}
         <div className="flow-row">
           <Button type="button" className="flow-btn" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="button" className="flow-btn primary" onClick={() => setSaved(true)}>
-            Build {order.length} slides
+          <Button
+            type="button"
+            className="flow-btn primary"
+            disabled={busy}
+            onClick={() => build()}
+          >
+            {busy ? 'Building…' : `Build ${order.length} slides`}
           </Button>
         </div>
         {saved ? (
