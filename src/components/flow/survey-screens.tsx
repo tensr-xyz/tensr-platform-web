@@ -46,6 +46,7 @@ import {
   chartSeriesFromBook,
   codedStub,
   lettersFor,
+  mediaCellText,
   selectionFromCell,
   themeRead,
   type BannerCell,
@@ -244,20 +245,7 @@ function cellFigure(
   if (figure === 'mean') {
     return cell.mean != null ? formatStat(cell.mean, 'mean', digits) : '—';
   }
-  const value =
-    figure === 'row_percent'
-      ? cell.row_percent
-      : figure === 'total_percent'
-        ? cell.total_percent
-        : cell.percent;
-  let shown = value != null ? `${value.toFixed(digits)}%` : '—';
-  const projected = cell.projected_thousands;
-  if (typeof projected === 'number' && Number.isFinite(projected) && figure === 'percent') {
-    const count = projected.toFixed(1).replace(/\.0$/, '');
-    const labelled = `${count} (000s)`;
-    shown = shown === '—' ? labelled : `${shown} · ${labelled}`;
-  }
-  return shown;
+  return mediaCellText(cell, figure, digits);
 }
 
 function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[] {

@@ -3,6 +3,7 @@ import {
   bannerHeading,
   codedStub,
   efficiencyPercent,
+  mediaCellText,
   selectionFromCell,
 } from './flow-survey';
 
@@ -99,6 +100,17 @@ describe('flow survey grid', () => {
 
   it('shows rake efficiency as a percent', () => {
     expect(efficiencyPercent(0.82)).toBe('82.0%');
+  });
+
+  it('shows projected thousands and index beside the column percent', () => {
+    expect(
+      mediaCellText({
+        banner_id: 'total',
+        percent: 39.4,
+        projected_thousands: 102.6,
+        index: 131.2,
+      })
+    ).toBe('39.4% · 102.6 (000s) · 131');
   });
 
   it('names the paired McNemar test when brands are compared inside a column', () => {
