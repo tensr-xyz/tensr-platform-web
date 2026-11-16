@@ -1069,7 +1069,7 @@ export function AgentThreadColumn({
         ) : null}
         {thread.outputReady ? (
           <div className="chat-result">
-            <button
+            <Button
               type="button"
               className="chat-result-top"
               aria-pressed={thread.panelOpen}
@@ -1094,7 +1094,7 @@ export function AgentThreadColumn({
                 <div className="flow-muted">{thread.kind} · Output</div>
               </div>
               {thread.panelOpen ? <span className="chat-viewing">Viewing</span> : null}
-            </button>
+            </Button>
             <div className="chat-result-actions">
               {asker ? (
                 <>

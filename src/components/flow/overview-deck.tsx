@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ChoiceSelect } from '@/components/ui/select';
 import { matchWave, type WaveColumn } from '@/lib/wave-match';
 
 export type OverviewSlide = {
@@ -127,22 +128,19 @@ export function OverviewDeck({
           <div className="deck-setup">
             <p>Audience</p>
             {audiences && audiences.length ? (
-              <select
+              <ChoiceSelect
                 aria-label="Audience"
                 className="flow-input"
                 value={chosenAudience}
-                onChange={event => {
-                  setChosenAudience(event.target.value);
+                onValueChange={value => {
+                  setChosenAudience(value);
                   setSaved(false);
                 }}
-              >
-                <option value="">Total sample</option>
-                {audiences.map(name => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'Total sample' },
+                  ...audiences.map(name => ({ value: name, label: name })),
+                ]}
+              />
             ) : (
               <p>{chosenAudience || audience || 'Total sample'}</p>
             )}
