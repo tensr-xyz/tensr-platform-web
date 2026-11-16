@@ -17,10 +17,11 @@ import { efficiencyPercent } from '@/lib/flow-survey';
 import { RAKE_COPY } from '@/lib/rake-weights';
 import {
   achievedShare,
+  buildScreenRakeBody,
   categoryMeanWeight,
   marginFor,
+  PREVIOUS_WEIGHT,
   shareLabel,
-  targetPercents,
   type WeightCode,
   type WeightMargin,
 } from '@/components/flow/weight-targets';
@@ -154,6 +155,8 @@ export function WeightPanel({
   const [addColumn, setAddColumn] = useState('');
   const [sourceDataset, setSourceDataset] = useState('');
   const [cap, setCap] = useState('');
+  const [floor, setFloor] = useState('');
+  const [startFrom, setStartFrom] = useState('');
   const [diagnostics, setDiagnostics] = useState<RakeDiagnostics | null>(null);
   const [savedName, setSavedName] = useState('');
   const [error, setError] = useState('');
@@ -280,40 +283,31 @@ export function WeightPanel({
       .catch(err => setError(err instanceof Error ? err.message : 'Could not load targets'));
   };
 
-  const requestBody = (previewOnly: boolean) => {
-    const categorical: Record<string, Record<string, number>> = {};
-    for (const group of groups) {
-      const targets = targetPercents(
-        group.codes.map(code => ({
+  const requestBody = (previewOnly: boolean) =>
+    buildScreenRakeBody(
+      groups.map(group => ({
+        column: group.column,
+        codes: group.codes.map(code => ({
           code: code.code,
           percent: percents[group.column]?.[code.code] || '',
-        }))
-      );
-      if (Object.keys(targets).length) categorical[group.column] = targets;
-    }
-    if (!Object.keys(categorical).length) return null;
-    const upper = Number(cap);
-    // Percents, same as categorical_targets — the API scales both to the weight sum.
-    const missingTargets = Object.fromEntries(
-      Object.entries(missingPct)
-        .filter(
-          ([column, value]) => categorical[column] && Number.isFinite(Number(value)) && value.trim()
-        )
-        .map(([column, value]) => [column, Number(value)])
+        })),
+      })),
+      {
+        missingHandling: handling,
+        missingTargets: missingPct,
+        floor,
+        cap,
+        startFrom,
+        preview: previewOnly,
+      }
     );
-    return {
-      categorical_targets: categorical,
-      ...(handling ? { missing_handling: handling } : {}),
-      ...(handling === 'missing_target' ? { missing_targets: missingTargets } : {}),
-      ...(Number.isFinite(upper) && upper > 0 ? { upper } : {}),
-      ...(previewOnly ? { preview: true } : {}),
-    };
-  };
 
   const previewKey = JSON.stringify([
     percents,
     groups.map(group => group.column),
+    floor,
     cap,
+    startFrom,
     handling,
     missingPct,
   ]);
@@ -452,11 +446,13 @@ export function WeightPanel({
                   labels[group.column]?.[code.code] ||
                   labels[group.column]?.[code.code.replace(/\.0$/, '')];
                 const capped = mean && Number(cap) > 0 && Number(mean) >= Number(cap);
+                const floored = mean && Number(floor) > 0 && Number(mean) <= Number(floor);
                 return (
                   <div
                     key={code.code}
                     className="weight-row"
                     data-capped={capped ? 'true' : 'false'}
+                    data-floored={floored ? 'true' : 'false'}
                   >
                     <span>
                       {label ? (
@@ -467,6 +463,7 @@ export function WeightPanel({
                         code.code
                       )}
                       {capped ? ` · capped at ${cap}` : ''}
+                      {floored ? ` · floored at ${floor}` : ''}
                     </span>
                     <span className="weight-muted">{shareLabel(code.percentage)}</span>
                     <span className="weight-target">
@@ -645,6 +642,30 @@ export function WeightPanel({
               Load
             </Button>
           ) : null}
+          <ChoiceSelect
+            className="weight-link"
+            aria-label="Start from weight"
+            value={startFrom}
+            onValueChange={setStartFrom}
+            options={[
+              { value: '', label: 'Start from equal weights' },
+              { value: PREVIOUS_WEIGHT, label: 'Start from previous weight' },
+              ...weightColumns.map(name => {
+                const column = columns.find(item => item.name === name);
+                const label = column?.label && column.label !== name ? column.label : name;
+                return { value: name, label: `Start from ${label}` };
+              }),
+            ]}
+          />
+          <span className="weight-cap">
+            Floor
+            <Input
+              aria-label="Weight floor"
+              value={floor}
+              placeholder="none"
+              onChange={event => setFloor(event.target.value)}
+            />
+          </span>
           <span className="weight-cap">
             Cap
             <Input

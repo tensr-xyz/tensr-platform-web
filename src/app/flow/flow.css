@@ -3748,7 +3748,8 @@ button.chat-result-top {
   font-size: 13px;
 }
 
-.weight-row[data-capped='true'] {
+.weight-row[data-capped='true'],
+.weight-row[data-floored='true'] {
   background: #f6ede2;
   color: var(--color-warn);
 }
@@ -7153,7 +7154,8 @@ button.chat-result-top {
   font-size: 11px;
 }
 
-.weight-dialog .weight-row[data-capped='true'] {
+.weight-dialog .weight-row[data-capped='true'],
+.weight-dialog .weight-row[data-floored='true'] {
   margin: 0 -22px;
   padding: 0 22px;
   background: #fbf1e2;
