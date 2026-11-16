@@ -77,6 +77,7 @@ import {
   shareRequest,
   useProjectPins,
 } from '@/components/flow/report-pins';
+import { documentFromPins, reportDocumentForApi } from '@/lib/report-document';
 import { SettingsScreen } from '@/components/flow/settings-screen';
 import { FiltersPanel, type FlowFilter } from '@/components/flow/filters-panel';
 import { describeFilters } from '@/components/flow/filters-panel-logic';
@@ -4968,6 +4969,7 @@ function ReportScreen({
       body: JSON.stringify({
         spec_ids: selected.map(row => row.id),
         outputs,
+        report_document: reportDocumentForApi(documentFromPins(reportPins)),
         headlines: findings
           .filter(finding => finding.headline)
           .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
