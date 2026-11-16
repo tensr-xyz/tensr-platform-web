@@ -26,9 +26,9 @@ export type ResultView = {
 };
 
 /** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
-export function withoutEngineCopies<T extends { title?: string; columns?: string[] }>(
-  tables: T[]
-): T[] {
+export function withoutEngineCopies<
+  T extends { title?: string; columns?: string[]; superseded?: boolean },
+>(tables: T[]): T[] {
   const titles = tables.map(table => (table.title || '').trim().toLowerCase());
   const has = (name: string) => titles.includes(name);
   const labelledCoefficients = tables.some(
@@ -37,6 +37,7 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
       (table.columns || []).some(column => column.trim().toLowerCase() === 'se')
   );
   return tables.filter(table => {
+    if (table.superseded) return false;
     const title = (table.title || '').trim().toLowerCase();
     const columns = (table.columns || []).map(column => column.trim().toLowerCase());
     if (
@@ -317,7 +318,9 @@ function asTable(value: unknown): RunTable | null {
     headers?: unknown;
     variable_names?: unknown;
     note?: unknown;
+    superseded?: unknown;
   };
+  if (record.superseded) return null;
   if (Array.isArray(record.headers) && Array.isArray(record.variable_names)) return null;
   let columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
   const titleText = cell(record.title);
@@ -1482,7 +1485,22 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     add(recordTable(record.descriptives, 'Descriptives', ['column', 'n', 'mean', 'std']));
     add(statRow(record, 'Test', ['statistic', 'df', 'p_value', 'effect_size']));
     add(recordTable(record.loadings, 'Loadings', ['variable', 'factor', 'loading']));
-    add(recordTable(record.items, 'Reliability', ['item', 'alpha_if_deleted', 'item_total']));
+    // Item statistics are objects. A bare list of item names is not a reliability table.
+    if (
+      Array.isArray(record.item_statistics) ||
+      (Array.isArray(record.items) &&
+        record.items.some(item => item && typeof item === 'object' && !Array.isArray(item)))
+    ) {
+      add(
+        recordTable(record.item_statistics || record.items, 'Items', [
+          'item',
+          'mean',
+          'std_dev',
+          'item_total_correlation',
+          'alpha_if_deleted',
+        ])
+      );
+    }
     const mark = record.r_syntax_verification;
     if (mark && typeof mark === 'object') {
       const verification = mark as { kind?: unknown; statement?: unknown; status?: unknown };

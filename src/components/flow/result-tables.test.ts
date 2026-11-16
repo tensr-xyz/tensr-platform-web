@@ -1116,6 +1116,92 @@ describe('summary tables', () => {
     expect(view.tables.map(table => table.title)).toEqual(['Coefficients', 'Correlations']);
     expect(view.tables[0].rows[0]).toEqual(['Brand trust', '0.420', '0.050', '0.001']);
   });
+
+  it('shows one correlation matrix with a Columns key and drops superseded copies', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Correlations',
+            columns: ['Variable', '1', '2'],
+            rows: [
+              ['1', '1.000', '0.768*** (n=500)'],
+              ['2', '0.768*** (n=500)', '1.000'],
+            ],
+          },
+          {
+            title: 'Columns',
+            columns: ['Column', 'Label'],
+            rows: [
+              ['1', 'How satisfied are you overall with your most recent visit?'],
+              ['2', 'How likely are you to recommend this brand?'],
+            ],
+          },
+        ],
+      },
+      result: {
+        report: {
+          tables: [
+            {
+              title: 'Pearson correlation matrix',
+              superseded: true,
+              columns: ['', 'sat', 'recommend'],
+              rows: [
+                ['sat', '1', '0.768'],
+                ['recommend', '0.768', '1'],
+              ],
+            },
+            {
+              title: 'Pearson correlation p-values',
+              superseded: true,
+              columns: ['', 'sat', 'recommend'],
+              rows: [
+                ['sat', '—', '0.001'],
+                ['recommend', '0.001', '—'],
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Correlations', 'Columns']);
+    expect(view.tables[0].columns).toEqual(['Variable', '1', '2']);
+    expect(view.tables[1].rows[0][1]).toContain('satisfied');
+  });
+
+  it('does not invent a Reliability table from a list of item names', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Reliability',
+            columns: ['Statistic', 'Value'],
+            rows: [
+              ["Cronbach's alpha", '0.810'],
+              ["McDonald's omega", '0.840'],
+              ['n', '40'],
+            ],
+          },
+          {
+            title: 'Items',
+            columns: ['Item', 'Mean', 'SD', 'Item-total correlation', 'Alpha if deleted'],
+            rows: [['Liking', '3.200', '0.400', '0.550', '0.720']],
+          },
+        ],
+      },
+      result: {
+        items: ['q1', 'q2', 'q3'],
+        cronbach_alpha: 0.81,
+        omega: 0.84,
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Reliability', 'Items']);
+    expect(view.tables[0].rows.map(row => row[0])).toEqual([
+      "Cronbach's alpha",
+      "McDonald's omega",
+      'n',
+    ]);
+  });
 });
 
 describe('answer tables', () => {
