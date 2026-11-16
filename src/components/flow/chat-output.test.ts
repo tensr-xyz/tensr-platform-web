@@ -277,6 +277,13 @@ describe('chat output panel', () => {
     expect(lead.trim().endsWith('-')).toBe(false);
   });
 
+  it('drops empty parentheses and clamps long share percents in the lead', () => {
+    const lead = resultLead('Heard is 38.062% ( ) in the North.');
+    expect(lead).toContain('38.1%');
+    expect(lead).not.toMatch(/38\.062%/);
+    expect(lead).not.toMatch(/\(\s*\)/);
+  });
+
   it('titles a funnel with the short name, not the lead', () => {
     const lead =
       'Aware is the largest stage and the last stage converts from the one before it across the whole base.';

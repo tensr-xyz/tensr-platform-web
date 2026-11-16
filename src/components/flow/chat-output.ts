@@ -435,6 +435,13 @@ function withoutStrayEnding(text: string): string {
   return lines
     .join('\n')
     .replace(/\s+weighted by [A-Za-z][A-Za-z0-9]*_[A-Za-z0-9_]*\.?/gi, '')
+    .replace(/\s*[\(\[]\s*[\)\]]/g, '')
+    .replace(/(\d+\.\d{2,})%/g, (_all, raw: string) => {
+      const number = Number(raw);
+      if (!Number.isFinite(number)) return `${raw}%`;
+      const shown = number.toFixed(1).replace(/\.0$/, '');
+      return `${shown}%`;
+    })
     .replace(/[ \t]{2,}/g, ' ')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
