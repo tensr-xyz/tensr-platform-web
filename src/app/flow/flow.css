@@ -7599,7 +7599,8 @@ button.chat-result-top {
   gap: 6px;
 }
 
-.table-chart-settings .chart-type {
+.table-chart-settings .chart-type,
+.table-chart .chart-type {
   height: 52px;
   flex-direction: column;
   gap: 4px;
@@ -7611,10 +7612,16 @@ button.chat-result-top {
   font-size: 11px;
 }
 
-.table-chart-settings .chart-type[data-active='true'] {
+.table-chart-settings .chart-type[data-active='true'],
+.table-chart .chart-type[data-active='true'] {
   border-color: var(--color-accent);
   background: var(--color-accent-soft);
   color: var(--color-accent);
+}
+
+.table-chart .chart-types {
+  flex: 1;
+  max-width: 320px;
 }
 
 .chart-field {

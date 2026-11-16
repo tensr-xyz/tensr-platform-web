@@ -1,6 +1,8 @@
 import {
   bannerFootnote,
   bannerHeading,
+  chartFromBannerSeries,
+  chartSeriesFromBook,
   codedStub,
   efficiencyPercent,
   mediaCellText,
@@ -122,6 +124,91 @@ describe('flow survey grid', () => {
         letters: [{ stub_row_id: 'a:1', banner_id: 'total', letter: 'B' }],
       })
     ).toContain('Paired McNemar test at 95%');
+  });
+
+  it('charts the same banner cells as grouped bars, and remaps to line or pie', () => {
+    const book = {
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'east', label: 'East' },
+        { id: 'north', label: 'North' },
+      ],
+      rows: [
+        {
+          id: 'yes',
+          label: 'Yes',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 50 },
+            { banner_id: 'east', percent: 60 },
+            { banner_id: 'north', percent: 40 },
+          ],
+        },
+        {
+          id: 'no',
+          label: 'No',
+          kind: 'value',
+          cells: [
+            { banner_id: 'total', percent: 50 },
+            { banner_id: 'east', percent: 40 },
+            { banner_id: 'north', percent: 60 },
+          ],
+        },
+        {
+          id: 'base',
+          label: 'Base',
+          kind: 'base',
+          cells: [{ banner_id: 'east', unweighted_n: 100 }],
+        },
+      ],
+    };
+    const series = chartSeriesFromBook(book);
+    expect(series).toEqual([
+      {
+        label: 'Yes',
+        values: [
+          { name: 'East', value: 60 },
+          { name: 'North', value: 40 },
+        ],
+      },
+      {
+        label: 'No',
+        values: [
+          { name: 'East', value: 40 },
+          { name: 'North', value: 60 },
+        ],
+      },
+    ]);
+
+    const bars = chartFromBannerSeries(series, 'bar', { title: 'Awareness' });
+    expect(bars).toMatchObject({
+      kind: 'bar_grouped',
+      title: 'Awareness',
+      categories: ['East', 'North'],
+      series: [
+        { name: 'Yes', values: [60, 40] },
+        { name: 'No', values: [40, 60] },
+      ],
+    });
+
+    expect(chartFromBannerSeries(series, 'line')?.kind).toBe('line');
+    expect(chartFromBannerSeries(series, 'area')?.kind).toBe('area');
+
+    const pie = chartFromBannerSeries(series, 'pie', { title: 'Awareness' });
+    expect(pie).toEqual({
+      kind: 'pie',
+      title: 'Awareness',
+      categories: ['Yes', 'No'],
+      values: [60, 40],
+    });
+
+    const single = chartFromBannerSeries([series[0]!], 'pie');
+    expect(single).toEqual({
+      kind: 'pie',
+      title: '',
+      categories: ['East', 'North'],
+      values: [60, 40],
+    });
   });
 });
 

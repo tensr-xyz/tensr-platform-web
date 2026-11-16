@@ -2886,6 +2886,7 @@ export function TablesBuilder({
                   {view === 'chart' && chartSeriesFromBook(book).length ? (
                     <TableBars
                       series={chartSeriesFromBook(book)}
+                      title={title}
                       onAddToReport={
                         projectId && datasetId && (book.run_id || specId)
                           ? () => {

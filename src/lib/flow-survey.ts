@@ -1,3 +1,5 @@
+import type { AnalysisReportChart } from './analysis-report-types';
+
 export type BannerColumn = {
   id: string;
   label?: string;
@@ -282,4 +284,75 @@ export function chartSeriesFromBook(
       }),
     }))
     .filter(row => row.values.some(item => item.value));
+}
+
+/** Chart kinds that remap the same banner cells (Displayr table ↔ visualization). */
+export type BannerChartKind = 'bar' | 'line' | 'area' | 'pie';
+
+export const BANNER_CHART_KINDS: { value: BannerChartKind; label: string }[] = [
+  { value: 'bar', label: 'Bar' },
+  { value: 'line', label: 'Line' },
+  { value: 'area', label: 'Area' },
+  { value: 'pie', label: 'Pie' },
+];
+
+/**
+ * Same table cells as a report chart. Pie uses one series across categories:
+ * a single stub row → pie of banner columns; several rows → pie of the first column.
+ */
+export function chartFromBannerSeries(
+  series: { label: string; values: { name: string; value: number }[] }[],
+  kind: BannerChartKind,
+  opts?: { title?: string; yLabel?: string }
+): AnalysisReportChart | null {
+  if (!series.length) return null;
+  const title = opts?.title || '';
+  const y_label = opts?.yLabel || 'Percent';
+
+  if (kind === 'pie') {
+    if (series.length === 1) {
+      const row = series[0]!;
+      return {
+        kind: 'pie',
+        title,
+        categories: row.values.map(item => item.name),
+        values: row.values.map(item => item.value),
+      };
+    }
+    const column = series[0]?.values[0]?.name;
+    return {
+      kind: 'pie',
+      title,
+      categories: series.map(row => row.label),
+      values: series.map(
+        row => row.values.find(item => item.name === column)?.value ?? row.values[0]?.value ?? 0
+      ),
+    };
+  }
+
+  const categories = series[0]!.values.map(item => item.name);
+  const chartSeries = series.map(row => ({
+    name: row.label,
+    values: categories.map(name => row.values.find(item => item.name === name)?.value ?? 0),
+  }));
+
+  if (kind === 'bar') {
+    return {
+      kind: 'bar_grouped',
+      title,
+      x_label: '',
+      y_label,
+      categories,
+      series: chartSeries,
+    };
+  }
+
+  return {
+    kind,
+    title,
+    x_label: '',
+    y_label,
+    categories,
+    series: chartSeries,
+  };
 }
