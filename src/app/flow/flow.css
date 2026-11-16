@@ -4674,6 +4674,14 @@ select.flow-input {
   border-bottom: 1px solid var(--color-line);
 }
 
+.banner-grid tbody tr.grid-stub-header th {
+  padding-top: 12px;
+  font-weight: var(--weight-medium);
+  text-align: left;
+  color: var(--color-ink);
+  border-bottom: 1px solid var(--color-line);
+}
+
 .report-cards .report-template-link {
   width: auto;
   display: inline;

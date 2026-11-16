@@ -424,11 +424,13 @@ export function BannerGrid({
               <th>
                 {showQuotes
                   ? 'Theme'
-                  : String(
-                      ((book.stubs as { label?: string; column?: string }[]) || [])[0]?.label ||
-                        ((book.stubs as { column?: string }[]) || [])[0]?.column ||
-                        ''
-                    )}
+                  : ((book.stubs as { label?: string; column?: string }[]) || []).length > 1
+                    ? ''
+                    : String(
+                        ((book.stubs as { label?: string; column?: string }[]) || [])[0]?.label ||
+                          ((book.stubs as { column?: string }[]) || [])[0]?.column ||
+                          ''
+                      )}
               </th>
               {columns.map(column => (
                 <th key={column.id}>
@@ -446,6 +448,13 @@ export function BannerGrid({
               const quotes = (row.cells || []).find(
                 cell => cell.banner_id === 'total'
               )?.unweighted_n;
+              if (row.kind === 'header') {
+                return (
+                  <tr key={row.id} className="grid-stub-header">
+                    <th colSpan={columns.length + 1}>{row.label}</th>
+                  </tr>
+                );
+              }
               return (
                 <tr key={row.id}>
                   <th>
