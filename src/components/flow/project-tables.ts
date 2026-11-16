@@ -36,6 +36,15 @@ export function savedTableTotal(groups: { id?: string }[][]): number {
   return ids.size;
 }
 
+/** Report header: how many tables are live against every saved table. */
+export function liveOfTotalLabel(live: number, total: number): string {
+  const open = Math.max(0, live);
+  const all = Math.max(open, total);
+  if (all <= 0) return '0 saved tables';
+  if (all === open) return `${open} live table${open === 1 ? '' : 's'}`;
+  return `${open} live of ${all}`;
+}
+
 export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = ''): ProjectTable[] {
   const seen = new Set<string>();
   const out: ProjectTable[] = [];

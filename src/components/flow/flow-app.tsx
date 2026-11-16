@@ -23,6 +23,7 @@ import {
 } from '@/components/flow/overview-deck';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import {
+  liveOfTotalLabel,
   loadProjectTables,
   savedTableTotal,
   tableFileNote,
@@ -153,6 +154,7 @@ import {
   findingsWithOutOfDate,
   outOfDateLine,
   reportTableFromBook,
+  shownPercent,
   titledWithQuestions,
   segmentChoices,
   valueRows,
@@ -4629,6 +4631,7 @@ function ReportScreen({
   const [picked, setPicked] = useState<string[]>([]);
   const [tables, setTables] = useState<ReportTable[]>([]);
   const [staleTables, setStaleTables] = useState<StaleTable[]>([]);
+  const [savedTotal, setSavedTotal] = useState(0);
   const [rebuildOffers, setRebuildOffers] = useState<
     Record<string, { id: string; filename: string }>
   >({});
@@ -4692,6 +4695,7 @@ function ReportScreen({
       setPicked([]);
       setTables([]);
       setStaleTables([]);
+      setSavedTotal(0);
       setFindings([]);
       setPhase('ready');
       setFindingsPhase('ready');
@@ -4731,6 +4735,11 @@ function ReportScreen({
         const runs = (overview.runs || []) as Parameters<typeof pinsFromRuns>[0];
         rememberReportRuns(projectId, runs);
         setProjectPins(projectId, pinsFromRuns(runs));
+        setSavedTotal(
+          savedTableTotal([
+            overview.tables.map(row => ({ id: String(row.spec_id || '') })).filter(row => row.id),
+          ])
+        );
         const staleRows = overview.tables.filter(row => row.stale);
         const liveRows = overview.tables.filter(row => row.spec_id && !row.stale);
         setStaleTables(
@@ -4867,6 +4876,8 @@ function ReportScreen({
     row => picked.includes(row.id) && Object.keys(row.spec || {}).length > 0
   );
   const savedCount = savedTableTotal([specs, staleTables]);
+  const liveCount = specs.length;
+  const tableCountLabel = liveOfTotalLabel(liveCount, savedTotal || savedCount);
 
   const rebuildStale = async (table: StaleTable, targetId?: string) => {
     setBusy(`rebuild-${table.id}`);
@@ -5236,9 +5247,7 @@ function ReportScreen({
         <div className="report-lead">
           <h1>{project?.name || 'Report'}</h1>
           <p className="report-meta">
-            <span className="ink">
-              {savedCount} saved table{savedCount === 1 ? '' : 's'}
-            </span>
+            <span className="ink">{tableCountLabel}</span>
           </p>
         </div>
         <StudyBrief key={projectId} projectId={projectId} />
@@ -5342,7 +5351,8 @@ function ReportScreen({
               <div className="report-tags">
                 <span>.XLSX</span>
                 <span>
-                  {savedCount} table{savedCount === 1 ? '' : 's'}
+                  {Math.max(savedTotal, savedCount)} table
+                  {Math.max(savedTotal, savedCount) === 1 ? '' : 's'}
                 </span>
               </div>
               <div>
@@ -5478,7 +5488,7 @@ function ReportScreen({
                           <div key={`${finding.id}-${bar.label}`}>
                             <div className="report-bar-label">
                               <span>{bar.label}</span>
-                              <span>{bar.percent.toFixed(1)}%</span>
+                              <span>{shownPercent(bar.percent, finding.decimals)}</span>
                             </div>
                             <div className="report-bar-track">
                               <div

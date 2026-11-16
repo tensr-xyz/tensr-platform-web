@@ -2,6 +2,7 @@ import { applyScaleFlags, compareManyWaves, reversedCodes, waveCounts } from './
 import { isAnswer, isNonAnswerTheme } from './coding-review-data';
 import { themeRows } from './survey-screens';
 import {
+  liveOfTotalLabel,
   loadProjectTables,
   numberTables,
   projectTableRows,
@@ -102,6 +103,7 @@ describe('QA round 8: tables load', () => {
         [{ id: 'shared' }, { id: 'rebuild' }],
       ])
     ).toBe(3);
+    expect(liveOfTotalLabel(8, 15)).toBe('8 live of 15');
   });
 });
 
