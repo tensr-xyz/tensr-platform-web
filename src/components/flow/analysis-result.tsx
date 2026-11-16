@@ -10,6 +10,10 @@ import { guardUserText } from '@/components/flow/chat-output';
 import { fetchAnalysisRun, R_CHECK_POLL_MS, rCheckPhase } from '@/lib/analysis-runs';
 import { loadOutputPreferences, OUTPUT_PREFERENCES_EVENT } from '@/lib/output-preferences';
 import { exportTableAsCSV, exportTableAsImage } from '@/utils/table-export';
+import { appendResultToDeck, exportResultAsPptx } from '@/lib/output-pptx';
+import type { AnalysisReportChart } from '@/lib/analysis-report-types';
+import { AgentInlineChart } from '@/components/organisms/agent-inline-chart';
+import { exportSvgElementAsPng } from '@/utils/chart-export';
 
 /** Column role for a theme table so the count, share, and quote each keep their own space. */
 export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'label' {
@@ -20,33 +24,53 @@ export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'l
   return 'label';
 }
 
-/** The shared result: a lead, the tables, one footnote, and checks folded away. */
+/** The shared result: a lead, charts, the tables, one footnote, and checks folded away. */
 export function AnalysisResult({
   lead,
   tables,
+  charts = [],
   footnote,
   checks,
   script,
   rCheck,
   rStatement,
   runId,
+  datasetId,
+  projectId,
+  templateName,
+  templateBase64,
 }: {
   lead?: string;
   tables: RunTable[];
+  charts?: AnalysisReportChart[];
   footnote?: string;
   checks?: string[];
   script?: string;
   rCheck?: string;
   rStatement?: string;
   runId?: string;
+  datasetId?: string;
+  projectId?: string;
+  templateName?: string;
+  templateBase64?: string;
 }) {
   const [places, setPlaces] = useState(() =>
     typeof window === 'undefined' ? 1 : loadOutputPreferences().decimalPlaces
   );
   const [checksOpen, setChecksOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [exportNote, setExportNote] = useState('');
+  const [exportBusy, setExportBusy] = useState('');
   const card = useRef<HTMLDivElement>(null);
   const download = (kind: 'xlsx' | 'png') => {
+    if (kind === 'png' && charts.length) {
+      const svg = card.current?.querySelector('.analysis-charts svg, svg');
+      if (svg instanceof SVGSVGElement) {
+        const title = 'title' in charts[0] ? String(charts[0].title || 'chart') : 'chart';
+        void exportSvgElementAsPng(svg, title);
+        return;
+      }
+    }
     const table = card.current?.querySelector('table');
     if (!(table instanceof HTMLElement)) return;
     if (kind === 'xlsx') {
@@ -54,6 +78,18 @@ export function AnalysisResult({
       return;
     }
     void exportTableAsImage(table, { filename: 'table' });
+  };
+  const runExport = (name: string, action: () => Promise<void>) => {
+    setExportBusy(name);
+    setExportNote('');
+    void action()
+      .then(() =>
+        setExportNote(name === 'pptx' ? 'PowerPoint slide downloaded.' : 'Added to the deck.')
+      )
+      .catch(err =>
+        setExportNote(err instanceof Error ? err.message : 'The export did not finish.')
+      )
+      .finally(() => setExportBusy(''));
   };
   const [scriptOpen, setScriptOpen] = useState(false);
   const [mark, setMark] = useState({ kind: rCheck || '', statement: rStatement || '' });
@@ -119,32 +155,73 @@ export function AnalysisResult({
           .join('\n')
       : lead;
   const foot = [footnote, checkNote].filter(Boolean).join(' · ');
-  if (!leadText && !tables.length && !foot) return null;
+  if (!leadText && !tables.length && !charts.length && !foot) return null;
   return (
     <div className="analysis-result" ref={card}>
-      {tables.length ? (
+      {tables.length || charts.length ? (
         <div className="analysis-export">
           <Button type="button" className="flow-btn" onClick={() => setExportOpen(open => !open)}>
             {exportOpen ? 'Close export' : 'Export'}
           </Button>
           {exportOpen ? (
             <div className="analysis-export-menu" role="menu">
-              <Button type="button" className="flow-btn" role="menuitem">
-                PowerPoint slide
-              </Button>
-              <p className="flow-muted">On the template chosen for this project · editable chart</p>
-              <Button type="button" className="flow-btn" role="menuitem">
-                Add to a deck…
-              </Button>
-              <p className="flow-muted">Append to a saved deck in Report</p>
               <Button
                 type="button"
                 className="flow-btn"
                 role="menuitem"
-                onClick={() => download('xlsx')}
+                disabled={Boolean(exportBusy)}
+                onClick={() =>
+                  runExport('pptx', () =>
+                    exportResultAsPptx({
+                      runId,
+                      lead: leadText,
+                      tables,
+                      footnote,
+                      projectId,
+                      templateBase64,
+                      templateName,
+                    })
+                  )
+                }
               >
-                Excel table
+                PowerPoint slide
               </Button>
+              <p className="flow-muted">
+                {templateName
+                  ? `On ${templateName.replace(/\.(pptx|potx)$/i, '')} · editable chart`
+                  : 'On the template chosen for this project · editable chart'}
+              </p>
+              <Button
+                type="button"
+                className="flow-btn"
+                role="menuitem"
+                disabled={Boolean(exportBusy) || !datasetId}
+                onClick={() =>
+                  runExport('deck', () =>
+                    appendResultToDeck({
+                      datasetId: datasetId || '',
+                      lead: leadText,
+                      tables,
+                      footnote,
+                      templateBase64,
+                      templateName,
+                    })
+                  )
+                }
+              >
+                Add to a deck…
+              </Button>
+              <p className="flow-muted">Append to a saved deck in Report</p>
+              {tables.length ? (
+                <Button
+                  type="button"
+                  className="flow-btn"
+                  role="menuitem"
+                  onClick={() => download('xlsx')}
+                >
+                  Excel table
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 className="flow-btn"
@@ -153,6 +230,7 @@ export function AnalysisResult({
               >
                 Image (PNG)
               </Button>
+              {exportNote ? <p className="flow-muted">{exportNote}</p> : null}
             </div>
           ) : null}
         </div>
@@ -160,6 +238,16 @@ export function AnalysisResult({
       {leadText ? (
         <div className="analysis-lead">
           <FlowMarkdown>{leadText}</FlowMarkdown>
+        </div>
+      ) : null}
+      {charts.length ? (
+        <div className="analysis-charts">
+          {charts.map((chart, index) => (
+            <AgentInlineChart
+              key={`${chart.kind}-${'title' in chart ? chart.title : index}-${index}`}
+              chart={chart}
+            />
+          ))}
         </div>
       ) : null}
       {tables.map((table, index) => {

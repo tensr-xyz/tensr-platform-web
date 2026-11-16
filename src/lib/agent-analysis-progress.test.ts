@@ -147,4 +147,20 @@ describe('interpretAgentLoopProgressMessage', () => {
     expect(second).toEqual(first);
     expect(second).not.toContain('run_analysis');
   });
+
+  it('replaces an earlier Working through line when the analysis type changes', () => {
+    const first = accumulateInterpretedLoopProgress(undefined, {
+      type: 'tool_start',
+      step: 'run_analysis',
+      message: 'Working through the One-Way ANOVA…',
+    });
+    const second = accumulateInterpretedLoopProgress(first, {
+      type: 'tool_start',
+      step: 'run_analysis',
+      message: 'Working through the Chi-Square Test of Independence…',
+    });
+    expect(first).toEqual(['Working through the One-Way ANOVA…']);
+    expect(second).toEqual(['Working through the Chi-Square Test of Independence…']);
+    expect(second).not.toContain('Working through the One-Way ANOVA…');
+  });
 });

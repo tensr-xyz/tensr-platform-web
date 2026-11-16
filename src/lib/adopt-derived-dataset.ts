@@ -23,6 +23,36 @@ export type DerivedDatasetPayload = {
   };
 };
 
+/** True when a tool turn saved a working version Sources should list (rake, edit, stack). */
+export function toolResultsSavedWorkingVersion(
+  toolResults:
+    | Array<{
+        name?: string;
+        result?: Record<string, unknown> | null;
+        derived_dataset_id?: string;
+        created_dataset?: boolean;
+        dataset_id?: string;
+      }>
+    | undefined
+): boolean {
+  for (const entry of toolResults ?? []) {
+    if (entry.created_dataset === true && String(entry.dataset_id || '').trim()) return true;
+    if (String(entry.derived_dataset_id || '').trim()) return true;
+    const result = entry.result;
+    if (!result || typeof result !== 'object') continue;
+    if (String(result.derived_dataset_id || '').trim()) return true;
+    const derived = result.derived;
+    if (
+      derived &&
+      typeof derived === 'object' &&
+      String((derived as { dataset_id?: string }).dataset_id || '').trim()
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function derivedDatasetFromToolResults(
   toolResults: Array<{ name?: string; result?: Record<string, unknown> | null }> | undefined
 ): DerivedDatasetPayload | null {

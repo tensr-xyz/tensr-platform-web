@@ -4,10 +4,21 @@ import {
   countsFromPercents,
   marginFor,
   shareLabel,
+  targetPercents,
 } from './weight-targets';
 
 describe('weight modal', () => {
-  it('turns a target percent into a count on the column base', () => {
+  it('sends the typed percents, the same encoding the agent uses', () => {
+    expect(
+      targetPercents([
+        { code: 'East', percent: '25' },
+        { code: 'West', percent: '75' },
+        { code: 'Blank', percent: '' },
+      ])
+    ).toEqual({ East: 25, West: 75 });
+  });
+
+  it('still converts percents to counts when a caller asks for expansion totals', () => {
     expect(countsFromPercents([{ code: 'East', percent: '25' }], 400)).toEqual({ East: 100 });
     expect(countsFromPercents([{ code: 'East', percent: '' }], 400)).toEqual({});
   });

@@ -1,6 +1,7 @@
 import {
   contextMark,
   fileMark,
+  filesInProject,
   sourceFileNote,
   sourceRowCount,
   orderedVersionGroup,
@@ -64,6 +65,31 @@ describe('sources screen', () => {
       { dataset_id: 'mid', created_at: '2026-02-02T00:00:00Z' },
     ]);
     expect(ordered.map(file => file.dataset_id)).toEqual(['late', 'mid', 'early']);
+  });
+
+  it('keeps a raked working version on Sources when project_id was blank', () => {
+    const listed = filesInProject(
+      [
+        {
+          dataset_id: 'upload',
+          project_id: 'coffee',
+          original_filename: 'coffee_tracker_demo.csv',
+        },
+        {
+          dataset_id: 'raked',
+          project_id: '',
+          parent_dataset_id: 'upload',
+          original_filename: 'coffee_tracker_demo - 6 Nov 00:20',
+        },
+        {
+          dataset_id: 'other',
+          project_id: 'elsewhere',
+          parent_dataset_id: 'upload',
+        },
+      ],
+      'coffee'
+    );
+    expect(listed.map(file => file.dataset_id)).toEqual(['upload', 'raked']);
   });
 
   it('marks context documents by kind', () => {

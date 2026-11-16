@@ -1,5 +1,12 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { AgentThread, liveRunShouldReplaceChat, stepLines, stepRowKey } from './agent-thread';
+import {
+  AgentThread,
+  liveRunShouldReplaceChat,
+  replyLines,
+  stepLines,
+  stepRowKey,
+  stepsAfterReply,
+} from './agent-thread';
 import { livePublishMatches, publishLiveChatRun } from './chat-live-run';
 import { runAgentLoop } from '@/lib/run-agent-loop';
 
@@ -25,6 +32,23 @@ describe('shared agent thread', () => {
       ])
     ).toEqual(['Reading the request', 'Coding the open answers']);
     expect(stepRowKey(0, 'Ran the analysis')).not.toBe(stepRowKey(1, 'Ran the analysis'));
+  });
+
+  it('keeps live step names instead of collapsing the finished tool_trace', () => {
+    const live = ['Reading the request', 'Coding the open answers'];
+    const traced = replyLines({
+      status: 'ok',
+      mode: 'agent',
+      answer_markdown: 'Done',
+      tool_trace: [
+        { name: 'run_analysis', args: { analysis_type: 'code_open_text' }, result: { ok: true } },
+        { name: 'run_analysis', args: { analysis_type: 'frequencies' }, result: { ok: true } },
+      ],
+    });
+    expect(traced).toEqual(['Coded the open answers', 'Counted the values']);
+    expect(stepsAfterReply(live, traced)).toEqual(live);
+    expect(stepsAfterReply([], traced)).toEqual(traced);
+    expect(stepRowKey(0, traced[0]!)).not.toBe(stepRowKey(1, traced[1]!));
   });
 
   it('keeps the open chat when another finished run is still in memory', () => {

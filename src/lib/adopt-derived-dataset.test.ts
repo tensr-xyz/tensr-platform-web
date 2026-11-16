@@ -4,6 +4,7 @@ import {
   derivedDatasetFromToolResults,
   derivedWorkspacePath,
   spreadsheetPatchFromDerivedDataset,
+  toolResultsSavedWorkingVersion,
   userFacingSchemaColumns,
 } from './adopt-derived-dataset';
 import type { TabData } from '@/stores/tabs-store';
@@ -177,6 +178,30 @@ describe('derivedWorkspacePath', () => {
     expect(derivedWorkspacePath('e5d1c555-9f80-497d-b0fb-2bfa07983d4c', 'nba_recoded.csv')).toBe(
       '/workspace/dataset/e5d1c555-9f80-497d-b0fb-2bfa07983d4c?name=nba_recoded.csv'
     );
+  });
+});
+
+describe('toolResultsSavedWorkingVersion', () => {
+  it('detects a raked working version from the slim stream payload', () => {
+    expect(
+      toolResultsSavedWorkingVersion([
+        {
+          name: 'run_analysis',
+          derived_dataset_id: 'coffee-raked',
+        },
+      ])
+    ).toBe(true);
+  });
+
+  it('ignores analysis turns that did not save a file', () => {
+    expect(
+      toolResultsSavedWorkingVersion([
+        {
+          name: 'run_analysis',
+          result: { ok: true, analysis_type: 'descriptives' },
+        },
+      ])
+    ).toBe(false);
   });
 });
 

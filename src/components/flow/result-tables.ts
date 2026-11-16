@@ -1,7 +1,10 @@
 import type { RunTable } from '@/components/flow/run-document';
+import type { AnalysisReportChart } from '@/lib/analysis-report-types';
+import { chartsFromToolPayloads } from '@/lib/flow-result-charts';
 
 export type ResultView = {
   tables: RunTable[];
+  charts: AnalysisReportChart[];
   script: string;
   checks: string[];
   weight: string;
@@ -260,6 +263,41 @@ export function answerResultTables(answer: string): RunTable[] {
   return tables;
 }
 
+/** Shared frequency headers. A blank first cell used to shift counts under Percent. */
+const FREQUENCY_HEADERS = ['Label', 'Count', '%', 'Valid %', 'Cumulative %'];
+
+function looksLikeFrequencyHeaders(columns: string[]): boolean {
+  if (columns.length < 2) return false;
+  const folded = columns.map(column => column.trim().toLowerCase());
+  const first = folded[0];
+  const hasCount = folded.some(
+    column => column === 'frequency' || column === 'count' || column === 'n'
+  );
+  const hasPercent = folded.some(column => /%|percent/.test(column));
+  if (first === '' && hasCount) return true;
+  if (
+    (first === '' || first === 'label' || first === 'answer' || first === 'value') &&
+    hasCount &&
+    hasPercent
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function normalizeFrequencyColumns(columns: string[]): string[] {
+  if (!looksLikeFrequencyHeaders(columns)) return columns;
+  if (columns.length >= FREQUENCY_HEADERS.length) return [...FREQUENCY_HEADERS];
+  return FREQUENCY_HEADERS.slice(0, Math.max(columns.length, 2));
+}
+
+/** Frequency % / Valid % / Cumulative %, or a header that names percent/share. Not "% of base". */
+function isPercentHeader(column: string): boolean {
+  const name = column.trim().toLowerCase();
+  if (name.includes('percent') || name.includes('share')) return true;
+  return name === '%' || name === 'valid %' || name === 'cumulative %' || /(?:^|\s)%$/.test(name);
+}
+
 function asTable(value: unknown): RunTable | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   const record = value as {
@@ -271,8 +309,13 @@ function asTable(value: unknown): RunTable | null {
     note?: unknown;
   };
   if (Array.isArray(record.headers) && Array.isArray(record.variable_names)) return null;
-  const columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
-  const percentAt = columns.map(column => column.toLowerCase().includes('percent'));
+  let columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
+  const titleText = cell(record.title);
+  const title = questionTitle(titleText);
+  if (looksLikeFrequencyHeaders(columns) || /^frequency table:/i.test(titleText)) {
+    columns = normalizeFrequencyColumns(columns);
+  }
+  const percentAt = columns.map(isPercentHeader);
   const rows = Array.isArray(record.rows)
     ? record.rows
         .filter(row => Array.isArray(row))
@@ -285,7 +328,7 @@ function asTable(value: unknown): RunTable | null {
     : [];
   if (columns.filter(Boolean).length < 2 || !rows.length) return null;
   const note = cell(record.note);
-  return { title: questionTitle(cell(record.title)), columns, rows, ...(note ? { note } : {}) };
+  return { title, columns, rows, ...(note ? { note } : {}) };
 }
 
 /** summary["table"]: one titled block per question, or a flat list of value rows. */
@@ -992,8 +1035,8 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
       kish_ess?: unknown;
       unweighted_n?: unknown;
     };
-    const label = cell(block.label);
-    const column = cell(block.column);
+    const column = realWeightToken(block.column);
+    const label = stripCodeBrackets(cell(block.label), column);
     if (label && label.toLowerCase() !== column.toLowerCase() && label.toLowerCase() !== 'weight') {
       sample.weight = label;
     } else if (column) sample.weight = column;
@@ -1011,6 +1054,10 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
         sample.sawN = true;
       }
     }
+  }
+  if (!sample.weight) {
+    const named = weightName(record);
+    if (named) sample.weight = named;
   }
   if (!sample.sawN && Array.isArray(record.stages) && record.stages.length) {
     const first = record.stages[0];
@@ -1072,8 +1119,20 @@ function takeSample(record: Record<string, unknown>, sample: SampleBits): void {
   }
 }
 
+function sampleWeightPhrase(sample: SampleBits): string {
+  const named = (sample.weight || '').trim();
+  if (named && !/^(none|unweighted|null)$/i.test(named)) {
+    return named.toLowerCase() === 'weighted' ? 'Weight: Weighted' : `Weight: ${named}`;
+  }
+  const weighted = sample.tableWeighted;
+  if (sample.sawTableBase && weighted != null && weighted !== sample.tableUnweighted) {
+    return 'Weight: Weighted';
+  }
+  return 'Weight: Unweighted';
+}
+
 function sampleLine(sample: SampleBits): string {
-  const weight = sample.weight ? `Weight: ${sample.weight}` : 'Weight: none';
+  const weight = sampleWeightPhrase(sample);
   const parts = [weight];
   if (sample.sawTableBase) {
     const weighted = sample.tableWeighted;
@@ -1110,27 +1169,46 @@ function sampleLine(sample: SampleBits): string {
     : line;
 }
 
+function realWeightToken(value: unknown): string {
+  const text = cell(value).trim();
+  if (!text || /^(none|unweighted|null)$/i.test(text)) return '';
+  return text;
+}
+
+/** Drop a trailing "[column_name]" from a weight label a person reads. */
+function stripCodeBrackets(label: string, code = ''): string {
+  const text = label.trim();
+  const match = /^(.*)\s*[\[(]\s*([A-Za-z_][\w.]*)\s*[\])]?\s*$/.exec(text);
+  if (!match) return text;
+  const left = match[1].trim();
+  const right = match[2].trim();
+  if (!left) return text;
+  if (code && right.toLowerCase() === code.toLowerCase()) return left;
+  if (right.includes('_') || right.toLowerCase() === 'label') return left;
+  return text;
+}
+
 function weightName(record: Record<string, unknown>): string {
-  if (record.weight && typeof record.weight === 'object') {
+  if (record.weight && typeof record.weight === 'object' && !Array.isArray(record.weight)) {
     const weight = record.weight as { column?: unknown; label?: unknown };
-    const column = cell(weight.column);
-    const label = cell(weight.label);
+    const column = realWeightToken(weight.column);
+    const label = stripCodeBrackets(cell(weight.label).trim(), column);
     if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== column.toLowerCase()) {
       return label;
     }
-    return column;
+    if (column) return column;
   }
   const named =
     typeof record.weight === 'string'
       ? record.weight
-      : typeof record.weight_column === 'string'
-        ? record.weight_column
-        : typeof record.resolved_weight === 'string'
-          ? record.resolved_weight
-          : '';
-  const text = named.trim();
-  if (!text || text.toLowerCase() === 'none' || text.toLowerCase() === 'unweighted') return '';
-  return text;
+      : typeof record.resolved_weight === 'string'
+        ? record.resolved_weight
+        : typeof record.weight_column === 'string'
+          ? record.weight_column
+          : typeof record.active_weight_column === 'string'
+            ? record.active_weight_column
+            : '';
+  return realWeightToken(named);
 }
 
 function isGroupMeanTable(table: RunTable): boolean {
@@ -1225,6 +1303,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   };
   const view: ResultView = {
     tables: [],
+    charts: [],
     script: '',
     checks: [],
     weight: '',
@@ -1499,6 +1578,17 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   if (sample.sawTableBase) view.baseDetail = sampleLine(sample);
   else if (detail) view.baseDetail = detail;
   else if (sample.sawN || sample.sawTotal) view.baseDetail = sampleLine(sample);
+  if (!view.weight && sample.weight) view.weight = sample.weight;
+  if (
+    !view.weight &&
+    sample.sawTableBase &&
+    sample.tableWeighted != null &&
+    sample.tableWeighted !== sample.tableUnweighted
+  ) {
+    // Bases are weighted but the book never named the column. Chip, footnote and base stay aligned.
+    view.weight = 'Weighted';
+  }
+  view.charts = chartsFromToolPayloads(results);
   return view;
 }
 
@@ -1514,12 +1604,19 @@ function answeredCount(record: Record<string, unknown>): number {
   return Number.isFinite(count) && count > 0 ? count : 0;
 }
 
+function frequencyCountIndex(columns: string[]): number {
+  return columns.findIndex(column => {
+    const name = column.trim().toLowerCase();
+    return name === 'frequency' || name === 'count' || name === 'n';
+  });
+}
+
 /** Valid answers on a frequency table. A partial table that does not add up to its total is left out. */
 function frequencyAnswered(view: ResultView): number {
   let reconciled = 0;
   let open = 0;
   for (const table of view.tables) {
-    const frequencyAt = table.columns.findIndex(column => column.toLowerCase() === 'frequency');
+    const frequencyAt = frequencyCountIndex(table.columns);
     if (frequencyAt < 0) continue;
     let categories = 0;
     let missing = 0;
@@ -1548,7 +1645,7 @@ function frequencyAnswered(view: ResultView): number {
 function largestFrequencyTotal(view: ResultView): number {
   let largest = 0;
   for (const table of view.tables) {
-    const frequencyAt = table.columns.findIndex(column => column.toLowerCase() === 'frequency');
+    const frequencyAt = frequencyCountIndex(table.columns);
     if (frequencyAt < 0) continue;
     for (const row of table.rows) {
       if ((row[0] || '').toLowerCase() !== 'total') continue;
@@ -1626,13 +1723,13 @@ export function weightNote(column: string, columns: ColumnLabels[] = []): string
   if (!name || name.toLowerCase() === 'none' || name.toLowerCase() === 'unweighted')
     return 'Unweighted';
   const meta = columnMeta(columns, name);
-  const label = (meta?.label || '').trim();
+  const label = stripCodeBrackets((meta?.label || '').trim(), name);
   if (label && label.toLowerCase() !== 'weight' && label.toLowerCase() !== name.toLowerCase()) {
     return `Weight: ${label}`;
   }
   if (name.toLowerCase() === 'weight') return 'Weighted';
   if (/[a-z]_[a-z0-9]/i.test(name)) return 'Weighted';
-  return `Weight: ${name}`;
+  return `Weight: ${stripCodeBrackets(name)}`;
 }
 
 export function resultFootnote(

@@ -2417,6 +2417,18 @@ select.flow-input {
   gap: 8px;
 }
 
+button.chat-result-top {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
 .chat-viewing {
   margin-left: auto;
   color: var(--color-accent);
@@ -4257,6 +4269,17 @@ select.flow-input {
 .output-table .flow-md-table {
   border: 0;
   border-radius: 0;
+  /* Wide agent crosstabs must scroll in the side panel, not clip trailing columns. */
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.output-table .flow-md-table .flow-table {
+  /* Beat the shared Table `w-full` so columns keep their width and the wrapper scrolls. */
+  width: max-content;
+  min-width: 100%;
+  table-layout: auto;
 }
 
 .output-table .flow-table th,
@@ -4660,6 +4683,14 @@ select.flow-input {
 .banner-grid thead tr.grid-groups th span {
   display: block;
   padding-bottom: 4px;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.banner-grid tbody tr.grid-stub-header th {
+  padding-top: 12px;
+  font-weight: var(--weight-medium);
+  text-align: left;
+  color: var(--color-ink);
   border-bottom: 1px solid var(--color-line);
 }
 
@@ -11097,6 +11128,33 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 .deck-slides {
   flex: 1;
+}
+
+.deck-slides ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.deck-slides li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--color-canvas);
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+}
+
+.deck-slides li.deck-slide-low {
+  border-left: 3px solid var(--color-warn);
+}
+
+.deck-low-note {
+  color: var(--color-warn);
 }
 
 .analysis-export-menu {

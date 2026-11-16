@@ -127,36 +127,57 @@ export function displayBannerTable(book: BannerBook): DisplayTable {
     const prev = letterMap.get(key) || '';
     letterMap.set(key, prev.includes(next) ? prev : `${prev}${next}`);
   }
-  const rows: DisplayRow[] = (book.rows || []).map(row => ({
-    id: row.id,
-    label: row.label || row.id || '',
-    kind: row.kind,
-    cells: (row.cells || []).map(cell => {
-      const suppressed = Boolean(cell.low_base_suppressed);
-      const lowBase = Boolean(cell.low_base || cell.low_base_suppressed);
-      const columnValue =
-        fmtMean(cell) ?? fmtPct(cell.percent, places(book, 'column_proportion', 1));
-      const rowValue = fmtPct(cell.row_percent, places(book, 'row_proportion', 1));
-      const totalValue = fmtPct(cell.total_percent, places(book, 'total_proportion', 1));
-      const countValue = fmtNum(cell.count ?? cell.weighted_n, places(book, 'count', 0));
-      const caution = (text: string) => (lowBase && text && text !== '—' ? `${text} *` : text);
-      const columnBase =
-        cell.column_unweighted_n == null ? '' : `base n=${fmtNum(cell.column_unweighted_n)} · `;
+  const rows: DisplayRow[] = (book.rows || []).map(row => {
+    if (row.kind === 'header') {
       return {
-        columnPercent: suppressed ? '*' : caution(columnValue),
-        rowPercent: suppressed ? '*' : caution(rowValue),
-        totalPercent: suppressed ? '*' : caution(totalValue),
-        countText: suppressed ? '*' : caution(countValue),
-        letters: letterMap.get(`${cell.stub_row_id}::${cell.banner_id}`) || '',
-        bases: `${columnBase}n=${fmtNum(cell.unweighted_n)} · wn=${fmtNum(cell.weighted_n)} · ESS=${fmtNum(cell.kish_ess)}`,
-        lowBase,
-        kind: cell.kind || row.kind,
-        unweighted_n: cell.unweighted_n,
-        provenance: cell.provenance,
-        stubRowId: cell.stub_row_id || row.id,
-        bannerId: cell.banner_id,
+        id: row.id,
+        label: row.label || row.id || '',
+        kind: 'header',
+        cells: headers.map(header => ({
+          columnPercent: '',
+          rowPercent: '',
+          totalPercent: '',
+          countText: '',
+          letters: '',
+          bases: '',
+          lowBase: false,
+          kind: 'header',
+          stubRowId: row.id,
+          bannerId: header.id,
+        })),
       };
-    }),
-  }));
+    }
+    return {
+      id: row.id,
+      label: row.label || row.id || '',
+      kind: row.kind,
+      cells: (row.cells || []).map(cell => {
+        const suppressed = Boolean(cell.low_base_suppressed);
+        const lowBase = Boolean(cell.low_base || cell.low_base_suppressed);
+        const columnValue =
+          fmtMean(cell) ?? fmtPct(cell.percent, places(book, 'column_proportion', 1));
+        const rowValue = fmtPct(cell.row_percent, places(book, 'row_proportion', 1));
+        const totalValue = fmtPct(cell.total_percent, places(book, 'total_proportion', 1));
+        const countValue = fmtNum(cell.count ?? cell.weighted_n, places(book, 'count', 0));
+        const caution = (text: string) => (lowBase && text && text !== '—' ? `${text} *` : text);
+        const columnBase =
+          cell.column_unweighted_n == null ? '' : `base n=${fmtNum(cell.column_unweighted_n)} · `;
+        return {
+          columnPercent: suppressed ? '*' : caution(columnValue),
+          rowPercent: suppressed ? '*' : caution(rowValue),
+          totalPercent: suppressed ? '*' : caution(totalValue),
+          countText: suppressed ? '*' : caution(countValue),
+          letters: letterMap.get(`${cell.stub_row_id}::${cell.banner_id}`) || '',
+          bases: `${columnBase}n=${fmtNum(cell.unweighted_n)} · wn=${fmtNum(cell.weighted_n)} · ESS=${fmtNum(cell.kish_ess)}`,
+          lowBase,
+          kind: cell.kind || row.kind,
+          unweighted_n: cell.unweighted_n,
+          provenance: cell.provenance,
+          stubRowId: cell.stub_row_id || row.id,
+          bannerId: cell.banner_id,
+        };
+      }),
+    };
+  });
   return { headers, rows };
 }

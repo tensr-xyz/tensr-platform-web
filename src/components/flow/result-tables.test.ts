@@ -93,14 +93,40 @@ const payloads = [
 describe('decimal display', () => {
   it('uses the project decimals for percents, and whole numbers for counts, means at 2 dp, weighted n at 0', () => {
     expect(formatDecimalText('31.400%', 1, 'Valid Percent')).toBe('31.4%');
+    expect(formatDecimalText('31.400', 1, 'Valid %')).toBe('31.4');
     expect(formatDecimalText('12.000', 1, 'Percent')).toBe('12');
+    expect(formatDecimalText('12.000', 1, '%')).toBe('12');
     expect(formatDecimalText('28.200', 1, '% promoters')).toBe('28.2');
     expect(formatDecimalText('57.000', 1, 'Frequency')).toBe('57');
+    expect(formatDecimalText('57.000', 1, 'Count')).toBe('57');
     expect(formatDecimalText('3.534', 1, 'Mean')).toBe('3.53');
     expect(formatDecimalText('1.100', 1, 'SD')).toBe('1.10');
     expect(formatDecimalText('251.200', 1, 'Weighted n')).toBe('251');
     expect(formatDecimalText('-43.979', 1, 'NPS')).toBe('-44.0');
     expect(formatDecimalText('0.420', 1, 'B')).toBe('0.42');
+  });
+
+  it('rewrites a blank-first frequency header so counts stay under Count', () => {
+    const view = resultViewFromToolResults({
+      frequency_tables: [
+        {
+          title: 'Frequency Table: Region',
+          columns: [
+            '',
+            'Frequency',
+            'Percent (incl. missing)',
+            'Valid Percent',
+            'Cumulative Percent',
+          ],
+          rows: [
+            ['North', '120', '13.3', '14.2', '14.2'],
+            ['Total', '900', '100', '', ''],
+          ],
+        },
+      ],
+    });
+    expect(view.tables[0].columns).toEqual(['Label', 'Count', '%', 'Valid %', 'Cumulative %']);
+    expect(view.tables[0].rows[0]).toEqual(['North', '120', '13.3', '14.2', '14.2']);
   });
 });
 
@@ -109,8 +135,8 @@ describe('result tables', () => {
     const views = payloads.map(payload => resultViewFromToolResults(payload));
     expect(views.filter(view => view.tables.length || view.filter || view.weight)).toHaveLength(12);
     expect(views[0].tables[0].rows[0][0]).toBe('North');
-    expect(views[0].tables[0].columns[0]).toBe('');
-    expect(views[0].tables[0].columns[1]).toBe('Frequency');
+    expect(views[0].tables[0].columns).toEqual(['Label', 'Count', '%', 'Valid %', 'Cumulative %']);
+    expect(views[0].tables[0].rows[0][1]).toBe('12');
     expect(views[1].tables[0].columns).toEqual([
       'Theme',
       'Count',
@@ -824,6 +850,25 @@ describe('result tables', () => {
     expect(
       weightChipName('design_weight', 'none', [{ name: 'design_weight', label: 'Design weight' }])
     ).toBe('Design weight');
+    expect(weightNote('weight_5', [{ name: 'weight_5', label: 'Raked weight [weight_5]' }])).toBe(
+      'Weight: Raked weight'
+    );
+    expect(
+      resultViewFromToolResults({
+        result: {
+          n: 40,
+          weight: { column: 'weight_5', label: 'Raked weight [weight_5]', unweighted_n: 40 },
+        },
+      }).baseDetail
+    ).toMatch(/Weight: Raked weight;/);
+    expect(
+      resultViewFromToolResults({
+        result: {
+          n: 40,
+          weight: { column: 'weight_5', label: 'Raked weight [weight_5]', unweighted_n: 40 },
+        },
+      }).baseDetail
+    ).not.toContain('weight_5');
   });
 
   it('shows an association table, the filter, and the weight column', () => {
@@ -1051,7 +1096,46 @@ describe('answer tables', () => {
     expect(view.baseDetail).toContain('500');
     expect(view.baseDetail).toContain('482');
     expect(view.baseDetail).not.toContain('base = 800');
+    expect(view.baseDetail).not.toContain('Weight: none');
+    expect(view.baseDetail).toMatch(/Weight:/i);
     expect(resultFootnote(view)).toContain('500');
+  });
+
+  it('names the same weight on the chip, the base, and the footnote', () => {
+    const columns = [{ name: 'design_weight', label: 'Design weight' }];
+    const view = resultViewFromToolResults({
+      resolved_weight: 'design_weight',
+      weight: {
+        column: 'design_weight',
+        label: 'Design weight',
+        weight_aware: true,
+        unweighted_n: 500,
+        weighted_n: 470,
+      },
+      cells: [
+        {
+          banner_id: 'total',
+          bases: { column: { unweighted_n: 500, weighted_n: 470 } },
+        },
+      ],
+    });
+    expect(view.weight).toBe('Design weight');
+    expect(weightChipName(view.weight, 'none', columns)).toBe('Design weight');
+    expect(view.baseDetail).toContain('Weight: Design weight');
+    expect(view.baseDetail).toContain('500');
+    expect(view.baseDetail).toContain('470');
+    expect(view.baseDetail).not.toContain('Weight: none');
+    expect(resultFootnote(view, '', 'Crosstab', columns)).toContain('Weight: Design weight');
+  });
+
+  it('falls through an empty weight object to resolved_weight', () => {
+    const view = resultViewFromToolResults({
+      weight: { column: null, weight_aware: true, unweighted_n: 100, weighted_n: 90 },
+      resolved_weight: 'design_weight',
+    });
+    expect(view.weight).toBe('design_weight');
+    expect(view.baseDetail).toContain('Weight: design_weight');
+    expect(view.baseDetail).not.toContain('Weight: none');
   });
 
   it('shows a duplication table and names the audience on the footnote', () => {

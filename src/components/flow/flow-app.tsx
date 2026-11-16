@@ -14,9 +14,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { AgentThread, AgentThreadColumn, useAgentThread } from '@/components/flow/agent-thread';
-import { OverviewDeck, WaveRefresh } from '@/components/flow/overview-deck';
+import { recentChatSessions, sortSessionsByRecency } from '@/components/flow/chat-sessions';
+import {
+  OverviewDeck,
+  OVERVIEW_SLIDES,
+  WaveRefresh,
+  type OverviewBuildRequest,
+  type OverviewSlide,
+} from '@/components/flow/overview-deck';
 import { flowFetch, flowJson, type FlowProject } from '@/lib/flow-api';
 import {
+  liveOfTotalLabel,
   loadProjectTables,
   savedTableTotal,
   tableFileNote,
@@ -30,7 +38,7 @@ import { runAgentLoop, type AgentLoopAttachment } from '@/lib/run-agent-loop';
 import { FlowComposer } from '@/components/flow/chat-composer';
 import { SidePanel as FlowSidePanel } from '@/components/flow/side-panel';
 import { datasetFileLabel } from '@/components/flow/survey-screens';
-import { baseCount, outputOpenHref } from '@/components/flow/chat-output';
+import { baseCount, outputOpenHref, outputTableTabLabel } from '@/components/flow/chat-output';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import { DetailsScreen } from '@/components/flow/details-screen';
 import { StudyBrief } from '@/components/flow/study-brief';
@@ -43,6 +51,8 @@ import {
   sourceVersionTitle,
   SourcesScreen,
 } from '@/components/flow/sources-screen';
+import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
+import { toolResultsSavedWorkingVersion } from '@/lib/adopt-derived-dataset';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
@@ -145,6 +155,7 @@ import {
   findingsWithOutOfDate,
   outOfDateLine,
   reportTableFromBook,
+  shownPercent,
   titledWithQuestions,
   segmentChoices,
   valueRows,
@@ -371,14 +382,12 @@ export function FlowApp({ slug }: { slug: string[] }) {
 
   const reload = useCallback(async () => {
     try {
-      const [projectPage, folderPage, filePage] = await Promise.all([
+      // Projects and folders paint first; the workspace file list can arrive after.
+      const [projectPage, folderPage] = await Promise.all([
         flowJson<{ projects?: FlowProject[]; next_cursor?: string | null }>(
           `/api/projects?limit=${PROJECT_PAGE}`
         ),
         flowJson<{ folders?: { id: string; name: string }[] }>('/api/project-folders'),
-        flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>(
-          '/datasets/?scope=all&include=versions'
-        ),
       ]);
       const listed = projectPage.projects || [];
       void membersFor(listed).then(memberMap => {
@@ -391,16 +400,22 @@ export function FlowApp({ slug }: { slug: string[] }) {
       ]);
       setProjectCursor(projectPage.next_cursor || null);
       setFolders(folderPage.folders || []);
-      const incoming = Array.isArray(filePage) ? filePage : filePage.datasets || [];
-      // A project page may already have loaded every version. The workspace list
-      // keeps one file per origin, so a refresh must not drop the rest.
-      setDatasets(current => {
-        const incomingIds = new Set(incoming.map(row => datasetRowId(row)));
-        const kept = current.filter(row => !incomingIds.has(datasetRowId(row)));
-        return [...incoming, ...kept];
-      });
       setError(null);
       setWorkspacePhase('ready');
+      void flowJson<DatasetRow[] | { datasets?: DatasetRow[] }>(
+        '/datasets/?scope=all&include=versions'
+      )
+        .then(filePage => {
+          const incoming = Array.isArray(filePage) ? filePage : filePage.datasets || [];
+          // A project page may already have loaded every version. The workspace list
+          // keeps one file per origin, so a refresh must not drop the rest.
+          setDatasets(current => {
+            const incomingIds = new Set(incoming.map(row => datasetRowId(row)));
+            const kept = current.filter(row => !incomingIds.has(datasetRowId(row)));
+            return [...incoming, ...kept];
+          });
+        })
+        .catch(() => undefined);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load the workspace');
       setWorkspacePhase('error');
@@ -794,6 +809,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 ready={tabReady}
                 pendingAsk={pendingAsk}
                 onAsked={() => setPendingAsk(null)}
+                onChanged={reload}
               />
             )}
           </div>
@@ -2390,12 +2406,14 @@ function ChatScreen({
   ready,
   pendingAsk,
   onAsked,
+  onChanged,
 }: {
   project?: FlowProject;
   datasets: DatasetRow[];
   ready: boolean;
   pendingAsk?: string | null;
   onAsked?: () => void;
+  onChanged?: () => void;
 }) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
@@ -2460,6 +2478,10 @@ function ChatScreen({
     syncAddress: true,
     pendingAsk,
     onAsked,
+    onFinished: result => {
+      // A rake / edit / stack saves a working version. Refresh so Sources lists it.
+      if (toolResultsSavedWorkingVersion(result.tool_results)) onChanged?.();
+    },
   });
   const {
     question,
@@ -2489,6 +2511,7 @@ function ChatScreen({
     tables,
     kind,
     structuredTables,
+    resultCharts,
     lead,
     footnote,
     resultChecks,
@@ -2651,7 +2674,11 @@ function ChatScreen({
   return (
     <div
       className={
-        showThread ? (panelOpen ? 'flow-split' : 'flow-split no-output') : 'flow-split chat-empty'
+        showThread
+          ? panelOpen && outputReady
+            ? 'flow-split'
+            : 'flow-split no-output'
+          : 'flow-split chat-empty'
       }
     >
       <aside className="flow-rail">
@@ -2752,12 +2779,12 @@ function ChatScreen({
             id="chat-output"
             defaultWidth={440}
             className="flow-output"
-            hidden={!panelOpen}
+            hidden={!panelOpen || !outputReady}
           >
             {outputReady && tableMode ? (
               <>
                 <div className="output-tabs">
-                  <span className="output-tab">T1 {title}</span>
+                  <span className="output-tab">{outputTableTabLabel(title)}</span>
                   {runIds.length ? (
                     <Button
                       className="flow-btn output-tab-export"
@@ -2833,21 +2860,24 @@ function ChatScreen({
                     </Button>
                   </div>
                   <h2>{title}</h2>
-                  {baseNote && !structuredTables.length ? (
+                  {baseNote && !structuredTables.length && !resultCharts.length ? (
                     <p className="flow-muted output-base">{baseNote}</p>
                   ) : null}
                 </div>
                 <div className="output-body">
-                  {structuredTables.length ? (
+                  {structuredTables.length || resultCharts.length ? (
                     <AnalysisResult
                       lead={lead}
                       tables={structuredTables}
+                      charts={resultCharts}
                       footnote={footnote}
                       checks={resultChecks}
                       script={resultView.script}
                       rCheck={resultView.rCheck}
                       rStatement={resultView.rStatement}
                       runId={runIds[0]}
+                      datasetId={datasetId || undefined}
+                      projectId={chatProjectId || undefined}
                     />
                   ) : (
                     <>
@@ -2862,7 +2892,7 @@ function ChatScreen({
                       ) : null}
                     </>
                   )}
-                  {structuredTables.length ? null : checks.length ? (
+                  {structuredTables.length || resultCharts.length ? null : checks.length ? (
                     <div>
                       <div className="flow-muted">Checks</div>
                       <div className="report-chips">
@@ -2979,9 +3009,7 @@ function ChatScreen({
                   </Link>
                 </div>
               </>
-            ) : (
-              <p className="flow-muted output-empty">An output from this chat lands here.</p>
-            )}
+            ) : null}
           </FlowSidePanel>
         </>
       ) : (
@@ -3234,15 +3262,19 @@ function ResponsesScreen({
   useEffect(() => {
     if (!project) return;
     void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
-      .then(page => setSessions(page.sessions || []))
+      .then(page => setSessions(sortSessionsByRecency(page.sessions || [])))
       .catch(() => setSessions([]));
   }, [project]);
+  const projectFileIds = datasets
+    .filter(row => row.project_id === project?.id)
+    .map(row => datasetRowId(row))
+    .filter(Boolean)
+    .join(',');
   useEffect(() => {
     if (!datasetId || !project?.id) return;
-    const fileIds = datasets
-      .filter(row => row.project_id === project.id)
-      .map(row => datasetRowId(row))
-      .filter(Boolean);
+    // Prefer the named-file path; skip the owner scan while files are still loading.
+    if (!projectFileIds && !ready) return;
+    const fileIds = projectFileIds ? projectFileIds.split(',') : [];
     void loadProjectTables(project.id, datasetId, { fileIds })
       .then(rows =>
         setSpecs(
@@ -3255,7 +3287,7 @@ function ResponsesScreen({
         )
       )
       .catch(() => setSpecs([]));
-  }, [datasetId, datasets, project?.id]);
+  }, [datasetId, projectFileIds, project?.id, ready]);
 
   const names = headers.length ? headers : columns.map(column => column.label || column.name);
   const needle = query.trim().toLowerCase();
@@ -3268,8 +3300,32 @@ function ResponsesScreen({
   const shownCols = (headerHits.length ? headerHits : visibleNames).filter(
     column => !hiddenCols.includes(column.name)
   );
+  const adoptVersion = (previousId: string, nextId: string, note: string) => {
+    if (!nextId || !project?.id) return;
+    setChosenId(nextId);
+    setSheetNote(note);
+    sheetPages.clear();
+    void flowJson(`/api/projects/${project.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active_dataset_id: nextId }),
+    }).then(() => {
+      showDatasetVersionUndoToast({
+        projectId: project.id,
+        previousDatasetId: previousId,
+        currentDatasetId: nextId,
+        title: note,
+        onRestored: id => {
+          setChosenId(id);
+          sheetPages.clear();
+          onChanged?.();
+        },
+      });
+      onChanged?.();
+    });
+  };
   const saveCell = (column: string, previewIndex: number, value: string) => {
     if (!datasetId) return;
+    const previousId = datasetId;
     const row = (filters.length ? 0 : pageOffset) + previewIndex;
     void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/edit-cell`, {
       method: 'POST',
@@ -3278,19 +3334,13 @@ function ResponsesScreen({
       .then(saved => {
         const next = String(saved.dataset_id || '');
         setEditingCell(null);
-        setSheetNote('Saved as a new version.');
-        if (!next || !project?.id) return;
-        setChosenId(next);
-        void flowJson(`/api/projects/${project.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ active_dataset_id: next }),
-        });
-        onChanged?.();
+        adoptVersion(previousId, next, 'Saved as a new version.');
       })
       .catch(err => setSheetNote(err instanceof Error ? err.message : 'The cell was not saved.'));
   };
   const reviseColumn = (path: string, body: Record<string, unknown>, note: string) => {
     if (!datasetId) return;
+    const previousId = datasetId;
     setColMenu(null);
     void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/${path}`, {
       method: 'POST',
@@ -3298,18 +3348,39 @@ function ResponsesScreen({
     })
       .then(saved => {
         const next = String(saved.dataset_id || '');
-        setSheetNote(note);
-        if (!next || !project?.id) return;
-        setChosenId(next);
-        void flowJson(`/api/projects/${project.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ active_dataset_id: next }),
-        });
-        onChanged?.();
+        adoptVersion(previousId, next, note);
       })
       .catch(err =>
         setSheetNote(err instanceof Error ? err.message : 'That change was not saved.')
       );
+  };
+  const addRows = (count = 1) => {
+    if (!datasetId) return;
+    const previousId = datasetId;
+    void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/add-rows`, {
+      method: 'POST',
+      body: JSON.stringify({ count }),
+    })
+      .then(saved => {
+        const next = String(saved.dataset_id || '');
+        adoptVersion(previousId, next, 'Row added as a new version.');
+      })
+      .catch(err => setSheetNote(err instanceof Error ? err.message : 'The row was not added.'));
+  };
+  const deleteSelectedRows = () => {
+    if (!datasetId || selectedRow == null) return;
+    const previousId = datasetId;
+    const row = (filters.length ? 0 : pageOffset) + selectedRow;
+    void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/delete-rows`, {
+      method: 'POST',
+      body: JSON.stringify({ rows: [row] }),
+    })
+      .then(saved => {
+        const next = String(saved.dataset_id || '');
+        setSelectedRow(null);
+        adoptVersion(previousId, next, 'Row deleted as a new version.');
+      })
+      .catch(err => setSheetNote(err instanceof Error ? err.message : 'The row was not deleted.'));
   };
   const columnMeta = (name: string) =>
     columns.find(column => column.name === name || column.label === name);
@@ -3497,7 +3568,7 @@ function ResponsesScreen({
           ) : sessions.length === 0 ? (
             <p className="flow-muted">No saved chats yet</p>
           ) : (
-            sessions.slice(0, 6).map(session => (
+            recentChatSessions(sessions).map(session => (
               <Button
                 key={session.session_id}
                 className="chat-item rail-chat"
@@ -4152,7 +4223,18 @@ function ResponsesScreen({
                     : `Row ${pageOffset + selectedRow + 1} selected`}
                   {sheetNote ? ` · ${sheetNote}` : ''}
                 </span>
-                <span>
+                <span className="sources-actions">
+                  <Button className="flow-btn" type="button" onClick={() => addRows(1)}>
+                    Add row
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={selectedRow == null}
+                    onClick={deleteSelectedRows}
+                  >
+                    Delete row
+                  </Button>
                   <Button
                     className="flow-btn"
                     type="button"
@@ -4275,7 +4357,10 @@ function ResponsesScreen({
               onSession={row =>
                 setSessions(current => {
                   const rest = (current || []).filter(item => item.session_id !== row.session_id);
-                  return [row, ...rest];
+                  return sortSessionsByRecency([
+                    { ...row, updated_at: row.updated_at || new Date().toISOString() },
+                    ...rest,
+                  ]);
                 })
               }
             />
@@ -4428,6 +4513,14 @@ function TablesScreen({
   const files = datasets.filter(row => row.project_id === project?.id && datasetRowId(row));
   const datasetId =
     chosen || project?.active_dataset_id || (files[0] ? datasetRowId(files[0]) : undefined);
+  // Wait for the project's files so the first /tables call can name them (no owner scan).
+  if (!files.length && !ready) {
+    return (
+      <section className="flow-panel" aria-busy="true">
+        <Skeleton className="h-40 w-full" />
+      </section>
+    );
+  }
   return (
     <TablesBuilder
       key={datasetId}
@@ -4560,6 +4653,7 @@ function ReportScreen({
   const [picked, setPicked] = useState<string[]>([]);
   const [tables, setTables] = useState<ReportTable[]>([]);
   const [staleTables, setStaleTables] = useState<StaleTable[]>([]);
+  const [savedTotal, setSavedTotal] = useState(0);
   const [rebuildOffers, setRebuildOffers] = useState<
     Record<string, { id: string; filename: string }>
   >({});
@@ -4574,6 +4668,8 @@ function ReportScreen({
   const [templateSummary, setTemplateSummary] = useState('');
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [waveOpen, setWaveOpen] = useState(false);
+  const [audienceNames, setAudienceNames] = useState<string[]>([]);
+  const [overviewSlides, setOverviewSlides] = useState<OverviewSlide[]>(OVERVIEW_SLIDES);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
@@ -4621,6 +4717,7 @@ function ReportScreen({
       setPicked([]);
       setTables([]);
       setStaleTables([]);
+      setSavedTotal(0);
       setFindings([]);
       setPhase('ready');
       setFindingsPhase('ready');
@@ -4660,6 +4757,11 @@ function ReportScreen({
         const runs = (overview.runs || []) as Parameters<typeof pinsFromRuns>[0];
         rememberReportRuns(projectId, runs);
         setProjectPins(projectId, pinsFromRuns(runs));
+        setSavedTotal(
+          savedTableTotal([
+            overview.tables.map(row => ({ id: String(row.spec_id || '') })).filter(row => row.id),
+          ])
+        );
         const staleRows = overview.tables.filter(row => row.stale);
         const liveRows = overview.tables.filter(row => row.spec_id && !row.stale);
         setStaleTables(
@@ -4796,6 +4898,8 @@ function ReportScreen({
     row => picked.includes(row.id) && Object.keys(row.spec || {}).length > 0
   );
   const savedCount = savedTableTotal([specs, staleTables]);
+  const liveCount = specs.length;
+  const tableCountLabel = liveOfTotalLabel(liveCount, savedTotal || savedCount);
 
   const rebuildStale = async (table: StaleTable, targetId?: string) => {
     setBusy(`rebuild-${table.id}`);
@@ -4843,7 +4947,7 @@ function ReportScreen({
   const exportFileId =
     selected[0]?.datasetId || reportPins.find(pin => pin.datasetId)?.datasetId || datasetId;
 
-  const deck = async () => {
+  const deck = async (recipe?: OverviewBuildRequest) => {
     const outputs = deliverableOutputs(reportPins, 'deck');
     if (!exportFileId || (!selected.length && !outputs.length)) {
       setError(
@@ -4854,23 +4958,71 @@ function ReportScreen({
       return;
     }
     setError('');
-    const created = await flowJson<{ export_id?: string; filename?: string }>(
-      `/datasets/${exportFileId}/export/deck`,
-      {
-        method: 'POST',
-        body: JSON.stringify({
-          spec_ids: selected.map(row => row.id),
-          outputs,
-          headlines: findings
-            .filter(finding => finding.headline)
-            .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
-          ...(template ? { template_base64: template } : {}),
-        }),
-      }
-    );
+    const created = await flowJson<{
+      export_id?: string;
+      filename?: string;
+      low_bases?: { title?: string; note?: string; base?: number; group?: string }[];
+      recipe?: { id?: string };
+    }>(`/datasets/${exportFileId}/export/deck`, {
+      method: 'POST',
+      body: JSON.stringify({
+        spec_ids: selected.map(row => row.id),
+        outputs,
+        headlines: findings
+          .filter(finding => finding.headline)
+          .map(finding => ({ title: finding.eyebrow, text: finding.headline })),
+        ...(template ? { template_base64: template } : {}),
+        ...(templateName ? { template_name: templateName } : {}),
+        ...(recipe
+          ? {
+              name: recipe.audience
+                ? `Audience overview · ${recipe.audience}`
+                : 'Audience overview',
+              audience: recipe.audience,
+              slides: recipe.slides,
+              options: {
+                headline: recipe.headline,
+                footnote: recipe.footnote,
+                hide_low: recipe.hideLow,
+                low_base_threshold: recipe.lowBaseThreshold,
+              },
+            }
+          : {}),
+      }),
+    });
     if (!created.export_id) throw new Error('The deck export did not return a file.');
+    const low = created.low_bases || [];
+    if (low.length) {
+      setOverviewSlides(current =>
+        current.map(slide => {
+          const hit = low.find(
+            note =>
+              String(note.title || '')
+                .toLowerCase()
+                .includes(slide.title.toLowerCase().slice(0, 12)) ||
+              slide.title.toLowerCase().includes(
+                String(note.title || '')
+                  .toLowerCase()
+                  .slice(0, 12)
+              )
+          );
+          if (!hit) return slide;
+          return {
+            ...slide,
+            lowBase: true,
+            lowBaseNote: String(
+              hit.note || `One group has a base of ${hit.base} · shown with a low-base note`
+            ),
+          };
+        })
+      );
+    }
     await downloadExport(`/exports/${created.export_id}`, created.filename || 'deck.pptx');
-    setNote('Deck downloaded.');
+    setNote(
+      recipe
+        ? `Overview deck downloaded${created.recipe?.id ? ' and saved as a recipe' : ''}.`
+        : 'Deck downloaded.'
+    );
   };
 
   const run = (name: string, action: () => Promise<void>) => {
@@ -5117,17 +5269,21 @@ function ReportScreen({
         <div className="report-lead">
           <h1>{project?.name || 'Report'}</h1>
           <p className="report-meta">
-            <span className="ink">
-              {savedCount} saved table{savedCount === 1 ? '' : 's'}
-            </span>
+            <span className="ink">{tableCountLabel}</span>
           </p>
         </div>
         <StudyBrief key={projectId} projectId={projectId} />
         {overviewOpen ? (
           <OverviewDeck
-            audience=""
+            audience={audienceNames[0] || ''}
+            audiences={audienceNames}
+            slides={overviewSlides}
             templateName={templateName || undefined}
             templateSummary={templateSummary || undefined}
+            onReplaceTemplate={() => templateInput.current?.click()}
+            onBuild={async request => {
+              await deck(request);
+            }}
             onClose={() => setOverviewOpen(false)}
           />
         ) : null}
@@ -5173,7 +5329,40 @@ function ReportScreen({
               <Button type="button" disabled={busy !== ''} onClick={() => run('deck', deck)}>
                 Download
               </Button>
-              <Button type="button" className="flow-btn" onClick={() => setOverviewOpen(true)}>
+              <Button
+                type="button"
+                className="flow-btn"
+                onClick={() => {
+                  const fromFindings = findings
+                    .filter(finding => finding.lowBase)
+                    .map(finding => ({
+                      title: finding.eyebrow || finding.headline || '',
+                      note: 'shown with a low-base note',
+                    }));
+                  setOverviewSlides(
+                    OVERVIEW_SLIDES.map(slide => {
+                      const hit = fromFindings.find(item =>
+                        item.title.toLowerCase().includes(slide.title.toLowerCase().slice(0, 10))
+                      );
+                      return hit ? { ...slide, lowBase: true, lowBaseNote: hit.note } : slide;
+                    })
+                  );
+                  if (exportFileId) {
+                    void flowJson<{ audiences?: { name?: string; label?: string }[] }>(
+                      `/datasets/${exportFileId}/audiences`
+                    )
+                      .then(page =>
+                        setAudienceNames(
+                          (page.audiences || [])
+                            .map(row => String(row.label || row.name || '').trim())
+                            .filter(Boolean)
+                        )
+                      )
+                      .catch(() => setAudienceNames([]));
+                  }
+                  setOverviewOpen(true);
+                }}
+              >
                 Audience overview
               </Button>
               <Button type="button" className="flow-btn" onClick={() => setWaveOpen(true)}>
@@ -5184,7 +5373,8 @@ function ReportScreen({
               <div className="report-tags">
                 <span>.XLSX</span>
                 <span>
-                  {savedCount} table{savedCount === 1 ? '' : 's'}
+                  {Math.max(savedTotal, savedCount)} table
+                  {Math.max(savedTotal, savedCount) === 1 ? '' : 's'}
                 </span>
               </div>
               <div>
@@ -5320,7 +5510,7 @@ function ReportScreen({
                           <div key={`${finding.id}-${bar.label}`}>
                             <div className="report-bar-label">
                               <span>{bar.label}</span>
-                              <span>{bar.percent.toFixed(1)}%</span>
+                              <span>{shownPercent(bar.percent, finding.decimals)}</span>
                             </div>
                             <div className="report-bar-track">
                               <div

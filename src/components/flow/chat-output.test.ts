@@ -12,6 +12,7 @@ import {
   keptModelAnswer,
   outputTakeaway,
   outputTitle,
+  outputTableTabLabel,
   titledWithQuestion,
   guardUserText,
   resultLead,
@@ -35,6 +36,14 @@ const answer = [
 ].join('\n');
 
 describe('chat output panel', () => {
+  it('labels an unsaved agent table without a T number, and keeps a saved one', () => {
+    expect(outputTableTabLabel('Region by gender')).toBe('Region by gender');
+    expect(outputTableTabLabel('Region by gender', 0)).toBe('Region by gender');
+    expect(outputTableTabLabel('Region by gender', null)).toBe('Region by gender');
+    expect(outputTableTabLabel('Region by gender', 3)).toBe('T3 Region by gender');
+    expect(outputTableTabLabel('  ')).toBe('Table');
+  });
+
   it('titles the panel from the table result, not the base sentence', () => {
     const results = [
       {
@@ -56,6 +65,39 @@ describe('chat output panel', () => {
         answer
       )
     ).toBe('likes_A by region');
+    expect(
+      outputTitle(
+        [
+          {
+            procedure: 'anova_oneway',
+            request_body: { value_column: 'likes_A', group_column: 'region' },
+          },
+        ],
+        answer,
+        [
+          { name: 'likes_A', label: 'How much do you like brand A?' },
+          { name: 'region', label: 'Region' },
+        ]
+      )
+    ).toBe('How much do you like brand A? by Region');
+    expect(
+      outputTitle(
+        [
+          {
+            procedure: 'anova_oneway',
+            request_body: { value_column: 'likes_C', group_column: 'age' },
+            result: {
+              report: {
+                answer_from_result: true,
+                answer:
+                  'How much do you like brand C? by Age band: F(2, 277) = 0.615, p = 0.541, consistent with chance.',
+              },
+            },
+          },
+        ],
+        answer
+      )
+    ).toBe('How much do you like brand C? by Age band');
   });
 
   it('titles a frequency card with the question and badges Frequencies', () => {
@@ -233,6 +275,13 @@ describe('chat output panel', () => {
     expect(lead).not.toMatch(/design_weight/);
     expect(lead).not.toMatch(/Cautions/);
     expect(lead.trim().endsWith('-')).toBe(false);
+  });
+
+  it('drops empty parentheses and clamps long share percents in the lead', () => {
+    const lead = resultLead('Heard is 38.062% ( ) in the North.');
+    expect(lead).toContain('38.1%');
+    expect(lead).not.toMatch(/38\.062%/);
+    expect(lead).not.toMatch(/\(\s*\)/);
   });
 
   it('titles a funnel with the short name, not the lead', () => {

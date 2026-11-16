@@ -1,14 +1,32 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AnalysisResult } from './analysis-result';
 import { OverviewDeck, OVERVIEW_SLIDES, WaveRefresh } from './overview-deck';
 
+jest.mock('@/lib/output-pptx', () => ({
+  exportResultAsPptx: jest.fn(async () => undefined),
+  appendResultToDeck: jest.fn(async () => undefined),
+}));
+
+import { appendResultToDeck, exportResultAsPptx } from '@/lib/output-pptx';
+
 describe('the deck and refresh screens', () => {
-  it('lists the template slides, the low-base flag, and the saved recipe', () => {
+  it('lists the template slides, the low-base flag, and the saved recipe', async () => {
+    const onBuild = jest.fn(async () => undefined);
     render(
       <OverviewDeck
         audience="Weekday readers"
         templateName="Client.potx"
         templateSummary="9 layouts · theme colours found"
+        slides={OVERVIEW_SLIDES.map(slide =>
+          slide.id === 'market'
+            ? {
+                ...slide,
+                lowBase: true,
+                lowBaseNote: 'One market has a base of 38 · shown with a low-base note',
+              }
+            : slide
+        )}
+        onBuild={onBuild}
         onClose={() => undefined}
       />
     );
@@ -17,9 +35,14 @@ describe('the deck and refresh screens', () => {
     expect(screen.getByText('9 layouts · theme colours found')).toBeTruthy();
     expect(screen.getByText('Saved as a recipe')).toBeTruthy();
     expect(screen.getByText('Reach by market')).toBeTruthy();
-    expect(OVERVIEW_SLIDES.some(slide => slide.lowBase)).toBe(true);
+    expect(screen.getByText(/base of 38/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: `Build ${OVERVIEW_SLIDES.length} slides` }));
-    expect(screen.getByText('Saved as a recipe. The original deck is unchanged.')).toBeTruthy();
+    await waitFor(() => expect(onBuild).toHaveBeenCalled());
+    expect(onBuild.mock.calls[0][0].audience).toBe('Weekday readers');
+    expect(onBuild.mock.calls[0][0].slides).toHaveLength(OVERVIEW_SLIDES.length);
+    expect(
+      await screen.findByText('Saved as a recipe. The original deck is unchanged.')
+    ).toBeTruthy();
   });
 
   it('walks the second-wave steps and keeps a movers summary', () => {
@@ -43,17 +66,24 @@ describe('the deck and refresh screens', () => {
     expect(screen.getByText(/added as the last slide/)).toBeTruthy();
   });
 
-  it('opens the export menu for one output', () => {
+  it('opens the export menu for one output and downloads a PowerPoint slide', async () => {
     render(
       <AnalysisResult
         lead="Alpha is 40.0%."
         tables={[{ title: 'Reach', columns: ['Item', '%'], rows: [['Alpha', '40.0%']] }]}
+        datasetId="ds-1"
+        templateName="Sales_master_2026.potx"
       />
     );
     fireEvent.click(screen.getByRole('button', { name: 'Export' }));
     expect(screen.getByRole('menuitem', { name: 'PowerPoint slide' })).toBeTruthy();
+    expect(screen.getByText(/On Sales_master_2026 · editable chart/)).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Add to a deck…' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Excel table' })).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: 'Image (PNG)' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitem', { name: 'PowerPoint slide' }));
+    await waitFor(() => expect(exportResultAsPptx).toHaveBeenCalled());
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Add to a deck…' }));
+    await waitFor(() => expect(appendResultToDeck).toHaveBeenCalled());
   });
 });

@@ -29,6 +29,17 @@ export function countsFromPercents(
   return counts;
 }
 
+/** The percent values the user typed. Same encoding the agent sends for rake. */
+export function targetPercents(codes: { code: string; percent: string }[]): Record<string, number> {
+  const percents: Record<string, number> = {};
+  for (const row of codes) {
+    const percent = Number(row.percent);
+    if (!row.code || row.percent.trim() === '' || !Number.isFinite(percent)) continue;
+    percents[row.code] = percent;
+  }
+  return percents;
+}
+
 export function achievedShare(achieved: number, base: number): string {
   if (!Number.isFinite(achieved) || !Number.isFinite(base) || base <= 0) return '';
   return `${((achieved / base) * 100).toFixed(1)}%`;

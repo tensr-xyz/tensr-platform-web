@@ -63,6 +63,7 @@ import {
   type AgentLoopResponse,
 } from '@/lib/run-agent-loop';
 import { visibleAgentStep } from '@/lib/agent-step-copy';
+import { sortSessionsByRecency } from '@/components/flow/chat-sessions';
 
 export type AgentChatSession = { session_id: string; title?: string; updated_at?: string };
 
@@ -103,7 +104,13 @@ export function stepLines(steps: { name?: string; message?: string }[] | undefin
   });
 }
 
-function replyLines(result: AgentLoopResponse): string[] {
+function traceField(item: Record<string, unknown>, key: string): string {
+  const value = item[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** Step lines from a finished reply. Prefer the procedure the person saw over wrapper tool names. */
+export function replyLines(result: AgentLoopResponse): string[] {
   const summary = result.execution_summary?.trim();
   if (summary) {
     return summary.split('\n').flatMap(line => {
@@ -112,14 +119,31 @@ function replyLines(result: AgentLoopResponse): string[] {
     });
   }
   return (result.tool_trace || []).flatMap(item => {
-    const message = item.message || item.summary;
-    const name = item.name || item.tool;
-    const line = visibleAgentStep(
-      typeof name === 'string' ? name : '',
-      typeof message === 'string' ? message : ''
-    );
+    const nested =
+      item.result && typeof item.result === 'object'
+        ? (item.result as Record<string, unknown>)
+        : {};
+    const args =
+      item.args && typeof item.args === 'object' ? (item.args as Record<string, unknown>) : {};
+    const message =
+      traceField(item, 'message') ||
+      traceField(item, 'summary') ||
+      traceField(nested, 'message') ||
+      '';
+    const wrapper = traceField(item, 'name') || traceField(item, 'tool');
+    const procedure = traceField(args, 'analysis_type');
+    const name =
+      (wrapper === 'run_analysis' || wrapper === 'run_operations') && procedure
+        ? procedure
+        : wrapper || procedure;
+    const line = visibleAgentStep(name, message);
     return line ? [line] : [];
   });
+}
+
+/** Keep the lines shown while the turn ran; only fall back to the finished trace. */
+export function stepsAfterReply(live: string[], traced: string[]): string[] {
+  return live.length ? live : traced;
 }
 
 function downloadEntries(result: AgentLoopResponse): ExportDownload[] {
@@ -235,11 +259,12 @@ export function useAgentThread({
       const row = {
         session_id: sessionId,
         title: title.length > 80 ? `${title.slice(0, 77)}…` : title,
+        updated_at: new Date().toISOString(),
       };
       if (!aliveRef.current) return;
       setSessions(current => {
         const rest = (current || []).filter(item => item.session_id !== row.session_id);
-        return [row, ...rest];
+        return sortSessionsByRecency([row, ...rest]);
       });
       onSessionRef.current?.(row);
     },
@@ -251,7 +276,7 @@ export function useAgentThread({
     void flowJson<{ sessions?: AgentChatSession[] }>(`/api/projects/${projectId}/sessions`, {
       signal: AbortSignal.timeout(15000),
     })
-      .then(page => setSessions(page.sessions || []))
+      .then(page => setSessions(sortSessionsByRecency(page.sessions || [])))
       .catch(() => setSessions(current => current || []));
   }, [projectId]);
 
@@ -424,6 +449,7 @@ export function useAgentThread({
         if (turnToken !== turnTokenRef.current) return true;
         if (result.session_id) noteSession(result.session_id, text.trim());
         const traced = replyLines(result);
+        const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
         const kept = keptModelAnswer(draft, result.answer_markdown || '');
         shown(() => {
@@ -431,7 +457,7 @@ export function useAgentThread({
           setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
           setTurn(result.status === 'awaiting_approval' ? null : result);
-          if (traced.length) setSteps(traced);
+          if (keptSteps.length) setSteps(keptSteps);
           setDownloads(entries);
           if (result.status !== 'awaiting_approval') setAttachments([]);
           setStatus(null);
@@ -442,6 +468,7 @@ export function useAgentThread({
           running: false,
           status: null,
           answer: kept,
+          steps: keptSteps,
           sessionId: result.session_id || sessionRef.current,
         });
         if (aliveRef.current) loadRail();
@@ -548,6 +575,7 @@ export function useAgentThread({
       .then(result => {
         if (turnToken !== turnTokenRef.current) return;
         const traced = replyLines(result);
+        const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
         const kept = keptModelAnswer(streamedRef.current, result.answer_markdown || '');
         shown(() => {
@@ -555,7 +583,7 @@ export function useAgentThread({
           setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
           setTurn(result.status === 'awaiting_approval' ? null : result);
-          if (traced.length) setSteps(traced);
+          if (keptSteps.length) setSteps(keptSteps);
           setDownloads(entries);
           if (result.status !== 'awaiting_approval') setAttachments([]);
           setStatus(null);
@@ -569,7 +597,7 @@ export function useAgentThread({
             running: false,
             status: null,
             answer: kept,
-            steps: traced.length ? traced : stepsRef.current,
+            steps: keptSteps,
           });
         }
         approvingRef.current = false;
@@ -670,7 +698,18 @@ export function useAgentThread({
             setAttachments([]);
             setAttachError(null);
             setStatus(null);
-            setPanelOpen(Boolean(last?.toolResults?.length));
+            // Failed tool steps still leave tool_results; only a ready output opens the column.
+            setPanelOpen(
+              outputCardReady(
+                last
+                  ? {
+                      status: 'ok',
+                      tool_results: last.toolResults,
+                    }
+                  : null,
+                false
+              )
+            );
           });
         })
         .catch(err => {
@@ -745,7 +784,8 @@ export function useAgentThread({
   const runIds = outputRunIds(toolResults);
   const outputReady = outputCardReady(turn, Boolean(plan));
   useEffect(() => {
-    if (outputReady) setPanelOpen(true);
+    // Open on the first real output; close again if the latest turn has none (e.g. a failed run).
+    setPanelOpen(outputReady);
   }, [outputReady]);
   const checks = outputChecks(toolResults);
   const tables = answerTables(answer);
@@ -757,8 +797,11 @@ export function useAgentThread({
     ...table,
     title: titledWithQuestion(table.title, columnLabels),
   }));
+  const resultCharts = resultView.charts;
   const prose = answerWithoutBase(
-    withoutResultTokens(structuredTables.length ? answerWithoutTables(answer) : answer)
+    withoutResultTokens(
+      structuredTables.length || resultCharts.length ? answerWithoutTables(answer) : answer
+    )
   );
   const lead = resultLead(answer, toolResults, resultTables);
   const footnote = resultFootnote(
@@ -822,6 +865,7 @@ export function useAgentThread({
     ledger,
     resultView,
     structuredTables,
+    resultCharts,
     footnote,
     resultChecks,
     datasetId,
@@ -1007,10 +1051,11 @@ export function AgentThreadColumn({
           </div>
         ) : null}
         {thread.answer && (!thread.plan || thread.approving) ? (
-          thread.structuredTables.length ? (
+          thread.structuredTables.length || thread.resultCharts.length ? (
             <AnalysisResult
               lead={thread.lead || thread.takeaway}
               tables={thread.structuredTables}
+              charts={thread.resultCharts}
               footnote={thread.footnote}
               checks={thread.resultChecks}
               script={thread.resultView.script}
@@ -1024,7 +1069,15 @@ export function AgentThreadColumn({
         ) : null}
         {thread.outputReady ? (
           <div className="chat-result">
-            <div className="chat-result-top">
+            <Button
+              type="button"
+              className="chat-result-top"
+              aria-pressed={thread.panelOpen}
+              aria-label={
+                thread.panelOpen ? `${thread.title}, output open` : `Show output: ${thread.title}`
+              }
+              onClick={() => thread.setPanelOpen(true)}
+            >
               <span className="chat-result-icon" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 14 14">
                   <path
@@ -1040,8 +1093,8 @@ export function AgentThreadColumn({
                 <strong>{thread.title}</strong>
                 <div className="flow-muted">{thread.kind} · Output</div>
               </div>
-              <span className="chat-viewing">Viewing</span>
-            </div>
+              {thread.panelOpen ? <span className="chat-viewing">Viewing</span> : null}
+            </Button>
             <div className="chat-result-actions">
               {asker ? (
                 <>

@@ -18,6 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { datasetRowId } from '@/components/flow/survey-screens';
 import { moveDatasetToProject } from '@/components/flow/move-dataset';
 import { StackWaves } from '@/components/flow/stack-waves';
+import { JoinFiles } from '@/components/flow/join-files';
 import { DatasetMenu } from '@/components/flow/dataset-actions';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
@@ -30,6 +31,7 @@ import {
 import { UploadPrepCard } from '@/components/flow/upload-prep-card';
 import type { PrepProposal } from '@/components/flow/upload-prep';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
+import { showDatasetVersionUndoToast, useDatasetVersion } from '@/lib/dataset-version-undo';
 
 export type SourceFile = {
   dataset_id?: string;
@@ -53,6 +55,35 @@ export function orderedVersionGroup(files: SourceFile[]): SourceFile[] {
       String(left.updated_at || left.created_at || '')
     )
   );
+}
+
+/**
+ * Files on the project, plus a working version saved without a project id when its
+ * parent or origin is already on the project. Matches the API `files_in_project` rule.
+ */
+export function filesInProject(rows: SourceFile[], projectId: string): SourceFile[] {
+  const project = String(projectId || '');
+  const chosen = rows.filter(row => String(row.project_id || '') === project && project);
+  const ids = new Set(chosen.map(row => datasetRowId(row)).filter(Boolean));
+  let pending = true;
+  let guard = 0;
+  while (pending && guard < 8) {
+    guard += 1;
+    pending = false;
+    for (const row of rows) {
+      if (!['', project].includes(String(row.project_id || ''))) continue;
+      const rowId = datasetRowId(row);
+      if (!rowId || ids.has(rowId)) continue;
+      const parent = String(row.parent_dataset_id || '');
+      const origin = String(row.origin_dataset_id || '');
+      if (ids.has(parent) || ids.has(origin)) {
+        chosen.push(row);
+        ids.add(rowId);
+        pending = true;
+      }
+    }
+  }
+  return chosen;
 }
 
 export type ContextDoc = {
@@ -176,11 +207,12 @@ export function SourcesScreen({
 }) {
   const router = useRouter();
   const projectId = project?.id || '';
-  const files = datasets.filter(row => row.project_id === projectId && datasetRowId(row));
+  const files = filesInProject(datasets, projectId).filter(row => datasetRowId(row));
   const fileInput = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<ContextDoc[] | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [stackOpen, setStackOpen] = useState(false);
+  const [joinOpen, setJoinOpen] = useState(false);
   const [docName, setDocName] = useState('');
   const [docKind, setDocKind] = useState('brief');
   const [docText, setDocText] = useState('');
@@ -190,6 +222,7 @@ export function SourcesScreen({
   const [proposal, setProposal] = useState<{ id: string; prep: PrepProposal } | null>(null);
   const activeId = project?.active_dataset_id || '';
   const skippedPrep = useRef<Set<string>>(new Set());
+  const activeBeforeStack = useRef(activeId);
 
   useEffect(() => {
     if (!activeId || proposal || skippedPrep.current.has(activeId)) return;
@@ -232,6 +265,22 @@ export function SourcesScreen({
         if (!stay) router.push(`/flow/p/${projectId}/responses`);
       })
       .catch(err => setError(err instanceof Error ? err.message : 'The file did not open.'));
+  };
+
+  const useThisVersion = (file: SourceFile, tipId?: string) => {
+    const id = datasetRowId(file);
+    if (!id || !projectId) return;
+    setError(null);
+    rememberFileName(id, sourceFileName(file));
+    void useDatasetVersion({
+      projectId,
+      versionId: id,
+      tipDatasetId: tipId || activeId || id,
+    })
+      .then(() => onChanged())
+      .catch(err =>
+        setError(err instanceof Error ? err.message : 'That version was not restored.')
+      );
   };
 
   const upload = (file: File) => {
@@ -331,7 +380,8 @@ export function SourcesScreen({
           <span className="flow-muted">{note}</span>
         </span>
         <span className="flow-muted sources-rows">{sourceRowCount(file)}</span>
-        {inUse ? <span className="sources-in-use">In use</span> : action}
+        {inUse ? <span className="sources-in-use">In use</span> : null}
+        {action}
         <DatasetMenu
           datasetId={id}
           name={sourceFileName(file)}
@@ -464,9 +514,28 @@ export function SourcesScreen({
               Stacked, weighted or coded copies Tensr made. Your uploads stay unchanged.
             </p>
             {files.length >= 2 ? (
-              <Button className="flow-btn" type="button" onClick={() => setStackOpen(true)}>
-                Stack files
-              </Button>
+              <span className="sources-actions">
+                <Button
+                  className="flow-btn"
+                  type="button"
+                  onClick={() => {
+                    activeBeforeStack.current = activeId;
+                    setJoinOpen(true);
+                  }}
+                >
+                  Join files
+                </Button>
+                <Button
+                  className="flow-btn"
+                  type="button"
+                  onClick={() => {
+                    activeBeforeStack.current = activeId;
+                    setStackOpen(true);
+                  }}
+                >
+                  Stack files
+                </Button>
+              </span>
             ) : null}
           </div>
           {lineageGroups.size ? (
@@ -491,6 +560,15 @@ export function SourcesScreen({
                             Review mapping
                           </Button>
                         ) : null}
+                        {datasetRowId(newest) === activeId ? null : (
+                          <Button
+                            className="flow-btn"
+                            type="button"
+                            onClick={() => useThisVersion(newest, datasetRowId(newest))}
+                          >
+                            Use this version
+                          </Button>
+                        )}
                         <Button
                           className="flow-btn"
                           type="button"
@@ -517,13 +595,26 @@ export function SourcesScreen({
                               fileRow(
                                 file,
                                 versionNote(file),
-                                <Button
-                                  className="flow-btn"
-                                  type="button"
-                                  onClick={() => openFile(datasetRowId(file), sourceFileName(file))}
-                                >
-                                  Open
-                                </Button>
+                                <span className="sources-actions">
+                                  {datasetRowId(file) === activeId ? null : (
+                                    <Button
+                                      className="flow-btn"
+                                      type="button"
+                                      onClick={() => useThisVersion(file, datasetRowId(newest))}
+                                    >
+                                      Use this version
+                                    </Button>
+                                  )}
+                                  <Button
+                                    className="flow-btn"
+                                    type="button"
+                                    onClick={() =>
+                                      openFile(datasetRowId(file), sourceFileName(file))
+                                    }
+                                  >
+                                    Open
+                                  </Button>
+                                </span>
                               )
                             )
                           : null}
@@ -623,7 +714,28 @@ export function SourcesScreen({
             datasets={datasets}
             projectNames={projectNames}
             onChanged={onChanged}
+            onStacked={nextId => {
+              showDatasetVersionUndoToast({
+                projectId,
+                previousDatasetId: activeBeforeStack.current,
+                currentDatasetId: nextId,
+                title: 'Stacked as a new file',
+                onRestored: () => onChanged(),
+              });
+            }}
             onDone={() => setStackOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={joinOpen} onOpenChange={setJoinOpen}>
+        <DialogContent className="sources-stack-dialog">
+          <JoinFiles
+            projectId={projectId}
+            datasets={datasets}
+            activeDatasetId={activeId}
+            onChanged={onChanged}
+            onDone={() => setJoinOpen(false)}
           />
         </DialogContent>
       </Dialog>

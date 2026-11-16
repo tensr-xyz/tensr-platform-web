@@ -352,6 +352,7 @@ export function BannerGrid({
   digits = 1,
   markLowBase = false,
   muted = false,
+  columnLabels = [],
 }: {
   book: Record<string, unknown>;
   onSelectCell: (cell: SurveyCell) => void;
@@ -363,6 +364,7 @@ export function BannerGrid({
   digits?: number;
   markLowBase?: boolean;
   muted?: boolean;
+  columnLabels?: { name: string; label: string }[];
 }) {
   const shownFigures = figures?.length ? figures : [figure];
   const weighted = Boolean((book.weight as { weight_aware?: boolean } | undefined)?.weight_aware);
@@ -372,7 +374,11 @@ export function BannerGrid({
   const lettersShown = String(book.significance_display || 'column_letters') !== 'none';
   const notCoded = ((book.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
     ?.not_coded;
-  const listed = ((book.rows as BannerRow[]) || []).filter(row => showNets || row.kind !== 'net');
+  // Mean and SD stay with the scale for every cell measure, including Counts.
+  // Nets hide only when the user has not asked for them on this table.
+  const listed = ((book.rows as BannerRow[]) || []).filter(
+    row => row.kind === 'mean' || row.kind === 'sd' || showNets || row.kind !== 'net'
+  );
   // A coded open end always ends on its "Not yet coded" row, in Themes and in Tables.
   const rows = themeRows(listed, notCoded?.unweighted_n, showQuotes);
   if (!columns.length) return <p className="flow-muted">This table has no banner columns yet.</p>;
@@ -420,11 +426,12 @@ export function BannerGrid({
               <th>
                 {showQuotes
                   ? 'Theme'
-                  : String(
-                      ((book.stubs as { label?: string; column?: string }[]) || [])[0]?.label ||
-                        ((book.stubs as { column?: string }[]) || [])[0]?.column ||
-                        ''
-                    )}
+                  : ((book.stubs as { label?: string; column?: string }[]) || []).length > 1
+                    ? ''
+                    : stubHeaderLabel(
+                        ((book.stubs as { label?: string; column?: string }[]) || [])[0],
+                        columnLabels
+                      )}
               </th>
               {columns.map(column => (
                 <th key={column.id}>
@@ -442,6 +449,13 @@ export function BannerGrid({
               const quotes = (row.cells || []).find(
                 cell => cell.banner_id === 'total'
               )?.unweighted_n;
+              if (row.kind === 'header') {
+                return (
+                  <tr key={row.id} className="grid-stub-header">
+                    <th colSpan={columns.length + 1}>{row.label}</th>
+                  </tr>
+                );
+              }
               return (
                 <tr key={row.id}>
                   <th>
@@ -475,7 +489,11 @@ export function BannerGrid({
                         >
                           {cellFigures(
                             cell,
-                            row.kind === 'mean' || row.kind === 'sd' ? ['mean'] : shownFigures,
+                            row.kind === 'mean' ||
+                              row.kind === 'sd' ||
+                              /^mean$/i.test(String(row.label || ''))
+                              ? ['mean']
+                              : shownFigures,
                             digits,
                             weighted
                           )}
@@ -1418,18 +1436,51 @@ type TableColumn = {
   role?: string;
 };
 
+/** A weight column by role, name, or label. The weight menu lists these; stub/banner do not. */
+export function isTableWeightColumn(
+  column: { name: string; label?: string; role?: string },
+  weights: string[] = []
+): boolean {
+  if (String(column.role || '').toLowerCase() === 'weight') return true;
+  if (weights.some(name => name.toLowerCase() === column.name.toLowerCase())) return true;
+  const name = column.name.trim().toLowerCase();
+  if (
+    name.includes('weight') ||
+    name === 'wt' ||
+    name === 'wgt' ||
+    name === 'wght' ||
+    name.endsWith('_wt')
+  ) {
+    return true;
+  }
+  return /\bweight\b/i.test(String(column.label || ''));
+}
+
 /** Stub and banner choices. Ids, open text, and weight columns are not questions. */
 export function tablePickerColumns(columns: TableColumn[], weights: string[] = []): TableColumn[] {
-  const weightNames = new Set(weights.map(name => name.toLowerCase()).filter(Boolean));
   return columns.filter(column => {
-    if (!column.name || isInternalColumn(column.name) || isIdColumn(column.name)) return false;
-    if (weightNames.has(column.name.toLowerCase())) return false;
-    if (String(column.role || '').toLowerCase() === 'weight') return false;
+    if (!column.name || isInternalColumn(column.name)) return false;
+    if (isIdColumn(column.name) || isIdColumn(String(column.label || ''))) return false;
+    if (isTableWeightColumn(column, weights)) return false;
     const labelled = Object.keys(column.labels || {}).length > 0;
     const type = String(column.type || '').toLowerCase();
     if (!labelled && (type === 'string' || type === 'text')) return false;
     return true;
   });
+}
+
+/** Grid corner header: the question label, never the bare variable name when a label exists. */
+export function stubHeaderLabel(
+  stub: { label?: string; column?: string } | undefined,
+  columns: { name: string; label: string }[]
+): string {
+  const column = String(stub?.column || '').trim();
+  const own = String(stub?.label || '').trim();
+  const meta = columns.find(item => item.name === column);
+  const labelled = meta ? columnChoiceLabel(meta).trim() : '';
+  if (labelled && labelled !== column) return labelled;
+  if (own && own !== column) return own;
+  return labelled || own || column;
 }
 type SavedSpec = {
   spec_id?: string;
@@ -1780,6 +1831,7 @@ export function TablesBuilder({
   const [view, setView] = useState<'table' | 'chart'>('table');
   const loadingSaved = useRef(false);
   const weightFromTable = useRef(false);
+  const bookRef = useRef<Record<string, unknown> | null>(null);
   const fileIdsRef = useRef<string[]>([]);
   fileIdsRef.current = (files || []).map(file => file.id);
 
@@ -1810,6 +1862,14 @@ export function TablesBuilder({
           specs: [] as SavedSpec[],
           first: null as Record<string, unknown> | null,
         }));
+    // Banner books are not needed to paint the rail or open the first table.
+    void flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`)
+      .then(bookPage => {
+        if (live) setBooks(bookPage.books || []);
+      })
+      .catch(() => {
+        if (live) setBooks([]);
+      });
     void Promise.all([
       firstPage,
       // The open file's list comes from the open_first call; the project list reads only this project's files.
@@ -1817,10 +1877,7 @@ export function TablesBuilder({
         fileIds: fileIdsRef.current,
         filePage: pendingOpen ? undefined : firstPage,
       }),
-      flowJson<{ books?: SavedBook[] }>(`/datasets/${datasetId}/banner-books`).catch(() => ({
-        books: [] as SavedBook[],
-      })),
-    ]).then(async ([specPage, projectTables, bookPage]) => {
+    ]).then(async ([specPage, projectTables]) => {
       if (!live) return;
       const saved: SavedSpec[] = projectTables.map(table => ({
         spec_id: table.id,
@@ -1832,7 +1889,6 @@ export function TablesBuilder({
         detail: table.detail,
       }));
       setSpecs(saved);
-      setBooks(bookPage.books || []);
       const liveHere = saved.filter(
         item => !item.stale && (!item.dataset_id || item.dataset_id === datasetId)
       );
@@ -1871,12 +1927,26 @@ export function TablesBuilder({
     }>(`/datasets/${datasetId}/metadata`)
       .then(meta => {
         const choices = tableWeightChoices(meta.weight_columns, meta.active_weight_column || '');
-        activeWeightName.current = meta.active_weight_column || '';
+        const active = meta.active_weight_column || '';
+        activeWeightName.current = active;
         setWeightColumns(choices);
         // A saved table's weight wins. The file weight is only the default before one is open.
-        const active = meta.active_weight_column || '';
+        // When the table opened before metadata arrived, resolve _weight / active again.
         const chosen = defaultTableWeight(active, choices);
-        if (!weightFromTable.current && chosen) setWeight(current => current || chosen);
+        setWeight(current => {
+          if (weightFromTable.current) {
+            const opened = bookRef.current;
+            const bookWeight = opened?.weight as
+              | { column?: string | null; weight_aware?: boolean }
+              | null
+              | undefined;
+            const saved = (opened?.spec as { weight?: unknown } | undefined)?.weight;
+            const fromBook = selectedTableWeight(saved, bookWeight, active);
+            if (fromBook) return fromBook;
+            return current;
+          }
+          return current || chosen;
+        });
         setWeightNeedsRefresh(Boolean(meta.weight_vector?.needs_refresh));
         setColumns(
           (meta.columns || [])
@@ -1894,7 +1964,9 @@ export function TablesBuilder({
     return () => {
       live = false;
     };
-  }, [datasetId, ready]);
+    // ready only gates the empty-state path above; refetching on ready flip duplicated /tables.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [datasetId]);
 
   const labelFor = (name: string) => {
     const column = columns.find(item => item.name === name);
@@ -1923,6 +1995,7 @@ export function TablesBuilder({
 
   function remember(body: Record<string, unknown>) {
     loadingSaved.current = true;
+    bookRef.current = body;
     setBook(body);
     const spec = body.spec as
       | {
@@ -1973,13 +2046,19 @@ export function TablesBuilder({
     const id = String(spec?.id || '');
     if (id) {
       const assigned = Number(body.table_number);
+      const stubMeta = ((body.stubs as { label?: string; column?: string }[]) || [])[0];
+      const listed = stubHeaderLabel(stubMeta, columns);
       setSpecs(current =>
         current.some(item => (item.spec_id || item.id) === id)
-          ? current
+          ? current.map(item =>
+              (item.spec_id || item.id) === id && listed && listed !== stubColumn
+                ? { ...item, label: listed }
+                : item
+            )
           : [
               {
                 spec_id: id,
-                label: spec?.label || stubColumn || stub,
+                label: listed || spec?.label || stubColumn || stub,
                 dataset_id: datasetId,
                 ...(Number.isFinite(assigned) && assigned > 0 ? { number: assigned } : {}),
               },
@@ -2825,6 +2904,10 @@ export function TablesBuilder({
                       figures={figures}
                       digits={digits}
                       markLowBase={lowBase}
+                      columnLabels={columns.map(column => ({
+                        name: column.name,
+                        label: columnChoiceLabel(column),
+                      }))}
                     />
                   )}
                 </>
