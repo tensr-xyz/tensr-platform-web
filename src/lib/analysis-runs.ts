@@ -233,7 +233,14 @@ export type StoredAnalysisRun = {
   result: Record<string, unknown>;
   provenance?: Record<string, unknown> | null;
   body?: Record<string, unknown> | null;
+  status?: string;
 };
+
+/** Poll interval while a banner finishes on the 180s worker. */
+export const ANALYSIS_RUN_POLL_MS = 2000;
+
+/** Give a cold worker enough room before the UI gives up. */
+export const ANALYSIS_RUN_POLL_LIMIT = 90;
 
 /** Row from GET /datasets/{id}/runs. The report lives on the full run. */
 export type AnalysisRunSummary = {
@@ -304,6 +311,34 @@ export async function fetchAnalysisRun(runId: string): Promise<StoredAnalysisRun
   } catch {
     return null;
   }
+}
+
+/** Wait until a pending analysis run is complete or failed. */
+export async function waitForAnalysisRun(
+  runId: string,
+  opts?: { intervalMs?: number; attempts?: number; signal?: AbortSignal }
+): Promise<StoredAnalysisRun | null> {
+  const intervalMs = opts?.intervalMs ?? ANALYSIS_RUN_POLL_MS;
+  const attempts = opts?.attempts ?? ANALYSIS_RUN_POLL_LIMIT;
+  for (let i = 0; i < attempts; i += 1) {
+    if (opts?.signal?.aborted) return null;
+    const run = await fetchAnalysisRun(runId);
+    const status = String(run?.status || 'complete');
+    if (run && status !== 'pending') return run;
+    if (i + 1 >= attempts) return run;
+    await new Promise<void>(resolve => {
+      const timer = setTimeout(resolve, intervalMs);
+      opts?.signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true }
+      );
+    });
+  }
+  return null;
 }
 
 export async function openStoredAnalysisRun(run: StoredAnalysisRun): Promise<void> {
@@ -454,6 +489,7 @@ export function normalizeStoredAnalysisRun(row: unknown): StoredAnalysisRun | nu
         : r.request_body && typeof r.request_body === 'object'
           ? (r.request_body as Record<string, unknown>)
           : null,
+    status: r.status == null || r.status === '' ? undefined : String(r.status),
   };
 }
 

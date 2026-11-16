@@ -1,7 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { attachStoredRuns, fetchAnalysisRun, type StoredAnalysisRun } from '@/lib/analysis-runs';
+import {
+  ANALYSIS_RUN_POLL_MS,
+  attachStoredRuns,
+  fetchAnalysisRun,
+  waitForAnalysisRun,
+  type StoredAnalysisRun,
+} from '@/lib/analysis-runs';
 import { AnalysisResult } from '@/components/flow/analysis-result';
 import {
   answerWithoutBase,
@@ -39,13 +45,25 @@ export function useEnrichedToolResults<T>(results: T[] | undefined): T[] | undef
   useEffect(() => {
     if (!ids) return;
     let cancelled = false;
-    void Promise.all(ids.split('|').map(id => fetchAnalysisRun(id))).then(loaded => {
+    const controller = new AbortController();
+    void Promise.all(
+      ids.split('|').map(async id => {
+        const first = await fetchAnalysisRun(id);
+        if (!first) return null;
+        if (String(first.status || '') !== 'pending') return first;
+        return waitForAnalysisRun(id, {
+          intervalMs: ANALYSIS_RUN_POLL_MS,
+          signal: controller.signal,
+        });
+      })
+    ).then(loaded => {
       if (cancelled) return;
       setRuns(loaded.filter((run): run is StoredAnalysisRun => Boolean(run)));
       setLoadedFor(ids);
     });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [ids]);
   if (!results) return results;
