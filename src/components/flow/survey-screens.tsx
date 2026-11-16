@@ -1434,7 +1434,12 @@ type TableColumn = {
   labels: Record<string, string>;
   type?: string;
   role?: string;
+  n_unique?: number | null;
+  n_rows?: number | null;
 };
+
+/** Distinct values at or below this count stay stub/banner categories when unlabelled. */
+export const TABLE_TEXT_CATEGORY_MAX = 100;
 
 /** A weight column by role, name, or label. The weight menu lists these; stub/banner do not. */
 export function isTableWeightColumn(
@@ -1456,6 +1461,28 @@ export function isTableWeightColumn(
   return /\bweight\b/i.test(String(column.label || ''));
 }
 
+/** Unlabelled string with few distinct values: a category, not an open end. */
+export function isTableTextCategorical(
+  column: {
+    type?: string;
+    labels?: Record<string, string>;
+    n_unique?: number | null;
+    n_rows?: number | null;
+  },
+  nRows?: number | null
+): boolean {
+  const type = String(column.type || '').toLowerCase();
+  if (type === 'text') return false;
+  if (type !== 'string' && type !== 'categorical') return false;
+  if (Object.keys(column.labels || {}).length > 0) return true;
+  const nUnique = Number(column.n_unique);
+  if (!Number.isFinite(nUnique) || nUnique < 1) return false;
+  if (nUnique > TABLE_TEXT_CATEGORY_MAX) return false;
+  const rows = Number(nRows ?? column.n_rows);
+  if (Number.isFinite(rows) && rows >= 20 && nUnique >= rows / 2) return false;
+  return true;
+}
+
 /** Stub and banner choices. Ids, open text, and weight columns are not questions. */
 export function tablePickerColumns(columns: TableColumn[], weights: string[] = []): TableColumn[] {
   return columns.filter(column => {
@@ -1464,7 +1491,9 @@ export function tablePickerColumns(columns: TableColumn[], weights: string[] = [
     if (isTableWeightColumn(column, weights)) return false;
     const labelled = Object.keys(column.labels || {}).length > 0;
     const type = String(column.type || '').toLowerCase();
-    if (!labelled && (type === 'string' || type === 'text')) return false;
+    if (!labelled && (type === 'string' || type === 'text' || type === 'categorical')) {
+      return isTableTextCategorical(column);
+    }
     return true;
   });
 }
@@ -1920,6 +1949,8 @@ export function TablesBuilder({
         type?: string;
         role?: string | null;
         value_labels?: Record<string, string>;
+        n_unique?: number | null;
+        n_rows?: number | null;
       }[];
       active_weight_column?: string | null;
       weight_columns?: string[];
@@ -1956,6 +1987,8 @@ export function TablesBuilder({
               labels: column.value_labels || {},
               type: column.type,
               role: column.role || undefined,
+              n_unique: column.n_unique ?? null,
+              n_rows: column.n_rows ?? null,
             }))
             .filter(column => column.name)
         );
