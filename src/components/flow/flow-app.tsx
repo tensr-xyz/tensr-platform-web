@@ -14,6 +14,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { AgentThread, AgentThreadColumn, useAgentThread } from '@/components/flow/agent-thread';
+import { recentChatSessions, sortSessionsByRecency } from '@/components/flow/chat-sessions';
 import {
   OverviewDeck,
   OVERVIEW_SLIDES,
@@ -3261,7 +3262,7 @@ function ResponsesScreen({
   useEffect(() => {
     if (!project) return;
     void flowJson<{ sessions?: FlowSession[] }>(`/api/projects/${project.id}/sessions`)
-      .then(page => setSessions(page.sessions || []))
+      .then(page => setSessions(sortSessionsByRecency(page.sessions || [])))
       .catch(() => setSessions([]));
   }, [project]);
   const projectFileIds = datasets
@@ -3567,7 +3568,7 @@ function ResponsesScreen({
           ) : sessions.length === 0 ? (
             <p className="flow-muted">No saved chats yet</p>
           ) : (
-            sessions.slice(0, 6).map(session => (
+            recentChatSessions(sessions).map(session => (
               <Button
                 key={session.session_id}
                 className="chat-item rail-chat"
@@ -4356,7 +4357,10 @@ function ResponsesScreen({
               onSession={row =>
                 setSessions(current => {
                   const rest = (current || []).filter(item => item.session_id !== row.session_id);
-                  return [row, ...rest];
+                  return sortSessionsByRecency([
+                    { ...row, updated_at: row.updated_at || new Date().toISOString() },
+                    ...rest,
+                  ]);
                 })
               }
             />

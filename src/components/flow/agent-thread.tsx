@@ -63,6 +63,7 @@ import {
   type AgentLoopResponse,
 } from '@/lib/run-agent-loop';
 import { visibleAgentStep } from '@/lib/agent-step-copy';
+import { sortSessionsByRecency } from '@/components/flow/chat-sessions';
 
 export type AgentChatSession = { session_id: string; title?: string; updated_at?: string };
 
@@ -235,11 +236,12 @@ export function useAgentThread({
       const row = {
         session_id: sessionId,
         title: title.length > 80 ? `${title.slice(0, 77)}…` : title,
+        updated_at: new Date().toISOString(),
       };
       if (!aliveRef.current) return;
       setSessions(current => {
         const rest = (current || []).filter(item => item.session_id !== row.session_id);
-        return [row, ...rest];
+        return sortSessionsByRecency([row, ...rest]);
       });
       onSessionRef.current?.(row);
     },
@@ -251,7 +253,7 @@ export function useAgentThread({
     void flowJson<{ sessions?: AgentChatSession[] }>(`/api/projects/${projectId}/sessions`, {
       signal: AbortSignal.timeout(15000),
     })
-      .then(page => setSessions(page.sessions || []))
+      .then(page => setSessions(sortSessionsByRecency(page.sessions || [])))
       .catch(() => setSessions(current => current || []));
   }, [projectId]);
 
