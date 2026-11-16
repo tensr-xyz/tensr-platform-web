@@ -1,4 +1,4 @@
-import { prepApplyBody, prepParts } from './upload-prep';
+import { prepApplyBody, preparedCopyLabel, prepParts } from './upload-prep';
 
 describe('upload prep', () => {
   it('lists each part by its label and never drops rows', () => {
@@ -25,6 +25,11 @@ describe('upload prep', () => {
       flags: false,
       drop_rows: false,
     });
+    const labels = parts.find(part => part.id === 'labels');
+    expect(labels?.title).toBe('Shorten 1 label');
+    expect(labels?.before).toBe('');
+    expect(labels?.after).toBe('→ Short');
+    expect(preparedCopyLabel('W5_raw.sav')).toBe('W5_raw · prepared');
   });
 
   it('says when no NPS scale and no quality flags were found', () => {

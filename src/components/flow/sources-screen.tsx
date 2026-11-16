@@ -365,6 +365,10 @@ export function SourcesScreen({
         {proposal ? (
           <UploadPrepCard
             proposal={proposal.prep}
+            fileName={(() => {
+              const match = files.find(row => datasetRowId(row) === proposal.id);
+              return match ? sourceFileName(match) : rememberedFileName(proposal.id);
+            })()}
             onApply={kept => {
               const bearer = getStytchBearerForTensrApi();
               if (!bearer) {
