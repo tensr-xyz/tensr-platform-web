@@ -56,6 +56,24 @@ describe('chat output panel', () => {
         answer
       )
     ).toBe('likes_A by region');
+    expect(
+      outputTitle(
+        [
+          {
+            procedure: 'anova_oneway',
+            request_body: { value_column: 'likes_C', group_column: 'age' },
+            result: {
+              report: {
+                answer_from_result: true,
+                answer:
+                  'How much do you like brand C? by Age band: F(2, 277) = 0.615, p = 0.541, consistent with chance.',
+              },
+            },
+          },
+        ],
+        answer
+      )
+    ).toBe('How much do you like brand C? by Age band');
   });
 
   it('titles a frequency card with the question and badges Frequencies', () => {

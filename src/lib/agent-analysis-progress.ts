@@ -63,6 +63,8 @@ export function interpretAgentLoopProgressMessage(
   return '';
 }
 
+const WORKING_THROUGH = /^Working through the .+/i;
+
 /** Live chat progress: interpreted copy only, never the raw SSE step name. */
 export function accumulateInterpretedLoopProgress(
   prev: string[] | undefined,
@@ -71,6 +73,12 @@ export function accumulateInterpretedLoopProgress(
   const line = interpretAgentLoopProgressMessage(progress);
   if (!line || isPulseOnlyWorkingLine(line)) return prev ?? [];
   if (prev?.includes(line)) return prev;
+  // A later run_analysis replaces an earlier "Working through the …" so a switch
+  // from ANOVA to chi-square does not leave both in the step list.
+  if (WORKING_THROUGH.test(line)) {
+    const kept = (prev ?? []).filter(item => !WORKING_THROUGH.test(item));
+    return [...kept, line];
+  }
   return [...(prev ?? []), line];
 }
 

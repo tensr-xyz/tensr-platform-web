@@ -462,6 +462,41 @@ function summaryLine(
   return withFigure || lines[0];
 }
 
+/** Subject before the statistic on a structured lead, e.g. "Satisfaction by Brand". */
+function subjectFromStructuredAnswer(answer: string): string {
+  for (const line of proseLines(answer)) {
+    const match = line.match(
+      /^(.+?):\s*(?:Welch'?s\s+)?(?:Survey\s+F|Pearson\s+chi-square|F|t|H|U|z|statistic)\b/i
+    );
+    const subject = (match?.[1] || '').trim();
+    if (subject && isQuestion(subject) && !PROCEDURE_TITLE.test(subject)) {
+      return subject.length > 90 ? `${subject.slice(0, 89).trimEnd()}…` : subject;
+    }
+  }
+  return '';
+}
+
+function structuredAnswerOnResult(item: ToolResult): string {
+  const result = item.result || {};
+  const nested =
+    result.result && typeof result.result === 'object'
+      ? (result.result as Record<string, unknown>)
+      : {};
+  for (const layer of [result, nested]) {
+    const report = layer.report;
+    if (!report || typeof report !== 'object') continue;
+    const block = report as { answer_from_result?: unknown; answer?: unknown };
+    if (
+      block.answer_from_result === true &&
+      typeof block.answer === 'string' &&
+      block.answer.trim()
+    ) {
+      return block.answer.trim();
+    }
+  }
+  return '';
+}
+
 /** The table title the API put on the result, or the first prose line that is not the base. */
 export function outputTitle(
   results: ToolResult[] | undefined,
@@ -478,6 +513,8 @@ export function outputTitle(
   const preferred = preferredProcedure(items);
   for (const item of items) {
     if (procedureOf(item) === 'compute' && preferred && preferred !== 'compute') continue;
+    const fromResult = subjectFromStructuredAnswer(structuredAnswerOnResult(item));
+    if (fromResult) return fromResult;
     const result = item.result || {};
     const nested =
       result.result && typeof result.result === 'object'
@@ -512,10 +549,18 @@ export function outputTitle(
     ]);
     const group = first(body, ['group_column', 'banner_column', 'factor', 'by']);
     if (measure && group) {
-      return `${titledWithQuestion(measure, columns)} by ${titledWithQuestion(group, columns)}`;
+      const labelled = `${titledWithQuestion(measure, columns)} by ${titledWithQuestion(group, columns)}`;
+      // Prefer the structured subject when the body only has variable codes.
+      if (!isQuestion(labelled)) {
+        const fromAnswer = subjectFromStructuredAnswer(answer);
+        if (fromAnswer) return fromAnswer;
+      }
+      return labelled;
     }
     if (measure) return titledWithQuestion(measure, columns);
   }
+  const fromAnswerAlone = subjectFromStructuredAnswer(answer);
+  if (fromAnswerAlone) return fromAnswerAlone;
   const procedure = preferred || procedureOf(items[0] || {});
   if (procedure && (KIND_LABELS[procedure] || analysisDisplayName(procedure))) {
     return KIND_LABELS[procedure] || analysisDisplayName(procedure);
