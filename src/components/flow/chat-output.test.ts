@@ -112,6 +112,33 @@ describe('chat output panel', () => {
     expect(titledWithQuestion('item_a × item_b × place', columns)).toBe(
       'Ledger × Northwind × Area'
     );
+    expect(
+      titledWithQuestion(
+        'sat_item x place',
+        columns.concat([{ name: 'sat_item', label: 'Satisfaction' }])
+      )
+    ).toBe('Satisfaction × Area');
+  });
+
+  it('keeps a rake and table lead when the chat answer is empty', () => {
+    const lead = resultLead('', [
+      {
+        procedure: 'rake',
+        summary: {
+          line: 'East met its target of 40% (achieved 40%); West missed its target of 60% (achieved 55%).',
+        },
+      },
+      {
+        procedure: 'banner_table',
+        summary: { line: 'banner_table' },
+        result: {
+          summary: { line: 'High 62.5%.' },
+        },
+      },
+    ]);
+    expect(lead).toMatch(/East met/);
+    expect(lead).toMatch(/40%/);
+    expect(lead.toLowerCase()).not.toContain('banner_table');
   });
 
   it('titles a yes or no card with the question', () => {

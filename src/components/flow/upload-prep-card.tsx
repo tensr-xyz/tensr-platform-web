@@ -29,10 +29,14 @@ export function UploadPrepCard({
   const keptCount = parts.filter(part => kept.includes(part.id) && part.after).length;
   const changeCount = parts.filter(part => part.after).length;
   const respondents = proposal.quality?.respondents;
+  const questions = proposal.questions;
   const extension = (fileName.split('.').pop() || 'sav').slice(0, 4).toUpperCase();
   const arrived = [
     fileName ? `${fileName} is in` : 'This file is in',
     typeof respondents === 'number' ? `${respondents.toLocaleString('en-GB')} respondents` : '',
+    typeof questions === 'number' && questions > 0
+      ? `${questions.toLocaleString('en-GB')} ${questions === 1 ? 'question' : 'questions'}`
+      : '',
   ]
     .filter(Boolean)
     .join(' · ');
@@ -106,7 +110,8 @@ export function UploadPrepCard({
       })}
       <div className="prep-foot">
         <p>
-          Applying {keptCount} of {changeCount} creates <strong>{copyName}</strong>
+          Applying {keptCount} of {changeCount} creates <strong>{copyName}</strong> in Working
+          versions
           {typeof respondents === 'number'
             ? `. All ${respondents.toLocaleString('en-GB')} rows stay.`
             : '. Every row stays.'}

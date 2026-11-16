@@ -18,8 +18,7 @@ import {
   valuesLookLikeDatetime,
   withExtraPadB,
 } from '@/utils/chart-axis';
-
-const SERIES_FILL = ['#71717a', '#a1a1aa', '#6366f1', '#78716c', '#8b5cf6'];
+import { resolveSeriesColors, type ChartStylePreset } from '@/lib/chart-theme';
 
 export type ReportChartProps = {
   chart: AnalysisReportChart;
@@ -27,7 +26,9 @@ export type ReportChartProps = {
   density?: ChartDensity;
   className?: string;
   /** `default` keeps the current palette. `apa` is greyscale, sans-serif, with a figure caption. */
-  preset?: 'default' | 'apa';
+  preset?: ChartStylePreset;
+  /** Team / template chart palette. Ignored when `preset` is `apa`. */
+  seriesColors?: string[];
   figureNumber?: number;
   note?: string;
 };
@@ -228,9 +229,11 @@ function ChartTitle({ layout, title }: { layout: ChartLayout; title: string }) {
 function ChartBody({
   chart,
   layout: baseLayout,
+  seriesFill,
 }: {
   chart: AnalysisReportChart;
   layout: ChartLayout;
+  seriesFill: string[];
 }) {
   if (chart.kind === 'histogram') {
     const maxC = Math.max(1, ...chart.bins.map(b => b.count));
@@ -667,7 +670,7 @@ function ChartBody({
                   return `${xs[gi]},${sy(v)}`;
                 })
                 .join(' ');
-              const color = SERIES_FILL[si % SERIES_FILL.length];
+              const color = seriesFill[si % seriesFill.length];
               return (
                 <g key={ser.name}>
                   {isArea && categories.length ? (
@@ -704,7 +707,7 @@ function ChartBody({
                           cx={xs[gi]}
                           cy={sy(v)}
                           r={layout.density === 'comfortable' ? 3.2 : 2.5}
-                          fill={SERIES_FILL[si % SERIES_FILL.length]}
+                          fill={seriesFill[si % seriesFill.length]}
                         />
                       </g>
                     );
@@ -727,7 +730,7 @@ function ChartBody({
                       y={y}
                       width={Math.max(1, barW - 1)}
                       height={Math.max(0, Math.abs(yZero - yVal))}
-                      fill={SERIES_FILL[si % SERIES_FILL.length]}
+                      fill={seriesFill[si % seriesFill.length]}
                       rx={1}
                     />
                     {error ? (
@@ -772,7 +775,7 @@ function ChartBody({
         <g transform={`translate(${padL + plotW + 10} ${padT + 4})`}>
           {series.map((ser, si) => (
             <g key={ser.name} transform={`translate(0 ${si * (layout.fontSize + 4)})`}>
-              <rect width={8} height={8} fill={SERIES_FILL[si % SERIES_FILL.length]} rx={1} />
+              <rect width={8} height={8} fill={seriesFill[si % seriesFill.length]} rx={1} />
               <text x={12} y={7} fill="#52525b" style={{ fontSize: layout.fontSize }}>
                 {truncateLabel(ser.name, legendMax)}
               </text>
@@ -932,7 +935,7 @@ function ChartBody({
           : sweep >= Math.PI * 2 - 0.0001
             ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
             : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
-      return { d, label, fill: SERIES_FILL[i % SERIES_FILL.length] };
+      return { d, label, fill: seriesFill[i % seriesFill.length] };
     });
     return (
       <svg
@@ -971,7 +974,7 @@ function ChartBody({
           <polyline
             key={item.name}
             fill="none"
-            stroke={SERIES_FILL[index % SERIES_FILL.length]}
+            stroke={seriesFill[index % seriesFill.length]}
             strokeWidth={2}
             points={item.points.map(point => `${sx(point.x)},${sy(point.y)}`).join(' ')}
           />
@@ -1038,7 +1041,7 @@ function ChartBody({
             <g key={group.label}>
               <polygon
                 points={[...right, ...left].join(' ')}
-                fill={SERIES_FILL[index % SERIES_FILL.length]}
+                fill={seriesFill[index % seriesFill.length]}
                 fillOpacity={0.35}
               />
               <line
@@ -1083,6 +1086,7 @@ export function ReportChart({
   density = 'inline',
   className,
   preset = 'default',
+  seriesColors,
   figureNumber = 1,
   note = 'Axes are labelled in the units of the plotted variables.',
 }: ReportChartProps) {
@@ -1103,6 +1107,7 @@ export function ReportChart({
   }, []);
 
   const layout = computeLayout(density, width);
+  const seriesFill = resolveSeriesColors(preset, null, seriesColors);
 
   const apa = preset === 'apa';
 
@@ -1121,7 +1126,7 @@ export function ReportChart({
           {chart.title ? <p className="text-sm italic">{chart.title}</p> : null}
         </>
       ) : null}
-      <ChartBody chart={chart} layout={layout} />
+      <ChartBody chart={chart} layout={layout} seriesFill={seriesFill} />
       {apa ? <figcaption className="text-xs">Note. {note}</figcaption> : null}
     </figure>
   );

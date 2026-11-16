@@ -287,7 +287,23 @@ export async function runAgentAnalysisPlan(
 
       emit('validating', interpretProgressMessage(plan, 'validating'));
       emit('running', interpretProgressMessage(plan, 'running'));
-      const envelope = await apiClient.datasets.analyze.run(datasetId, resolvedOp, resolvedSpec);
+      const started = await apiClient.datasets.analyze.run(datasetId, resolvedOp, resolvedSpec);
+      const pending = String((started as { status?: string }).status || '') === 'pending';
+      const pendingId = String(started.run_id || '').trim();
+      let envelope = started;
+      if (pending && pendingId) {
+        const { waitForAnalysisRun } = await import('@/lib/analysis-runs');
+        const run = await waitForAnalysisRun(pendingId, { signal: handlers?.signal });
+        if (!run || String(run.status || '') === 'pending')
+          throw new Error('The table is still running.');
+        if (String(run.status || '') === 'failed') throw new Error('The table could not be built.');
+        envelope = {
+          result: run.result,
+          report: run.report,
+          run_id: run.id,
+          provenance: run.provenance ?? undefined,
+        };
+      }
       emit('building', interpretProgressMessage(plan, 'building'));
       return finish(envelope);
     }

@@ -10,6 +10,7 @@ export type BannerCell = {
   banner_id: string;
   percent?: number | null;
   projected_thousands?: number | null;
+  index?: number | null;
   row_percent?: number | null;
   total_percent?: number | null;
   count?: number | null;
@@ -106,6 +107,36 @@ function bitsetFrom(cell: BannerCell): string {
     if (item?.row_uid_bitset) return item.row_uid_bitset;
   }
   return '';
+}
+
+/** Column %, projected thousands, and index in one cell when the book carried them. */
+export function mediaCellText(
+  cell: BannerCell | undefined,
+  figure: 'percent' | 'row_percent' | 'total_percent' = 'percent',
+  digits = 1
+): string {
+  if (!cell) return '—';
+  const value =
+    figure === 'row_percent'
+      ? cell.row_percent
+      : figure === 'total_percent'
+        ? cell.total_percent
+        : cell.percent;
+  let shown = value != null ? `${value.toFixed(digits)}%` : '—';
+  if (figure === 'percent') {
+    const projected = cell.projected_thousands;
+    if (typeof projected === 'number' && Number.isFinite(projected)) {
+      const count = projected.toFixed(1).replace(/\.0$/, '');
+      const labelled = `${count} (000s)`;
+      shown = shown === '—' ? labelled : `${shown} · ${labelled}`;
+    }
+    const index = cell.index;
+    if (typeof index === 'number' && Number.isFinite(index)) {
+      const idx = Math.round(index).toString();
+      shown = shown === '—' ? idx : `${shown} · ${idx}`;
+    }
+  }
+  return shown;
 }
 
 export function selectionFromCell(
@@ -220,7 +251,12 @@ export function bannerFootnote(book: Record<string, unknown>): string {
   if (typeof ess === 'number') parts.push(`Effective base: ${Math.round(ess)}`);
   const letters = book.letters as unknown[] | undefined;
   if (String(book.significance_display || '') !== 'none' && letters?.length) {
-    parts.push('Column proportions test at 95%');
+    const named = String(book.letter_test || '').trim();
+    if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
+      parts.push(named || 'Paired McNemar test at 95%');
+    } else {
+      parts.push(named || 'Column proportions test at 95%');
+    }
   }
   return parts.join(' · ');
 }

@@ -268,4 +268,6 @@ export type AnalyzeResponse = {
   run_id?: string;
   provenance?: Record<string, unknown>;
   convention?: Record<string, unknown>;
+  /** Present when the gateway queued the 180s banner worker. */
+  status?: string;
 };
