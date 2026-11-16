@@ -132,9 +132,17 @@ export function displayedCount(
   weighted: boolean
 ): string {
   if (!cell) return '—';
-  const raw = weighted
-    ? (cell.count ?? cell.weighted_n ?? cell.unweighted_n)
-    : (cell.unweighted_n ?? cell.count);
+  if (weighted) {
+    const raw = cell.count ?? cell.weighted_n;
+    if (raw == null || Number.isNaN(Number(raw))) return '—';
+    const weightedShown = String(Math.round(Number(raw)));
+    const unweighted = cell.unweighted_n;
+    if (unweighted != null && !Number.isNaN(Number(unweighted))) {
+      return `${weightedShown} (${Math.round(Number(unweighted))})`;
+    }
+    return weightedShown;
+  }
+  const raw = cell.unweighted_n ?? cell.count;
   if (raw == null || Number.isNaN(Number(raw))) return '—';
   return String(Math.round(Number(raw)));
 }
@@ -218,25 +226,54 @@ export function defaultTableWeight(active: string, choices: string[]): string {
 
 /** The cell measure stays selected when the mean row is on. Counts stay whole numbers. */
 
-export function shownStatistics(statistic: string, meanOn: boolean): string[] {
-  return meanOn ? [statistic, 'column_mean'] : [statistic];
+const CELL_FIGURES = ['count', 'percent', 'row_percent', 'total_percent', 'mean'] as const;
+
+type CellFigure = (typeof CELL_FIGURES)[number];
+
+const STATISTIC_FIGURE: Record<string, CellFigure> = {
+  count: 'count',
+  column_proportion: 'percent',
+  row_proportion: 'row_percent',
+  total_proportion: 'total_percent',
+  column_mean: 'mean',
+};
+
+/** One or more Show chips, plus the mean row when that toggle is on. */
+export function shownStatistics(statistic: string | string[], meanOn: boolean): string[] {
+  const selected = (Array.isArray(statistic) ? statistic : [statistic]).filter(Boolean);
+  const base = selected.length ? selected : ['column_proportion'];
+  if (meanOn && !base.includes('column_mean')) return [...base, 'column_mean'];
+  return [...base];
 }
 
 export function shownDecimals(
-  statistic: string,
+  statistic: string | string[],
   digits: number,
   meanOn: boolean
 ): Record<string, number> {
   const places = Number.isFinite(digits) ? digits : 0;
-  return {
-    [statistic]: statistic === 'count' ? 0 : places,
-    ...(meanOn ? { column_mean: Math.max(places, 1) } : {}),
-  };
+  const selected = shownStatistics(statistic, false);
+  const out: Record<string, number> = {};
+  for (const kind of selected) {
+    out[kind] = kind === 'count' ? 0 : places;
+  }
+  if (meanOn) out.column_mean = Math.max(places, 1);
+  return out;
+}
+
+/** Figures the grid paints for the selected Show statistics. */
+export function figuresForStatistics(statistics: string[]): CellFigure[] {
+  const figures: CellFigure[] = [];
+  for (const kind of statistics) {
+    const figure = STATISTIC_FIGURE[kind];
+    if (figure && !figures.includes(figure)) figures.push(figure);
+  }
+  return figures.length ? figures : ['percent'];
 }
 
 function cellFigure(
   cell: BannerCell | undefined,
-  figure: 'percent' | 'row_percent' | 'total_percent' | 'count' | 'mean',
+  figure: CellFigure,
   digits: number,
   weighted = false
 ): string {
@@ -246,6 +283,18 @@ function cellFigure(
     return cell.mean != null ? formatStat(cell.mean, 'mean', digits) : '—';
   }
   return mediaCellText(cell, figure, digits);
+}
+
+function cellFigures(
+  cell: BannerCell | undefined,
+  figures: CellFigure[],
+  digits: number,
+  weighted = false
+): string {
+  const parts = figures
+    .map(figure => cellFigure(cell, figure, digits, weighted))
+    .filter(part => part && part !== '—');
+  return parts.length ? parts.join(' · ') : '—';
 }
 
 function bannerGroups(columns: BannerColumn[]): { label: string; span: number }[] {
@@ -299,6 +348,7 @@ export function BannerGrid({
   showQuotes = false,
   showNets = false,
   figure = 'percent',
+  figures,
   digits = 1,
   markLowBase = false,
   muted = false,
@@ -308,11 +358,13 @@ export function BannerGrid({
   baseAtEnd?: boolean;
   showQuotes?: boolean;
   showNets?: boolean;
-  figure?: 'percent' | 'row_percent' | 'total_percent' | 'count' | 'mean';
+  figure?: CellFigure;
+  figures?: CellFigure[];
   digits?: number;
   markLowBase?: boolean;
   muted?: boolean;
 }) {
+  const shownFigures = figures?.length ? figures : [figure];
   const weighted = Boolean((book.weight as { weight_aware?: boolean } | undefined)?.weight_aware);
   const [picked, setPicked] = useState('');
   const columns = bannerColumns(book);
@@ -404,7 +456,7 @@ export function BannerGrid({
                     if (row.kind === 'not_coded') {
                       return (
                         <td key={column.id} className="flow-muted">
-                          {cellFigure(cell, figure, digits, weighted)}
+                          {cellFigures(cell, shownFigures, digits, weighted)}
                         </td>
                       );
                     }
@@ -421,9 +473,9 @@ export function BannerGrid({
                             onSelectCell(selected);
                           }}
                         >
-                          {cellFigure(
+                          {cellFigures(
                             cell,
-                            row.kind === 'mean' || row.kind === 'sd' ? 'mean' : figure,
+                            row.kind === 'mean' || row.kind === 'sd' ? ['mean'] : shownFigures,
                             digits,
                             weighted
                           )}
@@ -1712,7 +1764,7 @@ export function TablesBuilder({
   const [banners, setBanners] = useState<string[]>(initialBanner ? [initialBanner] : []);
   const [weight, setWeight] = useState('');
   const activeWeightName = useRef('');
-  const [statistic, setStatistic] = useState('column_proportion');
+  const [statistics, setStatistics] = useState<string[]>(['column_proportion']);
   const [digits, setDigits] = useState(0);
   const [lettersOn, setLettersOn] = useState(true);
   const [nest, setNest] = useState(false);
@@ -1852,14 +1904,17 @@ export function TablesBuilder({
     const label = columns.find(column => column.name === name)?.label;
     return label && label !== name ? label : name;
   };
-  const figure =
-    statistic === 'count'
-      ? 'count'
-      : statistic === 'row_proportion'
-        ? 'row_percent'
-        : statistic === 'total_proportion'
-          ? 'total_percent'
-          : 'percent';
+  const figures = figuresForStatistics(shownStatistics(statistics, meanOn));
+
+  function toggleStatistic(value: string) {
+    setStatistics(current => {
+      if (current.includes(value)) {
+        const next = current.filter(item => item !== value);
+        return next.length ? next : current;
+      }
+      return [...current, value];
+    });
+  }
 
   function openCell(cell: SurveyCell) {
     setSurveyCell(cell);
@@ -1875,6 +1930,7 @@ export function TablesBuilder({
           label?: string;
           nest_banners?: boolean;
           decimals?: Record<string, number>;
+          statistics?: string[];
           filter?: { filters?: { column: string; op: string; value: string | string[] }[] } | null;
           stubs?: { column?: string; nets?: { label?: string; values?: unknown[] }[] }[];
           banners?: { column?: string; columns?: string[]; nested?: unknown }[];
@@ -1890,6 +1946,14 @@ export function TablesBuilder({
     const names = bannerNames(spec);
     if (names.length) setBanners(names);
     setNest(Boolean(spec?.nest_banners));
+    const showKinds = ['count', 'column_proportion', 'row_proportion', 'total_proportion'] as const;
+    const savedStats = Array.isArray(spec?.statistics)
+      ? spec.statistics.filter((kind): kind is (typeof showKinds)[number] =>
+          (showKinds as readonly string[]).includes(String(kind))
+        )
+      : [];
+    if (savedStats.length) setStatistics(savedStats);
+    setMeanOn(Array.isArray(spec?.statistics) && spec.statistics.includes('column_mean'));
     const decimals = spec?.decimals;
     if (decimals && typeof decimals === 'object') {
       const first = Object.values(decimals).find(value => typeof value === 'number');
@@ -1992,19 +2056,19 @@ export function TablesBuilder({
     if (token !== tableRequest.current) return;
     nets.push(...customNets);
     setError('');
-    const statistics = shownStatistics(statistic, meanOn);
+    const selectedStats = shownStatistics(statistics, meanOn);
     const openId = String((book?.spec as { id?: string } | undefined)?.id || '');
     void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables`, {
       method: 'POST',
       body: JSON.stringify({
         stubs: [{ ...codedStub(stub), nets }],
         banner: banners.map(columnName => ({ column: columnName })),
-        statistics,
+        statistics: selectedStats,
         significance_display: lettersOn ? 'column_letters' : 'none',
         nest_banners: nest,
         low_base_threshold: lowBase ? 30 : 0,
         suppress_low_base: false,
-        decimals: shownDecimals(statistic, digits, meanOn),
+        decimals: shownDecimals(statistics, digits, meanOn),
         weight: weight || 'none',
         ...(openId ? { spec_id: openId } : {}),
         ...(tableFilter?.filters.length ? { filter_ref: tableFilter } : {}),
@@ -2030,7 +2094,7 @@ export function TablesBuilder({
     top2,
     bottom2,
     weight,
-    statistic,
+    statistics.join(','),
     digits,
     lettersOn,
     nest,
@@ -2392,8 +2456,8 @@ export function TablesBuilder({
                       key={value}
                       className="flow-btn"
                       type="button"
-                      data-active={statistic === value}
-                      onClick={() => setStatistic(value)}
+                      data-active={statistics.includes(value)}
+                      onClick={() => toggleStatistic(value)}
                     >
                       {label}
                     </Button>
@@ -2758,7 +2822,7 @@ export function TablesBuilder({
                         bottom2 ||
                         ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
                       }
-                      figure={figure}
+                      figures={figures}
                       digits={digits}
                       markLowBase={lowBase}
                     />
