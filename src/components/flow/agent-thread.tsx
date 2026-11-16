@@ -104,7 +104,13 @@ export function stepLines(steps: { name?: string; message?: string }[] | undefin
   });
 }
 
-function replyLines(result: AgentLoopResponse): string[] {
+function traceField(item: Record<string, unknown>, key: string): string {
+  const value = item[key];
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/** Step lines from a finished reply. Prefer the procedure the person saw over wrapper tool names. */
+export function replyLines(result: AgentLoopResponse): string[] {
   const summary = result.execution_summary?.trim();
   if (summary) {
     return summary.split('\n').flatMap(line => {
@@ -113,14 +119,31 @@ function replyLines(result: AgentLoopResponse): string[] {
     });
   }
   return (result.tool_trace || []).flatMap(item => {
-    const message = item.message || item.summary;
-    const name = item.name || item.tool;
-    const line = visibleAgentStep(
-      typeof name === 'string' ? name : '',
-      typeof message === 'string' ? message : ''
-    );
+    const nested =
+      item.result && typeof item.result === 'object'
+        ? (item.result as Record<string, unknown>)
+        : {};
+    const args =
+      item.args && typeof item.args === 'object' ? (item.args as Record<string, unknown>) : {};
+    const message =
+      traceField(item, 'message') ||
+      traceField(item, 'summary') ||
+      traceField(nested, 'message') ||
+      '';
+    const wrapper = traceField(item, 'name') || traceField(item, 'tool');
+    const procedure = traceField(args, 'analysis_type');
+    const name =
+      (wrapper === 'run_analysis' || wrapper === 'run_operations') && procedure
+        ? procedure
+        : wrapper || procedure;
+    const line = visibleAgentStep(name, message);
     return line ? [line] : [];
   });
+}
+
+/** Keep the lines shown while the turn ran; only fall back to the finished trace. */
+export function stepsAfterReply(live: string[], traced: string[]): string[] {
+  return live.length ? live : traced;
 }
 
 function downloadEntries(result: AgentLoopResponse): ExportDownload[] {
@@ -426,6 +449,7 @@ export function useAgentThread({
         if (turnToken !== turnTokenRef.current) return true;
         if (result.session_id) noteSession(result.session_id, text.trim());
         const traced = replyLines(result);
+        const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
         const kept = keptModelAnswer(draft, result.answer_markdown || '');
         shown(() => {
@@ -433,7 +457,7 @@ export function useAgentThread({
           setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
           setTurn(result.status === 'awaiting_approval' ? null : result);
-          if (traced.length) setSteps(traced);
+          if (keptSteps.length) setSteps(keptSteps);
           setDownloads(entries);
           if (result.status !== 'awaiting_approval') setAttachments([]);
           setStatus(null);
@@ -444,6 +468,7 @@ export function useAgentThread({
           running: false,
           status: null,
           answer: kept,
+          steps: keptSteps,
           sessionId: result.session_id || sessionRef.current,
         });
         if (aliveRef.current) loadRail();
@@ -550,6 +575,7 @@ export function useAgentThread({
       .then(result => {
         if (turnToken !== turnTokenRef.current) return;
         const traced = replyLines(result);
+        const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
         const kept = keptModelAnswer(streamedRef.current, result.answer_markdown || '');
         shown(() => {
@@ -557,7 +583,7 @@ export function useAgentThread({
           setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
           setTurn(result.status === 'awaiting_approval' ? null : result);
-          if (traced.length) setSteps(traced);
+          if (keptSteps.length) setSteps(keptSteps);
           setDownloads(entries);
           if (result.status !== 'awaiting_approval') setAttachments([]);
           setStatus(null);
@@ -571,7 +597,7 @@ export function useAgentThread({
             running: false,
             status: null,
             answer: kept,
-            steps: traced.length ? traced : stepsRef.current,
+            steps: keptSteps,
           });
         }
         approvingRef.current = false;
