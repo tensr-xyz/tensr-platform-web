@@ -527,12 +527,12 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
   confirmatory_factor_analysis: {
     useWhen: ['You have a hypothesized factor structure for observed indicators.'],
     assumptions: ['Indicators are numeric.', 'Model spec uses semopy syntax (e.g. F1 =~ x1 + x2).'],
-    output: ['Factor loadings, CFI/RMSEA/SRMR fit indices, path diagram.'],
+    output: ['Factor loadings, CFI/TLI/RMSEA/SRMR fit indices, path diagram.'],
   },
   structural_equation_modelling: {
     useWhen: ['You want to test latent and observed relationships in one model.'],
     assumptions: ['Full semopy model spec with measurement and structural paths.'],
-    output: ['Path coefficients, fit indices, SEM path diagram.'],
+    output: ['Path coefficients, CFI/TLI/RMSEA/SRMR fit indices, SEM path diagram.'],
   },
   mixed_model: {
     useWhen: [

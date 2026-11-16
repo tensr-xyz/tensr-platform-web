@@ -1169,6 +1169,64 @@ describe('summary tables', () => {
     expect(view.tables[1].rows[0][1]).toContain('satisfied');
   });
 
+  it('keeps labelled factor loadings, fit, and segments from the summary', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Loadings',
+            columns: ['Variable', 'PC1'],
+            rows: [['Price paid', '0.820']],
+          },
+          {
+            title: 'Variance explained',
+            columns: ['Component', 'Eigenvalue', 'Variance %', 'Cumulative %'],
+            rows: [['PC1', '1.900', '64.000', '64.000']],
+          },
+          {
+            title: 'Fit',
+            columns: ['Index', 'Value'],
+            rows: [
+              ['CFI', '0.960'],
+              ['TLI', '0.950'],
+              ['RMSEA', '0.040'],
+              ['SRMR', '0.030'],
+            ],
+          },
+          {
+            title: 'Segments',
+            columns: ['Segment', 'n', 'Price paid'],
+            rows: [
+              ['0', '30', '4.500'],
+              ['1', '10', '2.000'],
+            ],
+          },
+        ],
+      },
+      result: {
+        report: {
+          tables: [
+            {
+              title: 'Component loadings',
+              superseded: true,
+              columns: ['Variable', 'PC1'],
+              rows: [['price', '0.820']],
+            },
+          ],
+        },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual([
+      'Loadings',
+      'Variance explained',
+      'Fit',
+      'Segments',
+    ]);
+    expect(view.tables[0].rows[0][0]).toBe('Price paid');
+    expect(view.tables[2].rows.map(row => row[0])).toEqual(['CFI', 'TLI', 'RMSEA', 'SRMR']);
+    expect(view.tables[3].columns[2]).toBe('Price paid');
+  });
+
   it('does not invent a Reliability table from a list of item names', () => {
     const view = resultViewFromToolResults({
       summary: {
