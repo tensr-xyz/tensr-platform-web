@@ -582,6 +582,23 @@ function onlyTheFunnel(tables: RunTable[]): RunTable[] {
   return [stage, kept];
 }
 
+/** A second copy of the same rows, usually the grid beside its markdown twin. */
+function withoutRepeatedTables(tables: RunTable[]): RunTable[] {
+  const stubs = (table: RunTable) => table.rows.map(row => (row[0] || '').trim()).join('\n');
+  return tables.filter((table, index) => {
+    const labels = stubs(table);
+    if (!labels) return true;
+    return !tables.some((other, otherIndex) => {
+      if (otherIndex === index || stubs(other) !== labels) return false;
+      if (other.columns.length < table.columns.length) return false;
+      if (other.columns.length === table.columns.length && otherIndex > index) return false;
+      return table.rows.every((row, rowIndex) =>
+        row.slice(1).every(value => !value || (other.rows[rowIndex] || []).includes(value))
+      );
+    });
+  });
+}
+
 /** Whole-base stage shares, then the highest and lowest group at the last stage. */
 export function funnelHeadline(tables: RunTable[]): string {
   const stage = tables.find(isStageFunnel);
@@ -1173,11 +1190,14 @@ function procedureOfRecord(value: unknown): string {
 function focusRun(results: unknown): unknown {
   if (!Array.isArray(results)) return results;
   const names = results.map(procedureOfRecord);
-  const drop = names.includes('funnel')
-    ? new Set(['frequencies', 'descriptives', 'compute', 'banner_table'])
-    : names.includes('banner_table')
-      ? new Set(['frequencies', 'descriptives', 'compute'])
-      : null;
+  const drop =
+    names.includes('brand_duplication') || names.includes('paired_brand_test')
+      ? new Set(['frequencies', 'descriptives', 'compute', 'banner_table', 'funnel'])
+      : names.includes('funnel')
+        ? new Set(['frequencies', 'descriptives', 'compute', 'banner_table'])
+        : names.includes('banner_table')
+          ? new Set(['frequencies', 'descriptives', 'compute'])
+          : null;
   if (!drop) return results;
   return results.filter(item => !drop.has(procedureOfRecord(item)));
 }
@@ -1464,6 +1484,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     if (grouped) view.tables.push(grouped);
   }
   view.tables = onlyTheFunnel(oneFunnel(oneNpsBreakdown(view.tables)));
+  view.tables = withoutRepeatedTables(view.tables);
   const total = largestFrequencyTotal(view);
   const used = Number(view.base.replace(/[^\d.]/g, ''));
   if (total && used && used < total / 2) view.base = '';

@@ -11,18 +11,48 @@ import {
 } from '@/components/ui/dialog';
 import { matchWave, type WaveColumn } from '@/lib/wave-match';
 
-const SLIDES = [
-  { id: 'size', title: 'Size and projected reach' },
-  { id: 'demographics', title: 'Demographics' },
-  { id: 'seniority', title: 'Seniority and role' },
-  { id: 'attitudes', title: 'Key attitudes' },
-  { id: 'reach', title: 'Brand reach versus the total, with index' },
+export const OVERVIEW_SLIDES = [
+  { id: 'title', title: 'Title', note: 'Title layout · audience definition as subtitle' },
+  { id: 'size', title: 'Size and market split', note: 'People (000s)' },
+  {
+    id: 'reach',
+    title: 'Title reach vs total, with index',
+    note: 'Reach %, people (000s), index',
+  },
+  {
+    id: 'demographics',
+    title: 'Demographics: age, gender, income',
+    note: 'Audience vs total · index',
+  },
+  { id: 'seniority', title: 'Seniority, role and sector', note: 'Audience vs total · index' },
+  {
+    id: 'attitudes',
+    title: 'Key attitudes',
+    note: 'Top statements where the audience over-indexes',
+  },
+  {
+    id: 'market',
+    title: 'Reach by market',
+    note: 'A group under the base is shown with a low-base note',
+    lowBase: true,
+  },
 ];
 
-/** The audience overview deck: audience, template, and a reorderable slide list. */
-export function OverviewDeck({ audience, onClose }: { audience: string; onClose: () => void }) {
-  const [order, setOrder] = useState(SLIDES);
+/** The audience overview deck: template, slide list, low-base flags, saved as a recipe. */
+export function OverviewDeck({
+  audience,
+  templateName,
+  onClose,
+}: {
+  audience: string;
+  templateName?: string;
+  onClose: () => void;
+}) {
+  const [order, setOrder] = useState(OVERVIEW_SLIDES);
   const [saved, setSaved] = useState(false);
+  const [headline, setHeadline] = useState(true);
+  const [footnote, setFootnote] = useState(true);
+  const [hideLow, setHideLow] = useState(false);
   const move = (index: number, direction: -1 | 1) => {
     const next = index + direction;
     if (next < 0 || next >= order.length) return;
@@ -31,41 +61,92 @@ export function OverviewDeck({ audience, onClose }: { audience: string; onClose:
     if (!item) return;
     copy.splice(next, 0, item);
     setOrder(copy);
+    setSaved(false);
   };
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
-      <DialogContent className="share-dialog">
+      <DialogContent className="share-dialog deck-builder">
         <DialogHeader>
-          <DialogTitle>Audience overview</DialogTitle>
-          <DialogDescription>
-            {audience || 'The total sample'}. Slides use the uploaded template’s layouts and theme.
-          </DialogDescription>
+          <DialogDescription>Report</DialogDescription>
+          <DialogTitle>New audience overview deck</DialogTitle>
         </DialogHeader>
-        <p className="flow-muted">
-          Uses the template chosen on Deliverables. Low bases stay flagged on the slide.
-        </p>
-        <ol>
-          {order.map((slide, index) => (
-            <li key={slide.id} className="details-member">
-              <span>{slide.title}</span>
-              <Button type="button" className="flow-btn" onClick={() => move(index, -1)}>
-                Up
-              </Button>
-              <Button type="button" className="flow-btn" onClick={() => move(index, 1)}>
-                Down
-              </Button>
-            </li>
-          ))}
-        </ol>
+        <div className="deck-columns">
+          <div className="deck-setup">
+            <p>Audience</p>
+            <p>{audience || 'Total sample'}</p>
+            <p className="flow-muted">Compared with: Total sample</p>
+            <p>PowerPoint template</p>
+            <p>{templateName || 'The template chosen on Deliverables'}</p>
+            <p className="flow-muted">
+              Each slide uses the template&apos;s own layout and placeholders. Charts and tables
+              stay editable in PowerPoint.
+            </p>
+            <p>On every slide</p>
+            <Button
+              type="button"
+              className="flow-btn"
+              aria-pressed={headline}
+              onClick={() => setHeadline(value => !value)}
+            >
+              Headline written from the numbers
+            </Button>
+            <Button
+              type="button"
+              className="flow-btn"
+              aria-pressed={footnote}
+              onClick={() => setFootnote(value => !value)}
+            >
+              Base, weight and source footnote
+            </Button>
+            <Button
+              type="button"
+              className="flow-btn"
+              aria-pressed={hideLow}
+              onClick={() => setHideLow(value => !value)}
+            >
+              Hide groups with base under 50
+            </Button>
+            <div>
+              <p>Saved as a recipe</p>
+              <p className="flow-muted">
+                Rebuild this deck for another audience or a new wave from Report.
+              </p>
+            </div>
+          </div>
+          <div className="deck-slides">
+            <p>Slides · drag to reorder</p>
+            <ol>
+              {order.map((slide, index) => (
+                <li key={slide.id}>
+                  <span>{index + 1}</span>
+                  <span>
+                    {slide.title}
+                    <span className="flow-muted">
+                      {slide.lowBase && !hideLow ? ' · low-base note' : ''} {slide.note}
+                    </span>
+                  </span>
+                  <Button type="button" className="flow-btn" onClick={() => move(index, -1)}>
+                    Up
+                  </Button>
+                  <Button type="button" className="flow-btn" onClick={() => move(index, 1)}>
+                    Down
+                  </Button>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
         <div className="flow-row">
-          <Button type="button" className="flow-btn primary" onClick={() => setSaved(true)}>
-            Save as a recipe
-          </Button>
           <Button type="button" className="flow-btn" onClick={onClose}>
-            Close
+            Cancel
+          </Button>
+          <Button type="button" className="flow-btn primary" onClick={() => setSaved(true)}>
+            Build {order.length} slides
           </Button>
         </div>
-        {saved ? <p className="flow-muted">Saved. The original deck is unchanged.</p> : null}
+        {saved ? (
+          <p className="flow-muted">Saved as a recipe. The original deck is unchanged.</p>
+        ) : null}
       </DialogContent>
     </Dialog>
   );
@@ -75,52 +156,118 @@ export function OverviewDeck({ audience, onClose }: { audience: string; onClose:
 export function WaveRefresh({
   previous,
   next,
+  fileName,
+  onChooseFile,
   onClose,
 }: {
   previous: WaveColumn[];
   next: WaveColumn[];
+  fileName?: string;
+  onChooseFile?: () => void;
   onClose: () => void;
 }) {
   const matched = matchWave(previous, next);
+  const [step, setStep] = useState<'file' | 'matches' | 'moved'>(fileName ? 'matches' : 'file');
   const [kept, setKept] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(matched.byLabel.map(item => [item.previous, true]))
   );
+  const [dropped, setDropped] = useState<Record<string, boolean>>({});
   return (
     <Dialog open onOpenChange={open => !open && onClose()}>
-      <DialogContent className="share-dialog">
+      <DialogContent className="share-dialog deck-builder">
         <DialogHeader>
-          <DialogTitle>Refresh on a new wave</DialogTitle>
-          <DialogDescription>
-            {matched.byName.length} matched by name, {matched.byLabel.length} by label,{' '}
-            {matched.missing.length} not found. The original deck and data stay unchanged.
-          </DialogDescription>
+          <DialogDescription>Report</DialogDescription>
+          <DialogTitle>Refresh with a new wave</DialogTitle>
         </DialogHeader>
-        {matched.byLabel.map(item => (
-          <div key={item.previous} className="details-member">
-            <span>{item.label}</span>
+        <p className="flow-muted">The current deck and data stay as they are</p>
+        <div className="flow-row">
+          <span>{fileName ? `Choose file · ${fileName}` : '1 · Choose file'}</span>
+          <span>2 · Check matches</span>
+          <span>3 · Review what moved</span>
+        </div>
+        {step === 'file' ? (
+          <div>
+            <p>Second wave</p>
             <Button
               type="button"
               className="flow-btn"
-              aria-pressed={kept[item.previous] !== false}
-              onClick={() =>
-                setKept(current => ({
-                  ...current,
-                  [item.previous]: current[item.previous] === false,
-                }))
-              }
+              onClick={() => {
+                onChooseFile?.();
+                setStep('matches');
+              }}
             >
-              {kept[item.previous] === false ? 'Change' : 'Keep'}
+              Choose file
             </Button>
           </div>
-        ))}
-        {matched.missing.map(label => (
-          <p key={label} className="flow-muted">
-            Not found: {label}. Fix the question or drop that slide.
-          </p>
-        ))}
-        <Button type="button" className="flow-btn" onClick={onClose}>
-          Close
-        </Button>
+        ) : null}
+        {step === 'matches' ? (
+          <div>
+            <p>{matched.byName.length} questions matched by name</p>
+            <p>{matched.byLabel.length} matched by label · check these</p>
+            <p>{matched.missing.length} not found · slide affected</p>
+            <p>Needs a look</p>
+            {matched.byLabel.map(item => (
+              <div key={item.previous} className="details-member">
+                <span>
+                  {item.previous} → {item.label}
+                  <span className="flow-muted">Matched by label</span>
+                </span>
+                <Button
+                  type="button"
+                  className="flow-btn"
+                  aria-pressed={kept[item.previous] !== false}
+                  onClick={() =>
+                    setKept(current => ({
+                      ...current,
+                      [item.previous]: current[item.previous] === false,
+                    }))
+                  }
+                >
+                  {kept[item.previous] === false ? 'Change' : 'Keep'}
+                </Button>
+              </div>
+            ))}
+            {matched.missing.map(label => (
+              <div key={label} className="details-member">
+                <span>
+                  {label}
+                  <span className="flow-muted">
+                    Not found. No question in the new file has this name or a close label.
+                  </span>
+                </span>
+                <Button
+                  type="button"
+                  className="flow-btn"
+                  aria-pressed={dropped[label] === true}
+                  onClick={() => setDropped(current => ({ ...current, [label]: !current[label] }))}
+                >
+                  {dropped[label] ? 'Slide dropped' : 'Drop slide'}
+                </Button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div>
+            <p>Biggest movers since the previous wave</p>
+            <p className="flow-muted">
+              The new deck keeps the slide order and template. This summary is added as the last
+              slide.
+            </p>
+          </div>
+        )}
+        <div className="flow-row">
+          <Button type="button" className="flow-btn" onClick={onClose}>
+            Cancel
+          </Button>
+          {step === 'matches' ? (
+            <Button type="button" className="flow-btn" onClick={() => setStep('moved')}>
+              Review what moved
+            </Button>
+          ) : null}
+          <Button type="button" className="flow-btn primary" onClick={onClose}>
+            Build new version
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );

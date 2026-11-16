@@ -316,6 +316,35 @@ describe('chat output panel', () => {
     expect(text).not.toContain('Execution halted');
   });
 
+  it('drops an internal procedure name and keeps the result when the answer denies the table', () => {
+    const text = guardUserText(
+      'The brand_duplication procedure would not accept the subset. banner_table was not run.'
+    );
+    expect(text).toBe('');
+    const lead = resultLead(
+      "I can't give the exclusive reach of the other titles. The matrix was not returned. Net reach is 40.0%.",
+      [
+        {
+          summary: {
+            line: 'Net reach is 70.0% of this base, 12.5 thousand. Exclusive reach is highest for Alpha.',
+          },
+        },
+      ]
+    );
+    expect(lead).toContain('70.0%');
+    expect(lead).toContain('thousand');
+    expect(lead.toLowerCase()).not.toContain('not returned');
+    expect(
+      outputKind([{ analysis_type: 'brand_duplication' }, { analysis_type: 'banner_table' }])
+    ).toBe('Duplication');
+    expect(
+      outputTitle(
+        [{ analysis_type: 'brand_duplication' }, { analysis_type: 'banner_table' }],
+        'Overlap'
+      )
+    ).toBe('Duplication');
+  });
+
   it('uses the result line when the chat answer has no sentence', () => {
     const lead = resultLead('', [{ summary: { line: 'Heard 75.0%, Bought 12.0%.' } }]);
     expect(lead).toContain('75.0%');

@@ -38,6 +38,10 @@ type AskerTurn = {
   answer: string;
   checked?: boolean;
   status?: string;
+  audience?: string;
+  base?: string;
+  weight?: string;
+  source?: string;
 };
 
 function labelledMeasure(labels: Record<string, string>): 'ordinal' | 'nominal' {
@@ -211,8 +215,10 @@ function AskerLog({
   turns: AskerTurn[];
   onMark: (turnId: string, status?: 'checked' | 'flagged') => void;
 }) {
-  const [filter, setFilter] = useState<'to_check' | 'checked' | 'not_in_data'>('to_check');
-  const shown = turns.filter(turn => askerBucket(turn) === filter);
+  const [filter, setFilter] = useState<'to_check' | 'checked' | 'not_in_data' | 'all'>('to_check');
+  const [openId, setOpenId] = useState(turns[0]?.turn_id || '');
+  const shown = filter === 'all' ? turns : turns.filter(turn => askerBucket(turn) === filter);
+  const open = shown.find(turn => turn.turn_id === openId) || shown[0];
   return (
     <div className="details-questions">
       <div className="flow-muted details-label">Asker questions</div>
@@ -222,6 +228,7 @@ function AskerLog({
             ['to_check', 'To check'],
             ['checked', 'Checked'],
             ['not_in_data', 'Not in data'],
+            ['all', 'All'],
           ] as const
         ).map(([id, label]) => (
           <Button
@@ -237,10 +244,12 @@ function AskerLog({
       </div>
       {shown.map(turn => (
         <div key={turn.turn_id} className="details-member">
-          <span className="details-member-id">
-            <strong>{turn.question}</strong>
-            <span className="flow-muted">{turn.answer}</span>
-          </span>
+          <Button type="button" className="flow-btn" onClick={() => setOpenId(turn.turn_id)}>
+            <span className="details-member-id">
+              <strong>{turn.question}</strong>
+              <span className="flow-muted">{turn.answer}</span>
+            </span>
+          </Button>
           {askerBucket(turn) === 'checked' ? (
             <span className="flow-muted">Checked</span>
           ) : (
@@ -256,6 +265,24 @@ function AskerLog({
         </div>
       ))}
       {shown.length ? null : <p className="flow-muted">Nothing in this list.</p>}
+      {open ? (
+        <div className="asker-worked">
+          <p>How it was worked out</p>
+          <p>
+            <span className="flow-muted">Audience</span>{' '}
+            {open.audience || 'The rows this answer used'}
+          </p>
+          <p>
+            <span className="flow-muted">Base</span> {open.base || 'The base on this answer'}
+          </p>
+          <p>
+            <span className="flow-muted">Weight</span> {open.weight || 'The weight on this answer'}
+          </p>
+          <p>
+            <span className="flow-muted">Source</span> {open.source || 'This project’s file'}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }

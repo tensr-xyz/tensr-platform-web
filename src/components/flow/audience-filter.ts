@@ -107,15 +107,24 @@ function codeKey(value: string): string {
   return text;
 }
 
+function storedWords(codes: string[]): string {
+  const words = codes.filter(code => !/^-?\d+(?:\.0+)?$/.test(code));
+  return words.length === codes.length ? words.join(', ') : '';
+}
+
 function valuePhrase(column: FlowColumn, value: unknown): string {
   const options = answerOptions(column);
   const codes = (Array.isArray(value) ? value : [value]).map(item => String(item ?? '').trim());
   const clean = codes.filter(Boolean);
-  if (!clean.length || !options.length) return '';
+  if (!clean.length) return '';
+  if (!options.length) return storedWords(clean);
   const byCode = new Map(options.map(option => [codeKey(option.code), option.label]));
   const byLabel = new Map(options.map(option => [option.label.trim().toLowerCase(), option.label]));
   const resolved = clean.map(
-    code => byCode.get(codeKey(code)) || byLabel.get(code.toLowerCase()) || ''
+    code =>
+      byCode.get(codeKey(code)) ||
+      byLabel.get(code.toLowerCase()) ||
+      (storedWords([code]) ? code : '')
   );
   if (resolved.some(label => !label)) return '';
   const numericScale = isScale(options) && options.every(option => option.label === option.code);
