@@ -57,6 +57,35 @@ export function orderedVersionGroup(files: SourceFile[]): SourceFile[] {
   );
 }
 
+/**
+ * Files on the project, plus a working version saved without a project id when its
+ * parent or origin is already on the project. Matches the API `files_in_project` rule.
+ */
+export function filesInProject(rows: SourceFile[], projectId: string): SourceFile[] {
+  const project = String(projectId || '');
+  const chosen = rows.filter(row => String(row.project_id || '') === project && project);
+  const ids = new Set(chosen.map(row => datasetRowId(row)).filter(Boolean));
+  let pending = true;
+  let guard = 0;
+  while (pending && guard < 8) {
+    guard += 1;
+    pending = false;
+    for (const row of rows) {
+      if (!['', project].includes(String(row.project_id || ''))) continue;
+      const rowId = datasetRowId(row);
+      if (!rowId || ids.has(rowId)) continue;
+      const parent = String(row.parent_dataset_id || '');
+      const origin = String(row.origin_dataset_id || '');
+      if (ids.has(parent) || ids.has(origin)) {
+        chosen.push(row);
+        ids.add(rowId);
+        pending = true;
+      }
+    }
+  }
+  return chosen;
+}
+
 export type ContextDoc = {
   id: string;
   name: string;
@@ -178,7 +207,7 @@ export function SourcesScreen({
 }) {
   const router = useRouter();
   const projectId = project?.id || '';
-  const files = datasets.filter(row => row.project_id === projectId && datasetRowId(row));
+  const files = filesInProject(datasets, projectId).filter(row => datasetRowId(row));
   const fileInput = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<ContextDoc[] | null>(null);
   const [addOpen, setAddOpen] = useState(false);

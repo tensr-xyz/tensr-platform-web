@@ -50,6 +50,7 @@ import {
   SourcesScreen,
 } from '@/components/flow/sources-screen';
 import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
+import { toolResultsSavedWorkingVersion } from '@/lib/adopt-derived-dataset';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
@@ -801,6 +802,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 ready={tabReady}
                 pendingAsk={pendingAsk}
                 onAsked={() => setPendingAsk(null)}
+                onChanged={reload}
               />
             )}
           </div>
@@ -2397,12 +2399,14 @@ function ChatScreen({
   ready,
   pendingAsk,
   onAsked,
+  onChanged,
 }: {
   project?: FlowProject;
   datasets: DatasetRow[];
   ready: boolean;
   pendingAsk?: string | null;
   onAsked?: () => void;
+  onChanged?: () => void;
 }) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === project?.id)?.dataset_id;
@@ -2467,6 +2471,10 @@ function ChatScreen({
     syncAddress: true,
     pendingAsk,
     onAsked,
+    onFinished: result => {
+      // A rake / edit / stack saves a working version. Refresh so Sources lists it.
+      if (toolResultsSavedWorkingVersion(result.tool_results)) onChanged?.();
+    },
   });
   const {
     question,
