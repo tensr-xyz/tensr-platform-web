@@ -464,6 +464,17 @@ describe('result tables', () => {
     );
   });
 
+  it('does not put a weight column code in the footnote when the brief named it', () => {
+    const view = resultViewFromToolResults({
+      summary: { weight_source: 'study_brief' },
+      weight: { column: 'design_weight', label: 'Design weight' },
+      weight_from_brief: true,
+    });
+    const foot = resultFootnote(view, '', 'Funnel');
+    expect(foot).toContain('Weight: Design weight, the weight named in the study brief');
+    expect(foot).not.toContain('design_weight');
+  });
+
   it('puts the funnel base on the footnote', () => {
     const view = resultViewFromToolResults({
       procedure: 'funnel',

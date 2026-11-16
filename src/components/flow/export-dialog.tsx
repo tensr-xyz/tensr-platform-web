@@ -25,6 +25,23 @@ import {
 
 export type ExportKind = 'chart' | 'table' | 'report';
 
+/** Body for /reports/pipeline/export. project_id loads the study brief as a context page. */
+export function pipelineExportPayload(args: {
+  runIds: string[];
+  style?: string;
+  includeMethods?: boolean;
+  liveLink?: string;
+  projectId?: string;
+}): string {
+  return JSON.stringify({
+    run_ids: args.runIds,
+    style: args.style || 'apa',
+    include_methods: args.includeMethods !== false,
+    live_link: args.liveLink || '',
+    project_id: args.projectId || '',
+  });
+}
+
 function downloadText(filename: string, contents: string, type: string) {
   const url = URL.createObjectURL(new Blob([contents], { type }));
   const anchor = document.createElement('a');
@@ -140,12 +157,12 @@ export function ExportDialog({
       liveOn && project && typeof window !== 'undefined'
         ? `${window.location.origin}${project[0]}/report`
         : '';
-    return JSON.stringify({
-      run_ids: ids,
+    return pipelineExportPayload({
+      runIds: ids,
       style,
-      include_methods: methodsOn,
-      live_link: link,
-      project_id: projectId || '',
+      includeMethods: methodsOn,
+      liveLink: link,
+      projectId,
     });
   };
 
