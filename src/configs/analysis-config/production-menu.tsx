@@ -130,6 +130,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Ordinal Regression',
         'Stepwise Regression',
       ],
+      Survival: ['Kaplan–Meier', 'Cox Proportional Hazards', 'Nelson–Aalen'],
       Agreement: ["Cohen's Kappa", "Fleiss' Kappa", 'Weighted Kappa'],
       'Normality & related': ['Shapiro–Wilk Test', 'Lilliefors (K-S)'],
       'Descriptive Statistics (tables)': ["Fisher's Exact Test", 'Odds Ratio', 'Relative Risk'],
