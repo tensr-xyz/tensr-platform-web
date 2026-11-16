@@ -83,6 +83,22 @@ describe('audience filter', () => {
       )
     ).toBe('Role is Director or Board');
   });
+
+  it('uses the stored answer when the column has no code list', () => {
+    const columns = [{ name: 'seniority_code', label: 'Seniority' }];
+    expect(
+      audienceDefinitionText(
+        {
+          combine: 'or',
+          filters: [
+            { column: 'seniority_code', op: '=', value: 'C-suite' },
+            { column: 'seniority_code', op: '=', value: 'Board / director' },
+          ],
+        },
+        columns
+      )
+    ).toBe('Seniority is C-suite or Board / director');
+  });
 });
 
 describe('audience panel', () => {

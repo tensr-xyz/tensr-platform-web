@@ -31,6 +31,8 @@ const KIND_LABELS: Record<string, string> = {
   export_set: 'Export',
   nps: 'NPS',
   funnel: 'Funnel',
+  brand_duplication: 'Duplication',
+  paired_brand_test: 'Paired comparison',
 };
 
 function procedureOf(item: ToolResult): string {
@@ -276,7 +278,16 @@ const PROCEDURE_TITLE = /^(compute|computed|run analysis|run_analysis)$/i;
 /** The analysis the card should be named for. A saved column is not the result. */
 function preferredProcedure(items: ToolResult[]): string {
   const names = items.map(procedureOf);
-  for (const name of ['funnel', 'nps', 'chi_square', 'banner_table', 'rake', 'frequencies']) {
+  for (const name of [
+    'brand_duplication',
+    'paired_brand_test',
+    'funnel',
+    'nps',
+    'chi_square',
+    'banner_table',
+    'rake',
+    'frequencies',
+  ]) {
     if (names.includes(name)) return name;
   }
   return names.find(name => name && name !== 'compute') || names[0] || '';
@@ -344,6 +355,13 @@ export function guardUserText(text: string): string {
 function dropUserSentence(part: string): boolean {
   const folded = part.toLowerCase();
   if (STDERR_MARKS.some(mark => folded.includes(mark))) return true;
+  if (
+    /\b(?:brand_duplication|banner_table|paired_brand_test|row_filters|analysis_type)\b/i.test(
+      folded
+    )
+  ) {
+    return true;
+  }
   if (CORRECTION_MARKS.some(mark => folded.includes(mark))) return true;
   const opening =
     folded.startsWith("i'll ") || folded.startsWith('i will ') || folded.startsWith('let me ');
@@ -375,6 +393,11 @@ export function resultLead(
     answerWithoutBase(withoutResultTokens(answerWithoutTables(answer)))
   ).trim();
   const finding = withoutOtherRuns(answerWithoutBase(summaryLine(results))).trim();
+  const deniesTheTable =
+    /not returned|was not returned|can.?t give|cannot give|could not (?:give|return|show)|was not run/i.test(
+      prose
+    );
+  if (deniesTheTable && finding) return guardUserText(withoutStrayEnding(finding));
   const hasFigure = (text: string) => /%/.test(text) || /thousand/i.test(text);
   const text =
     (hasFigure(prose) ? prose : '') ||
@@ -437,6 +460,7 @@ export function outputTitle(
 ): string {
   const items = analysisItems(results);
   if (preferredProcedure(items) === 'funnel') return 'Funnel';
+  if (preferredProcedure(items) === 'brand_duplication') return 'Duplication';
   const questions = frequencyQuestions(results).map(question =>
     titledWithQuestion(question, columns)
   );

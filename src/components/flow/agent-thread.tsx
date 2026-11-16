@@ -903,6 +903,23 @@ export function AgentThreadColumn({
 
   return (
     <div className={panel ? 'agent-thread-panel' : 'chat-column'}>
+      {asker ? (
+        <aside className="asker-rail">
+          <p>Audiences you can ask about</p>
+          <p className="flow-muted">The audiences shared with this project.</p>
+          <p>Your questions</p>
+          {thread.past.map(item => (
+            <p key={item.user}>{item.user}</p>
+          ))}
+          <div>
+            <p>What you can do here</p>
+            <p className="flow-muted">
+              Ask questions and copy answers. You can&apos;t change data, weights, audiences or the
+              report. Answers you mark get checked by the project owner.
+            </p>
+          </div>
+        </aside>
+      ) : null}
       <div className="chat-scroll">
         {!thread.showThread && panel ? (
           <Empty className="min-h-[280px] border-0 bg-transparent">
@@ -1029,6 +1046,32 @@ export function AgentThreadColumn({
               {asker ? (
                 <>
                   <span className="output-badge">Asker · ask questions only</span>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => {
+                      const text = [thread.lead, thread.footnote].filter(Boolean).join('\n');
+                      void navigator.clipboard?.writeText(text);
+                    }}
+                  >
+                    Copy answer
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => {
+                      const text = thread.structuredTables
+                        .map(table =>
+                          [table.columns.join('\t'), ...table.rows.map(row => row.join('\t'))].join(
+                            '\n'
+                          )
+                        )
+                        .join('\n\n');
+                      void navigator.clipboard?.writeText(text);
+                    }}
+                  >
+                    Copy table
+                  </Button>
                   <Button
                     className="flow-btn"
                     type="button"

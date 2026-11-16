@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Table } from '@/components/ui/table';
 import type { RunTable } from '@/components/flow/run-document';
@@ -9,6 +9,7 @@ import { formatDecimalText } from '@/components/flow/result-tables';
 import { guardUserText } from '@/components/flow/chat-output';
 import { fetchAnalysisRun, R_CHECK_POLL_MS, rCheckPhase } from '@/lib/analysis-runs';
 import { loadOutputPreferences, OUTPUT_PREFERENCES_EVENT } from '@/lib/output-preferences';
+import { exportTableAsCSV, exportTableAsImage } from '@/utils/table-export';
 
 /** Column role for a theme table so the count, share, and quote each keep their own space. */
 export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'label' {
@@ -43,6 +44,17 @@ export function AnalysisResult({
     typeof window === 'undefined' ? 1 : loadOutputPreferences().decimalPlaces
   );
   const [checksOpen, setChecksOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const card = useRef<HTMLDivElement>(null);
+  const download = (kind: 'xlsx' | 'png') => {
+    const table = card.current?.querySelector('table');
+    if (!(table instanceof HTMLElement)) return;
+    if (kind === 'xlsx') {
+      exportTableAsCSV(table, { filename: 'table' });
+      return;
+    }
+    void exportTableAsImage(table, { filename: 'table' });
+  };
   const [scriptOpen, setScriptOpen] = useState(false);
   const [mark, setMark] = useState({ kind: rCheck || '', statement: rStatement || '' });
   useEffect(() => {
@@ -109,7 +121,42 @@ export function AnalysisResult({
   const foot = [footnote, checkNote].filter(Boolean).join(' · ');
   if (!leadText && !tables.length && !foot) return null;
   return (
-    <div className="analysis-result">
+    <div className="analysis-result" ref={card}>
+      {tables.length ? (
+        <div className="analysis-export">
+          <Button type="button" className="flow-btn" onClick={() => setExportOpen(open => !open)}>
+            {exportOpen ? 'Close export' : 'Export'}
+          </Button>
+          {exportOpen ? (
+            <div className="analysis-export-menu" role="menu">
+              <Button type="button" className="flow-btn" role="menuitem">
+                PowerPoint slide
+              </Button>
+              <p className="flow-muted">On the template chosen for this project · editable chart</p>
+              <Button type="button" className="flow-btn" role="menuitem">
+                Add to a deck…
+              </Button>
+              <p className="flow-muted">Append to a saved deck in Report</p>
+              <Button
+                type="button"
+                className="flow-btn"
+                role="menuitem"
+                onClick={() => download('xlsx')}
+              >
+                Excel table
+              </Button>
+              <Button
+                type="button"
+                className="flow-btn"
+                role="menuitem"
+                onClick={() => download('png')}
+              >
+                Image (PNG)
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {leadText ? (
         <div className="analysis-lead">
           <FlowMarkdown>{leadText}</FlowMarkdown>
