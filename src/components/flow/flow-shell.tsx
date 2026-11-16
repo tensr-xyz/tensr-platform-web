@@ -876,6 +876,7 @@ export function NewProjectDialog({
         ) : proposal ? (
           <UploadPrepCard
             proposal={proposal.prep}
+            fileName={file?.name || ''}
             onApply={kept => {
               const bearer = getStytchBearerForTensrApi();
               const projectId = createdProjectId.current;

@@ -1193,6 +1193,8 @@ describe('answer tables', () => {
 describe('counts', () => {
   it('writes a scientific count as a normal number', () => {
     expect(shownCount('2.67896e+06')).toBe('2,678,960');
+    expect(shownCount('511423')).toBe('511,423');
+    expect(shownCount('1,054,430')).toBe('1,054,430');
     expect(shownCount('2.67896e+06')).not.toContain('e');
     expect(formatDecimalText('2.67896e+06', 1, 'Count')).not.toContain('e');
   });

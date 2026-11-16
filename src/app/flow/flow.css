@@ -10189,6 +10189,139 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   text-align: left;
 }
 
+.prep-card {
+  border: 1px solid var(--color-accent);
+  border-radius: 14px;
+  overflow: clip;
+  background: var(--color-canvas);
+}
+
+.prep-card-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding: 18px 22px;
+  background: var(--color-accent-soft);
+}
+
+.prep-card-mark {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  font-size: 10px;
+}
+
+.prep-card-head strong {
+  display: block;
+  color: var(--color-ink);
+  font-size: 16px;
+  line-height: 20px;
+}
+
+.prep-card-head p,
+.prep-foot p {
+  margin: 3px 0 0;
+  color: var(--color-muted);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.prep-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  padding: 16px 22px;
+  border-top: 1px solid var(--color-line);
+}
+
+.prep-row-name {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 4px;
+  width: 220px;
+}
+
+.prep-row-name strong {
+  color: var(--color-ink);
+  font-size: 14px;
+  line-height: 18px;
+}
+
+.prep-row-name span,
+.prep-before {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.prep-before {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.prep-row-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.prep-more {
+  align-self: flex-start;
+  padding: 0;
+  color: var(--color-accent);
+  font-size: 12px;
+}
+
+.prep-keep {
+  display: flex;
+  flex-shrink: 0;
+  padding: 2px;
+  border: 1px solid var(--color-line);
+  border-radius: 7px;
+}
+
+.prep-keep .flow-btn {
+  border-radius: 5px;
+  padding: 4px 12px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.prep-keep .flow-btn[data-active='true'] {
+  background: var(--color-ink);
+  color: #fff;
+}
+
+.prep-foot {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 22px;
+  border-top: 1px solid var(--color-line);
+  background: var(--color-well);
+}
+
+.prep-foot p {
+  flex: 1;
+  margin: 0;
+}
+
+.prep-foot strong {
+  color: var(--color-ink);
+}
+
 /* QA round 3. Responses empty and error states. */
 .sheet-state {
   margin: 48px auto;

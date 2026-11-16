@@ -70,6 +70,18 @@ describe('audience filter', () => {
         columns
       )
     ).toBe('Role is Director or Board');
+    expect(
+      audienceDefinitionText(
+        {
+          combine: 'or',
+          filters: [
+            { column: 'role', op: '=', value: '1.0' },
+            { column: 'role', op: '=', value: 'Board' },
+          ],
+        },
+        columns
+      )
+    ).toBe('Role is Director or Board');
   });
 });
 

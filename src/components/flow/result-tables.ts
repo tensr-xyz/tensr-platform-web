@@ -84,10 +84,13 @@ function plainNumber(value: number): string {
 
 /** A count that arrived as 2.67896e+06 is shown as a normal number. */
 export function shownCount(value: string): string {
-  const text = value.trim();
-  if (!/^-?\d+(?:\.\d+)?e[+-]?\d+$/i.test(text)) return value;
+  const text = value.trim().replace(/,/g, '');
+  if (!/^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$/i.test(text)) return value;
   const number = Number(text);
-  return Number.isFinite(number) ? plainNumber(number) : value;
+  if (!Number.isFinite(number)) return value;
+  const scientific = /e[+-]?\d+$/i.test(text);
+  if (Math.abs(number) < 1000 && !scientific) return value;
+  return plainNumber(number);
 }
 
 /** Percents use the project decimals. Counts and weighted n are whole. Means and SDs are 2 dp. */
@@ -151,7 +154,7 @@ function cell(value: unknown): string {
   if (value == null) return '';
   if (typeof value === 'number') {
     if (!Number.isFinite(value)) return '';
-    if (Math.abs(value) >= 1e6) return plainNumber(value);
+    if (Math.abs(value) >= 1000) return plainNumber(value);
     const rounded = Math.round(value * 1000) / 1000;
     return String(rounded);
   }

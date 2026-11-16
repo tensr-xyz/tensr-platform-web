@@ -855,6 +855,28 @@ export function AgentThreadColumn({
   emptyDescription?: string;
 }) {
   const [stepsOpen, setStepsOpen] = useState(true);
+  const [asker, setAsker] = useState(false);
+  const [askedOwner, setAskedOwner] = useState(false);
+  useEffect(() => {
+    if (!thread.projectId) return;
+    let live = true;
+    void flowJson<{ user_id?: string }>('/me')
+      .then(me =>
+        flowJson<{ members?: { user_id?: string; role?: string }[] }>(
+          `/api/projects/${thread.projectId}/members`
+        ).then(page => {
+          if (!live) return;
+          const mine = (page.members || []).find(member => member.user_id === me.user_id);
+          setAsker(mine?.role === 'asker');
+        })
+      )
+      .catch(() => {
+        if (live) setAsker(false);
+      });
+    return () => {
+      live = false;
+    };
+  }, [thread.projectId]);
   const reportPins = useProjectPins(
     thread.projectId || '',
     thread.datasetId ? [thread.datasetId] : []
@@ -1004,6 +1026,22 @@ export function AgentThreadColumn({
               <span className="chat-viewing">Viewing</span>
             </div>
             <div className="chat-result-actions">
+              {asker ? (
+                <>
+                  <span className="output-badge">Asker · ask questions only</span>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => {
+                      setAskedOwner(true);
+                      thread.setStatus('Sent to the owner to check.');
+                    }}
+                  >
+                    Ask owner to check
+                  </Button>
+                  {askedOwner ? <span className="flow-muted">Not checked yet</span> : null}
+                </>
+              ) : null}
               <Link
                 className="flow-btn primary"
                 href={
@@ -1014,38 +1052,44 @@ export function AgentThreadColumn({
               >
                 Open
               </Link>
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={!thread.runIds[0] || !thread.datasetId || inReport}
-                onClick={() => {
-                  if (!thread.runIds[0] || !thread.datasetId || !thread.projectId) return;
-                  void savePin(thread.projectId, thread.datasetId, {
-                    id: thread.runIds[0],
-                    runId: thread.runIds[0],
-                    datasetId: thread.datasetId,
-                    headline: thread.title,
-                    support: thread.takeaway,
-                    citation: thread.kind,
-                    afterId: '',
-                    deck: true,
-                    topline: true,
-                    keepLive: true,
-                  })
-                    .then(() => thread.setStatus('Added to the report.'))
-                    .catch(() => thread.setStatus('That result could not be added to the report.'));
-                }}
-              >
-                {inReport ? 'In report' : 'Add to report'}
-              </Button>
-              <Button
-                className="flow-btn"
-                type="button"
-                disabled={!thread.datasetId}
-                onClick={saveTable}
-              >
-                Save table
-              </Button>
+              {asker ? null : (
+                <>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={!thread.runIds[0] || !thread.datasetId || inReport}
+                    onClick={() => {
+                      if (!thread.runIds[0] || !thread.datasetId || !thread.projectId) return;
+                      void savePin(thread.projectId, thread.datasetId, {
+                        id: thread.runIds[0],
+                        runId: thread.runIds[0],
+                        datasetId: thread.datasetId,
+                        headline: thread.title,
+                        support: thread.takeaway,
+                        citation: thread.kind,
+                        afterId: '',
+                        deck: true,
+                        topline: true,
+                        keepLive: true,
+                      })
+                        .then(() => thread.setStatus('Added to the report.'))
+                        .catch(() =>
+                          thread.setStatus('That result could not be added to the report.')
+                        );
+                    }}
+                  >
+                    {inReport ? 'In report' : 'Add to report'}
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={!thread.datasetId}
+                    onClick={saveTable}
+                  >
+                    Save table
+                  </Button>
+                </>
+              )}
               {thread.downloads[0] ? (
                 <Button
                   className="flow-btn"
