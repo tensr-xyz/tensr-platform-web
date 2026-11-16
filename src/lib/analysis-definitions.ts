@@ -2422,10 +2422,11 @@ export const ANALYSIS_WIZARD_META: Record<AnalysisKey, AnalysisWizardMeta> = {
     summary: 'Latent class analysis with class membership probabilities and profiles.',
   },
   confirmatory_factor_analysis: {
-    summary: 'CFA with factor loadings, fit indices (CFI, RMSEA, SRMR), and path diagram.',
+    summary: 'CFA with factor loadings, fit indices (CFI, TLI, RMSEA, SRMR), and path diagram.',
   },
   structural_equation_modelling: {
-    summary: 'Full SEM with path coefficients, fit indices, and path diagram.',
+    summary:
+      'Full SEM with path coefficients, fit indices (CFI, TLI, RMSEA, SRMR), and path diagram.',
   },
   fleiss_kappa: {
     summary: 'Inter-rater agreement for three or more raters on categorical ratings.',

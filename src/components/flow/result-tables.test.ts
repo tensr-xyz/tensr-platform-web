@@ -8,6 +8,7 @@ import {
   shownCount,
   weightChipName,
   weightNote,
+  withoutEngineCopies,
 } from './result-tables';
 
 const payloads = [
@@ -104,6 +105,10 @@ describe('decimal display', () => {
     expect(formatDecimalText('251.200', 1, 'Weighted n')).toBe('251');
     expect(formatDecimalText('-43.979', 1, 'NPS')).toBe('-44.0');
     expect(formatDecimalText('0.420', 1, 'B')).toBe('0.42');
+    expect(formatDecimalText('4.000', 1, 'Median')).toBe('4');
+    expect(formatDecimalText('4.500', 1, 'Median')).toBe('4.5');
+    expect(formatDecimalText('4.000', 0, 'Median')).toBe('4');
+    expect(formatDecimalText('4.250', 2, 'Median')).toBe('4.25');
   });
 
   it('rewrites a blank-first frequency header so counts stay under Count', () => {
@@ -907,6 +912,74 @@ describe('result tables', () => {
   });
 });
 
+describe('rank comparison tables', () => {
+  it('does not invent Group means when the result only has medians', () => {
+    const view = resultViewFromToolResults({
+      result: {
+        u_statistic: 12,
+        p_value: 0.04,
+        group_descriptives: [
+          { group: '2.0', label: 'Female', n: 10, median: 4 },
+          { group: '1.0', label: 'Male', n: 8, median: 4 },
+        ],
+      },
+      report: {
+        tables: [
+          {
+            title: 'Groups',
+            columns: ['Group', 'n', 'Median'],
+            rows: [
+              ['Female', '10', '4'],
+              ['Male', '8', '4'],
+            ],
+          },
+          {
+            title: 'Test',
+            columns: ['Statistic', 'Value'],
+            rows: [
+              ['U', '12'],
+              ['p', '0.04'],
+              ['r', '0.76'],
+            ],
+          },
+          {
+            title: 'Score by Gender',
+            columns: ['Group', 'n', 'Median', 'Mean rank', 'Status'],
+            rows: [['Female', '10', '4', '9.5', 'included']],
+          },
+        ],
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Groups', 'Test']);
+  });
+
+  it('drops the status group copy when Groups is already present', () => {
+    const tables = withoutEngineCopies([
+      {
+        title: 'Groups',
+        columns: ['Group', 'n', 'Median'],
+        rows: [['A', '10', '4']],
+      },
+      {
+        title: 'Group means',
+        columns: ['Group', 'n', 'Mean', 'SD'],
+        rows: [['A', '10', '', '']],
+      },
+      {
+        title: 'Rating by Arm',
+        columns: ['Group', 'n', 'Median', 'Mean rank', 'Status'],
+        rows: [['A', '10', '4', '5', 'included']],
+      },
+      {
+        title: 'Test',
+        columns: ['Statistic', 'Value'],
+        rows: [['U', '12']],
+      },
+    ]);
+    expect(tables.map(table => table.title)).toEqual(['Groups', 'Test']);
+  });
+});
+
 describe('mean comparison tables', () => {
   it('shows the ANOVA source, the pairs, and Levene with the group means', () => {
     const view = resultViewFromToolResults({
@@ -1042,6 +1115,150 @@ describe('summary tables', () => {
     });
     expect(view.tables.map(table => table.title)).toEqual(['Coefficients', 'Correlations']);
     expect(view.tables[0].rows[0]).toEqual(['Brand trust', '0.420', '0.050', '0.001']);
+  });
+
+  it('shows one correlation matrix with a Columns key and drops superseded copies', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Correlations',
+            columns: ['Variable', '1', '2'],
+            rows: [
+              ['1', '1.000', '0.768*** (n=500)'],
+              ['2', '0.768*** (n=500)', '1.000'],
+            ],
+          },
+          {
+            title: 'Columns',
+            columns: ['Column', 'Label'],
+            rows: [
+              ['1', 'How satisfied are you overall with your most recent visit?'],
+              ['2', 'How likely are you to recommend this brand?'],
+            ],
+          },
+        ],
+      },
+      result: {
+        report: {
+          tables: [
+            {
+              title: 'Pearson correlation matrix',
+              superseded: true,
+              columns: ['', 'sat', 'recommend'],
+              rows: [
+                ['sat', '1', '0.768'],
+                ['recommend', '0.768', '1'],
+              ],
+            },
+            {
+              title: 'Pearson correlation p-values',
+              superseded: true,
+              columns: ['', 'sat', 'recommend'],
+              rows: [
+                ['sat', '—', '0.001'],
+                ['recommend', '0.001', '—'],
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Correlations', 'Columns']);
+    expect(view.tables[0].columns).toEqual(['Variable', '1', '2']);
+    expect(view.tables[1].rows[0][1]).toContain('satisfied');
+  });
+
+  it('keeps labelled factor loadings, fit, and segments from the summary', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Loadings',
+            columns: ['Variable', 'PC1'],
+            rows: [['Price paid', '0.820']],
+          },
+          {
+            title: 'Variance explained',
+            columns: ['Component', 'Eigenvalue', 'Variance %', 'Cumulative %'],
+            rows: [['PC1', '1.900', '64.000', '64.000']],
+          },
+          {
+            title: 'Fit',
+            columns: ['Index', 'Value'],
+            rows: [
+              ['CFI', '0.960'],
+              ['TLI', '0.950'],
+              ['RMSEA', '0.040'],
+              ['SRMR', '0.030'],
+            ],
+          },
+          {
+            title: 'Segments',
+            columns: ['Segment', 'n', 'Price paid'],
+            rows: [
+              ['0', '30', '4.500'],
+              ['1', '10', '2.000'],
+            ],
+          },
+        ],
+      },
+      result: {
+        report: {
+          tables: [
+            {
+              title: 'Component loadings',
+              superseded: true,
+              columns: ['Variable', 'PC1'],
+              rows: [['price', '0.820']],
+            },
+          ],
+        },
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual([
+      'Loadings',
+      'Variance explained',
+      'Fit',
+      'Segments',
+    ]);
+    expect(view.tables[0].rows[0][0]).toBe('Price paid');
+    expect(view.tables[2].rows.map(row => row[0])).toEqual(['CFI', 'TLI', 'RMSEA', 'SRMR']);
+    expect(view.tables[3].columns[2]).toBe('Price paid');
+  });
+
+  it('does not invent a Reliability table from a list of item names', () => {
+    const view = resultViewFromToolResults({
+      summary: {
+        table: [
+          {
+            title: 'Reliability',
+            columns: ['Statistic', 'Value'],
+            rows: [
+              ["Cronbach's alpha", '0.810'],
+              ["McDonald's omega", '0.840'],
+              ['n', '40'],
+            ],
+          },
+          {
+            title: 'Items',
+            columns: ['Item', 'Mean', 'SD', 'Item-total correlation', 'Alpha if deleted'],
+            rows: [['Liking', '3.200', '0.400', '0.550', '0.720']],
+          },
+        ],
+      },
+      result: {
+        items: ['q1', 'q2', 'q3'],
+        cronbach_alpha: 0.81,
+        omega: 0.84,
+      },
+    });
+    expect(view.tables.map(table => table.title)).toEqual(['Reliability', 'Items']);
+    expect(view.tables[0].rows.map(row => row[0])).toEqual([
+      "Cronbach's alpha",
+      "McDonald's omega",
+      'n',
+    ]);
   });
 });
 

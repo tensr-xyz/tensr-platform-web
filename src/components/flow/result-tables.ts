@@ -26,9 +26,9 @@ export type ResultView = {
 };
 
 /** The builder table replaces the engine copy. A coefficients table with SE replaces the empty one. */
-export function withoutEngineCopies<T extends { title?: string; columns?: string[] }>(
-  tables: T[]
-): T[] {
+export function withoutEngineCopies<
+  T extends { title?: string; columns?: string[]; superseded?: boolean },
+>(tables: T[]): T[] {
   const titles = tables.map(table => (table.title || '').trim().toLowerCase());
   const has = (name: string) => titles.includes(name);
   const labelledCoefficients = tables.some(
@@ -37,7 +37,9 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
       (table.columns || []).some(column => column.trim().toLowerCase() === 'se')
   );
   return tables.filter(table => {
+    if (table.superseded) return false;
     const title = (table.title || '').trim().toLowerCase();
+    const columns = (table.columns || []).map(column => column.trim().toLowerCase());
     if (
       has('correlations') &&
       (title.includes('correlation matrix') || title.includes('correlation p-value'))
@@ -45,6 +47,13 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
       return false;
     }
     if (has('groups') && (title === 'group statistics' || title === 'group means')) return false;
+    if (
+      has('groups') &&
+      columns.includes('status') &&
+      (columns.includes('median') || columns.includes('mean rank'))
+    ) {
+      return false;
+    }
     if (
       labelledCoefficients &&
       title === 'coefficients' &&
@@ -59,12 +68,13 @@ export function withoutEngineCopies<T extends { title?: string; columns?: string
 function decimalKind(
   header: string,
   percentSign: boolean
-): 'percent' | 'mean' | 'whole' | 'tenth' | 'plain' {
+): 'percent' | 'mean' | 'median' | 'whole' | 'tenth' | 'plain' {
   if (percentSign) return 'percent';
   const name = header.trim().toLowerCase().replace(/[_-]+/g, ' ');
   if (/%|percent|share/.test(name)) return 'percent';
   if (/weighted\s*n|weighted base/.test(name)) return 'whole';
   if (name === 'nps' || name.endsWith(' nps')) return 'tenth';
+  if (/\bmedian\b/.test(name)) return 'median';
   if (/\b(mean|sd|std\.?|s\.d\.?|standard deviation)\b/.test(name)) return 'mean';
   if (
     /^(n|count|frequency|cases|df)$/.test(name) ||
@@ -116,11 +126,12 @@ export function formatDecimalText(value: string, places: number, header = ''): s
       ? 2
       : kind === 'tenth'
         ? 1
-        : kind === 'percent'
+        : kind === 'percent' || kind === 'median'
           ? Math.max(0, Math.min(6, Math.trunc(places)))
           : 0;
   let shown = number.toFixed(digits);
-  if (kind === 'percent') shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  if (kind === 'percent' || kind === 'median')
+    shown = shown.replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
   return `${shown}${match[3] || ''}`;
 }
 
@@ -307,7 +318,9 @@ function asTable(value: unknown): RunTable | null {
     headers?: unknown;
     variable_names?: unknown;
     note?: unknown;
+    superseded?: unknown;
   };
+  if (record.superseded) return null;
   if (Array.isArray(record.headers) && Array.isArray(record.variable_names)) return null;
   let columns = Array.isArray(record.columns) ? record.columns.map(cell) : [];
   const titleText = cell(record.title);
@@ -735,6 +748,10 @@ function npsTable(groups: unknown): RunTable | null {
 function groupTable(groups: unknown): RunTable | null {
   if (!Array.isArray(groups) || !groups.length) return null;
   const records = groups.filter(row => row && typeof row === 'object') as Record<string, unknown>[];
+  // Rank and normality results store medians, not means. Groups comes from the builder.
+  if (!records.some(record => record.mean != null && Number.isFinite(Number(record.mean)))) {
+    return null;
+  }
   const weighted = records.some(record => record.weighted_n != null);
   const rows = records
     .map(record => {
@@ -1468,7 +1485,22 @@ export function resultViewFromToolResults(results: unknown): ResultView {
     add(recordTable(record.descriptives, 'Descriptives', ['column', 'n', 'mean', 'std']));
     add(statRow(record, 'Test', ['statistic', 'df', 'p_value', 'effect_size']));
     add(recordTable(record.loadings, 'Loadings', ['variable', 'factor', 'loading']));
-    add(recordTable(record.items, 'Reliability', ['item', 'alpha_if_deleted', 'item_total']));
+    // Item statistics are objects. A bare list of item names is not a reliability table.
+    if (
+      Array.isArray(record.item_statistics) ||
+      (Array.isArray(record.items) &&
+        record.items.some(item => item && typeof item === 'object' && !Array.isArray(item)))
+    ) {
+      add(
+        recordTable(record.item_statistics || record.items, 'Items', [
+          'item',
+          'mean',
+          'std_dev',
+          'item_total_correlation',
+          'alpha_if_deleted',
+        ])
+      );
+    }
     const mark = record.r_syntax_verification;
     if (mark && typeof mark === 'object') {
       const verification = mark as { kind?: unknown; statement?: unknown; status?: unknown };

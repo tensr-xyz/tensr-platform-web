@@ -129,9 +129,14 @@ describe('production menu false-door sweep', () => {
     expect(getAnalysisOpForMenuName('Open-text coding')).toBeUndefined();
   });
 
-  it('keeps time series and machine learning off the command palette', () => {
+  it('puts survival on Analyze and keeps time series and machine learning off the palette', () => {
     const names = getAllAnalysisItems().map(item => item.name);
-    expect(names).not.toContain('Kaplan–Meier');
+    expect(names).toContain('Kaplan–Meier');
+    expect(names).toContain('Cox Proportional Hazards');
+    expect(names).toContain('Nelson–Aalen');
+    expect(getAnalysisOpForMenuName('Kaplan–Meier')).toBe('kaplan_meier');
+    expect(getAnalysisOpForMenuName('Cox Proportional Hazards')).toBe('cox_proportional_hazards');
+    expect(getAnalysisOpForMenuName('Nelson–Aalen')).toBe('nelson_aalen');
     expect(names).not.toContain('ARIMA / SARIMA');
     expect(names).not.toContain('Support Vector Machines (Classification)');
     expect(names).not.toContain('Verbatim Coding');

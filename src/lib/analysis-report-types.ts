@@ -51,6 +51,8 @@ export type AnalysisReportTable = {
   notes?: string[];
   /** Narrative follow-up rendered below the table (e.g. MANOVA univariate interpretation). */
   interpretation?: string;
+  /** Engine copy kept for ids; the builder table is the one shown. */
+  superseded?: boolean;
 };
 
 export type SpssReportBlock = AnalysisReportTable;
