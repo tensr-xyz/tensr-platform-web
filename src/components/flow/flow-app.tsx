@@ -2495,6 +2495,7 @@ function ChatScreen({
     tables,
     kind,
     structuredTables,
+    resultCharts,
     lead,
     footnote,
     resultChecks,
@@ -2839,15 +2840,16 @@ function ChatScreen({
                     </Button>
                   </div>
                   <h2>{title}</h2>
-                  {baseNote && !structuredTables.length ? (
+                  {baseNote && !structuredTables.length && !resultCharts.length ? (
                     <p className="flow-muted output-base">{baseNote}</p>
                   ) : null}
                 </div>
                 <div className="output-body">
-                  {structuredTables.length ? (
+                  {structuredTables.length || resultCharts.length ? (
                     <AnalysisResult
                       lead={lead}
                       tables={structuredTables}
+                      charts={resultCharts}
                       footnote={footnote}
                       checks={resultChecks}
                       script={resultView.script}
@@ -2870,7 +2872,7 @@ function ChatScreen({
                       ) : null}
                     </>
                   )}
-                  {structuredTables.length ? null : checks.length ? (
+                  {structuredTables.length || resultCharts.length ? null : checks.length ? (
                     <div>
                       <div className="flow-muted">Checks</div>
                       <div className="report-chips">

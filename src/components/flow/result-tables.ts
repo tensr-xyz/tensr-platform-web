@@ -1,7 +1,10 @@
 import type { RunTable } from '@/components/flow/run-document';
+import type { AnalysisReportChart } from '@/lib/analysis-report-types';
+import { chartsFromToolPayloads } from '@/lib/flow-result-charts';
 
 export type ResultView = {
   tables: RunTable[];
+  charts: AnalysisReportChart[];
   script: string;
   checks: string[];
   weight: string;
@@ -1225,6 +1228,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   };
   const view: ResultView = {
     tables: [],
+    charts: [],
     script: '',
     checks: [],
     weight: '',
@@ -1499,6 +1503,7 @@ export function resultViewFromToolResults(results: unknown): ResultView {
   if (sample.sawTableBase) view.baseDetail = sampleLine(sample);
   else if (detail) view.baseDetail = detail;
   else if (sample.sawN || sample.sawTotal) view.baseDetail = sampleLine(sample);
+  view.charts = chartsFromToolPayloads(results);
   return view;
 }
 

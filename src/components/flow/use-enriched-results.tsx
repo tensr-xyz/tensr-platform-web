@@ -87,10 +87,11 @@ export function ThreadResult({
   const enriched = useEnrichedToolResults(results);
   const view = useMemo(() => resultViewFromToolResults(enriched), [enriched]);
   const tables = view.tables.length ? view.tables : answerResultTables(answer);
+  const charts = view.charts;
   const prose = answerWithoutBase(
-    withoutResultTokens(tables.length ? answerWithoutTables(answer) : answer)
+    withoutResultTokens(tables.length || charts.length ? answerWithoutTables(answer) : answer)
   );
-  if (!tables.length) {
+  if (!tables.length && !charts.length) {
     if (!prose) return null;
     return <FlowMarkdown className="chat-prose">{prose}</FlowMarkdown>;
   }
@@ -98,6 +99,7 @@ export function ThreadResult({
     <AnalysisResult
       lead={resultLead(answer, enriched, tables)}
       tables={tables}
+      charts={charts}
       footnote={resultFootnote(
         view,
         outputBaseClause(enriched, answer),

@@ -11,6 +11,9 @@ import { fetchAnalysisRun, R_CHECK_POLL_MS, rCheckPhase } from '@/lib/analysis-r
 import { loadOutputPreferences, OUTPUT_PREFERENCES_EVENT } from '@/lib/output-preferences';
 import { exportTableAsCSV, exportTableAsImage } from '@/utils/table-export';
 import { appendResultToDeck, exportResultAsPptx } from '@/lib/output-pptx';
+import type { AnalysisReportChart } from '@/lib/analysis-report-types';
+import { AgentInlineChart } from '@/components/organisms/agent-inline-chart';
+import { exportSvgElementAsPng } from '@/utils/chart-export';
 
 /** Column role for a theme table so the count, share, and quote each keep their own space. */
 export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'label' {
@@ -21,10 +24,11 @@ export function quoteColumnFit(header: string): 'count' | 'share' | 'quote' | 'l
   return 'label';
 }
 
-/** The shared result: a lead, the tables, one footnote, and checks folded away. */
+/** The shared result: a lead, charts, the tables, one footnote, and checks folded away. */
 export function AnalysisResult({
   lead,
   tables,
+  charts = [],
   footnote,
   checks,
   script,
@@ -38,6 +42,7 @@ export function AnalysisResult({
 }: {
   lead?: string;
   tables: RunTable[];
+  charts?: AnalysisReportChart[];
   footnote?: string;
   checks?: string[];
   script?: string;
@@ -58,6 +63,14 @@ export function AnalysisResult({
   const [exportBusy, setExportBusy] = useState('');
   const card = useRef<HTMLDivElement>(null);
   const download = (kind: 'xlsx' | 'png') => {
+    if (kind === 'png' && charts.length) {
+      const svg = card.current?.querySelector('.analysis-charts svg, svg');
+      if (svg instanceof SVGSVGElement) {
+        const title = 'title' in charts[0] ? String(charts[0].title || 'chart') : 'chart';
+        void exportSvgElementAsPng(svg, title);
+        return;
+      }
+    }
     const table = card.current?.querySelector('table');
     if (!(table instanceof HTMLElement)) return;
     if (kind === 'xlsx') {
@@ -142,10 +155,10 @@ export function AnalysisResult({
           .join('\n')
       : lead;
   const foot = [footnote, checkNote].filter(Boolean).join(' · ');
-  if (!leadText && !tables.length && !foot) return null;
+  if (!leadText && !tables.length && !charts.length && !foot) return null;
   return (
     <div className="analysis-result" ref={card}>
-      {tables.length ? (
+      {tables.length || charts.length ? (
         <div className="analysis-export">
           <Button type="button" className="flow-btn" onClick={() => setExportOpen(open => !open)}>
             {exportOpen ? 'Close export' : 'Export'}
@@ -199,14 +212,16 @@ export function AnalysisResult({
                 Add to a deck…
               </Button>
               <p className="flow-muted">Append to a saved deck in Report</p>
-              <Button
-                type="button"
-                className="flow-btn"
-                role="menuitem"
-                onClick={() => download('xlsx')}
-              >
-                Excel table
-              </Button>
+              {tables.length ? (
+                <Button
+                  type="button"
+                  className="flow-btn"
+                  role="menuitem"
+                  onClick={() => download('xlsx')}
+                >
+                  Excel table
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 className="flow-btn"
@@ -223,6 +238,16 @@ export function AnalysisResult({
       {leadText ? (
         <div className="analysis-lead">
           <FlowMarkdown>{leadText}</FlowMarkdown>
+        </div>
+      ) : null}
+      {charts.length ? (
+        <div className="analysis-charts">
+          {charts.map((chart, index) => (
+            <AgentInlineChart
+              key={`${chart.kind}-${'title' in chart ? chart.title : index}-${index}`}
+              chart={chart}
+            />
+          ))}
         </div>
       ) : null}
       {tables.map((table, index) => {

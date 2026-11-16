@@ -757,8 +757,11 @@ export function useAgentThread({
     ...table,
     title: titledWithQuestion(table.title, columnLabels),
   }));
+  const resultCharts = resultView.charts;
   const prose = answerWithoutBase(
-    withoutResultTokens(structuredTables.length ? answerWithoutTables(answer) : answer)
+    withoutResultTokens(
+      structuredTables.length || resultCharts.length ? answerWithoutTables(answer) : answer
+    )
   );
   const lead = resultLead(answer, toolResults, resultTables);
   const footnote = resultFootnote(
@@ -822,6 +825,7 @@ export function useAgentThread({
     ledger,
     resultView,
     structuredTables,
+    resultCharts,
     footnote,
     resultChecks,
     datasetId,
@@ -1007,10 +1011,11 @@ export function AgentThreadColumn({
           </div>
         ) : null}
         {thread.answer && (!thread.plan || thread.approving) ? (
-          thread.structuredTables.length ? (
+          thread.structuredTables.length || thread.resultCharts.length ? (
             <AnalysisResult
               lead={thread.lead || thread.takeaway}
               tables={thread.structuredTables}
+              charts={thread.resultCharts}
               footnote={thread.footnote}
               checks={thread.resultChecks}
               script={thread.resultView.script}
