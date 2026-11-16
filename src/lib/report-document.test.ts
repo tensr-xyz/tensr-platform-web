@@ -19,16 +19,22 @@ import {
   frameForSlot,
   groupPagesIntoSection,
   inchesFrame,
+  hideTableRow,
   insertImage,
   insertShape,
+  insertTable,
   insertTextBox,
+  mergeTableRowsIntoNet,
   moveObject,
   normalizeReportDocument,
   pageHref,
   pagesForExport,
   pasteObjects,
   placeObjectInSlot,
+  presentTableObject,
+  renameTableRow,
   reorderPages,
+  reorderTableRows,
   reportDocumentForApi,
   resizeObject,
   resolveTextHref,
@@ -38,6 +44,8 @@ import {
   setObjectText,
   setObjectTextStyle,
   setPageHidden,
+  setTableRules,
+  setTableStyle,
   snapFrameToGrid,
   sortPages,
 } from './report-document';
@@ -337,5 +345,77 @@ describe('report document page model', () => {
     ).find(obj => obj.id === box.id)!;
     expect((apiBox.text_style as Record<string, unknown>).font_family).toBe('Georgia');
     expect(Array.isArray(apiBox.runs)).toBe(true);
+  });
+
+  it('stores table style, rules and edits and re-applies them to a live book', () => {
+    const doc = documentFromPins(pins.slice(0, 1));
+    const pageId = doc.pages[0]!.id;
+    const withTable = insertTable(doc, pageId, {
+      tableSpecId: 'spec-1',
+      tableStyle: { preset: 'compact' },
+      tableRules: [{ type: 'hide_empty', axis: 'rows' }],
+    });
+    const table = withTable.pages[0]!.objects.find(obj => obj.kind === 'table')!;
+    expect(table.tableSpecId).toBe('spec-1');
+    expect(table.tableStyle.preset).toBe('compact');
+    expect(table.tableStyle.fontSizePt).toBe(8);
+
+    const styled = setTableStyle(withTable, pageId, table.id, {
+      preset: 'client',
+      freezeHeader: false,
+    });
+    const ruled = setTableRules(styled, pageId, table.id, [{ type: 'hide_empty' }]);
+    const renamed = renameTableRow(ruled, pageId, table.id, 'r1', 'Brand One');
+    const hidden = hideTableRow(renamed, pageId, table.id, 'r3');
+    const ordered = reorderTableRows(hidden, pageId, table.id, ['r2', 'r1']);
+    const merged = mergeTableRowsIntoNet(ordered, pageId, table.id, ['r1', 'r2'], 'NET Brands');
+    const obj = merged.pages[0]!.objects.find(item => item.id === table.id)!;
+    expect(obj.tableEdits.renames.r1).toBe('Brand One');
+    expect(obj.tableEdits.hiddenRowIds).toContain('r3');
+    expect(obj.tableEdits.merges[0]?.label).toBe('NET Brands');
+
+    const presented = presentTableObject(merged, pageId, table.id, {
+      banner_columns: [{ id: 'total', label: 'Total' }],
+      rows: [
+        {
+          id: 'r1',
+          label: 'One',
+          kind: 'category',
+          cells: [{ stub_row_id: 'r1', banner_id: 'total', percent: 40, unweighted_n: 40 }],
+        },
+        {
+          id: 'r2',
+          label: 'Two',
+          kind: 'category',
+          cells: [{ stub_row_id: 'r2', banner_id: 'total', percent: 30, unweighted_n: 30 }],
+        },
+        {
+          id: 'r3',
+          label: 'Three',
+          kind: 'category',
+          cells: [{ stub_row_id: 'r3', banner_id: 'total', percent: 20, unweighted_n: 20 }],
+        },
+        {
+          id: 'empty',
+          label: 'Empty',
+          kind: 'category',
+          cells: [{ stub_row_id: 'empty', banner_id: 'total', percent: 0, unweighted_n: 0 }],
+        },
+      ],
+    });
+    const labels = presented.rows.map(row => String(row.label || ''));
+    expect(labels).toContain('NET Brands');
+    expect(labels).not.toContain('Three');
+    expect(labels).not.toContain('Empty');
+
+    const payload = reportDocumentForApi(merged);
+    const apiTable = (
+      (payload.pages as Record<string, unknown>[])[0]!.objects as Record<string, unknown>[]
+    ).find(item => item.id === table.id)!;
+    expect((apiTable.table_style as Record<string, unknown>).preset).toBe('client');
+    expect(Array.isArray(apiTable.table_rules)).toBe(true);
+    expect((apiTable.table_edits as Record<string, unknown>).renames).toEqual({
+      r1: 'Brand One',
+    });
   });
 });

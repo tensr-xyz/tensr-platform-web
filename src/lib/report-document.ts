@@ -1,6 +1,22 @@
 /** Report document: pages with positioned live objects (slide editor engine). */
 
 import { getPageLayout } from '@/lib/report-theme';
+import {
+  applyTablePresentation,
+  normalizeTableEdits,
+  normalizeTableRules,
+  normalizeTableStyle,
+  tableEditsForApi,
+  tableRulesForApi,
+  tableStyleForApi,
+  type PresentedBook,
+  type TableEdits,
+  type TableRule,
+  type TableStyle,
+} from '@/lib/table-presentation';
+
+export type { TableEdits, TableRule, TableStyle } from '@/lib/table-presentation';
+export { applyTablePresentation } from '@/lib/table-presentation';
 
 export const PAGE_WIDTH_IN = 13.333;
 export const PAGE_HEIGHT_IN = 7.5;
@@ -63,6 +79,9 @@ export type ReportObject = {
   runId: string | null;
   pinId: string | null;
   tableSpecId: string | null;
+  tableStyle: TableStyle;
+  tableRules: TableRule[];
+  tableEdits: TableEdits;
   keepLive: boolean;
 };
 
@@ -422,6 +441,9 @@ function normalizeObject(raw: unknown, layoutId: string): ReportObject | null {
   const runs = normalizeTextRuns(source.runs || source.text_runs || source.textRuns);
   let text = String(source.text || '').trim();
   if (runs.length && !text) text = textFromRuns(runs).trim();
+  const tableStyle = normalizeTableStyle(source.table_style || source.tableStyle);
+  const tableRules = normalizeTableRules(source.table_rules || source.tableRules || source.rules);
+  const tableEdits = normalizeTableEdits(source.table_edits || source.tableEdits || source.edits);
   return {
     id: String(source.id || '').trim() || newId('obj'),
     kind,
@@ -439,6 +461,9 @@ function normalizeObject(raw: unknown, layoutId: string): ReportObject | null {
     runId,
     pinId,
     tableSpecId,
+    tableStyle: kind === 'table' ? tableStyle : normalizeTableStyle({}),
+    tableRules: kind === 'table' ? tableRules : [],
+    tableEdits: kind === 'table' ? tableEdits : normalizeTableEdits({}),
     keepLive: source.keep_live !== false && source.keepLive !== false,
   };
 }
@@ -533,6 +558,9 @@ export function documentFromPins(pins: PinLike[]): ReportDocument {
           runId,
           pinId,
           tableSpecId: null,
+          tableStyle: normalizeTableStyle({}),
+          tableRules: [],
+          tableEdits: normalizeTableEdits({}),
           keepLive,
         },
         {
@@ -550,6 +578,9 @@ export function documentFromPins(pins: PinLike[]): ReportDocument {
           runId,
           pinId,
           tableSpecId: null,
+          tableStyle: normalizeTableStyle({}),
+          tableRules: [],
+          tableEdits: normalizeTableEdits({}),
           keepLive,
         },
       ],
@@ -1062,6 +1093,186 @@ export function insertTextBox(
   return insertObject(document, pageId, payload);
 }
 
+export function insertTable(
+  document: ReportDocument | unknown,
+  pageId: string,
+  options?: {
+    tableSpecId?: string | null;
+    runId?: string | null;
+    pinId?: string | null;
+    frame?: Partial<ReportFrame>;
+    tableStyle?: Partial<TableStyle> | Record<string, unknown>;
+    tableRules?: unknown[];
+    tableEdits?: Partial<TableEdits> | Record<string, unknown>;
+  }
+): ReportDocument {
+  return insertObject(document, pageId, {
+    kind: 'table',
+    table_spec_id: options?.tableSpecId,
+    run_id: options?.runId,
+    pin_id: options?.pinId,
+    frame: options?.frame || { x: 0.06, y: 0.22, w: 0.88, h: 0.68 },
+    table_style: options?.tableStyle || {},
+    table_rules: options?.tableRules || [],
+    table_edits: options?.tableEdits || {},
+  });
+}
+
+function patchTableObject(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  mutator: (obj: ReportObject) => ReportObject
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      return {
+        ...page,
+        objects: page.objects.map(obj => {
+          if (obj.id !== String(objectId) || obj.kind !== 'table') return obj;
+          return mutator(obj);
+        }),
+      };
+    }),
+  };
+}
+
+export function setTableStyle(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  style: Partial<TableStyle> | Record<string, unknown> | null | undefined
+): ReportDocument {
+  const patch = style && typeof style === 'object' ? style : {};
+  return patchTableObject(document, pageId, objectId, obj => ({
+    ...obj,
+    tableStyle: normalizeTableStyle({ ...obj.tableStyle, ...patch }),
+  }));
+}
+
+export function setTableRules(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  rules: unknown[] | null | undefined
+): ReportDocument {
+  return patchTableObject(document, pageId, objectId, obj => ({
+    ...obj,
+    tableRules: normalizeTableRules(rules || []),
+  }));
+}
+
+export function setTableEdits(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  edits: Partial<TableEdits> | Record<string, unknown> | null | undefined
+): ReportDocument {
+  return patchTableObject(document, pageId, objectId, obj => ({
+    ...obj,
+    tableEdits: normalizeTableEdits(edits || {}),
+  }));
+}
+
+export function renameTableRow(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  rowId: string,
+  label: string
+): ReportDocument {
+  return patchTableObject(document, pageId, objectId, obj => {
+    const edits = normalizeTableEdits(obj.tableEdits);
+    return {
+      ...obj,
+      tableEdits: normalizeTableEdits({
+        ...edits,
+        renames: { ...edits.renames, [String(rowId)]: String(label).trim() },
+      }),
+    };
+  });
+}
+
+export function hideTableRow(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  rowId: string,
+  hidden = true
+): ReportDocument {
+  return patchTableObject(document, pageId, objectId, obj => {
+    const edits = normalizeTableEdits(obj.tableEdits);
+    const target = String(rowId);
+    let hiddenRowIds = [...edits.hiddenRowIds];
+    if (hidden && !hiddenRowIds.includes(target)) hiddenRowIds.push(target);
+    if (!hidden) hiddenRowIds = hiddenRowIds.filter(id => id !== target);
+    return {
+      ...obj,
+      tableEdits: normalizeTableEdits({ ...edits, hiddenRowIds }),
+    };
+  });
+}
+
+export function reorderTableRows(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  rowIds: string[]
+): ReportDocument {
+  return patchTableObject(document, pageId, objectId, obj => {
+    const edits = normalizeTableEdits(obj.tableEdits);
+    return {
+      ...obj,
+      tableEdits: normalizeTableEdits({
+        ...edits,
+        rowOrder: (rowIds || [])
+          .map(String)
+          .map(id => id.trim())
+          .filter(Boolean),
+      }),
+    };
+  });
+}
+
+export function mergeTableRowsIntoNet(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  rowIds: string[],
+  label = 'NET'
+): ReportDocument {
+  return patchTableObject(document, pageId, objectId, obj => {
+    const edits = normalizeTableEdits(obj.tableEdits);
+    return {
+      ...obj,
+      tableEdits: normalizeTableEdits({
+        ...edits,
+        merges: [...edits.merges, { label, rowIds: [...rowIds], hideMembers: true }],
+      }),
+    };
+  });
+}
+
+export function presentTableObject(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  book: Record<string, unknown> | null | undefined
+): PresentedBook {
+  const doc = normalizeReportDocument(document);
+  const page = doc.pages.find(item => item.id === String(pageId));
+  const obj = page?.objects.find(item => item.id === String(objectId) && item.kind === 'table');
+  if (!obj) return applyTablePresentation(book || {});
+  return applyTablePresentation(book || {}, {
+    style: obj.tableStyle,
+    rules: obj.tableRules,
+    edits: obj.tableEdits,
+  });
+}
+
 export function setObjectText(
   document: ReportDocument | unknown,
   pageId: string,
@@ -1421,6 +1632,9 @@ export function reportDocumentForApi(document: ReportDocument | unknown): Record
         run_id: obj.runId,
         pin_id: obj.pinId,
         table_spec_id: obj.tableSpecId,
+        table_style: tableStyleForApi(obj.tableStyle),
+        table_rules: tableRulesForApi(obj.tableRules),
+        table_edits: tableEditsForApi(obj.tableEdits),
         keep_live: obj.keepLive,
       })),
     })),
