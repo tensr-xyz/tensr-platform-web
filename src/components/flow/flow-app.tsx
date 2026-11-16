@@ -49,6 +49,7 @@ import {
   sourceVersionTitle,
   SourcesScreen,
 } from '@/components/flow/sources-screen';
+import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
@@ -3278,8 +3279,32 @@ function ResponsesScreen({
   const shownCols = (headerHits.length ? headerHits : visibleNames).filter(
     column => !hiddenCols.includes(column.name)
   );
+  const adoptVersion = (previousId: string, nextId: string, note: string) => {
+    if (!nextId || !project?.id) return;
+    setChosenId(nextId);
+    setSheetNote(note);
+    sheetPages.clear();
+    void flowJson(`/api/projects/${project.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active_dataset_id: nextId }),
+    }).then(() => {
+      showDatasetVersionUndoToast({
+        projectId: project.id,
+        previousDatasetId: previousId,
+        currentDatasetId: nextId,
+        title: note,
+        onRestored: id => {
+          setChosenId(id);
+          sheetPages.clear();
+          onChanged?.();
+        },
+      });
+      onChanged?.();
+    });
+  };
   const saveCell = (column: string, previewIndex: number, value: string) => {
     if (!datasetId) return;
+    const previousId = datasetId;
     const row = (filters.length ? 0 : pageOffset) + previewIndex;
     void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/edit-cell`, {
       method: 'POST',
@@ -3288,19 +3313,13 @@ function ResponsesScreen({
       .then(saved => {
         const next = String(saved.dataset_id || '');
         setEditingCell(null);
-        setSheetNote('Saved as a new version.');
-        if (!next || !project?.id) return;
-        setChosenId(next);
-        void flowJson(`/api/projects/${project.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ active_dataset_id: next }),
-        });
-        onChanged?.();
+        adoptVersion(previousId, next, 'Saved as a new version.');
       })
       .catch(err => setSheetNote(err instanceof Error ? err.message : 'The cell was not saved.'));
   };
   const reviseColumn = (path: string, body: Record<string, unknown>, note: string) => {
     if (!datasetId) return;
+    const previousId = datasetId;
     setColMenu(null);
     void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/${path}`, {
       method: 'POST',
@@ -3308,18 +3327,39 @@ function ResponsesScreen({
     })
       .then(saved => {
         const next = String(saved.dataset_id || '');
-        setSheetNote(note);
-        if (!next || !project?.id) return;
-        setChosenId(next);
-        void flowJson(`/api/projects/${project.id}`, {
-          method: 'PATCH',
-          body: JSON.stringify({ active_dataset_id: next }),
-        });
-        onChanged?.();
+        adoptVersion(previousId, next, note);
       })
       .catch(err =>
         setSheetNote(err instanceof Error ? err.message : 'That change was not saved.')
       );
+  };
+  const addRows = (count = 1) => {
+    if (!datasetId) return;
+    const previousId = datasetId;
+    void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/add-rows`, {
+      method: 'POST',
+      body: JSON.stringify({ count }),
+    })
+      .then(saved => {
+        const next = String(saved.dataset_id || '');
+        adoptVersion(previousId, next, 'Row added as a new version.');
+      })
+      .catch(err => setSheetNote(err instanceof Error ? err.message : 'The row was not added.'));
+  };
+  const deleteSelectedRows = () => {
+    if (!datasetId || selectedRow == null) return;
+    const previousId = datasetId;
+    const row = (filters.length ? 0 : pageOffset) + selectedRow;
+    void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/delete-rows`, {
+      method: 'POST',
+      body: JSON.stringify({ rows: [row] }),
+    })
+      .then(saved => {
+        const next = String(saved.dataset_id || '');
+        setSelectedRow(null);
+        adoptVersion(previousId, next, 'Row deleted as a new version.');
+      })
+      .catch(err => setSheetNote(err instanceof Error ? err.message : 'The row was not deleted.'));
   };
   const columnMeta = (name: string) =>
     columns.find(column => column.name === name || column.label === name);
@@ -4162,7 +4202,18 @@ function ResponsesScreen({
                     : `Row ${pageOffset + selectedRow + 1} selected`}
                   {sheetNote ? ` · ${sheetNote}` : ''}
                 </span>
-                <span>
+                <span className="sources-actions">
+                  <Button className="flow-btn" type="button" onClick={() => addRows(1)}>
+                    Add row
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={selectedRow == null}
+                    onClick={deleteSelectedRows}
+                  >
+                    Delete row
+                  </Button>
                   <Button
                     className="flow-btn"
                     type="button"

@@ -1,5 +1,6 @@
 import {
   datasetExportPath,
+  datasetRestorePath,
   mapDatasetVersionToFileVersion,
   type DatasetVersionRow,
 } from './dataset-versions';
@@ -30,5 +31,13 @@ describe('mapDatasetVersionToFileVersion', () => {
 describe('datasetExportPath', () => {
   it('downloads a version through the dataset export route', () => {
     expect(datasetExportPath(recode.dataset_id)).toBe(`/datasets/${recode.dataset_id}/export`);
+  });
+});
+
+describe('datasetRestorePath', () => {
+  it('posts restore against the tip and the chosen version', () => {
+    expect(datasetRestorePath('tip-id', recode.dataset_id)).toBe(
+      `/datasets/tip-id/versions/${recode.dataset_id}/restore`
+    );
   });
 });
