@@ -56,6 +56,7 @@ import { toolResultsSavedWorkingVersion } from '@/lib/adopt-derived-dataset';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
+import { MergeSmallAnswersDialog } from '@/components/flow/merge-small-answers-dialog';
 import { ReportEditor } from '@/components/flow/report-editor';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { ShareDialog } from '@/components/flow/share-dialog';
@@ -3182,6 +3183,10 @@ function ResponsesScreen({
   const [valueFilter, setValueFilter] = useState<string | null>(null);
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
+  const [mergeSmall, setMergeSmall] = useState<{
+    field: string;
+    label: string;
+  } | null>(null);
   const [columnCounts, setColumnCounts] = useState<
     Record<
       string,
@@ -4115,6 +4120,18 @@ function ResponsesScreen({
                   <Button
                     type="button"
                     onClick={() => {
+                      const field = colMenu.field;
+                      const label =
+                        columnMeta(colMenu.name)?.label || columnMeta(field)?.label || colMenu.name;
+                      setColMenu(null);
+                      setMergeSmall({ field, label: String(label || field) });
+                    }}
+                  >
+                    Merge small answers
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
                       const target = window.prompt('New column name') || '';
                       const expr = window.prompt('Expression, such as this column >= 1') || '';
                       if (!target || !expr) return;
@@ -4472,6 +4489,22 @@ function ResponsesScreen({
           datasetId={datasetId}
           projectId={project?.id}
           onClose={() => setAnovaOpen(false)}
+        />
+      ) : null}
+      {mergeSmall ? (
+        <MergeSmallAnswersDialog
+          datasetId={datasetId}
+          column={mergeSmall.field}
+          questionLabel={mergeSmall.label}
+          open
+          onOpenChange={open => {
+            if (!open) setMergeSmall(null);
+          }}
+          onApplied={nextId => {
+            const previousId = datasetId || '';
+            setMergeSmall(null);
+            adoptVersion(previousId, nextId, 'Merged small answers into a new version.');
+          }}
         />
       ) : null}
       {weightOpen ? (
