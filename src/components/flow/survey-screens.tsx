@@ -36,6 +36,7 @@ import {
 } from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
 import { TableBars } from '@/components/flow/table-bars';
+import { NumberTracePopover } from '@/components/flow/number-trace-popover';
 import { rememberTablePin, savePin } from '@/components/flow/report-pins';
 import { WeightPanel } from '@/components/flow/weight-modal';
 export { WeightPanel } from '@/components/flow/weight-modal';
@@ -52,6 +53,7 @@ import {
   significanceToolbarLabel,
   type TableSignificanceSettings,
 } from '@/lib/table-significance';
+import { numberTraceFromCell } from '@/lib/number-trace';
 import {
   bannerColumns,
   bannerFootnote,
@@ -358,6 +360,7 @@ export function themeRows(rows: BannerRow[], notCoded?: number | null, sort = tr
 export function BannerGrid({
   book,
   onSelectCell,
+  onCommentCell,
   baseAtEnd = false,
   showQuotes = false,
   showNets = false,
@@ -370,6 +373,8 @@ export function BannerGrid({
 }: {
   book: Record<string, unknown>;
   onSelectCell: (cell: SurveyCell) => void;
+  /** Optional Paper 9f Comment action when the host screen can open comments. */
+  onCommentCell?: (cell: SurveyCell) => void;
   baseAtEnd?: boolean;
   showQuotes?: boolean;
   showNets?: boolean;
@@ -489,38 +494,80 @@ export function BannerGrid({
                         </td>
                       );
                     }
+                    const cellKey = `${row.id}:${column.id}`;
+                    const shownForRow =
+                      row.kind === 'mean' ||
+                      row.kind === 'sd' ||
+                      /^mean$/i.test(String(row.label || ''))
+                        ? (['mean'] as CellFigure[])
+                        : shownFigures;
+                    const selected = selectionFromCell(book, row, cell, letter);
+                    const trace = numberTraceFromCell(book, row, column, cell, letter, {
+                      digits,
+                      figure:
+                        shownForRow[0] === 'mean'
+                          ? 'mean'
+                          : shownForRow[0] === 'count'
+                            ? 'count'
+                            : 'percent',
+                      columnLabels,
+                    });
                     return (
                       <td key={column.id}>
-                        <Button
-                          className="flow-cell"
-                          type="button"
-                          data-active={picked === `${row.id}:${column.id}`}
-                          onClick={() => {
-                            const selected = selectionFromCell(book, row, cell, letter);
-                            if (!selected) return;
-                            setPicked(`${row.id}:${column.id}`);
-                            onSelectCell(selected);
+                        <Popover
+                          open={picked === cellKey}
+                          onOpenChange={open => {
+                            if (open) setPicked(cellKey);
+                            else if (picked === cellKey) setPicked('');
                           }}
                         >
-                          {cellFigures(
-                            cell,
-                            row.kind === 'mean' ||
-                              row.kind === 'sd' ||
-                              /^mean$/i.test(String(row.label || ''))
-                              ? ['mean']
-                              : shownFigures,
-                            digits,
-                            weighted
-                          )}
-                          {markLowBase && cell?.low_base ? ' *' : ''}
-                          {letter ? <span className="grid-letter"> {letter}</span> : null}
-                          {arrowsShown && !letter
-                            ? (() => {
-                                const arrow = arrowForCell(book, row.id, column.id);
-                                return arrow ? <span className="grid-arrow">{arrow}</span> : null;
-                              })()
-                            : null}
-                        </Button>
+                          <PopoverTrigger asChild>
+                            <Button
+                              className="flow-cell"
+                              type="button"
+                              data-active={picked === cellKey}
+                            >
+                              {cellFigures(cell, shownForRow, digits, weighted)}
+                              {markLowBase && cell?.low_base ? ' *' : ''}
+                              {letter ? <span className="grid-letter"> {letter}</span> : null}
+                              {arrowsShown && !letter
+                                ? (() => {
+                                    const arrow = arrowForCell(book, row.id, column.id);
+                                    return arrow ? (
+                                      <span className="grid-arrow">{arrow}</span>
+                                    ) : null;
+                                  })()
+                                : null}
+                            </Button>
+                          </PopoverTrigger>
+                          {trace ? (
+                            <PopoverContent
+                              align="start"
+                              sideOffset={8}
+                              className="number-trace-popover"
+                            >
+                              <NumberTracePopover
+                                trace={trace}
+                                onShowRespondents={
+                                  selected
+                                    ? () => {
+                                        setPicked('');
+                                        onSelectCell(selected);
+                                      }
+                                    : undefined
+                                }
+                                onComment={
+                                  selected && onCommentCell
+                                    ? () => {
+                                        setPicked('');
+                                        onCommentCell(selected);
+                                      }
+                                    : undefined
+                                }
+                              />
+                            </PopoverContent>
+                          ) : null}
+                        </Popover>
                       </td>
                     );
                   })}

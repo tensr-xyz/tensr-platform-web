@@ -22,6 +22,7 @@ export type BannerCell = {
   column_unweighted_n?: number;
   column_weighted_n?: number;
   unweighted_n?: number;
+  weighted_n?: number;
   provenance?: {
     row_uid_bitset?: string;
     origin_bitsets?: Record<string, { row_uid_bitset?: string }>;
