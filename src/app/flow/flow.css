@@ -11281,6 +11281,13 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   background: transparent;
 }
 
+.report-editor-chip.live {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: transparent;
+  font-weight: 500;
+}
+
 .report-editor-toggle[data-active='true'],
 .report-editor-chip[data-active='true'] {
   background: var(--color-accent-soft);
@@ -11577,6 +11584,38 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .report-editor-object-label {
   color: var(--color-muted);
   font-size: 12px;
+}
+
+.report-editor-live-value {
+  color: var(--color-accent);
+  font-weight: 700;
+}
+
+.report-editor-live-value[data-stale='true'] {
+  color: var(--color-warn);
+}
+
+.report-editor-live-note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.report-editor-readonly {
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 16px;
+  background: var(--color-canvas);
+}
+
+.report-editor-live-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
 }
 
 .report-editor-inspector {

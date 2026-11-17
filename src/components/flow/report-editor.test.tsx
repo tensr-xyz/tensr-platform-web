@@ -112,4 +112,36 @@ describe('ReportEditor formatting', () => {
     fireEvent.click(within(inspector).getByRole('button', { name: 'Hide' }));
     expect(await within(inspector).findByText('Prompted awareness (hidden)')).toBeTruthy();
   });
+
+  it('inserts a live value from the 9a toolbar and binds it in the inspector', async () => {
+    render(<ReportEditor datasetId="ds-1" pins={[]} />);
+
+    expect(await screen.findByRole('toolbar', { name: 'Report formatting' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '+ Live value' }));
+
+    const inspector = screen.getByLabelText('Object inspector');
+    expect(await within(inspector).findByText('Live value')).toBeTruthy();
+    expect(
+      within(inspector).getByRole('button', { name: 'Cell value' }).getAttribute('data-active')
+    ).toBe('true');
+    expect(within(inspector).getByText(/Updates when the data or wave changes/)).toBeTruthy();
+    expect(within(inspector).getByLabelText('Row label')).toBeTruthy();
+    expect(within(inspector).getByLabelText('Source table')).toBeTruthy();
+
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Page no.' }));
+    await waitFor(() =>
+      expect(
+        within(inspector).getByRole('button', { name: 'Page no.' }).getAttribute('data-active')
+      ).toBe('true')
+    );
+    expect(within(inspector).getByText('This report')).toBeTruthy();
+
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Base' }));
+    await waitFor(() =>
+      expect(
+        within(inspector).getByRole('button', { name: 'Base' }).getAttribute('data-active')
+      ).toBe('true')
+    );
+    expect(within(inspector).getByText('Sample size')).toBeTruthy();
+  });
 });

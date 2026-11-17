@@ -16,8 +16,13 @@ import {
   copyStyles,
   documentFromPins,
   hideTableRow,
+  insertDynamicText,
+  insertPageNumber,
+  insertSampleSizeDescription,
   insertTable,
   insertTextBox,
+  liveValueFromLabel,
+  liveValueShowsLabel,
   mergeTableRowsIntoNet,
   normalizeReportDocument,
   pageHref,
@@ -26,6 +31,7 @@ import {
   reportDocumentForApi,
   resolveTextHref,
   setDefaultLabels,
+  setObjectBinding,
   setObjectText,
   setObjectTextStyle,
   setTableRules,
@@ -36,6 +42,8 @@ import {
   type ReportDocument,
   type ReportObject,
   type TextAlign,
+  type TextBinding,
+  type TextBindingKind,
   type TextBoxStyle,
   type VerticalAlign,
 } from '@/lib/report-document';
@@ -124,6 +132,27 @@ function kindLabel(kind: ReportObject['kind']): string {
   return 'Shape';
 }
 
+function objectBinding(obj: ReportObject | null | undefined): TextBinding | null {
+  if (!obj) return null;
+  if (obj.binding) return obj.binding;
+  return obj.runs.find(run => run.binding)?.binding || null;
+}
+
+function tableSourceLabel(table: ReportObject, index: number, pageTitle: string): string {
+  const title = pageTitle.trim();
+  if (title) return `T${index + 1} · ${title}`;
+  return `Table ${index + 1}`;
+}
+
+function defaultCellKeys(table: ReportObject | null, defaults: DefaultLabels) {
+  const edits = table?.tableEdits;
+  const renamed = edits ? Object.values(edits.renames).find(label => String(label).trim()) : '';
+  const ordered = edits?.rowOrder.find(id => String(id).trim());
+  const rowKey = String(renamed || ordered || 'Category').trim() || 'Category';
+  const colKey = String(defaults.total || 'Total').trim() || 'Total';
+  return { rowKey, colKey };
+}
+
 function TableObjectPreview({ obj }: { obj: ReportObject }) {
   const style = obj.tableStyle;
   const banded = style.preset === 'banded';
@@ -191,6 +220,7 @@ function CanvasObjectView({
 }) {
   const style = obj.textStyle;
   const text = objectPlainText(obj) || 'Text';
+  const binding = objectBinding(obj);
   const listPrefix =
     style.listStyle === 'bullet' ? '• ' : style.listStyle === 'number' ? '1. ' : '';
   const indent = Math.max(0, style.listIndent) * 16;
@@ -198,6 +228,7 @@ function CanvasObjectView({
     .filter(Boolean)
     .join(' ');
   const isText = obj.kind === 'text';
+  const hasRunBindings = obj.runs.some(run => run.binding);
   return (
     <button
       type="button"
@@ -205,6 +236,8 @@ function CanvasObjectView({
       data-kind={obj.kind}
       data-selected={selected}
       data-paint={paintArmed}
+      data-live={binding ? binding.kind : undefined}
+      data-stale={binding?.stale ? 'true' : undefined}
       style={{
         left: `${obj.frame.x * 100}%`,
         top: `${obj.frame.y * 100}%`,
@@ -213,7 +246,7 @@ function CanvasObjectView({
         zIndex: obj.zIndex,
         fontFamily: isText ? style.fontFamily : undefined,
         fontSize: isText ? `${style.fontSizePt}pt` : undefined,
-        color: isText ? style.color : undefined,
+        color: isText && !binding ? style.color : undefined,
         fontWeight: isText ? (style.bold ? 700 : 400) : undefined,
         fontStyle: isText ? (style.italic ? 'italic' : 'normal') : undefined,
         textDecoration: isText ? deco || 'none' : undefined,
@@ -236,7 +269,30 @@ function CanvasObjectView({
       {obj.kind === 'text' ? (
         <span>
           {listPrefix}
-          {text}
+          {hasRunBindings ? (
+            obj.runs.map((run, index) =>
+              run.binding ? (
+                <span
+                  key={`${obj.id}-run-${index}`}
+                  className="report-editor-live-value"
+                  data-stale={run.binding.stale ? 'true' : undefined}
+                >
+                  {run.text || '—'}
+                </span>
+              ) : (
+                <span key={`${obj.id}-run-${index}`}>{run.text}</span>
+              )
+            )
+          ) : binding ? (
+            <span
+              className="report-editor-live-value"
+              data-stale={binding.stale ? 'true' : undefined}
+            >
+              {text}
+            </span>
+          ) : (
+            text
+          )}
         </span>
       ) : obj.kind === 'table' ? (
         <TableObjectPreview obj={obj} />
@@ -365,6 +421,11 @@ export function ReportEditor({
   };
 
   const selectedTable = selected?.kind === 'table' ? selected : null;
+  const selectedLive = selected?.kind === 'text' ? objectBinding(selected) : null;
+  const pageTables = useMemo(
+    () => (page?.objects || []).filter(obj => obj.kind === 'table'),
+    [page]
+  );
 
   const activePreset =
     STYLE_PRESETS.find(preset => {
@@ -425,6 +486,128 @@ export function ReportEditor({
       setEditCells(false);
       setSelectedRowIds([]);
     }
+  };
+
+  const preferredTable = (): ReportObject | null => {
+    if (selectedTable) return selectedTable;
+    if (selectedLive?.sourceObjectId) {
+      return pageTables.find(obj => obj.id === selectedLive.sourceObjectId) || null;
+    }
+    return pageTables[0] || null;
+  };
+
+  const selectCreatedOnPage = (next: ReportDocument, before: Set<string>) => {
+    if (!page) return;
+    const created = next.pages
+      .find(item => item.id === page.id)
+      ?.objects.find(obj => !before.has(obj.id));
+    commit(next);
+    if (created) setSelectedId(created.id);
+  };
+
+  const addLiveValue = (kind: TextBindingKind) => {
+    if (!page) return;
+    const before = new Set(page.objects.map(obj => obj.id));
+    const table = preferredTable();
+    if (kind === 'page_number') {
+      selectCreatedOnPage(
+        insertPageNumber(document, page.id, {
+          frame: { x: 0.78, y: 0.9, w: 0.16, h: 0.06 },
+          textStyle: { fontSizePt: 12, color: '#1E6B58', bold: true },
+        }),
+        before
+      );
+      return;
+    }
+    if (kind === 'sample_size') {
+      selectCreatedOnPage(
+        insertSampleSizeDescription(document, page.id, {
+          sourceObjectId: table?.id || null,
+          runId: table?.runId || null,
+          pinId: table?.pinId || null,
+          tableSpecId: table?.tableSpecId || null,
+          frame: { x: 0.12, y: 0.72, w: 0.7, h: 0.08 },
+          textStyle: { fontSizePt: 13, color: '#1E6B58', bold: true },
+        }),
+        before
+      );
+      return;
+    }
+    const keys = defaultCellKeys(table, document.defaultLabels);
+    selectCreatedOnPage(
+      insertDynamicText(document, page.id, {
+        rowKey: keys.rowKey,
+        colKey: keys.colKey,
+        sourceObjectId: table?.id || null,
+        runId: table?.runId || null,
+        pinId: table?.pinId || null,
+        tableSpecId: table?.tableSpecId || null,
+        frame: { x: 0.18, y: 0.22, w: 0.28, h: 0.1 },
+        textStyle: { fontSizePt: 14, color: '#1E6B58', bold: true },
+      }),
+      before
+    );
+  };
+
+  const rebindLiveValue = (kind: TextBindingKind, sourceTableId?: string | null) => {
+    if (!page || !selected || selected.kind !== 'text') return;
+    const current = objectBinding(selected);
+    const table =
+      (sourceTableId ? pageTables.find(obj => obj.id === sourceTableId) : null) ||
+      (current?.sourceObjectId
+        ? pageTables.find(obj => obj.id === current.sourceObjectId)
+        : null) ||
+      preferredTable();
+    const keys = defaultCellKeys(table, document.defaultLabels);
+    const pageIndex = Math.max(
+      0,
+      document.pages.findIndex(item => item.id === page.id)
+    );
+    if (kind === 'page_number') {
+      commit(
+        setObjectBinding(
+          document,
+          page.id,
+          selected.id,
+          {
+            kind: 'page_number',
+            template: current?.template || '{n}',
+          },
+          { pageIndex, pageCount: document.pages.length }
+        )
+      );
+      return;
+    }
+    if (kind === 'sample_size') {
+      commit(
+        setObjectBinding(document, page.id, selected.id, {
+          kind: 'sample_size',
+          sourceObjectId: table?.id || null,
+          runId: table?.runId || null,
+          pinId: table?.pinId || null,
+          tableSpecId: table?.tableSpecId || null,
+          fingerprint: current?.fingerprint || null,
+          stale: Boolean(current?.stale),
+        })
+      );
+      return;
+    }
+    commit(
+      setObjectBinding(document, page.id, selected.id, {
+        kind: 'cell',
+        rowKey: current?.kind === 'cell' && current.rowKey ? current.rowKey : keys.rowKey,
+        colKey: current?.kind === 'cell' && current.colKey ? current.colKey : keys.colKey,
+        stat: current?.stat || 'percent',
+        sourceObjectId: table?.id || null,
+        runId: table?.runId || null,
+        pinId: table?.pinId || null,
+        tableSpecId: table?.tableSpecId || null,
+        prefix: current?.prefix || '',
+        suffix: current?.suffix || '',
+        fingerprint: current?.fingerprint || null,
+        stale: Boolean(current?.stale),
+      })
+    );
   };
 
   const applyHouseStyle = (preset: TableStylePreset) => {
@@ -650,6 +833,14 @@ export function ReportEditor({
           }}
         >
           Format painter
+        </Button>
+        <span className="report-editor-toolbar-divider" aria-hidden="true" />
+        <Button
+          type="button"
+          className="report-editor-chip live"
+          onClick={() => addLiveValue('cell')}
+        >
+          + Live value
         </Button>
         <span className="report-editor-toolbar-divider" aria-hidden="true" />
         <button type="button" className="report-editor-tool-label" onClick={addTable}>
@@ -996,6 +1187,103 @@ export function ReportEditor({
                   )}
                 </>
               ) : null}
+            </>
+          ) : selectedLive && selected?.kind === 'text' ? (
+            <>
+              <h3>Live value</h3>
+              <label className="report-editor-field">
+                <span>Shows</span>
+                {selectedLive.kind === 'cell' ? (
+                  <div className="report-editor-live-pair">
+                    <Input
+                      value={selectedLive.rowKey || ''}
+                      aria-label="Row label"
+                      placeholder="Category"
+                      onChange={event => {
+                        if (!page) return;
+                        commit(
+                          setObjectBinding(document, page.id, selected.id, {
+                            ...selectedLive,
+                            rowKey: event.target.value,
+                          })
+                        );
+                      }}
+                    />
+                    <Input
+                      value={selectedLive.colKey || ''}
+                      aria-label="Column label"
+                      placeholder="Total"
+                      onChange={event => {
+                        if (!page) return;
+                        commit(
+                          setObjectBinding(document, page.id, selected.id, {
+                            ...selectedLive,
+                            colKey: event.target.value,
+                          })
+                        );
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div className="report-editor-readonly">{liveValueShowsLabel(selectedLive)}</div>
+                )}
+              </label>
+              <label className="report-editor-field">
+                <span>From</span>
+                {selectedLive.kind === 'page_number' ? (
+                  <div className="report-editor-readonly">
+                    {liveValueFromLabel(selectedLive, pageTables, { pageTitle: page?.title })}
+                  </div>
+                ) : (
+                  <select
+                    className="report-editor-select"
+                    aria-label="Source table"
+                    value={selectedLive.sourceObjectId || ''}
+                    onChange={event => {
+                      const nextId = event.target.value || null;
+                      rebindLiveValue(selectedLive.kind, nextId);
+                    }}
+                  >
+                    <option value="">
+                      {pageTables.length ? 'Choose a table' : 'No table on this page'}
+                    </option>
+                    {pageTables.map((table, index) => (
+                      <option key={table.id} value={table.id}>
+                        {tableSourceLabel(table, index, page?.title || '')}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </label>
+              <div className="report-editor-row" role="group" aria-label="Live value type">
+                {(
+                  [
+                    { value: 'cell', label: 'Cell value' },
+                    { value: 'sample_size', label: 'Base' },
+                    { value: 'page_number', label: 'Page no.' },
+                  ] as { value: TextBindingKind; label: string }[]
+                ).map(option => (
+                  <Button
+                    key={option.value}
+                    type="button"
+                    className="report-editor-pill"
+                    data-active={selectedLive.kind === option.value}
+                    onClick={() => rebindLiveValue(option.value)}
+                  >
+                    {option.label}
+                  </Button>
+                ))}
+              </div>
+              <p className="report-editor-live-note">
+                {selectedLive.stale
+                  ? 'Source table missing or changed. Re-link From above, or the value stays amber until the next refresh.'
+                  : 'Updates when the data or wave changes. If the source table is removed, the value turns amber and says why.'}
+              </p>
+              <div className="report-editor-divider" />
+              <label className="report-editor-field">
+                <span>Content</span>
+                <Input value={objectPlainText(selected)} readOnly aria-readonly="true" />
+              </label>
             </>
           ) : selected?.kind === 'text' ? (
             <>
