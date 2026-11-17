@@ -158,7 +158,17 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
   visualization: {
     icon: <Calculator className="h-4 w-4" />,
     sections: {
-      Charts: ['Bar Chart', 'Line Chart', 'Scatter Chart', 'Histogram', 'Boxplot'],
+      Charts: [
+        'Bar Chart',
+        'Line Chart',
+        'Scatter Chart',
+        'Histogram',
+        'Boxplot',
+        'Pie Chart',
+        'Area Chart',
+        'Density Plot',
+        'Violin Plot',
+      ],
     },
   },
   time_series: {

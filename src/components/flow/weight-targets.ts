@@ -57,3 +57,60 @@ export function marginFor(
 ): WeightMargin | undefined {
   return (margins || []).find(row => row.column === column && row.level === code);
 }
+
+/** Start-from choice on the weighting screen. Empty = equal weights of 1. */
+export const PREVIOUS_WEIGHT = '__previous__';
+
+export type ScreenRakeOptions = {
+  missingHandling?: '' | 'keep_unweighted' | 'missing_target' | 'exclude';
+  missingTargets?: Record<string, string>;
+  /** Lower weight bound. Blank or non-positive = no floor. */
+  floor?: string;
+  /** Upper weight bound. Blank or non-positive = no cap. */
+  cap?: string;
+  /**
+   * Design weight: empty = equal 1, PREVIOUS_WEIGHT = keep the current weight,
+   * otherwise a column name.
+   */
+  startFrom?: string;
+  preview?: boolean;
+};
+
+/** Body the weighting screen posts to /weights/rake (percents, caps, design weight). */
+export function buildScreenRakeBody(
+  groups: { column: string; codes: { code: string; percent: string }[] }[],
+  options: ScreenRakeOptions = {}
+): Record<string, unknown> | null {
+  const categorical: Record<string, Record<string, number>> = {};
+  for (const group of groups) {
+    const targets = targetPercents(group.codes);
+    if (Object.keys(targets).length) categorical[group.column] = targets;
+  }
+  if (!Object.keys(categorical).length) return null;
+
+  const handling = options.missingHandling || '';
+  const missingTargets = Object.fromEntries(
+    Object.entries(options.missingTargets || {})
+      .filter(
+        ([column, value]) => categorical[column] && Number.isFinite(Number(value)) && value.trim()
+      )
+      .map(([column, value]) => [column, Number(value)])
+  );
+  const lower = Number(options.floor);
+  const upper = Number(options.cap);
+  const startFrom = (options.startFrom || '').trim();
+
+  return {
+    categorical_targets: categorical,
+    ...(handling ? { missing_handling: handling } : {}),
+    ...(handling === 'missing_target' ? { missing_targets: missingTargets } : {}),
+    ...(Number.isFinite(lower) && lower > 0 ? { lower } : {}),
+    ...(Number.isFinite(upper) && upper > 0 ? { upper } : {}),
+    ...(startFrom === PREVIOUS_WEIGHT
+      ? { use_existing_weight: true }
+      : startFrom
+        ? { design_weight_column: startFrom }
+        : {}),
+    ...(options.preview ? { preview: true } : {}),
+  };
+}

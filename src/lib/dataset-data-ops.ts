@@ -287,7 +287,9 @@ export function rakeDatasetWeights(
     missing_handling?: 'exclude' | 'impute' | 'missing_target';
     targets_filename?: string;
     weight_label?: string;
+    lower?: number;
     upper?: number;
+    design_weight_column?: string;
     use_existing_weight?: boolean;
   },
   token?: string | null

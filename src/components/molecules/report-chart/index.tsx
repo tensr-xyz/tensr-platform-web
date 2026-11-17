@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { AnalysisReportChart, ChartAxisScale } from '@/lib/analysis-report-types';
-import { errorBarFootnoteLines } from '@/lib/chart-error-bars';
+import { chartFootnoteLines, errorBarFootnoteLines } from '@/lib/chart-error-bars';
 import {
   type ChartDensity,
   type ChartLayout,
@@ -600,10 +600,13 @@ function ChartBody({
         return error ? [value - error, value, value + error] : [value];
       })
     );
+    const hasLetters = series.some(s => s.letters?.some(letter => String(letter || '').trim()));
     const dataMin = ySamples.length ? Math.min(...ySamples) : 0;
     const dataMax = ySamples.length ? Math.max(...ySamples) : 1;
     const minV = Math.min(0, dataMin);
-    const maxV = Math.max(dataMax, minV === 0 ? 1 : 0);
+    const maxRaw = Math.max(dataMax, minV === 0 ? 1 : 0);
+    // Leave room above the tallest bar/point for column letters.
+    const maxV = hasLetters ? maxRaw + Math.max(0.5, (maxRaw - minV) * 0.1) : maxRaw;
     const catsAreDates =
       chart.x_scale === 'datetime' ||
       (chart.x_scale !== 'category' && valuesLookLikeDatetime(categories));
@@ -648,15 +651,17 @@ function ChartBody({
     const isLine = chart.kind === 'line' || isArea;
     const yTicks = ticksInDomain(minV, maxV, layout.maxTicksY).map(v => ({ value: v, y: sy(v) }));
     const xs = categories.map((_, i) => padL + i * groupW + groupW / 2);
-    const footnoteLines = errorBarFootnoteLines(chart);
+    const footnoteLines = chartFootnoteLines(chart);
     const footnoteLineH = layout.fontSize + 4;
     const footnoteH = footnoteLines.length ? footnoteLines.length * footnoteLineH + 6 : 0;
     const capHalf = Math.max(2, Math.min(6, barW * 0.2));
+    const letterSize = Math.max(9, layout.fontSize - 1);
 
     return (
       <svg
         data-chart-kind={chart.kind}
-        data-error-bars={footnoteLines.length ? 'on' : undefined}
+        data-error-bars={errorBarFootnoteLines(chart).length ? 'on' : undefined}
+        data-significance={hasLetters ? 'on' : undefined}
         viewBox={`0 0 ${layout.width} ${layout.height + footnoteH}`}
         className="h-auto w-full max-w-full"
         aria-hidden
@@ -684,6 +689,7 @@ function ChartBody({
                   {categories.map((_, gi) => {
                     const v = ser.values[gi] ?? 0;
                     const error = ser.errors?.[gi];
+                    const letter = String(ser.letters?.[gi] || '').trim();
                     return (
                       <g key={`${ser.name}-${gi}`}>
                         {error ? (
@@ -709,6 +715,18 @@ function ChartBody({
                           r={layout.density === 'comfortable' ? 3.2 : 2.5}
                           fill={seriesFill[si % seriesFill.length]}
                         />
+                        {letter ? (
+                          <text
+                            data-chart-letter
+                            x={xs[gi]}
+                            y={sy(v) - 6}
+                            textAnchor="middle"
+                            fill="#27272a"
+                            style={{ fontSize: letterSize, fontWeight: 600 }}
+                          >
+                            {letter}
+                          </text>
+                        ) : null}
                       </g>
                     );
                   })}
@@ -723,6 +741,8 @@ function ChartBody({
                 const y = Math.min(yZero, yVal);
                 const error = ser.errors?.[gi];
                 const xMid = x + barW / 2;
+                const letter = String(ser.letters?.[gi] || '').trim();
+                const letterY = Math.min(yVal, yZero) - 4;
                 return (
                   <g key={`${gi}-${si}`}>
                     <rect
@@ -749,6 +769,18 @@ function ChartBody({
                           y2={sy(v + error)}
                         />
                       </g>
+                    ) : null}
+                    {letter ? (
+                      <text
+                        data-chart-letter
+                        x={xMid}
+                        y={letterY}
+                        textAnchor="middle"
+                        fill="#27272a"
+                        style={{ fontSize: letterSize, fontWeight: 600 }}
+                      >
+                        {letter}
+                      </text>
                     ) : null}
                   </g>
                 );
@@ -918,6 +950,10 @@ function ChartBody({
     const cx = layout.padL + layout.plotW / 2;
     const cy = layout.padT + layout.plotH / 2;
     const r = Math.max(8, Math.min(layout.plotW, layout.plotH) / 2 - 8);
+    const hasLetters = (chart.letters || []).some(letter => String(letter || '').trim());
+    const footnoteLines = chartFootnoteLines(chart);
+    const footnoteLineH = layout.fontSize + 4;
+    const footnoteH = footnoteLines.length ? footnoteLines.length * footnoteLineH + 6 : 0;
     let angle = -Math.PI / 2;
     const slices = chart.categories.map((label, i) => {
       const value = Math.max(0, chart.values[i] ?? 0);
@@ -929,18 +965,28 @@ function ChartBody({
       const y1 = cy + r * Math.sin(start);
       const x2 = cx + r * Math.cos(start + sweep);
       const y2 = cy + r * Math.sin(start + sweep);
+      const mid = start + sweep / 2;
+      const letter = String(chart.letters?.[i] || '').trim();
       const d =
         sweep <= 0
           ? ''
           : sweep >= Math.PI * 2 - 0.0001
             ? `M ${cx} ${cy - r} A ${r} ${r} 0 1 1 ${cx - 0.01} ${cy - r} Z`
             : `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`;
-      return { d, label, fill: seriesFill[i % seriesFill.length] };
+      return {
+        d,
+        label,
+        fill: seriesFill[i % seriesFill.length],
+        letter,
+        lx: cx + (r + 14) * Math.cos(mid),
+        ly: cy + (r + 14) * Math.sin(mid),
+      };
     });
     return (
       <svg
         data-chart-kind="pie"
-        viewBox={`0 0 ${layout.width} ${layout.height}`}
+        data-significance={hasLetters ? 'on' : undefined}
+        viewBox={`0 0 ${layout.width} ${layout.height + footnoteH}`}
         className="h-auto w-full max-w-full"
         aria-hidden
       >
@@ -948,6 +994,34 @@ function ChartBody({
         {slices.map((slice, i) =>
           slice.d ? <path key={`${slice.label}-${i}`} d={slice.d} fill={slice.fill} /> : null
         )}
+        {slices.map((slice, i) =>
+          slice.letter ? (
+            <text
+              key={`letter-${slice.label}-${i}`}
+              data-chart-letter
+              x={slice.lx}
+              y={slice.ly}
+              textAnchor="middle"
+              dominantBaseline="middle"
+              fill="#27272a"
+              style={{ fontSize: Math.max(9, layout.fontSize - 1), fontWeight: 600 }}
+            >
+              {slice.letter}
+            </text>
+          ) : null
+        )}
+        {footnoteLines.map((line, index) => (
+          <text
+            key={line}
+            data-chart-footnote
+            x={layout.padL}
+            y={layout.height + 2 + (index + 1) * footnoteLineH}
+            fill="#71717a"
+            style={{ fontSize: layout.fontSize }}
+          >
+            {line}
+          </text>
+        ))}
       </svg>
     );
   }

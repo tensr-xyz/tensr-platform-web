@@ -1,40 +1,68 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { ReportChart } from '@/components/molecules/report-chart';
+import {
+  BANNER_CHART_KINDS,
+  type BannerChartKind,
+  type BannerChartSeries,
+  chartFromBannerSeries,
+} from '@/lib/flow-survey';
 
-const COLORS = ['#1e6b58', '#c4a574', '#3d6b8c', '#8c4a3d', '#6b8f71', '#8a6a9a'];
+const KIND_PATH: Record<BannerChartKind, string> = {
+  bar: 'M3 12V7M7 12V3M11 12V5',
+  line: 'M2 11l3-4 3 2 4-6',
+  area: 'M2 12l3-5 3 2 4-6v9H2z',
+  pie: 'M7 2a5 5 0 1 1 0 10A5 5 0 0 1 7 2zm0 0v5l4 2',
+};
 
-/** Grouped bars: one cluster per banner column, one colour per stub row. */
+/** Same banner cells as a chart, with a type picker (bar / line / area / pie). */
 export function TableBars({
   series,
+  title = '',
+  significanceNote,
   onAddToReport,
 }: {
-  series: { label: string; values: { name: string; value: number }[] }[];
+  series: BannerChartSeries[];
+  title?: string;
+  /** Same column-letter test footnote as the table. */
+  significanceNote?: string;
   onAddToReport?: () => void;
 }) {
-  const groups = series[0]?.values.map(item => item.name) ?? [];
-  const names = series.map(row => row.label);
-  const peak = Math.max(1, ...series.flatMap(row => row.values.map(item => item.value)));
+  const [kind, setKind] = useState<BannerChartKind>('bar');
   const [added, setAdded] = useState(false);
-  const groupWidth = 108;
-  const gap = 8;
-  const barWidth = Math.max(
-    10,
-    Math.min(22, (groupWidth - gap * 2) / Math.max(names.length, 1) - 4)
+  const chart = useMemo(
+    () => chartFromBannerSeries(series, kind, { title, significanceNote }),
+    [series, kind, title, significanceNote]
   );
-  const plotHeight = 180;
-  const width = Math.max(280, groups.length * groupWidth + 24);
-  const height = plotHeight + 36;
+
   return (
     <div className="table-chart">
       <div className="table-chart-head">
-        <div className="table-chart-legend">
-          {names.map((name, index) => (
-            <span key={name}>
-              <i style={{ background: COLORS[index % COLORS.length] }} />
-              {name}
-            </span>
+        <div className="chart-types" role="group" aria-label="Chart type">
+          {BANNER_CHART_KINDS.map(option => (
+            <Button
+              key={option.value}
+              className="chart-type"
+              type="button"
+              data-active={kind === option.value}
+              aria-pressed={kind === option.value}
+              onClick={() => setKind(option.value)}
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+                <path
+                  d={KIND_PATH[option.value]}
+                  fill={option.value === 'area' || option.value === 'pie' ? 'currentColor' : 'none'}
+                  fillOpacity={option.value === 'area' ? 0.25 : 1}
+                  stroke="currentColor"
+                  strokeWidth={1.3}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              {option.label}
+            </Button>
           ))}
         </div>
         {onAddToReport ? (
@@ -50,57 +78,7 @@ export function TableBars({
           </Button>
         ) : null}
       </div>
-      <svg
-        className="table-chart-svg"
-        viewBox={`0 0 ${width} ${height}`}
-        role="img"
-        aria-label="Grouped bar chart"
-      >
-        {groups.map((group, groupIndex) => {
-          const origin = 12 + groupIndex * groupWidth;
-          const cluster = names.length * barWidth + Math.max(0, names.length - 1) * 4;
-          const start = origin + (groupWidth - cluster) / 2;
-          return (
-            <g key={group}>
-              {series.map((row, seriesIndex) => {
-                const value = row.values.find(item => item.name === group)?.value ?? 0;
-                const barHeight = Math.max(value > 0 ? 2 : 0, (value / peak) * (plotHeight - 18));
-                const x = start + seriesIndex * (barWidth + 4);
-                const y = plotHeight - barHeight;
-                const shown = Number.isInteger(value) ? String(value) : value.toFixed(0);
-                return (
-                  <g key={`${group}-${row.label}`}>
-                    <rect
-                      x={x}
-                      y={y}
-                      width={barWidth}
-                      height={barHeight}
-                      rx={2}
-                      fill={COLORS[seriesIndex % COLORS.length]}
-                    />
-                    <text
-                      x={x + barWidth / 2}
-                      y={Math.max(12, y - 4)}
-                      textAnchor="middle"
-                      className="table-chart-value"
-                    >
-                      {shown}
-                    </text>
-                  </g>
-                );
-              })}
-              <text
-                x={origin + groupWidth / 2}
-                y={height - 8}
-                textAnchor="middle"
-                className="table-chart-label"
-              >
-                {group}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
+      {chart ? <ReportChart chart={chart} density="comfortable" /> : null}
     </div>
   );
 }

@@ -123,8 +123,9 @@ async function signInWhileProviderLoadIsPending() {
 }
 
 async function waitPastProviderRetries() {
+  // AuthProvider retries at 750ms then 1500ms; wait past the full budget.
   await act(async () => {
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 2500));
   });
 }
 
@@ -139,9 +140,15 @@ function expectSignedOut() {
 describe('AuthProvider after a sign-in whose profile load failed', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useRealTimers();
     localStorage.clear();
     sdkTokens = signedInTokens;
     useAuthStore.getState().reset();
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
   });
 
   it('does not sign the user in when its pending /me call later succeeds', async () => {

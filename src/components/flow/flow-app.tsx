@@ -77,6 +77,7 @@ import {
   shareRequest,
   useProjectPins,
 } from '@/components/flow/report-pins';
+import { documentFromPins, reportDocumentForApi } from '@/lib/report-document';
 import { SettingsScreen } from '@/components/flow/settings-screen';
 import { FiltersPanel, type FlowFilter } from '@/components/flow/filters-panel';
 import { describeFilters } from '@/components/flow/filters-panel-logic';
@@ -4958,6 +4959,18 @@ function ReportScreen({
       return;
     }
     setError('');
+    let reportDocument = reportDocumentForApi(documentFromPins(reportPins));
+    try {
+      const stored = await flowJson<{
+        document?: Record<string, unknown> | null;
+        has_document?: boolean;
+      }>(`/datasets/${exportFileId}/report/document`);
+      if (stored.has_document && stored.document && Array.isArray(stored.document.pages)) {
+        reportDocument = stored.document;
+      }
+    } catch {
+      /* Fall back to pins when no reshaped document is stored. */
+    }
     const created = await flowJson<{
       export_id?: string;
       filename?: string;
@@ -4968,6 +4981,7 @@ function ReportScreen({
       body: JSON.stringify({
         spec_ids: selected.map(row => row.id),
         outputs,
+        report_document: reportDocument,
         headlines: findings
           .filter(finding => finding.headline)
           .map(finding => ({ title: finding.eyebrow, text: finding.headline })),

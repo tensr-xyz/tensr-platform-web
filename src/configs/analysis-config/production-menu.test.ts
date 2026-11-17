@@ -140,7 +140,10 @@ describe('production menu false-door sweep', () => {
     expect(names).not.toContain('ARIMA / SARIMA');
     expect(names).not.toContain('Support Vector Machines (Classification)');
     expect(names).not.toContain('Verbatim Coding');
-    expect(names).not.toContain('Pie Chart');
+    expect(names).toContain('Pie Chart');
+    expect(names).toContain('Area Chart');
+    expect(names).toContain('Density Plot');
+    expect(names).toContain('Violin Plot');
     expect(names).not.toContain('Moses Test');
     expect(ACTIVE_PALETTE_TABS).not.toContain('time_series');
     expect(ACTIVE_PALETTE_TABS).not.toContain('ml_ai');

@@ -8,11 +8,24 @@ export type TableBaseBook = {
     weight_aware?: boolean;
     weighted_n?: number | null;
     unweighted_n?: number | null;
+    /** Kish effective sample size from the engine (Displayr/Q effective n). */
+    kish_effective_base?: number | null;
+    /** Alias used by NPS / techniques weight blocks. */
+    kish_ess?: number | null;
   } | null;
 };
 
 function formatBase(value: number): string {
   return Math.round(value).toLocaleString('en-GB');
+}
+
+function effectiveNSuffix(weight: TableBaseBook['weight'] | null | undefined): string {
+  if (!weight?.weight_aware) return '';
+  const raw = weight.kish_effective_base ?? weight.kish_ess;
+  if (raw == null) return '';
+  const ess = Number(raw);
+  if (!Number.isFinite(ess)) return '';
+  return ` · effective n ${formatBase(ess)}`;
 }
 
 /** "Base: …" once. A label that already starts with base is not prefixed again. */
@@ -48,15 +61,16 @@ export function tableBaseCopy(book: TableBaseBook | null | undefined): {
 } {
   if (!book) return { line: '', foot: '' };
   const weight = book.weight;
+  const ess = effectiveNSuffix(weight);
   const label = String(book.base_label || '').trim();
   if (label) {
     const line = baseLineFromLabel(label);
     const fromLabel = footFromBaseLabel(label);
-    if (fromLabel) return { line, foot: fromLabel };
+    if (fromLabel) return { line, foot: `${fromLabel}${ess}` };
     if (weight?.weight_aware && weight.weighted_n != null && weight.unweighted_n != null) {
       return {
         line,
-        foot: `${formatBase(Number(weight.weighted_n))} weighted (${formatBase(Number(weight.unweighted_n))} unweighted)`,
+        foot: `${formatBase(Number(weight.weighted_n))} weighted (${formatBase(Number(weight.unweighted_n))} unweighted)${ess}`,
       };
     }
     if (book.respondent_n != null) {
@@ -75,7 +89,7 @@ export function tableBaseCopy(book: TableBaseBook | null | undefined): {
     const unweighted = formatBase(Number(weight.unweighted_n));
     return {
       line: `Base: ${shown} weighted (unweighted ${unweighted})`,
-      foot: `${shown} weighted (${unweighted} unweighted)`,
+      foot: `${shown} weighted (${unweighted} unweighted)${ess}`,
     };
   }
   if (book.respondent_n != null) {

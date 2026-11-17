@@ -44,6 +44,7 @@ import {
   bannerFootnote,
   bannerHeading,
   chartSeriesFromBook,
+  chartSignificanceNote,
   codedStub,
   lettersFor,
   mediaCellText,
@@ -2886,6 +2887,8 @@ export function TablesBuilder({
                   {view === 'chart' && chartSeriesFromBook(book).length ? (
                     <TableBars
                       series={chartSeriesFromBook(book)}
+                      title={title}
+                      significanceNote={chartSignificanceNote(book)}
                       onAddToReport={
                         projectId && datasetId && (book.run_id || specId)
                           ? () => {
