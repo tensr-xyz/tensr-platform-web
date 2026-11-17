@@ -1,6 +1,7 @@
 import {
   chatTurnChangesFromToolResults,
   chatTurnUndoTarget,
+  formatChatTurnChangesHeadline,
   notifyChatRunFinished,
   numberedNextStepsFromTurn,
   resolveNumberedNextStep,
@@ -140,6 +141,36 @@ describe('chatTurnChangesFromToolResults', () => {
         },
       ])
     ).toEqual([]);
+  });
+
+  it('formats the Paper 9e changes headline', () => {
+    const changes = chatTurnChangesFromToolResults([
+      {
+        name: 'data_edit',
+        result: {
+          ok: true,
+          answer_markdown: 'Recoded Age.',
+          parent_dataset_id: 'v0',
+          derived_dataset_id: 'v1',
+        },
+      },
+      {
+        name: 'data_edit',
+        result: {
+          ok: true,
+          answer_markdown: 'Dropped test rows.',
+          parent_dataset_id: 'v1',
+          derived_dataset_id: 'v2',
+        },
+      },
+    ]);
+    expect(formatChatTurnChangesHeadline(changes)).toBe('2 changes · saved as a new version');
+    expect(formatChatTurnChangesHeadline(changes, { versionLabel: 7 })).toBe(
+      '2 changes · saved as version 7'
+    );
+    expect(formatChatTurnChangesHeadline(changes.slice(0, 1))).toBe(
+      '1 change · saved as a new version'
+    );
   });
 });
 

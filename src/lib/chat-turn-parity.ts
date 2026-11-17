@@ -196,6 +196,26 @@ export function chatTurnUndoTarget(
 }
 
 /**
+ * Headline for the turn change list (Paper 9e): "3 changes · saved as a new version".
+ * Prefer a numeric version label when the product has one; otherwise stay general.
+ */
+export function formatChatTurnChangesHeadline(
+  changes: ChatTurnChange[],
+  opts?: { versionLabel?: string | number | null }
+): string {
+  const count = changes.length;
+  if (!count) return '';
+  const noun = count === 1 ? 'change' : 'changes';
+  const raw = opts?.versionLabel;
+  if (raw != null && String(raw).trim()) {
+    const label = String(raw).trim();
+    const numbered = /^\d+$/.test(label) ? `version ${label}` : label;
+    return `${count} ${noun} · saved as ${numbered}`;
+  }
+  return `${count} ${noun} · saved as a new version`;
+}
+
+/**
  * Browser notification when a long chat run finishes and the tab is in the
  * background. Returns true when a notification was shown.
  */
