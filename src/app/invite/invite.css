@@ -54,6 +54,88 @@
   font-size: 13px;
 }
 
+/* Paper 9f · viewer filters on a shared output */
+.share-viewer-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+
+.share-viewer-filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.share-viewer-filters-label {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.share-viewer-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  height: auto;
+  padding: 5px 10px;
+  border: 1px solid var(--color-line);
+  border-radius: 6px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.share-viewer-filter-chip:hover:not(:disabled) {
+  border-color: #cfcfc8;
+}
+
+.share-viewer-filter-chip.active {
+  border-color: transparent;
+  background: var(--color-accent-soft);
+}
+
+.share-viewer-filter-chip:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.share-viewer-filter-menu {
+  min-width: 160px;
+}
+
+.share-viewer-filter-text,
+.share-viewer-filter-date {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.share-viewer-save-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.share-viewer-save-inline input {
+  width: 140px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.share-viewer-filters-error {
+  margin: 0;
+  color: var(--color-warn);
+  font-size: 12px;
+  line-height: 16px;
+}
+
 .iv-brand {
   display: flex;
   align-items: center;

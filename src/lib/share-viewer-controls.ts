@@ -257,3 +257,69 @@ export function controlsToApi(controls: ViewerControl[]): Array<Record<string, u
     multi: control.multi,
   }));
 }
+
+function optionMap(control: PublicViewerControl): Map<string, string> {
+  return new Map(control.options.map(option => [option.value, option.label]));
+}
+
+/** Chip text people read: "Region: All" / "Gender: Women". */
+export function viewerControlChipText(
+  control: PublicViewerControl,
+  raw: unknown
+): { text: string; active: boolean } {
+  const allLabel = control.allLabel || DEFAULT_ALL_LABEL;
+  if (isAllSelection({ allLabel }, raw)) {
+    return {
+      text: `${control.label}: ${allLabel.replace(/^\(|\)$/g, '') || 'All'}`,
+      active: false,
+    };
+  }
+  const labels = optionMap(control);
+  if (control.type === 'date') {
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      const range = raw as Record<string, unknown>;
+      const start = cleanText(range.from || range.start, 40);
+      const end = cleanText(range.to || range.end, 40);
+      if (start && end) return { text: `${control.label}: ${start}–${end}`, active: true };
+      if (start) return { text: `${control.label}: from ${start}`, active: true };
+      if (end) return { text: `${control.label}: to ${end}`, active: true };
+    }
+    const single = cleanText(raw, 40);
+    if (single) return { text: `${control.label}: ${single}`, active: true };
+  }
+  if (control.type === 'text') {
+    const needle = cleanText(raw, 80);
+    if (needle) return { text: `${control.label}: ${needle}`, active: true };
+  }
+  const values = asStringList(raw, 8);
+  if (!values.length) {
+    return {
+      text: `${control.label}: ${allLabel.replace(/^\(|\)$/g, '') || 'All'}`,
+      active: false,
+    };
+  }
+  const shown = values.map(value => labels.get(value) || value);
+  if (shown.length === 1) return { text: `${control.label}: ${shown[0]}`, active: true };
+  if (shown.length === 2)
+    return { text: `${control.label}: ${shown[0]}, ${shown[1]}`, active: true };
+  return { text: `${control.label}: ${shown.length} selected`, active: true };
+}
+
+export function normalizeSavedViews(raw: unknown): SavedViewerView[] {
+  if (!Array.isArray(raw)) return [];
+  const out: SavedViewerView[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const row = item as Record<string, unknown>;
+    const id = cleanText(row.id, 64);
+    const name = cleanText(row.name, 80);
+    if (!id || !name) continue;
+    const values =
+      row.values && typeof row.values === 'object' && !Array.isArray(row.values)
+        ? (row.values as Record<string, unknown>)
+        : {};
+    out.push({ id, name, values });
+    if (out.length >= 40) break;
+  }
+  return out;
+}
