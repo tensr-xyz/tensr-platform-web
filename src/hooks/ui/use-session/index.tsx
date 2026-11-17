@@ -58,6 +58,14 @@ export interface UserPresence {
   lastActive: number;
 }
 
+/** Who else is viewing a flow project (Paper 9f header avatars). */
+export interface ProjectViewerPresence {
+  userId: string;
+  userName: string;
+  page?: string | null;
+  lastActive: number;
+}
+
 class WebSocketService {
   private static instance: WebSocketService;
   private ws: WebSocket | null = null;
@@ -68,6 +76,7 @@ class WebSocketService {
   private sessionLiveEmitter = new EventEmitter<boolean>();
   private sessionEmitter = new EventEmitter<Session | null>();
   private presenceEmitter = new EventEmitter<Map<string, UserPresence>>();
+  private projectPresenceEmitter = new EventEmitter<Map<string, ProjectViewerPresence>>();
   private sessionsListEmitter = new EventEmitter<Session[]>();
   private analysisEmitter = new EventEmitter<{ datasetId: string; runId: string; op?: string }>();
   // Sheet (`sheet_live` op-log) messages — `initial_state` (sheet flavor), `op_applied`,
@@ -80,6 +89,9 @@ class WebSocketService {
   private _session: Session | null = null;
   private _sessionsList: Session[] = [];
   private _presence = new Map<string, UserPresence>();
+  private _projectPresence = new Map<string, ProjectViewerPresence>();
+  private _projectId: string | null = null;
+  private _projectPage: string | null = null;
   // sessionId to `join` once the (re)connected socket opens.
   private _pendingSessionId: string | null = null;
   // Sheet ids subscribed on this single connection — re-sent on reconnect so
@@ -122,6 +134,62 @@ class WebSocketService {
     // Create new Map to ensure reference changes
     const updatedPresence = new Map(this._presence);
     this.presenceEmitter.emit(updatedPresence);
+  }
+
+  private applyProjectPresenceSnapshot(
+    presence: Record<string, ProjectViewerPresence> | undefined
+  ) {
+    this._projectPresence.clear();
+    if (presence && typeof presence === 'object') {
+      Object.entries(presence).forEach(([userId, row]) => {
+        if (!row || typeof row !== 'object') return;
+        this._projectPresence.set(userId, {
+          userId: row.userId || userId,
+          userName: row.userName || 'Anonymous',
+          page: row.page ?? null,
+          lastActive: Number(row.lastActive) || Date.now(),
+        });
+      });
+    }
+    this.projectPresenceEmitter.emit(new Map(this._projectPresence));
+  }
+
+  private handleProjectPresenceUpdate(message: {
+    projectId?: string;
+    presence?: ProjectViewerPresence;
+  }) {
+    if (message.projectId && this._projectId && message.projectId !== this._projectId) {
+      return;
+    }
+    const incoming = message.presence;
+    if (!incoming || typeof incoming !== 'object') {
+      return;
+    }
+    const userId = incoming.userId;
+    if (!userId) {
+      return;
+    }
+    if (Object.prototype.hasOwnProperty.call(incoming, 'page') && incoming.page === null) {
+      this._projectPresence.delete(userId);
+    } else {
+      this._projectPresence.set(userId, {
+        userId,
+        userName: incoming.userName || 'Anonymous',
+        page: incoming.page ?? null,
+        lastActive: Date.now(),
+      });
+    }
+    this.projectPresenceEmitter.emit(new Map(this._projectPresence));
+  }
+
+  private sendProjectJoin() {
+    if (!this._projectId) return;
+    this.sendJson({
+      type: 'join_project',
+      projectId: this._projectId,
+      page: this._projectPage,
+      userName: this.userName,
+    });
   }
 
   private constructor() {}
@@ -285,6 +353,9 @@ class WebSocketService {
       for (const sheetId of this._subscribedSheetIds) {
         this.sendJson({ type: 'subscribe', sheetId });
       }
+      if (this._projectId) {
+        this.sendProjectJoin();
+      }
       // Prove the message Lambda can post back (join uses the same path).
       this.sendJson({ type: 'ping' });
       window.setTimeout(() => {
@@ -320,6 +391,17 @@ class WebSocketService {
 
           case 'presence_update':
             this.handlePresenceUpdate(message);
+            break;
+
+          case 'project_presence_state':
+            if (message.projectId) {
+              this._projectId = String(message.projectId);
+            }
+            this.applyProjectPresenceSnapshot(message.presence);
+            break;
+
+          case 'project_presence_update':
+            this.handleProjectPresenceUpdate(message);
             break;
 
           case 'participant_joined':
@@ -642,6 +724,66 @@ class WebSocketService {
 
   onPresenceChange(callback: (presence: Map<string, UserPresence>) => void) {
     return this.presenceEmitter.subscribe(callback);
+  }
+
+  /** Join (or switch) the flow project presence room on the shared socket. */
+  joinProject(projectId: string, page?: string | null) {
+    const nextId = projectId.trim();
+    if (!nextId) return;
+    const nextPage = page?.trim() || null;
+    const same = this._projectId === nextId;
+    this._projectId = nextId;
+    this._projectPage = nextPage;
+    if (same && this.isSocketOpen) {
+      this.sendJson({
+        type: 'project_presence',
+        page: nextPage,
+        userName: this.userName,
+      });
+      return;
+    }
+    if (this.isSocketOpen) {
+      this.sendProjectJoin();
+    } else {
+      this.connect();
+    }
+  }
+
+  updateProjectPage(page: string | null) {
+    if (!this._projectId) return;
+    this._projectPage = page?.trim() || null;
+    if (!this.isSocketOpen) return;
+    this.sendJson({
+      type: 'project_presence',
+      page: this._projectPage,
+      userName: this.userName,
+    });
+  }
+
+  leaveProject(projectId?: string) {
+    const id = (projectId || this._projectId || '').trim();
+    if (!id) return;
+    if (this.isSocketOpen) {
+      this.sendJson({ type: 'leave_project', projectId: id });
+    }
+    if (this._projectId === id) {
+      this._projectId = null;
+      this._projectPage = null;
+      this._projectPresence.clear();
+      this.projectPresenceEmitter.emit(new Map());
+    }
+  }
+
+  onProjectPresenceChange(callback: (presence: Map<string, ProjectViewerPresence>) => void) {
+    return this.projectPresenceEmitter.subscribe(callback);
+  }
+
+  get projectPresence() {
+    return this._projectPresence;
+  }
+
+  get projectPresenceId() {
+    return this._projectId;
   }
 
   onSessionsListChange(callback: (sessions: Session[]) => void) {

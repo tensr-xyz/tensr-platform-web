@@ -374,6 +374,45 @@ body:has(.flow) [data-radix-popper-content-wrapper],
   gap: 8px;
 }
 
+/* Paper 9f · presence avatars in the project header */
+.proj-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  margin-right: 4px;
+}
+
+.proj-presence-stack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.proj-presence-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 2px solid var(--color-canvas);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  line-height: 14px;
+  flex-shrink: 0;
+  cursor: default;
+}
+
+.proj-presence-avatar + .proj-presence-avatar {
+  margin-left: -8px;
+}
+
+.proj-presence-status {
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
 .proj-tabs {
   display: flex;
   gap: 4px;

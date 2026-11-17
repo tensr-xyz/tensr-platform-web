@@ -62,6 +62,7 @@ import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-output
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
 import { FindReplaceDialog } from '@/components/flow/find-replace-dialog';
+import { ProjectPresenceAvatars, useProjectPresence } from '@/components/flow/project-presence';
 import {
   documentApa,
   pinIsThin,
@@ -582,6 +583,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
     }
   }, [finishedRun, projectId, section, router]);
   const page = visibleProjectSection(section);
+  const presenceView = useProjectPresence(projectId || null, page);
   const [cachedName, setCachedName] = useState('');
   useEffect(() => {
     try {
@@ -707,6 +709,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   <span className="flow-k">⌘K</span>
                 </Button>
                 <div className="proj-actions">
+                  <ProjectPresenceAvatars view={presenceView} />
                   {findReplaceAllowed ? (
                     <Button
                       className="flow-btn"
