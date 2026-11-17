@@ -54,12 +54,30 @@ export function numberedNextStepsFromTurn(opts: {
   hasOutput?: boolean;
   /** Column labels only (never codes / variable names). */
   columnLabels?: string[];
+  /** Report already has pinned findings — offer reshape follow-ups. */
+  hasReportPins?: boolean;
 }): NumberedNextStep[] {
   const toolResults = opts.toolResults || [];
   const labels = (opts.columnLabels || []).map(label => label.trim()).filter(Boolean);
   const edits = chatTurnChangesFromToolResults(toolResults);
   const analysisTypes = analysisTypesFromToolResults(toolResults);
   const candidates: Array<{ label: string; prompt: string }> = [];
+
+  if (opts.hasReportPins) {
+    candidates.push({
+      label: 'Board version (5 slides)',
+      prompt:
+        'Make a 5 slide version for the board, one headline per slide, a chart on each, final slide with 3 recommendations.',
+    });
+    candidates.push({
+      label: 'Short version',
+      prompt: 'Build a short version of the report.',
+    });
+    candidates.push({
+      label: 'Refine for an audience',
+      prompt: 'Refine the report for a different audience.',
+    });
+  }
 
   if (analysisTypes.length) {
     candidates.push({

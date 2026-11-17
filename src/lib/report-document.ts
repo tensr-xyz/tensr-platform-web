@@ -1576,6 +1576,334 @@ export function sortPages(
   return doc;
 }
 
+/** Report reshape from chat: board / short / audience. Full report always kept. */
+
+export type ReportReshapeKind = 'board' | 'short' | 'audience';
+
+export type ReportReshapeRequest = {
+  kind: ReportReshapeKind;
+  maxSlides: number;
+  audienceLabel: string;
+  includeRecommendations: boolean | null;
+  recommendationCount: number;
+  placement: 'front' | 'end';
+};
+
+export type ReportReshapeResult = {
+  ok: true;
+  document: ReportDocument;
+  variantSection: string;
+  variantPageIds: string[];
+  keptFull: true;
+  kind: ReportReshapeKind;
+  note: string;
+};
+
+const METHODS_MARKERS = ['how to read this report', 'how to read', 'methods', 'methodology'];
+const APPENDIX_MARKERS = [
+  'uninteresting tables',
+  'weight diagnostics',
+  'report context',
+  'evidence appendix',
+  'reasons and verbatims',
+];
+const VARIANT_SECTION_PREFIXES = ['board', 'short', 'audience'];
+
+function sectionLabel(kind: ReportReshapeKind, audienceLabel = ''): string {
+  if (kind === 'board') return 'Board';
+  if (kind === 'short') return 'Short';
+  const label = String(audienceLabel || '').trim();
+  return label ? `Audience · ${label}` : 'Audience';
+}
+
+function isVariantSection(section: string | null | undefined): boolean {
+  const text = String(section || '')
+    .trim()
+    .toLowerCase();
+  if (!text) return false;
+  return VARIANT_SECTION_PREFIXES.some(
+    prefix => text === prefix || text.startsWith(`${prefix} ·`) || text.startsWith(`${prefix}·`)
+  );
+}
+
+function isMethodsOrAppendixPage(page: ReportPage): boolean {
+  const title = page.title.trim().toLowerCase();
+  const section = (page.section || '').trim().toLowerCase();
+  if (
+    METHODS_MARKERS.some(
+      marker => title === marker || title.startsWith(marker) || section === marker
+    )
+  ) {
+    return true;
+  }
+  if (APPENDIX_MARKERS.some(marker => title.includes(marker) || section.includes(marker))) {
+    return true;
+  }
+  return section.startsWith('evidence') || section.startsWith('appendix');
+}
+
+function isSourceFindingPage(page: ReportPage): boolean {
+  if (isVariantSection(page.section)) return false;
+  if (isMethodsOrAppendixPage(page)) return false;
+  if (page.hideFromExport) return false;
+  return true;
+}
+
+function clonePageForVariant(
+  page: ReportPage,
+  options: { section: string; titlePrefix?: string }
+): ReportPage {
+  const prefix = String(options.titlePrefix || '').trim();
+  let title = page.title;
+  if (prefix && title && !title.toLowerCase().startsWith(prefix.toLowerCase())) {
+    title = `${prefix}: ${title}`;
+  }
+  return {
+    ...page,
+    id: newId('page'),
+    title,
+    section: options.section,
+    hideFromExport: false,
+    hideFromPublish: false,
+    objects: page.objects.map(obj => ({ ...obj, id: newId('obj') })),
+  };
+}
+
+function defaultRecommendationBullets(pages: ReportPage[], count: number): string[] {
+  const wanted = Math.max(1, Math.min(count || 3, 8));
+  const bullets: string[] = [];
+  for (const page of pages) {
+    const title = page.title.trim();
+    if (!title) continue;
+    bullets.push(`Focus on: ${title}`);
+    if (bullets.length >= wanted) break;
+  }
+  while (bullets.length < wanted) bullets.push('Add a recommendation here.');
+  return bullets.slice(0, wanted);
+}
+
+function recommendationsPage(options: {
+  section: string;
+  bullets: string[];
+  title?: string;
+}): ReportPage {
+  const layoutId = 'title_and_content';
+  const title = options.title || 'Recommendations';
+  const lines = options.bullets.map(item => String(item).trim()).filter(Boolean);
+  const body = (lines.length ? lines : ['Add a recommendation here.'])
+    .map(line => `• ${line}`)
+    .join('\n');
+  return {
+    id: newId('page'),
+    title,
+    layoutId,
+    section: options.section,
+    hideFromExport: false,
+    hideFromPublish: false,
+    objects: [
+      {
+        id: newId('obj'),
+        kind: 'text',
+        frame: frameForSlot(layoutId, 'title') || { x: 0.06, y: 0.06, w: 0.88, h: 0.12 },
+        zIndex: 1,
+        hidden: false,
+        slotId: 'title',
+        text: title,
+        textStyle: { ...DEFAULT_TEXT_STYLE, fontSizePt: 28, bold: true },
+        runs: [],
+        shapeType: null,
+        imageUrl: null,
+        runId: null,
+        pinId: null,
+        tableSpecId: null,
+        tableStyle: normalizeTableStyle(undefined),
+        tableRules: [],
+        tableEdits: normalizeTableEdits(undefined),
+        keepLive: true,
+      },
+      {
+        id: newId('obj'),
+        kind: 'text',
+        frame: frameForSlot(layoutId, 'content') || { x: 0.06, y: 0.22, w: 0.88, h: 0.68 },
+        zIndex: 2,
+        hidden: false,
+        slotId: 'content',
+        text: body,
+        textStyle: { ...DEFAULT_TEXT_STYLE, listStyle: 'bullet', fontSizePt: 18 },
+        runs: [],
+        shapeType: null,
+        imageUrl: null,
+        runId: null,
+        pinId: null,
+        tableSpecId: null,
+        tableStyle: normalizeTableStyle(undefined),
+        tableRules: [],
+        tableEdits: normalizeTableEdits(undefined),
+        keepLive: true,
+      },
+    ],
+  };
+}
+
+export function reshapeReportDocument(
+  document: ReportDocument | unknown,
+  options: {
+    kind: ReportReshapeKind | string;
+    maxSlides?: number;
+    audienceLabel?: string;
+    includeRecommendations?: boolean | null;
+    recommendationCount?: number;
+    recommendationBullets?: string[] | null;
+    placement?: 'front' | 'end' | string;
+  }
+): ReportReshapeResult {
+  const doc = normalizeReportDocument(document);
+  const kind = String(options.kind || '')
+    .trim()
+    .toLowerCase() as ReportReshapeKind;
+  if (kind !== 'board' && kind !== 'short' && kind !== 'audience') {
+    throw new Error('kind must be board, short, or audience');
+  }
+  const slideCap = Math.max(1, Math.min(Number(options.maxSlides) || 5, 20));
+  const section = sectionLabel(kind, options.audienceLabel);
+  let wantRecs = options.includeRecommendations;
+  if (wantRecs == null) wantRecs = kind === 'board' || kind === 'audience';
+  wantRecs = Boolean(wantRecs);
+
+  const kept = doc.pages.filter(page => (page.section || '') !== section);
+  const sources = kept.filter(isSourceFindingPage);
+  const findingSlots = Math.max(1, slideCap - (wantRecs ? 1 : 0));
+  const chosen = sources.slice(0, findingSlots);
+  const titlePrefix =
+    kind === 'audience' && String(options.audienceLabel || '').trim()
+      ? String(options.audienceLabel).trim()
+      : '';
+
+  const variantPages: ReportPage[] = chosen.map(page =>
+    clonePageForVariant(page, { section, titlePrefix })
+  );
+  const variantPageIds = variantPages.map(page => page.id);
+
+  if (wantRecs) {
+    const bullets = (options.recommendationBullets || [])
+      .map(item => String(item).trim())
+      .filter(Boolean);
+    const resolved =
+      bullets.length > 0
+        ? bullets
+        : defaultRecommendationBullets(chosen, options.recommendationCount ?? 3);
+    const recPage = recommendationsPage({ section, bullets: resolved });
+    variantPages.push(recPage);
+    variantPageIds.push(recPage.id);
+  }
+
+  const place = String(options.placement || 'front')
+    .trim()
+    .toLowerCase();
+  const pages =
+    place === 'end' || place === 'after' || place === 'back'
+      ? [...kept, ...variantPages]
+      : [...variantPages, ...kept];
+
+  return {
+    ok: true,
+    document: { ...doc, pages },
+    variantSection: section,
+    variantPageIds,
+    keptFull: true,
+    kind,
+    note: `${section} version added at the ${
+      place === 'end' || place === 'after' || place === 'back' ? 'end' : 'front'
+    }. Full report kept.`,
+  };
+}
+
+export function parseReportReshapeRequest(message: string): ReportReshapeRequest | null {
+  const text = String(message || '').trim();
+  if (!text) return null;
+  const folded = text.toLowerCase().replace(/\s+/g, ' ');
+
+  const boardHit =
+    /\b(board|exec|executive|c[-\s]?suite)\b.{0,40}\b(version|deck|slides?|report)\b/.test(
+      folded
+    ) ||
+    /\b(version|deck|slides?|report)\b.{0,40}\b(board|exec|executive|c[-\s]?suite)\b/.test(
+      folded
+    ) ||
+    /\b5\s*slides?\b.{0,30}\bboard\b/.test(folded) ||
+    /\bboard\b.{0,30}\b5\s*slides?\b/.test(folded);
+
+  const shortHit =
+    /\b(short|shorter|condensed|brief)\b.{0,30}\b(version|deck|slides?|report)\b/.test(folded) ||
+    /\b(version|deck|slides?|report)\b.{0,30}\b(short|shorter|condensed|brief)\b/.test(folded);
+
+  const audienceHit =
+    /\bfor (?:a |the )?(?:different |new )?audience\b/.test(folded) ||
+    /\baudience version\b/.test(folded) ||
+    /\brefine for (?:a |an |the )?[\w\s-]{2,40}\b/.test(folded) ||
+    /\bfor (?:the )?(board|executives?|leadership|clients?|stakeholders?)\b/.test(folded);
+
+  let kind: ReportReshapeKind | null = null;
+  let audienceLabel = '';
+
+  if (boardHit) {
+    kind = 'board';
+  } else if (shortHit) {
+    kind = 'short';
+  } else if (audienceHit) {
+    kind = 'audience';
+    const match = folded.match(
+      /\bfor (?:a |an |the )?([\w][\w\s-]{1,40}?)(?:\s+(?:version|deck|slides?|report)\b|$)/
+    );
+    if (match?.[1]) {
+      const candidate = match[1].trim().replace(/[.,]+$/, '');
+      if (
+        candidate &&
+        !['different audience', 'new audience', 'audience', 'a different audience'].includes(
+          candidate
+        )
+      ) {
+        audienceLabel = candidate.replace(/\b\w/g, ch => ch.toUpperCase());
+      }
+    }
+    if (!audienceLabel) {
+      for (const named of ['board', 'executives', 'leadership', 'clients', 'stakeholders']) {
+        if (new RegExp(`\\b${named}\\b`).test(folded)) {
+          audienceLabel = named.replace(/\b\w/g, ch => ch.toUpperCase());
+          break;
+        }
+      }
+    }
+  }
+
+  if (!kind) return null;
+
+  let maxSlides = kind === 'board' ? 5 : kind === 'short' ? 8 : 6;
+  const slideMatch = folded.match(/\b(\d{1,2})\s*slides?\b/);
+  if (slideMatch) {
+    maxSlides = Math.max(1, Math.min(Number(slideMatch[1]) || maxSlides, 20));
+  }
+
+  let includeRecommendations: boolean | null = null;
+  let recommendationCount = 3;
+  if (/\brecommendations?\b/.test(folded)) {
+    includeRecommendations = true;
+    const recMatch = folded.match(/\b(\d)\s*recommendations?\b/);
+    if (recMatch) recommendationCount = Math.max(1, Math.min(Number(recMatch[1]) || 3, 8));
+  } else if (kind === 'short') {
+    includeRecommendations = false;
+  }
+
+  return {
+    kind,
+    maxSlides,
+    audienceLabel,
+    includeRecommendations,
+    recommendationCount,
+    placement: 'front',
+  };
+}
+
 /** Wire shape the deck export endpoint accepts (snake_case). */
 export function reportDocumentForApi(document: ReportDocument | unknown): Record<string, unknown> {
   const doc = normalizeReportDocument(document);

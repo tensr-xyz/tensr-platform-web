@@ -64,6 +64,18 @@ describe('numberedNextStepsFromTurn', () => {
     });
     expect(steps.some(step => step.label === 'Summarise what changed')).toBe(true);
   });
+
+  it('offers board / short / audience reshape when the report has pins', () => {
+    const steps = numberedNextStepsFromTurn({
+      hasReportPins: true,
+    });
+    expect(steps.map(step => step.label)).toEqual([
+      'Board version (5 slides)',
+      'Short version',
+      'Refine for an audience',
+    ]);
+    expect(steps[0]?.prompt).toMatch(/5 slide/i);
+  });
 });
 
 describe('resolveNumberedNextStep', () => {

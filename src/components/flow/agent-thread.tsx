@@ -74,6 +74,11 @@ import {
 } from '@/lib/chat-turn-parity';
 import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
 import { sortSessionsByRecency } from '@/components/flow/chat-sessions';
+import {
+  documentFromPins,
+  parseReportReshapeRequest,
+  reportDocumentForApi,
+} from '@/lib/report-document';
 
 export type AgentChatSession = { session_id: string; title?: string; updated_at?: string };
 
@@ -158,13 +163,15 @@ export function stepsAfterReply(live: string[], traced: string[]): string[] {
 
 function nextStepsForResult(
   result: AgentLoopResponse,
-  columnLabels: ColumnLabels[]
+  columnLabels: ColumnLabels[],
+  hasReportPins = false
 ): NumberedNextStep[] {
   return numberedNextStepsFromTurn({
     toolResults: result.tool_results,
     steps: replyLines(result),
     hasOutput: outputCardReady(result, false),
     columnLabels: columnLabels.map(column => column.label || column.name).filter(Boolean),
+    hasReportPins,
   });
 }
 
@@ -260,6 +267,11 @@ export function useAgentThread({
   const onFinishedRef = useRef(onFinished);
   const onAskedRef = useRef(onAsked);
   const openChatRef = useRef<(sessionId: string) => void>(() => undefined);
+  const reportPins = useProjectPins(projectId || '', datasetId ? [datasetId] : []);
+  const reportPinsRef = useRef(reportPins);
+  reportPinsRef.current = reportPins;
+  const datasetIdRef = useRef(datasetId);
+  datasetIdRef.current = datasetId;
   statusRef.current = status;
   modeRef.current = mode;
   onSessionRef.current = onSession;
@@ -421,7 +433,69 @@ export function useAgentThread({
           ? 1
           : 0);
       const recover = () => loadSavedTurn(text, nextMode, alreadyAnswered);
+      const reshapeAsk = parseReportReshapeRequest(text);
+      const reshapeFileId = datasetIdRef.current;
+      const reshapePins = reportPinsRef.current;
       try {
+        if (reshapeAsk && reshapeFileId && reshapePins.length) {
+          shown(() => setSteps(['Reshaping the report…']));
+          publish({ steps: ['Reshaping the report…'], status: 'Thinking…' });
+          const reshaped = await flowJson<{
+            ok?: boolean;
+            note?: string;
+            variant_section?: string;
+            variant_page_ids?: string[];
+            document?: { pages?: unknown[] };
+          }>(`/datasets/${reshapeFileId}/report/reshape`, {
+            method: 'POST',
+            body: JSON.stringify({
+              message: text,
+              kind: reshapeAsk.kind,
+              max_slides: reshapeAsk.maxSlides,
+              audience_label: reshapeAsk.audienceLabel,
+              include_recommendations: reshapeAsk.includeRecommendations,
+              recommendation_count: reshapeAsk.recommendationCount,
+              placement: reshapeAsk.placement,
+              document: reportDocumentForApi(documentFromPins(reshapePins)),
+              persist: true,
+            }),
+            signal: AbortSignal.timeout(60_000),
+          });
+          if (turnToken !== turnTokenRef.current) return true;
+          const section = reshaped.variant_section || 'Board';
+          const nVariant = (reshaped.variant_page_ids || []).length;
+          const nPages = Array.isArray(reshaped.document?.pages)
+            ? reshaped.document.pages.length
+            : nVariant;
+          const kept =
+            reshaped.note ||
+            `${section} version added at the front. Full report kept (${nPages} pages).`;
+          const suggestions = numberedNextStepsFromTurn({
+            hasReportPins: true,
+            hasOutput: false,
+          });
+          shown(() => {
+            setAnswer(kept);
+            setApproving(false);
+            setPlan(null);
+            setTurn(null);
+            setSteps(['Reshaped the report']);
+            setNextSteps(suggestions);
+            setDownloads([]);
+            setAttachments([]);
+            setStatus(null);
+          });
+          publish({
+            running: false,
+            status: null,
+            answer: kept,
+            steps: ['Reshaped the report'],
+            sessionId: sessionRef.current,
+          });
+          if (aliveRef.current) loadRail();
+          return true;
+        }
+
         const result = await runAgentLoop({
           message: text,
           mode: nextMode,
@@ -503,7 +577,9 @@ export function useAgentThread({
         const entries = downloadEntries(result);
         const kept = keptModelAnswer(draft, result.answer_markdown || '');
         const suggestions =
-          result.status === 'awaiting_approval' ? [] : nextStepsForResult(result, columnLabels);
+          result.status === 'awaiting_approval'
+            ? []
+            : nextStepsForResult(result, columnLabels, reportPinsRef.current.length > 0);
         shown(() => {
           setAnswer(kept);
           setApproving(false);
@@ -637,7 +713,9 @@ export function useAgentThread({
         const entries = downloadEntries(result);
         const kept = keptModelAnswer(streamedRef.current, result.answer_markdown || '');
         const suggestions =
-          result.status === 'awaiting_approval' ? [] : nextStepsForResult(result, columnLabels);
+          result.status === 'awaiting_approval'
+            ? []
+            : nextStepsForResult(result, columnLabels, reportPinsRef.current.length > 0);
         shown(() => {
           setAnswer(kept);
           setApproving(false);
@@ -768,7 +846,8 @@ export function useAgentThread({
                       answer_markdown: last.answer,
                       tool_results: last.toolResults,
                     },
-                    columnLabels
+                    columnLabels,
+                    reportPinsRef.current.length > 0
                   )
                 : []
             );

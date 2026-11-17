@@ -29,6 +29,7 @@ import {
   normalizeReportDocument,
   pageHref,
   pagesForExport,
+  parseReportReshapeRequest,
   pasteObjects,
   placeObjectInSlot,
   presentTableObject,
@@ -36,6 +37,7 @@ import {
   reorderPages,
   reorderTableRows,
   reportDocumentForApi,
+  reshapeReportDocument,
   resizeObject,
   resolveTextHref,
   searchPages,
@@ -417,5 +419,47 @@ describe('report document page model', () => {
     expect((apiTable.table_edits as Record<string, unknown>).renames).toEqual({
       r1: 'Brand One',
     });
+  });
+});
+
+describe('reshapeReportDocument', () => {
+  it('prepends a board variant and keeps the full report', () => {
+    const source = addPage(documentFromPins(pins), {
+      title: 'How to read this report',
+      layoutId: 'title_and_content',
+      section: 'Methods',
+    });
+    const originalIds = source.pages.map(page => page.id);
+    const result = reshapeReportDocument(source, {
+      kind: 'board',
+      maxSlides: 5,
+      includeRecommendations: true,
+      recommendationCount: 3,
+      recommendationBullets: ['Prioritise awareness', 'Watch value', 'Revisit the gap'],
+    });
+    expect(result.keptFull).toBe(true);
+    expect(result.variantSection).toBe('Board');
+    expect(originalIds.every(id => result.document.pages.some(page => page.id === id))).toBe(true);
+    const board = result.document.pages.filter(page => page.section === 'Board');
+    expect(board[0]?.id).toBe(result.document.pages[0]?.id);
+    expect(board.some(page => page.title === 'Recommendations')).toBe(true);
+    expect(board.every(page => page.title !== 'How to read this report')).toBe(true);
+    expect(board.filter(page => page.title !== 'Recommendations')).toHaveLength(2);
+  });
+
+  it('parses board and short reshape prompts', () => {
+    const board = parseReportReshapeRequest(
+      'Make a 5 slide version for the board, one headline per slide, a chart on each, final slide with 3 recommendations'
+    );
+    expect(board?.kind).toBe('board');
+    expect(board?.maxSlides).toBe(5);
+    expect(board?.includeRecommendations).toBe(true);
+    expect(board?.recommendationCount).toBe(3);
+
+    const short = parseReportReshapeRequest('Build a short version of the report');
+    expect(short?.kind).toBe('short');
+    expect(short?.includeRecommendations).toBe(false);
+
+    expect(parseReportReshapeRequest('What does region mean?')).toBeNull();
   });
 });
