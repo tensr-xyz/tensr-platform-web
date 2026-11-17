@@ -20,11 +20,15 @@ import {
   groupPagesIntoSection,
   inchesFrame,
   hideTableRow,
+  insertDynamicText,
   insertImage,
+  insertPageNumber,
+  insertSampleSizeDescription,
   insertShape,
   insertTable,
   insertTextBox,
   mergeTableRowsIntoNet,
+  refreshLiveText,
   moveObject,
   normalizeReportDocument,
   pageHref,
@@ -461,5 +465,61 @@ describe('reshapeReportDocument', () => {
     expect(short?.includeRecommendations).toBe(false);
 
     expect(parseReportReshapeRequest('What does region mean?')).toBeNull();
+  });
+
+  it('refreshes sample-size, page-number and cell-bound live text', () => {
+    const doc = documentFromPins(pins.slice(0, 1));
+    const pageId = doc.pages[0]!.id;
+    const withTable = insertTable(doc, pageId, { runId: 'run-1', tableSpecId: 'spec-live' });
+    const table = withTable.pages[0]!.objects.find(obj => obj.kind === 'table')!;
+    const bookV1 = {
+      base_label: 'Unweighted, n = 100',
+      cells: [{ stub_label: 'Aware', banner_label: 'Total', percent: 42, count: 42 }],
+    };
+    const withBase = insertSampleSizeDescription(withTable, pageId, {
+      sourceObjectId: table.id,
+      runId: 'run-1',
+      source: bookV1,
+    });
+    const withCell = insertDynamicText(withBase, pageId, {
+      rowKey: 'Aware',
+      colKey: 'Total',
+      sourceObjectId: table.id,
+      runId: 'run-1',
+      source: bookV1,
+      prefix: 'Awareness is ',
+    });
+    const withPage = insertPageNumber(withCell, pageId, { template: 'Page {n} of {total}' });
+
+    const base = withPage.pages[0]!.objects.find(obj => obj.binding?.kind === 'sample_size')!;
+    const cell = withPage.pages[0]!.objects.find(obj => obj.binding?.kind === 'cell')!;
+    const pageNo = withPage.pages[0]!.objects.find(obj => obj.binding?.kind === 'page_number')!;
+    expect(base.text).toBe('Unweighted, n = 100');
+    expect(cell.text).toBe('Awareness is 42%');
+    expect(pageNo.text).toBe('Page 1 of 1');
+
+    const bookV2 = {
+      base_label: 'base 180 weighted (unweighted 150)',
+      weight: {
+        weight_aware: true,
+        weighted_n: 180,
+        unweighted_n: 150,
+        kish_effective_base: 140,
+      },
+      cells: [{ stub_label: 'Aware', banner_label: 'Total', percent: 55.5, count: 83 }],
+    };
+    const refreshed = refreshLiveText(withPage, { 'run-1': bookV2 });
+    const base2 = refreshed.pages[0]!.objects.find(obj => obj.binding?.kind === 'sample_size')!;
+    const cell2 = refreshed.pages[0]!.objects.find(obj => obj.binding?.kind === 'cell')!;
+    expect(base2.text).toBe('Base: 180 weighted (unweighted 150)');
+    expect(cell2.text).toBe('Awareness is 55.5%');
+    expect(base2.binding?.stale).toBe(false);
+    expect(cell2.binding?.fingerprint).toBeTruthy();
+
+    const payload = reportDocumentForApi(refreshed);
+    const apiBase = (
+      (payload.pages as Record<string, unknown>[])[0]!.objects as Record<string, unknown>[]
+    ).find(obj => (obj.binding as Record<string, unknown> | null)?.kind === 'sample_size')!;
+    expect((apiBase.binding as Record<string, unknown>).kind).toBe('sample_size');
   });
 });

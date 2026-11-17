@@ -47,6 +47,25 @@ export type TextBoxStyle = {
   listIndent: number;
 };
 
+export type TextBindingKind = 'sample_size' | 'page_number' | 'cell';
+
+/** Live text bound to a table base, page index, or one cell. */
+export type TextBinding = {
+  kind: TextBindingKind;
+  sourceObjectId: string | null;
+  runId: string | null;
+  pinId: string | null;
+  tableSpecId: string | null;
+  rowKey: string | null;
+  colKey: string | null;
+  stat: string | null;
+  template: string | null;
+  prefix: string | null;
+  suffix: string | null;
+  stale: boolean;
+  fingerprint: string | null;
+};
+
 export type TextRun = {
   text: string;
   bold: boolean;
@@ -57,6 +76,7 @@ export type TextRun = {
   fontFamily: string | null;
   fontSizePt: number | null;
   href: string | null;
+  binding: TextBinding | null;
 };
 
 export type DefaultLabels = {
@@ -74,6 +94,7 @@ export type ReportObject = {
   text: string;
   textStyle: TextBoxStyle;
   runs: TextRun[];
+  binding: TextBinding | null;
   shapeType: ReportShapeType | null;
   imageUrl: string | null;
   runId: string | null;
@@ -113,6 +134,8 @@ const VERTICAL_ALIGNS = new Set<VerticalAlign>(['top', 'middle', 'bottom']);
 const LIST_STYLES = new Set<ListStyle>(['none', 'bullet', 'number']);
 const MAX_LIST_INDENT = 8;
 export const PAGE_HREF_PREFIX = 'page:';
+const TEXT_BINDING_KINDS = new Set<TextBindingKind>(['sample_size', 'page_number', 'cell']);
+export const DEFAULT_PAGE_NUMBER_TEMPLATE = '{n}';
 
 export const DEFAULT_TEXT_STYLE: TextBoxStyle = {
   fontFamily: 'Inter',
@@ -332,6 +355,286 @@ export function resolveTextHref(
   return { kind: 'url', url: text };
 }
 
+export function normalizeTextBinding(raw: unknown): TextBinding | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const source = raw as Record<string, unknown>;
+  const kind = String(source.kind || source.type || '')
+    .trim()
+    .toLowerCase() as TextBindingKind;
+  if (!TEXT_BINDING_KINDS.has(kind)) return null;
+  const rowKey =
+    String(source.row_key || source.rowKey || source.row_label || source.rowLabel || '').trim() ||
+    null;
+  const colKey =
+    String(
+      source.col_key ||
+        source.colKey ||
+        source.column_key ||
+        source.columnKey ||
+        source.col_label ||
+        source.colLabel ||
+        ''
+    ).trim() || null;
+  if (kind === 'cell' && !rowKey && !colKey) return null;
+  const templateRaw = String(source.template || '').trim() || null;
+  const prefix = String(source.prefix ?? '');
+  const suffix = String(source.suffix ?? '');
+  return {
+    kind,
+    sourceObjectId: String(source.source_object_id || source.sourceObjectId || '').trim() || null,
+    runId: String(source.run_id || source.runId || '').trim() || null,
+    pinId: String(source.pin_id || source.pinId || '').trim() || null,
+    tableSpecId: String(source.table_spec_id || source.tableSpecId || '').trim() || null,
+    rowKey,
+    colKey,
+    stat:
+      kind === 'cell'
+        ? String(source.stat || source.statistic || 'percent')
+            .trim()
+            .toLowerCase() || 'percent'
+        : null,
+    template: kind === 'page_number' ? templateRaw || DEFAULT_PAGE_NUMBER_TEMPLATE : null,
+    prefix: kind === 'cell' ? prefix : null,
+    suffix: kind === 'cell' ? suffix : null,
+    stale: Boolean(source.stale),
+    fingerprint: String(source.fingerprint || '').trim() || null,
+  };
+}
+
+function formatBaseCount(value: unknown): string {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '';
+  return Math.round(number).toLocaleString('en-GB');
+}
+
+export function sampleSizeDescriptionText(source: unknown): string {
+  if (!source || typeof source !== 'object') return '';
+  const book = source as Record<string, unknown>;
+  const label = String(book.base_label || '').trim();
+  if (label) {
+    if (/^base\s*:/i.test(label)) return `Base:${label.replace(/^base\s*:/i, '')}`;
+    if (/^base\b/i.test(label)) return `Base: ${label.replace(/^base\s+/i, '')}`;
+    return label;
+  }
+  const weight =
+    book.weight && typeof book.weight === 'object'
+      ? (book.weight as Record<string, unknown>)
+      : null;
+  if (weight?.weight_aware && weight.weighted_n != null && weight.unweighted_n != null) {
+    const shown = formatBaseCount(weight.weighted_n);
+    const unweighted = formatBaseCount(weight.unweighted_n);
+    const ess = formatBaseCount(weight.kish_effective_base ?? weight.kish_ess);
+    let line = `Base: ${shown} weighted (unweighted ${unweighted})`;
+    if (ess) line = `${line}; effective base = ${ess}`;
+    return line;
+  }
+  if (book.answered_n != null && book.respondent_n != null) {
+    return `Base: answered ${formatBaseCount(book.answered_n)} of ${formatBaseCount(book.respondent_n)}`;
+  }
+  if (book.respondent_n != null) {
+    return `Base: all respondents (${formatBaseCount(book.respondent_n)})`;
+  }
+  return '';
+}
+
+export function pageNumberText(
+  pageIndex: number,
+  pageCount: number,
+  template?: string | null
+): string {
+  const pattern = (template || DEFAULT_PAGE_NUMBER_TEMPLATE).trim() || DEFAULT_PAGE_NUMBER_TEMPLATE;
+  const n = Math.max(1, Math.floor(pageIndex) + 1);
+  const total = Math.max(n, Math.floor(pageCount));
+  return pattern
+    .replaceAll('{total}', String(total))
+    .replaceAll('{n}', String(n))
+    .replaceAll('{page}', String(n))
+    .replaceAll('{count}', String(total));
+}
+
+function cellMatches(
+  cell: Record<string, unknown>,
+  rowKey: string | null,
+  colKey: string | null
+): boolean {
+  const rowCandidates = [
+    cell.stub_label,
+    cell.stubLabel,
+    cell.row_label,
+    cell.rowLabel,
+    cell.stub_row_id,
+    cell.stubRowId,
+    cell.row,
+  ];
+  const colCandidates = [
+    cell.banner_label,
+    cell.bannerLabel,
+    cell.col_label,
+    cell.colLabel,
+    cell.banner_col_id,
+    cell.bannerColId,
+    cell.column,
+    cell.col,
+  ];
+  const rowOk =
+    !rowKey ||
+    rowCandidates.some(
+      item =>
+        String(item || '')
+          .trim()
+          .toLowerCase() === rowKey.toLowerCase()
+    );
+  const colOk =
+    !colKey ||
+    colCandidates.some(
+      item =>
+        String(item || '')
+          .trim()
+          .toLowerCase() === colKey.toLowerCase()
+    );
+  return Boolean(rowOk && colOk);
+}
+
+export function cellValueText(
+  source: unknown,
+  options: { rowKey?: string | null; colKey?: string | null; stat?: string | null }
+): string {
+  if (!source || typeof source !== 'object') return '';
+  const cells = (source as Record<string, unknown>).cells;
+  if (!Array.isArray(cells)) return '';
+  const wanted =
+    String(options.stat || 'percent')
+      .trim()
+      .toLowerCase() || 'percent';
+  const aliases: Record<string, string[]> = {
+    percent: ['percent', 'column_percent', 'col_percent', '%'],
+    count: ['count', 'n', 'unweighted_n', 'weighted_n'],
+    weighted_n: ['weighted_n', 'weighted', 'n_weighted'],
+    mean: ['mean', 'average'],
+  };
+  const keys = aliases[wanted] || [wanted];
+  for (const raw of cells) {
+    if (!raw || typeof raw !== 'object') continue;
+    const cell = raw as Record<string, unknown>;
+    if (!cellMatches(cell, options.rowKey || null, options.colKey || null)) continue;
+    for (const key of keys) {
+      if (cell[key] == null) continue;
+      const value = cell[key];
+      const number = Number(value);
+      if (!Number.isFinite(number)) {
+        const text = String(value).trim();
+        return text;
+      }
+      if (wanted === 'percent' || wanted === '%') {
+        const shown = number.toFixed(1).replace(/\.0$/, '');
+        return `${shown}%`;
+      }
+      if (Math.abs(number - Math.round(number)) < 1e-9) {
+        return Math.round(number).toLocaleString('en-GB');
+      }
+      return number.toFixed(2).replace(/\.?0+$/, '');
+    }
+  }
+  return '';
+}
+
+export function sourceFingerprint(source: unknown): string {
+  if (!source || typeof source !== 'object') return '';
+  const book = source as Record<string, unknown>;
+  const parts: string[] = [];
+  const label = String(book.base_label || '').trim();
+  if (label) parts.push(`base:${label}`);
+  const weight =
+    book.weight && typeof book.weight === 'object'
+      ? (book.weight as Record<string, unknown>)
+      : null;
+  if (weight) {
+    for (const key of ['weighted_n', 'unweighted_n', 'kish_effective_base', 'kish_ess'] as const) {
+      if (weight[key] != null) parts.push(`${key}:${String(weight[key])}`);
+    }
+  }
+  const cells = Array.isArray(book.cells) ? book.cells : [];
+  for (const raw of cells.slice(0, 40)) {
+    if (!raw || typeof raw !== 'object') continue;
+    const cell = raw as Record<string, unknown>;
+    parts.push(
+      [cell.stub_label, cell.banner_label, cell.percent, cell.count, cell.weighted_n]
+        .map(item => String(item ?? ''))
+        .join('|')
+    );
+  }
+  return parts.join(';');
+}
+
+function lookupLiveSource(
+  binding: TextBinding,
+  pageObjects: ReportObject[],
+  sources: Record<string, unknown>
+): unknown {
+  const keys: string[] = [];
+  for (const key of [binding.runId, binding.pinId, binding.tableSpecId, binding.sourceObjectId]) {
+    if (key) keys.push(key);
+  }
+  if (binding.sourceObjectId) {
+    const linked = pageObjects.find(obj => obj.id === binding.sourceObjectId);
+    if (linked) {
+      for (const key of [linked.runId, linked.pinId, linked.tableSpecId, linked.id]) {
+        if (key) keys.push(key);
+      }
+    }
+  }
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(sources, key)) return sources[key];
+  }
+  return undefined;
+}
+
+export function resolveBindingText(
+  binding: TextBinding | null | undefined,
+  options?: {
+    source?: unknown;
+    pageIndex?: number;
+    pageCount?: number;
+  }
+): string {
+  if (!binding) return '';
+  if (binding.kind === 'page_number') {
+    return pageNumberText(options?.pageIndex ?? 0, options?.pageCount ?? 1, binding.template);
+  }
+  if (binding.kind === 'sample_size') {
+    return sampleSizeDescriptionText(options?.source);
+  }
+  if (binding.kind === 'cell') {
+    const value = cellValueText(options?.source, {
+      rowKey: binding.rowKey,
+      colKey: binding.colKey,
+      stat: binding.stat,
+    });
+    if (!value) return '';
+    return `${binding.prefix || ''}${value}${binding.suffix || ''}`;
+  }
+  return '';
+}
+
+function textBindingForApi(binding: TextBinding | null): Record<string, unknown> | null {
+  if (!binding) return null;
+  return {
+    kind: binding.kind,
+    source_object_id: binding.sourceObjectId,
+    run_id: binding.runId,
+    pin_id: binding.pinId,
+    table_spec_id: binding.tableSpecId,
+    row_key: binding.rowKey,
+    col_key: binding.colKey,
+    stat: binding.stat,
+    template: binding.template,
+    prefix: binding.prefix,
+    suffix: binding.suffix,
+    stale: binding.stale,
+    fingerprint: binding.fingerprint,
+  };
+}
+
 export function normalizeTextRun(raw: unknown): TextRun | null {
   if (raw == null) return null;
   if (typeof raw !== 'object') {
@@ -347,6 +650,7 @@ export function normalizeTextRun(raw: unknown): TextRun | null {
           fontFamily: null,
           fontSizePt: null,
           href: null,
+          binding: null,
         }
       : null;
   }
@@ -375,6 +679,7 @@ export function normalizeTextRun(raw: unknown): TextRun | null {
     fontFamily: fontRaw ? String(fontRaw).trim() || null : null,
     fontSizePt,
     href,
+    binding: normalizeTextBinding(source.binding || source.live || source.dynamic),
   };
 }
 
@@ -444,6 +749,7 @@ function normalizeObject(raw: unknown, layoutId: string): ReportObject | null {
   const tableStyle = normalizeTableStyle(source.table_style || source.tableStyle);
   const tableRules = normalizeTableRules(source.table_rules || source.tableRules || source.rules);
   const tableEdits = normalizeTableEdits(source.table_edits || source.tableEdits || source.edits);
+  const binding = normalizeTextBinding(source.binding || source.live || source.dynamic);
   return {
     id: String(source.id || '').trim() || newId('obj'),
     kind,
@@ -456,6 +762,7 @@ function normalizeObject(raw: unknown, layoutId: string): ReportObject | null {
     text,
     textStyle: normalizeTextStyle(source.text_style || source.textStyle || source.style),
     runs,
+    binding,
     shapeType,
     imageUrl,
     runId,
@@ -553,6 +860,7 @@ export function documentFromPins(pins: PinLike[]): ReportDocument {
           text: headline,
           textStyle: { ...DEFAULT_TEXT_STYLE },
           runs: [],
+          binding: null,
           shapeType: null,
           imageUrl: null,
           runId,
@@ -573,6 +881,7 @@ export function documentFromPins(pins: PinLike[]): ReportDocument {
           text: hasChart ? '' : support,
           textStyle: { ...DEFAULT_TEXT_STYLE },
           runs: [],
+          binding: null,
           shapeType: null,
           imageUrl: null,
           runId,
@@ -1081,6 +1390,7 @@ export function insertTextBox(
     frame?: Partial<ReportFrame>;
     textStyle?: Partial<TextBoxStyle> | Record<string, unknown>;
     runs?: unknown[];
+    binding?: Partial<TextBinding> | Record<string, unknown> | null;
   }
 ): ReportDocument {
   const payload: Record<string, unknown> = {
@@ -1090,7 +1400,199 @@ export function insertTextBox(
     text_style: options?.textStyle || {},
   };
   if (options?.runs !== undefined) payload.runs = options.runs;
+  if (options?.binding !== undefined) payload.binding = options.binding;
   return insertObject(document, pageId, payload);
+}
+
+export function insertSampleSizeDescription(
+  document: ReportDocument | unknown,
+  pageId: string,
+  options?: {
+    sourceObjectId?: string | null;
+    runId?: string | null;
+    pinId?: string | null;
+    tableSpecId?: string | null;
+    source?: unknown;
+    frame?: Partial<ReportFrame>;
+    textStyle?: Partial<TextBoxStyle> | Record<string, unknown>;
+  }
+): ReportDocument {
+  const fingerprint = options?.source != null ? sourceFingerprint(options.source) : null;
+  const binding = normalizeTextBinding({
+    kind: 'sample_size',
+    source_object_id: options?.sourceObjectId,
+    run_id: options?.runId,
+    pin_id: options?.pinId,
+    table_spec_id: options?.tableSpecId,
+    fingerprint,
+  });
+  const text = options?.source != null ? sampleSizeDescriptionText(options.source) : '';
+  return insertTextBox(document, pageId, {
+    text: text || 'Sample size',
+    frame: options?.frame || { x: 0.06, y: 0.88, w: 0.88, h: 0.08 },
+    textStyle: { fontSizePt: 12, color: '#6A6B66', ...(options?.textStyle || {}) },
+    binding,
+  });
+}
+
+export function insertPageNumber(
+  document: ReportDocument | unknown,
+  pageId: string,
+  options?: {
+    template?: string | null;
+    frame?: Partial<ReportFrame>;
+    textStyle?: Partial<TextBoxStyle> | Record<string, unknown>;
+  }
+): ReportDocument {
+  const binding = normalizeTextBinding({
+    kind: 'page_number',
+    template: options?.template || DEFAULT_PAGE_NUMBER_TEMPLATE,
+  });
+  const doc = normalizeReportDocument(document);
+  const index = Math.max(
+    0,
+    doc.pages.findIndex(page => page.id === String(pageId))
+  );
+  const text = pageNumberText(index, doc.pages.length, binding?.template);
+  return insertTextBox(document, pageId, {
+    text,
+    frame: options?.frame || { x: 0.78, y: 0.92, w: 0.16, h: 0.05 },
+    textStyle: {
+      fontSizePt: 11,
+      color: '#6A6B66',
+      align: 'right',
+      ...(options?.textStyle || {}),
+    },
+    binding,
+  });
+}
+
+export function insertDynamicText(
+  document: ReportDocument | unknown,
+  pageId: string,
+  options: {
+    rowKey: string;
+    colKey?: string | null;
+    stat?: string;
+    sourceObjectId?: string | null;
+    runId?: string | null;
+    pinId?: string | null;
+    tableSpecId?: string | null;
+    source?: unknown;
+    prefix?: string;
+    suffix?: string;
+    frame?: Partial<ReportFrame>;
+    textStyle?: Partial<TextBoxStyle> | Record<string, unknown>;
+  }
+): ReportDocument {
+  const fingerprint = options.source != null ? sourceFingerprint(options.source) : null;
+  const prefix = options.prefix || '';
+  const suffix = options.suffix || '';
+  const binding = normalizeTextBinding({
+    kind: 'cell',
+    row_key: options.rowKey,
+    col_key: options.colKey,
+    stat: options.stat || 'percent',
+    source_object_id: options.sourceObjectId,
+    run_id: options.runId,
+    pin_id: options.pinId,
+    table_spec_id: options.tableSpecId,
+    prefix,
+    suffix,
+    fingerprint,
+  });
+  const value =
+    options.source != null
+      ? cellValueText(options.source, {
+          rowKey: options.rowKey,
+          colKey: options.colKey,
+          stat: options.stat || 'percent',
+        })
+      : '';
+  const text = value ? `${prefix}${value}${suffix}` : `${prefix}—${suffix}`;
+  return insertTextBox(document, pageId, {
+    text,
+    frame: options.frame || { x: 0.2, y: 0.2, w: 0.3, h: 0.1 },
+    textStyle: options.textStyle,
+    binding,
+  });
+}
+
+export function refreshLiveText(
+  document: ReportDocument | unknown,
+  sources?: Record<string, unknown> | null
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  const lookup = sources && typeof sources === 'object' ? sources : {};
+  const pageCount = doc.pages.length;
+  return {
+    ...doc,
+    pages: doc.pages.map((page, pageIndex) => {
+      const objects = page.objects.map(obj => {
+        let next = obj;
+        if (obj.binding) {
+          const source = lookupLiveSource(obj.binding, page.objects, lookup);
+          const resolved = resolveBindingText(obj.binding, {
+            source,
+            pageIndex,
+            pageCount,
+          });
+          const fingerprint = source != null ? sourceFingerprint(source) : '';
+          let binding: TextBinding = { ...obj.binding };
+          if (
+            binding.kind === 'sample_size' ||
+            binding.kind === 'cell' ||
+            binding.kind === 'page_number'
+          ) {
+            if (fingerprint) binding = { ...binding, fingerprint, stale: false };
+            else binding = { ...binding, stale: false };
+          } else if (binding.fingerprint && fingerprint && binding.fingerprint !== fingerprint) {
+            binding = { ...binding, stale: true };
+          }
+          binding = normalizeTextBinding(binding) || binding;
+          next = {
+            ...next,
+            text: resolved || next.text,
+            binding,
+            runs: next.runs.length ? next.runs : [],
+          };
+        }
+        if (!next.runs.some(run => run.binding)) return next;
+        const runs = next.runs.map(run => {
+          if (!run.binding) return run;
+          const source = lookupLiveSource(run.binding, page.objects, lookup);
+          const resolved = resolveBindingText(run.binding, {
+            source,
+            pageIndex,
+            pageCount,
+          });
+          const fingerprint = source != null ? sourceFingerprint(source) : '';
+          let binding: TextBinding = { ...run.binding };
+          if (
+            binding.kind === 'sample_size' ||
+            binding.kind === 'cell' ||
+            binding.kind === 'page_number'
+          ) {
+            if (fingerprint) binding = { ...binding, fingerprint, stale: false };
+            else binding = { ...binding, stale: false };
+          } else if (binding.fingerprint && fingerprint && binding.fingerprint !== fingerprint) {
+            binding = { ...binding, stale: true };
+          }
+          return {
+            ...run,
+            text: resolved || run.text,
+            binding: normalizeTextBinding(binding),
+          };
+        });
+        return {
+          ...next,
+          runs,
+          text: textFromRuns(runs).trim() || next.text,
+        };
+      });
+      return { ...page, objects };
+    }),
+  };
 }
 
 export function insertTable(
@@ -1357,6 +1859,7 @@ export function copyStyles(
               source.runs.map((src, index) => ({
                 ...src,
                 text: obj.runs[index]?.text || '',
+                binding: obj.runs[index]?.binding ?? null,
               }))
             );
           }
@@ -1711,6 +2214,7 @@ function recommendationsPage(options: {
         text: title,
         textStyle: { ...DEFAULT_TEXT_STYLE, fontSizePt: 28, bold: true },
         runs: [],
+        binding: null,
         shapeType: null,
         imageUrl: null,
         runId: null,
@@ -1731,6 +2235,7 @@ function recommendationsPage(options: {
         text: body,
         textStyle: { ...DEFAULT_TEXT_STYLE, listStyle: 'bullet', fontSizePt: 18 },
         runs: [],
+        binding: null,
         shapeType: null,
         imageUrl: null,
         runId: null,
@@ -1954,7 +2459,9 @@ export function reportDocumentForApi(document: ReportDocument | unknown): Record
           font_family: run.fontFamily,
           font_size_pt: run.fontSizePt,
           href: run.href,
+          binding: textBindingForApi(run.binding),
         })),
+        binding: textBindingForApi(obj.binding),
         shape_type: obj.shapeType,
         image_url: obj.imageUrl,
         run_id: obj.runId,
