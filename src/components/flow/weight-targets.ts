@@ -61,6 +61,34 @@ export function marginFor(
 /** Start-from choice on the weighting screen. Empty = equal weights of 1. */
 export const PREVIOUS_WEIGHT = '__previous__';
 
+/** How the weighted sample size is chosen on Limits & total (Paper 9c). */
+export type WeightedTotalMode = 'sample' | 'people' | 'thousands' | 'custom';
+
+/**
+ * Resolve the number posted as weighted_total.
+ * sample = leave the rake sum alone (undefined).
+ * thousands = typed figure × 1000 (population in thousands).
+ */
+export function resolveWeightedTotal(mode: WeightedTotalMode, custom: string): number | undefined {
+  if (mode === 'sample') return undefined;
+  const n = Number(custom);
+  if (!Number.isFinite(n) || n <= 0) return undefined;
+  return mode === 'thousands' ? n * 1000 : n;
+}
+
+export function buildCombineWeightsBody(
+  columns: string[],
+  options: { total?: number; weightLabel?: string } = {}
+): { columns: string[]; total?: number; weight_label?: string } | null {
+  const names = columns.map(name => name.trim()).filter(Boolean);
+  if (names.length < 2) return null;
+  return {
+    columns: names,
+    ...(options.total != null && options.total > 0 ? { total: options.total } : {}),
+    ...(options.weightLabel ? { weight_label: options.weightLabel } : {}),
+  };
+}
+
 export type ScreenRakeOptions = {
   missingHandling?: '' | 'keep_unweighted' | 'missing_target' | 'exclude';
   missingTargets?: Record<string, string>;
@@ -73,6 +101,8 @@ export type ScreenRakeOptions = {
    * otherwise a column name.
    */
   startFrom?: string;
+  /** After raking, rescale so sum(w) matches this total. */
+  weightedTotal?: number;
   preview?: boolean;
 };
 
@@ -99,6 +129,7 @@ export function buildScreenRakeBody(
   const lower = Number(options.floor);
   const upper = Number(options.cap);
   const startFrom = (options.startFrom || '').trim();
+  const weightedTotal = options.weightedTotal;
 
   return {
     categorical_targets: categorical,
@@ -111,6 +142,7 @@ export function buildScreenRakeBody(
       : startFrom
         ? { design_weight_column: startFrom }
         : {}),
+    ...(weightedTotal != null && weightedTotal > 0 ? { weighted_total: weightedTotal } : {}),
     ...(options.preview ? { preview: true } : {}),
   };
 }

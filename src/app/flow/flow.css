@@ -7339,10 +7339,10 @@ button.chat-result-top {
   margin-top: 0;
 }
 
-/* 4e Weighting, from the Paper export. */
+/* 4e / 9c Weighting, from the Paper export. */
 .weight-dialog {
-  width: min(680px, 94vw);
-  max-width: 680px !important;
+  width: min(760px, 94vw);
+  max-width: 760px !important;
   padding: 0 !important;
   gap: 0 !important;
   overflow: hidden;
@@ -7595,6 +7595,142 @@ button.chat-result-top {
   border-radius: 5px;
   font-size: 12px;
   box-shadow: none;
+}
+
+/* 9c Weighting · limits, total, combine */
+.weight-tabs {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.weight-tablist {
+  display: flex;
+  gap: 18px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--color-line);
+  background: transparent;
+}
+
+.weight-tab {
+  height: auto;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-size: 13px;
+  font-weight: var(--weight-regular);
+  box-shadow: none;
+}
+
+.weight-tab[data-state='active'] {
+  border-bottom-color: var(--color-ink);
+  color: var(--color-ink);
+  font-weight: var(--weight-medium);
+}
+
+.weight-tab-panel {
+  margin: 0;
+}
+
+.weight-limits,
+.weight-combine {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 16px 22px;
+}
+
+.weight-limits-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.weight-limits-block h3,
+.weight-combine h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+}
+
+.weight-limits-block p,
+.weight-combine > p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.weight-limits-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+
+.weight-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.weight-pills .flow-btn,
+.weight-pills button {
+  height: auto;
+  padding: 6px 11px;
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: var(--weight-regular);
+  box-shadow: none;
+}
+
+.weight-pills .flow-btn[data-active='true'],
+.weight-pills button[data-active='true'] {
+  border-color: transparent;
+  background: var(--color-accent-soft);
+}
+
+.weight-total-input input,
+.weight-start-select {
+  width: min(220px, 100%);
+}
+
+.weight-total-input input {
+  width: 110px;
+  height: 28px;
+}
+
+.weight-combine-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.weight-combine-factor {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.weight-combine-times {
+  color: var(--color-ink);
+  font-size: 13px;
+}
+
+.weight-combine-rescale {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
 /* 4f ANOVA, from the Paper export. */

@@ -291,10 +291,31 @@ export function rakeDatasetWeights(
     upper?: number;
     design_weight_column?: string;
     use_existing_weight?: boolean;
+    weighted_total?: number;
   },
   token?: string | null
 ) {
   return authedJson<RakeWeightsResult>(`/datasets/${datasetId}/weights/rake`, payload, token);
+}
+
+export function combineDatasetWeights(
+  datasetId: string,
+  payload: { columns: string[]; total?: number; weight_label?: string },
+  token?: string | null
+) {
+  return authedJson<RakeWeightsResult>(`/datasets/${datasetId}/weights/combine`, payload, token);
+}
+
+export function scaleDatasetWeightTotal(
+  datasetId: string,
+  payload: { total: number; weight_column?: string; weight_label?: string },
+  token?: string | null
+) {
+  return authedJson<RakeWeightsResult>(
+    `/datasets/${datasetId}/weights/scale-total`,
+    payload,
+    token
+  );
 }
 
 export type DataQualityReport = {
