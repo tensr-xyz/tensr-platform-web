@@ -170,9 +170,9 @@ function memberMark(id: string): string {
 
 function roleLabel(role?: string): string {
   if (role === 'owner') return 'Owner';
-  if (role === 'viewer') return 'Viewer';
-  if (role === 'asker') return 'Asker';
-  return 'Editor';
+  if (role === 'viewer') return 'Can view';
+  if (role === 'asker') return 'Can ask';
+  return 'Can edit';
 }
 
 function columnKind(column: FlowColumn): string {
@@ -227,7 +227,7 @@ function AskerLog({
   const open = shown.find(turn => turn.turn_id === openId) || shown[0];
   return (
     <div className="details-questions">
-      <div className="flow-muted details-label">Asker questions</div>
+      <div className="flow-muted details-label">Can ask questions</div>
       <div className="flow-row">
         {(
           [
@@ -1085,9 +1085,9 @@ export function DetailsScreen({
             value={role}
             onValueChange={setRole}
             options={[
-              { value: 'editor', label: 'Editor' },
-              { value: 'asker', label: 'Asker' },
-              { value: 'viewer', label: 'Viewer' },
+              { value: 'editor', label: 'Can edit' },
+              { value: 'asker', label: 'Can ask' },
+              { value: 'viewer', label: 'Can view' },
             ]}
           />
           <div className="flow-row">

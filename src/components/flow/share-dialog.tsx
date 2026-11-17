@@ -234,8 +234,13 @@ export function ShareDialog({
     const parts = text.split(/[^A-Za-z0-9]+/).filter(Boolean);
     return ((parts[0]?.[0] || '') + (parts[1]?.[0] || parts[0]?.[1] || '')).toUpperCase() || '?';
   };
-  const roleName = (value?: string) =>
-    value ? value[0].toUpperCase() + value.slice(1).toLowerCase() : 'Viewer';
+  const roleName = (value?: string) => {
+    if (value === 'asker') return 'Can ask';
+    if (value === 'editor') return 'Can edit';
+    if (value === 'viewer' || !value) return 'Can view';
+    if (value === 'owner') return 'Owner';
+    return value[0].toUpperCase() + value.slice(1).toLowerCase();
+  };
   const count = (people || []).length + invites.length;
 
   return (
@@ -263,9 +268,9 @@ export function ShareDialog({
                   value={role}
                   onValueChange={setRole}
                   options={[
-                    { value: 'viewer', label: 'Viewer' },
-                    { value: 'asker', label: 'Asker' },
-                    { value: 'editor', label: 'Editor' },
+                    { value: 'editor', label: 'Can edit' },
+                    { value: 'asker', label: 'Can ask' },
+                    { value: 'viewer', label: 'Can view' },
                   ]}
                 />
               </div>
@@ -274,9 +279,9 @@ export function ShareDialog({
               </Button>
             </div>
             <p className="share-roles">
-              <span>Viewer · reads outputs</span>
-              <span>Asker · asks questions, can’t edit</span>
-              <span>Editor · runs and edits</span>
+              <span>Can edit · runs and edits</span>
+              <span>Can ask · asks questions, can’t edit</span>
+              <span>Can view · reads outputs</span>
             </p>
             <span className="share-label">People with access · {count}</span>
             {people === null ? <Skeleton className="h-16" /> : null}
@@ -321,7 +326,7 @@ export function ShareDialog({
                     ) : null}
                   </span>
                 </span>
-                <span className="share-person-role">Viewer</span>
+                <span className="share-person-role">Can view</span>
               </div>
             ))}
           </div>
@@ -332,7 +337,7 @@ export function ShareDialog({
                 <strong>Anyone with the link</strong>
                 <span>Signed-in people who open the link</span>
               </span>
-              <span className="share-person-role">Viewer</span>
+              <span className="share-person-role">Can view</span>
               <Checkbox
                 checked={linkOn}
                 disabled={linkBusy}

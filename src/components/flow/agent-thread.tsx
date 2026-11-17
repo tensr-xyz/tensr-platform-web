@@ -21,6 +21,7 @@ import {
 } from '@/components/flow/chat-live-run';
 import { FlowComposer, readChatAttachments } from '@/components/flow/chat-composer';
 import { AnalysisResult } from '@/components/flow/analysis-result';
+import { exportResultAsPptx } from '@/lib/output-pptx';
 import {
   answerTables,
   answerWithoutBase,
@@ -1105,7 +1106,8 @@ export function AgentThreadColumn({
     <div className={panel ? 'agent-thread-panel' : 'chat-column'}>
       {asker ? (
         <aside className="asker-rail">
-          <p>Audiences you can ask about</p>
+          <p>Can ask</p>
+          <p className="flow-muted">Audiences you can ask about</p>
           <p className="flow-muted">The audiences shared with this project.</p>
           <p>Your questions</p>
           {thread.past.map(item => (
@@ -1234,10 +1236,36 @@ export function AgentThreadColumn({
               rCheck={thread.resultView.rCheck}
               rStatement={thread.resultView.rStatement}
               runId={thread.runIds[0]}
+              datasetId={thread.datasetId || undefined}
+              projectId={thread.projectId || undefined}
             />
           ) : (
             <FlowMarkdown className="chat-prose">{thread.prose}</FlowMarkdown>
           )
+        ) : null}
+        {asker && thread.answer && (!thread.plan || thread.approving) ? (
+          <div className="asker-worked">
+            <p>How it was worked out</p>
+            <p>
+              <span className="flow-muted">Audience</span>{' '}
+              {thread.resultView.audienceDefinition ||
+                thread.resultView.audience ||
+                'The rows this answer used'}
+            </p>
+            <p>
+              <span className="flow-muted">Base</span>{' '}
+              {thread.resultView.base || thread.resultView.baseDetail || 'The base on this answer'}
+            </p>
+            <p>
+              <span className="flow-muted">Weight</span>{' '}
+              {thread.resultView.weight || 'The project weight'}
+            </p>
+            <p>
+              <span className="flow-muted">Source</span>{' '}
+              {[thread.resultView.wave, thread.resultView.source].filter(Boolean).join(' · ') ||
+                'This project’s file'}
+            </p>
+          </div>
         ) : null}
         {showLiveChanges ? (
           <ChatTurnChangesPanel
@@ -1278,7 +1306,7 @@ export function AgentThreadColumn({
             <div className="chat-result-actions">
               {asker ? (
                 <>
-                  <span className="output-badge">Asker · ask questions only</span>
+                  <span className="output-badge">Can ask · ask questions only</span>
                   <Button
                     className="flow-btn"
                     type="button"
@@ -1304,6 +1332,24 @@ export function AgentThreadColumn({
                     }}
                   >
                     Copy table
+                  </Button>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={!thread.structuredTables.length && !thread.lead}
+                    onClick={() => {
+                      void exportResultAsPptx({
+                        runId: thread.runIds[0],
+                        lead: thread.lead || thread.takeaway,
+                        tables: thread.structuredTables,
+                        footnote: thread.footnote,
+                        projectId: thread.projectId,
+                      })
+                        .then(() => thread.setStatus('Slide downloaded.'))
+                        .catch(() => thread.setStatus('That slide could not be downloaded.'));
+                    }}
+                  >
+                    Download slide
                   </Button>
                   <Button
                     className="flow-btn"
