@@ -102,11 +102,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     let cancelled = false;
+    let retryTimer: number | undefined;
+    let hydrateTimer: number | undefined;
+
+    const clearPendingTimers = () => {
+      if (retryTimer !== undefined) {
+        window.clearTimeout(retryTimer);
+        retryTimer = undefined;
+      }
+      if (hydrateTimer !== undefined) {
+        window.clearTimeout(hydrateTimer);
+        hydrateTimer = undefined;
+      }
+    };
 
     // A failed sign-in clears the session while a /me call or retry may still be pending.
     const sessionCleared = (source: string) => {
       if (getStytchBearerForTensrApi()) return false;
       authTrace('AuthProvider:session-cleared-during-profile-load', { source });
+      clearPendingTimers();
       setLoading(false);
       return true;
     };
@@ -168,8 +182,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Transient /me failures must not leave entitlements null forever —
             // that looks like unpaid and traps users on /subscription.
             if (attempt < 2) {
-              window.setTimeout(
+              retryTimer = window.setTimeout(
                 () => {
+                  retryTimer = undefined;
                   if (!cancelled) loadProfile(source, attempt + 1);
                 },
                 750 * (attempt + 1)
@@ -196,6 +211,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loadProfile('stytch-session');
       return () => {
         cancelled = true;
+        clearPendingTimers();
       };
     }
 
@@ -211,13 +227,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         loadProfile('stytch-session');
         return () => {
           cancelled = true;
+          clearPendingTimers();
         };
       }
 
       authTrace('AuthProvider:tokens-waiting-for-stytch-session');
       setLoading(true);
 
-      const timer = window.setTimeout(() => {
+      hydrateTimer = window.setTimeout(() => {
+        hydrateTimer = undefined;
         if (cancelled) return;
 
         const stillStored = getStoredSession();
@@ -235,7 +253,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return () => {
         cancelled = true;
-        window.clearTimeout(timer);
+        clearPendingTimers();
       };
     }
 
@@ -245,6 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       cancelled = true;
+      clearPendingTimers();
     };
   }, [
     session,
