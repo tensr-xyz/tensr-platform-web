@@ -36,9 +36,24 @@ import {
 } from '@/lib/flow-columns';
 import { TableChart } from '@/components/flow/table-chart-panel';
 import { TableBars } from '@/components/flow/table-bars';
+import { NumberTracePopover } from '@/components/flow/number-trace-popover';
 import { rememberTablePin, savePin } from '@/components/flow/report-pins';
 import { WeightPanel } from '@/components/flow/weight-modal';
 export { WeightPanel } from '@/components/flow/weight-modal';
+import { TableSignificancePanel } from '@/components/flow/table-significance-panel';
+import { TidyTablesDialog } from '@/components/flow/tidy-tables-dialog';
+import {
+  DEFAULT_TABLE_SIGNIFICANCE,
+  arrowForCell,
+  clearProjectSignificance,
+  loadProjectSignificance,
+  saveProjectSignificance,
+  settingsFromSpec,
+  significanceRequestFields,
+  significanceToolbarLabel,
+  type TableSignificanceSettings,
+} from '@/lib/table-significance';
+import { numberTraceFromCell } from '@/lib/number-trace';
 import {
   bannerColumns,
   bannerFootnote,
@@ -345,6 +360,7 @@ export function themeRows(rows: BannerRow[], notCoded?: number | null, sort = tr
 export function BannerGrid({
   book,
   onSelectCell,
+  onCommentCell,
   baseAtEnd = false,
   showQuotes = false,
   showNets = false,
@@ -357,6 +373,8 @@ export function BannerGrid({
 }: {
   book: Record<string, unknown>;
   onSelectCell: (cell: SurveyCell) => void;
+  /** Optional Paper 9f Comment action when the host screen can open comments. */
+  onCommentCell?: (cell: SurveyCell) => void;
   baseAtEnd?: boolean;
   showQuotes?: boolean;
   showNets?: boolean;
@@ -372,7 +390,8 @@ export function BannerGrid({
   const [picked, setPicked] = useState('');
   const columns = bannerColumns(book);
   const letters = (book.letters as SigLetter[]) || [];
-  const lettersShown = String(book.significance_display || 'column_letters') !== 'none';
+  const lettersShown = String(book.significance_display || 'column_letters') === 'column_letters';
+  const arrowsShown = String(book.significance_display || '') === 'cell_comparisons';
   const notCoded = ((book.stubs as { not_coded?: { unweighted_n?: number } }[]) || [])[0]
     ?.not_coded;
   // Mean and SD stay with the scale for every cell measure, including Counts.
@@ -475,32 +494,80 @@ export function BannerGrid({
                         </td>
                       );
                     }
+                    const cellKey = `${row.id}:${column.id}`;
+                    const shownForRow =
+                      row.kind === 'mean' ||
+                      row.kind === 'sd' ||
+                      /^mean$/i.test(String(row.label || ''))
+                        ? (['mean'] as CellFigure[])
+                        : shownFigures;
+                    const selected = selectionFromCell(book, row, cell, letter);
+                    const trace = numberTraceFromCell(book, row, column, cell, letter, {
+                      digits,
+                      figure:
+                        shownForRow[0] === 'mean'
+                          ? 'mean'
+                          : shownForRow[0] === 'count'
+                            ? 'count'
+                            : 'percent',
+                      columnLabels,
+                    });
                     return (
                       <td key={column.id}>
-                        <Button
-                          className="flow-cell"
-                          type="button"
-                          data-active={picked === `${row.id}:${column.id}`}
-                          onClick={() => {
-                            const selected = selectionFromCell(book, row, cell, letter);
-                            if (!selected) return;
-                            setPicked(`${row.id}:${column.id}`);
-                            onSelectCell(selected);
+                        <Popover
+                          open={picked === cellKey}
+                          onOpenChange={open => {
+                            if (open) setPicked(cellKey);
+                            else if (picked === cellKey) setPicked('');
                           }}
                         >
-                          {cellFigures(
-                            cell,
-                            row.kind === 'mean' ||
-                              row.kind === 'sd' ||
-                              /^mean$/i.test(String(row.label || ''))
-                              ? ['mean']
-                              : shownFigures,
-                            digits,
-                            weighted
-                          )}
-                          {markLowBase && cell?.low_base ? ' *' : ''}
-                          {letter ? <span className="grid-letter"> {letter}</span> : null}
-                        </Button>
+                          <PopoverTrigger asChild>
+                            <Button
+                              className="flow-cell"
+                              type="button"
+                              data-active={picked === cellKey}
+                            >
+                              {cellFigures(cell, shownForRow, digits, weighted)}
+                              {markLowBase && cell?.low_base ? ' *' : ''}
+                              {letter ? <span className="grid-letter"> {letter}</span> : null}
+                              {arrowsShown && !letter
+                                ? (() => {
+                                    const arrow = arrowForCell(book, row.id, column.id);
+                                    return arrow ? (
+                                      <span className="grid-arrow">{arrow}</span>
+                                    ) : null;
+                                  })()
+                                : null}
+                            </Button>
+                          </PopoverTrigger>
+                          {trace ? (
+                            <PopoverContent
+                              align="start"
+                              sideOffset={8}
+                              className="number-trace-popover"
+                            >
+                              <NumberTracePopover
+                                trace={trace}
+                                onShowRespondents={
+                                  selected
+                                    ? () => {
+                                        setPicked('');
+                                        onSelectCell(selected);
+                                      }
+                                    : undefined
+                                }
+                                onComment={
+                                  selected && onCommentCell
+                                    ? () => {
+                                        setPicked('');
+                                        onCommentCell(selected);
+                                      }
+                                    : undefined
+                                }
+                              />
+                            </PopoverContent>
+                          ) : null}
+                        </Popover>
                       </td>
                     );
                   })}
@@ -1522,6 +1589,8 @@ type SavedSpec = {
   number?: number;
   stale?: boolean;
   detail?: string;
+  parked?: boolean;
+  hidden?: boolean;
 };
 type SavedBook = { id?: string; name?: string; n_specs?: number };
 
@@ -1814,6 +1883,7 @@ export function TablesBuilder({
   const router = useRouter();
   const [weightOpen, setWeightOpen] = useState(false);
   const [weightRerake, setWeightRerake] = useState(false);
+  const [tidyOpen, setTidyOpen] = useState(false);
   const [customNets, setCustomNets] = useState<{ label: string; values: string[] }[]>([]);
   const [netOpen, setNetOpen] = useState(false);
   const [netOptions, setNetOptions] = useState<string[]>([]);
@@ -1835,6 +1905,19 @@ export function TablesBuilder({
       // A filter handed over from Responses is optional.
     }
   }, [datasetId]);
+  useEffect(() => {
+    const saved = loadProjectSignificance(projectId);
+    if (saved) setSignificance(saved);
+  }, [projectId]);
+
+  function applySignificance(next: TableSignificanceSettings) {
+    setSignificance(next);
+    if (next.asProjectDefault && projectId) {
+      saveProjectSignificance(projectId, next);
+      return;
+    }
+    if (!next.asProjectDefault && projectId) clearProjectSignificance(projectId);
+  }
   const [columns, setColumns] = useState<TableColumn[]>([]);
   const [weightColumns, setWeightColumns] = useState<string[]>([]);
   const [weightNeedsRefresh, setWeightNeedsRefresh] = useState(false);
@@ -1847,7 +1930,11 @@ export function TablesBuilder({
   const activeWeightName = useRef('');
   const [statistics, setStatistics] = useState<string[]>(['column_proportion']);
   const [digits, setDigits] = useState(0);
-  const [lettersOn, setLettersOn] = useState(true);
+  const [significance, setSignificance] = useState<TableSignificanceSettings>(() => {
+    const saved = loadProjectSignificance(projectId);
+    return saved || { ...DEFAULT_TABLE_SIGNIFICANCE };
+  });
+  const [sigPanelOpen, setSigPanelOpen] = useState(false);
   const [nest, setNest] = useState(false);
   const [lowBase, setLowBase] = useState(true);
   const [top2, setTop2] = useState(false);
@@ -1917,6 +2004,8 @@ export function TablesBuilder({
         number: table.number,
         stale: table.stale,
         detail: table.detail,
+        parked: table.parked,
+        hidden: table.hidden,
       }));
       setSpecs(saved);
       const liveHere = saved.filter(
@@ -2038,12 +2127,26 @@ export function TablesBuilder({
           nest_banners?: boolean;
           decimals?: Record<string, number>;
           statistics?: string[];
+          significance_display?: string;
+          significance_alpha?: number;
+          multiple_comparison?: string;
+          comparison_type?: string;
+          means_post_hoc?: string;
+          post_hoc_control?: string;
           filter?: { filters?: { column: string; op: string; value: string | string[] }[] } | null;
           stubs?: { column?: string; nets?: { label?: string; values?: unknown[] }[] }[];
           banners?: { column?: string; columns?: string[]; nested?: unknown }[];
           weight?: { column?: string } | string | null;
         }
       | undefined;
+    if (spec) {
+      setSignificance(current =>
+        settingsFromSpec(spec as Record<string, unknown>, {
+          ...current,
+          asProjectDefault: current.asProjectDefault,
+        })
+      );
+    }
     const stubColumn = spec?.stubs?.[0]?.column;
     if (stubColumn) setStub(String(stubColumn));
     const storedNets = spec?.stubs?.[0]?.nets || [];
@@ -2177,7 +2280,7 @@ export function TablesBuilder({
         stubs: [{ ...codedStub(stub), nets }],
         banner: banners.map(columnName => ({ column: columnName })),
         statistics: selectedStats,
-        significance_display: lettersOn ? 'column_letters' : 'none',
+        ...significanceRequestFields(significance),
         nest_banners: nest,
         low_base_threshold: lowBase ? 30 : 0,
         suppress_low_base: false,
@@ -2209,7 +2312,7 @@ export function TablesBuilder({
     weight,
     statistics.join(','),
     digits,
-    lettersOn,
+    JSON.stringify(significanceRequestFields(significance)),
     nest,
     lowBase,
     meanOn,
@@ -2335,6 +2438,58 @@ export function TablesBuilder({
       spec.label || spec.name || '',
       columns.map(column => ({ name: column.name, label: columnChoiceLabel(column) }))
     );
+  const activeSpecs = specs.filter(spec => !spec.parked);
+  const parkedSpecs = specs.filter(spec => spec.parked);
+
+  function reloadSpecs() {
+    if (!datasetId) return;
+    void loadProjectTables(projectId, datasetId, { fileIds: fileIdsRef.current }).then(
+      projectTables => {
+        setSpecs(
+          projectTables.map(table => ({
+            spec_id: table.id,
+            label: table.label,
+            dataset_id: table.datasetId,
+            filename: table.filename,
+            number: table.number,
+            stale: table.stale,
+            detail: table.detail,
+            parked: table.parked,
+            hidden: table.hidden,
+          }))
+        );
+      }
+    );
+  }
+
+  function openSavedSpec(spec: SavedSpec) {
+    const id = spec.spec_id || spec.id || '';
+    if (dirty) {
+      setError('This table has unsaved changes. Save it before opening another.');
+      return;
+    }
+    if (spec.dataset_id && spec.dataset_id !== datasetId && onFile && !spec.stale) {
+      try {
+        window.sessionStorage.setItem(`tensr-open-table:${spec.dataset_id}`, id);
+      } catch {
+        // Without storage the file still switches; its first table opens.
+      }
+      onFile(spec.dataset_id);
+      return;
+    }
+    void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
+      .then(remember)
+      .catch(err => {
+        if (isTableSourceChanged(err)) {
+          setBook(null);
+          setError(
+            'Built on an older version of the data. Rebuild on current file from Report, or open the original version from Sources.'
+          );
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Could not open that table');
+      });
+  }
   const title = book
     ? `${selectedNumber ? `T${selectedNumber} · ` : ''}${labelFor(stub)}${
         banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
@@ -2365,15 +2520,15 @@ export function TablesBuilder({
       <aside className="tables-rail">
         <div className="tables-rail-head">
           <span>Tables</span>
-          <span>{railReady ? specs.length : ''}</span>
+          <span>{railReady ? activeSpecs.length : ''}</span>
         </div>
         {!railReady ? (
           <div aria-busy="true">
             <Skeleton className="mb-2 h-8 w-full" />
             <Skeleton className="h-8 w-full" />
           </div>
-        ) : specs.length ? (
-          specs.map(spec => {
+        ) : activeSpecs.length ? (
+          activeSpecs.map(spec => {
             const id = spec.spec_id || spec.id || '';
             return (
               <Button
@@ -2381,33 +2536,7 @@ export function TablesBuilder({
                 className="tables-saved"
                 type="button"
                 data-active={id === specId}
-                onClick={() => {
-                  if (dirty) {
-                    setError('This table has unsaved changes. Save it before opening another.');
-                    return;
-                  }
-                  if (spec.dataset_id && spec.dataset_id !== datasetId && onFile && !spec.stale) {
-                    try {
-                      window.sessionStorage.setItem(`tensr-open-table:${spec.dataset_id}`, id);
-                    } catch {
-                      // Without storage the file still switches; its first table opens.
-                    }
-                    onFile(spec.dataset_id);
-                    return;
-                  }
-                  void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
-                    .then(remember)
-                    .catch(err => {
-                      if (isTableSourceChanged(err)) {
-                        setBook(null);
-                        setError(
-                          'Built on an older version of the data. Rebuild on current file from Report, or open the original version from Sources.'
-                        );
-                        return;
-                      }
-                      setError(err instanceof Error ? err.message : 'Could not open that table');
-                    });
-                }}
+                onClick={() => openSavedSpec(spec)}
               >
                 <span>T{spec.number || ''}</span>
                 <span className="tables-saved-copy">
@@ -2424,6 +2553,33 @@ export function TablesBuilder({
         ) : (
           <p className="flow-muted">No saved tables yet</p>
         )}
+        {parkedSpecs.length ? (
+          <>
+            <div className="tables-rail-head">
+              <span>Parked</span>
+              <span>{parkedSpecs.length}</span>
+            </div>
+            {parkedSpecs.map(spec => {
+              const id = spec.spec_id || spec.id || '';
+              return (
+                <Button
+                  key={`parked-${id}`}
+                  className="tables-saved"
+                  type="button"
+                  data-active={id === specId}
+                  data-parked="true"
+                  onClick={() => openSavedSpec(spec)}
+                >
+                  <span>T{spec.number || ''}</span>
+                  <span className="tables-saved-copy">
+                    <span>{railLabel(spec)}</span>
+                    {spec.filename ? <span className="flow-muted">{spec.filename}</span> : null}
+                  </span>
+                </Button>
+              );
+            })}
+          </>
+        ) : null}
         <div className="tables-rail-head">
           <span>Banner books</span>
           <Button
@@ -2467,6 +2623,16 @@ export function TablesBuilder({
       ) : (
         <>
           <section className="tables-main">
+            <div className="tables-tidy-bar">
+              <Button
+                className="tables-tidy-trigger"
+                type="button"
+                disabled={!datasetId || !railReady}
+                onClick={() => setTidyOpen(true)}
+              >
+                Tidy tables…
+              </Button>
+            </div>
             <div className="tables-tools">
               {tableFilter?.filters.length ? (
                 <div className="tables-line">
@@ -2592,10 +2758,11 @@ export function TablesBuilder({
                 <Button
                   className="flow-btn"
                   type="button"
-                  data-active={lettersOn}
-                  onClick={() => setLettersOn(current => !current)}
+                  data-active={sigPanelOpen || significance.showAs !== 'off'}
+                  aria-expanded={sigPanelOpen}
+                  onClick={() => setSigPanelOpen(current => !current)}
                 >
-                  Sig 95% · A/a letters
+                  {significanceToolbarLabel(significance)} ▾
                 </Button>
                 <Button
                   className="flow-btn"
@@ -2775,187 +2942,207 @@ export function TablesBuilder({
                 </Button>
               </p>
             ) : null}
-            <div className="tables-sheet">
-              <div className="tables-title">
-                <div>
-                  <h2>{title}</h2>
-                  <p className="flow-muted">
-                    {[questionText(stub), baseLine].filter(Boolean).join(' · ')}
-                  </p>
-                </div>
-                <div className="tables-title-actions">
-                  {stub && (dirty || !matchesSaved()) ? (
-                    <Button className="flow-btn primary" type="button" onClick={saveTable}>
-                      Save table
+            <div
+              className={
+                sigPanelOpen ? 'tables-main-body tables-main-with-sig' : 'tables-main-body'
+              }
+            >
+              <div className="tables-sheet">
+                <div className="tables-title">
+                  <div>
+                    <h2>{title}</h2>
+                    <p className="flow-muted">
+                      {[questionText(stub), baseLine].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <div className="tables-title-actions">
+                    {stub && (dirty || !matchesSaved()) ? (
+                      <Button className="flow-btn primary" type="button" onClick={saveTable}>
+                        Save table
+                      </Button>
+                    ) : null}
+                    {dirty ? <span className="flow-muted">Unsaved changes</span> : null}
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => setView(current => (current === 'chart' ? 'table' : 'chart'))}
+                    >
+                      {view === 'chart' ? 'Table' : 'Chart'}
                     </Button>
-                  ) : null}
-                  {dirty ? <span className="flow-muted">Unsaved changes</span> : null}
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    onClick={() => setView(current => (current === 'chart' ? 'table' : 'chart'))}
-                  >
-                    {view === 'chart' ? 'Table' : 'Chart'}
-                  </Button>
-                  <Button className="flow-btn" type="button" onClick={addToBook}>
-                    Add to book
-                  </Button>
-                  <Button
-                    className="flow-btn"
-                    type="button"
-                    onClick={() => {
-                      if (!datasetId || !specId) {
-                        setError('Save the table before exporting.');
-                        return;
-                      }
-                      const title = String(openSaved?.label || 'table');
-                      const filename = `${title.replace(/[^\w.-]+/g, ' ').trim() || 'table'}.docx`;
-                      void downloadExport(
-                        `/datasets/${datasetId}/tables/${specId}/export.docx`,
-                        filename
-                      ).catch(err =>
-                        setError(err instanceof Error ? err.message : 'Could not export the table')
-                      );
-                    }}
-                  >
-                    Export
-                  </Button>
+                    <Button className="flow-btn" type="button" onClick={addToBook}>
+                      Add to book
+                    </Button>
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => {
+                        if (!datasetId || !specId) {
+                          setError('Save the table before exporting.');
+                          return;
+                        }
+                        const title = String(openSaved?.label || 'table');
+                        const filename = `${title.replace(/[^\w.-]+/g, ' ').trim() || 'table'}.docx`;
+                        void downloadExport(
+                          `/datasets/${datasetId}/tables/${specId}/export.docx`,
+                          filename
+                        ).catch(err =>
+                          setError(
+                            err instanceof Error ? err.message : 'Could not export the table'
+                          )
+                        );
+                      }}
+                    >
+                      Export
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              {!railReady || (opening && !book) ? (
-                <div aria-busy="true">
-                  <Skeleton className="mb-2 h-8 w-full" />
-                  <Skeleton className="mb-2 h-8 w-full" />
-                  <Skeleton className="h-48 w-full" />
-                </div>
-              ) : book ? (
-                <>
-                  {openSaved?.stale ? (
-                    <div className="tables-stale">
-                      <p>{openSaved.detail || 'This table is on an older version of the data.'}</p>
-                      <Button
-                        className="flow-btn"
-                        type="button"
-                        onClick={() => {
-                          if (!datasetId || !specId) return;
-                          void flowJson<{
-                            ok?: boolean;
-                            blocked?: boolean;
-                            detail?: string;
-                            dataset_id?: string;
-                            weight_note?: string;
-                          }>(`/datasets/${datasetId}/tables/${specId}/rebuild`, {
-                            method: 'POST',
-                            body: JSON.stringify({}),
-                          })
-                            .then(async result => {
-                              if (result.blocked) {
-                                setError(result.detail || 'This file has a scale problem.');
-                                return;
-                              }
-                              setSpecs(current =>
-                                current.map(item =>
-                                  (item.spec_id || item.id) === specId
-                                    ? { ...item, stale: false, detail: '' }
-                                    : item
-                                )
-                              );
-                              setError(result.weight_note || '');
-                              const opened = await flowJson<Record<string, unknown>>(
-                                `/datasets/${result.dataset_id || datasetId}/tables/${specId}`
-                              );
-                              remember(opened);
+                {!railReady || (opening && !book) ? (
+                  <div aria-busy="true">
+                    <Skeleton className="mb-2 h-8 w-full" />
+                    <Skeleton className="mb-2 h-8 w-full" />
+                    <Skeleton className="h-48 w-full" />
+                  </div>
+                ) : book ? (
+                  <>
+                    {openSaved?.stale ? (
+                      <div className="tables-stale">
+                        <p>
+                          {openSaved.detail || 'This table is on an older version of the data.'}
+                        </p>
+                        <Button
+                          className="flow-btn"
+                          type="button"
+                          onClick={() => {
+                            if (!datasetId || !specId) return;
+                            void flowJson<{
+                              ok?: boolean;
+                              blocked?: boolean;
+                              detail?: string;
+                              dataset_id?: string;
+                              weight_note?: string;
+                            }>(`/datasets/${datasetId}/tables/${specId}/rebuild`, {
+                              method: 'POST',
+                              body: JSON.stringify({}),
                             })
-                            .catch(err =>
-                              setError(err instanceof Error ? err.message : 'Could not rebuild')
-                            );
-                        }}
-                      >
-                        Rebuild
-                      </Button>
-                      <Button
-                        className="flow-btn"
-                        type="button"
-                        onClick={() => {
-                          if (openSaved?.dataset_id) onFile?.(openSaved.dataset_id);
-                        }}
-                      >
-                        Open original version
-                      </Button>
-                    </div>
-                  ) : null}
-                  {view === 'chart' && chartSeriesFromBook(book).length ? (
-                    <TableBars
-                      series={chartSeriesFromBook(book)}
-                      title={title}
-                      significanceNote={chartSignificanceNote(book)}
-                      onAddToReport={
-                        projectId && datasetId && (book.run_id || specId)
-                          ? () => {
-                              const runId = book.run_id
-                                ? String(book.run_id)
-                                : specId
-                                  ? `table:${specId}`
-                                  : '';
-                              if (!runId) return;
-                              const series = chartSeriesFromBook(book);
-                              const pin = {
-                                id: runId,
-                                runId,
-                                datasetId,
-                                headline: String(book.title || labelFor(stub) || 'Chart'),
-                                support: bannerFootnote(book),
-                                citation: 'Chart',
-                                afterId: '',
-                                deck: true,
-                                topline: true,
-                                keepLive: true,
-                                bars: series.flatMap(row =>
-                                  row.values.map(item => ({
-                                    label:
-                                      row.values.length > 1
-                                        ? `${row.label} · ${item.name}`
-                                        : row.label,
-                                    percent: item.value,
-                                  }))
-                                ),
-                              };
-                              if (book.run_id) void savePin(projectId, datasetId, pin);
-                              else rememberTablePin(projectId, pin);
-                            }
-                          : undefined
-                      }
-                    />
-                  ) : (
-                    <BannerGrid
-                      book={book}
-                      onSelectCell={openCell}
-                      muted={Boolean(openSaved?.stale)}
-                      baseAtEnd
-                      showNets={
-                        top2 ||
-                        bottom2 ||
-                        ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
-                      }
-                      figures={figures}
-                      digits={digits}
-                      markLowBase={lowBase}
-                      columnLabels={columns.map(column => ({
-                        name: column.name,
-                        label: columnChoiceLabel(column),
-                      }))}
-                    />
-                  )}
-                </>
-              ) : (
-                <p className="flow-muted">
-                  {stub && banners.length
-                    ? 'Building the preview.'
-                    : stub
-                      ? 'Choose a banner to preview the table.'
-                      : 'Choose a stub to preview the table.'}
-                </p>
-              )}
+                              .then(async result => {
+                                if (result.blocked) {
+                                  setError(result.detail || 'This file has a scale problem.');
+                                  return;
+                                }
+                                setSpecs(current =>
+                                  current.map(item =>
+                                    (item.spec_id || item.id) === specId
+                                      ? { ...item, stale: false, detail: '' }
+                                      : item
+                                  )
+                                );
+                                setError(result.weight_note || '');
+                                const opened = await flowJson<Record<string, unknown>>(
+                                  `/datasets/${result.dataset_id || datasetId}/tables/${specId}`
+                                );
+                                remember(opened);
+                              })
+                              .catch(err =>
+                                setError(err instanceof Error ? err.message : 'Could not rebuild')
+                              );
+                          }}
+                        >
+                          Rebuild
+                        </Button>
+                        <Button
+                          className="flow-btn"
+                          type="button"
+                          onClick={() => {
+                            if (openSaved?.dataset_id) onFile?.(openSaved.dataset_id);
+                          }}
+                        >
+                          Open original version
+                        </Button>
+                      </div>
+                    ) : null}
+                    {view === 'chart' && chartSeriesFromBook(book).length ? (
+                      <TableBars
+                        series={chartSeriesFromBook(book)}
+                        title={title}
+                        significanceNote={chartSignificanceNote(book)}
+                        onAddToReport={
+                          projectId && datasetId && (book.run_id || specId)
+                            ? () => {
+                                const runId = book.run_id
+                                  ? String(book.run_id)
+                                  : specId
+                                    ? `table:${specId}`
+                                    : '';
+                                if (!runId) return;
+                                const series = chartSeriesFromBook(book);
+                                const pin = {
+                                  id: runId,
+                                  runId,
+                                  datasetId,
+                                  headline: String(book.title || labelFor(stub) || 'Chart'),
+                                  support: bannerFootnote(book),
+                                  citation: 'Chart',
+                                  afterId: '',
+                                  deck: true,
+                                  topline: true,
+                                  keepLive: true,
+                                  bars: series.flatMap(row =>
+                                    row.values.map(item => ({
+                                      label:
+                                        row.values.length > 1
+                                          ? `${row.label} · ${item.name}`
+                                          : row.label,
+                                      percent: item.value,
+                                    }))
+                                  ),
+                                };
+                                if (book.run_id) void savePin(projectId, datasetId, pin);
+                                else rememberTablePin(projectId, pin);
+                              }
+                            : undefined
+                        }
+                      />
+                    ) : (
+                      <BannerGrid
+                        book={book}
+                        onSelectCell={openCell}
+                        muted={Boolean(openSaved?.stale)}
+                        baseAtEnd
+                        showNets={
+                          top2 ||
+                          bottom2 ||
+                          ((book.rows as { kind?: string }[]) || []).some(row => row.kind === 'net')
+                        }
+                        figures={figures}
+                        digits={digits}
+                        markLowBase={lowBase}
+                        columnLabels={columns.map(column => ({
+                          name: column.name,
+                          label: columnChoiceLabel(column),
+                        }))}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <p className="flow-muted">
+                    {stub && banners.length
+                      ? 'Building the preview.'
+                      : stub
+                        ? 'Choose a banner to preview the table.'
+                        : 'Choose a stub to preview the table.'}
+                  </p>
+                )}
+              </div>
+              {sigPanelOpen ? (
+                <TableSignificancePanel
+                  settings={significance}
+                  onChange={applySignificance}
+                  controlOptions={banners.map(column => ({
+                    value: column,
+                    label: labelFor(column),
+                  }))}
+                />
+              ) : null}
             </div>
             <div className="tables-foot">
               <span>{totalBase}</span>
@@ -3016,6 +3203,15 @@ export function TablesBuilder({
           }}
         />
       ) : null}
+      <TidyTablesDialog
+        datasetId={datasetId}
+        open={tidyOpen}
+        onOpenChange={setTidyOpen}
+        onApplied={() => {
+          setNote('Tables tidied.');
+          reloadSpecs();
+        }}
+      />
     </div>
   );
 }

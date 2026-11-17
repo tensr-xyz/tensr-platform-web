@@ -1,4 +1,5 @@
 import type { AnalysisReportChart } from './analysis-report-types';
+import { significanceFootnoteLine } from './table-significance';
 
 export type BannerColumn = {
   id: string;
@@ -21,6 +22,7 @@ export type BannerCell = {
   column_unweighted_n?: number;
   column_weighted_n?: number;
   unweighted_n?: number;
+  weighted_n?: number;
   provenance?: {
     row_uid_bitset?: string;
     origin_bitsets?: Record<string, { row_uid_bitset?: string }>;
@@ -251,13 +253,17 @@ export function bannerFootnote(book: Record<string, unknown>): string {
     .map(column => (column as { kish_effective_base?: number }).kish_effective_base)
     .find(value => typeof value === 'number');
   if (typeof ess === 'number') parts.push(`Effective base: ${Math.round(ess)}`);
-  const letters = book.letters as unknown[] | undefined;
-  if (String(book.significance_display || '') !== 'none' && letters?.length) {
-    const named = String(book.letter_test || '').trim();
-    if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
-      parts.push(named || 'Paired McNemar test at 95%');
-    } else {
-      parts.push(named || 'Column proportions test at 95%');
+  const sigLine = significanceFootnoteLine(book);
+  if (sigLine) parts.push(sigLine);
+  else {
+    const letters = book.letters as unknown[] | undefined;
+    if (String(book.significance_display || '') !== 'none' && letters?.length) {
+      const named = String(book.letter_test || '').trim();
+      if (book.paired_within_items || named.toLowerCase().startsWith('paired')) {
+        parts.push(named || 'Paired McNemar test at 95%');
+      } else {
+        parts.push(named || 'Column proportions test at 95%');
+      }
     }
   }
   return parts.join(' · ');

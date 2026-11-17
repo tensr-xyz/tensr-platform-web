@@ -1556,6 +1556,100 @@ export function insertDynamicText(
   });
 }
 
+/** Update an object's live-text binding and refresh its display string. */
+export function setObjectBinding(
+  document: ReportDocument | unknown,
+  pageId: string,
+  objectId: string,
+  bindingRaw: Partial<TextBinding> | Record<string, unknown> | null | undefined,
+  options?: {
+    source?: unknown;
+    pageIndex?: number;
+    pageCount?: number;
+  }
+): ReportDocument {
+  const doc = normalizeReportDocument(document);
+  const binding = normalizeTextBinding(bindingRaw);
+  const pageIndex =
+    options?.pageIndex ??
+    Math.max(
+      0,
+      doc.pages.findIndex(page => page.id === String(pageId))
+    );
+  const pageCount = options?.pageCount ?? doc.pages.length;
+  const resolved = binding
+    ? resolveBindingText(binding, {
+        source: options?.source,
+        pageIndex,
+        pageCount,
+      })
+    : '';
+  let fallback = '';
+  if (binding?.kind === 'sample_size') fallback = 'Sample size';
+  else if (binding?.kind === 'page_number')
+    fallback = pageNumberText(pageIndex, pageCount, binding.template);
+  else if (binding?.kind === 'cell') {
+    fallback = `${binding.prefix || ''}—${binding.suffix || ''}`;
+  }
+  const text = resolved || fallback;
+  return {
+    ...doc,
+    pages: doc.pages.map(page => {
+      if (page.id !== String(pageId)) return page;
+      return {
+        ...page,
+        objects: page.objects.map(obj => {
+          if (obj.id !== String(objectId) || obj.kind !== 'text') return obj;
+          return {
+            ...obj,
+            binding,
+            text: text || obj.text,
+            runs: [],
+          };
+        }),
+      };
+    }),
+  };
+}
+
+/** Plain-language "Shows" line for the live-value inspector. */
+export function liveValueShowsLabel(binding: TextBinding | null | undefined): string {
+  if (!binding) return '';
+  if (binding.kind === 'page_number') return 'Page number';
+  if (binding.kind === 'sample_size') return 'Sample size';
+  const row = String(binding.rowKey || '').trim() || 'Category';
+  const col = String(binding.colKey || '').trim() || 'Total';
+  return `${row} · ${col}`;
+}
+
+/** Plain-language "From" line for the live-value inspector. */
+export function liveValueFromLabel(
+  binding: TextBinding | null | undefined,
+  pageObjects: ReportObject[] = [],
+  options?: { pageTitle?: string | null }
+): string {
+  if (!binding) return '';
+  if (binding.kind === 'page_number') return 'This report';
+  const tables = pageObjects.filter(obj => obj.kind === 'table');
+  const linked =
+    (binding.sourceObjectId && tables.find(obj => obj.id === binding.sourceObjectId)) ||
+    (binding.runId && tables.find(obj => obj.runId === binding.runId)) ||
+    (binding.pinId && tables.find(obj => obj.pinId === binding.pinId)) ||
+    (binding.tableSpecId && tables.find(obj => obj.tableSpecId === binding.tableSpecId)) ||
+    null;
+  if (linked) {
+    const index = tables.findIndex(obj => obj.id === linked.id);
+    const pageTitle = String(options?.pageTitle || '').trim();
+    if (pageTitle) return `T${index + 1} · ${pageTitle}`;
+    return `Table ${index + 1}`;
+  }
+  if (tables.length === 1) {
+    const pageTitle = String(options?.pageTitle || '').trim();
+    return pageTitle ? `T1 · ${pageTitle}` : 'Table 1';
+  }
+  return tables.length ? 'Choose a table' : 'No table on this page';
+}
+
 export function refreshLiveText(
   document: ReportDocument | unknown,
   sources?: Record<string, unknown> | null

@@ -4,8 +4,10 @@ import {
   isAllSelection,
   normalizeControl,
   normalizeControls,
+  normalizeSavedViews,
   optionLabel,
   publicControl,
+  viewerControlChipText,
 } from './share-viewer-controls';
 
 describe('share viewer controls', () => {
@@ -68,5 +70,35 @@ describe('share viewer controls', () => {
     });
     expect(control).not.toBeNull();
     expect(publicControl(control!).options[0]).toEqual({ value: '1', label: 'North' });
+  });
+
+  it('formats viewer chip text with labels, not codes', () => {
+    const control = publicControl(
+      normalizeControl({
+        id: 'g',
+        type: 'dropdown',
+        column: 'gender',
+        label: 'Gender',
+        values: ['1', '2'],
+        value_labels: { '1': 'Women', '2': 'Men' },
+      })!
+    );
+    expect(viewerControlChipText(control, null)).toEqual({
+      text: 'Gender: All',
+      active: false,
+    });
+    expect(viewerControlChipText(control, '1')).toEqual({
+      text: 'Gender: Women',
+      active: true,
+    });
+  });
+
+  it('normalises saved views for the filter bar', () => {
+    expect(
+      normalizeSavedViews([
+        { id: 'v1', name: 'North view', values: { region: 'N' } },
+        { id: '', name: 'bad' },
+      ])
+    ).toEqual([{ id: 'v1', name: 'North view', values: { region: 'N' } }]);
   });
 });

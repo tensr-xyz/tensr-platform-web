@@ -1,7 +1,20 @@
 /** Table styling, persistent rules, and in-table edits (Displayr-style presentation). */
 
-export const TABLE_STYLE_PRESETS = ['default', 'compact', 'client', 'brand_health'] as const;
+export const TABLE_STYLE_PRESETS = [
+  'default',
+  'banded',
+  'compact',
+  'client',
+  'brand_health',
+] as const;
 export type TableStylePreset = (typeof TABLE_STYLE_PRESETS)[number];
+
+/** House / Banded / Minimal — labels from report-editor artboard 9a. */
+export const HOUSE_STYLE_OPTIONS: { id: TableStylePreset; label: string }[] = [
+  { id: 'default', label: 'House' },
+  { id: 'banded', label: 'Banded' },
+  { id: 'compact', label: 'Minimal' },
+];
 
 export const RULE_TYPES = [
   'hide_small_base',
@@ -152,7 +165,12 @@ export const DEFAULT_TABLE_STYLE: TableStyle = {
 };
 
 const PRESET_OVERRIDES: Partial<Record<TableStylePreset, Partial<TableStyle>>> = {
-  compact: { fontSizePt: 8, borderWidthPt: 0.25 },
+  banded: {
+    bodyFill: '#FFFFFF',
+    headerFill: '#F6F6F3',
+    borderWidthPt: 0.5,
+  },
+  compact: { fontSizePt: 8, borderWidthPt: 0.25, headerFill: '#FFFFFF' },
   client: {
     fontFamily: 'Georgia',
     fontSizePt: 11,
@@ -165,6 +183,11 @@ const PRESET_OVERRIDES: Partial<Record<TableStylePreset, Partial<TableStyle>>> =
     headerColor: '#1E6B58',
     borderColor: '#1E6B58',
   },
+};
+
+const PRESET_ALIASES: Record<string, TableStylePreset> = {
+  house: 'default',
+  minimal: 'compact',
 };
 
 const HEX6 = /^[0-9A-Fa-f]{6}$/;
@@ -227,11 +250,142 @@ export function normalizeCellFormat(raw: unknown): TableCellFormat | null {
   };
 }
 
+export function tableStylePresetLabel(preset: TableStylePreset | string): string {
+  const key = String(preset || '')
+    .trim()
+    .toLowerCase();
+  const mapped = PRESET_ALIASES[key] || (PRESET_SET.has(key) ? (key as TableStylePreset) : null);
+  const option = HOUSE_STYLE_OPTIONS.find(item => item.id === mapped);
+  if (option) return option.label;
+  if (key === 'client') return 'Client';
+  if (key === 'brand_health') return 'Brand health';
+  return 'House';
+}
+
+export function tableRuleLabel(rule: TableRule): string {
+  switch (rule.type) {
+    case 'hide_small_base':
+      if (rule.mode === 'blank_cell') {
+        return `Amber when base under ${rule.threshold ?? 30}`;
+      }
+      return `Hide rows with base under ${rule.threshold ?? 30}`;
+    case 'hide_empty':
+      return rule.axis === 'columns'
+        ? 'Hide empty columns'
+        : rule.axis === 'both'
+          ? 'Hide empty rows and columns'
+          : 'Hide empty rows';
+    case 'hide_non_significant':
+      return 'Hide rows with nothing significant';
+    case 'sort':
+      return `Sort rows ${rule.direction === 'asc' ? 'ascending' : 'descending'}`;
+    case 'show_top_k':
+      return `Show top ${rule.k ?? 5} rows`;
+    case 'colour_scale':
+      return 'Colour scale on values';
+    case 'highlight':
+      if (rule.op === 'above' && rule.color?.toUpperCase() === '#1E6B58') {
+        return 'Bold + green when significantly higher';
+      }
+      if (rule.op === 'below' && (rule.statistic === 'unweighted_n' || rule.fill === '#F5E6C8')) {
+        return `Amber when base under ${rule.value ?? 50}`;
+      }
+      if (rule.op === 'above') return `Highlight values above ${rule.value ?? 0}`;
+      if (rule.op === 'below') return `Highlight values below ${rule.value ?? 0}`;
+      return `Highlight values equal to ${rule.value ?? 0}`;
+    case 'shade_alternate_rows':
+      return 'Shade alternate rows';
+    case 'shade_net_rows':
+      return 'Shade NET rows';
+    default:
+      return 'Table rule';
+  }
+}
+
+/** Ready-made rules offered from the Rules ▾ menu / + Add rule. */
+export const TABLE_RULE_CATALOG: {
+  id: string;
+  label: string;
+  rule: Omit<TableRule, 'id' | 'enabled'> & { enabled?: boolean };
+}[] = [
+  {
+    id: 'sig-higher',
+    label: 'Bold + green when significantly higher',
+    rule: {
+      type: 'highlight',
+      op: 'above',
+      value: 0,
+      statistic: 'percent',
+      fill: '#E8F1ED',
+      color: '#1E6B58',
+    },
+  },
+  {
+    id: 'amber-base',
+    label: 'Amber when base under 50',
+    rule: {
+      type: 'highlight',
+      op: 'below',
+      value: 50,
+      statistic: 'unweighted_n',
+      fill: '#F5E6C8',
+      color: '#A15C12',
+    },
+  },
+  {
+    id: 'hide-small-base',
+    label: 'Hide rows with small base',
+    rule: { type: 'hide_small_base', mode: 'hide_row', threshold: 30, axis: 'rows' },
+  },
+  {
+    id: 'blank-small-base',
+    label: 'Blank cells with small base',
+    rule: { type: 'hide_small_base', mode: 'blank_cell', threshold: 30, axis: 'rows' },
+  },
+  {
+    id: 'hide-empty',
+    label: 'Hide empty rows and columns',
+    rule: { type: 'hide_empty', axis: 'both' },
+  },
+  {
+    id: 'hide-nonsig',
+    label: 'Hide rows with nothing significant',
+    rule: { type: 'hide_non_significant', axis: 'rows' },
+  },
+  {
+    id: 'sort-desc',
+    label: 'Sort rows descending',
+    rule: { type: 'sort', by: 'average', direction: 'desc', protectNets: true },
+  },
+  {
+    id: 'top-k',
+    label: 'Show top 5 rows',
+    rule: { type: 'show_top_k', k: 5, by: 'average', direction: 'desc', protectNets: true },
+  },
+  {
+    id: 'colour-scale',
+    label: 'Colour scale on values',
+    rule: { type: 'colour_scale', statistic: 'percent', lowColor: '#FFFFFF', highColor: '#1E6B58' },
+  },
+  {
+    id: 'shade-alt',
+    label: 'Shade alternate rows',
+    rule: { type: 'shade_alternate_rows', fill: '#F6F6F3' },
+  },
+  {
+    id: 'shade-net',
+    label: 'Shade NET rows',
+    rule: { type: 'shade_net_rows', fill: '#E8F1ED' },
+  },
+];
+
 export function normalizeTableStyle(raw: unknown): TableStyle {
   const source = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
-  let preset = String(source.preset || DEFAULT_TABLE_STYLE.preset)
+  let presetRaw = String(source.preset || DEFAULT_TABLE_STYLE.preset)
     .trim()
-    .toLowerCase() as TableStylePreset;
+    .toLowerCase();
+  if (PRESET_ALIASES[presetRaw]) presetRaw = PRESET_ALIASES[presetRaw];
+  let preset = presetRaw as TableStylePreset;
   if (!PRESET_SET.has(preset)) preset = DEFAULT_TABLE_STYLE.preset;
   const base: TableStyle = {
     ...DEFAULT_TABLE_STYLE,
@@ -1031,6 +1185,25 @@ export function applyTablePresentation(
           }
         }
       }
+    }
+  }
+
+  const hasAlternateRule = rules.some(rule => rule.enabled && rule.type === 'shade_alternate_rows');
+  if (style.preset === 'banded' && !hasAlternateRule) {
+    let visibleIndex = 0;
+    for (const row of rows) {
+      if (String(row.kind || '').toLowerCase() === 'header') continue;
+      if (visibleIndex % 2 === 1) {
+        const rowId = String(row.id || '');
+        for (const cell of (Array.isArray(row.cells) ? row.cells : []) as Array<
+          Record<string, unknown>
+        >) {
+          if (cell && typeof cell === 'object') {
+            setCellStyle(cellStyles, rowId, String(cell.banner_id || ''), { fill: '#F6F6F3' });
+          }
+        }
+      }
+      visibleIndex += 1;
     }
   }
 

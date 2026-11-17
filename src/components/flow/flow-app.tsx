@@ -56,9 +56,13 @@ import { toolResultsSavedWorkingVersion } from '@/lib/adopt-derived-dataset';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
+import { MergeSmallAnswersDialog } from '@/components/flow/merge-small-answers-dialog';
+import { ReportEditor } from '@/components/flow/report-editor';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
+import { FindReplaceDialog } from '@/components/flow/find-replace-dialog';
+import { ProjectPresenceAvatars, useProjectPresence } from '@/components/flow/project-presence';
 import {
   documentApa,
   pinIsThin,
@@ -341,6 +345,8 @@ export function FlowApp({ slug }: { slug: string[] }) {
   const [orgName, setOrgName] = useState('');
   const [shareOpen, setShareOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [findReplaceOpen, setFindReplaceOpen] = useState(false);
+  const [findReplaceTick, setFindReplaceTick] = useState(0);
   const [workspacePhase, setWorkspacePhase] = useState<'loading' | 'ready' | 'error'>('loading');
   // The shell has drawn, so a sign-in that led here has landed.
   useEffect(() => clearSigningIn(), []);
@@ -577,6 +583,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
     }
   }, [finishedRun, projectId, section, router]);
   const page = visibleProjectSection(section);
+  const presenceView = useProjectPresence(projectId || null, page);
   const [cachedName, setCachedName] = useState('');
   useEffect(() => {
     try {
@@ -610,6 +617,21 @@ export function FlowApp({ slug }: { slug: string[] }) {
     datasets[0];
   const openDatasetId =
     project?.active_dataset_id || (openDataset ? datasetRowId(openDataset) : '');
+  const findReplaceAllowed =
+    Boolean(projectId && openDatasetId) &&
+    (page === 'report' || page === 'tables' || page === 'sources' || page === 'responses');
+
+  useEffect(() => {
+    if (!findReplaceAllowed) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return;
+      if (event.key.toLowerCase() !== 'f') return;
+      event.preventDefault();
+      setFindReplaceOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [findReplaceAllowed]);
 
   useEffect(() => {
     if (!openDatasetId) return;
@@ -687,6 +709,16 @@ export function FlowApp({ slug }: { slug: string[] }) {
                   <span className="flow-k">⌘K</span>
                 </Button>
                 <div className="proj-actions">
+                  <ProjectPresenceAvatars view={presenceView} />
+                  {findReplaceAllowed ? (
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      onClick={() => setFindReplaceOpen(true)}
+                    >
+                      Find &amp; replace
+                    </Button>
+                  ) : null}
                   <Button className="flow-btn" type="button" onClick={() => setShareOpen(true)}>
                     Share
                   </Button>
@@ -768,7 +800,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 onCreate={() => setNewOpen(true)}
               />
             ) : section === 'details' ? (
-              <DetailsScreen project={project} datasets={datasets} />
+              <DetailsScreen project={project} datasets={datasets} onChanged={reload} />
             ) : section === 'sources' ? (
               <SourcesScreen
                 project={project}
@@ -791,6 +823,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 project={project}
                 datasets={datasets}
                 ready={tabReady}
+                labelsRevision={findReplaceTick}
               />
             ) : section === 'interviews' ? (
               <InterviewsScreen projectId={projectId} />
@@ -864,6 +897,15 @@ export function FlowApp({ slug }: { slug: string[] }) {
             onClose={() => setExportOpen(false)}
           />
         ) : null}
+        <FindReplaceDialog
+          datasetId={openDatasetId || undefined}
+          open={findReplaceOpen && Boolean(openDatasetId)}
+          onOpenChange={setFindReplaceOpen}
+          onApplied={() => {
+            setFindReplaceTick(tick => tick + 1);
+            void reload();
+          }}
+        />
         <AnalysisSetupHost />
       </div>
     </SubscriptionGate>
@@ -3181,6 +3223,10 @@ function ResponsesScreen({
   const [valueFilter, setValueFilter] = useState<string | null>(null);
   const [anovaOpen, setAnovaOpen] = useState(false);
   const [weightOpen, setWeightOpen] = useState(false);
+  const [mergeSmall, setMergeSmall] = useState<{
+    field: string;
+    label: string;
+  } | null>(null);
   const [columnCounts, setColumnCounts] = useState<
     Record<
       string,
@@ -4114,6 +4160,18 @@ function ResponsesScreen({
                   <Button
                     type="button"
                     onClick={() => {
+                      const field = colMenu.field;
+                      const label =
+                        columnMeta(colMenu.name)?.label || columnMeta(field)?.label || colMenu.name;
+                      setColMenu(null);
+                      setMergeSmall({ field, label: String(label || field) });
+                    }}
+                  >
+                    Merge small answers
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => {
                       const target = window.prompt('New column name') || '';
                       const expr = window.prompt('Expression, such as this column >= 1') || '';
                       if (!target || !expr) return;
@@ -4372,7 +4430,10 @@ function ResponsesScreen({
               <CodeFrameRail
                 datasetId={datasetId}
                 column={codedColumn.name}
-                title={codedColumn.name.replace(/_codes$/, '')}
+                title={
+                  columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
+                    ?.label || codedColumn.name.replace(/_codes$/, '')
+                }
                 question={
                   columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
                     ?.label || ''
@@ -4387,6 +4448,10 @@ function ResponsesScreen({
                 }}
                 onUseAsBanner={() => {
                   if (project?.id) router.push(`/flow/p/${project.id}/tables`);
+                }}
+                onApplied={nextId => {
+                  const previousId = datasetId || '';
+                  adoptVersion(previousId, nextId, 'Imported codeframe as a new version.');
                 }}
               />
             ) : null}
@@ -4471,6 +4536,22 @@ function ResponsesScreen({
           datasetId={datasetId}
           projectId={project?.id}
           onClose={() => setAnovaOpen(false)}
+        />
+      ) : null}
+      {mergeSmall ? (
+        <MergeSmallAnswersDialog
+          datasetId={datasetId}
+          column={mergeSmall.field}
+          questionLabel={mergeSmall.label}
+          open
+          onOpenChange={open => {
+            if (!open) setMergeSmall(null);
+          }}
+          onApplied={nextId => {
+            const previousId = datasetId || '';
+            setMergeSmall(null);
+            adoptVersion(previousId, nextId, 'Merged small answers into a new version.');
+          }}
         />
       ) : null}
       {weightOpen ? (
@@ -4633,11 +4714,13 @@ function ReportScreen({
   project,
   datasets,
   ready = false,
+  labelsRevision = 0,
 }: {
   projectId: string;
   project?: FlowProject;
   datasets: DatasetRow[];
   ready?: boolean;
+  labelsRevision?: number;
 }) {
   const datasetId =
     project?.active_dataset_id || datasets.find(row => row.project_id === projectId)?.dataset_id;
@@ -5279,6 +5362,11 @@ function ReportScreen({
           ) : null}
         </div>
       </div>
+      <ReportEditor
+        datasetId={exportFileId || null}
+        pins={reportPins}
+        labelsRevision={labelsRevision}
+      />
       <div className="report-sheet">
         <div className="report-lead">
           <h1>{project?.name || 'Report'}</h1>

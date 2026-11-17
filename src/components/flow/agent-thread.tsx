@@ -65,14 +65,13 @@ import {
 import { visibleAgentStep } from '@/lib/agent-step-copy';
 import {
   chatTurnChangesFromToolResults,
-  chatTurnUndoTarget,
   notifyChatRunFinished,
   numberedNextStepsFromTurn,
   resolveNumberedNextStep,
   summarizeChatSteps,
   type NumberedNextStep,
 } from '@/lib/chat-turn-parity';
-import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
+import { ChatTurnChangesPanel } from '@/components/flow/chat-turn-changes';
 import { sortSessionsByRecency } from '@/components/flow/chat-sessions';
 import {
   documentFromPins,
@@ -175,21 +174,9 @@ function nextStepsForResult(
   });
 }
 
-function offerTurnUndo(projectId: string, result: AgentLoopResponse): void {
-  if (!projectId) return;
-  const target = chatTurnUndoTarget(chatTurnChangesFromToolResults(result.tool_results));
-  if (!target) return;
-  showDatasetVersionUndoToast({
-    projectId,
-    previousDatasetId: target.previousDatasetId,
-    currentDatasetId: target.currentDatasetId,
-    title: 'Chat changes saved',
-  });
-}
-
-function notifyFinishedTurn(result: AgentLoopResponse, startedAt: number): void {
+function notifyFinishedTurn(result: AgentLoopResponse, startedAt: number): boolean {
   const body = (result.answer_markdown || '').replace(/\s+/g, ' ').trim().slice(0, 120);
-  notifyChatRunFinished({
+  return notifyChatRunFinished({
     title: 'Tensr finished a chat reply',
     body: body || undefined,
     startedAt,
@@ -230,6 +217,7 @@ export function useAgentThread({
   const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
   const [nextSteps, setNextSteps] = useState<NumberedNextStep[]>([]);
+  const [awayNote, setAwayNote] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -420,6 +408,7 @@ export function useAgentThread({
       setTurn(null);
       setSteps([]);
       setNextSteps([]);
+      setAwayNote(false);
       setDownloads([]);
       setStatus('Thinking…');
       setApproving(false);
@@ -593,8 +582,9 @@ export function useAgentThread({
         });
         if (result.status !== 'awaiting_approval' && aliveRef.current) {
           onFinishedRef.current?.(result);
-          notifyFinishedTurn(result, startedAt);
-          if (projectId) offerTurnUndo(projectId, result);
+          if (notifyFinishedTurn(result, startedAt)) {
+            shown(() => setAwayNote(true));
+          }
         }
         publish({
           running: false,
@@ -656,6 +646,7 @@ export function useAgentThread({
     setStatus('Thinking…');
     setAnswer('');
     setNextSteps([]);
+    setAwayNote(false);
     streamedRef.current = '';
     if (projectId) {
       publishLiveChatRun({
@@ -729,8 +720,9 @@ export function useAgentThread({
         });
         if (result.status !== 'awaiting_approval' && aliveRef.current) {
           onFinishedRef.current?.(result);
-          notifyFinishedTurn(result, startedAt);
-          if (projectId) offerTurnUndo(projectId, result);
+          if (notifyFinishedTurn(result, startedAt)) {
+            shown(() => setAwayNote(true));
+          }
         }
         const current = liveChatRun();
         if (projectId && livePublishMatches(current, projectId, approvedSession, sent)) {
@@ -770,6 +762,7 @@ export function useAgentThread({
     setAttachedNote('');
     setAnswer('');
     setNextSteps([]);
+    setAwayNote(false);
     setQuestion('');
     if (projectId) window.sessionStorage.removeItem(draftKey(projectId));
     setPlan(null);
@@ -837,6 +830,7 @@ export function useAgentThread({
                 : null
             );
             setSteps(stepLines(last?.steps));
+            setAwayNote(false);
             setNextSteps(
               last
                 ? nextStepsForResult(
@@ -988,6 +982,8 @@ export function useAgentThread({
     turn,
     steps,
     nextSteps,
+    awayNote,
+    setAwayNote,
     panelOpen,
     setPanelOpen,
     attachments,
@@ -1102,6 +1098,8 @@ export function AgentThreadColumn({
         .catch(() => thread.setStatus('That table could not be saved.'));
     });
   };
+  const liveChanges = chatTurnChangesFromToolResults(thread.toolResults);
+  const showLiveChanges = liveChanges.length > 0 && Boolean(thread.projectId) && !thread.plan;
 
   return (
     <div className={panel ? 'agent-thread-panel' : 'chat-column'}>
@@ -1134,19 +1132,35 @@ export function AgentThreadColumn({
             </EmptyHeader>
           </Empty>
         ) : null}
-        {thread.past.map((item, index) => (
-          <div key={`${index}-${item.user.slice(0, 24)}`}>
-            <div className="chat-bubble">
-              {item.user}
-              {item.note ? <div className="flow-muted">{item.note}</div> : null}
+        {thread.past.map((item, index) => {
+          const pastChanges = chatTurnChangesFromToolResults(
+            (item.toolResults || []).map(entry => ({
+              name: entry.name,
+              result: entry.result,
+            }))
+          );
+          return (
+            <div key={`${index}-${item.user.slice(0, 24)}`}>
+              <div className="chat-bubble">
+                {item.user}
+                {item.note ? <div className="flow-muted">{item.note}</div> : null}
+              </div>
+              <ThreadResult
+                results={item.toolResults}
+                answer={item.answer}
+                columns={thread.columnLabels}
+              />
+              {pastChanges.length && thread.projectId ? (
+                <ChatTurnChangesPanel
+                  projectId={thread.projectId}
+                  changes={pastChanges}
+                  disabled={thread.status === 'Thinking…'}
+                  onRestored={() => thread.setStatus('Restored the previous version.')}
+                />
+              ) : null}
             </div>
-            <ThreadResult
-              results={item.toolResults}
-              answer={item.answer}
-              columns={thread.columnLabels}
-            />
-          </div>
-        ))}
+          );
+        })}
         {thread.sent ? (
           <div className="chat-bubble">
             {thread.sent}
@@ -1224,6 +1238,14 @@ export function AgentThreadColumn({
           ) : (
             <FlowMarkdown className="chat-prose">{thread.prose}</FlowMarkdown>
           )
+        ) : null}
+        {showLiveChanges ? (
+          <ChatTurnChangesPanel
+            projectId={thread.projectId}
+            changes={liveChanges}
+            disabled={thread.status === 'Thinking…'}
+            onRestored={() => thread.setStatus('Restored the previous version.')}
+          />
         ) : null}
         {thread.outputReady ? (
           <div className="chat-result">
@@ -1363,20 +1385,27 @@ export function AgentThreadColumn({
       </div>
       {thread.nextSteps.length && thread.status !== 'Thinking…' ? (
         <div className="chat-next-steps" aria-label="Suggested next steps">
-          {thread.nextSteps.map(step => (
-            <Button
-              key={step.n}
-              className="chat-next-step"
-              type="button"
-              disabled={thread.status === 'Thinking…'}
-              onClick={() => thread.send(step.prompt)}
-            >
-              <span className="chat-next-step-n" aria-hidden="true">
-                {step.n}
-              </span>
-              {step.label}
-            </Button>
-          ))}
+          <div className="chat-next-steps-label">Next steps</div>
+          <div className="chat-next-steps-chips">
+            {thread.nextSteps.map(step => (
+              <Button
+                key={step.n}
+                className="chat-next-step"
+                type="button"
+                disabled={thread.status === 'Thinking…'}
+                onClick={() => thread.send(step.prompt)}
+              >
+                {step.n} · {step.label}
+              </Button>
+            ))}
+          </div>
+          <p className="chat-next-steps-hint">Type a number to run one.</p>
+        </div>
+      ) : null}
+      {thread.awayNote ? (
+        <div className="chat-away-note" role="status">
+          <span>Long run finished while you were away</span>
+          <span className="chat-away-note-meta">· browser notification</span>
         </div>
       ) : null}
       <FlowComposer

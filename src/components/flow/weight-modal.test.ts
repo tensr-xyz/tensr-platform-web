@@ -1,10 +1,12 @@
 import {
   achievedShare,
+  buildCombineWeightsBody,
   buildScreenRakeBody,
   categoryMeanWeight,
   countsFromPercents,
   marginFor,
   PREVIOUS_WEIGHT,
+  resolveWeightedTotal,
   shareLabel,
   targetPercents,
 } from './weight-targets';
@@ -67,6 +69,36 @@ describe('weight modal', () => {
     ).toEqual({
       categorical_targets: { sex: { F: 51 } },
       use_existing_weight: true,
+    });
+  });
+
+  it('resolves weighted totals for sample, people, thousands, and custom', () => {
+    expect(resolveWeightedTotal('sample', '1204')).toBeUndefined();
+    expect(resolveWeightedTotal('people', '45200')).toBe(45200);
+    expect(resolveWeightedTotal('thousands', '45.2')).toBe(45200);
+    expect(resolveWeightedTotal('custom', '0')).toBeUndefined();
+  });
+
+  it('posts weighted_total with the rake body when Limits & total sets one', () => {
+    expect(
+      buildScreenRakeBody([{ column: 'region', codes: [{ code: 'East', percent: '40' }] }], {
+        weightedTotal: 500,
+        floor: '0.3',
+        cap: '3',
+      })
+    ).toEqual({
+      categorical_targets: { region: { East: 40 } },
+      lower: 0.3,
+      upper: 3,
+      weighted_total: 500,
+    });
+  });
+
+  it('builds a combine body with at least two columns and an optional total', () => {
+    expect(buildCombineWeightsBody(['design_wt'])).toBeNull();
+    expect(buildCombineWeightsBody(['design_wt', 'nr_wt'], { total: 1204 })).toEqual({
+      columns: ['design_wt', 'nr_wt'],
+      total: 1204,
     });
   });
 });

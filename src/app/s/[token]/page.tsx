@@ -8,9 +8,16 @@ import { Table } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/rest';
 import { AnalysisReportView } from '@/components/organisms/analysis-report-view';
 import { runDocument } from '@/components/flow/run-document';
+import { ShareViewerFilters } from '@/components/flow/share-viewer-filters';
 import { flowJson } from '@/lib/flow-api';
-import { fetchPublicShare, type PublicSharePayload } from '@/lib/public-share';
+import {
+  fetchPublicShare,
+  fetchPublicShareView,
+  savePublicShareView,
+  type PublicSharePayload,
+} from '@/lib/public-share';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
+import type { PublicViewerControl, SavedViewerView } from '@/lib/share-viewer-controls';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import '../../invite/invite.css';
 
@@ -24,6 +31,16 @@ function storedReport(run: Record<string, unknown>): AnalysisReport | null {
   return record;
 }
 
+function viewerControls(payload: PublicSharePayload | null): PublicViewerControl[] {
+  const rows = payload?.viewer?.controls;
+  return Array.isArray(rows) ? rows : [];
+}
+
+function viewerSavedViews(payload: PublicSharePayload | null): SavedViewerView[] {
+  const rows = payload?.viewer?.saved_views;
+  return Array.isArray(rows) ? (rows as SavedViewerView[]) : [];
+}
+
 /** Shared output or project link. Outside the signed-in shell (Paper has no public board yet). */
 export default function PublicSharePage() {
   const params = useParams<{ token: string }>();
@@ -32,6 +49,9 @@ export default function PublicSharePage() {
   const [phase, setPhase] = useState<'loading' | 'ready' | 'error' | 'joining'>('loading');
   const [error, setError] = useState('');
   const [payload, setPayload] = useState<PublicSharePayload | null>(null);
+  const [filterValues, setFilterValues] = useState<Record<string, unknown>>({});
+  const [filterBusy, setFilterBusy] = useState(false);
+  const [filterError, setFilterError] = useState('');
 
   useEffect(() => {
     if (!token) {
@@ -59,6 +79,8 @@ export default function PublicSharePage() {
   const run = payload?.run;
   const fullReport = useMemo(() => (run ? storedReport(run) : null), [run]);
   const document = useMemo(() => (run ? runDocument(run) : null), [run]);
+  const controls = useMemo(() => viewerControls(payload), [payload]);
+  const savedViews = useMemo(() => viewerSavedViews(payload), [payload]);
 
   useEffect(() => {
     if (phase !== 'ready' || !payload || payload.share.kind !== 'project_link') return;
@@ -75,6 +97,50 @@ export default function PublicSharePage() {
         setPhase('error');
       });
   }, [phase, payload, token, router]);
+
+  const applyFilters = (next: Record<string, unknown>) => {
+    setFilterValues(next);
+    setFilterBusy(true);
+    setFilterError('');
+    void fetchPublicShareView(token, next)
+      .then(body => {
+        setPayload(previous =>
+          previous
+            ? {
+                ...previous,
+                run: body.run ?? previous.run,
+                viewer: body.viewer ?? previous.viewer,
+                share: body.share ?? previous.share,
+              }
+            : body
+        );
+      })
+      .catch(err => {
+        setFilterError(err instanceof Error ? err.message : 'Could not apply filters');
+      })
+      .finally(() => setFilterBusy(false));
+  };
+
+  const saveView = (name: string, values: Record<string, unknown>) => {
+    setFilterBusy(true);
+    setFilterError('');
+    void savePublicShareView(token, name, values)
+      .then(body => {
+        setPayload(previous =>
+          previous
+            ? {
+                ...previous,
+                viewer: body.viewer ?? previous.viewer,
+                share: body.share ?? previous.share,
+              }
+            : body
+        );
+      })
+      .catch(err => {
+        setFilterError(err instanceof Error ? err.message : 'Could not save that view');
+      })
+      .finally(() => setFilterBusy(false));
+  };
 
   if (phase === 'loading' || phase === 'joining') {
     return (
@@ -129,6 +195,16 @@ export default function PublicSharePage() {
       <div className="iv-card share-public-card">
         <p className="iv-note">{payload.project.name || 'Shared output'}</p>
         <h1 className="iv-title">{String(payload.share.title || document?.title || 'Output')}</h1>
+        <ShareViewerFilters
+          controls={controls}
+          savedViews={savedViews}
+          values={filterValues}
+          busy={filterBusy}
+          error={filterError}
+          onChange={applyFilters}
+          onSaveView={saveView}
+          onApplyView={view => applyFilters(view.values || {})}
+        />
         {fullReport ? (
           <AnalysisReportView
             report={fullReport}

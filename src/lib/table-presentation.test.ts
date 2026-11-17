@@ -3,6 +3,8 @@ import {
   normalizeTableEdits,
   normalizeTableRules,
   normalizeTableStyle,
+  tableRuleLabel,
+  tableStylePresetLabel,
 } from './table-presentation';
 
 function syntheticBook() {
@@ -116,6 +118,22 @@ describe('table presentation engine', () => {
     expect(style.fontFamily).toBe('Georgia');
     expect(style.freezeHeader).toBe(true);
     expect(style.cellFormats[0]?.fill).toBe('#AABBCC');
+    expect(normalizeTableStyle({ preset: 'house' }).preset).toBe('default');
+    expect(normalizeTableStyle({ preset: 'minimal' }).preset).toBe('compact');
+    expect(tableStylePresetLabel('default')).toBe('House');
+    expect(tableStylePresetLabel('banded')).toBe('Banded');
+    expect(
+      tableRuleLabel({
+        id: 'r1',
+        type: 'highlight',
+        enabled: true,
+        op: 'below',
+        value: 50,
+        statistic: 'unweighted_n',
+        fill: '#F5E6C8',
+        color: '#A15C12',
+      })
+    ).toBe('Amber when base under 50');
 
     const rules = normalizeTableRules([
       { type: 'hide_small_bases', threshold: 25, mode: 'blank_cell' },
@@ -165,6 +183,19 @@ describe('table presentation engine', () => {
       )
     ).toBe(true);
     expect(book.rows[0]?.label).toBe('Alpha');
+  });
+
+  it('applies banded preset shading without an explicit alternate-row rule', () => {
+    const presented = applyTablePresentation(syntheticBook(), {
+      style: { preset: 'banded' },
+      rules: [],
+    });
+    expect(presented.presentation.style.preset).toBe('banded');
+    expect(
+      presented.presentation.cellStyles.some(
+        item => item.rowId === 'beta' && item.fill === '#F6F6F3'
+      )
+    ).toBe(true);
   });
 
   it('merges rows into a presentation NET and blanks small bases', () => {

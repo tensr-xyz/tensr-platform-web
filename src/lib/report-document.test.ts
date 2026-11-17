@@ -27,8 +27,11 @@ import {
   insertShape,
   insertTable,
   insertTextBox,
+  liveValueFromLabel,
+  liveValueShowsLabel,
   mergeTableRowsIntoNet,
   refreshLiveText,
+  setObjectBinding,
   moveObject,
   normalizeReportDocument,
   listPageLinks,
@@ -530,5 +533,19 @@ describe('reshapeReportDocument', () => {
       (payload.pages as Record<string, unknown>[])[0]!.objects as Record<string, unknown>[]
     ).find(obj => (obj.binding as Record<string, unknown> | null)?.kind === 'sample_size')!;
     expect((apiBase.binding as Record<string, unknown>).kind).toBe('sample_size');
+
+    const rebound = setObjectBinding(refreshed, pageId, cell2.id, {
+      kind: 'page_number',
+      template: '{n} / {total}',
+    });
+    const pageLive = rebound.pages[0]!.objects.find(obj => obj.id === cell2.id)!;
+    expect(pageLive.binding?.kind).toBe('page_number');
+    expect(pageLive.text).toBe('1 / 1');
+    expect(liveValueShowsLabel(pageLive.binding)).toBe('Page number');
+    expect(liveValueFromLabel(pageLive.binding)).toBe('This report');
+    expect(liveValueShowsLabel(base2.binding)).toBe('Sample size');
+    expect(
+      liveValueFromLabel(cell2.binding, refreshed.pages[0]!.objects, { pageTitle: 'Awareness' })
+    ).toMatch(/T\d+ · Awareness/);
   });
 });

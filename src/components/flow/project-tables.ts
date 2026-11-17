@@ -11,6 +11,8 @@ export type ProjectTable = {
   number: number;
   stale?: boolean;
   detail?: string;
+  parked?: boolean;
+  hidden?: boolean;
 };
 
 type RawRow = {
@@ -23,6 +25,8 @@ type RawRow = {
   table_number?: number | null;
   stale?: boolean;
   detail?: string;
+  parked?: boolean;
+  hidden?: boolean;
 };
 
 /** Saved tables across the screens that list them. The same id counts once. */
@@ -63,6 +67,8 @@ export function projectTableRows(rows: RawRow[] | undefined, fallbackDataset = '
       number: Number(row.table_number) > 0 ? Number(row.table_number) : 0,
       stale: Boolean(row.stale),
       detail: row.detail || '',
+      parked: Boolean(row.parked),
+      hidden: Boolean(row.hidden),
     });
   }
   return out;
