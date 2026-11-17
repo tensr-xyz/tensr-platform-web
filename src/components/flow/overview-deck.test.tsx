@@ -1,10 +1,38 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AnalysisResult } from './analysis-result';
-import { OverviewDeck, OVERVIEW_SLIDES, WaveRefresh } from './overview-deck';
+import {
+  MarketDecksPanel,
+  OverviewDeck,
+  OVERVIEW_SLIDES,
+  WaveRefresh,
+  overviewMarketBatchPayload,
+  refreshDecksBatchPayload,
+} from './overview-deck';
 
 jest.mock('@/lib/output-pptx', () => ({
   exportResultAsPptx: jest.fn(async () => undefined),
   appendResultToDeck: jest.fn(async () => undefined),
+}));
+
+jest.mock('@/lib/flow-api', () => ({
+  flowJson: jest.fn(async (path: string) => {
+    if (String(path).includes('/metadata')) {
+      return {
+        columns: [
+          { name: 'region', label: 'Region', measure: 'nominal' },
+          { name: 'weight', label: 'Weight', measure: 'numeric' },
+        ],
+      };
+    }
+    if (String(path).includes('/values')) {
+      return {
+        values: ['North', 'South'],
+        value_labels: { North: 'North', South: 'South' },
+        counts: { North: 12, South: 8 },
+      };
+    }
+    return {};
+  }),
 }));
 
 import { appendResultToDeck, exportResultAsPptx } from '@/lib/output-pptx';
@@ -43,6 +71,89 @@ describe('the deck and refresh screens', () => {
     expect(
       await screen.findByText('Saved as a recipe. The original deck is unchanged.')
     ).toBeTruthy();
+  });
+
+  it('offers one copy per market and passes the chosen values to onBuild', async () => {
+    const onBuild = jest.fn(async () => undefined);
+    render(
+      <OverviewDeck
+        audience="Total sample"
+        datasetId="ds-1"
+        onBuild={onBuild}
+        onClose={() => undefined}
+      />
+    );
+    fireEvent.click(screen.getByLabelText('One copy per market'));
+    expect(await screen.findByTestId('overview-per-market')).toBeTruthy();
+    expect(await screen.findByText(/North/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: `Build ${OVERVIEW_SLIDES.length} slides` }));
+    await waitFor(() => expect(onBuild).toHaveBeenCalled());
+    expect(onBuild.mock.calls[0][0].perMarket).toEqual({
+      groupColumn: 'region',
+      values: ['North', 'South'],
+    });
+    expect(
+      await screen.findByText(
+        'Saved one recipe per market. Refresh them together when new data arrives.'
+      )
+    ).toBeTruthy();
+  });
+
+  it('shows New data and Refresh N decks on the market panel', () => {
+    const onRefresh = jest.fn(async () => undefined);
+    render(
+      <MarketDecksPanel
+        decks={[
+          {
+            id: 'a',
+            name: 'Overview · North',
+            group_label: 'North',
+            group_column_label: 'Region',
+            family_id: 'fam',
+            new_data: true,
+            n_versions: 1,
+          },
+          {
+            id: 'b',
+            name: 'Overview · South',
+            group_label: 'South',
+            group_column_label: 'Region',
+            family_id: 'fam',
+            new_data: true,
+          },
+        ]}
+        onRefresh={onRefresh}
+      />
+    );
+    expect(screen.getByText('Market decks')).toBeTruthy();
+    expect(screen.getAllByText('New data')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh 2 decks' }));
+    expect(onRefresh).toHaveBeenCalled();
+  });
+
+  it('builds batch and refresh payloads for market decks', () => {
+    expect(
+      JSON.parse(
+        overviewMarketBatchPayload({
+          specIds: ['s1'],
+          groupColumn: 'region',
+          values: ['North'],
+          name: 'Audience overview',
+          audience: 'Total sample',
+        })
+      )
+    ).toMatchObject({
+      spec_ids: ['s1'],
+      group_column: 'region',
+      values: ['North'],
+      save_family: true,
+    });
+    expect(
+      JSON.parse(refreshDecksBatchPayload({ familyId: 'fam', onlyNewData: true }))
+    ).toMatchObject({
+      family_id: 'fam',
+      only_new_data: true,
+    });
   });
 
   it('walks the second-wave steps and keeps a movers summary', () => {

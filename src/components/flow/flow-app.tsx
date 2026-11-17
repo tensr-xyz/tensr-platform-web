@@ -16,9 +16,13 @@ import { useAuth } from '@/hooks/api/use-auth';
 import { AgentThread, AgentThreadColumn, useAgentThread } from '@/components/flow/agent-thread';
 import { recentChatSessions, sortSessionsByRecency } from '@/components/flow/chat-sessions';
 import {
+  MarketDecksPanel,
   OverviewDeck,
   OVERVIEW_SLIDES,
   WaveRefresh,
+  overviewMarketBatchPayload,
+  refreshDecksBatchPayload,
+  type MarketDeckRow,
   type OverviewBuildRequest,
   type OverviewSlide,
 } from '@/components/flow/overview-deck';
@@ -4754,6 +4758,8 @@ function ReportScreen({
   const [waveOpen, setWaveOpen] = useState(false);
   const [audienceNames, setAudienceNames] = useState<string[]>([]);
   const [overviewSlides, setOverviewSlides] = useState<OverviewSlide[]>(OVERVIEW_SLIDES);
+  const [marketDecks, setMarketDecks] = useState<MarketDeckRow[]>([]);
+  const [decksTick, setDecksTick] = useState(0);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
@@ -5031,6 +5037,46 @@ function ReportScreen({
   const exportFileId =
     selected[0]?.datasetId || reportPins.find(pin => pin.datasetId)?.datasetId || datasetId;
 
+  const reloadMarketDecks = useCallback(async () => {
+    if (!exportFileId) {
+      setMarketDecks([]);
+      return;
+    }
+    try {
+      const page = await flowJson<{ decks?: MarketDeckRow[] }>(`/datasets/${exportFileId}/decks`);
+      setMarketDecks(
+        (page.decks || []).filter(row => Boolean(row.family_id || row.group_label || row.new_data))
+      );
+    } catch {
+      setMarketDecks([]);
+    }
+  }, [exportFileId]);
+
+  useEffect(() => {
+    void reloadMarketDecks();
+  }, [reloadMarketDecks, decksTick, refreshKey]);
+
+  const refreshMarketDecks = async () => {
+    if (!exportFileId) return;
+    const familyId = marketDecks.find(row => row.family_id)?.family_id || '';
+    const created = await flowJson<{
+      n_refreshed?: number;
+      note?: string;
+      refreshed?: { export_id?: string; label?: string }[];
+    }>(`/datasets/${exportFileId}/export/deck/refresh/batch`, {
+      method: 'POST',
+      body: refreshDecksBatchPayload({
+        familyId: familyId || undefined,
+        onlyNewData: true,
+      }),
+    });
+    setNote(
+      created.note ||
+        `Refreshed ${created.n_refreshed || 0} deck${(created.n_refreshed || 0) === 1 ? '' : 's'}.`
+    );
+    setDecksTick(value => value + 1);
+  };
+
   const deck = async (recipe?: OverviewBuildRequest) => {
     const outputs = deliverableOutputs(reportPins, 'deck');
     if (!exportFileId || (!selected.length && !outputs.length)) {
@@ -5042,6 +5088,52 @@ function ReportScreen({
       return;
     }
     setError('');
+    const overviewName = recipe?.audience
+      ? `Audience overview · ${recipe.audience}`
+      : 'Audience overview';
+    const overviewOptions = recipe
+      ? {
+          headline: recipe.headline,
+          footnote: recipe.footnote,
+          hide_low: recipe.hideLow,
+          low_base_threshold: recipe.lowBaseThreshold,
+        }
+      : undefined;
+
+    if (recipe?.perMarket) {
+      const created = await flowJson<{
+        export_id?: string;
+        filename?: string;
+        n_copies?: number;
+        family_id?: string;
+        note?: string;
+      }>(`/datasets/${exportFileId}/export/deck/batch`, {
+        method: 'POST',
+        body: overviewMarketBatchPayload({
+          specIds: selected.map(row => row.id),
+          groupColumn: recipe.perMarket.groupColumn,
+          values: recipe.perMarket.values,
+          name: overviewName,
+          audience: recipe.audience,
+          slides: recipe.slides,
+          options: overviewOptions,
+          templateName: templateName || undefined,
+        }),
+      });
+      if (!created.export_id) throw new Error('The market decks did not build.');
+      await downloadExport(
+        `/exports/${created.export_id}`,
+        created.filename ||
+          (created.n_copies === 1 ? 'deck.pptx' : 'audience-overview-by-market.zip')
+      );
+      setNote(
+        created.note ||
+          `Built ${created.n_copies || recipe.perMarket.values.length} market decks and saved them as recipes.`
+      );
+      setDecksTick(value => value + 1);
+      return;
+    }
+
     let reportDocument = reportDocumentForApi(documentFromPins(reportPins));
     try {
       const stored = await flowJson<{
@@ -5072,17 +5164,10 @@ function ReportScreen({
         ...(templateName ? { template_name: templateName } : {}),
         ...(recipe
           ? {
-              name: recipe.audience
-                ? `Audience overview · ${recipe.audience}`
-                : 'Audience overview',
+              name: overviewName,
               audience: recipe.audience,
               slides: recipe.slides,
-              options: {
-                headline: recipe.headline,
-                footnote: recipe.footnote,
-                hide_low: recipe.hideLow,
-                low_base_threshold: recipe.lowBaseThreshold,
-              },
+              options: overviewOptions,
             }
           : {}),
       }),
@@ -5120,6 +5205,7 @@ function ReportScreen({
         ? `Overview deck downloaded${created.recipe?.id ? ' and saved as a recipe' : ''}.`
         : 'Deck downloaded.'
     );
+    setDecksTick(value => value + 1);
   };
 
   const run = (name: string, action: () => Promise<void>) => {
@@ -5382,6 +5468,7 @@ function ReportScreen({
             slides={overviewSlides}
             templateName={templateName || undefined}
             templateSummary={templateSummary || undefined}
+            datasetId={exportFileId || undefined}
             onReplaceTemplate={() => templateInput.current?.click()}
             onBuild={async request => {
               await deck(request);
@@ -5409,6 +5496,22 @@ function ReportScreen({
           </div>
           {error ? <p className="flow-error">{error}</p> : null}
           {note ? <p className="flow-muted">{note}</p> : null}
+          <MarketDecksPanel
+            decks={marketDecks}
+            busy={busy === 'refresh-decks'}
+            onRefresh={() =>
+              new Promise<void>((resolve, reject) => {
+                setBusy('refresh-decks');
+                void refreshMarketDecks()
+                  .then(() => resolve())
+                  .catch(err => {
+                    setError(String(err instanceof Error ? err.message : err));
+                    reject(err);
+                  })
+                  .finally(() => setBusy(''));
+              })
+            }
+          />
           <div className="report-cards">
             <Card>
               <div className="report-tags">
