@@ -306,9 +306,12 @@ function CanvasObjectView({
 export function ReportEditor({
   datasetId,
   pins = [],
+  labelsRevision = 0,
 }: {
   datasetId: string | null;
   pins?: PinLike[];
+  /** Bumped after find/replace so the editor reloads the saved document. */
+  labelsRevision?: number;
 }) {
   const [document, setDocument] = useState<ReportDocument>(() => emptyDocument());
   const [pageId, setPageId] = useState('');
@@ -396,7 +399,7 @@ export function ReportEditor({
       live = false;
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
-  }, [datasetId, pins]);
+  }, [datasetId, pins, labelsRevision]);
 
   useEffect(() => {
     if (!selected) {
