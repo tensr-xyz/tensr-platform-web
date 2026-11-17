@@ -1,11 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import { mapApiInvitation } from '@/lib/organization-invitations';
 import { pickerColumns, questionKind, type FlowColumn } from '@/lib/flow-columns';
-import { datasetRowId } from '@/components/flow/survey-screens';
+import { datasetRowId, downloadExport, fileToBase64 } from '@/components/flow/survey-screens';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { SidePanel } from '@/components/flow/side-panel';
@@ -21,6 +21,12 @@ import { ChoiceSelect } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/rest';
 import { Textarea } from '@/components/ui/textarea';
 import { AudiencePanel } from '@/components/flow/audience-panel';
+import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
+import {
+  labelChangeLine,
+  labelsImportApplyLabel,
+  type LabelsImportPreview,
+} from '@/lib/label-workbook';
 
 type DetailFile = {
   dataset_id?: string;
@@ -290,13 +296,16 @@ function AskerLog({
 export function DetailsScreen({
   project,
   datasets,
+  onChanged,
 }: {
   project?: FlowProject;
   datasets: DetailFile[];
+  onChanged?: () => void;
 }) {
   const projectId = project?.id || '';
   const files = datasets.filter(row => row.project_id === projectId);
   const active = files.find(row => datasetRowId(row) === project?.active_dataset_id) || files[0];
+  const labelsFileRef = useRef<HTMLInputElement>(null);
   const [docs, setDocs] = useState<BriefDoc[] | null>(null);
   const [members, setMembers] = useState<Member[] | null>(null);
   const [columns, setColumns] = useState<FlowColumn[] | null>(null);
@@ -308,6 +317,10 @@ export function DetailsScreen({
   const [notes, setNotes] = useState('');
   const [savedText, setSavedText] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [labelsBusy, setLabelsBusy] = useState(false);
+  const [labelsPreview, setLabelsPreview] = useState<LabelsImportPreview | null>(null);
+  const [labelsNote, setLabelsNote] = useState<string | null>(null);
+  const [showLabelChanges, setShowLabelChanges] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [orgId, setOrgId] = useState<string | null>(null);
@@ -473,6 +486,109 @@ export function DetailsScreen({
       })
       .catch(err => setError(err instanceof Error ? err.message : 'The brief did not save.'))
       .finally(() => setBusy(false));
+  };
+
+  const downloadLabels = () => {
+    if (!datasetId || labelsBusy) return;
+    const stem = String(active?.original_filename || 'labels').replace(/\.[^.]+$/, '') || 'labels';
+    setLabelsBusy(true);
+    setLabelsNote(null);
+    void downloadExport(`/datasets/${datasetId}/labels.xlsx`, `${stem}_labels.xlsx`)
+      .then(() => setLabelsNote('Labels downloaded.'))
+      .catch(err =>
+        setLabelsNote(err instanceof Error ? err.message : 'Could not download labels.')
+      )
+      .finally(() => setLabelsBusy(false));
+  };
+
+  const onPickLabelsFile = (file: File | null) => {
+    if (!file || !datasetId) return;
+    setLabelsBusy(true);
+    setLabelsNote(null);
+    setShowLabelChanges(false);
+    void fileToBase64(file)
+      .then(content =>
+        flowJson<{
+          labels_changed?: number;
+          unmatched?: number;
+          code_changed?: number;
+          changes?: LabelsImportPreview['changes'];
+        }>(`/datasets/${datasetId}/labels/import`, {
+          method: 'POST',
+          body: JSON.stringify({
+            content_base64: content,
+            filename: file.name,
+            apply: false,
+          }),
+        }).then(body => {
+          setLabelsPreview({
+            filename: file.name,
+            content_base64: content,
+            labels_changed: Number(body.labels_changed || 0),
+            unmatched: Number(body.unmatched || 0),
+            code_changed: Number(body.code_changed || 0),
+            changes: Array.isArray(body.changes) ? body.changes : [],
+          });
+        })
+      )
+      .catch(err => {
+        setLabelsPreview(null);
+        setLabelsNote(err instanceof Error ? err.message : 'Could not read that labels file.');
+      })
+      .finally(() => {
+        setLabelsBusy(false);
+        if (labelsFileRef.current) labelsFileRef.current.value = '';
+      });
+  };
+
+  const applyLabelsImport = () => {
+    if (!datasetId || !projectId || !labelsPreview || labelsBusy) return;
+    if (labelsPreview.labels_changed < 1) {
+      setLabelsNote('No label changes to apply.');
+      return;
+    }
+    const previousId = datasetId;
+    const content = labelsPreview.content_base64;
+    if (!content) {
+      setLabelsNote('Upload the labels file again, then apply.');
+      return;
+    }
+    setLabelsBusy(true);
+    setLabelsNote(null);
+    void flowJson<{ dataset_id?: string }>(`/datasets/${datasetId}/labels/import`, {
+      method: 'POST',
+      body: JSON.stringify({
+        content_base64: content,
+        filename: labelsPreview.filename,
+        apply: true,
+      }),
+    })
+      .then(saved => {
+        const nextId = String(saved.dataset_id || '');
+        if (!nextId || nextId === previousId) {
+          throw new Error('Labels were not saved as a new version.');
+        }
+        setLabelsPreview(null);
+        setShowLabelChanges(false);
+        return flowJson(`/api/projects/${projectId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ active_dataset_id: nextId }),
+        }).then(() => {
+          showDatasetVersionUndoToast({
+            projectId,
+            previousDatasetId: previousId,
+            currentDatasetId: nextId,
+            title: 'Labels saved as a new version',
+            onRestored: () => onChanged?.(),
+          });
+          setLabelsNote('Labels applied as a new version.');
+          onChanged?.();
+        });
+      })
+      .catch(err =>
+        setLabelsNote(err instanceof Error ? err.message : 'Could not apply those labels.')
+      )
+      .finally(() => setLabelsBusy(false));
   };
 
   const candidates = peopleNotOnProject(workspace || [], members || []);
@@ -714,14 +830,97 @@ export function DetailsScreen({
                 Questionnaire outline
                 {outline.length ? ` · ${outline.length} questions` : ''}
               </div>
-              {active ? (
-                <Link href={`/flow/p/${projectId}/responses`}>
-                  Linked to {active.original_filename || 'this file'}
-                </Link>
-              ) : (
-                <Link href={`/flow/p/${projectId}/sources`}>Add a file on Sources</Link>
-              )}
+              <div className="details-q-head-actions">
+                {active && datasetId ? (
+                  <>
+                    <Button
+                      type="button"
+                      className="flow-btn"
+                      disabled={labelsBusy}
+                      onClick={() => void downloadLabels()}
+                    >
+                      Download labels (.xlsx)
+                    </Button>
+                    <Button
+                      type="button"
+                      className="flow-btn"
+                      disabled={labelsBusy}
+                      onClick={() => labelsFileRef.current?.click()}
+                    >
+                      Upload labels
+                    </Button>
+                    <Input
+                      ref={labelsFileRef}
+                      className="sr-only"
+                      type="file"
+                      accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                      aria-label="Labels Excel file"
+                      onChange={event => void onPickLabelsFile(event.target.files?.[0] || null)}
+                    />
+                  </>
+                ) : null}
+                {active ? (
+                  <Link href={`/flow/p/${projectId}/responses`}>
+                    Linked to {active.original_filename || 'this file'}
+                  </Link>
+                ) : (
+                  <Link href={`/flow/p/${projectId}/sources`}>Add a file on Sources</Link>
+                )}
+              </div>
             </div>
+            {labelsPreview ? (
+              <div className="details-labels-import" aria-busy={labelsBusy}>
+                <p className="details-labels-import-title">
+                  Upload labels · {labelsPreview.filename}
+                </p>
+                <div className="details-labels-stats">
+                  <div className="details-labels-stat">
+                    <strong data-tone="ok">{labelsPreview.labels_changed}</strong>
+                    <span>labels changed</span>
+                  </div>
+                  <div className="details-labels-stat">
+                    <strong>{labelsPreview.unmatched}</strong>
+                    <span>rows not matched · skipped</span>
+                  </div>
+                  <div className="details-labels-stat">
+                    <strong data-tone="warn">{labelsPreview.code_changed}</strong>
+                    <span>code changed · not allowed</span>
+                  </div>
+                </div>
+                <p className="flow-muted">
+                  Sheets: Questions (name, label) and Answers (name, code, label). Only labels
+                  change, never codes or data.
+                </p>
+                {showLabelChanges && labelsPreview.changes.length ? (
+                  <ul className="details-labels-changes">
+                    {labelsPreview.changes.map((change, index) => (
+                      <li key={`${change.column}-${change.field}-${change.code || ''}-${index}`}>
+                        {labelChangeLine(change)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                <div className="details-labels-import-actions">
+                  <Button
+                    type="button"
+                    className="flow-btn"
+                    disabled={!labelsPreview.changes.length}
+                    onClick={() => setShowLabelChanges(open => !open)}
+                  >
+                    {showLabelChanges ? 'Hide changes' : 'See changes'}
+                  </Button>
+                  <Button
+                    type="button"
+                    className="flow-btn primary"
+                    disabled={labelsBusy || labelsPreview.labels_changed < 1}
+                    onClick={() => void applyLabelsImport()}
+                  >
+                    {labelsImportApplyLabel(labelsPreview.labels_changed)}
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            {labelsNote ? <p className="flow-muted">{labelsNote}</p> : null}
             {outline.length ? (
               <div className="details-q">
                 {outline.map((column, index) => {

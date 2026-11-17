@@ -770,7 +770,7 @@ export function FlowApp({ slug }: { slug: string[] }) {
                 onCreate={() => setNewOpen(true)}
               />
             ) : section === 'details' ? (
-              <DetailsScreen project={project} datasets={datasets} />
+              <DetailsScreen project={project} datasets={datasets} onChanged={reload} />
             ) : section === 'sources' ? (
               <SourcesScreen
                 project={project}
