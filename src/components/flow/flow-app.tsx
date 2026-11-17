@@ -4390,7 +4390,10 @@ function ResponsesScreen({
               <CodeFrameRail
                 datasetId={datasetId}
                 column={codedColumn.name}
-                title={codedColumn.name.replace(/_codes$/, '')}
+                title={
+                  columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
+                    ?.label || codedColumn.name.replace(/_codes$/, '')
+                }
                 question={
                   columns.find(item => item.name === codedColumn.name.replace(/_codes$/, ''))
                     ?.label || ''
@@ -4405,6 +4408,10 @@ function ResponsesScreen({
                 }}
                 onUseAsBanner={() => {
                   if (project?.id) router.push(`/flow/p/${project.id}/tables`);
+                }}
+                onApplied={nextId => {
+                  const previousId = datasetId || '';
+                  adoptVersion(previousId, nextId, 'Imported codeframe as a new version.');
                 }}
               />
             ) : null}
