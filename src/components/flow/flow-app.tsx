@@ -56,6 +56,7 @@ import { toolResultsSavedWorkingVersion } from '@/lib/adopt-derived-dataset';
 import { InterviewsScreen } from '@/components/flow/interviews-screen';
 import { FlowNotebook } from '@/components/flow/notebook-panel';
 import { AnovaModal } from '@/components/flow/anova-modal';
+import { ReportEditor } from '@/components/flow/report-editor';
 import { ReportOutputs, ReportPaneSwitch } from '@/components/flow/report-outputs';
 import { ShareDialog } from '@/components/flow/share-dialog';
 import { ExportDialog } from '@/components/flow/export-dialog';
@@ -5279,6 +5280,7 @@ function ReportScreen({
           ) : null}
         </div>
       </div>
+      <ReportEditor datasetId={exportFileId || null} pins={reportPins} />
       <div className="report-sheet">
         <div className="report-lead">
           <h1>{project?.name || 'Report'}</h1>

@@ -11218,3 +11218,268 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
   background: var(--color-well);
   border-radius: 10px;
 }
+
+/* 9a Report editor · text formatting (TEN-143) */
+.report-page:has(.report-editor) {
+  align-items: stretch;
+}
+
+.report-editor {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-line);
+  border-bottom: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  min-height: 520px;
+}
+
+.report-editor-loading {
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.report-editor-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 24px;
+  background: var(--color-well);
+  border-bottom: 1px solid var(--color-line);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.report-editor-tool-label {
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font: inherit;
+  padding: 0 6px 0 0;
+  cursor: pointer;
+}
+
+.report-editor-chip,
+.report-editor-toggle {
+  height: auto;
+  min-height: 0;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-size: 13px;
+  line-height: 16px;
+  padding: 5px 10px;
+  box-shadow: none;
+}
+
+.report-editor-chip.quiet,
+.report-editor-toggle:not([data-active='true']) {
+  border-color: transparent;
+  background: transparent;
+}
+
+.report-editor-toggle[data-active='true'],
+.report-editor-chip[data-active='true'] {
+  background: var(--color-accent-soft);
+  border-color: transparent;
+  font-weight: 700;
+}
+
+.report-editor-toggle.italic {
+  font-style: italic;
+}
+
+.report-editor-toggle.underline {
+  text-decoration: underline;
+}
+
+.report-editor-toggle.strike {
+  text-decoration: line-through;
+}
+
+.report-editor-save {
+  margin-left: auto;
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.report-editor-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.report-editor-pages {
+  width: 150px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  border-right: 1px solid var(--color-line);
+  background: var(--color-canvas);
+}
+
+.report-editor-thumb {
+  height: 64px;
+  flex-shrink: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 4px;
+  background: var(--color-well);
+  cursor: pointer;
+}
+
+.report-editor-thumb[data-active='true'] {
+  border-width: 2px;
+  border-color: var(--color-accent);
+}
+
+.report-editor-thumb[data-hidden='true'] {
+  opacity: 0.5;
+}
+
+.report-editor-pages-note {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 11px;
+  line-height: 14px;
+}
+
+.report-editor-add-page {
+  margin-top: auto;
+}
+
+.report-editor-stage {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 28px;
+  background: var(--color-well);
+  min-width: 0;
+  overflow: auto;
+}
+
+.report-editor-page {
+  position: relative;
+  width: min(820px, 100%);
+  aspect-ratio: 16 / 9;
+  background: var(--color-canvas);
+  box-shadow: 0 1px 3px #1b1c1a1f;
+  flex-shrink: 0;
+}
+
+.report-editor-object {
+  position: absolute;
+  display: flex;
+  align-items: stretch;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 4px;
+  border: 1.5px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.report-editor-object[data-selected='true'] {
+  border-color: var(--color-accent);
+  border-style: dashed;
+}
+
+.report-editor-object[data-paint='true'] {
+  cursor: copy;
+}
+
+.report-editor-object-label {
+  color: var(--color-muted);
+  font-size: 12px;
+}
+
+.report-editor-inspector {
+  width: 300px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-left: 1px solid var(--color-line);
+  background: var(--color-canvas);
+  overflow-y: auto;
+}
+
+.report-editor-inspector h3 {
+  margin: 0;
+  font-size: 13px;
+  line-height: 16px;
+  font-weight: var(--weight-title);
+}
+
+.report-editor-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.report-editor-field span {
+  color: var(--color-muted);
+}
+
+.report-editor-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.report-editor-pill {
+  height: auto;
+  min-height: 0;
+  border-radius: 999px;
+  border: 1px solid var(--color-line);
+  background: transparent;
+  color: var(--color-ink);
+  font-size: 12px;
+  line-height: 16px;
+  padding: 5px 9px;
+  box-shadow: none;
+}
+
+.report-editor-pill[data-active='true'] {
+  background: var(--color-accent-soft);
+  border-color: transparent;
+}
+
+.report-editor-select {
+  height: 36px;
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font: inherit;
+}
+
+.report-editor-divider {
+  height: 1px;
+  background: var(--color-line);
+}
+
+.report-editor-labels {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-editor-preview {
+  margin: 0;
+  font-size: 12px;
+}
