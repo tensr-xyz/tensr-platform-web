@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ChoiceSelect } from '@/components/ui/select';
 import {
   Dialog,
@@ -12,8 +13,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Skeleton } from '@/components/ui/rest';
+import { Skeleton, Switch } from '@/components/ui/rest';
 import { flowJson } from '@/lib/flow-api';
+import { publicShareEmbedSnippet } from '@/lib/public-share';
 import { outputKindLabel, outputRuns, type OutputRun } from '@/components/flow/report-output-runs';
 
 type Person = { user_id: string; role: string; email: string; name: string };
@@ -25,11 +27,19 @@ type Share = {
   role?: string;
   run_id?: string | null;
   title?: string | null;
+  password_required?: boolean;
+  viewer_controls?: { label?: string; column?: string }[] | null;
 };
 
 function shareUrl(token: string): string {
   if (typeof window === 'undefined') return '';
   return `${window.location.origin}/s/${token}`;
+}
+
+function viewerFilterLabels(share: Share | undefined): string[] {
+  const rows = share?.viewer_controls;
+  if (!Array.isArray(rows)) return [];
+  return rows.map(row => String(row?.label || row?.column || '').trim()).filter(Boolean);
 }
 
 export function ShareDialog({
@@ -53,6 +63,9 @@ export function ShareDialog({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [outputs, setOutputs] = useState<OutputRun[] | null>(null);
   const [pickerError, setPickerError] = useState('');
+  const [passwordDraft, setPasswordDraft] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [settingsShareId, setSettingsShareId] = useState<string | null>(null);
 
   const projectShare = shares.find(share => share.kind === 'project_link');
   const outputShare = shares.find(share => share.kind === 'output');
@@ -60,6 +73,16 @@ export function ShareDialog({
   const oneOutput = Boolean(outputShare);
   const link = projectShare ? shareUrl(projectShare.token) : '';
   const outputLink = outputShare ? shareUrl(outputShare.token) : '';
+  const settingsShare =
+    shares.find(share => share.id === settingsShareId) || projectShare || outputShare || null;
+  const settingsLink = settingsShare ? shareUrl(settingsShare.token) : '';
+  const embedSnippet = settingsShare
+    ? publicShareEmbedSnippet(
+        settingsShare.token,
+        settingsShare.title || projectName || 'Published report'
+      )
+    : '';
+  const filterLabels = viewerFilterLabels(settingsShare || undefined);
 
   const loadShares = () =>
     flowJson<{ shares?: Share[] }>(`/api/projects/${projectId}/shares`)
@@ -229,6 +252,45 @@ export function ShareDialog({
       .catch(err => setError(err instanceof Error ? err.message : 'Could not remove the link'));
   };
 
+  const savePassword = (on: boolean) => {
+    if (!settingsShare) return;
+    setError('');
+    setPasswordBusy(true);
+    const password = on ? passwordDraft.trim() : null;
+    if (on && !password) {
+      setError('Enter a password before turning protection on.');
+      setPasswordBusy(false);
+      return;
+    }
+    void flowJson<{ share: Share }>(
+      `/api/projects/${projectId}/shares/${settingsShare.id}/password`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ password }),
+      }
+    )
+      .then(async () => {
+        setPasswordDraft('');
+        setNote(on ? 'Password saved. Viewers must enter it.' : 'Password removed.');
+        await loadShares();
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'Could not update the password'))
+      .finally(() => setPasswordBusy(false));
+  };
+
+  const unpublish = (share: Share) => {
+    setError('');
+    setLinkBusy(true);
+    void flowJson(`/api/projects/${projectId}/shares/${share.id}`, { method: 'DELETE' })
+      .then(async () => {
+        setNote(share.kind === 'output' ? 'Output unpublished.' : 'Link unpublished.');
+        if (settingsShareId === share.id) setSettingsShareId(null);
+        await loadShares();
+      })
+      .catch(err => setError(err instanceof Error ? err.message : 'Could not unpublish'))
+      .finally(() => setLinkBusy(false));
+  };
+
   const mark = (value?: string) => {
     const text = (value || '?').split('@')[0];
     const parts = text.split(/[^A-Za-z0-9]+/).filter(Boolean);
@@ -393,6 +455,135 @@ export function ShareDialog({
                 >
                   Copy link
                 </Button>
+              </div>
+            ) : null}
+            {settingsShare ? (
+              <div className="share-published" aria-label="Published link settings">
+                <div className="share-published-head">
+                  <span className="share-label">Published link settings</span>
+                  {projectShare && outputShare ? (
+                    <ChoiceSelect
+                      className="share-settings-pick"
+                      aria-label="Which link"
+                      value={settingsShare.id}
+                      onValueChange={setSettingsShareId}
+                      options={[
+                        {
+                          value: projectShare.id,
+                          label: 'Project link',
+                        },
+                        {
+                          value: outputShare.id,
+                          label: outputShare.title
+                            ? `Output · ${outputShare.title}`
+                            : 'Output link',
+                        },
+                      ]}
+                    />
+                  ) : null}
+                </div>
+                <div className="share-published-row">
+                  <span className="share-who">
+                    <strong>Password</strong>
+                    <span>
+                      {settingsShare.password_required
+                        ? 'Viewers must enter a password'
+                        : 'Optional. Protect this published link'}
+                    </span>
+                  </span>
+                  <Switch
+                    checked={Boolean(settingsShare.password_required)}
+                    disabled={passwordBusy}
+                    onCheckedChange={value => {
+                      if (!value) {
+                        savePassword(false);
+                        return;
+                      }
+                      if (!passwordDraft.trim()) {
+                        setError('Enter a password, then turn protection on.');
+                        return;
+                      }
+                      savePassword(true);
+                    }}
+                    aria-label="Password protect"
+                  />
+                </div>
+                <div className="share-copy share-password-row">
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    aria-label="Link password"
+                    placeholder={
+                      settingsShare.password_required ? 'Replace password' : 'Set a password'
+                    }
+                    value={passwordDraft}
+                    onChange={event => setPasswordDraft(event.target.value)}
+                    onKeyDown={event => {
+                      if (event.key === 'Enter') savePassword(true);
+                    }}
+                  />
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={passwordBusy || !passwordDraft.trim()}
+                    onClick={() => savePassword(true)}
+                  >
+                    Save
+                  </Button>
+                </div>
+                <div className="share-published-row share-published-stack">
+                  <span className="share-who">
+                    <strong>Viewer filters</strong>
+                    <span>
+                      {filterLabels.length
+                        ? `On the shared page: ${filterLabels.join(', ')}`
+                        : settingsShare.kind === 'output'
+                          ? 'Filters appear on the shared page when set on this output'
+                          : 'Use a one-output link to offer viewer filters'}
+                    </span>
+                  </span>
+                </div>
+                <div className="share-published-row share-published-stack">
+                  <span className="share-who">
+                    <strong>Embed</strong>
+                    <span>Paste this iframe into another web page</span>
+                  </span>
+                  <div className="share-copy share-embed">
+                    <Textarea
+                      readOnly
+                      aria-label="Embed code"
+                      className="share-embed-code"
+                      value={embedSnippet}
+                      rows={3}
+                    />
+                    <Button
+                      className="flow-btn"
+                      type="button"
+                      disabled={!settingsLink}
+                      onClick={() =>
+                        void navigator.clipboard
+                          .writeText(embedSnippet)
+                          .then(() => setNote('Embed code copied.'))
+                      }
+                    >
+                      Copy embed
+                    </Button>
+                  </div>
+                </div>
+                <div className="share-published-row">
+                  <span className="share-who">
+                    <strong>Unpublish</strong>
+                    <span>Turn this published link off. The URL stops working.</span>
+                  </span>
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    disabled={linkBusy}
+                    onClick={() => unpublish(settingsShare)}
+                  >
+                    Unpublish
+                  </Button>
+                </div>
               </div>
             ) : null}
           </div>

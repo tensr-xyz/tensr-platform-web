@@ -10713,6 +10713,64 @@ button.chat-result-top {
   border-radius: 10px;
 }
 
+/* 10f published link settings inside Share. */
+.share-published {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+  padding: 12px;
+  border: 1px solid var(--color-line);
+  border-radius: 10px;
+  background: var(--color-well);
+}
+
+.share-published-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.share-published-head .share-label {
+  margin-top: 0;
+}
+
+.share-settings-pick {
+  width: auto;
+  max-width: 200px;
+  height: 28px;
+  font-size: 12px;
+}
+
+.share-published-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.share-published-stack {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.share-password-row input {
+  background: var(--color-canvas);
+}
+
+.share-embed {
+  flex-direction: column;
+}
+
+.share-embed-code {
+  min-height: 72px;
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  background: var(--color-canvas);
+  color: var(--color-muted);
+  resize: vertical;
+}
+
 .share-picker .share-body {
   max-height: min(420px, 60vh);
   overflow: auto;

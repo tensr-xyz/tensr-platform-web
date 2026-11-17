@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/rest';
 import { AnalysisReportView } from '@/components/organisms/analysis-report-view';
@@ -13,7 +14,10 @@ import { flowJson } from '@/lib/flow-api';
 import {
   fetchPublicShare,
   fetchPublicShareView,
+  recalledSharePassword,
+  rememberSharePassword,
   savePublicShareView,
+  unlockPublicShare,
   type PublicSharePayload,
 } from '@/lib/public-share';
 import type { AnalysisReport } from '@/lib/analysis-report-types';
@@ -41,17 +45,27 @@ function viewerSavedViews(payload: PublicSharePayload | null): SavedViewerView[]
   return Array.isArray(rows) ? (rows as SavedViewerView[]) : [];
 }
 
+function shareIsLocked(payload: PublicSharePayload | null): boolean {
+  return Boolean(payload?.password_required);
+}
+
 /** Shared output or project link. Outside the signed-in shell (Paper has no public board yet). */
 export default function PublicSharePage() {
   const params = useParams<{ token: string }>();
   const token = String(params?.token || '');
   const router = useRouter();
-  const [phase, setPhase] = useState<'loading' | 'ready' | 'error' | 'joining'>('loading');
+  const [phase, setPhase] = useState<'loading' | 'ready' | 'locked' | 'error' | 'joining'>(
+    'loading'
+  );
   const [error, setError] = useState('');
   const [payload, setPayload] = useState<PublicSharePayload | null>(null);
   const [filterValues, setFilterValues] = useState<Record<string, unknown>>({});
   const [filterBusy, setFilterBusy] = useState(false);
   const [filterError, setFilterError] = useState('');
+  const [sharePassword, setSharePassword] = useState('');
+  const [passwordDraft, setPasswordDraft] = useState('');
+  const [passwordBusy, setPasswordBusy] = useState(false);
+  const [passwordError, setPasswordError] = useState('');
 
   useEffect(() => {
     if (!token) {
@@ -60,10 +74,16 @@ export default function PublicSharePage() {
       return;
     }
     let live = true;
-    fetchPublicShare(token)
+    const remembered = recalledSharePassword(token);
+    fetchPublicShare(token, remembered || undefined)
       .then(body => {
         if (!live) return;
         setPayload(body);
+        if (shareIsLocked(body)) {
+          setPhase('locked');
+          return;
+        }
+        if (remembered) setSharePassword(remembered);
         setPhase('ready');
       })
       .catch(err => {
@@ -90,19 +110,41 @@ export default function PublicSharePage() {
     setPhase('joining');
     void flowJson<{ project_id?: string }>(`/api/public/shares/${encodeURIComponent(token)}/join`, {
       method: 'POST',
+      headers: sharePassword ? { 'X-Share-Password': sharePassword } : undefined,
     })
       .then(() => router.replace(`/flow/p/${projectId}/report`))
       .catch(err => {
         setError(err instanceof Error ? err.message : 'Could not open this project');
         setPhase('error');
       });
-  }, [phase, payload, token, router]);
+  }, [phase, payload, token, router, sharePassword]);
+
+  const unlock = () => {
+    const password = passwordDraft.trim();
+    if (!password) {
+      setPasswordError('Enter the password for this link.');
+      return;
+    }
+    setPasswordBusy(true);
+    setPasswordError('');
+    void unlockPublicShare(token, password)
+      .then(body => {
+        rememberSharePassword(token, password);
+        setSharePassword(password);
+        setPayload(body);
+        setPhase('ready');
+      })
+      .catch(err => {
+        setPasswordError(err instanceof Error ? err.message : 'That password is not correct');
+      })
+      .finally(() => setPasswordBusy(false));
+  };
 
   const applyFilters = (next: Record<string, unknown>) => {
     setFilterValues(next);
     setFilterBusy(true);
     setFilterError('');
-    void fetchPublicShareView(token, next)
+    void fetchPublicShareView(token, next, sharePassword || undefined)
       .then(body => {
         setPayload(previous =>
           previous
@@ -111,6 +153,7 @@ export default function PublicSharePage() {
                 run: body.run ?? previous.run,
                 viewer: body.viewer ?? previous.viewer,
                 share: body.share ?? previous.share,
+                password_required: false,
               }
             : body
         );
@@ -124,7 +167,7 @@ export default function PublicSharePage() {
   const saveView = (name: string, values: Record<string, unknown>) => {
     setFilterBusy(true);
     setFilterError('');
-    void savePublicShareView(token, name, values)
+    void savePublicShareView(token, name, values, sharePassword || undefined)
       .then(body => {
         setPayload(previous =>
           previous
@@ -161,6 +204,37 @@ export default function PublicSharePage() {
           <p className="iv-body">{error || 'This link is no longer valid.'}</p>
           <Button asChild className="iv-btn">
             <Link href="/login">Sign in</Link>
+          </Button>
+        </div>
+      </main>
+    );
+  }
+
+  if (phase === 'locked') {
+    return (
+      <main className="iv">
+        <div className="iv-card">
+          <h1 className="iv-title">{payload.project.name || 'Shared report'}</h1>
+          <p className="iv-body">This published link is password protected.</p>
+          <Input
+            type="password"
+            autoComplete="current-password"
+            aria-label="Password"
+            placeholder="Password"
+            value={passwordDraft}
+            onChange={event => setPasswordDraft(event.target.value)}
+            onKeyDown={event => {
+              if (event.key === 'Enter') unlock();
+            }}
+          />
+          {passwordError ? <p className="iv-note flow-error">{passwordError}</p> : null}
+          <Button
+            className="iv-btn iv-primary"
+            type="button"
+            disabled={passwordBusy}
+            onClick={unlock}
+          >
+            Open
           </Button>
         </div>
       </main>
