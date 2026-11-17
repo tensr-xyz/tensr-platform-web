@@ -2590,7 +2590,7 @@ select.flow-input {
 
 .chat-turn-changes-title {
   color: var(--color-ink);
-  font-weight: 600;
+  font-weight: var(--weight-title);
 }
 
 .chat-turn-changes-label {
@@ -12407,7 +12407,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 .report-editor-chip[data-active='true'] {
   background: var(--color-accent-soft);
   border-color: transparent;
-  font-weight: 700;
+  font-weight: var(--weight-medium);
 }
 
 .report-editor-toggle.italic {
@@ -12703,7 +12703,7 @@ body:has(.flow) :is([role='dialog'], [data-radix-popper-content-wrapper]) :where
 
 .report-editor-live-value {
   color: var(--color-accent);
-  font-weight: 700;
+  font-weight: var(--weight-title);
 }
 
 .report-editor-live-value[data-stale='true'] {

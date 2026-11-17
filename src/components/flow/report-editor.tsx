@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ChoiceSelect } from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -230,7 +231,7 @@ function CanvasObjectView({
   const isText = obj.kind === 'text';
   const hasRunBindings = obj.runs.some(run => run.binding);
   return (
-    <button
+    <Button
       type="button"
       className="report-editor-object"
       data-kind={obj.kind}
@@ -299,7 +300,7 @@ function CanvasObjectView({
       ) : (
         <span className="report-editor-object-label">{kindLabel(obj.kind)}</span>
       )}
-    </button>
+    </Button>
   );
 }
 
@@ -701,9 +702,9 @@ export function ReportEditor({
   return (
     <div className="report-editor">
       <div className="report-editor-toolbar" role="toolbar" aria-label="Report formatting">
-        <button type="button" className="report-editor-tool-label" onClick={addText}>
+        <Button type="button" className="report-editor-tool-label" onClick={addText}>
           Text
-        </button>
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" className="report-editor-chip" disabled={!selected}>
@@ -846,9 +847,9 @@ export function ReportEditor({
           + Live value
         </Button>
         <span className="report-editor-toolbar-divider" aria-hidden="true" />
-        <button type="button" className="report-editor-tool-label" onClick={addTable}>
+        <Button type="button" className="report-editor-tool-label" onClick={addTable}>
           Table
-        </button>
+        </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button type="button" className="report-editor-chip" disabled={!selectedTable}>
@@ -893,7 +894,7 @@ export function ReportEditor({
       <div className="report-editor-body">
         <aside className="report-editor-pages" aria-label="Pages">
           {document.pages.map((item, index) => (
-            <button
+            <Button
               key={item.id}
               type="button"
               className="report-editor-thumb"
@@ -963,7 +964,7 @@ export function ReportEditor({
               <h3>Table style</h3>
               <div className="report-editor-style-grid">
                 {HOUSE_STYLE_OPTIONS.map(option => (
-                  <button
+                  <Button
                     key={option.id}
                     type="button"
                     className="report-editor-style-chip"
@@ -971,7 +972,7 @@ export function ReportEditor({
                     onClick={() => applyHouseStyle(option.id)}
                   >
                     {option.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
               <h3>Rules</h3>
@@ -985,29 +986,29 @@ export function ReportEditor({
                       className="report-editor-rule-row"
                       data-enabled={rule.enabled}
                     >
-                      <button
+                      <Button
                         type="button"
                         className="report-editor-rule-label"
                         onClick={() => toggleRule(rule.id)}
                         title={rule.enabled ? 'Turn rule off' : 'Turn rule on'}
                       >
                         {tableRuleLabel(rule)}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
                         className="report-editor-rule-remove"
                         onClick={() => removeRule(rule.id)}
                         aria-label={`Remove ${tableRuleLabel(rule)}`}
                       >
                         Remove
-                      </button>
+                      </Button>
                     </div>
                   ))
                 )}
                 {addingRule ? (
                   <div className="report-editor-rule-catalog" role="listbox" aria-label="Add rule">
                     {TABLE_RULE_CATALOG.map(entry => (
-                      <button
+                      <Button
                         key={entry.id}
                         type="button"
                         role="option"
@@ -1015,17 +1016,17 @@ export function ReportEditor({
                         onClick={() => addRuleFromCatalog(entry.id)}
                       >
                         {entry.label}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 ) : (
-                  <button
+                  <Button
                     type="button"
                     className="report-editor-add-rule"
                     onClick={() => setAddingRule(true)}
                   >
                     + Add rule
-                  </button>
+                  </Button>
                 )}
               </div>
               {editCells ? (
@@ -1163,7 +1164,7 @@ export function ReportEditor({
                         const active = selectedRowIds.includes(rowId);
                         return (
                           <li key={rowId}>
-                            <button
+                            <Button
                               type="button"
                               className="report-editor-row-item"
                               data-active={active}
@@ -1178,7 +1179,7 @@ export function ReportEditor({
                             >
                               {rowDisplayLabel(rowId)}
                               {hidden ? ' (hidden)' : ''}
-                            </button>
+                            </Button>
                           </li>
                         );
                       })}
@@ -1238,24 +1239,24 @@ export function ReportEditor({
                     {liveValueFromLabel(selectedLive, pageTables, { pageTitle: page?.title })}
                   </div>
                 ) : (
-                  <select
+                  <ChoiceSelect
                     className="report-editor-select"
                     aria-label="Source table"
                     value={selectedLive.sourceObjectId || ''}
-                    onChange={event => {
-                      const nextId = event.target.value || null;
-                      rebindLiveValue(selectedLive.kind, nextId);
+                    onValueChange={nextId => {
+                      rebindLiveValue(selectedLive.kind, nextId || null);
                     }}
-                  >
-                    <option value="">
-                      {pageTables.length ? 'Choose a table' : 'No table on this page'}
-                    </option>
-                    {pageTables.map((table, index) => (
-                      <option key={table.id} value={table.id}>
-                        {tableSourceLabel(table, index, page?.title || '')}
-                      </option>
-                    ))}
-                  </select>
+                    options={[
+                      {
+                        value: '',
+                        label: pageTables.length ? 'Choose a table' : 'No table on this page',
+                      },
+                      ...pageTables.map((table, index) => ({
+                        value: table.id,
+                        label: tableSourceLabel(table, index, page?.title || ''),
+                      })),
+                    ]}
+                  />
                 )}
               </label>
               <div className="report-editor-row" role="group" aria-label="Live value type">
@@ -1371,24 +1372,23 @@ export function ReportEditor({
               </label>
               <label className="report-editor-field">
                 <span>Page in this report</span>
-                <select
+                <ChoiceSelect
                   className="report-editor-select"
+                  aria-label="Page in this report"
                   value={linkPageId}
-                  onChange={event => {
-                    const nextId = event.target.value;
+                  onValueChange={nextId => {
                     setLinkPageId(nextId);
                     setLinkDraft('');
                     applyLink(nextId ? pageHref(nextId) : null);
                   }}
-                >
-                  <option value="">None</option>
-                  {document.pages.map((item, index) => (
-                    <option key={item.id} value={item.id}>
-                      Page {index + 1}
-                      {item.title ? ` · ${item.title}` : ''}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: '', label: 'None' },
+                    ...document.pages.map((item, index) => ({
+                      value: item.id,
+                      label: `Page ${index + 1}${item.title ? ` · ${item.title}` : ''}`,
+                    })),
+                  ]}
+                />
               </label>
               {objectHref(selected) ? (
                 <Button

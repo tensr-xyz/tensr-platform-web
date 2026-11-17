@@ -88,7 +88,7 @@ export function ShareViewerFilters({
           return (
             <DropdownMenu key={control.id}>
               <DropdownMenuTrigger asChild>
-                <button
+                <Button
                   type="button"
                   className={
                     chip.active ? 'share-viewer-filter-chip active' : 'share-viewer-filter-chip'
@@ -97,7 +97,7 @@ export function ShareViewerFilters({
                   aria-label={`${control.label} filter`}
                 >
                   {chip.text} ▾
-                </button>
+                </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="share-viewer-filter-menu">
                 {control.type === 'text' ? (
@@ -211,14 +211,14 @@ export function ShareViewerFilters({
         {views.length ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button
+              <Button
                 type="button"
                 className="share-viewer-filter-chip"
                 disabled={busy}
                 aria-label="Saved views"
               >
                 Views ▾
-              </button>
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="share-viewer-filter-menu">
               <DropdownMenuLabel>Saved views</DropdownMenuLabel>
