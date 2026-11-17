@@ -40,6 +40,7 @@ import { rememberTablePin, savePin } from '@/components/flow/report-pins';
 import { WeightPanel } from '@/components/flow/weight-modal';
 export { WeightPanel } from '@/components/flow/weight-modal';
 import { TableSignificancePanel } from '@/components/flow/table-significance-panel';
+import { TidyTablesDialog } from '@/components/flow/tidy-tables-dialog';
 import {
   DEFAULT_TABLE_SIGNIFICANCE,
   arrowForCell,
@@ -1541,6 +1542,8 @@ type SavedSpec = {
   number?: number;
   stale?: boolean;
   detail?: string;
+  parked?: boolean;
+  hidden?: boolean;
 };
 type SavedBook = { id?: string; name?: string; n_specs?: number };
 
@@ -1833,6 +1836,7 @@ export function TablesBuilder({
   const router = useRouter();
   const [weightOpen, setWeightOpen] = useState(false);
   const [weightRerake, setWeightRerake] = useState(false);
+  const [tidyOpen, setTidyOpen] = useState(false);
   const [customNets, setCustomNets] = useState<{ label: string; values: string[] }[]>([]);
   const [netOpen, setNetOpen] = useState(false);
   const [netOptions, setNetOptions] = useState<string[]>([]);
@@ -1953,6 +1957,8 @@ export function TablesBuilder({
         number: table.number,
         stale: table.stale,
         detail: table.detail,
+        parked: table.parked,
+        hidden: table.hidden,
       }));
       setSpecs(saved);
       const liveHere = saved.filter(
@@ -2385,6 +2391,58 @@ export function TablesBuilder({
       spec.label || spec.name || '',
       columns.map(column => ({ name: column.name, label: columnChoiceLabel(column) }))
     );
+  const activeSpecs = specs.filter(spec => !spec.parked);
+  const parkedSpecs = specs.filter(spec => spec.parked);
+
+  function reloadSpecs() {
+    if (!datasetId) return;
+    void loadProjectTables(projectId, datasetId, { fileIds: fileIdsRef.current }).then(
+      projectTables => {
+        setSpecs(
+          projectTables.map(table => ({
+            spec_id: table.id,
+            label: table.label,
+            dataset_id: table.datasetId,
+            filename: table.filename,
+            number: table.number,
+            stale: table.stale,
+            detail: table.detail,
+            parked: table.parked,
+            hidden: table.hidden,
+          }))
+        );
+      }
+    );
+  }
+
+  function openSavedSpec(spec: SavedSpec) {
+    const id = spec.spec_id || spec.id || '';
+    if (dirty) {
+      setError('This table has unsaved changes. Save it before opening another.');
+      return;
+    }
+    if (spec.dataset_id && spec.dataset_id !== datasetId && onFile && !spec.stale) {
+      try {
+        window.sessionStorage.setItem(`tensr-open-table:${spec.dataset_id}`, id);
+      } catch {
+        // Without storage the file still switches; its first table opens.
+      }
+      onFile(spec.dataset_id);
+      return;
+    }
+    void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
+      .then(remember)
+      .catch(err => {
+        if (isTableSourceChanged(err)) {
+          setBook(null);
+          setError(
+            'Built on an older version of the data. Rebuild on current file from Report, or open the original version from Sources.'
+          );
+          return;
+        }
+        setError(err instanceof Error ? err.message : 'Could not open that table');
+      });
+  }
   const title = book
     ? `${selectedNumber ? `T${selectedNumber} · ` : ''}${labelFor(stub)}${
         banners.length ? ` by ${banners.map(labelFor).join(', ')}` : ''
@@ -2415,15 +2473,15 @@ export function TablesBuilder({
       <aside className="tables-rail">
         <div className="tables-rail-head">
           <span>Tables</span>
-          <span>{railReady ? specs.length : ''}</span>
+          <span>{railReady ? activeSpecs.length : ''}</span>
         </div>
         {!railReady ? (
           <div aria-busy="true">
             <Skeleton className="mb-2 h-8 w-full" />
             <Skeleton className="h-8 w-full" />
           </div>
-        ) : specs.length ? (
-          specs.map(spec => {
+        ) : activeSpecs.length ? (
+          activeSpecs.map(spec => {
             const id = spec.spec_id || spec.id || '';
             return (
               <Button
@@ -2431,33 +2489,7 @@ export function TablesBuilder({
                 className="tables-saved"
                 type="button"
                 data-active={id === specId}
-                onClick={() => {
-                  if (dirty) {
-                    setError('This table has unsaved changes. Save it before opening another.');
-                    return;
-                  }
-                  if (spec.dataset_id && spec.dataset_id !== datasetId && onFile && !spec.stale) {
-                    try {
-                      window.sessionStorage.setItem(`tensr-open-table:${spec.dataset_id}`, id);
-                    } catch {
-                      // Without storage the file still switches; its first table opens.
-                    }
-                    onFile(spec.dataset_id);
-                    return;
-                  }
-                  void flowJson<Record<string, unknown>>(`/datasets/${datasetId}/tables/${id}`)
-                    .then(remember)
-                    .catch(err => {
-                      if (isTableSourceChanged(err)) {
-                        setBook(null);
-                        setError(
-                          'Built on an older version of the data. Rebuild on current file from Report, or open the original version from Sources.'
-                        );
-                        return;
-                      }
-                      setError(err instanceof Error ? err.message : 'Could not open that table');
-                    });
-                }}
+                onClick={() => openSavedSpec(spec)}
               >
                 <span>T{spec.number || ''}</span>
                 <span className="tables-saved-copy">
@@ -2474,6 +2506,33 @@ export function TablesBuilder({
         ) : (
           <p className="flow-muted">No saved tables yet</p>
         )}
+        {parkedSpecs.length ? (
+          <>
+            <div className="tables-rail-head">
+              <span>Parked</span>
+              <span>{parkedSpecs.length}</span>
+            </div>
+            {parkedSpecs.map(spec => {
+              const id = spec.spec_id || spec.id || '';
+              return (
+                <Button
+                  key={`parked-${id}`}
+                  className="tables-saved"
+                  type="button"
+                  data-active={id === specId}
+                  data-parked="true"
+                  onClick={() => openSavedSpec(spec)}
+                >
+                  <span>T{spec.number || ''}</span>
+                  <span className="tables-saved-copy">
+                    <span>{railLabel(spec)}</span>
+                    {spec.filename ? <span className="flow-muted">{spec.filename}</span> : null}
+                  </span>
+                </Button>
+              );
+            })}
+          </>
+        ) : null}
         <div className="tables-rail-head">
           <span>Banner books</span>
           <Button
@@ -2517,6 +2576,16 @@ export function TablesBuilder({
       ) : (
         <>
           <section className="tables-main">
+            <div className="tables-tidy-bar">
+              <Button
+                className="tables-tidy-trigger"
+                type="button"
+                disabled={!datasetId || !railReady}
+                onClick={() => setTidyOpen(true)}
+              >
+                Tidy tables…
+              </Button>
+            </div>
             <div className="tables-tools">
               {tableFilter?.filters.length ? (
                 <div className="tables-line">
@@ -3087,6 +3156,15 @@ export function TablesBuilder({
           }}
         />
       ) : null}
+      <TidyTablesDialog
+        datasetId={datasetId}
+        open={tidyOpen}
+        onOpenChange={setTidyOpen}
+        onApplied={() => {
+          setNote('Tables tidied.');
+          reloadSpecs();
+        }}
+      />
     </div>
   );
 }
