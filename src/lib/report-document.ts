@@ -355,6 +355,44 @@ export function resolveTextHref(
   return { kind: 'url', url: text };
 }
 
+/** Every in-report page: link on a text object (finding → evidence page). */
+export function listPageLinks(
+  document: { pages?: Array<Record<string, unknown>> } | null | undefined
+): Array<{ fromPageId: string; objectId: string; pageId: string; href: string }> {
+  const pages = Array.isArray(document?.pages) ? document.pages : [];
+  const links: Array<{ fromPageId: string; objectId: string; pageId: string; href: string }> = [];
+  for (const page of pages) {
+    if (!page || typeof page !== 'object') continue;
+    const fromPageId = String(page.id || '');
+    const objects = Array.isArray(page.objects) ? page.objects : [];
+    for (const obj of objects) {
+      if (!obj || typeof obj !== 'object') continue;
+      const record = obj as Record<string, unknown>;
+      if (record.kind !== 'text') continue;
+      const objectId = String(record.id || '');
+      const candidates: unknown[] = [];
+      if (record.href) candidates.push(record.href);
+      const runs = Array.isArray(record.runs) ? record.runs : [];
+      for (const run of runs) {
+        if (run && typeof run === 'object' && (run as { href?: unknown }).href) {
+          candidates.push((run as { href?: unknown }).href);
+        }
+      }
+      for (const href of candidates) {
+        const resolved = resolveTextHref(href);
+        if (!resolved || resolved.kind !== 'page') continue;
+        links.push({
+          fromPageId,
+          objectId,
+          pageId: resolved.pageId,
+          href: pageHref(resolved.pageId),
+        });
+      }
+    }
+  }
+  return links;
+}
+
 export function normalizeTextBinding(raw: unknown): TextBinding | null {
   if (!raw || typeof raw !== 'object') return null;
   const source = raw as Record<string, unknown>;

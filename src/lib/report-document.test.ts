@@ -31,6 +31,7 @@ import {
   refreshLiveText,
   moveObject,
   normalizeReportDocument,
+  listPageLinks,
   pageHref,
   pagesForExport,
   parseReportReshapeRequest,
@@ -313,6 +314,14 @@ describe('report document page model', () => {
       kind: 'url',
       url: 'https://example.com',
     });
+    expect(listPageLinks(linked)).toEqual([
+      {
+        fromPageId: pageId,
+        objectId: box.id,
+        pageId,
+        href: pageHref(pageId),
+      },
+    ]);
 
     const styled = setObjectTextStyle(linked, pageId, box.id, {
       underline: true,
