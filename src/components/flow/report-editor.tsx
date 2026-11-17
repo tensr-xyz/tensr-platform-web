@@ -15,14 +15,21 @@ import {
   applyDefaultLabels,
   copyStyles,
   documentFromPins,
+  hideTableRow,
+  insertTable,
   insertTextBox,
+  mergeTableRowsIntoNet,
   normalizeReportDocument,
   pageHref,
+  renameTableRow,
+  reorderTableRows,
   reportDocumentForApi,
   resolveTextHref,
   setDefaultLabels,
   setObjectText,
   setObjectTextStyle,
+  setTableRules,
+  setTableStyle,
   type DefaultLabels,
   type ListStyle,
   type PinLike,
@@ -32,6 +39,14 @@ import {
   type TextBoxStyle,
   type VerticalAlign,
 } from '@/lib/report-document';
+import {
+  HOUSE_STYLE_OPTIONS,
+  TABLE_RULE_CATALOG,
+  tableRuleLabel,
+  tableStylePresetLabel,
+  type TableRule,
+  type TableStylePreset,
+} from '@/lib/table-presentation';
 
 const STYLE_PRESETS: { id: string; label: string; style: Partial<TextBoxStyle> }[] = [
   { id: 'headline', label: 'Headline', style: { fontFamily: 'Inter', fontSizePt: 22, bold: true } },
@@ -109,7 +124,61 @@ function kindLabel(kind: ReportObject['kind']): string {
   return 'Shape';
 }
 
-function TextObjectView({
+function TableObjectPreview({ obj }: { obj: ReportObject }) {
+  const style = obj.tableStyle;
+  const banded = style.preset === 'banded';
+  const minimal = style.preset === 'compact';
+  const rows = [
+    ['', 'Total', 'Group A', 'Group B'],
+    ['Row one', '42%', '51%', '33%'],
+    ['Row two', '28%', '22%', '35%'],
+    ['Row three', '18%', '14%', '21%'],
+  ];
+  const ruleCount = obj.tableRules.filter(rule => rule.enabled).length;
+  return (
+    <div className="report-editor-table-preview" data-preset={style.preset}>
+      <table
+        style={{
+          fontFamily: style.fontFamily,
+          fontSize: `${Math.max(8, style.fontSizePt - 1)}pt`,
+          color: style.bodyColor,
+          borderColor: style.borderColor,
+          borderWidth: minimal ? 0 : style.borderWidthPt,
+        }}
+      >
+        <tbody>
+          {rows.map((row, rowIndex) => (
+            <tr key={rowIndex}>
+              {row.map((cell, colIndex) => {
+                const isHeader = rowIndex === 0;
+                const shade = banded && !isHeader && rowIndex % 2 === 0;
+                return (
+                  <td
+                    key={colIndex}
+                    style={{
+                      background: isHeader ? style.headerFill : shade ? '#F6F6F3' : style.bodyFill,
+                      color: isHeader ? style.headerColor : style.bodyColor,
+                      borderColor: style.borderColor,
+                      fontWeight: isHeader ? 600 : 400,
+                    }}
+                  >
+                    {cell}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <span className="report-editor-table-meta">
+        {tableStylePresetLabel(style.preset)}
+        {ruleCount ? ` · ${ruleCount} rule${ruleCount === 1 ? '' : 's'}` : ''}
+      </span>
+    </div>
+  );
+}
+
+function CanvasObjectView({
   obj,
   selected,
   paintArmed,
@@ -128,6 +197,7 @@ function TextObjectView({
   const deco = [style.underline ? 'underline' : '', style.strikethrough ? 'line-through' : '']
     .filter(Boolean)
     .join(' ');
+  const isText = obj.kind === 'text';
   return (
     <button
       type="button"
@@ -141,21 +211,22 @@ function TextObjectView({
         width: `${obj.frame.w * 100}%`,
         height: `${obj.frame.h * 100}%`,
         zIndex: obj.zIndex,
-        fontFamily: style.fontFamily,
-        fontSize: `${style.fontSizePt}pt`,
-        color: style.color,
-        fontWeight: style.bold ? 700 : 400,
-        fontStyle: style.italic ? 'italic' : 'normal',
-        textDecoration: deco || 'none',
-        textAlign: style.align,
-        lineHeight: String(style.lineSpacing),
-        justifyContent:
-          style.verticalAlign === 'middle'
+        fontFamily: isText ? style.fontFamily : undefined,
+        fontSize: isText ? `${style.fontSizePt}pt` : undefined,
+        color: isText ? style.color : undefined,
+        fontWeight: isText ? (style.bold ? 700 : 400) : undefined,
+        fontStyle: isText ? (style.italic ? 'italic' : 'normal') : undefined,
+        textDecoration: isText ? deco || 'none' : undefined,
+        textAlign: isText ? style.align : undefined,
+        lineHeight: isText ? String(style.lineSpacing) : undefined,
+        justifyContent: isText
+          ? style.verticalAlign === 'middle'
             ? 'center'
             : style.verticalAlign === 'bottom'
               ? 'flex-end'
-              : 'flex-start',
-        paddingLeft: indent,
+              : 'flex-start'
+          : 'flex-start',
+        paddingLeft: isText ? indent : undefined,
       }}
       onClick={event => {
         event.stopPropagation();
@@ -167,6 +238,8 @@ function TextObjectView({
           {listPrefix}
           {text}
         </span>
+      ) : obj.kind === 'table' ? (
+        <TableObjectPreview obj={obj} />
       ) : (
         <span className="report-editor-object-label">{kindLabel(obj.kind)}</span>
       )}
@@ -187,6 +260,10 @@ export function ReportEditor({
   const [paintSourceId, setPaintSourceId] = useState<string | null>(null);
   const [linkDraft, setLinkDraft] = useState('');
   const [linkPageId, setLinkPageId] = useState('');
+  const [editCells, setEditCells] = useState(false);
+  const [addingRule, setAddingRule] = useState(false);
+  const [rowDraft, setRowDraft] = useState('');
+  const [selectedRowIds, setSelectedRowIds] = useState<string[]>([]);
   const [phase, setPhase] = useState<'loading' | 'ready'>('loading');
   const [saveNote, setSaveNote] = useState('');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -287,9 +364,11 @@ export function ReportEditor({
     commit(setObjectTextStyle(document, page.id, selected.id, patch));
   };
 
+  const selectedTable = selected?.kind === 'table' ? selected : null;
+
   const activePreset =
     STYLE_PRESETS.find(preset => {
-      if (!selected) return false;
+      if (!selected || selected.kind !== 'text') return false;
       const style = selected.textStyle;
       return (
         style.fontSizePt === preset.style.fontSizePt &&
@@ -298,14 +377,21 @@ export function ReportEditor({
       );
     })?.label || 'Headline';
 
+  const houseStyleLabel = selectedTable
+    ? tableStylePresetLabel(selectedTable.tableStyle.preset)
+    : 'House style';
+
   const selectObject = (objectId: string) => {
     if (paintSourceId && page && paintSourceId !== objectId) {
       commit(copyStyles(document, page.id, paintSourceId, [objectId]));
       setPaintSourceId(null);
       setSelectedId(objectId);
+      setSelectedRowIds([]);
       return;
     }
     setSelectedId(objectId);
+    setSelectedRowIds([]);
+    setAddingRule(false);
   };
 
   const addText = () => {
@@ -323,6 +409,96 @@ export function ReportEditor({
     if (created) setSelectedId(created.id);
   };
 
+  const addTable = () => {
+    if (!page) return;
+    const before = new Set(page.objects.map(obj => obj.id));
+    const next = insertTable(document, page.id, {
+      frame: { x: 0.08, y: 0.28, w: 0.84, h: 0.52 },
+      tableStyle: { preset: 'default' },
+    });
+    const created = next.pages
+      .find(item => item.id === page.id)
+      ?.objects.find(obj => !before.has(obj.id));
+    commit(next);
+    if (created) {
+      setSelectedId(created.id);
+      setEditCells(false);
+      setSelectedRowIds([]);
+    }
+  };
+
+  const applyHouseStyle = (preset: TableStylePreset) => {
+    if (!page || !selectedTable) return;
+    commit(setTableStyle(document, page.id, selectedTable.id, { preset }));
+  };
+
+  const addRuleFromCatalog = (catalogId: string) => {
+    if (!page || !selectedTable) return;
+    const entry = TABLE_RULE_CATALOG.find(item => item.id === catalogId);
+    if (!entry) return;
+    const nextRules: TableRule[] = [
+      ...selectedTable.tableRules,
+      { ...entry.rule, id: `rule-${Math.random().toString(16).slice(2, 10)}`, enabled: true },
+    ];
+    commit(setTableRules(document, page.id, selectedTable.id, nextRules));
+    setAddingRule(false);
+  };
+
+  const removeRule = (ruleId: string) => {
+    if (!page || !selectedTable) return;
+    commit(
+      setTableRules(
+        document,
+        page.id,
+        selectedTable.id,
+        selectedTable.tableRules.filter(rule => rule.id !== ruleId)
+      )
+    );
+  };
+
+  const toggleRule = (ruleId: string) => {
+    if (!page || !selectedTable) return;
+    commit(
+      setTableRules(
+        document,
+        page.id,
+        selectedTable.id,
+        selectedTable.tableRules.map(rule =>
+          rule.id === ruleId ? { ...rule, enabled: !rule.enabled } : rule
+        )
+      )
+    );
+  };
+
+  const editableRowIds = useMemo(() => {
+    if (!selectedTable) return [] as string[];
+    const edits = selectedTable.tableEdits;
+    const ids = new Set<string>([
+      ...edits.rowOrder,
+      ...Object.keys(edits.renames),
+      ...edits.hiddenRowIds,
+      ...edits.merges.flatMap(merge => merge.rowIds),
+    ]);
+    return [...ids];
+  }, [selectedTable]);
+
+  const rowDisplayLabel = (rowId: string) => selectedTable?.tableEdits.renames[rowId] || rowId;
+
+  const ensureRowId = (raw: string) => {
+    const label = raw.trim();
+    if (!label) return null;
+    const existing = editableRowIds.find(
+      id => id === label || selectedTable?.tableEdits.renames[id] === label
+    );
+    if (existing) return existing;
+    return (
+      label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '') || `row-${Math.random().toString(16).slice(2, 8)}`
+    );
+  };
+
   const applyLink = (href: string | null) => {
     if (!page || !selected || selected.kind !== 'text') return;
     commit(withObjectHref(document, page.id, selected.id, href));
@@ -338,7 +514,7 @@ export function ReportEditor({
 
   return (
     <div className="report-editor">
-      <div className="report-editor-toolbar" role="toolbar" aria-label="Text formatting">
+      <div className="report-editor-toolbar" role="toolbar" aria-label="Report formatting">
         <button type="button" className="report-editor-tool-label" onClick={addText}>
           Text
         </button>
@@ -475,6 +651,48 @@ export function ReportEditor({
         >
           Format painter
         </Button>
+        <span className="report-editor-toolbar-divider" aria-hidden="true" />
+        <button type="button" className="report-editor-tool-label" onClick={addTable}>
+          Table
+        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" className="report-editor-chip" disabled={!selectedTable}>
+              {houseStyleLabel} ▾
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {HOUSE_STYLE_OPTIONS.map(option => (
+              <DropdownMenuItem key={option.id} onSelect={() => applyHouseStyle(option.id)}>
+                {option.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button type="button" className="report-editor-chip quiet" disabled={!selectedTable}>
+              Rules ▾
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {TABLE_RULE_CATALOG.map(entry => (
+              <DropdownMenuItem key={entry.id} onSelect={() => addRuleFromCatalog(entry.id)}>
+                {entry.label}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          type="button"
+          className="report-editor-chip quiet"
+          data-active={editCells}
+          disabled={!selectedTable && !editCells}
+          aria-pressed={editCells}
+          onClick={() => setEditCells(current => !current)}
+        >
+          Edit cells
+        </Button>
         {saveNote ? <span className="report-editor-save">{saveNote}</span> : null}
       </div>
 
@@ -534,7 +752,7 @@ export function ReportEditor({
               .slice()
               .sort((a, b) => a.zIndex - b.zIndex || a.id.localeCompare(b.id))
               .map(obj => (
-                <TextObjectView
+                <CanvasObjectView
                   key={obj.id}
                   obj={obj}
                   selected={obj.id === selectedId}
@@ -545,8 +763,241 @@ export function ReportEditor({
           </div>
         </div>
 
-        <aside className="report-editor-inspector" aria-label="Text and labels">
-          {selected?.kind === 'text' ? (
+        <aside className="report-editor-inspector" aria-label="Object inspector">
+          {selectedTable ? (
+            <>
+              <h3>Table style</h3>
+              <div className="report-editor-style-grid">
+                {HOUSE_STYLE_OPTIONS.map(option => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className="report-editor-style-chip"
+                    data-active={selectedTable.tableStyle.preset === option.id}
+                    onClick={() => applyHouseStyle(option.id)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <h3>Rules</h3>
+              <div className="report-editor-rules">
+                {selectedTable.tableRules.length === 0 ? (
+                  <p className="flow-muted">No rules yet. Add one to re-apply on every refresh.</p>
+                ) : (
+                  selectedTable.tableRules.map(rule => (
+                    <div
+                      key={rule.id}
+                      className="report-editor-rule-row"
+                      data-enabled={rule.enabled}
+                    >
+                      <button
+                        type="button"
+                        className="report-editor-rule-label"
+                        onClick={() => toggleRule(rule.id)}
+                        title={rule.enabled ? 'Turn rule off' : 'Turn rule on'}
+                      >
+                        {tableRuleLabel(rule)}
+                      </button>
+                      <button
+                        type="button"
+                        className="report-editor-rule-remove"
+                        onClick={() => removeRule(rule.id)}
+                        aria-label={`Remove ${tableRuleLabel(rule)}`}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))
+                )}
+                {addingRule ? (
+                  <div className="report-editor-rule-catalog" role="listbox" aria-label="Add rule">
+                    {TABLE_RULE_CATALOG.map(entry => (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        role="option"
+                        className="report-editor-rule-option"
+                        onClick={() => addRuleFromCatalog(entry.id)}
+                      >
+                        {entry.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="report-editor-add-rule"
+                    onClick={() => setAddingRule(true)}
+                  >
+                    + Add rule
+                  </button>
+                )}
+              </div>
+              {editCells ? (
+                <>
+                  <div className="report-editor-divider" />
+                  <h3>Edit cells</h3>
+                  <p className="flow-muted">
+                    Rename, hide, reorder or merge rows. Changes stay on the table and re-apply when
+                    the data updates.
+                  </p>
+                  <label className="report-editor-field">
+                    <span>Row label</span>
+                    <Input
+                      value={rowDraft}
+                      placeholder="Category to edit"
+                      onChange={event => setRowDraft(event.target.value)}
+                      onKeyDown={event => {
+                        if (event.key !== 'Enter' || !page || !selectedTable) return;
+                        const rowId = ensureRowId(rowDraft);
+                        if (!rowId) return;
+                        commit(
+                          renameTableRow(
+                            document,
+                            page.id,
+                            selectedTable.id,
+                            rowId,
+                            rowDraft.trim()
+                          )
+                        );
+                        setRowDraft('');
+                        setSelectedRowIds(current =>
+                          current.includes(rowId) ? current : [...current, rowId]
+                        );
+                      }}
+                    />
+                  </label>
+                  <div className="report-editor-row">
+                    <Button
+                      type="button"
+                      className="report-editor-pill"
+                      disabled={!rowDraft.trim() || !page || !selectedTable}
+                      onClick={() => {
+                        if (!page || !selectedTable) return;
+                        const rowId = ensureRowId(rowDraft);
+                        if (!rowId) return;
+                        commit(
+                          renameTableRow(
+                            document,
+                            page.id,
+                            selectedTable.id,
+                            rowId,
+                            rowDraft.trim()
+                          )
+                        );
+                        setSelectedRowIds(current =>
+                          current.includes(rowId) ? current : [...current, rowId]
+                        );
+                        setRowDraft('');
+                      }}
+                    >
+                      Rename
+                    </Button>
+                    <Button
+                      type="button"
+                      className="report-editor-pill"
+                      disabled={selectedRowIds.length === 0 || !page || !selectedTable}
+                      onClick={() => {
+                        if (!page || !selectedTable || !selectedRowIds[0]) return;
+                        commit(
+                          hideTableRow(document, page.id, selectedTable.id, selectedRowIds[0], true)
+                        );
+                      }}
+                    >
+                      Hide
+                    </Button>
+                    <Button
+                      type="button"
+                      className="report-editor-pill"
+                      disabled={selectedRowIds.length < 2 || !page || !selectedTable}
+                      onClick={() => {
+                        if (!page || !selectedTable) return;
+                        commit(
+                          mergeTableRowsIntoNet(
+                            document,
+                            page.id,
+                            selectedTable.id,
+                            selectedRowIds,
+                            'NET'
+                          )
+                        );
+                        setSelectedRowIds([]);
+                      }}
+                    >
+                      Merge into NET
+                    </Button>
+                  </div>
+                  <div className="report-editor-row">
+                    <Button
+                      type="button"
+                      className="report-editor-pill"
+                      disabled={editableRowIds.length < 2 || !page || !selectedTable}
+                      onClick={() => {
+                        if (!page || !selectedTable || editableRowIds.length < 2) return;
+                        const next = [...editableRowIds];
+                        const focus = selectedRowIds[0] || next[0];
+                        const index = next.indexOf(focus);
+                        if (index <= 0) return;
+                        [next[index - 1], next[index]] = [next[index], next[index - 1]];
+                        commit(reorderTableRows(document, page.id, selectedTable.id, next));
+                      }}
+                    >
+                      Move up
+                    </Button>
+                    <Button
+                      type="button"
+                      className="report-editor-pill"
+                      disabled={editableRowIds.length < 2 || !page || !selectedTable}
+                      onClick={() => {
+                        if (!page || !selectedTable || editableRowIds.length < 2) return;
+                        const next = [...editableRowIds];
+                        const focus = selectedRowIds[0] || next[0];
+                        const index = next.indexOf(focus);
+                        if (index < 0 || index >= next.length - 1) return;
+                        [next[index], next[index + 1]] = [next[index + 1], next[index]];
+                        commit(reorderTableRows(document, page.id, selectedTable.id, next));
+                      }}
+                    >
+                      Move down
+                    </Button>
+                  </div>
+                  {editableRowIds.length ? (
+                    <ul className="report-editor-row-list">
+                      {editableRowIds.map(rowId => {
+                        const hidden = selectedTable.tableEdits.hiddenRowIds.includes(rowId);
+                        const active = selectedRowIds.includes(rowId);
+                        return (
+                          <li key={rowId}>
+                            <button
+                              type="button"
+                              className="report-editor-row-item"
+                              data-active={active}
+                              data-hidden={hidden}
+                              onClick={() =>
+                                setSelectedRowIds(current =>
+                                  current.includes(rowId)
+                                    ? current.filter(id => id !== rowId)
+                                    : [...current, rowId]
+                                )
+                              }
+                            >
+                              {rowDisplayLabel(rowId)}
+                              {hidden ? ' (hidden)' : ''}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="flow-muted">
+                      Type a row label and press Rename to start editing.
+                    </p>
+                  )}
+                </>
+              ) : null}
+            </>
+          ) : selected?.kind === 'text' ? (
             <>
               <h3>Text</h3>
               <label className="report-editor-field">
@@ -665,12 +1116,15 @@ export function ReportEditor({
           ) : (
             <>
               <h3>Page</h3>
-              <p className="flow-muted">
-                Select a text box to format it, or add one from the toolbar.
-              </p>
-              <Button type="button" className="flow-btn" onClick={addText}>
-                Add text box
-              </Button>
+              <p className="flow-muted">Select a text box or table, or add one from the toolbar.</p>
+              <div className="report-editor-row">
+                <Button type="button" className="flow-btn" onClick={addText}>
+                  Add text box
+                </Button>
+                <Button type="button" className="flow-btn" onClick={addTable}>
+                  Add table
+                </Button>
+              </div>
             </>
           )}
 

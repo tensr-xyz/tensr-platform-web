@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { ReportEditor } from './report-editor';
 
 jest.mock('@/lib/flow-api', () => ({
@@ -30,6 +30,15 @@ jest.mock('@/lib/flow-api', () => ({
                   text_style: { font_size_pt: 14, bold: false },
                   z_index: 2,
                 },
+                {
+                  id: 'table-a',
+                  kind: 'table',
+                  frame: { x: 0.08, y: 0.55, w: 0.84, h: 0.35 },
+                  table_style: { preset: 'default' },
+                  table_rules: [],
+                  table_edits: {},
+                  z_index: 3,
+                },
               ],
             },
           ],
@@ -44,11 +53,11 @@ jest.mock('@/lib/flow-api', () => ({
   }),
 }));
 
-describe('ReportEditor text formatting', () => {
+describe('ReportEditor formatting', () => {
   it('formats selected text, paints styles, and renames default labels', async () => {
     render(<ReportEditor datasetId="ds-1" pins={[]} />);
 
-    expect(await screen.findByRole('toolbar', { name: 'Text formatting' })).toBeTruthy();
+    expect(await screen.findByRole('toolbar', { name: 'Report formatting' })).toBeTruthy();
     expect(screen.getByText('Awareness is up')).toBeTruthy();
 
     fireEvent.click(screen.getByText('Awareness is up'));
@@ -70,5 +79,37 @@ describe('ReportEditor text formatting', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Text' }));
     expect(await screen.findByDisplayValue('New text')).toBeTruthy();
+  });
+
+  it('styles a table, adds rules, and edits rows from the 9a chrome', async () => {
+    render(<ReportEditor datasetId="ds-1" pins={[]} />);
+
+    expect(await screen.findByRole('toolbar', { name: 'Report formatting' })).toBeTruthy();
+    fireEvent.click(screen.getByText('House'));
+
+    const inspector = screen.getByLabelText('Object inspector');
+    expect(within(inspector).getByText('Table style')).toBeTruthy();
+
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Banded' }));
+    await waitFor(() =>
+      expect(
+        within(inspector).getByRole('button', { name: 'Banded' }).getAttribute('data-active')
+      ).toBe('true')
+    );
+
+    fireEvent.click(within(inspector).getByRole('button', { name: '+ Add rule' }));
+    fireEvent.click(within(inspector).getByRole('option', { name: 'Amber when base under 50' }));
+    expect(
+      await within(inspector).findByRole('button', { name: 'Amber when base under 50' })
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Edit cells' }));
+    const rowInput = within(inspector).getByPlaceholderText('Category to edit');
+    fireEvent.change(rowInput, { target: { value: 'Prompted awareness' } });
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Rename' }));
+    expect(await within(inspector).findByText('Prompted awareness')).toBeTruthy();
+
+    fireEvent.click(within(inspector).getByRole('button', { name: 'Hide' }));
+    expect(await within(inspector).findByText('Prompted awareness (hidden)')).toBeTruthy();
   });
 });
