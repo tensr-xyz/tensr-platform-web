@@ -63,6 +63,16 @@ import {
   type AgentLoopResponse,
 } from '@/lib/run-agent-loop';
 import { visibleAgentStep } from '@/lib/agent-step-copy';
+import {
+  chatTurnChangesFromToolResults,
+  chatTurnUndoTarget,
+  notifyChatRunFinished,
+  numberedNextStepsFromTurn,
+  resolveNumberedNextStep,
+  summarizeChatSteps,
+  type NumberedNextStep,
+} from '@/lib/chat-turn-parity';
+import { showDatasetVersionUndoToast } from '@/lib/dataset-version-undo';
 import { sortSessionsByRecency } from '@/components/flow/chat-sessions';
 
 export type AgentChatSession = { session_id: string; title?: string; updated_at?: string };
@@ -146,6 +156,39 @@ export function stepsAfterReply(live: string[], traced: string[]): string[] {
   return live.length ? live : traced;
 }
 
+function nextStepsForResult(
+  result: AgentLoopResponse,
+  columnLabels: ColumnLabels[]
+): NumberedNextStep[] {
+  return numberedNextStepsFromTurn({
+    toolResults: result.tool_results,
+    steps: replyLines(result),
+    hasOutput: outputCardReady(result, false),
+    columnLabels: columnLabels.map(column => column.label || column.name).filter(Boolean),
+  });
+}
+
+function offerTurnUndo(projectId: string, result: AgentLoopResponse): void {
+  if (!projectId) return;
+  const target = chatTurnUndoTarget(chatTurnChangesFromToolResults(result.tool_results));
+  if (!target) return;
+  showDatasetVersionUndoToast({
+    projectId,
+    previousDatasetId: target.previousDatasetId,
+    currentDatasetId: target.currentDatasetId,
+    title: 'Chat changes saved',
+  });
+}
+
+function notifyFinishedTurn(result: AgentLoopResponse, startedAt: number): void {
+  const body = (result.answer_markdown || '').replace(/\s+/g, ' ').trim().slice(0, 120);
+  notifyChatRunFinished({
+    title: 'Tensr finished a chat reply',
+    body: body || undefined,
+    startedAt,
+  });
+}
+
 function downloadEntries(result: AgentLoopResponse): ExportDownload[] {
   const entries = (result.tool_results || []).flatMap(item => {
     const nested =
@@ -179,6 +222,7 @@ export function useAgentThread({
   const [approving, setApproving] = useState(false);
   const [turn, setTurn] = useState<AgentLoopResponse | null>(null);
   const [steps, setSteps] = useState<string[]>([]);
+  const [nextSteps, setNextSteps] = useState<NumberedNextStep[]>([]);
   const [panelOpen, setPanelOpen] = useState(false);
   const [attachments, setAttachments] = useState<AgentLoopAttachment[]>([]);
   const [attachError, setAttachError] = useState<string | null>(null);
@@ -192,6 +236,7 @@ export function useAgentThread({
   const questionRef = useRef('');
   const answerRef = useRef('');
   const stepsRef = useRef<string[]>([]);
+  const nextStepsRef = useRef<NumberedNextStep[]>([]);
   const noteRef = useRef('');
   const toolResultsRef = useRef(turn?.tool_results);
   toolResultsRef.current = turn?.tool_results;
@@ -199,6 +244,7 @@ export function useAgentThread({
   questionRef.current = question;
   answerRef.current = answer;
   stepsRef.current = steps;
+  nextStepsRef.current = nextSteps;
   noteRef.current = attachedNote;
   const askedRef = useRef<string | null>(null);
   const sendingRef = useRef(false);
@@ -312,13 +358,16 @@ export function useAgentThread({
   );
 
   const sendText = useCallback(
-    async (text: string, nextMode: Mode = modeRef.current) => {
+    async (rawText: string, nextMode: Mode = modeRef.current) => {
+      const resolved = resolveNumberedNextStep(rawText, nextStepsRef.current);
+      const text = resolved || rawText;
       if (!text.trim() || sendingRef.current) return false;
       const turnToken = ++turnTokenRef.current;
       if (statusRef.current === 'Thinking…' && (!projectId || chatRunInFlight(projectId)))
         return false;
       if (projectId && chatRunInFlight(projectId)) return false;
       sendingRef.current = true;
+      const startedAt = Date.now();
       const publish = (patch: Partial<NonNullable<ReturnType<typeof liveChatRun>>>) => {
         if (!projectId) return;
         const prior = liveChatRun();
@@ -358,6 +407,7 @@ export function useAgentThread({
       setPlan(null);
       setTurn(null);
       setSteps([]);
+      setNextSteps([]);
       setDownloads([]);
       setStatus('Thinking…');
       setApproving(false);
@@ -452,18 +502,24 @@ export function useAgentThread({
         const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
         const kept = keptModelAnswer(draft, result.answer_markdown || '');
+        const suggestions =
+          result.status === 'awaiting_approval' ? [] : nextStepsForResult(result, columnLabels);
         shown(() => {
           setAnswer(kept);
           setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
           setTurn(result.status === 'awaiting_approval' ? null : result);
           if (keptSteps.length) setSteps(keptSteps);
+          setNextSteps(suggestions);
           setDownloads(entries);
           if (result.status !== 'awaiting_approval') setAttachments([]);
           setStatus(null);
         });
-        if (result.status !== 'awaiting_approval' && aliveRef.current)
+        if (result.status !== 'awaiting_approval' && aliveRef.current) {
           onFinishedRef.current?.(result);
+          notifyFinishedTurn(result, startedAt);
+          if (projectId) offerTurnUndo(projectId, result);
+        }
         publish({
           running: false,
           status: null,
@@ -482,7 +538,7 @@ export function useAgentThread({
         sendingRef.current = false;
       }
     },
-    [datasetId, loadRail, loadSavedTurn, past, projectId, noteSession, shown]
+    [columnLabels, datasetId, loadRail, loadSavedTurn, past, projectId, noteSession, shown]
   );
 
   useEffect(() => {
@@ -518,10 +574,12 @@ export function useAgentThread({
     const calls = Array.isArray(plan.pending_approvals) ? plan.pending_approvals : null;
     const approvedSession = plan.session_id || sessionRef.current;
     const turnToken = ++turnTokenRef.current;
+    const startedAt = Date.now();
     approvingRef.current = true;
     setApproving(true);
     setStatus('Thinking…');
     setAnswer('');
+    setNextSteps([]);
     streamedRef.current = '';
     if (projectId) {
       publishLiveChatRun({
@@ -578,18 +636,24 @@ export function useAgentThread({
         const keptSteps = stepsAfterReply(stepsRef.current, traced);
         const entries = downloadEntries(result);
         const kept = keptModelAnswer(streamedRef.current, result.answer_markdown || '');
+        const suggestions =
+          result.status === 'awaiting_approval' ? [] : nextStepsForResult(result, columnLabels);
         shown(() => {
           setAnswer(kept);
           setApproving(false);
           setPlan(result.status === 'awaiting_approval' ? result : null);
           setTurn(result.status === 'awaiting_approval' ? null : result);
           if (keptSteps.length) setSteps(keptSteps);
+          setNextSteps(suggestions);
           setDownloads(entries);
           if (result.status !== 'awaiting_approval') setAttachments([]);
           setStatus(null);
         });
-        if (result.status !== 'awaiting_approval' && aliveRef.current)
+        if (result.status !== 'awaiting_approval' && aliveRef.current) {
           onFinishedRef.current?.(result);
+          notifyFinishedTurn(result, startedAt);
+          if (projectId) offerTurnUndo(projectId, result);
+        }
         const current = liveChatRun();
         if (projectId && livePublishMatches(current, projectId, approvedSession, sent)) {
           publishLiveChatRun({
@@ -627,6 +691,7 @@ export function useAgentThread({
     setSent('');
     setAttachedNote('');
     setAnswer('');
+    setNextSteps([]);
     setQuestion('');
     if (projectId) window.sessionStorage.removeItem(draftKey(projectId));
     setPlan(null);
@@ -694,6 +759,19 @@ export function useAgentThread({
                 : null
             );
             setSteps(stepLines(last?.steps));
+            setNextSteps(
+              last
+                ? nextStepsForResult(
+                    {
+                      status: 'ok',
+                      mode: 'agent',
+                      answer_markdown: last.answer,
+                      tool_results: last.toolResults,
+                    },
+                    columnLabels
+                  )
+                : []
+            );
             setDownloads([]);
             setAttachments([]);
             setAttachError(null);
@@ -718,7 +796,7 @@ export function useAgentThread({
           shown(() => setStatus('That chat could not be opened.'));
         });
     },
-    [projectId, rememberChat, shown]
+    [columnLabels, projectId, rememberChat, shown]
   );
   openChatRef.current = openChat;
 
@@ -830,6 +908,7 @@ export function useAgentThread({
     setPlan,
     turn,
     steps,
+    nextSteps,
     panelOpen,
     setPanelOpen,
     attachments,
@@ -1013,7 +1092,7 @@ export function AgentThreadColumn({
                   strokeLinejoin="round"
                 />
               </svg>
-              Ran {thread.steps.length} {thread.steps.length === 1 ? 'step' : 'steps'}
+              {summarizeChatSteps(thread.steps)}
               <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
                 <path
                   d={stepsOpen ? 'M3 4l2 2 2-2' : 'M4 3l2 2-2 2'}
@@ -1203,6 +1282,24 @@ export function AgentThreadColumn({
           <p className="flow-error">{thread.status}</p>
         ) : null}
       </div>
+      {thread.nextSteps.length && thread.status !== 'Thinking…' ? (
+        <div className="chat-next-steps" aria-label="Suggested next steps">
+          {thread.nextSteps.map(step => (
+            <Button
+              key={step.n}
+              className="chat-next-step"
+              type="button"
+              disabled={thread.status === 'Thinking…'}
+              onClick={() => thread.send(step.prompt)}
+            >
+              <span className="chat-next-step-n" aria-hidden="true">
+                {step.n}
+              </span>
+              {step.label}
+            </Button>
+          ))}
+        </div>
+      ) : null}
       <FlowComposer
         layout="thread"
         value={thread.question}
