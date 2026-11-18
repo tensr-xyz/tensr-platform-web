@@ -31,6 +31,7 @@ import {
 import { moveDatasetToProject } from '@/components/flow/move-dataset';
 import { UploadPrepCard } from '@/components/flow/upload-prep-card';
 import type { PrepProposal } from '@/components/flow/upload-prep';
+import { ConnectQualtricsDialog } from '@/components/flow/connect-qualtrics-dialog';
 import { ACCEPTED_UPLOAD_ACCEPT, isAcceptedUploadExtension } from '@/lib/accepted-upload-types';
 import { flowJson, type FlowProject } from '@/lib/flow-api';
 import {
@@ -703,7 +704,7 @@ export function ProjectSwitcher({
   );
 }
 
-type DataChoice = 'upload' | 'existing' | 'skip';
+type DataChoice = 'upload' | 'existing' | 'qualtrics' | 'skip';
 
 export function NewProjectDialog({
   open,
@@ -732,8 +733,10 @@ export function NewProjectDialog({
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [proposal, setProposal] = useState<{ id: string; prep: PrepProposal } | null>(null);
+  const [qualtricsOpen, setQualtricsOpen] = useState(false);
   const createdProjectId = useRef<string | null>(null);
   const uploadedDataset = useRef<RememberedUpload | null>(null);
+  const pendingQualtricsId = useRef<string | null>(null);
   const pickable = useMemo(
     () =>
       datasets
@@ -755,8 +758,24 @@ export function NewProjectDialog({
     setError('');
     setProgress(null);
     setProposal(null);
+    setQualtricsOpen(false);
     createdProjectId.current = null;
     uploadedDataset.current = null;
+    pendingQualtricsId.current = null;
+  };
+
+  const ensureProject = async () => {
+    let id = createdProjectId.current;
+    if (!id) {
+      const page = await flowJson<{ project?: { id?: string } }>('/api/projects', {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), folder: folder || null, keep_empty: true }),
+      });
+      id = page.project?.id || null;
+      if (!id) throw new Error('The project did not save.');
+      createdProjectId.current = id;
+    }
+    return id;
   };
 
   const create = async () => {
@@ -768,20 +787,18 @@ export function NewProjectDialog({
       if (choice === 'upload') {
         if (!file) throw new Error('Choose a file to upload, or skip for now.');
         if (!isAcceptedUploadExtension(file.name)) {
-          throw new Error('Use a .sav, .dta, CSV, Excel, Triple-S, or Parquet file.');
+          throw new Error('Use a .sav, .zsav, .dta, CSV, TSV, Excel, Triple-S, or Parquet file.');
         }
       }
       if (choice === 'existing' && !existing) throw new Error('Pick a dataset, or skip for now.');
-      let id = createdProjectId.current;
-      if (!id) {
-        const page = await flowJson<{ project?: { id?: string } }>('/api/projects', {
-          method: 'POST',
-          body: JSON.stringify({ name: name.trim(), folder: folder || null, keep_empty: true }),
-        });
-        id = page.project?.id || null;
-        if (!id) throw new Error('The project did not save.');
-        createdProjectId.current = id;
+      if (choice === 'qualtrics') {
+        if (!pendingQualtricsId.current) {
+          setQualtricsOpen(true);
+          setBusy(false);
+          return;
+        }
       }
+      const id = await ensureProject();
       if (choice === 'upload' && file) {
         const reused = rememberedDatasetId(uploadedDataset.current, file);
         if (reused) {
@@ -803,6 +820,9 @@ export function NewProjectDialog({
         }
       } else if (choice === 'existing') {
         datasetId = existing;
+      } else if (choice === 'qualtrics' && pendingQualtricsId.current) {
+        datasetId = pendingQualtricsId.current;
+        pendingQualtricsId.current = null;
       }
       if (datasetId) {
         await moveDatasetToProject(id, datasetId);
@@ -829,184 +849,225 @@ export function NewProjectDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={next => {
-        onOpenChange(next);
-        if (!next) reset();
-      }}
-    >
-      <DialogContent className="new-project-dialog">
-        <DialogHeader>
-          <DialogTitle>{step === 1 ? 'New project' : 'Add data'}</DialogTitle>
-          <DialogDescription>
-            {step === 1
-              ? 'Name the study. You can rename it or move it to a folder later.'
-              : `Bring data into ${name.trim() || 'the project'}. You can add more files from Sources.`}
-          </DialogDescription>
-        </DialogHeader>
-        {step === 1 ? (
-          <div className="new-project-fields">
-            <label className="new-project-field">
-              <span>Name</span>
-              <Input
-                autoFocus
-                value={name}
-                placeholder="e.g. Brand tracker wave 4"
-                aria-label="Project name"
-                onChange={event => setName(event.target.value)}
-                onKeyDown={event => {
-                  if (event.key === 'Enter' && name.trim()) setStep(2);
-                }}
-              />
-            </label>
-            <label className="new-project-field">
-              <span>Folder (optional)</span>
-              <ChoiceSelect
-                aria-label="Folder"
-                value={folder}
-                onValueChange={setFolder}
-                options={[
-                  { value: '', label: 'No folder' },
-                  ...folders.map(item => ({ value: item.name, label: item.name })),
-                ]}
-              />
-            </label>
-          </div>
-        ) : proposal ? (
-          <UploadPrepCard
-            proposal={proposal.prep}
-            fileName={file?.name || ''}
-            onApply={kept => {
-              const bearer = getStytchBearerForTensrApi();
-              const projectId = createdProjectId.current;
-              if (!bearer || !projectId) {
-                setError('Sign in again to prepare the file.');
-                return;
-              }
-              setBusy(true);
-              void applyUploadPrep(proposal.id, bearer, kept)
-                .then(saved =>
-                  moveDatasetToProject(projectId, saved.dataset_id).then(() => saved.dataset_id)
-                )
-                .then(async datasetId => {
-                  await flowJson(`/api/projects/${projectId}`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ active_dataset_id: datasetId }),
-                  });
-                  await onCreated();
-                  onOpenChange(false);
-                  reset();
-                  router.push(`/flow/p/${projectId}/sources`);
-                })
-                .catch(err => setError(formatApiErrorMessage(err)))
-                .finally(() => setBusy(false));
-            }}
-            onSkip={() => {
-              const bearer = getStytchBearerForTensrApi();
-              const projectId = createdProjectId.current;
-              if (bearer) void skipUploadPrep(proposal.id, bearer);
-              onOpenChange(false);
-              reset();
-              if (projectId) router.push(`/flow/p/${projectId}/sources`);
-            }}
-          />
-        ) : (
-          <div className="new-project-data">
-            {(
-              [
-                ['upload', 'Upload a file', '.sav, .dta, CSV, Excel, Triple-S or Parquet'],
-                ['existing', 'Use a dataset you have', 'Moves it into this project'],
-                ['skip', 'Skip for now', 'Add data later from Sources'],
-              ] as const
-            ).map(([value, title, note]) => (
-              <Button
-                key={value}
-                type="button"
-                className="new-project-choice"
-                data-active={choice === value}
-                onClick={() => setChoice(value)}
-              >
-                <strong>{title}</strong>
-                <span>{note}</span>
-              </Button>
-            ))}
-            {choice === 'upload' ? (
-              <div className="new-project-file">
-                <Button
-                  className="flow-btn"
-                  type="button"
-                  onClick={() => fileInput.current?.click()}
-                >
-                  {file ? 'Choose another file' : 'Choose file'}
-                </Button>
-                <span className="flow-muted">{file ? file.name : 'No file chosen'}</span>
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={next => {
+          onOpenChange(next);
+          if (!next) reset();
+        }}
+      >
+        <DialogContent className="new-project-dialog">
+          <DialogHeader>
+            <DialogTitle>{step === 1 ? 'New project' : 'Add data'}</DialogTitle>
+            <DialogDescription>
+              {step === 1
+                ? 'Name the study. You can rename it or move it to a folder later.'
+                : `Bring data into ${name.trim() || 'the project'}. You can add more files from Sources.`}
+            </DialogDescription>
+          </DialogHeader>
+          {step === 1 ? (
+            <div className="new-project-fields">
+              <label className="new-project-field">
+                <span>Name</span>
                 <Input
-                  ref={fileInput}
-                  className="sources-file-input"
-                  type="file"
-                  accept={ACCEPTED_UPLOAD_ACCEPT}
-                  aria-label="Upload file"
-                  onChange={event => {
-                    setFile(event.target.files?.[0] || null);
-                    event.target.value = '';
+                  autoFocus
+                  value={name}
+                  placeholder="e.g. Brand tracker wave 4"
+                  aria-label="Project name"
+                  onChange={event => setName(event.target.value)}
+                  onKeyDown={event => {
+                    if (event.key === 'Enter' && name.trim()) setStep(2);
                   }}
                 />
-              </div>
-            ) : choice === 'existing' ? (
-              pickable.length ? (
+              </label>
+              <label className="new-project-field">
+                <span>Folder (optional)</span>
                 <ChoiceSelect
-                  aria-label="Dataset"
-                  value={existing}
-                  onValueChange={setExisting}
-                  placeholder="Choose a dataset"
-                  options={pickable}
+                  aria-label="Folder"
+                  value={folder}
+                  onValueChange={setFolder}
+                  options={[
+                    { value: '', label: 'No folder' },
+                    ...folders.map(item => ({ value: item.name, label: item.name })),
+                  ]}
                 />
-              ) : (
-                <p className="flow-muted">You have no datasets yet. Upload one instead.</p>
-              )
-            ) : null}
+              </label>
+            </div>
+          ) : proposal ? (
+            <UploadPrepCard
+              proposal={proposal.prep}
+              fileName={file?.name || ''}
+              onApply={kept => {
+                const bearer = getStytchBearerForTensrApi();
+                const projectId = createdProjectId.current;
+                if (!bearer || !projectId) {
+                  setError('Sign in again to prepare the file.');
+                  return;
+                }
+                setBusy(true);
+                void applyUploadPrep(proposal.id, bearer, kept)
+                  .then(saved =>
+                    moveDatasetToProject(projectId, saved.dataset_id).then(() => saved.dataset_id)
+                  )
+                  .then(async datasetId => {
+                    await flowJson(`/api/projects/${projectId}`, {
+                      method: 'PATCH',
+                      body: JSON.stringify({ active_dataset_id: datasetId }),
+                    });
+                    await onCreated();
+                    onOpenChange(false);
+                    reset();
+                    router.push(`/flow/p/${projectId}/sources`);
+                  })
+                  .catch(err => setError(formatApiErrorMessage(err)))
+                  .finally(() => setBusy(false));
+              }}
+              onSkip={() => {
+                const bearer = getStytchBearerForTensrApi();
+                const projectId = createdProjectId.current;
+                if (bearer) void skipUploadPrep(proposal.id, bearer);
+                onOpenChange(false);
+                reset();
+                if (projectId) router.push(`/flow/p/${projectId}/sources`);
+              }}
+            />
+          ) : (
+            <div className="new-project-data">
+              {(
+                [
+                  [
+                    'upload',
+                    'Upload a file',
+                    '.sav, .zsav, .dta, CSV, TSV, Excel, Triple-S or Parquet',
+                  ],
+                  ['qualtrics', 'Connect Qualtrics', 'Pull responses and labels with an API token'],
+                  ['existing', 'Use a dataset you have', 'Moves it into this project'],
+                  ['skip', 'Skip for now', 'Add data later from Sources'],
+                ] as const
+              ).map(([value, title, note]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  className="new-project-choice"
+                  data-active={choice === value}
+                  onClick={() => {
+                    setChoice(value);
+                    if (value === 'qualtrics') setQualtricsOpen(true);
+                  }}
+                >
+                  <strong>{title}</strong>
+                  <span>{note}</span>
+                </Button>
+              ))}
+              {choice === 'upload' ? (
+                <div className="new-project-file">
+                  <Button
+                    className="flow-btn"
+                    type="button"
+                    onClick={() => fileInput.current?.click()}
+                  >
+                    {file ? 'Choose another file' : 'Choose file'}
+                  </Button>
+                  <span className="flow-muted">{file ? file.name : 'No file chosen'}</span>
+                  <Input
+                    ref={fileInput}
+                    className="sources-file-input"
+                    type="file"
+                    accept={ACCEPTED_UPLOAD_ACCEPT}
+                    aria-label="Upload file"
+                    onChange={event => {
+                      setFile(event.target.files?.[0] || null);
+                      event.target.value = '';
+                    }}
+                  />
+                </div>
+              ) : choice === 'existing' ? (
+                pickable.length ? (
+                  <ChoiceSelect
+                    aria-label="Dataset"
+                    value={existing}
+                    onValueChange={setExisting}
+                    placeholder="Choose a dataset"
+                    options={pickable}
+                  />
+                ) : (
+                  <p className="flow-muted">You have no datasets yet. Upload one instead.</p>
+                )
+              ) : null}
+            </div>
+          )}
+          {progress !== null && busy ? <p className="flow-muted">Uploading… {progress}%</p> : null}
+          {error ? <p className="flow-error">{error}</p> : null}
+          <div className="new-project-foot">
+            {step === 2 ? (
+              <Button className="flow-btn" type="button" disabled={busy} onClick={() => setStep(1)}>
+                Back
+              </Button>
+            ) : (
+              <Button className="flow-btn" type="button" onClick={() => onOpenChange(false)}>
+                Cancel
+              </Button>
+            )}
+            {proposal ? null : step === 1 ? (
+              <Button
+                className="flow-btn primary"
+                type="button"
+                disabled={!name.trim()}
+                onClick={() => setStep(2)}
+              >
+                Continue
+              </Button>
+            ) : (
+              <Button
+                className="flow-btn primary"
+                type="button"
+                disabled={busy}
+                onClick={() => void create()}
+              >
+                {busy
+                  ? choice === 'upload'
+                    ? `Uploading… ${progress ?? 0}%`
+                    : 'Creating…'
+                  : choice === 'skip'
+                    ? 'Create project'
+                    : 'Create and open'}
+              </Button>
+            )}
           </div>
-        )}
-        {progress !== null && busy ? <p className="flow-muted">Uploading… {progress}%</p> : null}
-        {error ? <p className="flow-error">{error}</p> : null}
-        <div className="new-project-foot">
-          {step === 2 ? (
-            <Button className="flow-btn" type="button" disabled={busy} onClick={() => setStep(1)}>
-              Back
-            </Button>
-          ) : (
-            <Button className="flow-btn" type="button" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-          )}
-          {proposal ? null : step === 1 ? (
-            <Button
-              className="flow-btn primary"
-              type="button"
-              disabled={!name.trim()}
-              onClick={() => setStep(2)}
-            >
-              Continue
-            </Button>
-          ) : (
-            <Button
-              className="flow-btn primary"
-              type="button"
-              disabled={busy}
-              onClick={() => void create()}
-            >
-              {busy
-                ? choice === 'upload'
-                  ? `Uploading… ${progress ?? 0}%`
-                  : 'Creating…'
-                : choice === 'skip'
-                  ? 'Create project'
-                  : 'Create and open'}
-            </Button>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      <ConnectQualtricsDialog
+        open={qualtricsOpen}
+        onOpenChange={setQualtricsOpen}
+        title="Connect Qualtrics"
+        onPulled={async result => {
+          pendingQualtricsId.current = result.dataset_id;
+          setChoice('qualtrics');
+          setBusy(true);
+          setError('');
+          try {
+            const id = await ensureProject();
+            await moveDatasetToProject(id, result.dataset_id);
+            await flowJson(`/api/projects/${id}`, {
+              method: 'PATCH',
+              body: JSON.stringify({ active_dataset_id: result.dataset_id }),
+            });
+            await onCreated();
+            if (result.prep && typeof result.prep === 'object') {
+              setProposal({ id: result.dataset_id, prep: result.prep as PrepProposal });
+              return;
+            }
+            onOpenChange(false);
+            reset();
+            router.push(`/flow/p/${id}/sources`);
+          } catch (err) {
+            setError(formatApiErrorMessage(err));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
+    </>
   );
 }

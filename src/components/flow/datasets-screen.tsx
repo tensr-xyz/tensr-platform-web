@@ -275,7 +275,7 @@ export function DatasetsScreen({
 
   const upload = (file: File) => {
     if (!isAcceptedUploadExtension(file.name)) {
-      setError('Use a .sav, .dta, CSV, Excel, Triple-S, or Parquet file.');
+      setError('Use a .sav, .zsav, .dta, CSV, TSV, Excel, Triple-S, or Parquet file.');
       return;
     }
     const token = getStytchBearerForTensrApi();
@@ -472,7 +472,7 @@ export function DatasetsScreen({
               ? 'Try a different name, project or type.'
               : activeView === 'versions'
                 ? 'Stack, weight or code a file in a project and its versions show up here.'
-                : 'Upload a .sav, .dta, CSV or Excel file to get started.'}
+                : 'Upload a .sav, .zsav, .dta, CSV, TSV or Excel file to get started.'}
           </span>
         </div>
       ) : (

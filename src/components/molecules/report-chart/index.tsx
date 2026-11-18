@@ -830,6 +830,151 @@ function ChartBody({
     );
   }
 
+  if (chart.kind === 'sankey') {
+    const layout = baseLayout;
+    const SK_W = layout.width;
+    const SK_H = Math.max(layout.height, layout.density === 'comfortable' ? 320 : 240);
+    const SK_PL = layout.density === 'comfortable' ? 72 : 56;
+    const SK_PR = SK_PL;
+    const SK_PT = layout.titleSize + (layout.density === 'comfortable' ? 28 : 20);
+    const SK_PB = 16;
+    const nodeW = layout.density === 'comfortable' ? 10 : 8;
+    const gap = 8;
+    const plotH = Math.max(40, SK_H - SK_PT - SK_PB);
+    const leftX = SK_PL;
+    const rightX = SK_W - SK_PR - nodeW;
+    const nodes = chart.nodes || [];
+    const links = (chart.links || []).filter(link => link.value > 0);
+    const leftIds = nodes.filter(node => node.id.startsWith('s:')).map(node => node.id);
+    const rightIds = nodes.filter(node => node.id.startsWith('t:')).map(node => node.id);
+    const nameById = new Map(nodes.map(node => [node.id, node.name]));
+    const outFlow = new Map<string, number>();
+    const inFlow = new Map<string, number>();
+    for (const link of links) {
+      outFlow.set(link.source, (outFlow.get(link.source) ?? 0) + link.value);
+      inFlow.set(link.target, (inFlow.get(link.target) ?? 0) + link.value);
+    }
+    const leftTotal = leftIds.reduce((sum, id) => sum + (outFlow.get(id) ?? 0), 0) || 1;
+    const rightTotal = rightIds.reduce((sum, id) => sum + (inFlow.get(id) ?? 0), 0) || 1;
+    const leftGaps = Math.max(0, leftIds.length - 1) * gap;
+    const rightGaps = Math.max(0, rightIds.length - 1) * gap;
+    const leftScale = (plotH - leftGaps) / leftTotal;
+    const rightScale = (plotH - rightGaps) / rightTotal;
+    type Band = { y0: number; y1: number };
+    const leftBand = new Map<string, Band>();
+    const rightBand = new Map<string, Band>();
+    let leftCursor = SK_PT;
+    for (const id of leftIds) {
+      const height = (outFlow.get(id) ?? 0) * leftScale;
+      leftBand.set(id, { y0: leftCursor, y1: leftCursor + height });
+      leftCursor += height + gap;
+    }
+    let rightCursor = SK_PT;
+    for (const id of rightIds) {
+      const height = (inFlow.get(id) ?? 0) * rightScale;
+      rightBand.set(id, { y0: rightCursor, y1: rightCursor + height });
+      rightCursor += height + gap;
+    }
+    const leftOffset = new Map<string, number>();
+    const rightOffset = new Map<string, number>();
+    const linkPaths = links.flatMap((link, index) => {
+      const source = leftBand.get(link.source);
+      const target = rightBand.get(link.target);
+      if (!source || !target) return [];
+      const sourceH = Math.max(1, link.value * leftScale);
+      const targetH = Math.max(1, link.value * rightScale);
+      const sy0 = source.y0 + (leftOffset.get(link.source) ?? 0);
+      const ty0 = target.y0 + (rightOffset.get(link.target) ?? 0);
+      leftOffset.set(link.source, (leftOffset.get(link.source) ?? 0) + sourceH);
+      rightOffset.set(link.target, (rightOffset.get(link.target) ?? 0) + targetH);
+      const x0 = leftX + nodeW;
+      const x1 = rightX;
+      const mid = (x0 + x1) / 2;
+      const d = [
+        `M ${x0} ${sy0}`,
+        `C ${mid} ${sy0}, ${mid} ${ty0}, ${x1} ${ty0}`,
+        `L ${x1} ${ty0 + targetH}`,
+        `C ${mid} ${ty0 + targetH}, ${mid} ${sy0 + sourceH}, ${x0} ${sy0 + sourceH}`,
+        'Z',
+      ].join(' ');
+      return [
+        {
+          d,
+          color: seriesFill[index % seriesFill.length],
+          key: `${link.source}-${link.target}-${index}`,
+        },
+      ];
+    });
+    const labelChars = layout.density === 'comfortable' ? 16 : 12;
+    const formatFlow = (value: number) =>
+      Number.isInteger(value) ? String(value) : value.toFixed(1);
+
+    return (
+      <svg
+        data-chart-kind="sankey"
+        viewBox={`0 0 ${SK_W} ${SK_H}`}
+        className="h-auto w-full max-w-full"
+        aria-hidden
+      >
+        <ChartTitle layout={{ ...layout, width: SK_W, height: SK_H }} title={chart.title} />
+        {linkPaths.map(link => (
+          <path key={link.key} d={link.d} fill={link.color} fillOpacity={0.45} stroke="none" />
+        ))}
+        {leftIds.map((id, index) => {
+          const band = leftBand.get(id);
+          if (!band) return null;
+          return (
+            <g key={id}>
+              <rect
+                x={leftX}
+                y={band.y0}
+                width={nodeW}
+                height={Math.max(1, band.y1 - band.y0)}
+                fill={seriesFill[index % seriesFill.length]}
+                rx={1}
+              />
+              <text
+                x={leftX - 6}
+                y={(band.y0 + band.y1) / 2 + layout.fontSize * 0.35}
+                textAnchor="end"
+                fill="#3f3f46"
+                style={{ fontSize: layout.fontSize }}
+              >
+                {truncateLabel(nameById.get(id) || id, labelChars)}
+              </text>
+            </g>
+          );
+        })}
+        {rightIds.map((id, index) => {
+          const band = rightBand.get(id);
+          if (!band) return null;
+          const value = inFlow.get(id) ?? 0;
+          return (
+            <g key={id}>
+              <rect
+                x={rightX}
+                y={band.y0}
+                width={nodeW}
+                height={Math.max(1, band.y1 - band.y0)}
+                fill={seriesFill[index % seriesFill.length]}
+                rx={1}
+              />
+              <text
+                x={rightX + nodeW + 6}
+                y={(band.y0 + band.y1) / 2 + layout.fontSize * 0.35}
+                textAnchor="start"
+                fill="#3f3f46"
+                style={{ fontSize: layout.fontSize }}
+              >
+                {`${truncateLabel(nameById.get(id) || id, labelChars)} (${formatFlow(value)})`}
+              </text>
+            </g>
+          );
+        })}
+      </svg>
+    );
+  }
+
   if (chart.kind === 'path_diagram') {
     const layout = baseLayout;
     const PD_W = layout.width;

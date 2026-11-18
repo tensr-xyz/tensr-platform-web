@@ -19,10 +19,13 @@ export type AnalysisKey =
   | 'reliability_cronbach'
   | 'partial_correlation'
   | 'pca'
+  | 'bartlett_sphericity'
   | 'anova_twoway'
   | 'anova_repeated'
   | 'stepwise_regression'
   | 'poisson_regression'
+  | 'quasi_poisson_regression'
+  | 'multinomial_logit'
   | 'cohens_kappa'
   | 'efa'
   | 'discriminant_analysis'
@@ -116,10 +119,13 @@ export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
   reliability_cronbach: 'Reliability Analysis',
   partial_correlation: 'Partial Correlation',
   pca: 'Principal Component Analysis',
+  bartlett_sphericity: 'Bartlett Test of Sphericity',
   anova_twoway: 'Two-Way ANOVA',
   anova_repeated: 'Repeated Measures ANOVA',
   stepwise_regression: 'Stepwise Regression',
   poisson_regression: 'Poisson Regression',
+  quasi_poisson_regression: 'Quasi-Poisson Regression',
+  multinomial_logit: 'Multinomial Logit',
   cohens_kappa: "Cohen's Kappa",
   efa: 'Exploratory Factor Analysis',
   discriminant_analysis: 'Discriminant Analysis',
@@ -207,10 +213,13 @@ export const SPSS_MENU_PATHS: Record<AnalysisKey, string> = {
   reliability_cronbach: 'Analyze → Scale → Reliability Analysis',
   partial_correlation: 'Analyze → Correlate → Partial',
   pca: 'Analyze → Dimension Reduction → PCA',
+  bartlett_sphericity: 'Analyze → Dimension Reduction → Bartlett Test of Sphericity',
   anova_twoway: 'Analyze → General Linear Model → Univariate',
   anova_repeated: 'Analyze → General Linear Model → Repeated Measures',
   stepwise_regression: 'Analyze → Regression → Linear → Stepwise',
   poisson_regression: 'Analyze → Regression → Poisson',
+  quasi_poisson_regression: 'Analyze → Regression → Quasi-Poisson',
+  multinomial_logit: 'Analyze → Regression → Multinomial Logistic',
   cohens_kappa: 'Analyze → Descriptive Statistics → Crosstabs → Kappa',
   efa: 'Analyze → Dimension Reduction → Factor',
   discriminant_analysis: 'Analyze → Classify → Discriminant',
@@ -315,10 +324,13 @@ export const ANALYSIS_PALETTE_CATEGORY: Record<AnalysisKey, PaletteCategoryId> =
   reliability_cronbach: 'describe',
   partial_correlation: 'relationships',
   pca: 'describe',
+  bartlett_sphericity: 'describe',
   anova_twoway: 'compare',
   anova_repeated: 'compare',
   stepwise_regression: 'prediction',
   poisson_regression: 'prediction',
+  quasi_poisson_regression: 'prediction',
+  multinomial_logit: 'prediction',
   cohens_kappa: 'frequencies',
   efa: 'describe',
   discriminant_analysis: 'compare',
@@ -505,6 +517,8 @@ export function applyBodyToForm(
     op === 'linear_regression' ||
     op === 'logistic_regression' ||
     op === 'poisson_regression' ||
+    op === 'quasi_poisson_regression' ||
+    op === 'multinomial_logit' ||
     op === 'probit_regression' ||
     op === 'negative_binomial_regression' ||
     op === 'ordinal_regression'
@@ -548,6 +562,7 @@ export function applyBodyToForm(
     op === 'friedman' ||
     op === 'reliability_cronbach' ||
     op === 'pca' ||
+    op === 'bartlett_sphericity' ||
     op === 'efa' ||
     op === 'anova_repeated' ||
     op === 'manova' ||
@@ -637,6 +652,10 @@ export function formatVariablesLine(op: AnalysisKey, body: Record<string, unknow
     return `${body.column_x} | controls: ${(body.control_columns as string[] | undefined)?.join(', ') || 'none'}`;
   }
   if (op === 'pca') {
+    const cols = body.columns as string[] | undefined;
+    return cols?.length ? cols.join(', ') : '';
+  }
+  if (op === 'bartlett_sphericity') {
     const cols = body.columns as string[] | undefined;
     return cols?.length ? cols.join(', ') : '';
   }
@@ -732,6 +751,14 @@ export function formatVariablesLine(op: AnalysisKey, body: Record<string, unknow
   if (op === 'logistic_regression') {
     const inds = (body.independents as string[] | undefined) ?? [];
     return `logit(${body.dependent}) ~ ${inds.join(', ')}`;
+  }
+  if (op === 'multinomial_logit') {
+    const inds = (body.independents as string[] | undefined) ?? [];
+    return `mlogit(${body.dependent}) ~ ${inds.join(', ')}`;
+  }
+  if (op === 'poisson_regression' || op === 'quasi_poisson_regression') {
+    const inds = (body.independents as string[] | undefined) ?? [];
+    return `${body.dependent} ~ ${inds.join(', ')}`;
   }
   if (op === 'chi_square') {
     return `${body.column_a} × ${body.column_b}`;
@@ -964,6 +991,10 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       n_components: n && !Number.isNaN(n) ? n : undefined,
     };
   }
+  if (analysis === 'bartlett_sphericity') {
+    if (selectedCols.length < 2) throw new Error('Select at least two variables');
+    return { columns: selectedCols };
+  }
   if (analysis === 'anova_twoway') {
     return {
       factor_a: groupCol,
@@ -977,7 +1008,16 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
     if (selectedCols.length < 2) throw new Error('Select at least two measure columns');
     return { subject_column: subjectCol, measure_columns: selectedCols };
   }
-  if (analysis === 'poisson_regression') {
+  if (analysis === 'poisson_regression' || analysis === 'quasi_poisson_regression') {
+    if (!independentCols.length) throw new Error('Add at least one predictor');
+    return {
+      dependent: depCol,
+      independents: independentCols,
+      confidence_level: confidenceLevelNumber(confidenceLevel),
+      include_constant: regressionIncludeConstant,
+    };
+  }
+  if (analysis === 'multinomial_logit') {
     if (!independentCols.length) throw new Error('Add at least one predictor');
     return {
       dependent: depCol,
@@ -1722,6 +1762,7 @@ const CATEGORICAL_OUTCOME_ANALYSES = new Set<AnalysisKey>([
   'random_forest_classification',
   'svm_classification',
   'logistic_regression',
+  'multinomial_logit',
   'probit_regression',
   'gradient_boosting',
   'neural_network_mlp',
@@ -2269,6 +2310,10 @@ export const ANALYSIS_WIZARD_META: Record<AnalysisKey, AnalysisWizardMeta> = {
   pca: {
     summary: 'Reduce many numeric variables to orthogonal components that explain variance.',
   },
+  bartlett_sphericity: {
+    summary:
+      'Test whether a correlation matrix differs from identity (Bartlett) and report Kaiser–Meyer–Olkin sampling adequacy before PCA or factor analysis.',
+  },
   anova_twoway: {
     summary: 'Test main and interaction effects of two factors on a numeric outcome.',
   },
@@ -2280,6 +2325,13 @@ export const ANALYSIS_WIZARD_META: Record<AnalysisKey, AnalysisWizardMeta> = {
   },
   poisson_regression: {
     summary: 'Model a count outcome as a function of predictors (log link).',
+  },
+  quasi_poisson_regression: {
+    summary:
+      'Count regression with a Poisson mean and Pearson χ² scale for standard errors (quasi-Poisson).',
+  },
+  multinomial_logit: {
+    summary: 'Model a categorical outcome with three or more levels using multinomial logit.',
   },
   cohens_kappa: {
     summary: 'Agreement between two categorical raters beyond chance.',

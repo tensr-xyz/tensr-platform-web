@@ -191,8 +191,10 @@ function appendRequiredFieldErrors(
       break;
     case 'linear_regression':
     case 'logistic_regression':
+    case 'multinomial_logit':
     case 'stepwise_regression':
     case 'poisson_regression':
+    case 'quasi_poisson_regression':
       require(WIZARD_FIELD.depCol, !!form.depCol?.trim(), 'Select a dependent variable.');
       require(WIZARD_FIELD.independentCols, form.independentCols.length >
         0, 'Add at least one predictor.');
@@ -261,6 +263,7 @@ function appendRequiredFieldErrors(
       require(WIZARD_FIELD.pairedVar2, !!form.pairedAfterCol?.trim(), 'Select variable Y.');
       break;
     case 'pca':
+    case 'bartlett_sphericity':
     case 'efa':
       require(WIZARD_FIELD.columns, form.selectedCols.filter(c => numericNames.includes(c))
         .length >= 2, 'Select at least two numeric variables.');
@@ -983,6 +986,8 @@ export function computeWizardFieldErrors(
       break;
     case 'pca':
       break;
+    case 'bartlett_sphericity':
+      break;
     case 'efa':
       break;
     case 'cluster_analysis': {
@@ -1072,7 +1077,12 @@ export function computeWizardFieldErrors(
         checkColumnSlot(errors, WIZARD_FIELD.groupCol, schema, form.subjectCol, 'categorical');
       break;
     case 'poisson_regression':
+    case 'quasi_poisson_regression':
       if (form.depCol) checkColumnSlot(errors, WIZARD_FIELD.depCol, schema, form.depCol, 'numeric');
+      break;
+    case 'multinomial_logit':
+      if (form.depCol)
+        checkColumnSlot(errors, WIZARD_FIELD.depCol, schema, form.depCol, 'categorical');
       break;
     case 'linear_mixed_model':
     case 'mixed_model':
@@ -1168,6 +1178,7 @@ export function analysisRequiredFieldsSatisfied(
       );
     case 'linear_regression':
     case 'logistic_regression':
+    case 'multinomial_logit':
       return !!(form.depCol?.trim() && form.independentCols.length > 0);
     case 'banner_table':
       return !!(form.chiA?.trim() && form.chiB?.trim() && form.chiA !== form.chiB);
@@ -1181,6 +1192,8 @@ export function analysisRequiredFieldsSatisfied(
         form.pairedBeforeCol !== form.pairedAfterCol
       );
     case 'pca':
+      return form.selectedCols.filter(c => numericNames.includes(c)).length >= 2;
+    case 'bartlett_sphericity':
       return form.selectedCols.filter(c => numericNames.includes(c)).length >= 2;
     case 'efa':
       return form.selectedCols.filter(c => numericNames.includes(c)).length >= 2;
@@ -1247,6 +1260,7 @@ export function analysisRequiredFieldsSatisfied(
       );
     case 'stepwise_regression':
     case 'poisson_regression':
+    case 'quasi_poisson_regression':
       return !!(form.depCol?.trim() && form.independentCols.length > 0);
     case 'linear_mixed_model':
       return !!(form.depCol?.trim() && form.groupCol?.trim() && form.independentCols.length > 0);

@@ -10,15 +10,19 @@ import {
 } from '@/components/atoms/empty';
 import { clearSigningIn } from '@/lib/signing-in';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { AgentThread, AgentThreadColumn, useAgentThread } from '@/components/flow/agent-thread';
 import { recentChatSessions, sortSessionsByRecency } from '@/components/flow/chat-sessions';
 import {
+  MarketDecksPanel,
   OverviewDeck,
   OVERVIEW_SLIDES,
   WaveRefresh,
+  overviewMarketBatchPayload,
+  refreshDecksBatchPayload,
+  type MarketDeckRow,
   type OverviewBuildRequest,
   type OverviewSlide,
 } from '@/components/flow/overview-deck';
@@ -119,6 +123,23 @@ import {
   PLUGINS_TAB_VALUE,
   type AnalysisItem,
 } from '@/configs/analysis-config/utils';
+import {
+  getPaletteColumnContext,
+  setPaletteColumnContext,
+  paletteColumnKindFromType,
+  subscribePaletteColumnContext,
+} from '@/lib/palette-column-context';
+import {
+  readRecentPaletteActions,
+  recentPaletteItemsFromCatalog,
+  recordRecentPaletteAction,
+} from '@/lib/palette-recent';
+import {
+  RECENT_PALETTE_SECTION,
+  SUGGESTED_PALETTE_SECTION,
+  suggestPaletteActionsForKind,
+  suggestedPaletteResultsLabel,
+} from '@/lib/palette-suggestions';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -2017,6 +2038,12 @@ function Palette({
   const [section, setSection] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const [plugins, setPlugins] = useState<{ pluginId: string; name: string }[]>([]);
+  const [recentTick, setRecentTick] = useState(0);
+  const columnContext = useSyncExternalStore(
+    subscribePaletteColumnContext,
+    getPaletteColumnContext,
+    () => null
+  );
   const filtered = useMemo(() => filterAnalysisItems(items, query), [items, query]);
   const searching = query.trim().length > 0;
   const ranked = useMemo(
@@ -2027,12 +2054,28 @@ function Palette({
     () => groupAnalysisItems(searching ? ranked : filtered),
     [filtered, ranked, searching]
   );
-  const sections = searching
+  const recentItems = useMemo(() => {
+    void recentTick;
+    return recentPaletteItemsFromCatalog(readRecentPaletteActions(), items);
+  }, [items, recentTick]);
+  const suggestedItems = useMemo(
+    () => (columnContext ? suggestPaletteActionsForKind(columnContext.kind, items) : []),
+    [columnContext, items]
+  );
+  const catalogSections =
+    searching || tab === PLUGINS_TAB_VALUE ? {} : getPaletteTabContent(grouped, tab);
+  const sections: Record<string, AnalysisItem[]> = searching
     ? { Matches: ranked }
     : tab === PLUGINS_TAB_VALUE
       ? {}
-      : getPaletteTabContent(grouped, tab);
-  const sectionNames = Object.keys(sections).filter(name => !query || sections[name]?.length);
+      : {
+          ...(recentItems.length ? { [RECENT_PALETTE_SECTION]: recentItems } : {}),
+          ...(suggestedItems.length ? { [SUGGESTED_PALETTE_SECTION]: suggestedItems } : {}),
+          ...catalogSections,
+        };
+  const sectionNames = Object.keys(sections).filter(
+    name => !searching || (sections[name]?.length ?? 0) > 0
+  );
   const activeSection = section && sections[section] ? section : sectionNames[0] || null;
   const analyses = activeSection ? sections[activeSection] || [] : [];
   const pluginRows = plugins.filter(plugin =>
@@ -2066,21 +2109,38 @@ function Palette({
       .catch(() => setPlugins([]));
   }, []);
 
+  const launchAnalysis = (item: AnalysisItem) => {
+    recordRecentPaletteAction(item.name);
+    setRecentTick(tick => tick + 1);
+    onClose();
+    const store = useAnalysisSetupStore.getState();
+    if (isDialogMenuItem(item.name)) {
+      store.openDialog(item.name);
+      return;
+    }
+    const op = getAnalysisOpForMenuName(item.name);
+    if (op) store.openSetupFromPalette(op);
+    else store.openUnavailable(item.name);
+  };
+
   const openChosen = (ask: boolean) => {
     if (!chosen) return;
     if (chosen.kind === 'plugin' || ask) {
       onAsk(chosen.kind === 'plugin' ? chosen.name : chosen.item.name);
       return;
     }
-    onClose();
-    const store = useAnalysisSetupStore.getState();
-    if (isDialogMenuItem(chosen.item.name)) {
-      store.openDialog(chosen.item.name);
-      return;
-    }
-    const op = getAnalysisOpForMenuName(chosen.item.name);
-    if (op) store.openSetupFromPalette(op);
-    else store.openUnavailable(chosen.item.name);
+    launchAnalysis(chosen.item);
+  };
+
+  const resultsLabel = searching
+    ? 'Best match'
+    : activeSection === SUGGESTED_PALETTE_SECTION
+      ? suggestedPaletteResultsLabel(columnContext?.label)
+      : activeSection || '';
+
+  const itemWhere = (item: AnalysisItem) => {
+    const tabLabel = PALETTE_TAB_LABELS[item.category] || item.category;
+    return `${tabLabel} · ${item.section}`;
   };
 
   return (
@@ -2197,30 +2257,33 @@ function Palette({
                   <PaletteNoMatch query={query} onAsk={onAsk} />
                 ) : (
                   <>
-                    <p className="palette-label">{query ? 'Best match' : activeSection}</p>
+                    <p className="palette-label">{resultsLabel}</p>
                     {analyses.map((item, rowIndex) => (
                       <Button
-                        key={item.name}
+                        key={`${activeSection}-${item.name}`}
                         className="palette-hit"
                         type="button"
                         data-active={rowIndex === index}
                         onClick={() => {
                           setIndex(rowIndex);
-                          onClose();
-                          const store = useAnalysisSetupStore.getState();
-                          if (isDialogMenuItem(item.name)) {
-                            store.openDialog(item.name);
-                            return;
-                          }
-                          const op = getAnalysisOpForMenuName(item.name);
-                          if (op) store.openSetupFromPalette(op);
-                          else store.openUnavailable(item.name);
+                          launchAnalysis(item);
                         }}
                       >
                         <span className="palette-mark">{paletteMark(item.name)}</span>
                         <span className="palette-copy">
                           <strong>{item.name}</strong>
-                          {item.hint ? <span>{item.hint}</span> : null}
+                          {(() => {
+                            const detail = searching
+                              ? item.hint
+                                ? `${itemWhere(item)} · ${item.hint}`
+                                : itemWhere(item)
+                              : item.hint ||
+                                (activeSection === SUGGESTED_PALETTE_SECTION ||
+                                activeSection === RECENT_PALETTE_SECTION
+                                  ? itemWhere(item)
+                                  : '');
+                            return detail ? <span>{detail}</span> : null;
+                          })()}
                         </span>
                         {rowIndex === index ? <span className="palette-enter">↵</span> : null}
                       </Button>
@@ -3493,6 +3556,20 @@ function ResponsesScreen({
         return sortCol.dir === 'asc' ? compared : -compared;
       });
   const activeName = names[activeIndex] || 'Variable';
+  const activeMeta = columnMeta(activeName);
+  const activeLabel = String(activeMeta?.label || activeName || '').trim() || 'Variable';
+  const activeType = String(activeMeta?.type || '');
+  useEffect(() => {
+    if (!datasetId || sheetPhase !== 'ready') {
+      setPaletteColumnContext(null);
+      return;
+    }
+    setPaletteColumnContext({
+      label: activeLabel,
+      kind: paletteColumnKindFromType(activeType),
+    });
+    return () => setPaletteColumnContext(null);
+  }, [datasetId, sheetPhase, activeLabel, activeType]);
   const isCoded = (column: FlowColumn) =>
     column.name.endsWith('_codes') || String(column.label || '').startsWith('Codes for');
   const codedColumn =
@@ -4754,6 +4831,8 @@ function ReportScreen({
   const [waveOpen, setWaveOpen] = useState(false);
   const [audienceNames, setAudienceNames] = useState<string[]>([]);
   const [overviewSlides, setOverviewSlides] = useState<OverviewSlide[]>(OVERVIEW_SLIDES);
+  const [marketDecks, setMarketDecks] = useState<MarketDeckRow[]>([]);
+  const [decksTick, setDecksTick] = useState(0);
   const [error, setError] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
@@ -5031,6 +5110,46 @@ function ReportScreen({
   const exportFileId =
     selected[0]?.datasetId || reportPins.find(pin => pin.datasetId)?.datasetId || datasetId;
 
+  const reloadMarketDecks = useCallback(async () => {
+    if (!exportFileId) {
+      setMarketDecks([]);
+      return;
+    }
+    try {
+      const page = await flowJson<{ decks?: MarketDeckRow[] }>(`/datasets/${exportFileId}/decks`);
+      setMarketDecks(
+        (page.decks || []).filter(row => Boolean(row.family_id || row.group_label || row.new_data))
+      );
+    } catch {
+      setMarketDecks([]);
+    }
+  }, [exportFileId]);
+
+  useEffect(() => {
+    void reloadMarketDecks();
+  }, [reloadMarketDecks, decksTick, refreshKey]);
+
+  const refreshMarketDecks = async () => {
+    if (!exportFileId) return;
+    const familyId = marketDecks.find(row => row.family_id)?.family_id || '';
+    const created = await flowJson<{
+      n_refreshed?: number;
+      note?: string;
+      refreshed?: { export_id?: string; label?: string }[];
+    }>(`/datasets/${exportFileId}/export/deck/refresh/batch`, {
+      method: 'POST',
+      body: refreshDecksBatchPayload({
+        familyId: familyId || undefined,
+        onlyNewData: true,
+      }),
+    });
+    setNote(
+      created.note ||
+        `Refreshed ${created.n_refreshed || 0} deck${(created.n_refreshed || 0) === 1 ? '' : 's'}.`
+    );
+    setDecksTick(value => value + 1);
+  };
+
   const deck = async (recipe?: OverviewBuildRequest) => {
     const outputs = deliverableOutputs(reportPins, 'deck');
     if (!exportFileId || (!selected.length && !outputs.length)) {
@@ -5042,6 +5161,52 @@ function ReportScreen({
       return;
     }
     setError('');
+    const overviewName = recipe?.audience
+      ? `Audience overview · ${recipe.audience}`
+      : 'Audience overview';
+    const overviewOptions = recipe
+      ? {
+          headline: recipe.headline,
+          footnote: recipe.footnote,
+          hide_low: recipe.hideLow,
+          low_base_threshold: recipe.lowBaseThreshold,
+        }
+      : undefined;
+
+    if (recipe?.perMarket) {
+      const created = await flowJson<{
+        export_id?: string;
+        filename?: string;
+        n_copies?: number;
+        family_id?: string;
+        note?: string;
+      }>(`/datasets/${exportFileId}/export/deck/batch`, {
+        method: 'POST',
+        body: overviewMarketBatchPayload({
+          specIds: selected.map(row => row.id),
+          groupColumn: recipe.perMarket.groupColumn,
+          values: recipe.perMarket.values,
+          name: overviewName,
+          audience: recipe.audience,
+          slides: recipe.slides,
+          options: overviewOptions,
+          templateName: templateName || undefined,
+        }),
+      });
+      if (!created.export_id) throw new Error('The market decks did not build.');
+      await downloadExport(
+        `/exports/${created.export_id}`,
+        created.filename ||
+          (created.n_copies === 1 ? 'deck.pptx' : 'audience-overview-by-market.zip')
+      );
+      setNote(
+        created.note ||
+          `Built ${created.n_copies || recipe.perMarket.values.length} market decks and saved them as recipes.`
+      );
+      setDecksTick(value => value + 1);
+      return;
+    }
+
     let reportDocument = reportDocumentForApi(documentFromPins(reportPins));
     try {
       const stored = await flowJson<{
@@ -5072,17 +5237,10 @@ function ReportScreen({
         ...(templateName ? { template_name: templateName } : {}),
         ...(recipe
           ? {
-              name: recipe.audience
-                ? `Audience overview · ${recipe.audience}`
-                : 'Audience overview',
+              name: overviewName,
               audience: recipe.audience,
               slides: recipe.slides,
-              options: {
-                headline: recipe.headline,
-                footnote: recipe.footnote,
-                hide_low: recipe.hideLow,
-                low_base_threshold: recipe.lowBaseThreshold,
-              },
+              options: overviewOptions,
             }
           : {}),
       }),
@@ -5120,6 +5278,7 @@ function ReportScreen({
         ? `Overview deck downloaded${created.recipe?.id ? ' and saved as a recipe' : ''}.`
         : 'Deck downloaded.'
     );
+    setDecksTick(value => value + 1);
   };
 
   const run = (name: string, action: () => Promise<void>) => {
@@ -5382,6 +5541,7 @@ function ReportScreen({
             slides={overviewSlides}
             templateName={templateName || undefined}
             templateSummary={templateSummary || undefined}
+            datasetId={exportFileId || undefined}
             onReplaceTemplate={() => templateInput.current?.click()}
             onBuild={async request => {
               await deck(request);
@@ -5409,6 +5569,22 @@ function ReportScreen({
           </div>
           {error ? <p className="flow-error">{error}</p> : null}
           {note ? <p className="flow-muted">{note}</p> : null}
+          <MarketDecksPanel
+            decks={marketDecks}
+            busy={busy === 'refresh-decks'}
+            onRefresh={() =>
+              new Promise<void>((resolve, reject) => {
+                setBusy('refresh-decks');
+                void refreshMarketDecks()
+                  .then(() => resolve())
+                  .catch(err => {
+                    setError(String(err instanceof Error ? err.message : err));
+                    reject(err);
+                  })
+                  .finally(() => setBusy(''));
+              })
+            }
+          />
           <div className="report-cards">
             <Card>
               <div className="report-tags">

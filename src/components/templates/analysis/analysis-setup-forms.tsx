@@ -1392,7 +1392,29 @@ export function PcaForm({ form, setForm, schema, notices, errors }: FormSlicePro
         label="Number of components (optional)"
         value={form.pcaNComponents}
         onChange={pcaNComponents => setForm(f => ({ ...f, pcaNComponents }))}
-        hint="Leave blank to extract all components (up to the number of variables)."
+        hint="Leave blank for the Kaiser rule (eigenvalue greater than 1)."
+      />
+    </section>
+  );
+}
+
+export function BartlettSphericityForm({ form, setForm, schema, notices, errors }: FormSliceProps) {
+  return (
+    <section className="space-y-3">
+      <FormSectionLabel>Variables</FormSectionLabel>
+      <p className="text-[10px] leading-snug text-muted-foreground">
+        Bartlett&apos;s test of sphericity and Kaiser–Meyer–Olkin (KMO) sampling adequacy for the
+        selected numeric variables.
+      </p>
+      <MultiColumnPicker
+        selected={form.selectedCols}
+        onChange={selectedCols => setForm(f => ({ ...f, selectedCols }))}
+        schema={schema}
+        filterSlot="numeric"
+        showTypeShortcuts
+        minSelected={2}
+        notices={notices[WIZARD_FIELD.columns]}
+        errors={errors[WIZARD_FIELD.columns]}
       />
     </section>
   );
@@ -1416,7 +1438,7 @@ export function EfaForm(props: FormSliceProps) {
         label="Number of factors (optional)"
         value={form.pcaNComponents}
         onChange={pcaNComponents => setForm(f => ({ ...f, pcaNComponents }))}
-        hint="Leave blank for an automatic factor count (up to five)."
+        hint="Leave blank for the Kaiser rule (eigenvalue greater than 1)."
       />
     </section>
   );
@@ -2423,6 +2445,8 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
       return <RegressionTabs {...props} />;
     case 'logistic_regression':
       return <RegressionTabs {...props} logistic />;
+    case 'multinomial_logit':
+      return <RegressionTabs {...props} logistic />;
     case 'banner_table':
       return <BannerTableForm {...props} />;
     case 'chi_square':
@@ -2451,11 +2475,14 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
       return <PartialCorrelationForm {...props} />;
     case 'pca':
       return <PcaForm {...props} />;
+    case 'bartlett_sphericity':
+      return <BartlettSphericityForm {...props} />;
     case 'anova_twoway':
       return <TwoWayAnovaForm {...props} />;
     case 'anova_repeated':
       return <RepeatedMeasuresAnovaForm {...props} />;
     case 'poisson_regression':
+    case 'quasi_poisson_regression':
       return <RegressionTabs {...props} outcomeKind="count" />;
     case 'cohens_kappa':
     case 'fishers_exact':

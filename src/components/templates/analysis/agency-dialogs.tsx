@@ -447,14 +447,22 @@ function TechniqueColumnDialog({
         if (!datasetId) throw new Error(WORKSPACE_DATASET_REQUIRED);
         const body: Record<string, unknown> = {};
         for (const field of fields) {
-          body[field.key] = field.numeric
-            ? Number(values[field.key]) || undefined
-            : field.multi
-              ? (values[field.key] || '')
-                  .split(',')
-                  .map(s => s.trim())
-                  .filter(Boolean)
-              : values[field.key];
+          if (field.numeric) {
+            const raw = (values[field.key] || '').trim();
+            if (!raw) continue;
+            const parsed = Number(raw);
+            if (Number.isFinite(parsed) && parsed > 0) body[field.key] = parsed;
+            continue;
+          }
+          if (field.multi) {
+            const selected = (values[field.key] || '')
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean);
+            if (selected.length) body[field.key] = selected;
+            continue;
+          }
+          if (values[field.key]) body[field.key] = values[field.key];
         }
         const payload = await apiClient.datasets.techniques.run(datasetId, path, body);
         return techniqueRun(payload, { op: analysisOp, parameters: body });
@@ -498,7 +506,10 @@ export const TurfDialog = ({ children }: { children: ReactNode }) => (
     analysisOp="turf"
     fields={[
       { key: 'items', label: 'Items', multi: true },
-      { key: 'k', label: 'Reach (k)', numeric: true },
+      { key: 'k', label: 'Portfolio size', numeric: true },
+      { key: 'k_max', label: 'Maximum portfolio size', numeric: true },
+      { key: 'forced_items', label: 'Must include', multi: true },
+      { key: 'banned_items', label: 'Must exclude', multi: true },
     ]}
   >
     {children}
@@ -565,6 +576,32 @@ export const NpsDialog = ({ children }: { children: ReactNode }) => (
     analysisOp="nps"
     fields={[
       { key: 'score_column', label: 'Score' },
+      { key: 'group_column', label: 'Group' },
+    ]}
+  >
+    {children}
+  </TechniqueColumnDialog>
+);
+export const CalibratedPurchaseIntentDialog = ({ children }: { children: ReactNode }) => (
+  <TechniqueColumnDialog
+    title="Calibrated purchase intent"
+    path="calibrated-purchase-intent"
+    analysisOp="calibrated_purchase_intent"
+    fields={[
+      { key: 'column', label: 'Purchase intent' },
+      { key: 'group_column', label: 'Group' },
+    ]}
+  >
+    {children}
+  </TechniqueColumnDialog>
+);
+export const ShareOfWalletDialog = ({ children }: { children: ReactNode }) => (
+  <TechniqueColumnDialog
+    title="Share of wallet"
+    path="share-of-wallet"
+    analysisOp="share_of_wallet"
+    fields={[
+      { key: 'columns', label: 'Volume columns', multi: true },
       { key: 'group_column', label: 'Group' },
     ]}
   >

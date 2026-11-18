@@ -230,6 +230,17 @@ function chartToHtmlSnippet(chart: NonNullable<AnalysisReport['chart']>): string
     return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600">${title}</figcaption>
       <p style="font-size:13px;color:#334155">Violin groups: ${labels || 'none'}.</p></figure>`;
   }
+  if (chart.kind === 'sankey') {
+    const flowCount = (chart.links || []).length;
+    const nodeLabels = (chart.nodes || [])
+      .map(node => escHtml(node.name))
+      .filter((name, index, all) => all.indexOf(name) === index)
+      .join(', ');
+    return `<figure style="margin:1.25rem 0"><figcaption style="font-weight:600">${title}</figcaption>
+      <p style="font-size:13px;color:#334155">${flowCount} flow${flowCount === 1 ? '' : 's'}${
+        nodeLabels ? `: ${nodeLabels}` : ''
+      }.</p></figure>`;
+  }
   if (chart.kind === 'bar_grouped' || chart.kind === 'bar' || chart.kind === 'line') {
     const series = chart.series?.[0];
     const values = series?.values ?? [];

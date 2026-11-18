@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,9 +13,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ChoiceSelect } from '@/components/ui/select';
 import { downloadExport } from '@/components/flow/survey-screens';
 import { exportDatasetSavAndSps } from '@/lib/dataset-data-export';
 import { flowJson } from '@/lib/flow-api';
+import { isIdColumn, isInternalColumn } from '@/lib/flow-columns';
+import { valueLabel, type ColumnValues } from '@/components/flow/filters-panel-logic';
 import {
   documentApa,
   documentCsv,
@@ -100,6 +103,56 @@ export async function deckFromTables(datasetId: string, stem: string) {
   await downloadExport(`/exports/${created.export_id}`, created.filename || `${stem}.pptx`);
 }
 
+/** Body for /export/deck/batch — one PowerPoint per group value. */
+export function deckBatchPayload(args: {
+  specIds: string[];
+  groupColumn: string;
+  values: string[];
+  name?: string;
+}): string {
+  return JSON.stringify({
+    spec_ids: args.specIds,
+    group_column: args.groupColumn,
+    values: args.values,
+    name: args.name || 'deck',
+  });
+}
+
+/** One PowerPoint per selected group value (zip when there are several). */
+export async function deckBatchFromTables(
+  datasetId: string,
+  stem: string,
+  groupColumn: string,
+  values: string[]
+) {
+  if (!groupColumn.trim()) throw new Error('Choose a column to make one copy per group.');
+  if (!values.length) throw new Error('Choose at least one group value.');
+  const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
+    `/datasets/${datasetId}/tables`
+  );
+  const ids = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
+  if (!ids.length) {
+    throw new Error('Save a table in Tables first. Each copy uses the same saved tables.');
+  }
+  const created = await flowJson<{ export_id?: string; filename?: string; n_copies?: number }>(
+    `/datasets/${datasetId}/export/deck/batch`,
+    {
+      method: 'POST',
+      body: deckBatchPayload({
+        specIds: ids,
+        groupColumn,
+        values,
+        name: stem,
+      }),
+    }
+  );
+  if (!created.export_id) throw new Error('The copies did not build. Try again.');
+  await downloadExport(
+    `/exports/${created.export_id}`,
+    created.filename || (created.n_copies === 1 ? `${stem}.pptx` : `${stem}-by-group.zip`)
+  );
+}
+
 /** Every saved table on the file as an Excel banner book. */
 export async function bannerBookFromTables(datasetId: string, stem: string) {
   if (!datasetId) throw new Error('Open a file first.');
@@ -159,8 +212,65 @@ export function ExportDialog({
   const [liveOn, setLiveOn] = useState(false);
   const [reportFormat, setReportFormat] = useState('docx');
   const [included, setIncluded] = useState<Record<number, boolean>>({});
+  const [perGroup, setPerGroup] = useState(false);
+  const [groupColumn, setGroupColumn] = useState('');
+  const [groupOptions, setGroupOptions] = useState<{ value: string; label: string }[]>([]);
+  const [groupValues, setGroupValues] = useState<ColumnValues | null>(null);
+  const [pickedGroups, setPickedGroups] = useState<Record<string, boolean>>({});
   const stem = caption.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
   const current = { ...document, title: caption, summary: note };
+
+  useEffect(() => {
+    if (!datasetId || kind !== 'report' || reportFormat !== 'pptx' || !perGroup) return;
+    let live = true;
+    void flowJson<{
+      columns?: { name?: string; label?: string; measure?: string }[];
+    }>(`/datasets/${datasetId}/metadata`)
+      .then(body => {
+        if (!live) return;
+        const next = (body.columns || [])
+          .filter(col => {
+            const name = String(col.name || '');
+            if (!name || isInternalColumn(name) || isIdColumn(name)) return false;
+            const measure = String(col.measure || '').toLowerCase();
+            return measure !== 'numeric' && measure !== 'text' && measure !== 'datetime';
+          })
+          .map(col => ({
+            value: String(col.name || ''),
+            label: String(col.label || col.name || '').trim() || String(col.name || ''),
+          }));
+        setGroupOptions(next);
+        if (!groupColumn && next[0]) setGroupColumn(next[0].value);
+      })
+      .catch(() => {
+        if (live) setGroupOptions([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [datasetId, kind, reportFormat, perGroup, groupColumn]);
+
+  useEffect(() => {
+    if (!datasetId || !perGroup || !groupColumn) {
+      setGroupValues(null);
+      return;
+    }
+    let live = true;
+    void flowJson<ColumnValues>(
+      `/datasets/${datasetId}/columns/${encodeURIComponent(groupColumn)}/values`
+    )
+      .then(body => {
+        if (!live) return;
+        setGroupValues(body);
+        setPickedGroups(Object.fromEntries((body.values || []).map(value => [value, true])));
+      })
+      .catch(() => {
+        if (live) setGroupValues(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [datasetId, perGroup, groupColumn]);
 
   const save = (name: string, action: () => Promise<void> | void) => {
     setBusy(name);
@@ -230,9 +340,21 @@ export function ExportDialog({
         id: 'pptx',
         ext: '.PPTX',
         label: 'PowerPoint',
-        note: datasetId ? 'One slide per saved table' : 'Open a file to build a deck',
+        note: datasetId
+          ? perGroup
+            ? 'One PowerPoint per group value'
+            : 'One slide per saved table'
+          : 'Open a file to build a deck',
         soon: !datasetId,
-        run: () => deckFromTables(datasetId || '', stem),
+        run: () => {
+          if (perGroup) {
+            const values = Object.entries(pickedGroups)
+              .filter(([, on]) => on)
+              .map(([value]) => value);
+            return deckBatchFromTables(datasetId || '', stem, groupColumn, values);
+          }
+          return deckFromTables(datasetId || '', stem);
+        },
       },
       {
         id: 'xlsx',
@@ -346,7 +468,64 @@ export function ExportDialog({
                   </span>
                   <Switch checked={liveOn} onCheckedChange={setLiveOn} aria-label="Live link" />
                 </label>
+                {datasetId && reportFormat === 'pptx' ? (
+                  <label className="xp-toggle">
+                    <span>
+                      <strong>One copy per group</strong>
+                      <span className="flow-muted">
+                        {' '}
+                        Separate PowerPoint for each value (country, region, …)
+                      </span>
+                    </span>
+                    <Switch
+                      checked={perGroup}
+                      onCheckedChange={setPerGroup}
+                      aria-label="One copy per group"
+                    />
+                  </label>
+                ) : null}
               </div>
+              {datasetId && reportFormat === 'pptx' && perGroup ? (
+                <div className="xr-per-group" data-testid="export-per-group">
+                  <span className="xp-label">Group by</span>
+                  <ChoiceSelect
+                    aria-label="Group by"
+                    className="flow-input"
+                    value={groupColumn}
+                    onValueChange={setGroupColumn}
+                    options={groupOptions}
+                    placeholder="Choose a column"
+                  />
+                  <span className="xp-label">Values</span>
+                  <div className="xr-include">
+                    {(groupValues?.values || []).length === 0 ? (
+                      <p className="flow-muted">
+                        {groupColumn ? 'Loading values…' : 'Choose a column first.'}
+                      </p>
+                    ) : (
+                      (groupValues?.values || []).map(value => (
+                        <label key={value} className="xr-item">
+                          <Checkbox
+                            checked={pickedGroups[value] !== false}
+                            onCheckedChange={on =>
+                              setPickedGroups(current => ({
+                                ...current,
+                                [value]: on === true,
+                              }))
+                            }
+                          />
+                          <span>
+                            {valueLabel(value, groupValues?.value_labels)}
+                            {typeof groupValues?.counts?.[value] === 'number'
+                              ? ` · ${groupValues.counts[value]}`
+                              : ''}
+                          </span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="xr-right">
               <span className="xp-label">What to include</span>
@@ -405,6 +584,9 @@ export function ExportDialog({
               disabled={
                 busy !== '' ||
                 !format.run ||
+                (format.id === 'pptx' &&
+                  perGroup &&
+                  (!groupColumn || !Object.values(pickedGroups).some(Boolean))) ||
                 (!chosen.length &&
                   format.id !== 'pptx' &&
                   format.id !== 'sav' &&
@@ -412,7 +594,11 @@ export function ExportDialog({
               }
               onClick={() => format.run && save(format.label, format.run)}
             >
-              {busy ? 'Working…' : `↓ Export ${format.ext.toLowerCase().split(' ')[0]}`}
+              {busy
+                ? 'Working…'
+                : format.id === 'pptx' && perGroup
+                  ? '↓ Export copies'
+                  : `↓ Export ${format.ext.toLowerCase().split(' ')[0]}`}
             </Button>
           </div>
         </DialogContent>

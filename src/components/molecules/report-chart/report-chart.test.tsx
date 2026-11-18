@@ -129,6 +129,33 @@ describe('ReportChart palette kinds', () => {
     expect(container.querySelector('path')).toBeTruthy();
   });
 
+  it('draws a sankey with source and target nodes', () => {
+    const { container } = render(
+      <ReportChart
+        chart={{
+          kind: 'sankey',
+          title: 'From → To',
+          nodes: [
+            { id: 's:A', name: 'A' },
+            { id: 's:B', name: 'B' },
+            { id: 't:X', name: 'X' },
+            { id: 't:Y', name: 'Y' },
+          ],
+          links: [
+            { source: 's:A', target: 't:X', value: 3 },
+            { source: 's:A', target: 't:Y', value: 1 },
+            { source: 's:B', target: 't:X', value: 2 },
+          ],
+        }}
+        density="comfortable"
+      />
+    );
+    expect(container.querySelector('[data-chart-kind="sankey"]')).toBeTruthy();
+    expect(container.querySelectorAll('[data-chart-kind="sankey"] path').length).toBe(3);
+    expect(container.querySelectorAll('[data-chart-kind="sankey"] rect').length).toBe(4);
+    expect(screen.getByText('From → To')).toBeTruthy();
+  });
+
   it('sizes weighted scatter points by weight and leaves unweighted points equal', () => {
     const weighted = render(
       <ReportChart

@@ -144,6 +144,7 @@ describe('production menu false-door sweep', () => {
     expect(names).toContain('Area Chart');
     expect(names).toContain('Density Plot');
     expect(names).toContain('Violin Plot');
+    expect(names).toContain('Sankey');
     expect(names).not.toContain('Moses Test');
     expect(ACTIVE_PALETTE_TABS).not.toContain('time_series');
     expect(ACTIVE_PALETTE_TABS).not.toContain('ml_ai');

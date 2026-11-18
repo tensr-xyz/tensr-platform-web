@@ -1,7 +1,9 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/rest';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +12,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { ChoiceSelect } from '@/components/ui/select';
+import { valueLabel, type ColumnValues } from '@/components/flow/filters-panel-logic';
+import { flowJson } from '@/lib/flow-api';
+import { isIdColumn, isInternalColumn } from '@/lib/flow-columns';
 import { matchWave, type WaveColumn } from '@/lib/wave-match';
 
 export type OverviewSlide = {
@@ -53,7 +58,114 @@ export type OverviewBuildRequest = {
   footnote: boolean;
   hideLow: boolean;
   lowBaseThreshold: number;
+  /** When set, build one PowerPoint recipe per selected group value. */
+  perMarket?: { groupColumn: string; values: string[] };
 };
+
+/** Body for /export/deck/batch when saving a market-deck family. */
+export function overviewMarketBatchPayload(args: {
+  specIds: string[];
+  groupColumn: string;
+  values: string[];
+  name: string;
+  audience?: string;
+  slides?: OverviewSlide[];
+  options?: Record<string, unknown>;
+  templateName?: string;
+}): string {
+  return JSON.stringify({
+    spec_ids: args.specIds,
+    group_column: args.groupColumn,
+    values: args.values,
+    name: args.name,
+    audience: args.audience || '',
+    slides: args.slides || [],
+    options: args.options || {},
+    template_name: args.templateName || '',
+    save_family: true,
+  });
+}
+
+/** Body for /export/deck/refresh/batch. */
+export function refreshDecksBatchPayload(args: {
+  familyId?: string;
+  deckSpecIds?: string[];
+  onlyNewData?: boolean;
+}): string {
+  return JSON.stringify({
+    family_id: args.familyId || '',
+    deck_spec_ids: args.deckSpecIds || [],
+    only_new_data: args.onlyNewData !== false,
+  });
+}
+
+export type MarketDeckRow = {
+  id: string;
+  name: string;
+  family_id?: string | null;
+  group_label?: string | null;
+  group_column_label?: string | null;
+  new_data?: boolean;
+  export_id?: string | null;
+  n_versions?: number;
+};
+
+/** Deliverables strip: market copies with New data and Refresh N decks. */
+export function MarketDecksPanel({
+  decks,
+  busy,
+  onRefresh,
+}: {
+  decks: MarketDeckRow[];
+  busy?: boolean;
+  onRefresh: () => Promise<void> | void;
+}) {
+  if (!decks.length) return null;
+  const newCount = decks.filter(row => row.new_data).length;
+  const columnLabel =
+    decks.find(row => row.group_column_label)?.group_column_label ||
+    decks.find(row => row.group_label)?.group_label ||
+    'group';
+  return (
+    <div className="market-decks" data-testid="market-decks">
+      <div className="market-decks-head">
+        <div>
+          <h3>Market decks</h3>
+          <p className="flow-muted">
+            One overview copy per {columnLabel}
+            {newCount ? ` · ${newCount} with new data` : ''}
+          </p>
+        </div>
+        {newCount ? (
+          <Button
+            type="button"
+            className="flow-btn primary"
+            disabled={busy}
+            onClick={() => void onRefresh()}
+          >
+            {busy ? 'Refreshing…' : `Refresh ${newCount} deck${newCount === 1 ? '' : 's'}`}
+          </Button>
+        ) : null}
+      </div>
+      <ul>
+        {decks.map(deck => (
+          <li key={deck.id}>
+            <span>
+              {deck.group_label || deck.name}
+              {deck.n_versions ? (
+                <span className="flow-muted">
+                  {' '}
+                  · {deck.n_versions} earlier version{deck.n_versions === 1 ? '' : 's'}
+                </span>
+              ) : null}
+            </span>
+            {deck.new_data ? <span className="market-deck-new">New data</span> : null}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 /** The audience overview deck: template, slide list, low-base flags, saved as a recipe. */
 export function OverviewDeck({
@@ -62,6 +174,7 @@ export function OverviewDeck({
   slides,
   templateName,
   templateSummary,
+  datasetId,
   onReplaceTemplate,
   onBuild,
   onClose,
@@ -73,6 +186,7 @@ export function OverviewDeck({
   templateName?: string;
   /** e.g. "9 layouts · theme colours found" from the uploaded PPTX. */
   templateSummary?: string;
+  datasetId?: string;
   onReplaceTemplate?: () => void;
   onBuild?: (request: OverviewBuildRequest) => Promise<void> | void;
   onClose: () => void;
@@ -86,6 +200,61 @@ export function OverviewDeck({
   const [headline, setHeadline] = useState(true);
   const [footnote, setFootnote] = useState(true);
   const [hideLow, setHideLow] = useState(false);
+  const [perMarket, setPerMarket] = useState(false);
+  const [groupColumn, setGroupColumn] = useState('');
+  const [groupOptions, setGroupOptions] = useState<{ value: string; label: string }[]>([]);
+  const [groupValues, setGroupValues] = useState<ColumnValues | null>(null);
+  const [pickedGroups, setPickedGroups] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!datasetId || !perMarket) return;
+    let live = true;
+    void flowJson<{
+      columns?: { name?: string; label?: string; measure?: string }[];
+    }>(`/datasets/${datasetId}/metadata`)
+      .then(body => {
+        if (!live) return;
+        const next = (body.columns || [])
+          .filter(col => {
+            const name = String(col.name || '');
+            if (!name || isInternalColumn(name) || isIdColumn(name)) return false;
+            const measure = String(col.measure || '').toLowerCase();
+            return measure !== 'numeric' && measure !== 'text' && measure !== 'datetime';
+          })
+          .map(col => ({
+            value: String(col.name || ''),
+            label: String(col.label || col.name || '').trim() || String(col.name || ''),
+          }));
+        setGroupOptions(next);
+        if (!groupColumn && next[0]) setGroupColumn(next[0].value);
+      })
+      .catch(() => {
+        if (live) setGroupOptions([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [datasetId, perMarket, groupColumn]);
+  useEffect(() => {
+    if (!datasetId || !perMarket || !groupColumn) {
+      setGroupValues(null);
+      return;
+    }
+    let live = true;
+    void flowJson<ColumnValues>(
+      `/datasets/${datasetId}/columns/${encodeURIComponent(groupColumn)}/values`
+    )
+      .then(body => {
+        if (!live) return;
+        setGroupValues(body);
+        setPickedGroups(Object.fromEntries((body.values || []).map(value => [value, true])));
+      })
+      .catch(() => {
+        if (live) setGroupValues(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [datasetId, perMarket, groupColumn]);
   const move = (index: number, direction: -1 | 1) => {
     const next = index + direction;
     if (next < 0 || next >= order.length) return;
@@ -101,6 +270,19 @@ export function OverviewDeck({
       setSaved(true);
       return;
     }
+    const values = Object.entries(pickedGroups)
+      .filter(([, on]) => on)
+      .map(([value]) => value);
+    if (perMarket) {
+      if (!groupColumn.trim()) {
+        setError('Choose a column to make one copy per market.');
+        return;
+      }
+      if (!values.length) {
+        setError('Choose at least one market value.');
+        return;
+      }
+    }
     setBusy(true);
     setError('');
     void Promise.resolve(
@@ -111,6 +293,7 @@ export function OverviewDeck({
         footnote,
         hideLow,
         lowBaseThreshold: 50,
+        ...(perMarket ? { perMarket: { groupColumn, values } } : {}),
       })
     )
       .then(() => setSaved(true))
@@ -182,6 +365,69 @@ export function OverviewDeck({
             >
               Hide groups with base under 50
             </Button>
+            {datasetId ? (
+              <label className="deck-per-market">
+                <span>
+                  <strong>One copy per market</strong>
+                  <span className="flow-muted">
+                    {' '}
+                    Separate deck for each value; refresh together when data changes
+                  </span>
+                </span>
+                <Switch
+                  checked={perMarket}
+                  onCheckedChange={on => {
+                    setPerMarket(on);
+                    setSaved(false);
+                  }}
+                  aria-label="One copy per market"
+                />
+              </label>
+            ) : null}
+            {datasetId && perMarket ? (
+              <div className="deck-per-market-fields" data-testid="overview-per-market">
+                <p>Market column</p>
+                <ChoiceSelect
+                  aria-label="Market column"
+                  className="flow-input"
+                  value={groupColumn}
+                  onValueChange={value => {
+                    setGroupColumn(value);
+                    setSaved(false);
+                  }}
+                  options={groupOptions}
+                  placeholder="Choose a column"
+                />
+                <p>Values</p>
+                <div className="deck-per-market-values">
+                  {(groupValues?.values || []).length === 0 ? (
+                    <p className="flow-muted">
+                      {groupColumn ? 'Loading values…' : 'Choose a column first.'}
+                    </p>
+                  ) : (
+                    (groupValues?.values || []).map(value => (
+                      <label key={value} className="deck-per-market-item">
+                        <Checkbox
+                          checked={pickedGroups[value] !== false}
+                          onCheckedChange={on =>
+                            setPickedGroups(current => ({
+                              ...current,
+                              [value]: on === true,
+                            }))
+                          }
+                        />
+                        <span>
+                          {valueLabel(value, groupValues?.value_labels)}
+                          {typeof groupValues?.counts?.[value] === 'number'
+                            ? ` · ${groupValues.counts[value]}`
+                            : ''}
+                        </span>
+                      </label>
+                    ))
+                  )}
+                </div>
+              </div>
+            ) : null}
             <div>
               <p>Saved as a recipe</p>
               <p className="flow-muted">
@@ -231,7 +477,11 @@ export function OverviewDeck({
           </Button>
         </div>
         {saved ? (
-          <p className="flow-muted">Saved as a recipe. The original deck is unchanged.</p>
+          <p className="flow-muted">
+            {perMarket
+              ? 'Saved one recipe per market. Refresh them together when new data arrives.'
+              : 'Saved as a recipe. The original deck is unchanged.'}
+          </p>
         ) : null}
       </DialogContent>
     </Dialog>

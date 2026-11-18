@@ -240,6 +240,39 @@ export function standardizeDatasetValues(
   );
 }
 
+export type CreateVariablesOperation =
+  | 'log'
+  | 'sqrt'
+  | 'center'
+  | 'standardize'
+  | 'rank'
+  | 'unit_interval'
+  | 'case_shares';
+
+export type CreateVariablesScope = 'variable' | 'case';
+
+export type CreateVariablesResult = DerivedDatasetResult & {
+  created_columns?: string[];
+};
+
+/** Log/sqrt copies, within-case or within-variable scaling, and case-level shares. */
+export function createDatasetVariables(
+  datasetId: string,
+  payload: {
+    columns: string[];
+    operation: CreateVariablesOperation;
+    scope?: CreateVariablesScope;
+    suffix?: string | null;
+  },
+  token?: string | null
+) {
+  return authedJson<CreateVariablesResult>(
+    `/datasets/${datasetId}/create-variables`,
+    payload as Record<string, unknown>,
+    token
+  );
+}
+
 export type RakeWeightsResult = DerivedDatasetResult & {
   derived_dataset_id: string;
   parent_dataset_id?: string;
@@ -351,6 +384,224 @@ export async function fetchDataQualityReport(datasetId: string, token?: string |
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json() as Promise<DataQualityReport>;
+}
+
+export type ResponseQualityDecision = 'keep' | 'review' | 'remove';
+
+export type ResponseQualityReport = {
+  id_column: string | null;
+  respondents: number;
+  summary: {
+    flagged?: number;
+    speeder_rows?: number;
+    straightline_rows?: number;
+    trap_rows?: number;
+    bot_rows?: number;
+    keep?: number;
+    review?: number;
+    remove?: number;
+    would_remove?: number;
+    would_review?: number;
+  };
+  rows: Array<{
+    row_index: number;
+    respondent_id: string;
+    flags: string[];
+    reasons: string[];
+    score: number;
+    decision: ResponseQualityDecision;
+  }>;
+  removal_list: Array<{
+    respondent_id: string;
+    row_index: number;
+    reasons: string[];
+  }>;
+  flag_labels: Record<string, string>;
+};
+
+export async function fetchResponseQualityReport(datasetId: string, token?: string | null) {
+  const res = await fetch(tensrApiUrl(`/datasets/${datasetId}/response-quality`), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<ResponseQualityReport>;
+}
+
+export function applyResponseQualityRemovals(
+  datasetId: string,
+  payload: { row_indices?: number[]; respondent_ids?: string[]; filename?: string },
+  token?: string | null
+) {
+  return authedJson<{
+    dataset_id: string;
+    rows_before: number;
+    rows_after: number;
+    removed: number;
+    original_filename?: string;
+  }>(`/datasets/${datasetId}/response-quality/apply`, payload, token);
+}
+
+export type TableCheckCellStatus = 'matched' | 'differs' | 'cant_tell' | 'rounding';
+
+export type TableCheckReport = {
+  filename?: string;
+  n_tables: number;
+  ok: boolean;
+  summary: {
+    matched: number;
+    differs: number;
+    cant_tell: number;
+    rounding: number;
+  };
+  cause_labels: Record<string, string>;
+  tables: Array<{
+    title: string;
+    sheet_name?: string;
+    stub_column?: string | null;
+    banner_column?: string | null;
+    stub_label?: string | null;
+    banner_label?: string | null;
+    weight?: string | null;
+    base_text?: string;
+    weight_text?: string;
+    statistic?: string;
+    ok: boolean;
+    reason?: string;
+    summary: {
+      matched: number;
+      differs: number;
+      cant_tell: number;
+      rounding: number;
+    };
+    cells: Array<{
+      stub_label: string;
+      banner_label: string;
+      uploaded: {
+        raw?: string;
+        percent?: number | null;
+        mean?: number | null;
+        count?: number | null;
+        letters?: string | null;
+      } | null;
+      expected: {
+        percent?: number | null;
+        mean?: number | null;
+        count?: number | null;
+        unweighted_n?: number | null;
+      } | null;
+      status: TableCheckCellStatus;
+      cause: string;
+      cause_label: string;
+    }>;
+    corrected?: {
+      title?: string;
+      base_label?: string;
+      banner_columns?: Array<{ id?: string; label?: string }>;
+      rows?: Array<{
+        label?: string;
+        cells?: Array<Record<string, unknown>>;
+      }>;
+    } | null;
+  }>;
+};
+
+export function checkDatasetTables(
+  datasetId: string,
+  payload: {
+    filename?: string;
+    content_base64?: string;
+    tables?: Array<Record<string, unknown>>;
+    weight_column?: string;
+    stub_column?: string;
+    banner_column?: string;
+  },
+  token?: string | null
+) {
+  return authedJson<TableCheckReport>(`/datasets/${datasetId}/table-check`, payload, token);
+}
+
+export type DataChecksReport = {
+  respondents: number;
+  n_columns: number;
+  summary: {
+    issues: number;
+    construction_issues?: number;
+    missing_labels?: number;
+    unlabeled_codes?: number;
+    unused_labels?: number;
+    duplicate_labels?: number;
+    out_of_range?: number;
+    empty_columns?: number;
+    straightline_questions?: number;
+    summary_table_candidates?: number;
+  };
+  construction: Array<{
+    kind: string;
+    kind_label: string;
+    column: string;
+    columns?: string[];
+    label: string;
+    message: string;
+    codes: string[];
+    count: number;
+  }>;
+  straightlining: Array<{
+    kind: string;
+    kind_label: string;
+    set_id?: string | null;
+    label: string;
+    columns: string[];
+    column_labels: string[];
+    straightline_count: number;
+    respondent_pct: number;
+    message: string;
+  }>;
+  summary_tables: Array<{
+    column: string;
+    label: string;
+    n_categories: number;
+  }>;
+  issue_labels: Record<string, string>;
+};
+
+export type SummaryTablesResult = {
+  ok: boolean;
+  n_tables: number;
+  truncated: boolean;
+  limit: number;
+  tables: Array<{
+    stub: string;
+    stub_column: string;
+    stub_label: string;
+    book: Record<string, unknown>;
+  }>;
+  candidates?: Array<{
+    column: string;
+    label: string;
+    n_categories: number;
+  }>;
+  analysis_type?: string;
+  provenance?: Record<string, unknown>;
+};
+
+export async function fetchDataChecksReport(datasetId: string, token?: string | null) {
+  const res = await fetch(tensrApiUrl(`/datasets/${datasetId}/data-checks`), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<DataChecksReport>;
+}
+
+export function buildDatasetSummaryTables(
+  datasetId: string,
+  payload: { columns?: string[]; weight_column?: string; limit?: number } = {},
+  token?: string | null
+) {
+  return authedJson<SummaryTablesResult>(
+    `/datasets/${datasetId}/data-checks/summary-tables`,
+    payload,
+    token
+  );
 }
 
 export type FindOutliersResult = {
@@ -493,6 +744,52 @@ export function fuseSurveyDatasets(
     {
       dataset_ids: payload.dataset_ids,
       key: payload.key_columns?.[0],
+    },
+    token
+  );
+}
+
+export type SentimentShare = {
+  id: string;
+  label: string;
+  n: number;
+  percent: number;
+};
+
+export type SentimentApplyResult = DerivedDatasetResult & {
+  job_id?: string;
+  processed?: number;
+  total?: number;
+  done?: boolean;
+  status?: string;
+  review_count?: number;
+  not_answered?: number;
+  labels?: string[];
+  shares?: SentimentShare[];
+  sentiment_column?: string;
+  derived_dataset_id?: string;
+};
+
+/** Model-based Positive / Neutral / Negative scores for one open-end column. */
+export function applyOpenEndSentiment(
+  datasetId: string,
+  payload: {
+    text_column: string;
+    use_model?: boolean;
+    confirm_verbatims_sent?: boolean;
+    overrides?: Record<string, string>;
+    job_id?: string | null;
+  },
+  token?: string | null
+) {
+  return authedJson<SentimentApplyResult>(
+    `/datasets/${datasetId}/open-end/sentiment`,
+    {
+      text_column: payload.text_column,
+      ...(payload.use_model ? { use_model: true } : {}),
+      ...(payload.confirm_verbatims_sent ? { confirm_verbatims_sent: true } : {}),
+      ...(payload.overrides ? { overrides: payload.overrides } : {}),
+      ...(payload.job_id ? { job_id: payload.job_id } : {}),
     },
     token
   );
