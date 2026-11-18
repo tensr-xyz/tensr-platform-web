@@ -30,7 +30,7 @@ describe('ai controls client', () => {
     const result = await updateOrganizationAiEnabled('org-1', false, 'tok');
     expect(result.ai_enabled).toBe(false);
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/organizations/org-1'),
+      expect.stringContaining('/api/organizations/org-1'),
       expect.objectContaining({
         method: 'PUT',
         body: JSON.stringify({ ai_enabled: false }),
@@ -47,7 +47,7 @@ describe('ai controls client', () => {
     const result = await updateProjectAiEnabled('proj-1', false, 'tok');
     expect(result.ai_enabled).toBe(false);
     expect(global.fetch).toHaveBeenCalledWith(
-      expect.stringContaining('/projects/proj-1'),
+      expect.stringContaining('/api/projects/proj-1'),
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({ ai_enabled: false }),

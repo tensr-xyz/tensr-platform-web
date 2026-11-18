@@ -19,7 +19,7 @@ export async function updateOrganizationAiEnabled(
   aiEnabled: boolean,
   token: string
 ): Promise<{ ai_enabled: boolean }> {
-  const res = await fetch(tensrApiUrl(`/organizations/${organizationId}`), {
+  const res = await fetch(tensrApiUrl(`/api/organizations/${organizationId}`), {
     method: 'PUT',
     headers: {
       Authorization: `Bearer ${token}`,
@@ -40,7 +40,7 @@ export async function updateProjectAiEnabled(
   aiEnabled: boolean,
   token: string
 ): Promise<{ ai_enabled: boolean }> {
-  const res = await fetch(tensrApiUrl(`/projects/${projectId}`), {
+  const res = await fetch(tensrApiUrl(`/api/projects/${projectId}`), {
     method: 'PATCH',
     headers: {
       Authorization: `Bearer ${token}`,
