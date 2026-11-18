@@ -151,6 +151,8 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Van Westendorp',
         'Gabor-Granger',
         'NPS',
+        'Calibrated purchase intent',
+        'Share of wallet',
         'Brand Funnel',
         'Open-text coding',
         'MaxDiff (counting / MNL)',

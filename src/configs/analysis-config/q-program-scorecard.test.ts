@@ -19,6 +19,8 @@ const REQUIRED_DIALOGS = [
   'Van Westendorp',
   'Gabor-Granger',
   'NPS',
+  'Calibrated purchase intent',
+  'Share of wallet',
   'Brand Funnel',
   'MaxDiff (counting / MNL)',
   'Conjoint',

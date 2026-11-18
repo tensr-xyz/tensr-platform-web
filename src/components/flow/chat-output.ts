@@ -33,6 +33,8 @@ const KIND_LABELS: Record<string, string> = {
   drivers: 'Drivers',
   export_set: 'Export',
   nps: 'NPS',
+  calibrated_purchase_intent: 'Calibrated purchase intent',
+  share_of_wallet: 'Share of wallet',
   funnel: 'Funnel',
   brand_duplication: 'Duplication',
   paired_brand_test: 'Paired comparison',

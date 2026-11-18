@@ -582,6 +582,32 @@ export const NpsDialog = ({ children }: { children: ReactNode }) => (
     {children}
   </TechniqueColumnDialog>
 );
+export const CalibratedPurchaseIntentDialog = ({ children }: { children: ReactNode }) => (
+  <TechniqueColumnDialog
+    title="Calibrated purchase intent"
+    path="calibrated-purchase-intent"
+    analysisOp="calibrated_purchase_intent"
+    fields={[
+      { key: 'column', label: 'Purchase intent' },
+      { key: 'group_column', label: 'Group' },
+    ]}
+  >
+    {children}
+  </TechniqueColumnDialog>
+);
+export const ShareOfWalletDialog = ({ children }: { children: ReactNode }) => (
+  <TechniqueColumnDialog
+    title="Share of wallet"
+    path="share-of-wallet"
+    analysisOp="share_of_wallet"
+    fields={[
+      { key: 'columns', label: 'Volume columns', multi: true },
+      { key: 'group_column', label: 'Group' },
+    ]}
+  >
+    {children}
+  </TechniqueColumnDialog>
+);
 export const FunnelDialog = ({ children }: { children: ReactNode }) => (
   <TechniqueColumnDialog
     title="Brand Funnel"

@@ -73,6 +73,16 @@ export const Q_PROCEDURES: readonly QProcedure[] = [
     chatPhrases: ['nps', 'net promoter'],
   },
   {
+    menuLabel: 'Calibrated purchase intent',
+    analysisType: 'calibrated_purchase_intent',
+    chatPhrases: ['calibrated purchase intent', 'purchase intent index'],
+  },
+  {
+    menuLabel: 'Share of wallet',
+    analysisType: 'share_of_wallet',
+    chatPhrases: ['share of wallet', 'share of category', 'volumetric analysis'],
+  },
+  {
     menuLabel: 'Brand Funnel',
     analysisType: 'funnel',
     chatPhrases: ['brand funnel'],
