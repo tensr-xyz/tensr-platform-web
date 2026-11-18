@@ -6,6 +6,13 @@ import { ApiRequestError } from '@/lib/api-error';
 import { handleUnauthorizedResponse } from '@/lib/session-expired';
 import type { PlaybookProposedAction, PrepPlaybookStep } from '@/lib/chat-pending-action';
 
+export type RecipeReferenceFile = {
+  label: string;
+  filename?: string;
+  dataset_id?: string;
+  note?: string;
+};
+
 export type SavedRecipe = {
   recipe_id: string;
   version: number;
@@ -13,6 +20,11 @@ export type SavedRecipe = {
   project_id: string;
   ops: unknown[];
   created_from: string;
+  description?: string;
+  when_to_use?: string;
+  instructions?: string;
+  reference_files?: RecipeReferenceFile[];
+  applies_as_house_style?: boolean;
 };
 
 function mapDatasetListRow(d: Record<string, unknown>) {
@@ -944,6 +956,11 @@ class ApiClient {
 
     listRecipes: () => this.request<{ recipes: SavedRecipe[] }>('/datasets/recipes'),
 
+    getHouseStyleRecipe: () =>
+      this.request<{ recipe: SavedRecipe | null; standing_instructions: string }>(
+        '/datasets/recipes/house-style'
+      ),
+
     saveRecipe: (body: {
       project_id: string;
       name: string;
@@ -951,9 +968,33 @@ class ApiClient {
       created_from: 'history' | 'plan' | 'manual';
       column_map?: Record<string, string>;
       parent_recipe_id?: string | null;
+      description?: string;
+      when_to_use?: string;
+      instructions?: string;
+      reference_files?: RecipeReferenceFile[];
+      applies_as_house_style?: boolean;
     }) =>
       this.request<SavedRecipe>('/datasets/recipes', {
         method: 'POST',
+        body: JSON.stringify(body),
+      }),
+
+    updateRecipeInstructions: (
+      recipeId: string,
+      version: number,
+      body: {
+        name?: string;
+        description?: string;
+        when_to_use?: string;
+        instructions?: string;
+        reference_files?: RecipeReferenceFile[];
+        applies_as_house_style?: boolean;
+        ops?: unknown[];
+        column_map?: Record<string, string>;
+      }
+    ) =>
+      this.request<SavedRecipe>(`/datasets/recipes/${recipeId}/versions/${version}`, {
+        method: 'PATCH',
         body: JSON.stringify(body),
       }),
 
