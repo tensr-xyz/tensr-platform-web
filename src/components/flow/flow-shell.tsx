@@ -787,7 +787,7 @@ export function NewProjectDialog({
       if (choice === 'upload') {
         if (!file) throw new Error('Choose a file to upload, or skip for now.');
         if (!isAcceptedUploadExtension(file.name)) {
-          throw new Error('Use a .sav, .dta, CSV, Excel, Triple-S, or Parquet file.');
+          throw new Error('Use a .sav, .zsav, .dta, CSV, TSV, Excel, Triple-S, or Parquet file.');
         }
       }
       if (choice === 'existing' && !existing) throw new Error('Pick a dataset, or skip for now.');
@@ -936,7 +936,11 @@ export function NewProjectDialog({
             <div className="new-project-data">
               {(
                 [
-                  ['upload', 'Upload a file', '.sav, .dta, CSV, Excel, Triple-S or Parquet'],
+                  [
+                    'upload',
+                    'Upload a file',
+                    '.sav, .zsav, .dta, CSV, TSV, Excel, Triple-S or Parquet',
+                  ],
                   ['qualtrics', 'Connect Qualtrics', 'Pull responses and labels with an API token'],
                   ['existing', 'Use a dataset you have', 'Moves it into this project'],
                   ['skip', 'Skip for now', 'Add data later from Sources'],

@@ -162,7 +162,9 @@ describe('sources screen', () => {
     expect(contextMark('brief')).toBe('DOC');
     expect(contextMark('report')).toBe('PPT');
     expect(fileMark('wave.sav')).toBe('SAV');
+    expect(fileMark('wave.zsav')).toBe('SAV');
     expect(fileMark('extra.csv')).toBe('CSV');
+    expect(fileMark('panel.tsv')).toBe('TSV');
   });
 
   it('shows the file name and never the id', () => {

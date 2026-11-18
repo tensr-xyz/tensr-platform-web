@@ -270,9 +270,10 @@ export function sourceRowCount(file: SourceFile): string {
 
 export function fileMark(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase() || '';
-  if (ext === 'csv') return 'CSV';
+  if (ext === 'csv' || ext === 'tsv') return ext.toUpperCase();
   if (ext === 'xlsx' || ext === 'xls') return 'XLS';
   if (ext === 'parquet') return 'PQ';
+  if (ext === 'zsav') return 'SAV';
   if (['sav', 'dta', 'sss', 'json'].includes(ext)) return ext.toUpperCase();
   return 'FILE';
 }
@@ -377,7 +378,7 @@ export function SourcesScreen({
 
   const upload = (file: File) => {
     if (!isAcceptedUploadExtension(file.name)) {
-      setError('Use a .sav, .dta, CSV, Excel, Triple-S, or Parquet file.');
+      setError('Use a .sav, .zsav, .dta, CSV, TSV, Excel, Triple-S, or Parquet file.');
       return;
     }
     const token = getStytchBearerForTensrApi();
@@ -624,7 +625,7 @@ export function SourcesScreen({
               onClick={() => fileInput.current?.click()}
             >
               <strong>{uploading ? 'Uploading…' : 'Upload your first file'}</strong>
-              <span className="flow-muted">.sav .dta CSV Excel Triple-S Parquet</span>
+              <span className="flow-muted">.sav .zsav .dta CSV TSV Excel Triple-S Parquet</span>
             </Button>
           )}
           <Input
