@@ -21,6 +21,12 @@ describe('sources screen', () => {
       })
     ).toBe('Stacked wave.sav + extra.csv');
     expect(sourceFileNote({ parent_dataset_id: 'parent' })).toBe('New version');
+    expect(
+      sourceFileNote({
+        producing_operation: 'qualtrics_pull',
+        lineage_label: 'Qualtrics · Wave 1 brand check',
+      })
+    ).toBe('Qualtrics · Wave 1 brand check');
     expect(sourceRowCount({ n_rows: 2406 })).toBe('2,406 rows');
     expect(sourceRowCount({})).toBe('No rows');
   });

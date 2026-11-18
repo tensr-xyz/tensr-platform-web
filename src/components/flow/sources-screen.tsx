@@ -31,6 +31,7 @@ import {
 } from '@/lib/upload-dataset';
 import { UploadPrepCard } from '@/components/flow/upload-prep-card';
 import type { PrepProposal } from '@/components/flow/upload-prep';
+import { ConnectQualtricsDialog } from '@/components/flow/connect-qualtrics-dialog';
 import { getStytchBearerForTensrApi } from '@/utils/auth';
 import { showDatasetVersionUndoToast, useDatasetVersion } from '@/lib/dataset-version-undo';
 
@@ -42,11 +43,18 @@ export type SourceFile = {
   project_id?: string;
   parent_dataset_id?: string | null;
   lineage_label?: string | null;
+  producing_operation?: string | null;
   source_filenames?: string[] | null;
   origin_dataset_id?: string | null;
   offer_switch_back?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
+  survey_connector?: {
+    platform?: string;
+    label?: string;
+    survey_name?: string;
+    last_pulled_at?: string;
+  } | null;
 };
 
 /** Newest version first. The list is every version of one upload, not only the latest edit. */
@@ -245,6 +253,14 @@ export function resolveStackedSource(
 
 export function sourceFileNote(file: SourceFile): string {
   if (file.parent_dataset_id) return file.lineage_label || 'New version';
+  const connector = file.survey_connector;
+  if (connector?.label) return connector.label;
+  if (connector?.platform === 'qualtrics' || file.producing_operation === 'qualtrics_pull') {
+    return (
+      file.lineage_label ||
+      (connector?.survey_name ? `Qualtrics · ${connector.survey_name}` : 'Qualtrics')
+    );
+  }
   return 'Raw upload';
 }
 
@@ -292,6 +308,8 @@ export function SourcesScreen({
   const [docText, setDocText] = useState('');
   const [uploading, setUploading] = useState(false);
   const [olderOpen, setOlderOpen] = useState(false);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [connectMode, setConnectMode] = useState<'qualtrics' | 'request'>('qualtrics');
   const [error, setError] = useState<string | null>(null);
   const [proposal, setProposal] = useState<{ id: string; prep: PrepProposal } | null>(null);
   const activeId = project?.active_dataset_id || '';
@@ -492,14 +510,27 @@ export function SourcesScreen({
               the documents the agent reads.
             </p>
           </div>
-          <Button
-            className="sources-ink"
-            type="button"
-            disabled={uploading}
-            onClick={() => fileInput.current?.click()}
-          >
-            {uploading ? 'Uploading…' : '+ Upload file'}
-          </Button>
+          <span className="sources-actions">
+            <Button
+              className="flow-btn"
+              type="button"
+              disabled={uploading}
+              onClick={() => {
+                setConnectMode('qualtrics');
+                setConnectOpen(true);
+              }}
+            >
+              Connect Qualtrics
+            </Button>
+            <Button
+              className="sources-ink"
+              type="button"
+              disabled={uploading}
+              onClick={() => fileInput.current?.click()}
+            >
+              {uploading ? 'Uploading…' : '+ Upload file'}
+            </Button>
+          </span>
         </div>
         {proposal ? (
           <UploadPrepCard
@@ -545,7 +576,7 @@ export function SourcesScreen({
               {uploads.map(file =>
                 fileRow(
                   file,
-                  'Uploaded',
+                  file.survey_connector ? sourceFileNote(file) : 'Uploaded',
                   <Button
                     className="flow-btn"
                     type="button"
@@ -746,17 +777,52 @@ export function SourcesScreen({
         {error ? <p className="flow-error">{error}</p> : null}
 
         <div className="sources-soon-row">
+          <Button
+            type="button"
+            className="sources-soon-chip sources-soon-action"
+            onClick={() => {
+              setConnectMode('qualtrics');
+              setConnectOpen(true);
+            }}
+          >
+            Qualtrics
+          </Button>
           <span className="flow-muted">Coming soon</span>
-          {['Prolific fielding', 'Qualtrics sync', 'Decipher / Alchemer'].map(label => (
+          {['Prolific fielding', 'SurveyMonkey', 'Forsta / Decipher', 'Alchemer'].map(label => (
             <span key={label} className="sources-soon-chip" data-soon>
               {label}
             </span>
           ))}
+          <Button
+            type="button"
+            className="sources-soon-more"
+            onClick={() => {
+              setConnectMode('request');
+              setConnectOpen(true);
+            }}
+          >
+            Request another connector →
+          </Button>
           <Link className="sources-soon-more" href="/flow/plugins">
-            More connectors in Plugins →
+            More in Plugins →
           </Link>
         </div>
       </div>
+
+      <ConnectQualtricsDialog
+        key={connectMode}
+        open={connectOpen}
+        onOpenChange={setConnectOpen}
+        initialMode={connectMode}
+        onPulled={async result => {
+          setError(null);
+          if (result.prep && typeof result.prep === 'object') {
+            setProposal({ id: result.dataset_id, prep: result.prep as PrepProposal });
+          }
+          await moveDatasetToProject(projectId, result.dataset_id);
+          onChanged();
+        }}
+      />
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent>
