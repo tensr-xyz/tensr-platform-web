@@ -16,14 +16,20 @@ describe('upload prep', () => {
       weight_label: 'Design weight',
       weight_summary: { mean: 1, min: 0.5, max: 1.5, effective_base: 40 },
       nps: { label: 'How likely are you to recommend it?' },
-      quality: { flagged: 4, speeder_rows: 2, straightline_rows: 2 },
+      quality: {
+        flagged: 6,
+        speeder_rows: 2,
+        straightline_rows: 2,
+        trap_rows: 1,
+        bot_rows: 1,
+      },
     });
     expect(parts.map(part => part.label)).toEqual([
       '1 shortened labels',
       'brand awareness',
       'Weight: Design weight',
       'NPS groups for How likely are you to recommend it?',
-      '4 quality flags',
+      '6 quality flags',
     ]);
     const body = prepApplyBody(['sets', 'weight']);
     expect(body).toEqual({
@@ -47,6 +53,8 @@ describe('upload prep', () => {
     const flags = parts.find(part => part.id === 'flags');
     expect(flags?.before).toContain('finished in under a third of the median time');
     expect(flags?.before).toContain('same answer down a grid');
+    expect(flags?.before).toContain('failed an attention check');
+    expect(flags?.before).toContain('bot or copy-pasted answers');
     expect(preparedCopyLabel('W5_raw.sav')).toBe('W5_raw · prepared');
   });
 

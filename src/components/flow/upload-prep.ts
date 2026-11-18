@@ -28,6 +28,12 @@ export type PrepProposal = {
     poor_text_rows?: number;
     speeder_rows?: number;
     straightline_rows?: number;
+    trap_rows?: number;
+    bot_rows?: number;
+    non_substantive_rows?: number;
+    duplicate_rows?: number;
+    would_remove?: number;
+    would_review?: number;
   };
 };
 
@@ -96,6 +102,8 @@ function setAfter(set: NonNullable<PrepProposal['variable_sets']>[number]): stri
 function qualityBefore(quality: NonNullable<PrepProposal['quality']>): string {
   const speeder = quality.speeder_rows;
   const straight = quality.straightline_rows;
+  const trap = quality.trap_rows;
+  const bot = quality.bot_rows;
   const outlier = quality.outlier_rows;
   const poor = quality.poor_text_rows;
   const bits = [
@@ -105,6 +113,8 @@ function qualityBefore(quality: NonNullable<PrepProposal['quality']>): string {
     typeof straight === 'number' && straight > 0
       ? `${straight} gave the same answer down a grid`
       : '',
+    typeof trap === 'number' && trap > 0 ? `${trap} failed an attention check` : '',
+    typeof bot === 'number' && bot > 0 ? `${bot} look like bot or copy-pasted answers` : '',
     typeof outlier === 'number' && outlier > 0 && !(typeof speeder === 'number' && speeder > 0)
       ? `${outlier} numeric outliers`
       : '',

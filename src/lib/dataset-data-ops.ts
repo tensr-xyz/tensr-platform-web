@@ -353,6 +353,61 @@ export async function fetchDataQualityReport(datasetId: string, token?: string |
   return res.json() as Promise<DataQualityReport>;
 }
 
+export type ResponseQualityDecision = 'keep' | 'review' | 'remove';
+
+export type ResponseQualityReport = {
+  id_column: string | null;
+  respondents: number;
+  summary: {
+    flagged?: number;
+    speeder_rows?: number;
+    straightline_rows?: number;
+    trap_rows?: number;
+    bot_rows?: number;
+    keep?: number;
+    review?: number;
+    remove?: number;
+    would_remove?: number;
+    would_review?: number;
+  };
+  rows: Array<{
+    row_index: number;
+    respondent_id: string;
+    flags: string[];
+    reasons: string[];
+    score: number;
+    decision: ResponseQualityDecision;
+  }>;
+  removal_list: Array<{
+    respondent_id: string;
+    row_index: number;
+    reasons: string[];
+  }>;
+  flag_labels: Record<string, string>;
+};
+
+export async function fetchResponseQualityReport(datasetId: string, token?: string | null) {
+  const res = await fetch(tensrApiUrl(`/datasets/${datasetId}/response-quality`), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<ResponseQualityReport>;
+}
+
+export function applyResponseQualityRemovals(
+  datasetId: string,
+  payload: { row_indices?: number[]; respondent_ids?: string[]; filename?: string },
+  token?: string | null
+) {
+  return authedJson<{
+    dataset_id: string;
+    rows_before: number;
+    rows_after: number;
+    removed: number;
+    original_filename?: string;
+  }>(`/datasets/${datasetId}/response-quality/apply`, payload, token);
+}
+
 export type FindOutliersResult = {
   n_rows: number;
   total_flagged_rows: number;
