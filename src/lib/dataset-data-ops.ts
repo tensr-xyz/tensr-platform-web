@@ -240,6 +240,39 @@ export function standardizeDatasetValues(
   );
 }
 
+export type CreateVariablesOperation =
+  | 'log'
+  | 'sqrt'
+  | 'center'
+  | 'standardize'
+  | 'rank'
+  | 'unit_interval'
+  | 'case_shares';
+
+export type CreateVariablesScope = 'variable' | 'case';
+
+export type CreateVariablesResult = DerivedDatasetResult & {
+  created_columns?: string[];
+};
+
+/** Log/sqrt copies, within-case or within-variable scaling, and case-level shares. */
+export function createDatasetVariables(
+  datasetId: string,
+  payload: {
+    columns: string[];
+    operation: CreateVariablesOperation;
+    scope?: CreateVariablesScope;
+    suffix?: string | null;
+  },
+  token?: string | null
+) {
+  return authedJson<CreateVariablesResult>(
+    `/datasets/${datasetId}/create-variables`,
+    payload as Record<string, unknown>,
+    token
+  );
+}
+
 export type RakeWeightsResult = DerivedDatasetResult & {
   derived_dataset_id: string;
   parent_dataset_id?: string;
