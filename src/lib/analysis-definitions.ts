@@ -19,6 +19,7 @@ export type AnalysisKey =
   | 'reliability_cronbach'
   | 'partial_correlation'
   | 'pca'
+  | 'bartlett_sphericity'
   | 'anova_twoway'
   | 'anova_repeated'
   | 'stepwise_regression'
@@ -118,6 +119,7 @@ export const ANALYSIS_LABELS: Record<AnalysisKey, string> = {
   reliability_cronbach: 'Reliability Analysis',
   partial_correlation: 'Partial Correlation',
   pca: 'Principal Component Analysis',
+  bartlett_sphericity: 'Bartlett Test of Sphericity',
   anova_twoway: 'Two-Way ANOVA',
   anova_repeated: 'Repeated Measures ANOVA',
   stepwise_regression: 'Stepwise Regression',
@@ -211,6 +213,7 @@ export const SPSS_MENU_PATHS: Record<AnalysisKey, string> = {
   reliability_cronbach: 'Analyze → Scale → Reliability Analysis',
   partial_correlation: 'Analyze → Correlate → Partial',
   pca: 'Analyze → Dimension Reduction → PCA',
+  bartlett_sphericity: 'Analyze → Dimension Reduction → Bartlett Test of Sphericity',
   anova_twoway: 'Analyze → General Linear Model → Univariate',
   anova_repeated: 'Analyze → General Linear Model → Repeated Measures',
   stepwise_regression: 'Analyze → Regression → Linear → Stepwise',
@@ -321,6 +324,7 @@ export const ANALYSIS_PALETTE_CATEGORY: Record<AnalysisKey, PaletteCategoryId> =
   reliability_cronbach: 'describe',
   partial_correlation: 'relationships',
   pca: 'describe',
+  bartlett_sphericity: 'describe',
   anova_twoway: 'compare',
   anova_repeated: 'compare',
   stepwise_regression: 'prediction',
@@ -558,6 +562,7 @@ export function applyBodyToForm(
     op === 'friedman' ||
     op === 'reliability_cronbach' ||
     op === 'pca' ||
+    op === 'bartlett_sphericity' ||
     op === 'efa' ||
     op === 'anova_repeated' ||
     op === 'manova' ||
@@ -647,6 +652,10 @@ export function formatVariablesLine(op: AnalysisKey, body: Record<string, unknow
     return `${body.column_x} | controls: ${(body.control_columns as string[] | undefined)?.join(', ') || 'none'}`;
   }
   if (op === 'pca') {
+    const cols = body.columns as string[] | undefined;
+    return cols?.length ? cols.join(', ') : '';
+  }
+  if (op === 'bartlett_sphericity') {
     const cols = body.columns as string[] | undefined;
     return cols?.length ? cols.join(', ') : '';
   }
@@ -981,6 +990,10 @@ export function buildBodyFromForm(form: AnalysisFormState): Record<string, unkno
       columns: selectedCols,
       n_components: n && !Number.isNaN(n) ? n : undefined,
     };
+  }
+  if (analysis === 'bartlett_sphericity') {
+    if (selectedCols.length < 2) throw new Error('Select at least two variables');
+    return { columns: selectedCols };
   }
   if (analysis === 'anova_twoway') {
     return {
@@ -2296,6 +2309,10 @@ export const ANALYSIS_WIZARD_META: Record<AnalysisKey, AnalysisWizardMeta> = {
   },
   pca: {
     summary: 'Reduce many numeric variables to orthogonal components that explain variance.',
+  },
+  bartlett_sphericity: {
+    summary:
+      'Test whether a correlation matrix differs from identity (Bartlett) and report Kaiser–Meyer–Olkin sampling adequacy before PCA or factor analysis.',
   },
   anova_twoway: {
     summary: 'Test main and interaction effects of two factors on a numeric outcome.',

@@ -119,6 +119,7 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'Partial Correlation': L('partial_correlation'),
   PCA: L('pca'),
   'Principal Component Analysis': L('pca'),
+  'Bartlett Test of Sphericity': L('bartlett_sphericity'),
   'Exploratory Factor Analysis': L('efa'),
   EFA: L('efa'),
   'Two-Way ANOVA': L('anova_twoway'),

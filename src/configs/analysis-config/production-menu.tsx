@@ -109,6 +109,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
       'Dimension Reduction': [
         'Principal Component Analysis',
         'Exploratory Factor Analysis',
+        'Bartlett Test of Sphericity',
         'Multidimensional Scaling (MDS)',
         'Network',
       ],
@@ -241,6 +242,7 @@ export const PRODUCTION_ANALYSIS_LABELS: Record<
   'Partial Correlation': 'partial_correlation',
   'Principal Component Analysis': 'pca',
   PCA: 'pca',
+  'Bartlett Test of Sphericity': 'bartlett_sphericity',
   'Two-Way ANOVA': 'anova_twoway',
   'Repeated Measures ANOVA': 'anova_repeated',
   'Poisson Regression': 'poisson_regression',

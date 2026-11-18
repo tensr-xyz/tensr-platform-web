@@ -112,6 +112,7 @@ const SYNONYMS: Record<string, string> = {
   'scale reliability': 'Reliability',
   reliability: 'Reliability',
   pca: 'Principal Component Analysis',
+  bartlett_sphericity: 'Bartlett Test of Sphericity',
   'principal component': 'Principal Component Analysis',
   'partial correlation': 'Partial Correlation',
   'two-way anova': 'Two-Way ANOVA',

@@ -198,7 +198,21 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
       'Cases are independent.',
       'Linear structure in the data helps interpretation.',
     ],
-    output: ['Eigenvalues, variance explained, and component loadings.'],
+    output: [
+      'Eigenvalues, variance explained, and component loadings.',
+      "Bartlett's test of sphericity and KMO sampling adequacy.",
+    ],
+  },
+  bartlett_sphericity: {
+    useWhen: [
+      'You want to check whether items are correlated enough for PCA or factor analysis.',
+      'You need Kaiser–Meyer–Olkin (KMO) sampling adequacy before extracting factors.',
+    ],
+    assumptions: ['Variables are numeric.', 'At least two complete cases per retained variable.'],
+    output: [
+      "Bartlett's chi-square, degrees of freedom, and p-value.",
+      'Overall KMO and per-variable measures of sampling adequacy.',
+    ],
   },
   anova_twoway: {
     useWhen: ['You have two categorical factors and one numeric outcome.'],
@@ -322,7 +336,11 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
   efa: {
     useWhen: ['You suspect a smaller set of latent factors underlies many correlated items.'],
     assumptions: ['Variables are numeric.', 'Adequate sample size relative to number of items.'],
-    output: ['Factor loadings and communalities.'],
+    output: [
+      'Factor loadings and communalities.',
+      'Kaiser rule (eigenvalue > 1) when the factor count is left blank.',
+      "Bartlett's test of sphericity and KMO sampling adequacy.",
+    ],
   },
   discriminant_analysis: {
     useWhen: ['You have a categorical group and want to see which predictors separate the groups.'],

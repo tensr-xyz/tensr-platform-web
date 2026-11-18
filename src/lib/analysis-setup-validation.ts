@@ -263,6 +263,7 @@ function appendRequiredFieldErrors(
       require(WIZARD_FIELD.pairedVar2, !!form.pairedAfterCol?.trim(), 'Select variable Y.');
       break;
     case 'pca':
+    case 'bartlett_sphericity':
     case 'efa':
       require(WIZARD_FIELD.columns, form.selectedCols.filter(c => numericNames.includes(c))
         .length >= 2, 'Select at least two numeric variables.');
@@ -985,6 +986,8 @@ export function computeWizardFieldErrors(
       break;
     case 'pca':
       break;
+    case 'bartlett_sphericity':
+      break;
     case 'efa':
       break;
     case 'cluster_analysis': {
@@ -1189,6 +1192,8 @@ export function analysisRequiredFieldsSatisfied(
         form.pairedBeforeCol !== form.pairedAfterCol
       );
     case 'pca':
+      return form.selectedCols.filter(c => numericNames.includes(c)).length >= 2;
+    case 'bartlett_sphericity':
       return form.selectedCols.filter(c => numericNames.includes(c)).length >= 2;
     case 'efa':
       return form.selectedCols.filter(c => numericNames.includes(c)).length >= 2;

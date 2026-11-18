@@ -63,6 +63,7 @@ const FORM_DRIVEN: AnalysisKey[] = [
   'ordinal_regression',
   'quasi_poisson_regression',
   'multinomial_logit',
+  'bartlett_sphericity',
 ];
 
 describe('analysisRequiredFieldsSatisfied for analyses without a dedicated rule', () => {

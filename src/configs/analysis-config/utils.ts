@@ -68,6 +68,7 @@ const PREFERRED_MENU_NAME_FOR_OP: Partial<Record<AnalysisKey, string>> = {
   logistic_regression: 'Binary Logistic Regression',
   partial_correlation: 'Partial Correlation',
   pca: 'Principal Component Analysis',
+  bartlett_sphericity: 'Bartlett Test of Sphericity',
   poisson_regression: 'Poisson Regression',
   quasi_poisson_regression: 'Quasi-Poisson Regression',
   multinomial_logit: 'Multinomial Logit',
