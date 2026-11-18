@@ -61,6 +61,8 @@ const FORM_DRIVEN: AnalysisKey[] = [
   'probit_regression',
   'negative_binomial_regression',
   'ordinal_regression',
+  'quasi_poisson_regression',
+  'multinomial_logit',
 ];
 
 describe('analysisRequiredFieldsSatisfied for analyses without a dedicated rule', () => {
@@ -82,6 +84,8 @@ describe('analysisRequiredFieldsSatisfied for analyses without a dedicated rule'
     'probit_regression',
     'negative_binomial_regression',
     'ordinal_regression',
+    'quasi_poisson_regression',
+    'multinomial_logit',
     'cochrans_q',
     'canonical_correlation',
     'multidimensional_scaling',

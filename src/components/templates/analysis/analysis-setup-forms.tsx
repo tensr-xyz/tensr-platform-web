@@ -2423,6 +2423,8 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
       return <RegressionTabs {...props} />;
     case 'logistic_regression':
       return <RegressionTabs {...props} logistic />;
+    case 'multinomial_logit':
+      return <RegressionTabs {...props} logistic />;
     case 'banner_table':
       return <BannerTableForm {...props} />;
     case 'chi_square':
@@ -2456,6 +2458,7 @@ export function renderAnalysisForm(analysis: AnalysisKey, props: FormSliceProps)
     case 'anova_repeated':
       return <RepeatedMeasuresAnovaForm {...props} />;
     case 'poisson_regression':
+    case 'quasi_poisson_regression':
       return <RegressionTabs {...props} outcomeKind="count" />;
     case 'cohens_kappa':
     case 'fishers_exact':

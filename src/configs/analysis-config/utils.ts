@@ -69,6 +69,8 @@ const PREFERRED_MENU_NAME_FOR_OP: Partial<Record<AnalysisKey, string>> = {
   partial_correlation: 'Partial Correlation',
   pca: 'Principal Component Analysis',
   poisson_regression: 'Poisson Regression',
+  quasi_poisson_regression: 'Quasi-Poisson Regression',
+  multinomial_logit: 'Multinomial Logit',
 };
 
 function mergedSections(menuKey: string): Record<string, string[]> {
@@ -275,7 +277,23 @@ export const ANALYSIS_SEARCH_ALIASES: Partial<Record<AnalysisKey, string[]>> = {
   linear_regression: ['regression', 'ols', 'linear model', 'lm', 'least squares', 'predict'],
   stepwise_regression: ['regression', 'stepwise', 'ols'],
   logistic_regression: ['regression', 'logit', 'logistic', 'binary outcome', 'glm'],
+  multinomial_logit: [
+    'regression',
+    'multinomial',
+    'mlogit',
+    'multinomial logit',
+    'polytomous',
+    'glm',
+  ],
   poisson_regression: ['regression', 'poisson', 'count model', 'glm'],
+  quasi_poisson_regression: [
+    'regression',
+    'quasi-poisson',
+    'quasipoisson',
+    'overdispersion',
+    'count model',
+    'glm',
+  ],
   ordinal_regression: ['regression', 'ordinal', 'ordered logit', 'proportional odds'],
   mann_whitney_u: [
     'mann-whitney',

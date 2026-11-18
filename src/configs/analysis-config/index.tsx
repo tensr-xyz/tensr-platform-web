@@ -131,6 +131,8 @@ export const ANALYSIS_COMPONENTS: Record<string, AnalysisComponent> = {
   'Decision Tree Classification': L('decision_tree'),
   'Decision Trees': L('decision_tree'),
   'Poisson Regression': L('poisson_regression'),
+  'Quasi-Poisson Regression': L('quasi_poisson_regression'),
+  'Multinomial Logit': L('multinomial_logit'),
   "Cohen's Kappa": L('cohens_kappa'),
   'Multiple Regression': LinearRegLauncher,
   'Logistic Regression': LogisticRegLauncher,

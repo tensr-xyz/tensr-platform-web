@@ -26,6 +26,8 @@ const KIND_LABELS: Record<string, string> = {
   ttest_paired: 'Paired t-test',
   linear_regression: 'Regression',
   logistic_regression: 'Logistic regression',
+  multinomial_logit: 'Multinomial logit',
+  quasi_poisson_regression: 'Quasi-Poisson regression',
   correlation: 'Correlation',
   drivers: 'Drivers',
   export_set: 'Export',

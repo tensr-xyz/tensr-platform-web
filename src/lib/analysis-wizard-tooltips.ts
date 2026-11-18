@@ -229,6 +229,32 @@ export const ANALYSIS_WIZARD_TOOLTIPS: Partial<Record<AnalysisKey, AnalysisWizar
     ],
     output: ['Coefficients, incidence rate ratios, AIC, and deviance.'],
   },
+  quasi_poisson_regression: {
+    useWhen: [
+      'Your outcome is a non-negative count and the Poisson deviance suggests overdispersion.',
+      'You want Poisson means with standard errors scaled by Pearson χ²/df.',
+    ],
+    assumptions: [
+      'Independent counts.',
+      'Mean follows a log-linear Poisson structure; variance is a multiple of the mean.',
+    ],
+    output: ['Coefficients, incidence rate ratios, Pearson dispersion, and scaled SEs.'],
+  },
+  multinomial_logit: {
+    useWhen: [
+      'Your outcome has three or more unordered categories.',
+      'You want relative log-odds for each category versus a reference level.',
+    ],
+    assumptions: [
+      'The outcome is nominal with a modest number of categories.',
+      'Cases are independent.',
+      'Independence of irrelevant alternatives is a modelling assumption.',
+    ],
+    output: [
+      'Coefficients by outcome level versus the reference.',
+      'Pseudo R², AIC, and in-sample classification accuracy.',
+    ],
+  },
   cohens_kappa: {
     useWhen: ['Two raters classified the same cases and you need agreement beyond chance.'],
     assumptions: ['Same cases rated by both columns.', 'Categories are nominal.'],
