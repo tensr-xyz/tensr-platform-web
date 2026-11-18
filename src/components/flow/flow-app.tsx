@@ -10,7 +10,7 @@ import {
 } from '@/components/atoms/empty';
 import { clearSigningIn } from '@/lib/signing-in';
 import { usePathname, useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { SubscriptionGate } from '@/components/templates/subscription-gate';
 import { useAuth } from '@/hooks/api/use-auth';
 import { AgentThread, AgentThreadColumn, useAgentThread } from '@/components/flow/agent-thread';
@@ -123,6 +123,23 @@ import {
   PLUGINS_TAB_VALUE,
   type AnalysisItem,
 } from '@/configs/analysis-config/utils';
+import {
+  getPaletteColumnContext,
+  setPaletteColumnContext,
+  paletteColumnKindFromType,
+  subscribePaletteColumnContext,
+} from '@/lib/palette-column-context';
+import {
+  readRecentPaletteActions,
+  recentPaletteItemsFromCatalog,
+  recordRecentPaletteAction,
+} from '@/lib/palette-recent';
+import {
+  RECENT_PALETTE_SECTION,
+  SUGGESTED_PALETTE_SECTION,
+  suggestPaletteActionsForKind,
+  suggestedPaletteResultsLabel,
+} from '@/lib/palette-suggestions';
 import { useAnalysisSetupStore } from '@/stores/analysis-setup-store';
 import { useTabsStore, ViewType } from '@/stores/tabs-store';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -2021,6 +2038,12 @@ function Palette({
   const [section, setSection] = useState<string | null>(null);
   const [index, setIndex] = useState(0);
   const [plugins, setPlugins] = useState<{ pluginId: string; name: string }[]>([]);
+  const [recentTick, setRecentTick] = useState(0);
+  const columnContext = useSyncExternalStore(
+    subscribePaletteColumnContext,
+    getPaletteColumnContext,
+    () => null
+  );
   const filtered = useMemo(() => filterAnalysisItems(items, query), [items, query]);
   const searching = query.trim().length > 0;
   const ranked = useMemo(
@@ -2031,12 +2054,28 @@ function Palette({
     () => groupAnalysisItems(searching ? ranked : filtered),
     [filtered, ranked, searching]
   );
-  const sections = searching
+  const recentItems = useMemo(() => {
+    void recentTick;
+    return recentPaletteItemsFromCatalog(readRecentPaletteActions(), items);
+  }, [items, recentTick]);
+  const suggestedItems = useMemo(
+    () => (columnContext ? suggestPaletteActionsForKind(columnContext.kind, items) : []),
+    [columnContext, items]
+  );
+  const catalogSections =
+    searching || tab === PLUGINS_TAB_VALUE ? {} : getPaletteTabContent(grouped, tab);
+  const sections: Record<string, AnalysisItem[]> = searching
     ? { Matches: ranked }
     : tab === PLUGINS_TAB_VALUE
       ? {}
-      : getPaletteTabContent(grouped, tab);
-  const sectionNames = Object.keys(sections).filter(name => !query || sections[name]?.length);
+      : {
+          ...(recentItems.length ? { [RECENT_PALETTE_SECTION]: recentItems } : {}),
+          ...(suggestedItems.length ? { [SUGGESTED_PALETTE_SECTION]: suggestedItems } : {}),
+          ...catalogSections,
+        };
+  const sectionNames = Object.keys(sections).filter(
+    name => !searching || (sections[name]?.length ?? 0) > 0
+  );
   const activeSection = section && sections[section] ? section : sectionNames[0] || null;
   const analyses = activeSection ? sections[activeSection] || [] : [];
   const pluginRows = plugins.filter(plugin =>
@@ -2070,21 +2109,38 @@ function Palette({
       .catch(() => setPlugins([]));
   }, []);
 
+  const launchAnalysis = (item: AnalysisItem) => {
+    recordRecentPaletteAction(item.name);
+    setRecentTick(tick => tick + 1);
+    onClose();
+    const store = useAnalysisSetupStore.getState();
+    if (isDialogMenuItem(item.name)) {
+      store.openDialog(item.name);
+      return;
+    }
+    const op = getAnalysisOpForMenuName(item.name);
+    if (op) store.openSetupFromPalette(op);
+    else store.openUnavailable(item.name);
+  };
+
   const openChosen = (ask: boolean) => {
     if (!chosen) return;
     if (chosen.kind === 'plugin' || ask) {
       onAsk(chosen.kind === 'plugin' ? chosen.name : chosen.item.name);
       return;
     }
-    onClose();
-    const store = useAnalysisSetupStore.getState();
-    if (isDialogMenuItem(chosen.item.name)) {
-      store.openDialog(chosen.item.name);
-      return;
-    }
-    const op = getAnalysisOpForMenuName(chosen.item.name);
-    if (op) store.openSetupFromPalette(op);
-    else store.openUnavailable(chosen.item.name);
+    launchAnalysis(chosen.item);
+  };
+
+  const resultsLabel = searching
+    ? 'Best match'
+    : activeSection === SUGGESTED_PALETTE_SECTION
+      ? suggestedPaletteResultsLabel(columnContext?.label)
+      : activeSection || '';
+
+  const itemWhere = (item: AnalysisItem) => {
+    const tabLabel = PALETTE_TAB_LABELS[item.category] || item.category;
+    return `${tabLabel} · ${item.section}`;
   };
 
   return (
@@ -2201,30 +2257,33 @@ function Palette({
                   <PaletteNoMatch query={query} onAsk={onAsk} />
                 ) : (
                   <>
-                    <p className="palette-label">{query ? 'Best match' : activeSection}</p>
+                    <p className="palette-label">{resultsLabel}</p>
                     {analyses.map((item, rowIndex) => (
                       <Button
-                        key={item.name}
+                        key={`${activeSection}-${item.name}`}
                         className="palette-hit"
                         type="button"
                         data-active={rowIndex === index}
                         onClick={() => {
                           setIndex(rowIndex);
-                          onClose();
-                          const store = useAnalysisSetupStore.getState();
-                          if (isDialogMenuItem(item.name)) {
-                            store.openDialog(item.name);
-                            return;
-                          }
-                          const op = getAnalysisOpForMenuName(item.name);
-                          if (op) store.openSetupFromPalette(op);
-                          else store.openUnavailable(item.name);
+                          launchAnalysis(item);
                         }}
                       >
                         <span className="palette-mark">{paletteMark(item.name)}</span>
                         <span className="palette-copy">
                           <strong>{item.name}</strong>
-                          {item.hint ? <span>{item.hint}</span> : null}
+                          {(() => {
+                            const detail = searching
+                              ? item.hint
+                                ? `${itemWhere(item)} · ${item.hint}`
+                                : itemWhere(item)
+                              : item.hint ||
+                                (activeSection === SUGGESTED_PALETTE_SECTION ||
+                                activeSection === RECENT_PALETTE_SECTION
+                                  ? itemWhere(item)
+                                  : '');
+                            return detail ? <span>{detail}</span> : null;
+                          })()}
                         </span>
                         {rowIndex === index ? <span className="palette-enter">↵</span> : null}
                       </Button>
@@ -3497,6 +3556,20 @@ function ResponsesScreen({
         return sortCol.dir === 'asc' ? compared : -compared;
       });
   const activeName = names[activeIndex] || 'Variable';
+  const activeMeta = columnMeta(activeName);
+  const activeLabel = String(activeMeta?.label || activeName || '').trim() || 'Variable';
+  const activeType = String(activeMeta?.type || '');
+  useEffect(() => {
+    if (!datasetId || sheetPhase !== 'ready') {
+      setPaletteColumnContext(null);
+      return;
+    }
+    setPaletteColumnContext({
+      label: activeLabel,
+      kind: paletteColumnKindFromType(activeType),
+    });
+    return () => setPaletteColumnContext(null);
+  }, [datasetId, sheetPhase, activeLabel, activeType]);
   const isCoded = (column: FlowColumn) =>
     column.name.endsWith('_codes') || String(column.label || '').startsWith('Codes for');
   const codedColumn =
