@@ -210,7 +210,22 @@ describe('agent chart from dataset', () => {
       'area',
       'violin',
       'density',
+      'sankey',
     ]);
+  });
+
+  it('builds a sankey from source and target columns', () => {
+    const chart = buildChartFromDataset('sankey', paletteColumns, paletteRows, null, {
+      kind: 'sankey',
+      xId: 'Pos',
+      yId: 'Pos',
+    });
+    expect(chart?.kind).toBe('sankey');
+    if (chart?.kind !== 'sankey') return;
+    expect(chart.links.length).toBeGreaterThan(0);
+    expect(chart.nodes.some(node => node.id.startsWith('s:'))).toBe(true);
+    expect(chart.nodes.some(node => node.id.startsWith('t:'))).toBe(true);
+    expect(chart.title).toContain('→');
   });
 
   it('loads every preview page and then applies the sheet filter', async () => {

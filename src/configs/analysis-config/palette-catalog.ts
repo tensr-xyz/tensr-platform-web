@@ -24,6 +24,7 @@ export const PALETTE_CATALOG: PaletteCatalog = {
         'Area Chart',
         'Density Plot',
         'Violin Plot',
+        'Sankey',
       ],
     },
   },

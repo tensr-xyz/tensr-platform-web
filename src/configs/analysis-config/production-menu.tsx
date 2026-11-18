@@ -171,6 +171,7 @@ export const PRODUCTION_MENU_ITEMS: MenuItems = {
         'Area Chart',
         'Density Plot',
         'Violin Plot',
+        'Sankey',
       ],
     },
   },

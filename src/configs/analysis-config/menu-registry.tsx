@@ -149,6 +149,7 @@ const DIALOG_MENU: Record<string, AnalysisComponent> = {
   'Area Chart': chartMenuItem('Area Chart'),
   'Violin Plot': chartMenuItem('Violin Plot'),
   'Density Plot': chartMenuItem('Density Plot'),
+  Sankey: chartMenuItem('Sankey'),
 };
 
 const ML_MENU_INITIAL_BODY: Record<string, Record<string, unknown>> = {

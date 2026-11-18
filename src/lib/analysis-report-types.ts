@@ -179,6 +179,12 @@ export type AnalysisReportChart =
       /** Per-slice column letters from the same test as the table. */
       letters?: string[];
     } & ChartAxisHints)
+  | ({
+      kind: 'sankey';
+      title: string;
+      nodes: { id: string; name: string }[];
+      links: { source: string; target: string; value: number }[];
+    } & ChartAxisHints)
   | {
       kind: 'path_diagram';
       title: string;
