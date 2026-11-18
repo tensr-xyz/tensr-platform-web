@@ -748,3 +748,49 @@ export function fuseSurveyDatasets(
     token
   );
 }
+
+export type SentimentShare = {
+  id: string;
+  label: string;
+  n: number;
+  percent: number;
+};
+
+export type SentimentApplyResult = DerivedDatasetResult & {
+  job_id?: string;
+  processed?: number;
+  total?: number;
+  done?: boolean;
+  status?: string;
+  review_count?: number;
+  not_answered?: number;
+  labels?: string[];
+  shares?: SentimentShare[];
+  sentiment_column?: string;
+  derived_dataset_id?: string;
+};
+
+/** Model-based Positive / Neutral / Negative scores for one open-end column. */
+export function applyOpenEndSentiment(
+  datasetId: string,
+  payload: {
+    text_column: string;
+    use_model?: boolean;
+    confirm_verbatims_sent?: boolean;
+    overrides?: Record<string, string>;
+    job_id?: string | null;
+  },
+  token?: string | null
+) {
+  return authedJson<SentimentApplyResult>(
+    `/datasets/${datasetId}/open-end/sentiment`,
+    {
+      text_column: payload.text_column,
+      ...(payload.use_model ? { use_model: true } : {}),
+      ...(payload.confirm_verbatims_sent ? { confirm_verbatims_sent: true } : {}),
+      ...(payload.overrides ? { overrides: payload.overrides } : {}),
+      ...(payload.job_id ? { job_id: payload.job_id } : {}),
+    },
+    token
+  );
+}

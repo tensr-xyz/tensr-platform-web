@@ -1162,6 +1162,20 @@ class ApiClient {
           method: 'POST',
           body: JSON.stringify(body),
         }),
+      sentiment: (
+        datasetId: string,
+        body: {
+          text_column: string;
+          use_model?: boolean;
+          confirm_verbatims_sent?: boolean;
+          overrides?: Record<string, string>;
+          job_id?: string | null;
+        }
+      ) =>
+        this.request<Record<string, unknown>>(`/datasets/${datasetId}/open-end/sentiment`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
     },
 
     techniques: {
