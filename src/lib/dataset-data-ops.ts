@@ -408,6 +408,85 @@ export function applyResponseQualityRemovals(
   }>(`/datasets/${datasetId}/response-quality/apply`, payload, token);
 }
 
+export type TableCheckCellStatus = 'matched' | 'differs' | 'cant_tell' | 'rounding';
+
+export type TableCheckReport = {
+  filename?: string;
+  n_tables: number;
+  ok: boolean;
+  summary: {
+    matched: number;
+    differs: number;
+    cant_tell: number;
+    rounding: number;
+  };
+  cause_labels: Record<string, string>;
+  tables: Array<{
+    title: string;
+    sheet_name?: string;
+    stub_column?: string | null;
+    banner_column?: string | null;
+    stub_label?: string | null;
+    banner_label?: string | null;
+    weight?: string | null;
+    base_text?: string;
+    weight_text?: string;
+    statistic?: string;
+    ok: boolean;
+    reason?: string;
+    summary: {
+      matched: number;
+      differs: number;
+      cant_tell: number;
+      rounding: number;
+    };
+    cells: Array<{
+      stub_label: string;
+      banner_label: string;
+      uploaded: {
+        raw?: string;
+        percent?: number | null;
+        mean?: number | null;
+        count?: number | null;
+        letters?: string | null;
+      } | null;
+      expected: {
+        percent?: number | null;
+        mean?: number | null;
+        count?: number | null;
+        unweighted_n?: number | null;
+      } | null;
+      status: TableCheckCellStatus;
+      cause: string;
+      cause_label: string;
+    }>;
+    corrected?: {
+      title?: string;
+      base_label?: string;
+      banner_columns?: Array<{ id?: string; label?: string }>;
+      rows?: Array<{
+        label?: string;
+        cells?: Array<Record<string, unknown>>;
+      }>;
+    } | null;
+  }>;
+};
+
+export function checkDatasetTables(
+  datasetId: string,
+  payload: {
+    filename?: string;
+    content_base64?: string;
+    tables?: Array<Record<string, unknown>>;
+    weight_column?: string;
+    stub_column?: string;
+    banner_column?: string;
+  },
+  token?: string | null
+) {
+  return authedJson<TableCheckReport>(`/datasets/${datasetId}/table-check`, payload, token);
+}
+
 export type FindOutliersResult = {
   n_rows: number;
   total_flagged_rows: number;
