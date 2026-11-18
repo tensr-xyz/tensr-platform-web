@@ -487,6 +487,90 @@ export function checkDatasetTables(
   return authedJson<TableCheckReport>(`/datasets/${datasetId}/table-check`, payload, token);
 }
 
+export type DataChecksReport = {
+  respondents: number;
+  n_columns: number;
+  summary: {
+    issues: number;
+    construction_issues?: number;
+    missing_labels?: number;
+    unlabeled_codes?: number;
+    unused_labels?: number;
+    duplicate_labels?: number;
+    out_of_range?: number;
+    empty_columns?: number;
+    straightline_questions?: number;
+    summary_table_candidates?: number;
+  };
+  construction: Array<{
+    kind: string;
+    kind_label: string;
+    column: string;
+    columns?: string[];
+    label: string;
+    message: string;
+    codes: string[];
+    count: number;
+  }>;
+  straightlining: Array<{
+    kind: string;
+    kind_label: string;
+    set_id?: string | null;
+    label: string;
+    columns: string[];
+    column_labels: string[];
+    straightline_count: number;
+    respondent_pct: number;
+    message: string;
+  }>;
+  summary_tables: Array<{
+    column: string;
+    label: string;
+    n_categories: number;
+  }>;
+  issue_labels: Record<string, string>;
+};
+
+export type SummaryTablesResult = {
+  ok: boolean;
+  n_tables: number;
+  truncated: boolean;
+  limit: number;
+  tables: Array<{
+    stub: string;
+    stub_column: string;
+    stub_label: string;
+    book: Record<string, unknown>;
+  }>;
+  candidates?: Array<{
+    column: string;
+    label: string;
+    n_categories: number;
+  }>;
+  analysis_type?: string;
+  provenance?: Record<string, unknown>;
+};
+
+export async function fetchDataChecksReport(datasetId: string, token?: string | null) {
+  const res = await fetch(tensrApiUrl(`/datasets/${datasetId}/data-checks`), {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json() as Promise<DataChecksReport>;
+}
+
+export function buildDatasetSummaryTables(
+  datasetId: string,
+  payload: { columns?: string[]; weight_column?: string; limit?: number } = {},
+  token?: string | null
+) {
+  return authedJson<SummaryTablesResult>(
+    `/datasets/${datasetId}/data-checks/summary-tables`,
+    payload,
+    token
+  );
+}
+
 export type FindOutliersResult = {
   n_rows: number;
   total_flagged_rows: number;
