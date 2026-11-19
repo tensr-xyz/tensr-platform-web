@@ -16,6 +16,7 @@ import {
   lastFittedModelFromToolResults,
   stripLastFittedModelMarker,
 } from '@/lib/agent-conversation-history';
+import { EMPTY_TURN_ANSWER } from '@/components/flow/chat-output';
 
 const RETRYABLE_AGENT_LOOP_STATUSES = new Set([502]);
 const WARMUP_AGENT_LOOP_STATUSES = new Set([500, 503]);
@@ -342,7 +343,7 @@ export function deriveMessageUpdateFromLoopResponse(
   context: DeriveLoopMessageContext
 ): Partial<Omit<ChatMessage, 'id'>> {
   const answer =
-    stripLastFittedModelMarker(response.answer_markdown?.trim() || '') || '_No answer returned._';
+    stripLastFittedModelMarker(response.answer_markdown?.trim() || '') || EMPTY_TURN_ANSWER;
   const charts = chartsFromToolResults(response.tool_results);
   const lastFittedModel = lastFittedModelFromToolResults(response.tool_results);
 

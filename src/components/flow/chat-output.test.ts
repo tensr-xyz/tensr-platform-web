@@ -10,6 +10,9 @@ import {
   restoreListBreaks,
   outputBaseNote,
   keptModelAnswer,
+  EMPTY_TURN_ANSWER,
+  CONTINUING_TURN_ANSWER,
+  visibleTurnAnswer,
   outputTakeaway,
   outputTitle,
   outputTableTabLabel,
@@ -241,6 +244,14 @@ describe('chat output panel', () => {
     expect(keptModelAnswer(streamed, 'Funnel.')).toBe(streamed);
     expect(keptModelAnswer(streamed, streamed)).toBe(streamed);
     expect(keptModelAnswer('{{r1.line}}', 'Aware is 75%.')).toBe('Aware is 75%.');
+  });
+
+  it('fills a visible message when a finished turn has no text', () => {
+    expect(visibleTurnAnswer('ok', '')).toBe(EMPTY_TURN_ANSWER);
+    expect(visibleTurnAnswer('error', '   ')).toBe(EMPTY_TURN_ANSWER);
+    expect(visibleTurnAnswer('continuing', '')).toBe(CONTINUING_TURN_ANSWER);
+    expect(visibleTurnAnswer('awaiting_approval', '')).toBe('');
+    expect(visibleTurnAnswer('ok', 'The table is ready.')).toBe('The table is ready.');
   });
 
   it('titles a funnel with the short name, not compute', () => {

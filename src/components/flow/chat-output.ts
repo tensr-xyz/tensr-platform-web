@@ -311,6 +311,19 @@ export function isBlandAnswer(text: string): boolean {
   );
 }
 
+/** Plain text when a turn would otherwise leave the chat blank. */
+export const EMPTY_TURN_ANSWER = 'The reply did not finish. Ask again.';
+export const CONTINUING_TURN_ANSWER = 'This turn is still running. Nothing has been reported yet.';
+
+/** Terminal answers must be readable. Approval may stay blank (plan is on the card). */
+export function visibleTurnAnswer(status: string | undefined, text: string): string {
+  const done = text.trim();
+  if (done) return done;
+  if (status === 'awaiting_approval') return '';
+  if (status === 'continuing') return CONTINUING_TURN_ANSWER;
+  return EMPTY_TURN_ANSWER;
+}
+
 /** Keep the streamed answer when the finished text is only a procedure line. */
 export function keptModelAnswer(streamed: string, finalText: string): string {
   const live = streamed.trim();

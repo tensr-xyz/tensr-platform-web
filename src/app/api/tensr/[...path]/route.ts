@@ -227,9 +227,12 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
         const sessionId = sessionIdFromBody(requestBody);
         const payload = `data: ${JSON.stringify({
           type: 'result',
-          status: 'continuing',
-          session_id: sessionId,
-          answer_markdown: '',
+          response: {
+            status: 'continuing',
+            mode: 'agent',
+            session_id: sessionId,
+            answer_markdown: 'This turn is still running. Nothing has been reported yet.',
+          },
         })}\n\n`;
         return new NextResponse(payload, { status: 200, headers: outHeaders });
       }
@@ -250,9 +253,12 @@ async function proxyRequest(req: NextRequest, pathSegments: string[]): Promise<N
       outHeaders.set('X-Tensr-Upstream-Status', String(res.status));
       const payload = `data: ${JSON.stringify({
         type: 'result',
-        status: 'continuing',
-        session_id: sessionIdFromBody(requestBody),
-        answer_markdown: '',
+        response: {
+          status: 'continuing',
+          mode: 'agent',
+          session_id: sessionIdFromBody(requestBody),
+          answer_markdown: 'This turn is still running. Nothing has been reported yet.',
+        },
       })}\n\n`;
       return new NextResponse(payload, { status: 200, headers: outHeaders });
     }

@@ -1,6 +1,7 @@
 import { TextDecoder, TextEncoder } from 'util';
 import posthog from 'posthog-js';
 import { ApiRequestError } from '@/lib/api-error';
+import { EMPTY_TURN_ANSWER } from '@/components/flow/chat-output';
 import { STREAM_QUIET_MS, streamAgentLoop } from '@/lib/stream-agent-loop';
 
 Object.assign(global, { TextDecoder, TextEncoder });
@@ -236,6 +237,42 @@ describe('streamAgentLoop', () => {
     const secondBody = JSON.parse(String((global.fetch as jest.Mock).mock.calls[1][1].body));
     expect(firstUrl).toContain('/assistant/agent-loop-v2/stream');
     expect(secondBody).toMatchObject({ resume: true, session_id: 'sess-1', message: '' });
+  });
+
+  it('never returns a blank answer after continuing hops are exhausted', async () => {
+    const emptyContinuing =
+      'data: {"type":"result","response":{"status":"continuing","mode":"agent","session_id":"sess-empty","answer_markdown":""}}\n\n';
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(sseFetchResponse(emptyContinuing))
+      .mockResolvedValueOnce(sseFetchResponse(emptyContinuing))
+      .mockResolvedValueOnce(sseFetchResponse(emptyContinuing))
+      .mockResolvedValueOnce(sseFetchResponse(emptyContinuing));
+
+    const result = await streamAgentLoop({
+      message: 'go ahead',
+      mode: 'agent',
+      agentVersion: 'v2',
+      sessionId: 'sess-empty',
+    });
+
+    expect(result.status).toBe('ok');
+    expect(result.answer_markdown).toBe(EMPTY_TURN_ANSWER);
+    expect(result.answer_markdown.trim()).not.toBe('');
+  });
+
+  it('fills a visible message when the result has no text', async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      sseFetchResponse(
+        'data: {"type":"progress","step":"model","message":"Reading the request"}\n\n' +
+          'data: {"type":"result","response":{"status":"ok","mode":"agent","answer_markdown":""}}\n\n'
+      )
+    );
+    const result = await streamAgentLoop({
+      message: 'go ahead without a weight',
+      mode: 'agent',
+      agentVersion: 'v2',
+    });
+    expect(result.answer_markdown).toBe(EMPTY_TURN_ANSWER);
   });
 
   it('replaces streamed text when a delta says the table block changed', async () => {
