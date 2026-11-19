@@ -187,10 +187,16 @@ export function applyClientDeckJobSnapshot(
   if (String(job.status || '') !== 'complete' || !job.result) {
     const line = clientDeckProgressLine(job);
     const pages = job.report_pages;
+    const status = String(job.status || 'pending');
+    const running = status === 'running' || status === 'pending';
+    // Mid-run copy is progress only. "Ask me to continue" is for stalled/failed
+    // polls — saying it while tables still compute looks like a finished pause.
     const answer = [
       line,
       typeof pages === 'number' && pages > 0 ? `Report pages: ${pages}` : '',
-      'Report pages already saved will stay. Ask me to continue when you want the PowerPoint file.',
+      running
+        ? ''
+        : 'Report pages already saved will stay. Ask me to continue when you want the PowerPoint file.',
     ]
       .filter(Boolean)
       .join('\n');

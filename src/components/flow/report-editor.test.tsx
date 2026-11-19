@@ -1,8 +1,27 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { ReportEditor } from './report-editor';
+import { previewGridFromBannerBook, ReportEditor } from './report-editor';
 
 jest.mock('@/lib/flow-api', () => ({
   flowJson: jest.fn(async (path: string, init?: { method?: string; body?: string }) => {
+    if (String(path).includes('/tables/spec-live')) {
+      return {
+        ok: true,
+        banner_columns: [
+          { id: 'total', label: 'Total' },
+          { id: 'young', label: '18–34' },
+        ],
+        rows: [
+          {
+            id: 'aware',
+            label: 'Prompted awareness',
+            cells: [
+              { banner_id: 'total', percent: 62 },
+              { banner_id: 'young', percent: 71 },
+            ],
+          },
+        ],
+      };
+    }
     if (String(path).includes('/report/document') && (!init || init.method === 'GET')) {
       return {
         ok: true,
@@ -33,6 +52,7 @@ jest.mock('@/lib/flow-api', () => ({
                 {
                   id: 'table-a',
                   kind: 'table',
+                  table_spec_id: 'spec-live',
                   frame: { x: 0.08, y: 0.55, w: 0.84, h: 0.35 },
                   table_style: { preset: 'default' },
                   table_rules: [],
@@ -53,7 +73,40 @@ jest.mock('@/lib/flow-api', () => ({
   }),
 }));
 
+describe('previewGridFromBannerBook', () => {
+  it('builds percent rows from a banner book and never invents placeholder labels', () => {
+    const grid = previewGridFromBannerBook({
+      banner_columns: [
+        { id: 'total', label: 'Total' },
+        { id: 'south', label: 'South' },
+      ],
+      rows: [
+        {
+          id: 'region_south',
+          label: 'South',
+          cells: [
+            { banner_id: 'total', percent: 40.4 },
+            { banner_id: 'south', percent: 100 },
+          ],
+        },
+      ],
+    });
+    expect(grid[0]).toEqual(['', 'Total', 'South']);
+    expect(grid[1]).toEqual(['South', '40.4%', '100%']);
+    expect(JSON.stringify(grid)).not.toMatch(/Row one|Group A/);
+  });
+});
+
 describe('ReportEditor formatting', () => {
+  it('loads live table numbers instead of placeholder rows', async () => {
+    render(<ReportEditor datasetId="ds-1" pins={[]} />);
+    expect(await screen.findByText('Prompted awareness')).toBeTruthy();
+    expect(screen.getByText('62%')).toBeTruthy();
+    expect(screen.getByText('71%')).toBeTruthy();
+    expect(screen.queryByText('Row one')).toBeNull();
+    expect(screen.queryByText('Group A')).toBeNull();
+  });
+
   it('formats selected text, paints styles, and renames default labels', async () => {
     render(<ReportEditor datasetId="ds-1" pins={[]} />);
 

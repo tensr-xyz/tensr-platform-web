@@ -87,17 +87,68 @@ export async function savAndSyntax(datasetId: string, stem: string) {
   await exportDatasetSavAndSps(datasetId, stem);
 }
 
-/** The same deck Report builds: every saved table on the file, one slide each. */
+/** Spec ids from Report pages (exec → insights → appendix), in page order. */
+export function tableSpecIdsFromReportDocument(
+  document: { pages?: unknown } | null | undefined
+): string[] {
+  const pages = Array.isArray(document?.pages) ? document.pages : [];
+  const ids: string[] = [];
+  const seen = new Set<string>();
+  for (const page of pages) {
+    if (!page || typeof page !== 'object') continue;
+    const objects = Array.isArray((page as { objects?: unknown }).objects)
+      ? ((page as { objects: unknown[] }).objects as Record<string, unknown>[])
+      : [];
+    for (const obj of objects) {
+      if (!obj || typeof obj !== 'object') continue;
+      const specId = String(obj.table_spec_id || obj.tableSpecId || '').trim();
+      if (!specId || seen.has(specId)) continue;
+      seen.add(specId);
+      ids.push(specId);
+    }
+  }
+  return ids;
+}
+
+/**
+ * PowerPoint from the Report: prefer tables linked on Report pages, else every
+ * saved table. Always send the stored report document so page order is kept.
+ */
 export async function deckFromTables(datasetId: string, stem: string) {
-  const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
-    `/datasets/${datasetId}/tables`
-  );
-  const ids = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
-  if (!ids.length)
-    throw new Error('Save a table in Tables first. The deck has one slide per saved table.');
+  let reportDocument: Record<string, unknown> | null = null;
+  try {
+    const stored = await flowJson<{
+      document?: Record<string, unknown> | null;
+      has_document?: boolean;
+    }>(`/datasets/${datasetId}/report/document`);
+    if (stored.has_document && stored.document && Array.isArray(stored.document.pages)) {
+      reportDocument = stored.document;
+    }
+  } catch {
+    /* Fall back to saved tables when the document route fails. */
+  }
+  const fromReport = tableSpecIdsFromReportDocument(reportDocument);
+  let ids = fromReport;
+  if (!ids.length) {
+    const page = await flowJson<{ specs?: { spec_id?: string; id?: string }[] }>(
+      `/datasets/${datasetId}/tables`
+    );
+    ids = (page.specs || []).map(spec => spec.spec_id || spec.id || '').filter(Boolean);
+  }
+  if (!ids.length) {
+    throw new Error(
+      'Add Report pages with tables, or save a table in Tables, before building a deck.'
+    );
+  }
   const created = await flowJson<{ export_id?: string; filename?: string }>(
     `/datasets/${datasetId}/export/deck`,
-    { method: 'POST', body: JSON.stringify({ spec_ids: ids }) }
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        spec_ids: ids,
+        ...(reportDocument ? { report_document: reportDocument } : {}),
+      }),
+    }
   );
   if (!created.export_id) throw new Error('The deck did not build. Try again.');
   await downloadExport(`/exports/${created.export_id}`, created.filename || `${stem}.pptx`);
@@ -217,8 +268,39 @@ export function ExportDialog({
   const [groupOptions, setGroupOptions] = useState<{ value: string; label: string }[]>([]);
   const [groupValues, setGroupValues] = useState<ColumnValues | null>(null);
   const [pickedGroups, setPickedGroups] = useState<Record<string, boolean>>({});
+  const [reportPageTitles, setReportPageTitles] = useState<string[]>([]);
   const stem = caption.replace(/[^\w.-]+/g, '-').slice(0, 40) || 'analysis';
   const current = { ...document, title: caption, summary: note };
+
+  useEffect(() => {
+    if (!datasetId || kind !== 'report') {
+      setReportPageTitles([]);
+      return;
+    }
+    let live = true;
+    void flowJson<{
+      document?: { pages?: { title?: string }[] } | null;
+      has_document?: boolean;
+    }>(`/datasets/${datasetId}/report/document`)
+      .then(body => {
+        if (!live) return;
+        if (!body.has_document || !body.document?.pages?.length) {
+          setReportPageTitles([]);
+          return;
+        }
+        setReportPageTitles(
+          body.document.pages.map(
+            (page, index) => String(page.title || '').trim() || `Page ${index + 1}`
+          )
+        );
+      })
+      .catch(() => {
+        if (live) setReportPageTitles([]);
+      });
+    return () => {
+      live = false;
+    };
+  }, [datasetId, kind]);
 
   useEffect(() => {
     if (!datasetId || kind !== 'report' || reportFormat !== 'pptx' || !perGroup) return;
@@ -321,6 +403,8 @@ export function ExportDialog({
     const chosen = current.tables.filter((_, index) => included[index] !== false);
     const reportDoc = { ...current, tables: chosen };
     const chosenRuns = runIds.filter((_, index) => included[index] !== false);
+    const reportPageCount = reportPageTitles.length;
+    const findingCount = reportPageCount || current.tables.length;
     const formats: {
       id: string;
       ext: string;
@@ -343,7 +427,9 @@ export function ExportDialog({
         note: datasetId
           ? perGroup
             ? 'One PowerPoint per group value'
-            : 'One slide per saved table'
+            : reportPageCount
+              ? 'One slide per Report page table'
+              : 'One slide per saved table'
           : 'Open a file to build a deck',
         soon: !datasetId,
         run: () => {
@@ -395,7 +481,10 @@ export function ExportDialog({
         <DialogContent className="export-dialog xr">
           <DialogHeader className="xp-head">
             <p className="xp-eyebrow">
-              {title} · {current.tables.length} finding{current.tables.length === 1 ? '' : 's'}
+              {title} · {findingCount}{' '}
+              {reportPageCount
+                ? `page${findingCount === 1 ? '' : 's'}`
+                : `finding${findingCount === 1 ? '' : 's'}`}
             </p>
             <DialogTitle>Export report</DialogTitle>
             <DialogDescription className="sr-only">
@@ -530,24 +619,34 @@ export function ExportDialog({
             <div className="xr-right">
               <span className="xp-label">What to include</span>
               <div className="xr-include">
-                {current.tables.length === 0 ? (
+                {reportPageTitles.length > 0 ? (
+                  reportPageTitles.map((pageTitle, index) => (
+                    <label key={`report-page-${index}`} className="xr-item">
+                      <Checkbox checked disabled aria-label={`Include ${pageTitle}`} />
+                      <span>
+                        P{index + 1} · {pageTitle}
+                      </span>
+                    </label>
+                  ))
+                ) : current.tables.length === 0 ? (
                   <p className="flow-muted">
-                    Pin a finding with Add to report on an output to include it here.
+                    Open Report after a deck build, or pin a finding with Add to report.
                   </p>
-                ) : null}
-                {current.tables.map((table, index) => (
-                  <label key={`${table.title}-${index}`} className="xr-item">
-                    <Checkbox
-                      checked={included[index] !== false}
-                      onCheckedChange={value =>
-                        setIncluded(currentMap => ({ ...currentMap, [index]: value === true }))
-                      }
-                    />
-                    <span>
-                      T{index + 1} · {table.title}
-                    </span>
-                  </label>
-                ))}
+                ) : (
+                  current.tables.map((table, index) => (
+                    <label key={`${table.title}-${index}`} className="xr-item">
+                      <Checkbox
+                        checked={included[index] !== false}
+                        onCheckedChange={value =>
+                          setIncluded(currentMap => ({ ...currentMap, [index]: value === true }))
+                        }
+                      />
+                      <span>
+                        T{index + 1} · {table.title}
+                      </span>
+                    </label>
+                  ))
+                )}
               </div>
               <span className="xp-label">Preview</span>
               <div className="xr-previews">

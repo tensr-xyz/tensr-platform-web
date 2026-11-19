@@ -166,8 +166,37 @@ describe('client-deck-job', () => {
     expect(Date.now() - started).toBeLessThan(5000);
     expect(clientDeckJob.mock.calls.length).toBeLessThanOrEqual(2);
     expect(out.tool_results?.[0]?.result?.pending).toBe(true);
-    expect(out.answer_markdown || '').toMatch(/continue/i);
+    expect(out.answer_markdown || '').toMatch(/Computing tables 15 of 31/);
+    expect(out.answer_markdown || '').not.toMatch(/Ask me to continue/i);
     expect(out.answer_markdown || '').not.toContain('PowerPoint:');
+  });
+
+  it('running snapshots stay on progress without asking to continue', () => {
+    const pending = {
+      status: 'ok' as const,
+      mode: 'agent' as const,
+      answer_markdown: 'Building',
+      tool_results: [
+        {
+          name: 'build_client_deck',
+          result: {
+            pending: true,
+            job_id: 'job-run',
+            dataset_id: 'ds-run',
+            procedure: 'build_client_deck',
+          },
+        },
+      ],
+    };
+    const out = applyClientDeckJobSnapshot(pending, {
+      status: 'running',
+      stage: 'narrative',
+      report_pages: 24,
+      message: 'Writing insights',
+    });
+    expect(out.answer_markdown || '').toContain('Writing insights');
+    expect(out.answer_markdown || '').toContain('Report pages: 24');
+    expect(out.answer_markdown || '').not.toMatch(/Ask me to continue/i);
   });
 
   it('failed jobs with saved tables ask to continue and resume', async () => {
